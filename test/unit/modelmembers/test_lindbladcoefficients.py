@@ -270,7 +270,7 @@ def test_is_similar():
     a = LCB('other_diagonal', pp, param_mode='cholesky')
     assert a.is_similar(LCB('other_diagonal', pp, param_mode='cholesky'))
     assert not a.is_similar(LCB('other_diagonal', pp, param_mode='elements'))   # param_mode differs
-    assert not a.is_similar(LCB('ham', pp, param_mode='cholesky'))              # block_type differs
+    assert not a.is_similar(LCB('ham', pp, param_mode='elements'))              # block_type differs
     assert not a.is_similar(LCB('other', pp, param_mode='cholesky'))
     assert not a.is_similar("not a block")
 

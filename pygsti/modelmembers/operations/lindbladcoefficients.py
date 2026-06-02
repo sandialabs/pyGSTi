@@ -92,6 +92,461 @@ class InvalidParamModeError(ValueError):
         super().__init__(msg)
 
 
+# =====================================================================================================
+# Parameterization strategies (Approach A: composition).
+#
+# A `_BlockParameterization` encapsulates the map  phi : (real parameter vector v) -> block_data  for a
+# coefficient block, together with its inverse, its Jacobian d(block_data)/dv, and a *differentiable*
+# torch version of phi.  Each block-type CoefficientBlock subclass exposes the parameterizations valid
+# for it via a `_PARAM_CLASSES` dict {param_mode: parameterization class}; the block holds one instance
+# in `self._parameterization` and delegates all param_mode-dependent numeric work to it.
+#
+# This is the key to GitHub issue 607: the *only* new primitive needed to make a block Torchable is the
+# parameterization's differentiable `block_data_torch` (see LindbladCoefficientBlock.torch_base), and the
+# numpy `block_data_jacobian` is what the standard MapForwardSimulator path (and the sparse-Cholesky
+# reduced-order CPTP idea) needs.  Adding a new parameterization = adding one _BlockParameterization
+# subclass and registering it.
+#
+# Methods take the owning block `blk` so they can read/write blk.block_data and read blk._bel_labels /
+# blk._cache_mx / blk._coeff_shape.
+# =====================================================================================================
+
+class _BlockParameterization:
+    """Base class for parameterization strategies; see module section header."""
+    name = None  # the param_mode string this corresponds to
+
+    def num_params(self, blk):
+        raise NotImplementedError
+
+    def params_to_block_data(self, blk, v):
+        """Set blk.block_data from the parameter vector v (inverse of block_data_to_params)."""
+        raise NotImplementedError
+
+    def block_data_to_params(self, blk, ttol):
+        """Return the parameter vector implied by blk.block_data (ttol = truncation tolerance)."""
+        raise NotImplementedError
+
+    def block_data_jacobian(self, blk, v):
+        """Return d(block_data)/dv with shape blk._coeff_shape + (num_params,)."""
+        raise NotImplementedError
+
+    def param_labels(self, blk):
+        raise NotImplementedError
+
+    def superop_hessian(self, blk, superops, superops_are_flat):
+        """Second derivative of the term-superoperators w.r.t. params (rarely used)."""
+        raise NotImplementedError
+
+    # --- Torchable support (differentiable params -> block_data) ---
+    def torch_stateless_data(self, blk):
+        """Constants (independent of the free params) needed by `block_data_torch`."""
+        return (len(blk._bel_labels),)
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        """Differentiable torch reconstruction of block_data from the parameter tensor t_param,
+        given the stateless data `sd` returned by `torch_stateless_data`."""
+        raise NotImplementedError
+
+
+class _StaticParam(_BlockParameterization):
+    """Zero-parameter block: block_data is a fixed constant."""
+    name = 'static'
+
+    def num_params(self, blk):
+        return 0
+
+    def params_to_block_data(self, blk, v):
+        assert len(v) == 0, "'static' parameterized blocks should have zero parameters!"
+
+    def block_data_to_params(self, blk, ttol):
+        return _np.empty(0, 'd')
+
+    def block_data_jacobian(self, blk, v):
+        return _np.zeros(blk._coeff_shape + (0,), 'd')
+
+    def param_labels(self, blk):
+        return []
+
+    def superop_hessian(self, blk, superops, superops_are_flat):
+        if superops_are_flat or not blk._superops_matrix_structured:
+            return _np.zeros((superops.shape[1], superops.shape[2], 0, 0), 'd')
+        return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
+
+    def torch_stateless_data(self, blk):
+        return (_np.ascontiguousarray(blk.block_data),)
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        import torch as _torch
+        return _torch.from_numpy(sd[0])
+
+
+class _RealVectorElements(_BlockParameterization):
+    """Unconstrained real-vector parameterization: block_data == v (identity map).  Shared numeric
+    behavior for the 'ham' and 'other_diagonal' 'elements' modes; subclasses set the labels."""
+    name = 'elements'
+
+    def num_params(self, blk):
+        return len(blk._bel_labels)
+
+    def params_to_block_data(self, blk, v):
+        blk.block_data[:] = v
+
+    def block_data_to_params(self, blk, ttol):
+        return blk.block_data.real
+
+    def block_data_jacobian(self, blk, v):
+        return _np.identity(len(blk._bel_labels), 'd')
+
+    def superop_hessian(self, blk, superops, superops_are_flat):
+        d1, d2 = superops.shape[1:3]
+        nP = blk.num_params
+        return _np.zeros((d1, d2, nP, nP), 'd')
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        return t_param
+
+
+class _HamElements(_RealVectorElements):
+    def param_labels(self, blk):
+        return [f"{lbl} Hamiltonian error coefficient" for lbl in blk._bel_labels]
+
+
+class _DiagElements(_RealVectorElements):
+    def param_labels(self, blk):
+        return [f"{lbl} stochastic coefficient" for lbl in blk._bel_labels]
+
+
+class _DiagCholesky(_BlockParameterization):
+    """Diagonal Pauli-stochastic CPTP parameterization: block_data[i] = v[i]**2 (>= 0)."""
+    name = 'cholesky'
+
+    def num_params(self, blk):
+        return len(blk._bel_labels)
+
+    def params_to_block_data(self, blk, v):
+        blk.block_data[:] = v**2
+
+    def block_data_to_params(self, blk, ttol):
+        nonneg = [val >= ttol for val in blk.block_data]
+        assert all(nonneg), "Lindblad stochastic coefficients are not positive!"
+        clipped = blk.block_data.clip(0, 1e100)
+        return _np.sqrt(clipped.real)
+
+    def block_data_jacobian(self, blk, v):
+        num_bels = len(blk._bel_labels)
+        assert len(v) == num_bels, f"Expected {num_bels} parameters, got {len(v)}!"
+        # block_data[i] = v[i]**2  =>  d(block_data[i])/d v[j] = 2 v[i] delta_{i,j}
+        return 2.0 * _np.diag(v)
+
+    def param_labels(self, blk):
+        return [f"sqrt({lbl} stochastic coefficient)" for lbl in blk._bel_labels]
+
+    def superop_hessian(self, blk, superops, superops_are_flat):
+        nP = blk.num_params
+        trans = _np.transpose(superops, (1, 2, 0))      # shape (d,d,nP)
+        I = _np.identity(nP, 'd')
+        return trans[:, :, :, None] * (2.0 * I)[None, None, :, :]
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        return t_param**2
+
+
+class _Depol(_BlockParameterization):
+    """Depolarizing: a single nonnegative coefficient shared by all diagonal generators
+    (block_data[i] = v[0]**2 for all i)."""
+    name = 'depol'
+
+    def num_params(self, blk):
+        return 1
+
+    def params_to_block_data(self, blk, v):
+        blk.block_data[:] = (v.item()**2) * _np.ones(len(blk._bel_labels), 'd')
+
+    def block_data_to_params(self, blk, ttol):
+        nonneg = [val >= ttol for val in blk.block_data]
+        assert all(nonneg), f"Lindblad stochastic coefficients are not positive! (tol={ttol})"
+        first = blk.block_data[0]
+        all_equal = [_np.isclose(val, first, atol=1e-6) for val in blk.block_data]
+        assert all(all_equal), f"Diagonal lindblad coefficients are not equal! (tol={ttol})"
+        avg = _np.mean(blk.block_data.clip(0, 1e100))
+        return _np.array([_np.sqrt(_np.real(avg))], 'd')
+
+    def block_data_jacobian(self, blk, v):
+        mat = _np.zeros((len(blk._bel_labels), 1), 'd')
+        mat[:, 0] = 2.0 * v[0]
+        return mat
+
+    def param_labels(self, blk):
+        return ["sqrt(common stochastic error coefficient for depolarization)"]
+
+    def superop_hessian(self, blk, superops, superops_are_flat):
+        base = _np.sum(superops, axis=0)   # shape (d,d)
+        return base[:, :, None, None] * 2.0
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        import torch as _torch
+        n = sd[0]
+        return (t_param[0]**2) * _torch.ones(n, dtype=_torch.double)
+
+
+class _RelDepol(_BlockParameterization):
+    """Relative depolarizing: a single (possibly negative) coefficient shared by all diagonal
+    generators (block_data[i] = v[0] for all i)."""
+    name = 'reldepol'
+
+    def num_params(self, blk):
+        return 1
+
+    def params_to_block_data(self, blk, v):
+        blk.block_data[:] = v.item() * _np.ones(len(blk._bel_labels), 'd')
+
+    def block_data_to_params(self, blk, ttol):
+        first = blk.block_data[0]
+        all_equal = [_np.isclose(val, first, atol=1e-6) for val in blk.block_data]
+        assert all(all_equal), f"Diagonal lindblad coefficients are not equal! (tol={ttol})"
+        avg = _np.mean(blk.block_data)
+        return _np.array([_np.real(avg)], 'd')
+
+    def block_data_jacobian(self, blk, v):
+        mat = _np.zeros((len(blk._bel_labels), 1), 'd')
+        mat[:, 0] = 1.0
+        return mat
+
+    def param_labels(self, blk):
+        return ["common stochastic error coefficient for depolarization"]
+
+    def superop_hessian(self, blk, superops, superops_are_flat):
+        d1, d2 = superops.shape[1:3]
+        return _np.zeros((d1, d2, 1, 1), 'd')
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        import torch as _torch
+        n = sd[0]
+        return t_param[0] * _torch.ones(n, dtype=_torch.double)
+
+
+class _OtherElements(_BlockParameterization):
+    """Unconstrained Hermitian-matrix parameterization for the full 'other' block.  The n*n real
+    params encode the Hermitian block_data: diag = real diagonal, lower = real parts, upper = imag parts."""
+    name = 'elements'
+
+    def num_params(self, blk):
+        return len(blk._bel_labels)**2
+
+    def params_to_block_data(self, blk, v):
+        num_bels = len(blk._bel_labels)
+        params = v.reshape((num_bels, num_bels))
+        params_upper_indices = triu_indices(num_bels)
+        params_upper = -1j * params[params_upper_indices]
+        params_lower = (params.T)[params_upper_indices]
+        block_data_trans = blk.block_data.T
+        blk.block_data[params_upper_indices] = params_lower + params_upper
+        block_data_trans[params_upper_indices] = params_lower - params_upper
+        diag_indices = cached_diag_indices(num_bels)
+        blk.block_data[diag_indices] = params[diag_indices]
+
+    def block_data_to_params(self, blk, ttol):
+        is_hermitian = _mt.is_hermitian(blk.block_data, 1e-8)
+        assert is_hermitian, "Lindblad 'other' coefficient matrix is not Hermitian!"
+        num_bels = len(blk._bel_labels)
+        params_mat = _np.empty((num_bels, num_bels), 'd')
+        for i in range(num_bels):
+            assert _np.abs(blk.block_data[i, i].imag) < IMAG_TOL
+            params_mat[i, i] = blk.block_data[i, i].real
+            for j in range(i):
+                params_mat[i, j] = blk.block_data[i, j].real
+                params_mat[j, i] = blk.block_data[i, j].imag
+        return params_mat.ravel()
+
+    def block_data_jacobian(self, blk, v):
+        num_bels = len(blk._bel_labels)
+        nP = len(v)
+        stride = num_bels
+        mat = _np.zeros((num_bels, num_bels, nP), 'complex')
+        for i in range(num_bels):
+            mat[i, i, i * stride + i] = 1.0
+            for j in range(i):
+                mat[i, j, i * stride + j] = 1.0
+                mat[i, j, j * stride + i] = 1.0j
+                mat[j, i, i * stride + j] = 1.0
+                mat[j, i, j * stride + i] = -1.0j
+        return mat
+
+    def param_labels(self, blk):
+        labels = []
+        for i, ilbl in enumerate(blk._bel_labels):
+            for j, jlbl in enumerate(blk._bel_labels):
+                if i == j:
+                    labels.append(f"{ilbl} diagonal element of non-H coeff matrix")
+                elif j < i:
+                    labels.append(f"Re[({ilbl},{jlbl}) element of non-H coeff matrix]")
+                else:
+                    labels.append(f"Im[({ilbl},{jlbl}) element of non-H coeff matrix]")
+        return labels
+
+    def superop_hessian(self, blk, superops, superops_are_flat):
+        num_bels = len(blk._bel_labels)
+        if superops_are_flat:
+            superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
+        snP = num_bels
+        # unconstrained Hermitian: Hessian is identically zero
+        return _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        import torch as _torch
+        n = sd[0]
+        P = t_param.reshape(n, n)
+        lowP = _torch.tril(P, -1)
+        Re = lowP + lowP.T + _torch.diag(_torch.diagonal(P))
+        lowPT = _torch.tril(P.T, -1)
+        Imag = lowPT - lowPT.T
+        return _torch.complex(Re, Imag)
+
+
+class _OtherCholesky(_BlockParameterization):
+    """CPTP (positive-semidefinite) parameterization for the full 'other' block: block_data = C C^dag,
+    where the n*n real params encode the lower-triangular Cholesky factor C."""
+    name = 'cholesky'
+
+    def num_params(self, blk):
+        return len(blk._bel_labels)**2
+
+    def params_to_block_data(self, blk, v):
+        num_bels = len(blk._bel_labels)
+        params = v.reshape((num_bels, num_bels))
+        params_upper_indices = triu_indices(num_bels)
+        cache_mx = blk._cache_mx
+        params_upper = 1j * params[params_upper_indices]
+        params_lower = (params.T)[params_upper_indices]
+        cache_mx_trans = cache_mx.T
+        cache_mx_trans[params_upper_indices] = params_lower + params_upper
+        diag_indices = cached_diag_indices(num_bels)
+        cache_mx[diag_indices] = params[diag_indices]
+        blk.block_data[:, :] = cache_mx @ cache_mx.T.conj()
+
+    def block_data_to_params(self, blk, ttol):
+        is_hermitian = _mt.is_hermitian(blk.block_data, 1e-8)
+        assert is_hermitian, "Lindblad 'other' coefficient matrix is not Hermitian!"
+        num_bels = len(blk._bel_labels)
+        params_mat = _np.empty((num_bels, num_bels), 'd')
+
+        col_norms = _np.linalg.norm(blk.block_data, axis=0)
+        row_norms = _np.linalg.norm(blk.block_data, axis=1)
+        ind_weights = col_norms + row_norms
+        zero_inds = set(_np.where(ind_weights < 1e-12 * num_bels)[0])
+        num_nonzero = num_bels - len(zero_inds)
+
+        next_nonzero = 0; next_zero = num_nonzero
+        perm = _np.zeros((num_bels, num_bels), 'd')
+        for i in range(num_bels):
+            if i in zero_inds:
+                perm[next_zero, i] = 1.0; next_zero += 1
+            else:
+                perm[next_nonzero, i] = 1.0; next_nonzero += 1
+
+        pdata = perm @ blk.block_data @ perm.T
+        small = pdata[0:num_nonzero, 0:num_nonzero]
+        evals, U = _np.linalg.eigh(small)
+        assert all([ev > ttol for ev in evals]), "Lindblad coefficients are not CPTP!"
+        if ttol < 0:
+            Ui = U.T.conj()
+            pev = evals.clip(1e-16, None)
+            small = U @ (pev[:, None] * Ui)
+            try:
+                Lsmall = _np.linalg.cholesky(small)
+            except _np.linalg.LinAlgError:
+                pev = evals.clip(1e-12, 1e100)
+                small = U @ (pev[:, None] * Ui)
+                Lsmall = _np.linalg.cholesky(small)
+        else:
+            Lsmall = _np.linalg.cholesky(small)
+
+        perm_Lmx = _np.zeros((num_bels, num_bels), 'complex')
+        perm_Lmx[:num_nonzero, :num_nonzero] = Lsmall
+        Lmx = perm.T @ perm_Lmx @ perm
+
+        for i in range(num_bels):
+            assert _np.abs(Lmx[i, i].imag) < IMAG_TOL
+            params_mat[i, i] = Lmx[i, i].real
+            for j in range(i):
+                params_mat[i, j] = Lmx[i, j].real
+                params_mat[j, i] = Lmx[i, j].imag
+        return params_mat.ravel()
+
+    def block_data_jacobian(self, blk, v):
+        num_bels = len(blk._bel_labels)
+        nP = len(v)
+        params = v.reshape((num_bels, num_bels))
+        stride = num_bels
+        dC = _np.zeros((nP, num_bels, num_bels), 'complex')
+        C = blk._cache_mx
+        for i in range(num_bels):
+            C[i, i] = params[i, i]
+            dC[i * stride + i, i, i] = 1.0
+            for j in range(i):
+                C[i, j] = params[i, j] + 1j * params[j, i]
+                dC[i * stride + j, i, j] = 1.0
+                dC[j * stride + i, i, j] = 1.0j
+        dBdp = _np.dot(dC, C.T.conjugate())
+        dBdp += _np.dot(C, dC.conjugate().transpose((0, 2, 1))).transpose((1, 0, 2))
+        dBdp = _np.rollaxis(dBdp, 0, 3)  # => (num_bels, num_bels, nP)
+        return dBdp
+
+    def param_labels(self, blk):
+        labels = []
+        for i, ilbl in enumerate(blk._bel_labels):
+            for j, jlbl in enumerate(blk._bel_labels):
+                if i == j:
+                    labels.append(f"{ilbl} diagonal element of non-H coeff Cholesky decomp")
+                elif j < i:
+                    labels.append(f"Re[({ilbl},{jlbl}) element of non-H coeff Cholesky decomp]")
+                else:
+                    labels.append(f"Im[({ilbl},{jlbl}) element of non-H coeff Cholesky decomp]")
+        return labels
+
+    def superop_hessian(self, blk, superops, superops_are_flat):
+        num_bels = len(blk._bel_labels)
+        if superops_are_flat:
+            superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
+        snP = num_bels
+        d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'complex')
+
+        def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
+            for _base in range(snP):
+                start_ab = _base if ab_inc_eq else _base + 1
+                start_qr = _base if qr_inc_eq else _base + 1
+                for _ab in range(start_ab, snP):
+                    for _qr in range(start_qr, snP):
+                        yield (_base, _ab, _qr)
+
+        for base, a, q in iter_base_ab_qr(True, True):
+            d2Odp2[:, :, a, base, q, base] = superops[a, q] + superops[q, a]
+        for base, a, r in iter_base_ab_qr(True, False):
+            d2Odp2[:, :, a, base, base, r] = -1j * superops[a, r] + 1j * superops[r, a]
+        for base, b, q in iter_base_ab_qr(False, True):
+            d2Odp2[:, :, base, b, q, base] = 1j * superops[b, q] - 1j * superops[q, b]
+        for base, b, r in iter_base_ab_qr(False, False):
+            d2Odp2[:, :, base, b, base, r] = superops[b, r] + superops[r, b]
+        return d2Odp2
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        import torch as _torch
+        n = sd[0]
+        P = t_param.reshape(n, n)
+        Cre = _torch.tril(P, -1) + _torch.diag(_torch.diagonal(P))
+        Cim = _torch.tril(P.T, -1)
+        C = _torch.complex(Cre, Cim)
+        return C @ C.conj().T
+
+
 class LindbladCoefficientBlock(_NicelySerializable):
     """ 
     Class for storing and managing the parameters associated with particular subblocks of error-generator
@@ -163,6 +618,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
         super().__init__()
         self._block_type = block_type  # 'ham' or 'other' or 'other_diagonal'
         self._param_mode = param_mode  # 'static', 'elements', 'cholesky', 'depol', 'reldepol'
+        _pcls = type(self)._PARAM_CLASSES.get(param_mode)
+        if _pcls is None:
+            raise InvalidParamModeError(param_mode, block_type)
+        self._parameterization = _pcls()  # composition: owns the param_mode-specific maps (Approach A)
         self._basis = basis  # must be a full Basis object, not just a string, as we otherwise don't know dimension
         self._bel_labels = tuple(basis_element_labels) if (basis_element_labels is not None) \
             else tuple(basis.labels[1:])  # Note: don't include identity
@@ -221,7 +680,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
     @property
     def num_params(self) -> int:
-        raise NotImplementedError("LindbladCoefficientBlock subclasses implement num_params")
+        return self._parameterization.num_params(self)
 
     def create_lindblad_term_superoperators(self, mx_basis='pp', sparse: Union[Literal['auto'], bool]="auto", include_1norms=False, flat=False):
         assert(self._basis is not None), "Cannot create lindblad superoperators without a basis!"
@@ -420,7 +879,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         """
         Generate human-readable labels for the parameters of this block.
         """
-        return self._param_labels_impl()
+        return self._parameterization.param_labels(self)
 
     def _block_data_to_params(self, truncate: Union[bool, float]=False):
         """
@@ -437,7 +896,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if self._param_mode == 'static':
             return _np.empty(0, 'd')
 
-        params = self._block_data_to_params_impl(ttol)
+        params = self._parameterization.block_data_to_params(self, ttol)
 
         assert(not _np.iscomplexobj(params))
         assert(len(params) == self.num_params)
@@ -471,7 +930,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             assert len(v) == 0, "'static' parameterized blocks should have zero parameters!"
             return
 
-        self._from_vector_impl(v)
+        self._parameterization.params_to_block_data(self, v)
 
         # mark cache stale
         self._coefficients_need_update = True
@@ -491,7 +950,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if self._param_mode == 'static':
             return _np.zeros(self._coeff_shape + (0,), 'd')
 
-        return self._deriv_wrt_params_impl(v)
+        return self._parameterization.block_data_jacobian(self, v)
 
     def elementary_errorgen_deriv_wrt_params(self, v=None):
         eeg_indices = self.elementary_errorgen_indices
@@ -530,7 +989,21 @@ class LindbladCoefficientBlock(_NicelySerializable):
             else:
                 return _np.zeros((superops.shape[2], superops.shape[3], 0), 'd')
 
-        dOdp = self._superop_deriv_wrt_params_impl(superops, v, superops_are_flat)
+        # The error generator is linear in block_data (superop = sum_i block_data_flat[i] * G_i), so by
+        # the chain rule  d(superop)/dv = einsum('Dp,Djk->jkp', d(block_data)/dv, G).  Only the
+        # parameterization's Jacobian is param_mode-specific (issue 607).
+        v = self.to_vector() if (v is None) else v
+        nP = len(v)
+        if self._superops_matrix_structured and not superops_are_flat:
+            n = len(self._bel_labels)
+            Gflat = superops.reshape((n * n, superops.shape[2], superops.shape[3]))
+        else:
+            Gflat = superops
+        Jflat = self.deriv_wrt_params(v).reshape(-1, nP)
+        dOdp = _np.einsum('Dp,Djk->jkp', Jflat, Gflat)
+        if self._superops_matrix_structured:
+            n = len(self._bel_labels)
+            dOdp = dOdp.reshape(dOdp.shape[0], dOdp.shape[1], n, n)  # legacy (d2,d2,n,n) param shape
 
         # --- common checks & real‐cast ---
         tr = dOdp.ndim
@@ -549,13 +1022,36 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
 
         # dispatch to block‐type helper
-        d2 = self._superop_hessian_wrt_params_impl(superops, superops_are_flat)
+        d2 = self._parameterization.superop_hessian(self, superops, superops_are_flat)
 
         # sanity checks & real‐cast
         tr = d2.ndim
         assert (tr - 2) in (2, 4), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
         assert _np.linalg.norm(_np.imag(d2)) < IMAG_TOL
         return _np.real(d2)
+
+    def stateless_data(self):
+        """Block data considered constant during model fitting, for the PyTorch path (issue 607).
+
+        Returns ``(parameterization_class, torch_ctx)``, where ``torch_ctx`` carries the constants that
+        ``torch_base`` needs.  This mirrors the Torchable API (``stateless_data`` / ``torch_base`` on
+        TPState / FullTPOp / TPPOVM) but lives on the (non-ModelMember) coefficient block, so that a
+        Torchable ``LindbladErrorgen`` can compose its blocks' contributions.
+        """
+        return (type(self._parameterization), self._parameterization.torch_stateless_data(self))
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable reconstruction of ``block_data`` from the parameter tensor ``t_param``.
+
+        With ``sd = blk.stateless_data()`` and ``t_param = torch.from_numpy(blk.to_vector())``,
+        ``type(blk).torch_base(sd, t_param)`` reproduces ``blk.block_data`` as a torch Tensor whose
+        autodiff Jacobian w.r.t. ``t_param`` equals ``blk.deriv_wrt_params(...)``.  The error generator
+        at the ``LindbladErrorgen`` level is then ``einsum('i,ijk->jk', torch_base(...).ravel(), G)``
+        with ``G`` the (constant) term-generator superoperators.
+        """
+        param_cls, torch_ctx = sd
+        return param_cls.block_data_torch(torch_ctx, t_param)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -611,15 +1107,7 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
     _block_dtype = 'd'
     _uses_cache_mx = False
     _superops_matrix_structured = False
-
-    @property
-    def num_params(self) -> int:
-        if self._param_mode == 'static':
-            return 0
-        elif self._param_mode == 'elements':
-            return len(self._bel_labels)
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
+    _PARAM_CLASSES = {'static': _StaticParam, 'elements': _HamElements}
 
     def _compute_term_generators(self, mxs, d2, sparse):
         nMxs = len(mxs)
@@ -664,49 +1152,6 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
     def _coefficient_labels_impl(self):
         return ["%s Hamiltonian error coefficient" % lbl for lbl in self._bel_labels]
 
-    def _param_labels_impl(self):
-        if self._param_mode == 'static':
-            return []
-        elif self._param_mode == 'elements':
-            return [f"{lbl} Hamiltonian error coefficient" for lbl in self._bel_labels]
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _block_data_to_params_impl(self, ttol):
-        if self._param_mode == "elements":
-            return self.block_data.real  # type: ignore
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _from_vector_impl(self, v):
-        if self._param_mode == 'elements':
-            self.block_data[:] = v
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _deriv_wrt_params_impl(self, v):
-        num_bels = len(self._bel_labels)
-        if self._param_mode == 'elements':
-            # d(block_data[i])/d v[j] = delta_{i,j}
-            return _np.identity(num_bels, 'd')
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _superop_deriv_wrt_params_impl(self, superops, v, superops_are_flat):
-        if self._param_mode == 'elements':
-            # d/dp_k of H-term superop == the k'th superop itself
-            return superops.transpose((1, 2, 0))
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _superop_hessian_wrt_params_impl(self, superops, superops_are_flat):
-        """Hessian for the 'ham' block: always zero (linear in parameters)."""
-        if self._param_mode != 'elements':
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-        d1, d2 = superops.shape[1:3]
-        nP = self.num_params
-        return _np.zeros((d1, d2, nP, nP), 'd')
-
 
 class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
     """Pauli-stochastic diagonal (``block_type='other_diagonal'``) Lindblad coefficient block.
@@ -718,17 +1163,8 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
     _block_dtype = 'd'
     _uses_cache_mx = False
     _superops_matrix_structured = False
-
-    @property
-    def num_params(self) -> int:
-        if self._param_mode == 'static':
-            return 0
-        elif self._param_mode in ('depol', 'reldepol'):
-            return 1
-        elif self._param_mode in ('elements', 'cholesky'):
-            return len(self._bel_labels)
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
+    _PARAM_CLASSES = {'static': _StaticParam, 'elements': _DiagElements, 'cholesky': _DiagCholesky,
+                      'depol': _Depol, 'reldepol': _RelDepol}
 
     def _compute_term_generators(self, mxs, d2, sparse):
         nMxs = len(mxs)
@@ -784,125 +1220,6 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
     def _coefficient_labels_impl(self):
         return ["(%s,%s) other error coefficient" % (lbl, lbl) for lbl in self._bel_labels]
 
-    def _param_labels_impl(self):
-        if self._param_mode == 'static':
-            return []
-        elif self._param_mode == "depol":
-            return ["sqrt(common stochastic error coefficient for depolarization)"]
-        elif self._param_mode == 'reldepol':
-            return ["common stochastic error coefficient for depolarization"]
-        elif self._param_mode == "cholesky":
-            return [f"sqrt({lbl} stochastic coefficient)" for lbl in self._bel_labels]
-        elif self._param_mode == "elements":
-            return [f"{lbl} stochastic coefficient" for lbl in self._bel_labels]
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _block_data_to_params_impl(self, ttol):
-        # depol / reldepol share a one-parameter constraint
-        if self._param_mode in ("depol", "reldepol"):
-            if self._param_mode == "depol":
-                nonneg = [v >= ttol for v in self.block_data]
-                assert all(nonneg), f"Lindblad stochastic coefficients are not positive! (tol={ttol})"
-            # check all diagonal entries are equal
-            first = self.block_data[0]
-            all_equal = [_np.isclose(v, first, atol=1e-6) for v in self.block_data]
-            assert all(all_equal), f"Diagonal lindblad coefficients are not equal! (tol={ttol})"
-            # build the single parameter
-            if self._param_mode == "depol":
-                avg = _np.mean(self.block_data.clip(0, 1e100))  # was 1e-16
-                return _np.array([_np.sqrt(_np.real(avg))], 'd')  # shape (1,)
-            else:  # 'reldepol'
-                avg = _np.mean(self.block_data)
-                return _np.array([_np.real(avg)], 'd')  # shape (1,)
-
-        # cholesky: each block_data[i] = param[i]**2
-        elif self._param_mode == "cholesky":
-            nonneg = [v >= ttol for v in self.block_data]
-            assert all(nonneg), "Lindblad stochastic coefficients are not positive!"
-            clipped = self.block_data.clip(0, 1e100)  # was 1e-16
-            return _np.sqrt(clipped.real)  # shape (len(self._bel_labels),)
-
-        # elements: unconstrained real diag
-        elif self._param_mode == "elements":
-            return self.block_data.real  # shape (len(self._bel_labels),)
-
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _from_vector_impl(self, v):
-        num_bels = len(self._bel_labels)
-
-        if self._param_mode in ('depol', 'reldepol'):
-            v = v.item() * _np.ones(num_bels, 'd')
-        else:
-            assert v.shape == (num_bels,)
-
-        if self._param_mode in ('cholesky', 'depol'):
-            self.block_data[:] = v**2
-        elif self._param_mode in ('reldepol', 'elements'):
-            self.block_data[:] = v
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _deriv_wrt_params_impl(self, v):
-        num_bels = len(self._bel_labels)
-        nP = len(v)
-        mat = _np.zeros((num_bels, nP), 'd')
-
-        if self._param_mode in ('depol', 'reldepol'):
-            assert nP == 1, f"Expected 1 parameter, got {nP}!"
-            if self._param_mode == 'depol':
-                mat[:, 0] = 2.0 * v[0]
-            else:  # 'reldepol'
-                mat[:, 0] = 1.0
-
-        elif self._param_mode == 'cholesky':
-            assert nP == num_bels, f"Expected {num_bels} parameters, got {nP}!"
-            # block_data[i] = v[i]**2  =>  d(block_data[i])/d v[j] = 2 v[i] delta_{i,j}
-            mat[:, :] = 2.0 * _np.diag(v)
-
-        elif self._param_mode == 'elements':
-            assert nP == num_bels, f"Expected {num_bels} parameters, got {nP}!"
-            mat[:, :] = _np.identity(num_bels, 'd')
-
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-        return mat
-
-    def _superop_deriv_wrt_params_impl(self, superops, v, superops_are_flat):
-        if v is None:
-            v = self.to_vector()
-        transposed = _np.transpose(superops, (1, 2, 0))  # shape = (d, d, nBEL)
-
-        if self._param_mode == "depol":  # all coeffs same & == param^2
-            return _np.sum(transposed, axis=2)[:, :, None] * 2 * v[0]
-        elif self._param_mode == "reldepol":  # all coeffs same & == param
-            return _np.sum(transposed, axis=2)[:, :, None]
-        elif self._param_mode == "cholesky":  # (coeffs = params^2)
-            return transposed * 2 * v  # just a broadcast
-        elif self._param_mode == "elements":  # "unconstrained" (coeff == params)
-            return transposed
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _superop_hessian_wrt_params_impl(self, superops, superops_are_flat):
-        nP = self.num_params
-        if self._param_mode == 'depol':
-            base = _np.sum(superops, axis=0)   # shape (d,d)
-            return base[:, :, None, None] * 2.0
-        elif self._param_mode == 'cholesky':
-            # d2O/dp_i dp_j = 0 if i!=j;  = 2 superops[i] if i==j
-            trans = _np.transpose(superops, (1, 2, 0))      # shape (d,d,nP)
-            I = _np.identity(nP, 'd')                       # shape (nP,nP)
-            return trans[:, :, :, None] * (2.0 * I)[None, None, :, :]
-        elif self._param_mode in ('elements', 'reldepol'):
-            d1, d2 = superops.shape[1:3]
-            return _np.zeros((d1, d2, nP, nP), 'd')
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
 
 class _OtherCoeffBlock(LindbladCoefficientBlock):
     """Full non-Hamiltonian (``block_type='other'``) Lindblad coefficient block (Pauli
@@ -915,15 +1232,7 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
     _block_dtype = 'complex'
     _uses_cache_mx = True
     _superops_matrix_structured = True
-
-    @property
-    def num_params(self) -> int:
-        if self._param_mode == 'static':
-            return 0
-        elif self._param_mode in ('elements', 'cholesky'):
-            return len(self._bel_labels)**2
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
+    _PARAM_CLASSES = {'static': _StaticParam, 'elements': _OtherElements, 'cholesky': _OtherCholesky}
 
     def _compute_term_generators(self, mxs, d2, sparse):
         nMxs = len(mxs)
@@ -1020,265 +1329,6 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
             for j, jlbl in enumerate(self._bel_labels):
                 labels.append("(%s,%s) other error coefficient" % (ilbl, jlbl))
         return labels
-
-    def _param_labels_impl(self):
-        labels = []
-        if self._param_mode == 'static':
-            return labels
-        elif self._param_mode == "cholesky":
-            # Cholesky-decomp parameters: real diag, real lower, imag lower
-            for i, ilbl in enumerate(self._bel_labels):
-                for j, jlbl in enumerate(self._bel_labels):
-                    if i == j:
-                        label = f"{ilbl} diagonal element of non-H coeff Cholesky decomp"
-                    elif j < i:
-                        label = f"Re[({ilbl},{jlbl}) element of non-H coeff Cholesky decomp]"
-                    else:
-                        label = f"Im[({ilbl},{jlbl}) element of non-H coeff Cholesky decomp]"
-                    labels.append(label)
-        elif self._param_mode == "elements":
-            # Unconstrained Hermitian-matrix parameters
-            for i, ilbl in enumerate(self._bel_labels):
-                for j, jlbl in enumerate(self._bel_labels):
-                    if i == j:
-                        label = f"{ilbl} diagonal element of non-H coeff matrix"
-                    elif j < i:
-                        label = f"Re[({ilbl},{jlbl}) element of non-H coeff matrix]"
-                    else:
-                        label = f"Im[({ilbl},{jlbl}) element of non-H coeff matrix]"
-                    labels.append(label)
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-        return labels
-
-    def _block_data_to_params_impl(self, ttol):
-        """Handle the 'other' block (full Hermitian matrix)."""
-        numpy_isclose_abstol_default = 1e-8
-        is_hermitian = _mt.is_hermitian(self.block_data, numpy_isclose_abstol_default)
-        assert is_hermitian, "Lindblad 'other' coefficient matrix is not Hermitian!"
-
-        num_bels = len(self._bel_labels)
-        params_mat = _np.empty((num_bels, num_bels), 'd')
-
-        if self._param_mode == "cholesky":
-            # build the Cholesky-style parameters out of block_data = C C+
-            col_norms = _np.linalg.norm(self.block_data, axis=0)
-            row_norms = _np.linalg.norm(self.block_data, axis=1)
-            ind_weights = col_norms + row_norms
-            zero_inds = set(_np.where(ind_weights < 1e-12 * num_bels)[0])
-            num_nonzero = num_bels - len(zero_inds)
-
-            # permute zero rows/cols to end
-            next_nonzero = 0; next_zero = num_nonzero
-            perm = _np.zeros((num_bels, num_bels), 'd')
-            for i in range(num_bels):
-                if i in zero_inds:
-                    perm[next_zero, i] = 1.0; next_zero += 1
-                else:
-                    perm[next_nonzero, i] = 1.0; next_nonzero += 1
-
-            # extract nonzero block, compute eigen-decomp & cholesky
-            pdata = perm @ self.block_data @ perm.T
-            small = pdata[0:num_nonzero, 0:num_nonzero]
-            evals, U = _np.linalg.eigh(small)
-            assert(all([ev > ttol for ev in evals])), "Lindblad coefficients are not CPTP!"
-            if ttol < 0:
-                # truncate small negatives up
-                Ui = U.T.conj()
-                pev = evals.clip(1e-16, None)
-                small = U @ (pev[:, None] * Ui)
-                try:
-                    Lsmall = _np.linalg.cholesky(small)
-                except _np.linalg.LinAlgError:
-                    pev = evals.clip(1e-12, 1e100)
-                    small = U @ (pev[:, None] * Ui)
-                    Lsmall = _np.linalg.cholesky(small)
-            else:
-                Lsmall = _np.linalg.cholesky(small)
-
-            # re-embed into full L
-            perm_Lmx = _np.zeros((num_bels, num_bels), 'complex')
-            perm_Lmx[:num_nonzero, :num_nonzero] = Lsmall
-            Lmx = perm.T @ perm_Lmx @ perm
-
-            # now extract the real diag & real/imag lower-triangle
-            for i in range(num_bels):
-                assert(_np.abs(Lmx[i, i].imag) < IMAG_TOL)
-                params_mat[i, i] = Lmx[i, i].real
-                for j in range(i):
-                    params_mat[i, j] = Lmx[i, j].real
-                    params_mat[j, i] = Lmx[i, j].imag
-
-        elif self._param_mode == "elements":
-            # store directly the Hermitian matrix's real diag + real/imag lower-triangle
-            for i in range(num_bels):
-                assert(_np.abs(self.block_data[i, i].imag) < IMAG_TOL)
-                params_mat[i, i] = self.block_data[i, i].real
-                for j in range(i):
-                    params_mat[i, j] = self.block_data[i, j].real
-                    params_mat[j, i] = self.block_data[i, j].imag
-
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-        # flatten to 1D vector
-        return params_mat.ravel()
-
-    def _from_vector_impl(self, v):
-        num_bels = len(self._bel_labels)
-        params = v.reshape((num_bels, num_bels))
-
-        params_upper_indices = triu_indices(num_bels)
-        if self._param_mode == 'cholesky':
-            cache_mx: _np.ndarray = self._cache_mx  # type: ignore
-
-            params_upper = 1j * params[params_upper_indices]
-            params_lower = (params.T)[params_upper_indices]
-
-            cache_mx_trans = cache_mx.T
-            cache_mx_trans[params_upper_indices] = params_lower + params_upper
-            diag_indices = cached_diag_indices(num_bels)
-            cache_mx[diag_indices] = params[diag_indices]
-
-            # The matrix of (complex) "other"-coefficients is built by assuming
-            # cache_mx is its Cholesky decomp; means otherCoeffs is pos-def.
-            self.block_data[:, :] = cache_mx @ cache_mx.T.conj()
-
-        elif self._param_mode == 'elements':
-            params_upper = -1j * params[params_upper_indices]
-            params_lower = (params.T)[params_upper_indices]
-
-            block_data_trans = self.block_data.T
-            self.block_data[params_upper_indices] = params_lower + params_upper
-            block_data_trans[params_upper_indices] = params_lower - params_upper
-
-            diag_indices = cached_diag_indices(num_bels)
-            self.block_data[diag_indices] = params[diag_indices]
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _deriv_wrt_params_impl(self, v):
-        num_bels = len(self._bel_labels)
-        nP = len(v)
-        params = v.reshape((num_bels, num_bels))
-        stride = num_bels
-
-        if self._param_mode == 'cholesky':
-            # block_data = C C+, C[i,i]=params[i,i], C[i,j]=params[i,j]+1j*params[j,i] (i>j)
-            # d(block_data)/dp = dC*C+ + C*(dC)+
-            dC = _np.zeros((nP, num_bels, num_bels), 'complex')
-            C: _np.ndarray = self._cache_mx  # type: ignore
-
-            for i in range(num_bels):
-                C[i, i] = params[i, i]
-                dC[i * stride + i, i, i] = 1.0
-                for j in range(i):
-                    C[i, j] = params[i, j] + 1j * params[j, i]
-                    dC[i * stride + j, i, j] = 1.0
-                    dC[j * stride + i, i, j] = 1.0j
-
-            dBdp = _np.dot(dC, C.T.conjugate())
-            dBdp += _np.dot(C, dC.conjugate().transpose((0, 2, 1))).transpose((1, 0, 2))
-            dBdp = _np.rollaxis(dBdp, 0, 3)  # => shape = (num_bels, num_bels, nP)
-            return dBdp
-
-        elif self._param_mode == 'elements':
-            # direct Hermitian: block_data[i,j] = v[i,j]_real + i v[j,i]_real
-            mat = _np.zeros((num_bels, num_bels, nP), 'complex')
-            for i in range(num_bels):
-                mat[i, i, i * stride + i] = 1.0
-                for j in range(i):
-                    mat[i, j, i * stride + j] = 1.0
-                    mat[i, j, j * stride + i] = 1.0j
-                    mat[j, i, i * stride + j] = 1.0
-                    mat[j, i, j * stride + i] = -1.0j
-            return mat
-
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _superop_deriv_wrt_params_impl(self, superops, v, superops_are_flat):
-        """superop_deriv_wrt_params for the full 'other' block."""
-        num_bels = len(self._bel_labels)
-
-        # unflatten if needed
-        if superops_are_flat:
-            superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
-
-        if self._param_mode == 'cholesky':
-            L: _np.ndarray = self._cache_mx  # type: ignore
-            Lbar = L.conjugate()
-            F1 = _np.tril(_np.ones((num_bels, num_bels), 'd'))
-            F2 = _np.triu(_np.ones((num_bels, num_bels), 'd'), 1) * 1j
-
-            dOdp = _np.einsum('amlj,mb,ab->ljab', superops, Lbar, F1)        # only a >= b nonzero (F1)
-            dOdp += _np.einsum('malj,mb,ab->ljab', superops, L, F1)         # ditto
-            dOdp += _np.einsum('bmlj,ma,ab->ljab', superops, Lbar, F2)      # only b > a nonzero (F2)
-            dOdp += _np.einsum('mblj,ma,ab->ljab', superops, L, F2.conj())  # ditto
-            return dOdp
-
-        elif self._param_mode == 'elements':
-            # direct Hermitian-matrix parameters
-            F0 = _np.identity(num_bels, 'd')
-            F1 = _np.tril(_np.ones((num_bels, num_bels), 'd'), -1)
-            F2 = _np.triu(_np.ones((num_bels, num_bels), 'd'), 1) * 1j
-
-            # reorder superops so indices = (l,j,a,b)
-            AB_LJ = _np.transpose(superops, (2, 3, 0, 1))  # ablj -> ljab
-            BA_LJ = _np.transpose(superops, (2, 3, 1, 0))  # balj -> ljab
-            dOdp = AB_LJ * F0[None, None, :, :]                                  # a == b case
-            dOdp += AB_LJ * F1[None, None, :, :] + BA_LJ * F1[None, None, :, :]  # a > b (F1)
-            dOdp += BA_LJ * F2[None, None, :, :] - AB_LJ * F2[None, None, :, :]  # a < b (F2)
-            return dOdp
-
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _superop_hessian_wrt_params_impl(self, superops, superops_are_flat):
-        """Hessian for the full 'other' block (Pauli correlation / active errors)."""
-        num_bels = len(self._bel_labels)
-
-        if superops_are_flat:
-            superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
-
-        sqrt_nP = _np.sqrt(self.num_params)
-        snP = int(sqrt_nP)
-        assert snP == sqrt_nP == num_bels
-
-        if self._param_mode == 'cholesky':
-            d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'complex')
-
-            # Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
-            # indices of d2Odp2 are [i,j,a,b,q,r]
-            def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
-                """ Generates (base,ab,qr) tuples such that `base` runs over all possible
-                    'other' params and 'ab' and 'qr' run over parameter indices s.t. ab > base
-                    and qr > base.  If ab_inc_eq == True then > becomes >=, likewise qr_inc_eq. """
-                for _base in range(snP):
-                    start_ab = _base if ab_inc_eq else _base + 1
-                    start_qr = _base if qr_inc_eq else _base + 1
-                    for _ab in range(start_ab, snP):
-                        for _qr in range(start_qr, snP):
-                            yield (_base, _ab, _qr)
-
-            for base, a, q in iter_base_ab_qr(True, True):  # Case1: base=b=r, ab=a, qr=q
-                d2Odp2[:, :, a, base, q, base] = superops[a, q] + superops[q, a]
-            for base, a, r in iter_base_ab_qr(True, False):  # Case2: base=b=q, ab=a, qr=r
-                d2Odp2[:, :, a, base, base, r] = -1j * superops[a, r] + 1j * superops[r, a]
-            for base, b, q in iter_base_ab_qr(False, True):  # Case3: base=a=r, ab=b, qr=q
-                d2Odp2[:, :, base, b, q, base] = 1j * superops[b, q] - 1j * superops[q, b]
-            for base, b, r in iter_base_ab_qr(False, False):  # Case4: base=a=q, ab=b, qr=r
-                d2Odp2[:, :, base, b, base, r] = superops[b, r] + superops[r, b]
-
-            return d2Odp2
-
-        elif self._param_mode == 'elements':
-            # unconstrained Hermitian: Hessian is identically zero
-            d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')
-            return d2Odp2
-
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
 
 
 LindbladCoefficientBlock._BLOCK_TYPES = {
