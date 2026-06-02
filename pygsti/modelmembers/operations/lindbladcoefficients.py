@@ -80,7 +80,7 @@ class InvalidBlockTypeError(ValueError):
     msg = "Internal error: invalid block type!"
 
     def __init__(self) -> None:
-        super().__init__(msg)
+        super().__init__(self.msg)
 
 
 class InvalidParamModeError(ValueError):
@@ -100,6 +100,21 @@ class LindbladCoefficientBlock(_NicelySerializable):
     """
 
     _superops_cache = {}  # a custom cache for create_lindblad_term_superoperators method calls
+
+    # Registry mapping block_type string -> concrete subclass; populated at end of this module.
+    _BLOCK_TYPES = {}
+
+    def __new__(cls, block_type=None, *args, **kwargs):
+        # When the base class is instantiated directly -- the public/back-compat entry point, e.g.
+        # ``LindbladCoefficientBlock('ham', ...)`` -- construct the concrete subclass registered for
+        # the requested ``block_type``.  Subclasses (and pickle/deepcopy, which invoke
+        # ``cls.__new__(cls)`` with no ``block_type``) allocate normally without dispatching.
+        if cls is LindbladCoefficientBlock:
+            try:
+                cls = LindbladCoefficientBlock._BLOCK_TYPES[block_type]
+            except KeyError:
+                raise InvalidBlockTypeError()
+        return super().__new__(cls)
 
     def __init__(self, block_type, basis, basis_element_labels=None, initial_block_data=None, param_mode='static',
                  truncate=False):
@@ -1325,6 +1340,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
+        # Always serialize under the *base* class name; ``block_type`` (below) selects the concrete
+        # subclass on load (via __new__ in _from_nice_serialization).  This keeps the on-disk format
+        # stable and backward/forward compatible across the base+subclasses refactor.
+        state['module'] = LindbladCoefficientBlock.__module__
+        state['class'] = LindbladCoefficientBlock.__name__
         state.update({'block_type': self._block_type,
                       'parameterization_mode': self._param_mode,
                       'basis_element_labels': list(self._bel_labels),
@@ -1360,6 +1380,26 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if len(self._bel_labels) < 10:
             s += " Coefficients are:\n" + str(_np.round(self.block_data, 4))
         return s
+
+
+class _HamCoeffBlock(LindbladCoefficientBlock):
+    """Hamiltonian (``block_type='ham'``) Lindblad coefficient block."""
+
+
+class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
+    """Pauli-stochastic diagonal (``block_type='other_diagonal'``) Lindblad coefficient block."""
+
+
+class _OtherCoeffBlock(LindbladCoefficientBlock):
+    """Full non-Hamiltonian (``block_type='other'``) Lindblad coefficient block (Pauli
+    stochastic + correlation + active error generators)."""
+
+
+LindbladCoefficientBlock._BLOCK_TYPES = {
+    'ham': _HamCoeffBlock,
+    'other_diagonal': _OtherDiagonalCoeffBlock,
+    'other': _OtherCoeffBlock,
+}
 
 
 @lru_cache(maxsize=16)
