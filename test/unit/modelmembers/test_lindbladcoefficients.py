@@ -297,37 +297,62 @@ def test_static_deriv_shapes():
         assert blk.superop_deriv_wrt_params(G, np.empty(0), superops_are_flat=True).shape[-1] == 0
 
 
-# Snapshot of the Term-simulator polynomial coefficients (1-qubit pp, fixed block_data below),
-# generated from the pre-refactor code.  Guards the block-type split's move of
-# _create_lindblad_term_objects_* (count + a hash of all terms' Polynomial.coeffs).
+# Snapshot of the Term-simulator polynomial coefficients (1-qubit pp, fixed block_data below).
+# Guards the block-type split's move of _create_lindblad_term_objects_* (term count + a
+# platform-independent fingerprint of every term's Polynomial.coeffs).  Values are regenerated
+# from the current, golden-validated code; the fingerprint is integer-quantized (see
+# _term_fingerprint), so they are identical on Linux and Windows.
 _TERM_SNAPSHOT_1Q = {
-    ('ham', 'static'):            (6,  'bb697653e167e1ea'),
-    ('ham', 'elements'):          (6,  '167e8530daa8c3c2'),
-    ('other_diagonal', 'static'): (9,  '8f4ecb17fd64a16c'),
-    ('other_diagonal', 'elements'):  (9, 'e1e341741e994e87'),
-    ('other_diagonal', 'cholesky'):  (9, '93b4c49fe6469e64'),
-    ('other_diagonal', 'depol'):     (9, '26594d67358c52d7'),
-    ('other_diagonal', 'reldepol'):  (9, '28850a5764660304'),
-    ('other', 'static'):          (27, '0f434ddab05c2818'),
-    ('other', 'elements'):        (27, '709cf132c89e1fb0'),
-    ('other', 'cholesky'):        (27, '742ea93b1f30fccb'),
+    ('ham', 'static'):            (6,  '51b66691aec58f41'),
+    ('ham', 'elements'):          (6,  '4678afcfae6f2f46'),
+    ('other_diagonal', 'static'): (9,  'a93ab7917787cbf5'),
+    ('other_diagonal', 'elements'):  (9, '740224cf5de53b06'),
+    ('other_diagonal', 'cholesky'):  (9, '420d40c4ef90f283'),
+    ('other_diagonal', 'depol'):     (9, 'de25c201ccac84b6'),
+    ('other_diagonal', 'reldepol'):  (9, '519adfe0c63611cd'),
+    ('other', 'static'):          (27, 'ed030cf097f2f2bf'),
+    ('other', 'elements'):        (27, 'f1b5685854dc434c'),
+    ('other', 'cholesky'):        (27, '358c013b0ac41bb0'),
 }
 _TERM_SNAPSHOT_CONFIGS = list(_TERM_SNAPSHOT_1Q.keys())
 
 
+# Quantize coefficients to this resolution before hashing.  Collapses cross-platform float
+# artifacts -- +0.0 vs -0.0 and last-ULP wobble in math-library output -- to identical integers,
+# making the fingerprint reproducible across Linux/Windows.  (Monomial keys are already small
+# non-negative ints that pack identically on 32- and 64-bit platforms.)
+_TERM_FP_SCALE = 10 ** 9
+
+
 def _term_fingerprint(terms):
+    """Platform-independent fingerprint of a list of polynomial terms.
+
+    Each term's ``Polynomial.coeffs`` becomes a sorted tuple of ``(monomial, re, im)`` triples:
+    ``monomial`` is the tuple of variable indices and ``re``/``im`` are the coefficient's real and
+    imaginary parts quantized to ``_TERM_FP_SCALE``.  Numerically-zero monomials are dropped and the
+    all-integer structure is hashed, so the result is independent of float ``repr`` -- the source of
+    the earlier Linux-vs-Windows discrepancy.
+    """
     sigs = []
     for t in terms:
-        sig = tuple(sorted((tuple(int(i) for i in k), round(complex(v).real, 12), round(complex(v).imag, 12))
-                           for k, v in t.coeff.coeffs.items()))
-        sigs.append(sig)
+        sig = []
+        for k, v in t.coeff.coeffs.items():
+            c = complex(v)
+            re = int(round(c.real * _TERM_FP_SCALE))
+            im = int(round(c.imag * _TERM_FP_SCALE))
+            if re == 0 and im == 0:
+                continue
+            sig.append((tuple(int(i) for i in k), re, im))
+        sig.sort()
+        sigs.append(tuple(sig))
     sigs.sort()
     return hashlib.sha1(repr(sigs).encode()).hexdigest()[:16]
 
 
 @pytest.mark.parametrize("bt,pm", _TERM_SNAPSHOT_CONFIGS, ids=["%s-%s" % k for k in _TERM_SNAPSHOT_1Q])
 def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
-    """Pin the Term-simulator polynomial coefficients (counts + hash) to guard the block-type split."""
+    """Pin the Term-simulator polynomial coefficients (count + platform-independent fingerprint)
+    to guard the block-type split's move of _create_lindblad_term_objects_*."""
     from pygsti.baseobjs.statespace import QubitSpace
     pp = Basis.cast('pp', 4)
     blk = LCB(bt, pp, param_mode=pm)
@@ -341,3 +366,6 @@ def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
     expected_count, expected_hash = _TERM_SNAPSHOT_1Q[(bt, pm)]
     assert len(terms) == expected_count
     assert _term_fingerprint(terms) == expected_hash
+    # sanity: every monomial references only this block's own parameters (0 .. num_params-1)
+    var_indices = {int(i) for t in terms for k in t.coeff.coeffs for i in k}
+    assert all(0 <= i < blk.num_params for i in var_indices)
