@@ -268,7 +268,7 @@ def test_is_similar():
     a = LCB('other_diagonal', pp, param_mode='cholesky')
     assert a.is_similar(LCB('other_diagonal', pp, param_mode='cholesky'))
     assert not a.is_similar(LCB('other_diagonal', pp, param_mode='elements'))   # param_mode differs
-    assert not a.is_similar(LCB('ham', pp, param_mode='cholesky'))              # block_type differs
+    assert not a.is_similar(LCB('ham', pp, param_mode='elements'))              # block_type differs
     assert not a.is_similar(LCB('other', pp, param_mode='cholesky'))
     assert not a.is_similar("not a block")
 
@@ -357,3 +357,97 @@ def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
     # sanity: every monomial references only this block's own parameters (0 .. num_params-1)
     var_indices = {int(i) for t in terms for k in t.coeff.coeffs for i in k}
     assert all(0 <= i < blk.num_params for i in var_indices)
+
+
+# =====================================================================================================
+# Coverage-directed tests for the refactored module (Approach A).  These exercise behavior the golden
+# matrix above did not reach: the elementary-errorgen Jacobian, set_elementary_errorgens' on_missing
+# handling, 'other'-block labels / properties, the matrix-structured (non-flat) superop derivative, and
+# the fail-fast block_type / param_mode validation introduced by the composition refactor.
+# =====================================================================================================
+
+@pytest.mark.parametrize("case", FD_CASES, ids=_config_as_string)
+def test_elementary_errorgen_deriv_wrt_params_fd(case):
+    """elementary_errorgen_deriv_wrt_params(v) == d(elementary_errorgens)/dv  (central finite diff)."""
+    blk = make_block(*case, data_seed=2024)
+    v0 = blk.to_vector().copy()  # copy: for 'elements' to_vector() returns a *view* of block_data,
+    blk.from_vector(v0)          # which from_vector would then mutate underneath us during the FD loop
+    lbls = list(blk.elementary_errorgens.keys())
+    analytic = blk.elementary_errorgen_deriv_wrt_params(v0)
+    assert analytic.shape == (len(lbls), blk.num_params)
+
+    eps = 1e-6
+    fd = np.zeros((len(lbls), blk.num_params))
+    for p in range(blk.num_params):
+        vp = v0.copy(); vp[p] += eps
+        blk.from_vector(vp); plus = dict(blk.elementary_errorgens)
+        vm = v0.copy(); vm[p] -= eps
+        blk.from_vector(vm); minus = dict(blk.elementary_errorgens)
+        fd[:, p] = [(plus[lbl] - minus[lbl]) / (2 * eps) for lbl in lbls]
+    blk.from_vector(v0)  # restore
+    assert np.allclose(analytic, fd, atol=1e-6, rtol=1e-5)
+
+
+def test_set_elementary_errorgens_on_missing():
+    """on_missing in {'ignore','warn','raise'} controls handling of absent elementary errorgens."""
+    blk = LCB('ham', Basis.cast('pp', 4), param_mode='elements')
+    full = dict(blk.elementary_errorgens)
+    dropped = next(iter(full))
+    partial = {k: v for k, v in full.items() if k != dropped}
+
+    with pytest.raises(ValueError):
+        blk.set_elementary_errorgens(partial, on_missing='raise')
+    with pytest.warns(UserWarning):
+        blk.set_elementary_errorgens(partial, on_missing='warn')
+    # default 'ignore' assumes 0 for the missing entry -- no error or warning
+    unused = blk.set_elementary_errorgens(partial)
+    assert isinstance(unused, dict)
+
+
+def test_coefficient_labels_block_type_and_caches():
+    """coefficient_labels (incl. the n*n 'other' case), the block_type property, the static
+    from_vector no-op, the cached elementary_errorgen_indices return, and convert()."""
+    pp = Basis.cast('pp', 4)
+    for bt, n_labels in [('ham', 3), ('other_diagonal', 3), ('other', 9)]:
+        blk = LCB(bt, pp, param_mode='static')
+        assert blk.block_type == bt
+        labels = blk.coefficient_labels
+        assert len(labels) == n_labels and all(isinstance(s, str) for s in labels)
+
+    LCB('ham', pp, param_mode='static').from_vector(np.empty(0))  # static carries no params -> no-op
+
+    blk = LCB('other_diagonal', pp, param_mode='elements')
+    _ = blk.elementary_errorgens                                  # populate index cache + clear flag
+    assert blk.elementary_errorgen_indices is blk.elementary_errorgen_indices  # cached return
+    converted = blk.convert('cholesky')
+    assert converted.block_type == 'other_diagonal' and converted._param_mode == 'cholesky'
+
+
+def test_invalid_block_type_raises():
+    from pygsti.modelmembers.operations.lindbladcoefficients import InvalidBlockTypeError
+    with pytest.raises(InvalidBlockTypeError):
+        LCB('not_a_block_type', Basis.cast('pp', 4))
+
+
+def test_invalid_param_mode_raises_eagerly():
+    """Approach A validates (block_type, param_mode) at construction time (fail-fast)."""
+    from pygsti.modelmembers.operations.lindbladcoefficients import InvalidParamModeError
+    pp = Basis.cast('pp', 4)
+    with pytest.raises(InvalidParamModeError):
+        LCB('ham', pp, param_mode='cholesky')           # 'cholesky' invalid for 'ham'
+    with pytest.raises(InvalidParamModeError):
+        LCB('other_diagonal', pp, param_mode='not_a_mode')
+
+
+@pytest.mark.parametrize("case", [c for c in FD_CASES if c[2] == 'other'], ids=_config_as_string)
+def test_superop_deriv_other_matrix_structured(case):
+    """The matrix-structured (superops_are_flat=False) path of superop_deriv_wrt_params for the
+    'other' block agrees with the flat path (Approach A's generic chain-rule implementation)."""
+    bname, dim, bt, pm = case
+    blk = make_block(*case, data_seed=7)
+    v = blk.to_vector()
+    G_struct = np.asarray(blk.create_lindblad_term_superoperators(bname, sparse=False, flat=False))
+    G_flat = np.asarray(blk.create_lindblad_term_superoperators(bname, sparse=False, flat=True))
+    d_struct = blk.superop_deriv_wrt_params(G_struct, v, superops_are_flat=False)  # (d2, d2, n, n)
+    d_flat = blk.superop_deriv_wrt_params(G_flat, v, superops_are_flat=True)        # (d2, d2, n*n)
+    assert np.allclose(d_struct.reshape(d_flat.shape), d_flat, atol=1e-9)
