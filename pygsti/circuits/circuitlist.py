@@ -264,11 +264,14 @@ class CircuitList(_NicelySerializable):
         Returns:
             `CircuitList` with the subcircuits tensored together.
         """
+        if isinstance(other_circuitlist, _Circuit):
+            raise TypeError("Cannot tensor a CircuitList with a Circuit. You must provide a CircuitList.")
+
         circuits = []
         for c1, c2 in zip(self._circuits, other_circuitlist._circuits):
             if len(c1) != len(c2):
                 raise ValueError("Cannot tensor circuits of different lengths.")
-        circuits.append(c1.tensor_circuit(c2))
+            circuits.append(c1.tensor_circuit(c2))
 
         out = CircuitList(circuits, name=new_name)
         return out

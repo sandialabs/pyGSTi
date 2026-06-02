@@ -23,7 +23,7 @@ import itertools as _itertools
 import warnings as _warnings
 
 import numpy as _np
-from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup, LabelTup as _LabelTup, LabelStr as _LabelStr
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
@@ -1343,17 +1343,34 @@ class Circuit(object):
 
         for i in layers:
             ret_layer = []
-            for l in self._layer_components(i):  # loop over labels in this layer
+            layer_lbl = self.layertup[i]
+            
+            if lines is None: # Add idles only when lines is None
+                if layer_lbl.sslbls is None:
+                    if not layer_lbl.components:
+                        components = [_Label('I', line) for line in self._line_labels]
+                    else:
+                        components = [layer_lbl]
+                else:
+                    components = list(layer_lbl.components)
+                    for line in self._line_labels:
+                        if line not in layer_lbl.sslbls:
+                            components.append(_Label('I', line))
+            else:
+                components = list(layer_lbl.components)
+
+
+            for l in components:
                 sslbls = get_sslbls(l)
                 if sslbls is None:
-                    ## add in special case of identity layer
-                    #if (isinstance(l,_Label) and l.name == self.identity): # ~ is_identity_layer(l)
-                    #    ret_layer.append(l); continue
-                    sslbls = set(self._line_labels)  # otherwise, treat None sslbs as *all* labels
+                    sslbls = set(self._line_labels)
                 else:
                     sslbls = set(sslbls)
-                if (strict and sslbls.issubset(lines)) or \
-                   (not strict and len(sslbls.intersection(lines)) >= 0):
+
+                if lines is None:
+                    ret_layer.append(l)
+                elif (strict and sslbls.issubset(lines)) or \
+                   (not strict and sslbls.intersection(lines)):
                     ret_layer.append(l)
             ret.append(_Label(ret_layer) if len(ret_layer) != 1 else ret_layer[0])  # Labels b/c we use _fastinit
 
@@ -2493,11 +2510,16 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         #assert(self.identity == circuit.identity), "The identity labels must be the same!"
 
+
         #Construct new line labels (of final circuit)
         overlap = set(self._line_labels).intersection(circuit._line_labels)
         if len(overlap) > 0:
             raise ValueError(
                 "The line labels of `circuit` and this Circuit must be distinct, but overlap = %s!" % str(overlap))
+        if self._line_labels == '*':
+            raise ValueError("The line labels of 'self', are underspecified and are currently the placeholder labels.")
+        if circuit._line_labels == '*':
+            raise ValueError("The line labels of 'circuit', are underspecified and are currently the placeholder labels.")
 
         all_line_labels = set(self._line_labels + circuit._line_labels)
         if line_order is not None:
@@ -2517,8 +2539,67 @@ class Circuit(object):
         else:
             new_line_labels = self._line_labels + circuit._line_labels
 
+    
         #Add circuit's labels into this circuit
-        self.insert_labels_as_lines_inplace(circuit._labels, line_labels=circuit.line_labels)
+        new_layers = []
+        ind = 0
+        while ind < min(self.num_layers, circuit.num_layers):
+            lbl = self.layer_label(ind)
+            other_lbl = circuit.layer_label(ind)
+            # Convert to LabelTup esq formats.
+
+            if isinstance(lbl, _LabelStr):
+                # These lbls have no qubits associated with them because of reasons.
+                # So we will assume that each line in the circuit of each has that gate applied.
+                lbl = _Label(lbl.name, self.line_labels)
+            if isinstance(other_lbl, _LabelStr):
+                other_lbl = _Label(other_lbl.name, circuit.line_labels)
+            
+            if isinstance(lbl, _CircuitLabel) and lbl.depth == 1:
+                # Convert into not a CircuitLabel.
+                lbl = _Label(lbl.components, lbl.sslbls, lbl.time, lbl.args)
+            if isinstance(other_lbl, _CircuitLabel) and other_lbl.depth == 1:
+                other_lbl = _Label(other_lbl.components, other_lbl.sslbls, other_lbl.time, other_lbl.args)
+
+            nq_prior: int = lbl.num_qubits
+
+            if isinstance(lbl, _CircuitLabel) and isinstance(other_lbl, _CircuitLabel):
+                assert lbl.depth == other_lbl.depth, "Embedded circuits must have the same depth when tensoring together."
+                lbl = _Label((lbl, other_lbl)) # make a _LabelTupTup
+                assert isinstance(lbl, _LabelTupTup)
+                assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
+            elif isinstance(lbl, _LabelTupTup) and isinstance(other_lbl, _LabelTupTup):
+                lbl = _Label((*lbl, *other_lbl)) # this should make a _LabelTupTup
+                assert isinstance(lbl,  _LabelTupTup)
+                assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
+            elif isinstance(lbl, _LabelTupTup):
+                lbl = _Label((*lbl, other_lbl))
+                assert isinstance(lbl, _LabelTupTup)
+                assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
+            elif isinstance(other_lbl, _LabelTupTup):
+                lbl = _Label((lbl, *other_lbl))
+            elif isinstance(other_lbl, _LabelTup) and isinstance(lbl, _LabelTup):
+                lbl = _Label((lbl, other_lbl))
+                assert isinstance(lbl, _LabelTupTup)
+                assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
+            else:
+                raise NotImplementedError(f"{type(lbl)} is not yet supported for tensoring with {type(other_lbl)}")
+            new_layers.append(lbl)
+            ind += 1
+
+        # We need to pad with idle gates if the circuits are not the same length.
+        if len(self) < len(circuit):
+            while ind < len(circuit):
+                new_layers.append(circuit.layer_label(ind))
+                ind += 1
+        else:
+            while ind < len(self):
+                new_layers.append(self.layer_label(ind))
+                ind += 1
+    
+
+        self._labels = new_layers
+
         self._line_labels = new_line_labels  # essentially just reorders labels if needed
 
     def tensor_circuit(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None) -> Circuit:
@@ -2544,6 +2625,7 @@ class Circuit(object):
         -------
         Circuit
         """
+
         cpy = self.copy(editable=True)
         cpy.tensor_circuit_inplace(circuit, line_order)
         if self._static: cpy.done_editing()

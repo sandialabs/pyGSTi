@@ -86,7 +86,6 @@ def test_subcircuits_splits_can_create_empty_sub_circuit():
     lane_to_qubits = {0: (0,)}
 
     attempt = compute_subcircuits(original, qubits_to_lanes, lane_to_qubits)
-
     assert original == _Circuit(attempt[0], line_labels=[0])
 
 def test_subcircuits_split_can_be_cached():
@@ -100,19 +99,14 @@ def test_subcircuits_split_can_be_cached():
 
     # This is a random circuit so the lanes may not be perfect.
     circuit = build_circuit_with_multiple_qubit_gates_with_designated_lanes(num_qubits, depth, lane_eps, gates_to_num_used)
-
     qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit)
 
 
     assert "lanes" in circuit.saved_auxinfo
-
     assert list(circuit.saved_auxinfo["lanes"].keys()) == [(0, 1, 2, 3, 4, 5)]
 
     sub_cirs = compute_subcircuits(circuit, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=True)
-
     assert len(circuit.saved_auxinfo["lanes"].keys()) == len(sub_cirs)
-
-
 
 def test_find_qubit_to_lane_splitting():
 
