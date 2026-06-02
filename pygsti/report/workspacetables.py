@@ -1762,7 +1762,7 @@ class GaugeRobustErrgenTable(WorkspaceTable):
         baseStrs = _circuits.list_all_circuits_without_powers_and_cycles(list(model.operations.keys()), maxLen)
         for s in baseStrs:
             for i in range(1, maxPower):
-                if len(s**i) > 1 and _np.linalg.norm(target_model.circuit_operator(s**i) - Id) < 1e-6:
+                if len(s**i) > 1 and _np.linalg.norm(target_model.sim.product(s**i) - Id) < 1e-6:
                     syntheticIdleStrs.append(s**i); break
         #syntheticIdleStrs = _circuits.to_circuits([ ('Gx',)*4, ('Gy',)*4 ] ) #DEBUG!!!
         #syntheticIdleStrs = _circuits.to_circuits([ ('Gx',)*4, ('Gy',)*4, ('Gy','Gx','Gx')*2] ) #DEBUG!!!
@@ -2569,7 +2569,7 @@ class GateEigenvalueTable(WorkspaceTable):
                 if isinstance(gl, _baseobjs.Label) or isinstance(gl, str):
                     mx = target_model.operations[gl].to_dense("HilbertSchmidt")
                 else:
-                    mx = target_model.circuit_operator(gl)
+                    mx = target_model.sim.product(gl)
                 target_evals = _tools.eigenvalues(mx)
 
                 if any([(x in display) for x in ('rel', 'log-rel', 'relpolar')]):

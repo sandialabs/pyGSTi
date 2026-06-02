@@ -709,33 +709,3 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dloglpp, logl_array_to_fill, loglpp)
 
-    @_deprecated('OpModel.circuit_operator')
-    def product(self, circuit, scale=False):
-        """
-        Compute the product of a specified sequence of operation labels.
-
-        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of circuit can be thought of as the first gate operation
-        performed, which is on the far right of the product of matrices.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        Returns
-        -------
-        product : numpy array
-            The product or scaled product of the operation matrices.
-        scale : float
-            Only returned when scale == True, in which case the
-            actual product == product * scale.  The purpose of this
-            is to allow a trace or other linear operation to be done
-            prior to the scaling.
-        """
-        from pygsti.models.model import OpModel as _OpModel  # avoid circular import
-        model : _OpModel = self.model  # type: ignore
-        return model.circuit_operator(circuit, scale)

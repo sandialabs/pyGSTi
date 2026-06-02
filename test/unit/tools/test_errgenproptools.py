@@ -694,7 +694,7 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
                                                                     'truncation_threshold':truncation_threshold})
     else:
         eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
-    ideal_channel = target_model.circuit_operator(circuit)
+    ideal_channel = target_model.sim.product(circuit)
     #also get the ideal state prep and povm:
     ideal_prep = target_model.circuit_layer_operator(Label('rho0'), typ='prep').copy()
     ideal_meas = target_model.circuit_layer_operator(Label('Mdefault'), typ='povm').copy()
@@ -714,7 +714,7 @@ def pauli_expectation_errorgen_prop(error_propagator, target_model, circuit, pau
                                                                     'truncation_threshold':truncation_threshold})
     else:
         eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
-    ideal_channel = target_model.circuit_operator(circuit)
+    ideal_channel = target_model.sim.product(circuit)
     #also get the ideal state prep and povm:
     ideal_prep = target_model.circuit_layer_operator(Label('rho0'), typ='prep').copy()
     

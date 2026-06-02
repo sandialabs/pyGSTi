@@ -361,15 +361,15 @@ class ThresholdMethodBase(object):
     def test_product(self):
         circuit = ('Gx', 'Gy')
         p1 = self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
-        p2 = self.model.circuit_operator(circuit, scale=False)
-        p3, scale = self.model.circuit_operator(circuit, scale=True)
+        p2 = self.model.sim.product(circuit, scale=False)
+        p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
 
         circuit = ('Gx', 'Gy', 'Gy')
         p1 = self.model['Gy'].to_dense() @ self.model['Gy'].to_dense() @ self.model['Gx'].to_dense()
-        p2 = self.model.circuit_operator(circuit, scale=False)
-        p3, scale = self.model.circuit_operator(circuit, scale=True)
+        p2 = self.model.sim.product(circuit, scale=False)
+        p3, scale = self.model.sim.product(circuit, scale=True)
         self.assertArraysAlmostEqual(p1, p2)
         self.assertArraysAlmostEqual(p1, scale * p3)
 

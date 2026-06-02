@@ -58,37 +58,6 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     # DistributableForwardSimulator and (I think) not need any more implementation.
     # If this is done, then MatrixForwardSimulator wouldn't need to separately subclass DistributableForwardSimulator
 
-    @_deprecated('OpModel.circuit_operator')
-    def product(self, circuit, scale=False):
-        """
-        Compute the product of a specified sequence of operation labels.
-
-        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of circuit can be thought of as the first gate operation
-        performed, which is on the far right of the product of matrices.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        Returns
-        -------
-        product : numpy array
-            The product or scaled product of the operation matrices.
-        scale : float
-            Only returned when scale == True, in which case the
-            actual product == product * scale.  The purpose of this
-            is to allow a trace or other linear operation to be done
-            prior to the scaling.
-        """
-        from pygsti.models.model import OpModel as _OpModel  # avoid circular import
-        model : _OpModel = self.model  # type: ignore
-        return model.circuit_operator(circuit, scale)
-
     def _rho_es_from_spam_tuples(self, rholabel, elabels):
         # This calculator uses the convention that rho has shape (N,1)
         rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense("minimal")[:, None]
@@ -587,7 +556,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
 
             if use_scaling:
                 old_err = _np.seterr(over='ignore')
-                G, scale = self.model.circuit_operator(circuit_ops, True)
+                G, scale = self.model.sim.product(circuit_ops, True)
                 # TODO - add a ".dense_space_type" attribute of evotype that == either "Hilbert" or "Hilbert-Schmidt"?
                 if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
@@ -597,7 +566,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                 _np.seterr(**old_err)
 
             else:  # no scaling -- faster but susceptible to overflow
-                G = self.model.circuit_operator(circuit_ops, False)
+                G = self.model.sim.product(circuit_ops, False)
                 if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
                 else:  # evotype == "densitymx"

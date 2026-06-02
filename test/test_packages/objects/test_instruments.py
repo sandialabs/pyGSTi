@@ -240,8 +240,8 @@ class InstrumentTestCase(BaseTestCase):
         gatestring2 = ('Gx','Gy','Gy')
 
         p1 = np.dot( model.operations['Gy'].to_dense(), model.operations['Gx'].to_dense())
-        p2 = model.circuit_operator(gatestring1, scale=False)
-        p3,scale = model.circuit_operator(gatestring1, scale=True)
+        p2 = model.sim.product(gatestring1, scale=False)
+        p3,scale = model.sim.product(gatestring1, scale=True)
 
         print(p1)
         print(p2)

@@ -276,6 +276,69 @@ class ForwardSimulator(_NicelySerializable):
             hprobs[outcome] = hprobs_array[element_index]
         return hprobs
 
+    def product(self, circuit, scale=False):
+        """
+        Compute the product of a specified sequence of operation labels.
+
+        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
+        the first element of circuit can be thought of as the first gate operation
+        performed, which is on the far right of the product of matrices.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+            The sequence of operation labels.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        Returns
+        -------
+        product : numpy array
+            The product or scaled product of the operation matrices.
+        scale : float
+            Only returned when scale == True, in which case the
+            actual product == product * scale.  The purpose of this
+            is to allow a trace or other linear operation to be done
+            prior to the scaling.
+        """
+        superop_dim = self.model.evotype.minimal_dim(self.model.state_space)
+
+        # Smallness tolerances, used internally for conditional scaling required
+        # to control bulk products, their gradients, and their Hessians.
+        _PSMALL = 1e-100
+        G = _np.identity(superop_dim)
+        if scale:
+            scaledGatesAndExps = {}
+            scale_exp = 0
+            for lOp in circuit:
+                if lOp not in scaledGatesAndExps:
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
+                    ng = max(_np.linalg.norm(opmx), 1.0)
+                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
+
+                gate, ex = scaledGatesAndExps[lOp]
+                H = gate @ G  # product of gates, starting with identity
+                scale_exp += ex   # scale and keep track of exponent
+                if H.max() < _PSMALL and H.min() > -_PSMALL:
+                    nG = max(_np.linalg.norm(G), _np.exp(-scale_exp))
+                    G = gate @ G
+                    G /= nG
+                    scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
+                else: G = H
+
+            old_err = _np.seterr(over='ignore')
+            scale = _np.exp(scale_exp)
+            _np.seterr(**old_err)
+
+            return G, scale
+
+        else:
+            for lOp in circuit:
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
+                # above line: LEXICOGRAPHICAL VS MATRIX ORDER
+            return G
+
     # ---------------------------------------------------------------------------
     # BULK operations -----------------------------------------------------------
     # ---------------------------------------------------------------------------

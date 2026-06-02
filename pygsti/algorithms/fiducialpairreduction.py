@@ -432,7 +432,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
             gsGerm = _copy_to_static_explicitop_model(target_model)
-            germMx = gsGerm.circuit_operator(germ)
+            germMx = gsGerm.sim.product(germ)
             #give this state space labels equal to the line_labels of 
             gsGerm.operations['Ggerm'] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
@@ -631,7 +631,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
             gsGerm = _copy_to_static_explicitop_model(target_model)
-            germMx = gsGerm.circuit_operator(germ)
+            germMx = gsGerm.sim.product(germ)
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
             total_num_amplified_parameters += gsGerm.num_params
@@ -806,7 +806,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
             gsGerm = _copy_to_static_explicitop_model(target_model)
-            germMx = gsGerm.circuit_operator(germ)
+            germMx = gsGerm.sim.product(germ)
             
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)

@@ -742,7 +742,7 @@ def create_explicit_alias_model(mdl_primitives, alias_dict):
         del mdl_new.operations[gl]  # remove all gates from mdl_new
 
     for gl, opstr in alias_dict.items():
-        mdl_new.operations[gl] = mdl_primitives.circuit_operator(opstr)
+        mdl_new.operations[gl] = mdl_primitives.sim.product(opstr)
         #Creates fully parameterized gates by default...
 
     mdl_new._clean_paramvec()

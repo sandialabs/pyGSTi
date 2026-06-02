@@ -251,7 +251,7 @@ It is also possible to manipulate the underlying operations by accessing the for
 
 ```{code-cell} ipython3
 # Computing the product of operation matrices (only allowed with the matrix simulator type)
-print("Product of Gx * Gx = \n",depol_model3.circuit_operator(("Gx", "Gx")), end='\n\n')
+print("Product of Gx * Gx = \n",depol_model3.sim.product(("Gx", "Gx")), end='\n\n')
 ```
 
 ## Next steps
