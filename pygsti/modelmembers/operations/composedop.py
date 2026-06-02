@@ -9,6 +9,14 @@ The ComposedOp class and supporting functionality.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
 import collections as _collections
 import itertools as _itertools
@@ -19,6 +27,7 @@ import numpy as _np
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers.operations.experrorgenop import ExpErrorgenOp as _ExpErrorgenOp
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
@@ -30,7 +39,7 @@ from pygsti.tools import slicetools as _slct
 from pygsti import SpaceT
 
 
-class ComposedOp(_LinearOperator):
+class ComposedOp(_LinearOperator, _Torchable):
     """
     An operation that is the composition of a number of map-like factors (possibly other `LinearOperator`).
 
@@ -299,6 +308,33 @@ class ComposedOp(_LinearOperator):
             for op in self.factorops[1:]:
                 mx = _np.dot(op.to_dense(on_space), mx)
             return mx
+
+    def stateless_data(self):
+        """Constants for the torch path (issue 607): one entry per factor op.
+
+        Returns ``(factors,)`` where each entry is ``(type(factor), factor.stateless_data(), inds)`` and
+        ``inds`` are the factor's local parameter indices (from ``_submember_rpindices``, the same arrays
+        ``to_vector``/``from_vector`` use).  Every factor must itself be ``Torchable`` -- including the
+        static ideal/target prefactor, which is handled by ``StaticTorchable``.
+        """
+        factors = [(type(op), op.stateless_data(), _slct.to_array(inds))
+                   for op, inds in zip(self.factorops, self._submember_rpindices)]
+        return (factors,)
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable dense HS process matrix = product of the factors' ``torch_base`` outputs.
+
+        Composes in the same order as ``to_dense``/``_update_denserep``:
+        ``mx = mats[0]; for m in mats[1:]: mx = m @ mx`` (factor 0 is the prefactor, applied first).
+        Each factor receives its own parameter slice ``t_param[inds]`` (empty for static factors).
+        """
+        (factors,) = sd
+        mats = [ftype.torch_base(fsd, t_param[inds]) for ftype, fsd, inds in factors]
+        mx = mats[0]
+        for m in mats[1:]:
+            mx = m @ mx
+        return mx
 
     @property
     def parameter_labels(self):

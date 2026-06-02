@@ -16,7 +16,12 @@ from __future__ import annotations
 from typing import Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
+import numpy as _np
 from pygsti.modelmembers.modelmember import ModelMember
 
 
@@ -28,7 +33,7 @@ class Torchable(ModelMember):
 
         Note: the word "stateless" here is used in the sense of object-oriented programming.
         """
-        raise NotImplementedError()   
+        raise NotImplementedError()
 
     @staticmethod
     def torch_base(sd : Tuple, t_param : _torch.Tensor) -> _torch.Tensor:
@@ -48,3 +53,24 @@ class Torchable(ModelMember):
             np.allclose(obj.base, t.numpy()).
         """
         raise NotImplementedError()
+
+
+class StaticTorchable(Torchable):
+    """
+    Mixin for static (non-parameterized) operations on the dense torch path.
+
+    A static op contributes a constant dense superoperator and has no free parameters, so its
+    ``torch_base`` simply returns the baked-in matrix and ignores the (empty) parameter slice.
+    This lets a composite op (e.g. ``ComposedOp``) treat all of its factors uniformly, including a
+    static ideal/target prefactor.  Any static linear-op ModelMember whose ``to_dense('HilbertSchmidt')``
+    yields its process matrix can use this mixin (``ComposedOp._update_denserep`` already relies on that
+    call for the static prefactor).
+    """
+
+    def stateless_data(self) -> Tuple:
+        mx = _np.ascontiguousarray(self.to_dense('HilbertSchmidt'))
+        return (_torch.from_numpy(mx),)
+
+    @staticmethod
+    def torch_base(sd : Tuple, t_param : _torch.Tensor) -> _torch.Tensor:
+        return sd[0]

@@ -330,6 +330,61 @@ class ForwardSimConsistencyTester(TestCase):
         return
 
 
+class LindbladForwardSimConsistencyTester(TestCase):
+    """End-to-end check that TorchForwardSimulator runs on a CPTPLND (Lindblad) model and agrees with
+    the other forward simulators (GitHub issue 607).  The gates are ComposedOp([static ideal,
+    ExpErrorgenOp]); state prep / POVM are kept 'full TP' so every model member is Torchable."""
+
+    PROBS_TOL = 1e-12
+    JACS_TOL = 1e-9
+
+    def setUp(self):
+        model = smq1Q_XYI.target_model()
+        # TP spam (TPState/TPPOVM are Torchable) + CPTPLND operations
+        # (ComposedOp([StaticUnitaryOp, ExpErrorgenOp])).
+        model.convert_members_inplace('full TP')
+        model.convert_members_inplace('CPTPLND', categories_to_convert='ops')
+        # perturb off the ideal so the error generators are nonzero
+        rng = np.random.default_rng(7)
+        model.from_vector(model.to_vector() + 0.03 * rng.standard_normal(model.num_params))
+        self.model_noisy = model
+
+        prep_fiducials = smq1Q_XYI.prep_fiducials()
+        meas_fiducials = smq1Q_XYI.meas_fiducials()
+        germs = smq1Q_XYI.germs()
+        max_lengths = [4]
+        circuits = create_lsgst_circuit_lists(
+            self.model_noisy, prep_fiducials, meas_fiducials, germs, max_lengths
+        )[0]
+        sims = [
+            SimpleMapForwardSimulator(),
+            SimpleMatrixForwardSimulator(),
+            MapForwardSimulator(),
+            MatrixForwardSimulator()
+        ]
+        if TorchForwardSimulator.ENABLED:
+            sims.append(TorchForwardSimulator())
+        return ForwardSimTestHelper(self.model_noisy, sims, circuits)
+
+    @pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+    def test_consistent_probs(self):
+        fsth = self.setUp()
+        pcl = fsth.probs_colinearities()
+        self.assertFalse(np.any(pcl < 1 - self.PROBS_TOL),
+                         msg=f"Outcome probabilities disagreed across forward simulators: 1-colin="
+                             f"{1 - pcl}")
+        return
+
+    @pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+    def test_consistent_jacs(self):
+        fsth = self.setUp()
+        jcl = fsth.jac_colinearities()
+        self.assertFalse(np.any(jcl < 1 - self.JACS_TOL),
+                         msg=f"Outcome-probability Jacobians disagreed across forward simulators: 1-colin="
+                             f"{1 - jcl}")
+        return
+
+
 class ForwardSimIntegrationTester(BaseProtocolData):
 
     def _run(self, obj : ForwardSimulator.Castable):
