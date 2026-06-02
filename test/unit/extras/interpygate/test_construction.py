@@ -1,10 +1,19 @@
 
+import warnings
+
 import numpy as np
 from scipy.interpolate import LinearNDInterpolator as _linND
 
 import pygsti
-import pygsti.extras.interpygate as interp
-from pygsti.extras.interpygate.core import use_csaps as USE_CSAPS
+# Importing interpygate fires MissingDependencyWarning at module-load time
+# if csaps is not installed (spline interpolation falls back to linear);
+# csaps is an optional dep that pgdev313 currently lacks. Suppress the
+# noise here — tests gate spline-specific paths via USE_CSAPS already.
+from pygsti.tools.exceptions import MissingDependencyWarning as _MissingDependencyWarning
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", _MissingDependencyWarning)
+    import pygsti.extras.interpygate as interp
+    from pygsti.extras.interpygate.core import use_csaps as USE_CSAPS
 from pygsti.tools.basistools import change_basis
 from pygsti.modelpacks import smq1Q_XY
 from pathlib import Path

@@ -31,13 +31,6 @@ def lgstStrings(self):
 
 
 @ns.memo
-def elgstStrings(self):
-    return circuits.create_elgst_lists(
-        self.opLabels, self.germs, self.maxLengthList
-    )
-
-
-@ns.memo
 def lsgstStrings(self):
     return circuits.create_lsgst_circuit_lists(
         self.opLabels, self.prep_fids, self.meas_fids,
@@ -76,7 +69,7 @@ def mdl_lgst(self):
 @ns.memo
 def mdl_lgst_go(self):
     return alg.gaugeopt_to_target(
-        self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, check_jac=True
+        self.mdl_lgst, self.model, item_weights={'spam': 1.0, 'gates': 1.0}, check_jac=True
     )
 
 

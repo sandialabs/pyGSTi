@@ -31,6 +31,7 @@ from pygsti.circuits import subcircuit_selection as _subcircsel
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign as _CombinedExperimentDesign
 from pygsti.processors import random_compilation as _rc
+from pygsti.tools.exceptions import QiskitInteropWarning as _QiskitInteropWarning
 
 
 def qiskit_circuits_to_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], List[qiskit.QuantumCircuit]],
@@ -74,7 +75,8 @@ def qiskit_circuits_to_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCi
         import qiskit
         if qiskit.__version__ != '2.1.1':
             _warnings.warn("The function 'qiskit_circuits_to_mirror_edesign' is designed for qiskit 2.1.1." \
-            "Your version is " + qiskit.__version__)
+            "Your version is " + qiskit.__version__,
+                           _QiskitInteropWarning)
 
         from qiskit import transpile
     except:
@@ -229,7 +231,8 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
         import qiskit
         if qiskit.__version__ != '2.1.1':
             _warnings.warn("The function 'qiskit_circuits_to_fullstack_mirror_edesign' is designed for qiskit 2.1.1." \
-            "Your version is " + qiskit.__version__)
+            "Your version is " + qiskit.__version__,
+                           _QiskitInteropWarning)
         from qiskit import transpile
     except:
         raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
@@ -295,9 +298,11 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
 
             if qk_backend is not None:
                 if coupling_map is not None:
-                    _warnings.warn("'coupling_map' is ignored when 'qk_backend' is provided.")
+                    _warnings.warn("'coupling_map' is ignored when 'qk_backend' is provided.",
+                                   _QiskitInteropWarning)
                 if basis_gates is not None:
-                    _warnings.warn("'basis_gates' is ignored when 'qk_backend' is provided.")
+                    _warnings.warn("'basis_gates' is ignored when 'qk_backend' is provided.",
+                                   _QiskitInteropWarning)
 
                 qk_test_circ = transpile(qk_circ,
                                          backend=qk_backend,
@@ -522,7 +527,8 @@ def qiskit_circuits_to_subcircuit_mirror_edesign(
         import qiskit
         if qiskit.__version__ != '2.1.1':
             _warnings.warn("The function 'qiskit_circuits_to_subcircuit_mirror_edesign' is designed for qiskit 2.1.1." \
-            "Your version is " + qiskit.__version__)
+            "Your version is " + qiskit.__version__,
+                           _QiskitInteropWarning)
 
         from qiskit import transpile
     except:

@@ -28,10 +28,13 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
+from pygsti.tools.exceptions import ForwardSimDiagnosticWarning as _ForwardSimDiagnosticWarning
 from pygsti.tools.matrixtools import _fas
 from pygsti import SpaceT
 from pygsti.tools import listtools as _lt
 from pygsti.circuits import CircuitList as _CircuitList
+
+from pygsti.tools.legacytools import deprecate as _deprecated
 
 _dummy_profiler = _DummyProfiler()
 
@@ -54,63 +57,6 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     # the `as_layout` method to distributed atoms, this class could instead derive from
     # DistributableForwardSimulator and (I think) not need any more implementation.
     # If this is done, then MatrixForwardSimulator wouldn't need to separately subclass DistributableForwardSimulator
-
-    def product(self, circuit, scale=False):
-        """
-        Compute the product of a specified sequence of operation labels.
-
-        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of circuit can be thought of as the first gate operation
-        performed, which is on the far right of the product of matrices.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        Returns
-        -------
-        product : numpy array
-            The product or scaled product of the operation matrices.
-        scale : float
-            Only returned when scale == True, in which case the
-            actual product == product * scale.  The purpose of this
-            is to allow a trace or other linear operation to be done
-            prior to the scaling.
-        """
-        if scale:
-            scaledGatesAndExps = {}
-            scale_exp = 0
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
-            for lOp in circuit:
-                if lOp not in scaledGatesAndExps:
-                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
-                    ng = max(_nla.norm(opmx), 1.0)
-                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
-
-                gate, ex = scaledGatesAndExps[lOp]
-                H = _np.dot(gate, G)   # product of gates, starting with identity
-                scale_exp += ex   # scale and keep track of exponent
-                if H.max() < _PSMALL and H.min() > -_PSMALL:
-                    nG = max(_nla.norm(G), _np.exp(-scale_exp))
-                    G = _np.dot(gate, G / nG); scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
-                else: G = H
-
-            old_err = _np.seterr(over='ignore')
-            scale = _np.exp(scale_exp)
-            _np.seterr(**old_err)
-
-            return G, scale
-
-        else:
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
-            for lOp in circuit:
-                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
-                # above line: LEXICOGRAPHICAL VS MATRIX ORDER
-            return G
 
     def _rho_es_from_spam_tuples(self, rholabel, elabels):
         # This calculator uses the convention that rho has shape (N,1)
@@ -610,7 +556,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
 
             if use_scaling:
                 old_err = _np.seterr(over='ignore')
-                G, scale = self.product(circuit_ops, True)
+                G, scale = self.model.sim.product(circuit_ops, True)
                 # TODO - add a ".dense_space_type" attribute of evotype that == either "Hilbert" or "Hilbert-Schmidt"?
                 if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
@@ -620,7 +566,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                 _np.seterr(**old_err)
 
             else:  # no scaling -- faster but susceptible to overflow
-                G = self.product(circuit_ops, False)
+                G = self.model.sim.product(circuit_ops, False)
                 if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
                 else:  # evotype == "densitymx"
@@ -712,7 +658,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #Note: resets processor-distribution information
         return cls(None, state['mode'] == "distribute_by_timestamp")
 
-    def copy(self):
+    def copy(self, keep_model_attached=True):
         """
         Return a shallow copy of this MatrixForwardSimulator
 
@@ -720,7 +666,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         -------
         MatrixForwardSimulator
         """
-        return MatrixForwardSimulator(self.model)
+        out = MatrixForwardSimulator(self.model)
+        if not keep_model_attached:
+            out.model = None  # type: ignore
+        return out
 
     def _compute_product_cache(self, layout_atom_tree, resource_alloc):
         """
@@ -791,52 +740,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
 
-        #Note: resource_alloc gives procs that could work together to perform
-        # computation, e.g. paralllel dot products but NOT to just partition
-        # futher (e.g. among the wrt_slices) as this is done in the layout.
-        # This function doesn't make use of resource_alloc - all procs compute the same thing.
-
-        ## ------------------------------------------------------------------
-        #
-        ##print("MPI: _compute_dproduct_cache begin: %d deriv cols" % nDerivCols)
-        #if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
-        #    #print("MPI: _compute_dproduct_cache called w/comm size %d" % comm.Get_size())
-        #    # parallelize of deriv cols, then sub-trees (if available and necessary)
-        #
-        #    if resource_alloc.comm.Get_size() > nDerivCols:
-        #
-        #        #If there are more processors than deriv cols, give a
-        #        # warning -- note that we *cannot* make use of a tree being
-        #        # split because there's no good way to reconstruct the
-        #        # *non-final* parent-tree elements from those of the sub-trees.
-        #        _warnings.warn("Increased speed could be obtained by giving dproduct cache computation"
-        #                       " *fewer* processors, as there are more cpus than derivative columns.")
-        #
-        #    # Use comm to distribute columns
-        #    allDerivColSlice = slice(0, nDerivCols) if (wrt_slice is None) else wrt_slice
-        #    _, myDerivColSlice, _, sub_resource_alloc = \
-        #        _mpit.distribute_slice(allDerivColSlice, resource_alloc.comm)
-        #    #print("MPI: _compute_dproduct_cache over %d cols (%s) (rank %d computing %s)" \
-        #    #    % (nDerivCols, str(allDerivColIndices), comm.Get_rank(), str(myDerivColIndices)))
-        #    if sub_resource_alloc is not None and sub_resource_alloc.comm is not None \
-        #       and sub_resource_alloc.comm.Get_size() > 1:
-        #        _warnings.warn("Too many processors to make use of in "
-        #                       " _compute_dproduct_cache.")
-        #        if sub_resource_alloc.comm.Get_rank() > 0: myDerivColSlice = slice(0, 0)
-        #        #don't compute anything on "extra", i.e. rank != 0, cpus
-        #
-        #    my_results = self._compute_dproduct_cache(
-        #        layout_atom_tree, prod_cache, scale_cache, None, myDerivColSlice, profiler)
-        #    # pass None as comm, *not* mySubComm, since we can't do any
-        #    #  further parallelization
-        #
-        #    tm = _time.time()
-        #    all_results = resource_alloc.comm.allgather(my_results)
-        #    profiler.add_time("MPI IPC", tm)
-        #    return _np.concatenate(all_results, axis=1)  # TODO: remove this concat w/better gather?
-        #
-        ## ------------------------------------------------------------------
-
         tSerialStart = _time.time()
         dProdCache = _np.zeros((cacheSize,) + deriv_shape)
         wrtIndices = _slct.indices(wrt_slice) if (wrt_slice is not None) else None
@@ -871,10 +774,14 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             if abs(scale) > 1e-8:  # _np.isclose(scale,0) is SLOW!
                 dProdCache[iDest] /= _np.exp(scale)
                 if dProdCache[iDest].max() < _DSMALL and dProdCache[iDest].min() > -_DSMALL:
-                    _warnings.warn("Scaled dProd small in order to keep prod managable.")
+                    if _ForwardSimDiagnosticWarning.enabled:
+                        _warnings.warn("Scaled dProd small in order to keep prod managable.",
+                                       _ForwardSimDiagnosticWarning)
             elif (_np.count_nonzero(dProdCache[iDest]) and dProdCache[iDest].max() < _DSMALL
                   and dProdCache[iDest].min() > -_DSMALL):
-                _warnings.warn("Would have scaled dProd but now will not alter scale_cache.")
+                if _ForwardSimDiagnosticWarning.enabled:
+                    _warnings.warn("Would have scaled dProd but now will not alter scale_cache.",
+                                   _ForwardSimDiagnosticWarning)
 
         #profiler.print_mem("DEBUGMEM: POINT2"); profiler.comm.barrier()
 
@@ -901,88 +808,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         hessn_shape = (nDerivCols1, nDerivCols2, dim, dim)
         eval_tree = layout_atom_tree
         cacheSize = len(eval_tree)
-
-        #Note: resource_alloc gives procs that could work together to perform
-        # computation, e.g. paralllel dot products but NOT to just partition
-        # futher (e.g. among the wrt_slices) as this is done in the layout.
-        # This function doesn't make use of resource_alloc - all procs compute the same thing.
-
-        ## ------------------------------------------------------------------
-        #
-        #if resource_alloc is not None and resource_alloc.comm is not None and resource_alloc.comm.Get_size() > 1:
-        #    # parallelize of deriv cols, then sub-trees (if available and necessary)
-        #
-        #    if resource_alloc.comm.Get_size() > nDerivCols1 * nDerivCols2:
-        #        #If there are more processors than deriv cells, give a
-        #        # warning -- note that we *cannot* make use of a tree being
-        #        # split because there's no good way to reconstruct the
-        #        # *non-final* parent-tree elements from those of the sub-trees.
-        #        _warnings.warn("Increased speed could be obtained"
-        #                       " by giving hproduct cache computation"
-        #                       " *fewer* processors and *smaller* (sub-)tree"
-        #                       " (e.g. by splitting tree beforehand), as there"
-        #                       " are more cpus than hessian elements.")  # pragma: no cover
-        #
-        #    # allocate final result memory
-        #    hProdCache = _np.zeros((cacheSize,) + hessn_shape)
-        #
-        #    # Use comm to distribute columns
-        #    allDeriv1ColSlice = slice(0, nDerivCols1)
-        #    allDeriv2ColSlice = slice(0, nDerivCols2)
-        #    deriv1Slices, myDeriv1ColSlice, deriv1Owners, mySubComm = \
-        #        _mpit.distribute_slice(allDeriv1ColSlice, resource_alloc.comm)
-        #
-        #    # Get slice into entire range of model params so that
-        #    #  per-gate hessians can be computed properly
-        #    if wrt_slice1 is not None and wrt_slice1.start is not None:
-        #        myHessianSlice1 = _slct.shift(myDeriv1ColSlice, wrt_slice1.start)
-        #    else: myHessianSlice1 = myDeriv1ColSlice
-        #
-        #    #print("MPI: _compute_hproduct_cache over %d cols (rank %d computing %s)" \
-        #    #    % (nDerivCols2, comm.Get_rank(), str(myDerivColSlice)))
-        #
-        #    if mySubComm is not None and mySubComm.Get_size() > 1:
-        #        deriv2Slices, myDeriv2ColSlice, deriv2Owners, mySubSubComm = \
-        #            _mpit.distribute_slice(allDeriv2ColSlice, mySubComm)
-        #
-        #        # Get slice into entire range of model params (see above)
-        #        if wrt_slice2 is not None and wrt_slice2.start is not None:
-        #            myHessianSlice2 = _slct.shift(myDeriv2ColSlice, wrt_slice2.start)
-        #        else: myHessianSlice2 = myDeriv2ColSlice
-        #
-        #        if mySubSubComm is not None and mySubSubComm.Get_size() > 1:
-        #            _warnings.warn("Too many processors to make use of in "
-        #                           " _compute_hproduct_cache.")
-        #            #TODO: remove: not needed now that we track owners
-        #            #if mySubSubComm.Get_rank() > 0: myDeriv2ColSlice = slice(0,0)
-        #            #  #don't compute anything on "extra", i.e. rank != 0, cpus
-        #
-        #        hProdCache[:, myDeriv1ColSlice, myDeriv2ColSlice] = self._compute_hproduct_cache(
-        #            layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice],
-        #            d_prod_cache2[:, myDeriv2ColSlice], scale_cache, None, myHessianSlice1, myHessianSlice2)
-        #        # pass None as comm, *not* mySubSubComm, since we can't do any further parallelization
-        #
-        #        #NOTE: we only need to gather to the root processor (TODO: update this)
-        #        _mpit.gather_slices(deriv2Slices, deriv2Owners, hProdCache, [None, myDeriv1ColSlice],
-        #                            2, mySubComm)  # , gather_mem_limit) #gather over col-distribution (Deriv2)
-        #        #note: gathering axis 2 of hProdCache[:,myDeriv1ColSlice],
-        #        #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
-        #    else:
-        #        #compute "Deriv1" row-derivatives distribution only; don't use column distribution
-        #        hProdCache[:, myDeriv1ColSlice] = self._compute_hproduct_cache(
-        #            layout_atom_tree, prod_cache, d_prod_cache1[:, myDeriv1ColSlice], d_prod_cache2,
-        #            scale_cache, None, myHessianSlice1, wrt_slice2)
-        #        # pass None as comm, *not* mySubComm (this is ok, see "if" condition above)
-        #
-        #    #NOTE: we only need to gather to the root processor (TODO: update this)
-        #    _mpit.gather_slices(deriv1Slices, deriv1Owners, hProdCache, [], 1, resource_alloc.comm)
-        #    #, gather_mem_limit) #gather over row-distribution (Deriv1)
-        #    #note: gathering axis 1 of hProdCache,
-        #    #      dim=(cacheSize,nDerivCols1,nDerivCols2,dim,dim)
-        #
-        #    return hProdCache
-        #
-        ## ------------------------------------------------------------------
 
         hProdCache = _np.zeros((cacheSize,) + hessn_shape)
         wrtIndices1 = _slct.indices(wrt_slice1) if (wrt_slice1 is not None) else None
@@ -1026,10 +851,14 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             if abs(scale) > 1e-8:  # _np.isclose(scale,0) is SLOW!
                 hProdCache[iDest] /= _np.exp(scale)
                 if hProdCache[iDest].max() < _HSMALL and hProdCache[iDest].min() > -_HSMALL:
-                    _warnings.warn("Scaled hProd small in order to keep prod managable.")
+                    if _ForwardSimDiagnosticWarning.enabled:
+                        _warnings.warn("Scaled hProd small in order to keep prod managable.",
+                                       _ForwardSimDiagnosticWarning)
             elif (_np.count_nonzero(hProdCache[iDest]) and hProdCache[iDest].max() < _HSMALL
                   and hProdCache[iDest].min() > -_HSMALL):
-                _warnings.warn("hProd is small (oh well!).")
+                if _ForwardSimDiagnosticWarning.enabled:
+                    _warnings.warn("hProd is small (oh well!).",
+                                   _ForwardSimDiagnosticWarning)
 
         return hProdCache
 
