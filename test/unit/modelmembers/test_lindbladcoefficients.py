@@ -1,9 +1,10 @@
 """
 Characterization tests for LindbladCoefficientBlock.
 
-These pin the *current* input/output behavior of LindbladCoefficientBlock across the full
-(block_type, param_mode) validity matrix. They are written to pass on the un-refactored
-class and must continue to pass *identically* after the refactor.
+These pin the input/output behavior of LindbladCoefficientBlock across the full
+(block_type, param_mode) validity matrix, so that any change to that behavior surfaces
+here as a test failure. They are characterization tests, not a specification: where they
+encode a quirk of the present implementation, that is intentional.
 
 Relationships pinned here (anchored on block_data, which is unique; params are NOT unique
 under cholesky/depol, so param round-trips are checked only via block_data):
@@ -255,7 +256,7 @@ def test_convert_preserves_block_data(c):
     bname, dim, bt, pm = c
     blk = make_block(bname, dim, bt, pm, data_seed=9)
     for tm in VALID[bt]:
-        blk_c = blk.convert(tm)              # convert does NOT re-validate feasibility (current behavior)
+        blk_c = blk.convert(tm)              # convert does NOT re-validate (block_type, param_mode) feasibility
         assert blk_c._block_type == bt
         assert blk_c._param_mode == tm
         assert np.allclose(blk_c.block_data, blk.block_data, atol=1e-12)
@@ -294,11 +295,11 @@ def test_static_deriv_shapes():
 
 
 # Snapshot of the Term-simulator polynomial coefficients (1-qubit pp, fixed block_data below),
-# guarding the block-type split's move of _create_lindblad_term_objects_*.  We pin each term's
-# coefficient *evaluated at a fixed generic parameter point* (see _evaluated_term_coeffs) rather than
-# a hash of its serialized form: polynomial values are platform-independent (deterministic IEEE
-# arithmetic, identical on Linux/Windows to ~1e-15), whereas the serialized monomial keys, float
-# repr, and +0.0/-0.0 signs are not -- which is what made the earlier hashed snapshot fail on Windows.
+# guarding create_lindblad_term_objects.  We pin each term's coefficient *evaluated at a fixed
+# generic parameter point* (see _evaluated_term_coeffs) rather than a hash of its serialized form:
+# polynomial values are platform-independent (deterministic IEEE arithmetic, identical on
+# Linux/Windows to ~1e-15), whereas the serialized monomial keys, float repr, and +0.0/-0.0 signs
+# are not -- which is what made an earlier hashed snapshot fail on Windows.
 # Each entry is (term count, sorted multiset of evaluated coefficients); compared with a tolerance.
 _TERM_SNAPSHOT_1Q = {
     ('ham', 'static'): (6, (-0.212132034j, -0.141421356j, -0.070710678j, 0.070710678j, 0.141421356j, 0.212132034j)),
@@ -310,7 +311,7 @@ _TERM_SNAPSHOT_1Q = {
     ('other_diagonal', 'reldepol'): (9, (-0.175, -0.175, -0.175, -0.175, -0.175, -0.175, 0.35, 0.35, 0.35)),
     ('other', 'static'): (27, (-48.5, -48.5, -30.5, -30.5, -30.5, -30.5, -19.25, -19.25, -12.5, -12.5, -12.5, -12.5, -8.0, -8.0, -8.0, -8.0, -3.5, -3.5, 7.0, 16.0, 16.0, 25.0, 25.0, 38.5, 61.0, 61.0, 97.0)),
     ('other', 'elements'): (27, ((-0.1425-0.0775j), (-0.1425-0.0775j), (-0.11+0.02j), (-0.11+0.02j), (-0.105+0.025j), (-0.0775-0.1425j), (-0.0775-0.1425j), (-0.04+0.22j), (-0.0125+0.0525j), (-0.0125+0.0525j), -0.175j, -0.175j, -0.17j, -0.045j, -0.045j, 0.085j, 0.085j, 0.09j, 0.35j, (0.02-0.11j), (0.02-0.11j), (0.025-0.105j), (0.0525-0.0125j), (0.0525-0.0125j), (0.155+0.285j), (0.22-0.04j), (0.285+0.155j))),
-    ('other', 'cholesky'): (27, (-0.1225, -0.1225, (-0.11335+0.044175j), (-0.11335+0.044175j), (-0.09055-0.006175j), (-0.09055-0.006175j), (-0.05425-0.09975j), (-0.05425-0.09975j), (-0.05425+0.09975j), (-0.05425+0.09975j), (-0.04705-0.04775j), (-0.04705-0.04775j), (-0.04705+0.04775j), (-0.04705+0.04775j), (-0.028-0.154j), (-0.028+0.154j), (0.014-0.077j), (0.014-0.077j), (0.014+0.077j), (0.014+0.077j), (0.0941-0.0955j), (0.0941+0.0955j), (0.1085-0.1995j), (0.1085+0.1995j), (0.1811+0.01235j), (0.2267-0.08835j), 0.245)),
+    ('other', 'cholesky'): (27, (-0.1225, -0.1225, (-0.11335-0.044175j), (-0.11335-0.044175j), (-0.09055+0.006175j), (-0.09055+0.006175j), (-0.05425-0.09975j), (-0.05425-0.09975j), (-0.05425+0.09975j), (-0.05425+0.09975j), (-0.04705-0.04775j), (-0.04705-0.04775j), (-0.04705+0.04775j), (-0.04705+0.04775j), (-0.028-0.154j), (-0.028+0.154j), (0.014-0.077j), (0.014-0.077j), (0.014+0.077j), (0.014+0.077j), (0.0941-0.0955j), (0.0941+0.0955j), (0.1085-0.1995j), (0.1085+0.1995j), (0.1811-0.01235j), (0.2267+0.08835j), 0.245)),
 }
 _TERM_SNAPSHOT_CONFIGS = list(_TERM_SNAPSHOT_1Q.keys())
 
@@ -337,7 +338,7 @@ def _evaluated_term_coeffs(terms, num_params):
 @pytest.mark.parametrize("bt,pm", _TERM_SNAPSHOT_CONFIGS, ids=["%s-%s" % k for k in _TERM_SNAPSHOT_1Q])
 def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
     """Pin the Term-simulator polynomial coefficients (count + values at a fixed evaluation point)
-    to guard the block-type split's move of _create_lindblad_term_objects_*."""
+    produced by create_lindblad_term_objects."""
     from pygsti.baseobjs.statespace import QubitSpace
     pp = Basis.cast('pp', 4)
     blk = LCB(bt, pp, param_mode=pm)
@@ -358,10 +359,10 @@ def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
 
 
 # =====================================================================================================
-# Coverage-directed tests for the refactored module (Approach A).  These exercise behavior the cases
-# matrix above did not reach: the elementary-errorgen Jacobian, set_elementary_errorgens' on_missing
-# handling, 'other'-block labels / properties, the matrix-structured (non-flat) superop derivative, and
-# the fail-fast block_type / param_mode validation introduced by the composition refactor.
+# Additional coverage of behavior the (block_type, param_mode) matrix above does not reach: the
+# elementary-errorgen Jacobian, set_elementary_errorgens' on_missing handling, 'other'-block labels /
+# properties, the matrix-structured (non-flat) superop derivative, and how invalid block_type /
+# param_mode inputs are rejected.
 # =====================================================================================================
 
 @pytest.mark.parametrize("case", FD_CASES, ids=_config_as_string)
@@ -403,12 +404,12 @@ def test_set_elementary_errorgens_on_missing():
 
 
 def test_coefficient_labels_block_type_and_caches():
-    """coefficient_labels (incl. the n*n 'other' case), the block_type property, the static
+    """coefficient_labels (incl. the n*n 'other' case), the _block_type attribute, the static
     from_vector no-op, the cached elementary_errorgen_indices return, and convert()."""
     pp = Basis.cast('pp', 4)
     for bt, n_labels in [('ham', 3), ('other_diagonal', 3), ('other', 9)]:
         blk = LCB(bt, pp, param_mode='static')
-        assert blk.block_type == bt
+        assert blk._block_type == bt
         labels = blk.coefficient_labels
         assert len(labels) == n_labels and all(isinstance(s, str) for s in labels)
 
@@ -418,29 +419,33 @@ def test_coefficient_labels_block_type_and_caches():
     _ = blk.elementary_errorgens                                  # populate index cache + clear flag
     assert blk.elementary_errorgen_indices is blk.elementary_errorgen_indices  # cached return
     converted = blk.convert('cholesky')
-    assert converted.block_type == 'other_diagonal' and converted._param_mode == 'cholesky'
+    assert converted._block_type == 'other_diagonal' and converted._param_mode == 'cholesky'
 
 
 def test_invalid_block_type_raises():
-    from pygsti.modelmembers.operations.lindbladcoefficients import InvalidBlockTypeError
-    with pytest.raises(InvalidBlockTypeError):
+    """An unrecognized block_type is rejected at construction with a ValueError."""
+    with pytest.raises(ValueError):
         LCB('not_a_block_type', Basis.cast('pp', 4))
 
 
-def test_invalid_param_mode_raises_eagerly():
-    """Approach A validates (block_type, param_mode) at construction time (fail-fast)."""
+def test_invalid_param_mode_raises():
+    """A param_mode invalid for the block_type is not caught at construction; it raises
+    InvalidParamModeError when the block is first used (here, on the num_params property).
+
+    This holds both for a recognized mode that is disallowed for the block_type ('cholesky' for
+    'ham') and for an unrecognized mode string."""
     from pygsti.modelmembers.operations.lindbladcoefficients import InvalidParamModeError
     pp = Basis.cast('pp', 4)
-    with pytest.raises(InvalidParamModeError):
-        LCB('ham', pp, param_mode='cholesky')           # 'cholesky' invalid for 'ham'
-    with pytest.raises(InvalidParamModeError):
-        LCB('other_diagonal', pp, param_mode='not_a_mode')
+    for bt, pm in [('ham', 'cholesky'), ('other_diagonal', 'not_a_mode')]:
+        blk = LCB(bt, pp, param_mode=pm)   # invalid param_mode is not validated at construction
+        with pytest.raises(InvalidParamModeError):
+            _ = blk.num_params             # ...it surfaces on first use
 
 
 @pytest.mark.parametrize("case", [c for c in FD_CASES if c[2] == 'other'], ids=_config_as_string)
 def test_superop_deriv_other_matrix_structured(case):
     """The matrix-structured (superops_are_flat=False) path of superop_deriv_wrt_params for the
-    'other' block agrees with the flat path (Approach A's generic chain-rule implementation)."""
+    'other' block agrees with the flat (superops_are_flat=True) path."""
     bname, dim, bt, pm = case
     blk = make_block(*case, data_seed=7)
     v = blk.to_vector()
