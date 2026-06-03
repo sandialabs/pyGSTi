@@ -3,7 +3,7 @@ import pytest
 import pickle
 
 from pygsti.baseobjs.label import Label as L
-from pygsti.baseobjs.label import LabelTup, LabelTupTup, CircuitLabel, LabelStr
+from pygsti.baseobjs.label import LabelTup, LabelTupTup, CircuitLabel, LabelStr, LabelTupTupWithTime
 
 from pygsti.serialization import jsoncodec
 from pygsti.circuits import Circuit
@@ -189,3 +189,105 @@ class LabelTester(BaseCase):
             print(' => eval ' + r)
             evald_repr_l = eval(r)
             self.assertEqual(l, evald_repr_l)
+
+
+class LabelConcateTester(BaseCase):
+    def test_concate_labeltup(self):
+        l1 = L(('Gx', 0))
+        l2 = L(('Gy', 1))
+        l3 = L((('Gz', 2), ('Ga', 3)))
+        cl = CircuitLabel('circuit', [l3], None, 1, None)
+
+        # LabelTup with LabelTup
+        concatenated = l1.concate(l2)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1))))
+
+        # LabelTup with LabelTupTup
+        concatenated = l1.concate(l3)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((('Gx', 0), ('Gz', 2), ('Ga', 3))))
+
+        # LabelTup with CircuitLabel (depth 1)
+        concatenated = l1.concate(cl)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((('Gx', 0), ('Gz', 2), ('Ga', 3))))
+
+        # LabelTup with CircuitLabel (depth > 1)
+        cl_depth2 = CircuitLabel('circuit', [l1, l2], None, 1, None)
+        with self.assertRaises(ValueError):
+            l1.concate(cl_depth2)
+
+        # LabelTup with LabelStr
+        l_str = L('Idle')
+        with self.assertRaises(ValueError):
+            l1.concate(l_str)
+
+    def test_concate_labeltuptup(self):
+        l1 = L((('Gx', 0), ('Gy', 1)))
+        l2 = L(('Gz', 2))
+        l3 = L((('Ga', 3), ('Gb', 4)))
+
+        # LabelTupTup with LabelTup
+        concatenated = l1.concate(l2)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Gz', 2))))
+
+        # LabelTupTup with LabelTupTup
+        concatenated = l1.concate(l3)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Ga', 3), ('Gb', 4))))
+
+        # LabelTupTup with LabelStr
+        l_str = L('Idle')
+        with self.assertRaises(ValueError):
+            l1.concate(l_str)
+
+    def test_concate_labeltuptupwithtime(self):
+        l1 = L((('Gx', 0), ('Gy', 1)), time=0.1)
+        l2 = L((('Gz', 2),), time=0.1)
+        l3 = L((('Ga', 3),), time=0.2)
+
+        # LabelTupTupWithTime with LabelTupTupWithTime (same time)
+        concatenated = l1.concate(l2)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Gz', 2))))
+
+
+        # LabelTupTupWithTime with LabelTupTupWithTime (different time)
+        with self.assertRaises(ValueError):
+            l1.concate(l3)
+
+        # LabelTupTupWithTime with LabelTupWithTime (same time)
+        l_tup_with_time = L(('Gb', 4), time=0.1)
+        concatenated = l1.concate(l_tup_with_time)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Gb', 4))))
+
+        # LabelTupTupWithTime with LabelTupWithTime (different time)
+        l_tup_with_time_different = L(('Gc', 5), time=0.2)
+        with self.assertRaises(ValueError):
+            l1.concate(l_tup_with_time_different)
+
+    def test_concate_qubit_overlap(self):
+        l1 = L(('Gx', 0))
+        l2 = L(('Gy', 0))
+        with self.assertRaises(ValueError):
+            l1.concate(l2)
+
+        l3 = L((('Gx', 0), ('Gy', 1)))
+        l4 = L(('Gz', 1))
+        with self.assertRaises(ValueError):
+            l3.concate(l4)
+
+    def test_concate_time_propagation(self):
+        l1 = L([('Gx', 0)], time=0.5)
+        l2 = L(('Gy', 1), time=0.5)
+        concatenated = l1.concate(l2)
+        self.assertIsInstance(concatenated, LabelTupTupWithTime)
+        self.assertEqual(concatenated.time, 0.5)
+
+        l3 = L([('Gz', 2)], time=0.5)
+        concatenated2 = concatenated.concate(l3)
+        self.assertIsInstance(concatenated2, LabelTupTupWithTime)
+        self.assertEqual(concatenated2.time, 0.5)

@@ -300,6 +300,12 @@ class Label(object):
 
     def replace_name(self, oldname, newname):
         raise NotImplementedError()
+    
+    def concate(self, other: Label):
+        """
+        Combine two labels together so that they are one label which could be a single layer.
+        """
+        raise NotImplementedError("Derived Classes must implement this function.")
 
 
 class LabelTup(Label, tuple):
@@ -542,6 +548,37 @@ class LabelTup(Label, tuple):
         LabelTup
         """
         return LabelTup.init(newname, self.sslbls) if (self.name == oldname) else self
+
+    def concate(self, other: Label):
+        if self.sslbls and other.sslbls and set(self.sslbls) & set(other.sslbls):
+            raise ValueError("Cannot concatenate labels with overlapping qubits")
+
+        time = getattr(self, 'time', 0.0)
+        other_time = getattr(other, 'time', 0.0)
+
+        if time != 0.0 and other_time != 0.0 and time != other_time:
+            raise ValueError(f"Trying to concate two Labels with distinct time values {time}, and {other_time}")
+        new_time = max(time, other_time)
+
+        if isinstance(other, CircuitLabel):
+            if other.depth == 1:
+                other = Label(other.components, other.sslbls, other.time, other.args)
+            else:
+                raise ValueError(f"Trying to concate a CircuitLabel with depth: {other.depth} to a lbl with depth {self.depth}")
+
+        if isinstance(other, LabelTupTup):
+            components = (self,) + tuple(other)
+        elif isinstance(other, LabelTup):
+            components = (self, other)
+        elif isinstance(other, LabelStr):
+            raise ValueError("Cannot concate `LabelStr` as they do not have an associated qubit set unless it is explicitly in the string.")
+        else:
+            return super().concate(other)
+
+        if new_time != 0.0:
+            return LabelTupTupWithTime.init(components, time=new_time)
+        else:
+            return LabelTupTup.init(components)
 
     __hash__ = tuple.__hash__
     # ^ this is why we derive from tuple - using the
@@ -1199,6 +1236,20 @@ class LabelTupTup(Label, tuple):
             ret.append(LabelTupTup.init(ec))
         return tuple(ret)
 
+    def concate(self, other: Label):
+        if self.sslbls and other.sslbls and set(self.sslbls) & set(other.sslbls):
+            raise ValueError("Cannot concatenate labels with overlapping qubits")
+
+        if isinstance(other, CircuitLabel):
+            pass
+        elif isinstance(other, LabelTupTup):
+            return Label((*self, *other))
+        elif isinstance(other, LabelTup):
+            return Label((*self, other))
+        elif isinstance(other, LabelStr):
+            raise ValueError("Cannot concate `LabelStr` as they do not have an associated qubit set unless it is explicitly in the string.")
+        return super().concate(other)
+
     __hash__ = tuple.__hash__
     # ^ this is why we derive from tuple - using the
     #   native tuple.__hash__ directly == speed boost
@@ -1362,6 +1413,20 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
             #assert(len(ec) > 0), "Logic error!" #this is ok (e.g. an idle subcircuit)
             ret.append(LabelTupTupWithTime.init(ec))
         return tuple(ret)
+    
+    def concate(self, other):
+        if hasattr(other, 'time') and self.time != other.time:
+            raise ValueError(f"Trying to concate two Labels with distinct time values {self.time}, and {other.time}")
+
+        if self.sslbls and other.sslbls and set(self.sslbls) & set(other.sslbls):
+            raise ValueError("Cannot concatenate labels with overlapping qubits")
+
+        if isinstance(other, LabelTupTup):
+            return LabelTupTupWithTime.init(tuple(self) + tuple(other), time=self.time)
+        elif isinstance(other, LabelTup):
+            return LabelTupTupWithTime.init(tuple(self) + (other,), time=self.time)
+
+        return super().concate(other)
 
     __hash__ = tuple.__hash__
     # ^ this is why we derive from tuple - using the
@@ -1614,6 +1679,20 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
             :class:`CircuitLabel` objects).
         """
         return tuple(_itertools.chain(*[x.expand_subcircuits() for x in self.components])) * self.reps
+
+    def concate(self, other: Label):
+
+        if isinstance(other, CircuitLabel):
+            if other.depth == self.depth:
+                # We can concate these.
+                return Label((self, other)) # make a _LabelTupTup
+            raise ValueError(f"Cannot concate two CircuitLabels of different depth: {self.depth} vs {other.depth}")
+
+        tmp_lbl: Label = None
+        if self.depth == 1:
+            # Convert into not a CircuitLabel.
+            tmp_lbl = Label(self.components, self.sslbls, self.time, self.args)
+        return tmp_lbl.concate(other)
 
     __hash__ = tuple.__hash__
     # ^ this is why we derive from tuple - using the
