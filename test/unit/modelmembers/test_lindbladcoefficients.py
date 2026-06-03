@@ -1,9 +1,8 @@
 """
-Characterization ("golden") tests for LindbladCoefficientBlock.
+Characterization tests for LindbladCoefficientBlock.
 
 These pin the *current* input/output behavior of LindbladCoefficientBlock across the full
-(block_type, param_mode) validity matrix, so the planned base+subclasses refactor (GitHub
-issue 607) can be verified behavior-preserving.  They are written to pass on the un-refactored
+(block_type, param_mode) validity matrix. They are written to pass on the un-refactored
 class and must continue to pass *identically* after the refactor.
 
 Relationships pinned here (anchored on block_data, which is unique; params are NOT unique
@@ -14,8 +13,7 @@ under cholesky/depol, so param round-trips are checked only via block_data):
   * superop_deriv_wrt_params == d(superop)/dv                            (finite differences),
         where superop = einsum('i,ijk->jk', block_data.ravel(), G),
         G = create_lindblad_term_superoperators(..., flat=True)
-  * the linearity / chain-rule identities (what makes the parameterization the *only*
-    param_mode-specific piece -- see issue 607 plan):
+  * the linearity / chain-rule identities
         superop_deriv    == einsum('Dp,Djk->jkp',  deriv_wrt_params,        G)
         superop_hessian  == einsum('Dpq,Djk->jkpq', d(deriv_wrt_params)/dv, G)
   * elementary_errorgens values + round-trip; coefficient/param labels; NicelySerializable
@@ -360,7 +358,7 @@ def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
 
 
 # =====================================================================================================
-# Coverage-directed tests for the refactored module (Approach A).  These exercise behavior the golden
+# Coverage-directed tests for the refactored module (Approach A).  These exercise behavior the cases
 # matrix above did not reach: the elementary-errorgen Jacobian, set_elementary_errorgens' on_missing
 # handling, 'other'-block labels / properties, the matrix-structured (non-flat) superop derivative, and
 # the fail-fast block_type / param_mode validation introduced by the composition refactor.
