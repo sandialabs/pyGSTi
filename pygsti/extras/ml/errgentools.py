@@ -246,21 +246,23 @@ def up_to_weight_k_paulis(k: int, n: int):
 
     return paulis
 
-def up_to_weight_k_paulis_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: np.array, num_hops: int) -> list:
-    """Enumerate Pauli strings of weight 1..k (i.e., all Paulis contain at least one and
-    at most k non-identity Paulis) with support on qubits connected by m 
-    hops in the qubit connectivity graph.
+def up_to_weight_k_paulis_from_qubit_graph(
+    k: int, n: int, qubit_graph_laplacian: np.ndarray, num_hops: int
+) -> list[str]:
+    """
+    Enumerate Pauli strings of weight 1..k whose *support set* of non-identity qubits
+    is connected under a "within num_hops" connectivity rule derived from the qubit graph.
 
-    Weight-1 Paulis are always included. Weight-2 Paulis are included only when their
-    two non-identity qubits are within `num_hops` steps as determined from powers of the
-    (provided) graph Laplacian.
+    Convention used throughout this module:
+        qubit i  <->  string position (n - 1 - i)
+    so qubit 0 is the rightmost character in the Pauli string.
 
     Parameters
     ----------
     k : int
-        Maximum Pauli weight (only `k <= 2` supported).
+        Maximum Pauli weight.
     n : int
-        Number of qubits.
+        Number of qubits (string length).
     qubit_graph_laplacian : numpy.ndarray
         Laplacian matrix of the qubit connectivity graph.
     num_hops : int
@@ -269,76 +271,181 @@ def up_to_weight_k_paulis_from_qubit_graph(k: int, n: int, qubit_graph_laplacian
     Returns
     -------
     list[str]
-        Pauli strings of length `n`. (Ordering uses reverse indexing convention in this file.) [qubit n, qubit n-1, ..., qubit 0]
+        All Pauli strings of weight 1..k with support on qubits connected within num_hops.
 
     Notes
     -----
-    Assumes the graph is connected (not strictly enforced by code).
+    This is a generalization of the legacy k<=2 implementation:
+      - For w=1, every single-qubit Pauli is allowed.
+      - For w=2, a pair (i,j) is allowed iff i and j are within num_hops hops.
+      - For w>2, a support S is allowed iff the induced subgraph on S is connected
+        using the "within num_hops" adjacency.
     """
-    assert (k <= 2), "Only implemented up to k = 2!"
-    paulis = []
+    # ---- Basic input checks ----
+    if not isinstance(k, int) or k < 1:
+        raise TypeError("Pauli weight, k, must be an integer > 1.")
+    if not isinstance(n, int) or n < 0:
+        raise TypeError("n must be a non-negative integer.")
 
-    # weight 1
-    for i in range(n):
-        for p in ['X', 'Y', 'Z']:
-            nq_pauli = n * ['I']
-            nq_pauli[n - 1 - i] = p # reverse indexing
-            paulis.append(''.join(nq_pauli))
-    
-    # weight 2
-    if k > 1:
-        qubit_graph_laplacian = _copy.deepcopy(qubit_graph_laplacian) # Don't delete! Otherwise this function modifies the laplacian globally for some reason?
-        laplace_power = np.linalg.matrix_power(qubit_graph_laplacian, num_hops)
-        for i in np.arange(n):
-            laplace_power[i, i] = 0
-        # assert (laplace_power == 0).all(axis=1).any() == False, 'Graph must be connected'
-    
-        nodes_within_hops = []
-        for i in range(n):
-            nodes_within_hops.append(np.arange(n)[abs(laplace_power[i, :]) > 0])
-    
-        for i , qubit_list in enumerate(nodes_within_hops):
-            unseen_qubits = qubit_list[np.where(qubit_list > i)[0]]
-            for j in unseen_qubits:
-                for p in ['X', 'Y', 'Z']:
-                        for q in ['X', 'Y', 'Z']:
-                            nq_pauli = n * ['I']
-                            nq_pauli[n - 1 - i] = p # reverse indexing
-                            nq_pauli[n - 1 - j] = q # reverse indexing
-                            paulis.append(''.join(nq_pauli))
-    
+    if k > n:
+        print("Pauli weight cannot exceed the number of qubits. Automatically setting k = min(k,n)")
+
+    # Clamp k so we never ask for weight > n.
+    k = min(k, n)
+
+    # Make a private copy to avoid mutating the caller's matrix accidentally.
+    L = np.array(qubit_graph_laplacian, copy=True)
+
+    # Sanity-check dimensions: Laplacian must be n x n.
+    if L.shape != (n, n):
+        raise ValueError("qubit_graph_laplacian must have shape (n, n).")
+
+    # ---- Build the "within num_hops" connectivity relation ----
+    #
+    # Legacy code used:
+    #   laplace_power = L**num_hops
+    #   nodes are considered "within hops" if laplace_power[i,j] != 0
+    #
+    M = np.linalg.matrix_power(L, num_hops)
+
+    # Remove diagonal entries; we don't want to treat i as "connected to itself"
+    # for the purpose of defining edges between *distinct* qubits.
+    np.fill_diagonal(M, 0)
+
+    # Convert to a boolean adjacency: close[i,j] == True means "i and j are within num_hops"
+    # according to the matrix-power criterion above.
+    close = (np.abs(M) > 0)
+
+    # If the underlying graph is undirected, "close" should be symmetric.
+    # This line enforces symmetry just in case numerical issues or input oddities break it.
+    close = np.logical_or(close, close.T)
+
+    # ---- Helper: test whether a proposed support set is connected ----
+    def support_is_connected(support_qubits: tuple[int, ...]) -> bool:
+        """
+        Return True iff the induced subgraph on `support_qubits` is connected,
+        where edges are given by `close`.
+        """
+        # Empty support shouldn't appear here (we generate weights starting at 1),
+        # and a single vertex is trivially connected.
+        if len(support_qubits) <= 1:
+            return True
+
+        # We'll do a simple DFS/BFS over the support set using the `close` adjacency.
+        support = list(support_qubits)
+        support_set = set(support)
+
+        # Start from the first qubit in the support.
+        seen = {support[0]}
+        stack = [support[0]]
+
+        # Standard depth-first traversal restricted to nodes in the support.
+        while stack:
+            u = stack.pop()
+
+            # Consider only neighbors v that are:
+            #   (1) in the support set
+            #   (2) adjacent to u under "close"
+            #   (3) not yet visited
+            for v in support:
+                if v not in seen and close[u, v]:
+                    seen.add(v)
+                    stack.append(v)
+
+        # Connected iff we reached every vertex in the support.
+        return len(seen) == len(support_set)
+
+    # ---- Enumerate all valid Pauli strings ----
+    base = ['I'] * n            # template for fast construction
+    paulis = []                 # output list of Pauli strings
+    qubits = range(n)           # qubit labels 0..n-1
+
+    # Enumerate all weights w = 1..k
+    for w in range(1, k + 1):
+
+        # Enumerate all possible supports (sets of qubits) of size w.
+        for support_qubits in _itertools.combinations(qubits, w):
+
+            # Skip supports that are not connected under the within-num_hops rule.
+            if not support_is_connected(support_qubits):
+                continue
+
+            # For each support, assign an X/Y/Z to each qubit in the support.
+            # There are 3^w assignments.
+            for letters in _itertools.product("XYZ", repeat=w):
+
+                # Start from all-identity string, then overwrite the support positions.
+                s = base[:]
+
+                # Place each chosen letter at the appropriate *string* index.
+                # Remember: qubit q corresponds to string position (n-1-q).
+                for q, P in zip(support_qubits, letters):
+                    s[n - 1 - q] = P
+
+                # Convert list-of-chars to a string and store it.
+                paulis.append("".join(s))
+
     return paulis
 
-def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: np.array, num_hops: int, egtypes=['H', 'S']) -> list:
-    """Returns a list of all n-qubit error generators up to weight k, of types given in
-    egtypes and based on the qubit connectivity graph, in a tuple-of-strings format.
+def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: np.ndarray, num_hops: int, egtypes=['H', 'S']) -> list:
+    """Returns a list of all n-qubit error generators up to weight k of the specified
+    types (e.g., 'H' and 'S') whose supports are connected subgraphs of the qubit connectivity
+    graph (where connectivity is defined by hop distance on the qubit graph).
+
+    This function first identifies the subset of multi-qubit Pauli operators (up to weight k)
+    whose active qubit supports form a connected subgraph. The notion of connectivity is
+    defined by a hop distance: two qubits are considered connected if they are at most
+    `num_hops` apart in the graph represented by `qubit_graph_laplacian`.
+
+    Once the relevant Pauli operators are found, the function constructs primitive error
+    generators for each Pauli operator and for each of the specified error generator types
+    in `egtypes`. Typically, these include Hamiltonian-like ('H') and stochastic-like ('S')
+    error generators.
 
     Parameters
     ----------
     k : int
-        Maximum Pauli weight.
-    n : int
-        Number of qubits. If None, inferred from `qubit_graph_laplacian.shape[0]`.
+        Maximum Pauli weight. That is, the maximum number of qubits on which the 
+        constituent Pauli operator acts non-trivially (non-identity).
+    n : int or None
+        Number of qubits. If None, it is automatically inferred from the size of 
+        `qubit_graph_laplacian` (specifically, `qubit_graph_laplacian.shape[0]`).
     qubit_graph_laplacian : numpy.ndarray
-        Laplacian matrix of the qubit graph.
+        The Laplacian matrix of the qubit connectivity graph. A square matrix of 
+        shape (n, n) representing the graph structure.
     num_hops : int
-        Hop distance defining allowable weight-2 supports.
-    egtypes : list[str], default ['H','S']
-        Error generator types to include.
+        The maximum graph hop distance defining allowable connectivity between 
+        individual qubits. Supports with a hop distance larger than `num_hops` 
+        between nodes are treated as disconnected.
+    egtypes : list[str], default ['H', 'S']
+        A list of error generator types to generate. Standard choices are:
+          * 'H' : Hamiltonian-like error generators
+          * 'S' : Stochastic-like error generators
 
     Returns
     -------
     list[tuple]
-        List of error generators in the tuple form `(egtype, (pauli_string,))`. The first element is 
-    the error generators type (e.g., 'H' or 'S'') and the second element is a 
-    tuple specifying the Pauli(s) that index that error generator.
+        A list of error generator descriptors. Each descriptor is a tuple of the 
+        form `(egtype, (pauli_string,))`, where:
+          * `egtype` (str) is the type of the error generator (e.g., 'H' or 'S').
+          * `pauli_string` (str) is the Pauli representation (e.g. 'IX', 'XY') 
+            which indexes the error generator on the connected support.
     """
-        
-    if n is None: n = qubit_graph_laplacian.shape[0]
+
+    # 1. Infer the number of qubits from the Laplacian shape if n is not provided (None).
+    if n is None:
+        n = qubit_graph_laplacian.shape[0]
+
+    # 2. Retrieve all Pauli strings up to weight k whose supports are connected
+    #    subgraphs of the qubit graph (with adjacency defined by <= num_hops).
     relevant_paulis = up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph_laplacian, num_hops)
+
+    # 3. Construct error generator descriptors for each requested error type and Pauli string.
     error_generators = []
     for egtype in egtypes:
+        # Each error generator is represented as a tuple: (type, (pauli_string,))
         error_generators += [(egtype, (p,)) for p in relevant_paulis]
+
     return error_generators
     
 def up_to_weight_k_error_gens(k, n, egtypes=['H', 'S']):
