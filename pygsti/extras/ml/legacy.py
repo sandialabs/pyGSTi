@@ -30,8 +30,13 @@ from pygsti.circuits import Circuit
 from pygsti.protocols import GSTDesign
 from pygsti.protocols import ProtocolData
 from pygsti.protocols import GST
+from typing import TYPE_CHECKING, Any, cast
 
-def batch_prediction(model, circuits, prediction_key = 'success'):
+if TYPE_CHECKING:
+    import pandas
+    from pygsti.processors import ProcessorSpec
+
+def batch_prediction(model: Any, circuits: list[Circuit], prediction_key: str = 'success') -> _np.ndarray:
     """Compute a vector of outcome probabilities from a model over a list of circuits.
 
     Parameters
@@ -51,7 +56,7 @@ def batch_prediction(model, circuits, prediction_key = 'success'):
     """
     return _np.array([model.probabilities(circuit)[prediction_key] for circuit in circuits])
 
-def extract_success_fail(df):
+def extract_success_fail(df: "pandas.DataFrame") -> tuple[DataSet, list[Circuit]]:
     """Build a two-outcome ('success','fail') pyGSTi DataSet from a dataframe.
 
     Parameters
@@ -78,7 +83,7 @@ def extract_success_fail(df):
     sfds.done_adding_data()
     return sfds, circuits
 
-def create_spec_model(pspec):
+def create_spec_model(pspec: "ProcessorSpec") -> tuple[TwirledLayersModel, dict]:
     """Create a simple `TwirledLayersModel` and corresponding error dictionary from a ProcessorSpec.
 
     Parameters
@@ -98,6 +103,8 @@ def create_spec_model(pspec):
     This is a heuristic initializer: it sets all 1Q gates and CNOTs to error rate 0.01 and
     all readout errors to 0.0.
     """
+    from pygsti.processors import QubitProcessorSpec
+    assert isinstance(pspec, QubitProcessorSpec)
     qubit_labels = pspec.qubit_labels
     num_qubits = len(qubit_labels)
     one_qubit_gate_names = pspec.gate_names[1:]
@@ -108,13 +115,13 @@ def create_spec_model(pspec):
     for i,j in _itertools.product(one_qubit_gate_names, qubit_labels):
         error_dict['gates'][Label(i,state_space_labels = (j,))] = 0.01
     for i,j in _itertools.product(['Gcnot'],availability['Gcnot']):
-        error_dict['gates'][Label('Gcnot',state_space_labels = j)] = 0.01
+        error_dict['gates'][Label('Gcnot',state_space_labels = cast(Any, j))] = 0.01
     specmodel = TwirledLayersModel(error_dict, num_qubits = num_qubits, state_space_labels = qubit_labels, 
-                                   idle_name = None)
+                                   idle_name = cast(Any, None))
     
     return specmodel, error_dict
 
-def create_mle_model(df, indices, pspec, specmodel):
+def create_mle_model(df: "pandas.DataFrame", indices: dict, pspec: "ProcessorSpec", specmodel: TwirledLayersModel) -> object:
     """Fit an MLE GST model on a subset of circuits selected from a dataframe.
 
     Parameters
@@ -133,6 +140,8 @@ def create_mle_model(df, indices, pspec, specmodel):
     mlemodel : pygsti model
         Final iteration estimate from GST results.
     """
+    from pygsti.processors import QubitProcessorSpec
+    assert isinstance(pspec, QubitProcessorSpec)
     sfds, train_circuits  = extract_success_fail(df.loc[indices['train']]) 
     train_circuits = list(sfds.keys())
     print('You had {} circuits. You are training on {} circuits.'.format(len(df), len(train_circuits)))
@@ -140,7 +149,7 @@ def create_mle_model(df, indices, pspec, specmodel):
 
     gst_edesign = GSTDesign(pspec, [train_circuits]) #creates gst edesign based on a specmodel. sfds.keys is the set of circuits. <---- restrict this
     gst_protocol_data = ProtocolData(gst_edesign, sfds) # No need to change sfds because the protocol only looks for circuits in its design. DOUBLE CHECK!
-    gst_protocol = GST(specmodel, gaugeopt_suite=None,  badfit_options={}, verbosity=1) #
+    gst_protocol = GST(specmodel, gaugeopt_suite=cast(Any, None),  badfit_options={}, verbosity=1) #
     gst_results = gst_protocol.run(gst_protocol_data) #fits an mle model to the gst_protocol_data
     mlemodel = gst_results.estimates['GateSetTomography'].models['final iteration estimate'] # extracts the mle model parameters
     

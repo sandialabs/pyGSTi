@@ -25,7 +25,7 @@ from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation import localstimerrorgen as _lseg
 
 
-def numberToBase(n, b):
+def numberToBase(n: int, b: int) -> list[int]:
     """
     Returns the (base-10) integer n in base b, expressed as a list (of values between 0 and b).
 
@@ -50,7 +50,7 @@ def numberToBase(n, b):
     return digits[::-1]
 
 
-def padded_numberToBase4(n, length):
+def padded_numberToBase4(n: int, length: int) -> list[int]:
     """
     Returns the (base-10) integer in base 4, as a length `length` list values between 0 and 3, i.e., it 
     pads the list with 0s at the start if n can be expressed with less than `length` string in base 4.
@@ -78,7 +78,7 @@ def padded_numberToBase4(n, length):
     return [0] * (length - len(a)) + a
 
 
-def index_to_paulistring(i, num_qubits):
+def index_to_paulistring(i: int, num_qubits: int) -> str:
     """
     Implements the inverse of `paulistring_to_index` i.e. mapping an integer index to an n-qubit Pauli string.
 
@@ -103,7 +103,7 @@ def index_to_paulistring(i, num_qubits):
     return ''.join([i_to_p[i] for i in padded_numberToBase4(i, num_qubits)])
  
 
-def paulistring_to_index(ps, num_qubits):
+def paulistring_to_index(ps: str | list | tuple, num_qubits: int) -> int:
     """
     Maps an n-qubit Pauli operator (represented as a string, list or tuple of elements from
     {'I', 'X', 'Y', 'Z'}) to an integer.  It uses the most conventional mapping, whereby, e.g.,
@@ -169,7 +169,7 @@ def paulistring_to_index(ps, num_qubits):
 
 
 ##### Noah's Updated implementation 5/8/2026 #####
-def up_to_weight_k_paulis(k: int, n: int):
+def up_to_weight_k_paulis(k: int, n: int) -> list[str]:
     """
     Return all n-qubit Pauli strings with weight 1..k (non-identity count). If k=0, returns the all-identity string. If k>n, automatically sets k=n.
 
@@ -387,7 +387,7 @@ def up_to_weight_k_paulis_from_qubit_graph(
 
     return paulis
 
-def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: np.ndarray, num_hops: int, egtypes=['H', 'S']) -> list:
+def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int | None, qubit_graph_laplacian: np.ndarray, num_hops: int, egtypes: list[str] = ['H', 'S']) -> list[tuple[str, tuple[str]]]:
     """Returns a list of all n-qubit error generators up to weight k of the specified
     types (e.g., 'H' and 'S') whose supports are connected subgraphs of the qubit connectivity
     graph (where connectivity is defined by hop distance on the qubit graph).
@@ -435,6 +435,7 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_lapla
     # 1. Infer the number of qubits from the Laplacian shape if n is not provided (None).
     if n is None:
         n = qubit_graph_laplacian.shape[0]
+    assert n is not None
 
     # 2. Retrieve all Pauli strings up to weight k whose supports are connected
     #    subgraphs of the qubit graph (with adjacency defined by <= num_hops).
@@ -448,7 +449,7 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_lapla
 
     return error_generators
     
-def up_to_weight_k_error_gens(k, n, egtypes=['H', 'S']):
+def up_to_weight_k_error_gens(k: int, n: int, egtypes: list[str] = ['H', 'S']) -> list[tuple[str, tuple[str]]]:
     """Returns a list of all n-qubit error generators up to weight k, of types given in
     egtypes, in a tuple-of-strings format.
 
@@ -476,7 +477,7 @@ def up_to_weight_k_error_gens(k, n, egtypes=['H', 'S']):
     return error_generators
 
 
-def error_generator_index(typ, paulis):
+def error_generator_index(typ: str, paulis: tuple[str, ...]) -> int:
     """A function that *defines* an indexing of the primitive error generators.Currently
     specifies indexing for all 'H' and 'S' errors. In future, will add 'C' and 'A' 
     error generators, but will maintain current indexing for 'H' and 'S'.
@@ -516,7 +517,7 @@ def error_generator_index(typ, paulis):
     # Future to do: C and A errors
     return base + paulistring_to_index(p1, n)
 
-def index_to_error_gen(i, n, as_label=False):
+def index_to_error_gen(i: int, n: int, as_label: bool = False) -> tuple[str, tuple[str]] | LocalStimErrorgenLabel:
     """
     Maps from the index to the 'label' representation of an elementary
     error generator. Inverse of `error_generator_index` for H/S generators.
@@ -556,7 +557,7 @@ def index_to_error_gen(i, n, as_label=False):
     else:
         return _lseg.LocalStimErrorgenLabel(typ, paulis)
 
-def num_error_generators(num_qubits):
+def num_error_generators(num_qubits: int) -> int:
     """Return the number of indexed H/S error generators for `num_qubits`.
 
     Parameters

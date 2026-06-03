@@ -23,13 +23,14 @@ CustomDense
 import tensorflow as tf
 from tensorflow.keras.layers import Dense, Layer, InputSpec
 from tensorflow.keras import initializers, regularizers, constraints
+from typing import Any
 
 
 class SelectiveDense(Layer):
-    def __init__(self, units, input_indices, activation=None, use_bias=True,
-                 kernel_initializer='glorot_uniform', bias_initializer='zeros',
+    def __init__(self, units: int, input_indices: list[list[int]], activation=None, use_bias: bool = True,
+                 kernel_initializer: Any = 'glorot_uniform', bias_initializer: Any = 'zeros',
                  kernel_regularizer=None, bias_regularizer=None,
-                 kernel_constraint=None, bias_constraint=None, **kwargs):
+                 kernel_constraint=None, bias_constraint=None, **kwargs) -> None:
         """Create a dense-like layer that applies separate kernels to selected input subsets.
 
         This layer takes a single input tensor and, for each entry in `input_indices`,
@@ -84,7 +85,7 @@ class SelectiveDense(Layer):
         self.kernel_constraint = constraints.get(kernel_constraint)
         self.bias_constraint = constraints.get(bias_constraint)
 
-    def build(self, input_shape):
+    def build(self, input_shape: tf.TensorShape | list | tuple) -> None:
         """Create the layer weights based on the input shape.
 
         Parameters
@@ -125,7 +126,7 @@ class SelectiveDense(Layer):
 
         self.built = True
 
-    def call(self, inputs):
+    def call(self, inputs: tf.Tensor) -> tf.Tensor:
         """Apply the selective dense transformations.
 
         Parameters
@@ -161,7 +162,7 @@ class SelectiveDense(Layer):
         output = tf.concat(outputs, axis=1)
         # print(output.shape, output.shape)
         
-        if self.use_bias:
+        if self.bias is not None:
             output = tf.nn.bias_add(output, self.bias)
         
         if self.activation is not None:
@@ -185,10 +186,10 @@ class SelectiveDense(Layer):
 
 
 class CustomDense(Dense):
-    def __init__(self, units, num_errorgens, activation=None, use_bias=True,
-                 kernel_initializer='glorot_uniform', bias_initializer='zeros',
+    def __init__(self, units: int, num_errorgens: int, activation=None, use_bias: bool = True,
+                 kernel_initializer: Any = 'glorot_uniform', bias_initializer: Any = 'zeros',
                  kernel_regularizer=None, bias_regularizer=None,
-                 kernel_constraint=None, bias_constraint=None, **kwargs):        
+                 kernel_constraint=None, bias_constraint=None, **kwargs) -> None:        
         
         """Create a Dense-like layer with parameters replicated over error generators.
 
@@ -225,7 +226,7 @@ class CustomDense(Dense):
                                            bias_constraint=bias_constraint, **kwargs)
         self.num_errorgens = num_errorgens
 
-    def build(self, input_shape):
+    def build(self, input_shape: tf.TensorShape | list | tuple) -> None:
         """Create the layer weights based on the input shape.
 
         Parameters
@@ -236,13 +237,13 @@ class CustomDense(Dense):
 
         Creates
         -------
-        self._kernel : tf.Variable
+        self.kernel : tf.Variable
             Kernel tensor of shape `(num_errorgens, input_dim, units)`.
         self.bias : tf.Variable or None
             Bias tensor of shape `(num_errorgens, units)` if `use_bias` is True.
         """
         input_dim = input_shape[-1]
-        self._kernel = self.add_weight(
+        self.kernel = self.add_weight(
             name="kernel",
             shape=(self.num_errorgens, input_dim, self.units),
             initializer=self.kernel_initializer,
@@ -264,7 +265,7 @@ class CustomDense(Dense):
         self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dim})
         self.built = True
 
-    def call(self, inputs):
+    def call(self, inputs: tf.Tensor) -> tf.Tensor:
         """Apply the per-error-generator dense transformations.
 
         Parameters

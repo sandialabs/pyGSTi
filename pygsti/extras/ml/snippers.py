@@ -14,8 +14,12 @@ per-layer feature vector that should be used as inputs when predicting that gene
 #***************************************************************************************************
 
 import numpy as _np
+from typing import TYPE_CHECKING
 
-def undirected_adjacency_matrix_from_edges(edges, qubit_labels):
+if TYPE_CHECKING:
+    from pygsti.extras.ml.encoding import StandardCircuitEncoder
+
+def undirected_adjacency_matrix_from_edges(edges: list[tuple], qubit_labels: list) -> _np.ndarray:
     """
     Constructs the undirected adjacency matrix for the graph with nodes given by `qubit_labels` and edges given by `edges.
 
@@ -41,7 +45,7 @@ def undirected_adjacency_matrix_from_edges(edges, qubit_labels):
 
 # FUTURE TODO: This function assumes only H and S errors. Will need to update if/when
 # code is updated to add in C and A errors.
-def layer_snipper_from_qubit_graph(error_generators, encoder, adjacency_matrix, hops):
+def layer_snipper_from_qubit_graph(error_generators: list[tuple], encoder: "StandardCircuitEncoder", adjacency_matrix: _np.ndarray, hops: int) -> list[list[int]]:
     """
     Creates a "snipper" for a QPANN. This snipper will specify that, when predicting the
     error rate of an error generator G that acts non-trivially on the qubit set Q, the 
@@ -90,6 +94,8 @@ def layer_snipper_from_qubit_graph(error_generators, encoder, adjacency_matrix, 
     degree_matrix = _np.diag(_np.sum(adjacency_matrix, axis = 1))
     laplacian = degree_matrix - adjacency_matrix
     laplace_power = _np.linalg.matrix_power(laplacian, hops)
+    from pygsti.processors import QubitProcessorSpec
+    assert isinstance(encoder.pspec, QubitProcessorSpec)
     nodes_within_hops = [list(_np.arange(encoder.pspec.num_qubits)[abs(laplace_power[i, :]) > 0]) for i in range(encoder.pspec.num_qubits)]
     #
     # Init the list that this function will return, specifying the relevant encoding indices for each error generator in `error_generators`
@@ -107,7 +113,7 @@ def layer_snipper_from_qubit_graph(error_generators, encoder, adjacency_matrix, 
         # All the qubits that are within `hops` steps on the graph of the qubits acted on by the error
         relevant_qubits = _np.unique(_np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
         # The encoding indices that encode what is happening to these qubits
-        relevant_encoding_indices = encoder.indices_for_qubits(relevant_qubits)
+        relevant_encoding_indices = encoder.indices_for_qubits(list(relevant_qubits))
         # Add to the list specifying the relevant encoding indices for each error generator in `error_generators`
         encoding_indices.append(relevant_encoding_indices)
 
