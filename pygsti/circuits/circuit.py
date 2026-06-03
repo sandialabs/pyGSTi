@@ -2546,8 +2546,8 @@ class Circuit(object):
         while ind < min(self.num_layers, circuit.num_layers):
             lbl = self.layer_label(ind)
             other_lbl = circuit.layer_label(ind)
-            # Convert to LabelTup esq formats.
 
+            # Convert to LabelTup esq formats.
             if isinstance(lbl, _LabelStr):
                 # These lbls have no qubits associated with them because of reasons.
                 # So we will assume that each line in the circuit of each has that gate applied.
@@ -2555,35 +2555,7 @@ class Circuit(object):
             if isinstance(other_lbl, _LabelStr):
                 other_lbl = _Label(other_lbl.name, circuit.line_labels)
             
-            if isinstance(lbl, _CircuitLabel) and lbl.depth == 1:
-                # Convert into not a CircuitLabel.
-                lbl = _Label(lbl.components, lbl.sslbls, lbl.time, lbl.args)
-            if isinstance(other_lbl, _CircuitLabel) and other_lbl.depth == 1:
-                other_lbl = _Label(other_lbl.components, other_lbl.sslbls, other_lbl.time, other_lbl.args)
-
-            nq_prior: int = lbl.num_qubits if lbl.num_qubits is not None else 0
-
             lbl = lbl.concate(other_lbl)
-            # if isinstance(lbl, _CircuitLabel) and isinstance(other_lbl, _CircuitLabel):
-            #     assert lbl.depth == other_lbl.depth, "Embedded circuits must have the same depth when tensoring together."
-            #     lbl = _Label((lbl, other_lbl)) # make a _LabelTupTup
-            #     assert isinstance(lbl, _LabelTupTup)
-            #     assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
-            # elif isinstance(lbl, _LabelTupTup) and isinstance(other_lbl, _LabelTupTup):
-            #     lbl = _Label((*lbl, *other_lbl)) # this should make a _LabelTupTup
-            #     assert isinstance(lbl,  _LabelTupTup)
-            #     assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
-            # elif isinstance(lbl, _LabelTupTup):
-            #     lbl = _Label((*lbl, other_lbl))
-            #     assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
-            # elif isinstance(other_lbl, _LabelTupTup):
-            #     lbl = _Label((lbl, *other_lbl))
-            # elif isinstance(other_lbl, _LabelTup) and isinstance(lbl, _LabelTup):
-            #     lbl = _Label((lbl, other_lbl))
-            #     assert isinstance(lbl, _LabelTupTup)
-            #     assert lbl.num_qubits == other_lbl.num_qubits + nq_prior
-            # else:
-            #     raise NotImplementedError(f"{type(lbl)} is not yet supported for tensoring with {type(other_lbl)}")
             new_layers.append(lbl)
             ind += 1
 

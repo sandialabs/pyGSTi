@@ -3,7 +3,7 @@ import pytest
 import pickle
 
 from pygsti.baseobjs.label import Label as L
-from pygsti.baseobjs.label import LabelTup, LabelTupTup, CircuitLabel, LabelStr, LabelTupTupWithTime
+from pygsti.baseobjs.label import Label as L, LabelTup, LabelTupTup, CircuitLabel, LabelStr, LabelTupTupWithTime, LabelTupTupWithArgs
 
 from pygsti.serialization import jsoncodec
 from pygsti.circuits import Circuit
@@ -223,6 +223,13 @@ class LabelConcateTester(BaseCase):
         with self.assertRaises(ValueError):
             l1.concate(l_str)
 
+    def test_concate_circuitlabel_depth(self):
+        l1 = L(('Gx', 0))
+        l2 = L(('Gy', 1))
+        cl_depth2 = CircuitLabel('circuit', ["Gx","Gy"], (2,), 1, None)
+        with self.assertRaises(ValueError):
+            cl_depth2.concate(l1)
+
     def test_concate_labeltuptup(self):
         l1 = L((('Gx', 0), ('Gy', 1)))
         l2 = L(('Gz', 2))
@@ -286,8 +293,32 @@ class LabelConcateTester(BaseCase):
         concatenated = l1.concate(l2)
         self.assertIsInstance(concatenated, LabelTupTupWithTime)
         self.assertEqual(concatenated.time, 0.5)
+        self.assertEqual(concatenated.collect_args(), l1.collect_args() + l2.collect_args())
 
         l3 = L([('Gz', 2)], time=0.5)
         concatenated2 = concatenated.concate(l3)
         self.assertIsInstance(concatenated2, LabelTupTupWithTime)
         self.assertEqual(concatenated2.time, 0.5)
+        self.assertEqual(concatenated2.collect_args(), l1.collect_args() + l2.collect_args() + l3.collect_args())
+
+    def test_concate_labelstr_errors(self):
+
+        ltt_wt = L((('Gx', 0), ('Gy', 1)), time=0.1)
+        ltt = L((('Gx', 0), ('Gy', 1))) 
+        lt_wt = L(('Gy', 1), time=0.1)
+        lt = L(('Gy', 1))
+        cl = CircuitLabel('circuit', [lt], None, 1, None)
+
+        mystr = L("Gx:2@2")
+
+        with self.assertRaises(ValueError):
+            mystr.concate(ltt_wt)
+        with self.assertRaises(ValueError):
+            mystr.concate(ltt)
+        with self.assertRaises(ValueError):
+            mystr.concate(lt_wt)
+        with self.assertRaises(ValueError):
+            mystr.concate(lt)
+        with self.assertRaises(ValueError):
+            mystr.concate(cl)
+

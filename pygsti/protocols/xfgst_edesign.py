@@ -3,7 +3,7 @@ from pygsti.protocols import CircuitListsDesign, HasProcessorSpec
 from pygsti.circuits.circuitlist import CircuitList
 from pygsti.circuits.circuit import Circuit
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
-from pygsti.baseobjs.label import Label
+from pygsti.baseobjs.label import Label, LabelTup
 import copy
 
 from pygsti.tools.graphcoloring import *
@@ -33,7 +33,7 @@ def find_neighbors(vertices: list, edges: list) -> dict:
 
 
 def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list, 
-                                       oneq_gstdesign, twoq_gstdesign, randstate: int) -> tuple:
+                                       oneq_gstdesign, twoq_gstdesign, randgen) -> tuple:
     """
     Generate crosstalk-free GST circuits by stitching together 1Q and 2Q GST circuits for 
     each color patch.
@@ -49,7 +49,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     vertices (list): A list of vertices in the graph.
     oneq_gstdesign: A GST edesign containing the 1Q GST circuits.
     twoq_gstdesign: An GST edesign containing the 2Q GST circuit.
-    randstate: A random state object used for randomization.
+    randgen: A random number generator from numpy.
 
     Returns:
     tuple: A tuple containing:
@@ -77,14 +77,20 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
     m2q = mapper_2q.copy()
     for k2 in mapper_2q:
         if k2.num_qubits == 1:
+            assert isinstance(k2, LabelTup)
+            # So we are assuming k2 = Label("Gsingle", x) where x = 0,1.
             tgt = k2[1]
+            assert tgt in [0,1]
             tmp = [None, None]
             tmp[tgt] = k2
-            tmp[1-tgt] = Label("Gi", 1-tgt)
+            # This implies that the correction is only for the single noisy idle gate.
+            tmp[1-tgt] = Label("Gi", 1-tgt) # Wrap around will set the tmp correctly.
+            # However, we still need to ensure that Label("Gi", 1-tgt) is correct.
             m2q[k2] = tuple(tmp)
+            # We are going to be replacing the 1q gate with a parallelized noisy idle and the gate.
 
     mapper_2q = m2q # Reset here.
-    layer_mappers = {1: mapper_1q, 2: mapper_2q}
+    layer_mappers = {1: mapper_1q, 2: mapper_2q} # So layer mappers handles how big each lane is not the length of a circuit.
 
     num_lines = -1
     global_line_order = None
@@ -103,22 +109,20 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
             num_batches = int(np.ceil(max_len / min_len))
 
             if oneq_len > twoq_len:
-                # node_perms = [randstate.permutation(max_len) for _ in unused_qubits]
-                # edge_perms = [[] for _ in edge_set]
-                # for _ in range(num_batches):
-                #     for perm in edge_perms:
-                #         perm.extend([randstate.permutation(min_len)])
-                # edge_perms = [mp[:max_len] for mp in edge_perms]
                 raise NotImplementedError()
         
             # 2Q GST circuit list is longer
-            edge_perms = [randstate.permutation(max_len) for _ in edge_set] # Randomize the order in which we place 2Q GST circuits on each edge
+            n_edges = len(edge_set)
+            edge_perms = np.tile(np.arange(max_len), (n_edges, 1))
+            edge_perms = randgen.permuted(edge_perms, axis=1) # Note that this will permute the columns independently and not in bulk way.
+
             node_perms = []
-            for i in range(unused_qubits.size):
-                perms = [randstate.permutation(min_len) for _ in range(num_batches)]
-                node_perms.append(np.concatenate(perms)[:max_len])
-            edge_perms = np.array(edge_perms)
-            node_perms = np.array(node_perms)
+            node_perms = np.tile(np.arange(min_len), (min_len, num_batches, 1))
+            # truncate to largest size we will need.
+            node_perms =randgen.permuted(node_perms, axis=-1).reshape(min_len, num_batches*min_len)[:, :max_len]
+
+            assert edge_perms.shape == (len(edge_set), max_len)
+            assert node_perms.shape == (min_len, max_len)
         
             # Check invariants
             edge_line_contributions = 2*edge_perms.shape[0] if edge_perms.size > 0 else 0
@@ -140,7 +144,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                     edge_start = 1
                     node_start = 0
                     c = twoq_circuits[edge_perms[0,j]]
-                    tensored_lines.append(edge_set[0])
+                    tensored_lines.append(edge_set[0])  #This may just pick the same value each time if edge_set does not change.
                 else:
                     edge_start = 0
                     node_start = 1
@@ -156,7 +160,7 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                     circs_to_tensor.append( c2 )
                     tensored_lines.append((unused_qubits[i],))
                 c_ten = batch_tensor(circs_to_tensor, layer_mappers, global_line_order, tensored_lines)
-                for i in range(c_ten.num_layers):
+                for i in range(c_ten.num_layers): # This is just a debugging loop to ensure we have everything labeled.
                     l0 = set(c_ten.layer(i))
                     l1 = set(c_ten.layer_with_idles(i))
                     assert l0 == l1
@@ -255,7 +259,7 @@ class CrosstalkFreeExperimentDesign(CircuitListsDesign):
         TODO: Update the init function so that it handles different circuit stitchers better (i.e., by using stitcher_kwargs, etc.)
         """
         # TODO: make sure idle gates are explicit.
-        randstate = np.random.RandomState(seed)
+        randgen = np.random.default_rng(seed)
         self.processor_spec = processor_spec
         self.oneq_gstdesign = oneq_gstdesign
         self.twoq_gstdesign = twoq_gstdesign
@@ -268,7 +272,7 @@ class CrosstalkFreeExperimentDesign(CircuitListsDesign):
     
         self.circuit_lists, self.aux_info = circuit_stitcher(self.color_patches, self.vertices, 
                                                             self.oneq_gstdesign, self.twoq_gstdesign, 
-                                                            randstate,
+                                                            randgen,
         )
         
         CircuitListsDesign.__init__(self, self.circuit_lists, qubit_labels=self.vertices)
