@@ -1382,6 +1382,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
                     i = qubit_labels.index(sslbls[0])
                     j = qubit_labels.index(sslbls[1])
                     twoQ_connectivity[i, j] = True
+                    twoQ_connectivity[j, i] = True # We assume symmetric elsewhere.
 
         return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
     
