@@ -710,7 +710,7 @@ class LabelTupWithTime(LabelTup, tuple):
 
     def __add__(self, s: str) -> LabelTupWithTime:
         if isinstance(s, str):
-            return LabelTupWithTime.init(self.name + s, self.sslbls)
+            return LabelTupWithTime.init(self.name + s, self.sslbls, self.time)
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 
