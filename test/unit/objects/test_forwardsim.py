@@ -9,6 +9,7 @@ from pygsti.forwardsims import ForwardSimulator, \
     MapForwardSimulator, SimpleMapForwardSimulator, \
     MatrixForwardSimulator,  SimpleMatrixForwardSimulator, \
     TorchForwardSimulator
+from pygsti.forwardsims import torchfwdsim
 from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit, create_lsgst_circuit_lists
 from pygsti.baseobjs import Label as L
@@ -261,6 +262,7 @@ class ForwardSimConsistencyTester(TestCase):
 
     PROBS_TOL = 1e-14
     JACS_TOL = 1e-10
+    STASHED_DTYPE = torchfwdsim.DEFAULT_REAL_TYPE
 
     def setUp(self):
         self.model_ideal = smq1Q_XYI.target_model()
@@ -284,8 +286,14 @@ class ForwardSimConsistencyTester(TestCase):
         ]
         if TorchForwardSimulator.ENABLED:
             sims.append(TorchForwardSimulator())
+            import torch
+            torchfwdsim.DEFAULT_REAL_TYPE = torch.float64
         fsth = ForwardSimTestHelper(self.model_noisy, sims, circuits)
         return fsth
+    
+    def tearDown(self) -> None:
+        torchfwdsim.DEFAULT_REAL_TYPE = ForwardSimConsistencyTester.STASHED_DTYPE
+        return super().tearDown()
         
     def test_consistent_probs(self):
         fsth = self.setUp()
@@ -338,6 +346,7 @@ class LindbladForwardSimConsistencyTester(TestCase):
 
     PROBS_TOL = 1e-12
     JACS_TOL = 1e-9
+    STASHED_DTYPE = torchfwdsim.DEFAULT_REAL_TYPE
 
     def setUp(self):
         model = smq1Q_XYI.target_model()
@@ -363,7 +372,13 @@ class LindbladForwardSimConsistencyTester(TestCase):
         ]
         if TorchForwardSimulator.ENABLED:
             sims.append(TorchForwardSimulator())
+            import torch
+            torchfwdsim.DEFAULT_REAL_TYPE = torch.float64
         return ForwardSimTestHelper(self.model_noisy, sims, circuits)
+    
+    def tearDown(self) -> None:
+        torchfwdsim.DEFAULT_REAL_TYPE = LindbladForwardSimConsistencyTester.STASHED_DTYPE
+        return super().tearDown()
 
     @pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
     def test_consistent_probs(self):

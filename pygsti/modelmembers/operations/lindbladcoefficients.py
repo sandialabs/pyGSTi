@@ -179,7 +179,8 @@ class _StaticParam(_BlockParameterization):
     @staticmethod
     def block_data_torch(sd, t_param):
         import torch as _torch
-        return _torch.from_numpy(sd[0])
+        arr = sd[0]
+        return _torch.from_numpy(arr).to(dtype=t_param.dtype, device=t_param.device)
 
 
 class _RealVectorElements(_BlockParameterization):
@@ -291,7 +292,7 @@ class _Depol(_BlockParameterization):
     def block_data_torch(sd, t_param):
         import torch as _torch
         n = sd[0]
-        return (t_param[0]**2) * _torch.ones(n, dtype=_torch.double)
+        return (t_param[0]**2) * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
 
 
 class _RelDepol(_BlockParameterization):
@@ -328,7 +329,7 @@ class _RelDepol(_BlockParameterization):
     def block_data_torch(sd, t_param):
         import torch as _torch
         n = sd[0]
-        return t_param[0] * _torch.ones(n, dtype=_torch.double)
+        return t_param[0] * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
 
 
 class _OtherElements(_BlockParameterization):
@@ -1030,7 +1031,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         assert _np.linalg.norm(_np.imag(d2)) < IMAG_TOL
         return _np.real(d2)
 
-    def stateless_data(self):
+    def stateless_data(self, real_dtype, device):
         """Block data considered constant during model fitting, for the PyTorch path (issue 607).
 
         Returns ``(parameterization_class, torch_ctx)``, where ``torch_ctx`` carries the constants that
@@ -1044,7 +1045,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
     def torch_base(sd, t_param):
         """Differentiable reconstruction of ``block_data`` from the parameter tensor ``t_param``.
 
-        With ``sd = blk.stateless_data()`` and ``t_param = torch.from_numpy(blk.to_vector())``,
+        With ``sd = blk.stateless_data(...)`` and ``t_param = torch.from_numpy(blk.to_vector())``,
         ``type(blk).torch_base(sd, t_param)`` reproduces ``blk.block_data`` as a torch Tensor whose
         autodiff Jacobian w.r.t. ``t_param`` equals ``blk.deriv_wrt_params(...)``.  The error generator
         at the ``LindbladErrorgen`` level is then ``einsum('i,ijk->jk', torch_base(...).ravel(), G)``

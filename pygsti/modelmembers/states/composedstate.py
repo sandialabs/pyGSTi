@@ -153,7 +153,7 @@ class ComposedState(_State, _Torchable):
         #error map acts on dmVec
         return _np.dot(self.error_map.to_dense(on_space), self.state_vec.to_dense(on_space))
 
-    def stateless_data(self):
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         """Constants for the torch path (issue 607).
 
         Returns ``(static_ket, error_map_type, error_map_sd)``.  All parameters belong to the (Torchable)
@@ -161,7 +161,8 @@ class ComposedState(_State, _Torchable):
         ``static_ket`` is the constant base state in Hilbert-Schmidt space.
         """
         static_ket = _np.ascontiguousarray(self.state_vec.to_dense('HilbertSchmidt'))
-        return (_torch.from_numpy(static_ket), type(self.error_map), self.error_map.stateless_data())
+        err_sld = self.error_map.stateless_data(real_dtype, device)
+        return (_torch.from_numpy(static_ket).to(dtype=real_dtype, device=device), type(self.error_map), err_sld)
 
     @staticmethod
     def torch_base(sd, t_param):

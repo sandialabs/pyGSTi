@@ -195,9 +195,9 @@ class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
             # Construct a dense version from scratch (more time consuming)
             return _spl.expm(self.errorgen.to_dense(on_space))
 
-    def stateless_data(self):
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         """Constants for the torch path (issue 607): delegated to the wrapped error generator."""
-        return self.errorgen.stateless_data()
+        return self.errorgen.stateless_data(real_dtype, device)
 
     @staticmethod
     def torch_base(sd, t_param):

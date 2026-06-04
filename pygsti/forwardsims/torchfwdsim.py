@@ -32,17 +32,17 @@ from pygsti.forwardsims.forwardsim import ForwardSimulator
 try:
     import torch
     TORCH_ENABLED = True
+    DEFAULT_REAL_TYPE = torch.float32
 
     def todevice_kwargs():
         if torch.cuda.device_count() > 0:
-            return {'dtype': torch.float32, 'device': 'cuda:0'}
+            return {'dtype': DEFAULT_REAL_TYPE, 'device': 'cuda:0'}
         elif torch.mps.device_count() > 0:
-            return {'dtype': torch.float32, 'device': 'mps:0'}
+            return {'dtype': DEFAULT_REAL_TYPE, 'device': 'mps:0'}
         elif torch.xpu.device_count() > 0:
-            return {'dtype': torch.float32, 'device': 'xpu:0'}
+            return {'dtype': DEFAULT_REAL_TYPE, 'device': 'xpu:0'}
         else:
-            return {'dtype': torch.float32, 'device': 'cpu'}
-    DEVICE_KWARGS = todevice_kwargs()
+            return {'dtype': DEFAULT_REAL_TYPE, 'device': 'cpu'}
 
 except ImportError:
     TORCH_ENABLED = False
@@ -114,14 +114,20 @@ class StatelessModel:
             k_prev = k
             v_prev = v
         assert self.outcome_probs_dim == v_prev.stop
-
+        to_args = todevice_kwargs()
+        if not self.use_gpu:
+            to_args['device'] = 'cpu'
+        if 'mps' in to_args['device']:
+            # This branch must come AFTER the possible overwrite of 
+            # to_args['device']. It's only here because using MPS
+            # requires float32.
+            to_args['dtype'] = torch.float32
         self.param_metadata = []
         for lbl, obj in model._iter_parameterized_objs():
             assert isinstance(obj, Torchable), f"{type(obj)} does not subclass {Torchable}."
             param_type = type(obj)
-            sld = obj.stateless_data()
-            if self.use_gpu:
-                sld = tuple((i.to(**DEVICE_KWARGS) if isinstance(i, torch.Tensor) else i) for i in sld)
+            sld = obj.stateless_data(to_args['dtype'], to_args['device'])
+            # sld = tuple((i.to(**to_args) if isinstance(i, torch.Tensor) else i) for i in sld)
             param_data = (lbl, param_type) + (sld,)
             self.param_metadata.append(param_data)
 
@@ -142,6 +148,14 @@ class StatelessModel:
         free_params = []
         free_param_sizes = []
         prev_idx = 0
+        to_args = todevice_kwargs()
+        if not self.use_gpu:
+            to_args['device'] = 'cpu'
+        if 'mps' in to_args['device']:
+            # This branch must come AFTER the possible overwrite of 
+            # to_args['device']. It's only here because using MPS
+            # requires float32.
+            to_args['dtype'] = torch.float32
         for i, (lbl, obj) in enumerate(model._iter_parameterized_objs()):
             gpind = obj.gpindices_as_array()
             vec = obj.to_vector()
@@ -161,8 +175,7 @@ class StatelessModel:
                 call to get_torch_bases would silently fail, so we're forced to raise an error here.
                 """
                 raise ValueError(message)
-            if self.use_gpu:
-                vec = vec.to(**DEVICE_KWARGS)
+            vec = vec.to(**to_args)
             free_params.append(vec)
             free_param_sizes.append(vec_size)
         self.free_param_sizes = free_param_sizes
@@ -242,9 +255,9 @@ class TorchForwardSimulator(ForwardSimulator):
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
-        if 'mps' in DEVICE_KWARGS['device']:
-            self.use_gpu = False
-            if (use_gpu is not None) and use_gpu:
+        if 'mps' in todevice_kwargs()['device']:
+            self.use_gpu = DEFAULT_REAL_TYPE == torch.float32
+            if use_gpu:
                 warnings.warn('Apple Metal Performance Shaders not supported; ignoring use_gpu=True.')
         else:
             if use_gpu is None:

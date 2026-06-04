@@ -13,7 +13,8 @@ the PyTorch-backed forward simulator in pyGSTi/forwardsims/torchfwdsim.py.
 
 
 from __future__ import annotations
-from typing import Tuple, TYPE_CHECKING
+from typing import Tuple, TYPE_CHECKING, Optional, Any
+
 if TYPE_CHECKING:
     import torch as _torch
 try:
@@ -27,7 +28,7 @@ from pygsti.modelmembers.modelmember import ModelMember
 
 class Torchable(ModelMember):
 
-    def stateless_data(self) -> Tuple:
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
         """
         Return this ModelMember's data that is considered constant for purposes of model fitting.
 
@@ -42,7 +43,7 @@ class Torchable(ModelMember):
 
             vec = obj.to_vector()
             t_param = torch.from_numpy(vec)
-            sd = obj.stateless_data()
+            sd = obj.stateless_data(torch.float64, 'cpu')
             t = type(obj).torch_base(sd, t_param)
 
         then t will be a PyTorch Tensor that represents "obj" in a canonical numerical way.
@@ -67,9 +68,13 @@ class StaticTorchable(Torchable):
     call for the static prefactor).
     """
 
-    def stateless_data(self) -> Tuple:
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[_torch.Tensor]:
         mx = _np.ascontiguousarray(self.to_dense('HilbertSchmidt'))
-        return (_torch.from_numpy(mx),)
+        if _np.iscomplexobj(mx):
+            dtype = _torch.complex64 if real_dtype.itemsize == 4 else _torch.complex128
+        else:
+            dtype = real_dtype
+        return (_torch.from_numpy(mx).to(dtype=dtype, device=device),)
 
     @staticmethod
     def torch_base(sd : Tuple, t_param : _torch.Tensor) -> _torch.Tensor:

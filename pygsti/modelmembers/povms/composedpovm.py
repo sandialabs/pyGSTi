@@ -282,7 +282,7 @@ class ComposedPOVM(_POVM, _Torchable):
         # Recall self.base_povm.num_params == 0
         return self.error_map.to_vector()
 
-    def stateless_data(self):
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         """Constants for the torch path (issue 607).
 
         Returns ``(base_effect_rows, error_map_type, error_map_sd)``.  All parameters belong to the
@@ -293,7 +293,8 @@ class ComposedPOVM(_POVM, _Torchable):
         """
         base_rows = _np.ascontiguousarray(
             _np.stack([self.base_povm[k].to_dense('HilbertSchmidt') for k in self.keys()]))
-        return (_torch.from_numpy(base_rows), type(self.error_map), self.error_map.stateless_data())
+        err_sld = self.error_map.stateless_data(real_dtype, device)
+        return (_torch.from_numpy(base_rows).to(dtype=real_dtype, device=device), type(self.error_map), err_sld)
 
     @staticmethod
     def torch_base(sd, t_param):

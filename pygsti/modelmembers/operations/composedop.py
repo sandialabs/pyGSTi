@@ -309,15 +309,15 @@ class ComposedOp(_LinearOperator, _Torchable):
                 mx = _np.dot(op.to_dense(on_space), mx)
             return mx
 
-    def stateless_data(self):
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         """Constants for the torch path (issue 607): one entry per factor op.
 
-        Returns ``(factors,)`` where each entry is ``(type(factor), factor.stateless_data(), inds)`` and
+        Returns ``(factors,)`` where each entry is ``(type(factor), factor.stateless_data(...), inds)`` and
         ``inds`` are the factor's local parameter indices (from ``_submember_rpindices``, the same arrays
         ``to_vector``/``from_vector`` use).  Every factor must itself be ``Torchable`` -- including the
         static ideal/target prefactor, which is handled by ``StaticTorchable``.
         """
-        factors = [(type(op), op.stateless_data(), _slct.to_array(inds))
+        factors = [(type(op), op.stateless_data(real_dtype, device), _slct.to_array(inds))
                    for op, inds in zip(self.factorops, self._submember_rpindices)]
         return (factors,)
 

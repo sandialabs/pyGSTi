@@ -743,20 +743,23 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         else:  # dense rep
             return self._rep.to_dense(on_space)
 
-    def stateless_data(self):
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         """Constants needed to differentiably rebuild the dense HS error generator (issue 607).
 
         Returns ``(G, blocks)`` where ``G`` is the constant ``(N, d2, d2)`` term-superoperator stack
         (``combined_lindblad_term_superops``) as a torch tensor, and ``blocks`` is a list, in
-        ``coefficient_blocks`` order, of ``(blk.stateless_data(), blk.num_params)``.  The error generator
+        ``coefficient_blocks`` order, of ``(blk.stateless_data(...), blk.num_params)``.  The error generator
         is linear in the (per-block) block_data, so ``torch_base`` rebuilds it as
         ``einsum('i,ijk->jk', concat(block torch_bases), G).real`` -- the differentiable analog of
         ``to_dense('HilbertSchmidt')``.  Dense path only.
         """
         assert self._rep_type != 'sparse superop', \
             "LindbladErrorgen.stateless_data (the torch path) requires a dense representation."
-        G = _torch.from_numpy(_np.ascontiguousarray(self.combined_lindblad_term_superops))
-        blocks = [(blk.stateless_data(), blk.num_params) for blk in self.coefficient_blocks]
+        const = _np.ascontiguousarray(self.combined_lindblad_term_superops)
+        G_dtype = _torch.complex64 if real_dtype.itemsize == 4 else _torch.complex128
+        G = _torch.from_numpy(const)
+        G = G.to(device=device, dtype=G_dtype)
+        blocks = [(blk.stateless_data(real_dtype, device), blk.num_params) for blk in self.coefficient_blocks]
         return (G, blocks)
 
     @staticmethod
