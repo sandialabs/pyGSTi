@@ -5,7 +5,7 @@ The block-level Torchable plumbing is checked in ``test_lindbladcoefficients_tor
 covers the operation classes that compose it so that ``TorchForwardSimulator`` can run on a CPTPLND/GLND
 model: ``LindbladErrorgen`` -> ``ExpErrorgenOp`` -> ``ComposedOp``.  For each we check that
 
-  (1) ``type(obj).torch_base(obj.stateless_data(), torch.from_numpy(obj.to_vector()))`` reproduces the
+  (1) ``type(obj).torch_base(obj.stateless_data(torch.float32, 'cpu'), torch.from_numpy(obj.to_vector()))`` reproduces the
       numpy ``obj.to_dense('HilbertSchmidt')`` (error generator for the errorgen, ``exp(L)`` process
       matrix for the ops); and
   (2) ``torch.func.jacrev(torch_base)`` reproduces the numpy ``deriv_wrt_params`` -- i.e. PyTorch
@@ -58,14 +58,14 @@ def _a_composed_op(model):
 
 
 def _torch_base_np(obj, t_param=None):
-    sd = obj.stateless_data()
+    sd = obj.stateless_data(torch.float32, 'cpu')
     if t_param is None:
         t_param = torch.from_numpy(np.ascontiguousarray(obj.to_vector()))
     return type(obj).torch_base(sd, t_param).detach().numpy()
 
 
 def _jacrev_np(obj):
-    sd = obj.stateless_data()
+    sd = obj.stateless_data(torch.float32, 'cpu')
     t_param = torch.from_numpy(np.ascontiguousarray(obj.to_vector()))
     ref = obj.to_dense('HilbertSchmidt')
     J = torch.func.jacrev(lambda tp: type(obj).torch_base(sd, tp))(t_param)
@@ -109,7 +109,7 @@ def test_composedstate_torch_base():
     """ComposedState (Lindblad SPAM prep) torch_base = error_map_superop @ static_ket; reproduces
     to_dense and its analytic Jacobian.  ComposedState.torch_base returns a super-ket (1-D)."""
     rho = _noisy_full_cptp_model().preps['rho0']
-    sd = rho.stateless_data()
+    sd = rho.stateless_data(torch.float32, 'cpu')
     t = torch.from_numpy(np.ascontiguousarray(rho.to_vector()))
 
     assert np.allclose(_torch_base_np(rho), rho.to_dense('HilbertSchmidt'), atol=1e-9)
@@ -122,7 +122,7 @@ def test_composedpovm_torch_base():
     reproduces the per-effect dual vectors and their analytic Jacobians.  Rows are in POVM-effect order
     (the row order TorchForwardSimulator multiplies against the super-ket)."""
     povm = _noisy_full_cptp_model().povms['Mdefault']
-    sd = povm.stateless_data()
+    sd = povm.stateless_data(torch.float32, 'cpu')
     t = torch.from_numpy(np.ascontiguousarray(povm.to_vector()))
 
     # value: row i is effect i's dual vector

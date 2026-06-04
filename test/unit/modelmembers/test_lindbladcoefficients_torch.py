@@ -5,7 +5,7 @@ Proves the design "sets up Torchable": each parameterization supplies a differen
 ``block_data_torch`` (params -> block_data), exposed on the block as ``stateless_data`` /
 ``torch_base``.  We check that
 
-  (1) ``torch_base(stateless_data(), torch.from_numpy(to_vector()))`` reproduces ``block_data``;
+  (1) ``torch_base(stateless_data(torch.float32, 'cpu'), torch.from_numpy(to_vector()))`` reproduces ``block_data``;
   (2) ``torch.func.jacrev(torch_base)`` equals the numpy ``deriv_wrt_params`` -- i.e. PyTorch
       autodiff reproduces the manual block_data Jacobian (so the Torch path needs no hand-written
       derivatives); and
@@ -57,7 +57,7 @@ def _jacrev_np(f, t_param):
 def test_torch_base_matches_block_data_and_jacobian(bname, dim, bt, pm):
     blk = _block_at_params(bname, dim, bt, pm)
     vv = blk.to_vector()
-    sd = blk.stateless_data()
+    sd = blk.stateless_data(torch.float32, 'cpu')
     t_param = torch.from_numpy(np.ascontiguousarray(vv))
 
     # (1) torch_base reproduces block_data
@@ -77,7 +77,7 @@ def test_torch_errorgen_recipe_matches_superop_deriv(bname, dim, bt, pm):
     the numpy superop_deriv -- the LindbladErrorgen.torch_base recipe (the follow-on task)."""
     blk = _block_at_params(bname, dim, bt, pm)
     vv = blk.to_vector()
-    sd = blk.stateless_data()
+    sd = blk.stateless_data(torch.float32, 'cpu')
     G = np.asarray(blk.create_lindblad_term_superoperators(bname, sparse=False, flat=True))
     t_param = torch.from_numpy(np.ascontiguousarray(vv))
     t_G = torch.from_numpy(np.ascontiguousarray(G))
