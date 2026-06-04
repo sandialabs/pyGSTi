@@ -32,6 +32,10 @@ on:
 env:
   SKIP_DEAP: 1
   PYGSTI_NO_CUSTOMLM_SIGINT: 1
+  # Resolve PyTorch (a transitive test dependency) from the CPU-only wheel index
+  # instead of pip's default CUDA build, which drags in ~2.5 GB of nvidia-* wheels
+  # that CI never uses. uv honors this for every resolution in the job.
+  UV_TORCH_BACKEND: cpu
 
 jobs:
   build-and-test:
@@ -56,25 +60,28 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
-    - name: Cache pip packages
-      uses: actions/cache@v4
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}-${{ hashFiles('**/*requirements.txt') }}
-    - name: Install pip packages
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install wheel
-        python -m pip install flake8
+        enable-cache: true
+        # Key the uv cache on the real dependency manifests. (The old pip cache
+        # hashed setup.py + requirements.txt, but the deps actually live in pyproject.toml.)
+        cache-dependency-glob: |
+          **/pyproject.toml
+          **/setup.py
+    - name: Install build and lint tools
+      # setuptools is needed by the explicit `setup.py build_ext` call below (an
+      # editable install does not leave it in the environment); flake8 for linting.
+      run: uv pip install --system setuptools wheel flake8
     - name: Install package (Cython)
       if: ${{ inputs.use-cython == 'true' }}
       run: |
-        python -m pip install -e .[testing]
+        uv pip install --system -e .[testing]
         python setup.py build_ext --inplace
     - name: Install package (No Cython, Linux only)
       if: ${{ inputs.use-cython != 'true' && inputs.os == 'ubuntu-latest' }}
       run: |
-        PYGSTI_CYTHON_SKIP=1 python -m pip install -e .[testing_no_cython]
+        PYGSTI_CYTHON_SKIP=1 uv pip install --system -e .[testing_no_cython]
     - name: Lint with flake8 (Linux only)
       if: ${{ inputs.os == 'ubuntu-latest'}}
       run: |
@@ -103,7 +110,7 @@ jobs:
         # Tutorials live as MyST Markdown under docs/markdown/; jupytext
         # materializes the paired .ipynb mirror under docs/notebooks/ for
         # nbval to consume.
-        pip install -e .[docs]
+        uv pip install --system -e .[docs]
         (cd docs && jupytext --sync 'markdown/**/*.md')
 
         # Download and compile CHP for the Clifford-simulation notebook;
