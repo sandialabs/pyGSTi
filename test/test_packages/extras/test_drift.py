@@ -1,9 +1,14 @@
+import os
+import tempfile
 import unittest
 
 import numpy as np
 
 import pygsti
 from pygsti.extras import drift
+from pygsti.modelpacks.legacy import std1Q_XYI
+from pygsti.protocols import (ProtocolData, StabilityAnalysis,
+                              StabilityAnalysisResults, StandardGSTDesign)
 from ..testutils import BaseTestCase
 
 
@@ -105,12 +110,9 @@ class DriftTestCase(BaseTestCase):
 
         ds = pygsti.io.read_time_dependent_dataset("cmp_chk_files/timeseries_data_trunc.txt")
 
-        # This test used to also call drift.do_stability_analysis(...), a one-call
-        # routine that wrapped the steps below. That routine has since been removed;
-        # the StabilityAnalyzer is now the public entry point, so we drive it directly.
-        # The drift *report* layer this test also exercised (the Workspace drift plots
-        # and drift.report.create_drift_report) is currently broken against the present
-        # StabilityAnalyzer API and is intentionally not covered here.
+        # --- Core analysis -------------------------------------------------------
+        # do_stability_analysis(), the old one-call routine, was removed; the
+        # StabilityAnalyzer is now the public entry point, so drive it directly.
         results = drift.StabilityAnalyzer(ds, ids=True)
         str(results)  # smoke-test __str__ at each stage, as the original test did
         results.compute_spectra()
@@ -147,6 +149,40 @@ class DriftTestCase(BaseTestCase):
         bound = results.maxmax_tvd_bound()
         self.assertGreaterEqual(bound, 0.0)
         self.assertLessEqual(bound, 1.0)
+
+        # --- Reporting and plotting ----------------------------------------------
+        # The drift report/plot layer consumes a StabilityAnalysisResults: a
+        # ProtocolResults pairing the StabilityAnalyzer with a GST experiment design
+        # (the germ/fiducial structure drives the per-triple figures).
+        pspec = std1Q_XYI.processor_spec()
+        germs = [pygsti.circuits.Circuit(None, stringrep='Gi')]
+        edesign = StandardGSTDesign(pspec, std1Q_XYI.fiducials, std1Q_XYI.fiducials, germs, [256])
+        sa_results = StabilityAnalysisResults(ProtocolData(edesign, ds), StabilityAnalysis(), results)
+
+        circuit = list(ds.keys())[0]
+        some_circuits = list(ds.keys())[:5]
+        w = pygsti.report.Workspace()
+
+        # Probability-trajectory plots, for a single circuit and for several at once.
+        self.assertEqual(len(w.ProbTrajectoriesPlot(sa_results, circuit, outcome=('0',)).figs), 1)
+        self.assertEqual(len(w.ProbTrajectoriesPlot(sa_results, some_circuits, outcome=('1',)).figs), 1)
+
+        # Power-spectra plots: by named detector, for one circuit, and across circuits.
+        w.PowerSpectraPlot(sa_results, detectorkey='fdr-2')
+        w.PowerSpectraPlot(sa_results, spectrumlabel={'circuit': circuit})
+        w.PowerSpectraPlot(sa_results, spectrumlabel={'dataset': '0', 'circuit': some_circuits,
+                                                      'outcome': ('1',)}, showlegend=True)
+
+        # Germ/fiducial-resolved plots (prep fiducial, germ, meas fiducial).
+        w.GermFiducialProbTrajectoriesPlot(sa_results, 'Gx', 'Gi', 'Gx', outcome=('1',))
+        w.GermFiducialPowerSpectraPlot(sa_results, 'Gx', 'Gi', 'Gx')
+
+        # Full HTML drift report, written to a throwaway directory.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "DriftReport")
+            drift.report.create_drift_report(sa_results, edesign.circuit_lists[-1], path,
+                                              title="Test Drift Report", verbosity=0)
+            self.assertTrue(os.path.isfile(os.path.join(path, "main.html")))
 
 
 if __name__ == '__main__':

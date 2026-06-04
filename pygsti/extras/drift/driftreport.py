@@ -309,6 +309,10 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
 
     def _create(self, stabilityanalyzer, circuits, outcome, times, dskey, estimatekey, estimator, showlegend, scale):
 
+        # Accept either a StabilityAnalysisResults (as the sibling plots do) or a bare
+        # StabilityAnalyzer (as passed internally by GermFiducialProbTrajectoriesPlot).
+        stabilityanalyzer = getattr(stabilityanalyzer, 'stabilityanalyzer', stabilityanalyzer)
+
         # If we're plotting probability trajectories for multiple circuits.
         if isinstance(circuits, dict) or isinstance(circuits, list):
 
