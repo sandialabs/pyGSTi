@@ -4,6 +4,7 @@ from warnings import warn
 from collections import defaultdict
 import os
 
+
 try:
     from setuptools import setup, find_packages
     from setuptools import Extension
@@ -12,6 +13,7 @@ except ImportError:
     from distutils.core import setup
     from distutils.extension import Extension
     from distutils.command.build_ext import build_ext
+
 
 # Configure setuptools_scm to build a custom version (for more info,
 # see https://stackoverflow.com/a/78657279 and https://setuptools-scm.readthedocs.io/en/latest/extending)
@@ -35,6 +37,7 @@ def custom_version(version):
 
     return local_scheme
 
+
 #Create a custom command class that allows us to specify different compiler flags
 # based on the compiler (~platform) being used (see
 # https://stackoverflow.com/questions/30985862/how-to-identify-compiler-before-defining-cython-extensions)
@@ -44,7 +47,14 @@ for compiler, args in [
         ('gcc', ["-std=c++11", "-Wno-deprecated"])]:
     BUILD_ARGS[compiler] = args
 
-class build_ext_compiler_check(build_ext):
+
+class our_build_ext(build_ext):
+
+    def finalize_options(self):
+        super().finalize_options()
+        if self.parallel is None:  # respect explicit -j / config
+            self.parallel = int(os.environ.get("BUILD_JOBS", os.cpu_count()))
+    
     def build_extensions(self):
         compiler = self.compiler.compiler_type
         args = BUILD_ARGS[compiler]
@@ -53,6 +63,7 @@ class build_ext_compiler_check(build_ext):
             if ext.language == "c++":  # only do this for c++ files, so we can specify -std=c++11, etc.
                 ext.extra_compile_args = args
         build_ext.build_extensions(self)
+
 
 # Check if environment can try to build extensions
 try:
@@ -63,6 +74,12 @@ try:
         warn("PYGSTI_SKIP_CYTHON env variable defined. Installing without Cython extensions...")
         extensions = None
     else:
+        common_evotypes_kwargs = dict(
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"],
+            extra_compile_args=['-O3']
+        )
         ext_modules = [
             Extension(
                 "pygsti.tools.fastcalc",
@@ -110,9 +127,7 @@ try:
                     "pygsti/evotypes/densitymx/statereps.pyx",
                     "pygsti/evotypes/densitymx/statecreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.densitymx.opreps",
@@ -121,9 +136,7 @@ try:
                     "pygsti/evotypes/densitymx/opcreps.cpp",
                     "pygsti/evotypes/densitymx/statecreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.densitymx.effectreps",
@@ -133,9 +146,7 @@ try:
                     "pygsti/evotypes/densitymx/statecreps.cpp",
                     "pygsti/evotypes/densitymx/opcreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.statevec.statereps",
@@ -143,9 +154,7 @@ try:
                     "pygsti/evotypes/statevec/statereps.pyx",
                     "pygsti/evotypes/statevec/statecreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.statevec.opreps",
@@ -154,9 +163,7 @@ try:
                     "pygsti/evotypes/statevec/opcreps.cpp",
                     "pygsti/evotypes/statevec/statecreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.statevec.effectreps",
@@ -166,9 +173,7 @@ try:
                     "pygsti/evotypes/statevec/statecreps.cpp",
                     "pygsti/evotypes/statevec/opcreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.statevec.termreps",
@@ -179,9 +184,7 @@ try:
                     "pygsti/evotypes/statevec/opcreps.cpp",
                     "pygsti/evotypes/statevec/effectcreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.stabilizer.statereps",
@@ -189,9 +192,7 @@ try:
                     "pygsti/evotypes/stabilizer/statereps.pyx",
                     "pygsti/evotypes/stabilizer/statecreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.stabilizer.opreps",
@@ -200,9 +201,7 @@ try:
                     "pygsti/evotypes/stabilizer/opcreps.cpp",
                     "pygsti/evotypes/stabilizer/statecreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.stabilizer.effectreps",
@@ -212,9 +211,7 @@ try:
                     "pygsti/evotypes/stabilizer/statecreps.cpp",
                     "pygsti/evotypes/stabilizer/opcreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.evotypes.stabilizer.termreps",
@@ -225,9 +222,7 @@ try:
                     "pygsti/evotypes/stabilizer/opcreps.cpp",
                     "pygsti/evotypes/stabilizer/effectcreps.cpp"
                 ],
-                include_dirs=['.', 'pygsti/evotypes', np.get_include()],
-                language="c++",
-                extra_link_args=["-std=c++11"]
+                **common_evotypes_kwargs
             ),
             Extension(
                 "pygsti.forwardsims.mapforwardsim_calc_densitymx",
@@ -277,7 +272,7 @@ except ImportError:
 try:
     setup(
         use_scm_version={'version_scheme': 'no-guess-dev', 'version_file': "pygsti/_version.py", 'local_scheme': custom_version},
-        cmdclass={'build_ext': build_ext_compiler_check},
+        cmdclass={'build_ext': our_build_ext},
         ext_modules=extensions,
         packages=find_packages(where='.', include=['pygsti']),
         package_data={
