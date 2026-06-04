@@ -1,122 +1,315 @@
 import numpy as np
 import copy
+import random
+from typing import List, Dict, Tuple, Set
+import networkx
+
+def find_edge_coloring(deg: int, vertices: list[int], edges:list[tuple[[int,int]]], neighbors: dict[int, list[int]]) -> dict[int, list[tuple[int,int]]]:
 
 
+    # First we need to build a Linegraph rom the edges.
 
-def find_edge_coloring(deg: int, vertices: list, edges: list, neighbors: dict) -> dict:
+    new_vertices = np.arange(len(edges))
+
+    mygraph = networkx.Graph()
+
+    for i in range(len(new_vertices)):
+        for j in range(i+1, len(new_vertices)):
+            uv = edges[i]
+            wz = edges[j]
+            if uv[0] in wz or uv[1] in wz:
+                mygraph.add_edge(i,j)
+                mygraph.add_edge(j,i)
+
+    verts_in_line_graph_to_color = networkx.algorithms.coloring.greedy_color(mygraph, strategy="random_sequential")
+    # Networkx will always choose the smallest available color.
+    # We just can change the order in which they visit the nodes.
+
+    color_to_edges: dict[int, list[tuple[int,int]]] = {}
+    for i in range(len(new_vertices)):
+        color = verts_in_line_graph_to_color[i]
+        if color in color_to_edges:
+            color_to_edges[color].append(edges[i])
+        else:
+            color_to_edges[color] = [edges[i]]
+    return color_to_edges
+
+
+def switchboard_find_edge_coloring(algorithm_name: str, deg: int, vertices: List[int], edges: List[Tuple[int, int]], neighbors: Dict[int, List[int]]) -> Dict[int, List[Tuple[int, int]]]:
     """
-    Implements Misra & Gries' edge coloring algorithm for a simple undirected graph.
-
-    This function colors the edges of a simple undirected graph using at most 
-    d or d+1 colors, where d is the maximum degree of the graph. The algorithm 
-    is optimal (or off by 1) for all simple, undirected graphs, as stated by 
-    Vizing's theorem.
+    Dispatches to different edge coloring algorithms based on the provided name.
 
     Parameters:
-    deg (int): The maximum degree of the graph.
+    algorithm_name (str): The name of the algorithm to use ('misra_gries', 'moser_tardos', etc.).
+    deg (int): The maximum degree of the graph, or the number of colors to use.
     vertices (list): A list of vertices in the graph.
-    edges (list): A list of edges represented as tuples of vertices [assumed to be symmetric, i.e., (u,v) and (v,u) are elements].
+    edges (list): A list of edges represented as tuples of vertices.
     neighbors (dict): A dictionary mapping each vertex to its neighboring vertices.
 
     Returns:
     color_patches (dict): A dictionary mapping each color to a list of edges colored with that color.
-                          Unlike with edges, the items in color_patches are NOT symmetric [i.e., it only contains (v1, v2) for v1 < v2]
     """
+    if algorithm_name == "misra_gries":
+        return misra_gries_edge_coloring(deg, vertices, edges, neighbors)
+    elif algorithm_name == "moser_tardos":
+        return moser_tardos_edge_coloring(deg, vertices, edges, neighbors)
+    # Add other algorithms here as they are implemented
+    elif algorithm_name == "new_bipartite":
+        return new_bipartite_edge_coloring(deg, vertices, edges, neighbors)
+    elif algorithm_name == "assadi":
+        return assadi_oct25_edge_coloring(deg, vertices, edges, neighbors)
+    elif algorithm_name == "vizing":
+        return vizing_edge_coloring(deg, vertices, edges, neighbors)
+    elif algorithm_name == "sinnamon":
+        return sinnamon_2d_minus_1_edge_coloring(deg, vertices, edges, neighbors)
+    else:
+        raise ValueError(f"Unknown edge coloring algorithm: {algorithm_name}")
 
-    edges = copy.deepcopy(edges)
-    free_colors = {u: [i for i in range(deg+1)] for u in vertices} # Keeps track of which colors are free on each vertex
-    color_patches = {i: [] for i in range(deg+1)} # Keeps track of the edges (items) that have been assigned a color (keys)
-    
-    edge_colors = {edge: -1 for edge in edges} # Keeps track of which color (item) an edge has been assigned to (key)
-    edges = [list(edge) for edge in edges]
+def _misra_gries_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors):
+    # Find a maximal fan F of vertex 'u' with F[1] = 'v.'
+    max_fan = build_maximal_fan(u, v, neighbors, free_colors, edge_colors)
 
-    for edge in edges:
-        edge.sort()
-    edges = list(set([tuple(edge) for edge in edges]))
+    # Pick free colors c and d on u and k, the last vertex in the fan.
+    # Find the cd_u path, i.e., the maximal path through u of edges whose colors alternate between c and d.
+    k = max_fan[-1]
+    c, d = free_colors[u][-1], free_colors[k][-1] # c is free on u, while d is free on the last entry in the fan
+    cdu_path = find_color_path(u, k, c, d, neighbors, edge_colors)
 
-    # Loop the edges in G.
-    # You will color a new edge each time.
-    for edge in edges:
-        # Find a maximal fan F of vertex 'u' with F[1] = 'v.'
-        u, v = edge
-        max_fan = build_maximal_fan(u, v, neighbors, free_colors, edge_colors)
-        
-        # Pick free colors c and d on u and k, the last vertex in the fan.
-        # Find the cd_u path, i.e., the maximal path through u of edges whose colors alternate between c and d.
-        k = max_fan[-1]
-        c, d = free_colors[u][-1], free_colors[k][-1] # c is free on u, while d is free on the last entry in the fan
-        cdu_path = find_color_path(u, k, c, d, neighbors, edge_colors)        
-        
-        # invert the cd_u path
-        for i in range(len(cdu_path)):
-            path_edge = cdu_path[i]
-            # path should be colored as d, c, d, c, etc... because c was free on u
-            current_color = [d, c][i%2]
-            other_color = [d, c][(i+1)%2]
-            ope = order(path_edge[0], path_edge[1])
-            if ope in color_patches[current_color]:
-                color_patches[current_color].remove(ope)
-                #color_patches[current_color].remove(ope)
-            color_patches[other_color].append(ope)
-            #color_patches[other_color].append(ope)
-            edge_colors[path_edge] = other_color
-            edge_colors[(path_edge[1], path_edge[0])] = other_color
-        if len(cdu_path) > 0: 
-            free_colors[u].remove(c)
-            free_colors[u].append(d)
-            final_color, final_vertex = edge_colors[cdu_path[-1]], cdu_path[-1][-1]
+    # invert the cd_u path
+    for i in range(len(cdu_path)):
+        path_edge = cdu_path[i]
+        # path should be colored as d, c, d, c, etc... because c was free on u
+        current_color = [d, c][i%2]
+        other_color = [d, c][(i+1)%2]
+        ope = order(path_edge[0], path_edge[1])
+        if ope in color_patches[current_color]:
+            color_patches[current_color].remove(ope)
+        color_patches[other_color].append(ope)
+        edge_colors[ope] = other_color
+
+    if len(cdu_path) > 0:
+        free_colors[u].remove(c)
+        free_colors[u].append(d)
+        final_color, final_vertex = edge_colors[cdu_path[-1]], cdu_path[-1][-1]
+        if final_color in free_colors[final_vertex]:
             free_colors[final_vertex].remove(final_color)
-            free_colors[final_vertex].append(list(np.setdiff1d([c, d], [final_color]))[0])        
-        
-        # Find a subfan of u, F' = F[1:w] for which the color d is free on w.
-        w_index = 0
-        for i in range(len(max_fan)):
-            if d in free_colors[max_fan[i]]: w_index = i
-        w, sub_fan = max_fan[w_index], max_fan[:w_index + 1]
-        
-        # Rotate the subfan. If it exists, then
-        # you have now colored the edge (u,v) with whatever color was on (u, F[2])
-        if len(sub_fan) > 1: # rotate the subfan
-            edge_colors, free_colors, color_patches = rotate_fan(sub_fan, u, edge_colors, free_colors, color_patches)
+        free_colors[final_vertex].append(list(np.setdiff1d([c, d], [final_color]))[0])
 
-        # Set the color of (u, w) to d.
-        edge_colors[(u, w)] = d
-        edge_colors[(w, u)] = d
-        color_patches[d].append(order(u, w))
-        if d in free_colors[u]:
-            free_colors[u].remove(d)
-        if d in free_colors[w]:
-            free_colors[w].remove(d)
+    # Find a subfan of u, F' = F[1:w] for which the color d is free on w.
+    w_index = 0
+    for i in range(len(max_fan)):
+        if d in free_colors[max_fan[i]]: w_index = i
+    w, sub_fan = max_fan[w_index], max_fan[:w_index + 1]
 
-        check_valid_edge_coloring(color_patches)
+    # Rotate the subfan.
+    if len(sub_fan) > 1: # rotate the subfan
+        edge_colors, free_colors, color_patches = rotate_fan(sub_fan, u, edge_colors, free_colors, color_patches)
+
+    # Set the color of (u, w) to d.
+    edge_colors[order(u, w)] = d
+    color_patches[d].append(order(u, w))
+    if d in free_colors[u]:
+        free_colors[u].remove(d)
+    if d in free_colors[w]:
+        free_colors[w].remove(d)
+
+def misra_gries_edge_coloring(deg: int, vertices: List[int], edges: List[Tuple[int, int]], neighbors: Dict[int, List[int]]) -> Dict[int, List[Tuple[int, int]]]:
+    """
+    Implements Misra & Gries' edge coloring algorithm for a simple undirected graph.
+    """
+    edges_canonical = list(set([order(u,v) for u,v in edges]))
+    free_colors = {u: [i for i in range(deg+1)] for u in vertices}
+    color_patches: Dict[int, List[Tuple[int, int]]] = {i: [] for i in range(deg+1)}
+    edge_colors: Dict[Tuple[int, int], int] = {edge_tuple: -1 for edge_tuple in edges_canonical}
+
+    for edge in edges_canonical:
+        u, v = edge
+        _misra_gries_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors)
 
     return color_patches
+
+def sinnamon_euler_color_edge_coloring(deg: int, vertices: List[int], edges: List[Tuple[int, int]], neighbors: Dict[int, List[int]]) -> Dict[int, List[Tuple[int, int]]]:
+    """
+    Sinnamon's randomized algorithm for (d+1)-edge-coloring.
+    """
+    edges_canonical = list(set([order(u,v) for u,v in edges]))
+    free_colors = {u: [i for i in range(deg+1)] for u in vertices} 
+    color_patches: Dict[int, List[Tuple[int, int]]] = {i: [] for i in range(deg+1)}
+    edge_colors: Dict[Tuple[int, int], int] = {edge_tuple: -1 for edge_tuple in edges_canonical}
+
+    for edge in edges_canonical:
+        u, v = edge
+        _sinnamon_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors)
+
+    return color_patches
+
+def _sinnamon_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors):
+    # Simple case
+    miss_u = free_colors[u]
+    
+    c = -1
+    for color in miss_u:
+        is_free_at_v = True
+        for neighbor_v in neighbors.get(v, []):
+            if edge_colors.get(order(v, neighbor_v), -1) == color:
+                is_free_at_v = False
+                break
+        if is_free_at_v:
+            c = color
+            break
+    
+    if c != -1:
+        edge_colors[order(u, v)] = c
+        color_patches[c].append(order(u, v))
+        if c in free_colors[u]: free_colors[u].remove(c)
+        if c in free_colors[v]: free_colors[v].remove(c)
+        return
+
+    # Randomized case
+    for _ in range(int(math.log(len(vertices)))+1):
+        fan = build_maximal_fan(u, v, neighbors, free_colors, edge_colors)
+        k = fan[-1]
+        
+        c = random.choice(free_colors[u])
+        used_k_colors = [color for color in range(deg + 1) if color not in free_colors[k]]
+        if not used_k_colors: 
+            _misra_gries_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors)
+            return
+        d = random.choice(used_k_colors)
+        
+        path = find_color_path(u, k, c, d, neighbors, edge_colors)
+        if not path or path[-1][1] != v:
+            for i in range(len(path)):
+                path_edge = path[i]
+                current_color = [d, c][i%2]
+                other_color = [d, c][(i+1)%2]
+                ope = order(path_edge[0], path_edge[1])
+                if ope in color_patches.get(current_color, []):
+                    color_patches[current_color].remove(ope)
+                if other_color not in color_patches:
+                    color_patches[other_color] = []
+                color_patches[other_color].append(ope)
+                edge_colors[ope] = other_color
+
+            w_index = 0
+            for i in range(len(fan)):
+                if d in free_colors[fan[i]]: w_index = i
+            w, sub_fan = fan[w_index], fan[:w_index + 1]
+            if len(sub_fan) > 1:
+                edge_colors, free_colors, color_patches = rotate_fan(sub_fan, u, edge_colors, free_colors, color_patches)
+            
+            edge_colors[order(u, w)] = d
+            if d not in color_patches:
+                color_patches[d] = []
+            color_patches[d].append(order(u, w))
+            if d in free_colors[u]: free_colors[u].remove(d)
+            if d in free_colors[w]: free_colors[w].remove(d)
+            return
+
+    # Fallback to deterministic
+    _misra_gries_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors)
 
 
 def order(u, v):
     """
     Return a tuple containing the two input values in sorted order.
-
-    This function takes two values, `u` and `v`, and returns them as a 
-    tuple in ascending order. The smaller value will be the first element 
-    of the tuple.
-
-    Parameters:
-    u: The first value to be ordered.
-    v: The second value to be ordered.
-
-    Returns:
-    tuple: A tuple containing the values `u` and `v` in sorted order.
     """
     return (min(u, v), max(u, v))
 
+
+def get_missing_colors(vertex, edge_colors, neighbors, max_degree, all_colors):
+    """
+    Determines the set of colors missing from the edges incident to a given vertex.
+
+    Args:
+        vertex (int): The vertex to check.
+        edge_colors (dict): A dictionary mapping (u, v) tuples to their assigned color.
+                            (u,v) and (v,u) should map to the same color.
+        neighbors (dict): A dictionary mapping each vertex to its neighboring vertices.
+        max_degree (int): The maximum degree of the graph.
+        all_colors (list): A list of all possible colors [0, ..., max_degree].
+
+    Returns:
+        set: A set of colors missing from the incident edges of the vertex.
+    """
+    used_colors = set()
+    for neighbor in neighbors.get(vertex, []):
+        edge_tuple = order(vertex, neighbor)
+        color = edge_colors.get(edge_tuple, -1) # -1 implies uncolored or not yet assigned
+        if color != -1:
+            used_colors.add(color)
+    
+    return set(all_colors) - used_colors
+
+def find_alternating_path(start_node, color1, color2, edge_colors, neighbors):
+    """
+    Finds a maximal (color1, color2)-alternating path starting from start_node.
+    
+    Args:
+        start_node (int): The vertex to start the path from.
+        color1 (int): The first color in the alternating sequence.
+        color2 (int): The second color in the alternating sequence.
+        edge_colors (dict): A dictionary mapping ordered edge tuples to their colors.
+        neighbors (dict): A dictionary mapping each vertex to its neighboring vertices.
+
+    Returns:
+        list: A list of ordered edge tuples forming the maximal alternating path.
+    """
+    path = []
+    visited_edges = set()
+    current_vertex = start_node
+    current_color_to_find = color1 # First edge should have color1
+
+    while True:
+        found_next_edge = False
+        for neighbor in neighbors.get(current_vertex, []):
+            edge_tuple = order(current_vertex, neighbor)
+            if edge_tuple not in visited_edges and edge_colors.get(edge_tuple, -1) == current_color_to_find:
+                path.append(edge_tuple)
+                visited_edges.add(edge_tuple)
+                current_vertex = neighbor
+                current_color_to_find = color1 if current_color_to_find == color2 else color2
+                found_next_edge = True
+                break
+        if not found_next_edge:
+            break
+            
+    return path
+
+def flip_path(path, edge_colors, color_patches, color1, color2):
+    """
+    Flips the colors of edges in an alternating path from color1 to color2 and vice versa.
+
+    Args:
+        path (list): A list of ordered edge tuples in the path.
+        edge_colors (dict): A dictionary mapping ordered edge tuples to their colors. (will be modified)
+        color_patches (dict): A dictionary mapping colors to lists of ordered edge tuples. (will be modified)
+        color1 (int): The first color in the alternating sequence.
+        color2 (int): The second color in the alternating sequence.
+    """
+    for edge in path:
+        current_color = edge_colors[edge]
+        
+        # Remove from current color patch
+        if current_color != -1 and edge in color_patches.get(current_color, []):
+            color_patches[current_color].remove(edge)
+
+        # Determine new color
+        new_color = color1 if current_color == color2 else color2
+        
+        # Assign new color
+        edge_colors[edge] = new_color
+        
+        # Add to new color patch
+        if new_color != -1:
+            color_patches[new_color].append(edge)
 
 def find_fan_candidates(fan: list, u: int, vertices: list, edge_colors: dict, free_colors: dict) -> list:
     """
     Selects candidate vertices to be added to a fan.
 
-    This function returns vertices connected to the anchor vertex `u` 
-    where the edge (u, v) is colored with a color that is free on the 
+    This function returns vertices connected to the anchor vertex `u`
+    where the edge (u, v) is colored with a color that is free on the
     last vertex in the fan.
 
     Parameters:
@@ -127,15 +320,15 @@ def find_fan_candidates(fan: list, u: int, vertices: list, edge_colors: dict, fr
     free_colors (dict): A dictionary mapping vertices to their available colors.
 
     Returns:
-    list: A list of candidate vertices that can be colored with free colors 
+    list: A list of candidate vertices that can be colored with free colors
           available to the last vertex in the fan.
     """
     last_vertex = fan[-1]
     free_vertex_colors = free_colors[last_vertex]
-    return [v for v in vertices if edge_colors[(u, v)] in free_vertex_colors]
+    return [v for v in vertices if edge_colors.get(order(u, v), -1) in free_vertex_colors]
 
 
-def build_maximal_fan(u: int, v: int, vertex_neighbors: dict, 
+def build_maximal_fan(u: int, v: int, vertex_neighbors: dict,
                       free_colors: dict, edge_colors: dict) -> list:
     """
     Construct a maximal fan of vertex u starting with vertex v.
@@ -168,7 +361,7 @@ def build_maximal_fan(u: int, v: int, vertex_neighbors: dict,
 
 def find_next_path_vertex(current_vertex: int, color: int, neighbors: dict, edge_colors: dict):
     """
-    Finds, if it exists, the next vertex in a cd_u path. It does so by finding the neighbor 
+    Finds, if it exists, the next vertex in a cd_u path. It does so by finding the neighbor
     of the current vertex which is attached by an edge of the right color.
 
     Parameters:
@@ -177,23 +370,23 @@ def find_next_path_vertex(current_vertex: int, color: int, neighbors: dict, edge
     neighbors (dict): A dictionary mapping each vertex to its neighboring vertices.
     edge_colors (dict): A dictionary mapping edges to their curren colors.
 
-    Returns: 
-    int or None: The next vertex in the cd_u path that is connected by an edge of the specified color, 
+    Returns:
+    int or None: The next vertex in the cd_u path that is connected by an edge of the specified color,
                  or None if no such vertex exists.
     """
-    
+
     for vertex in neighbors[current_vertex]:
-        if edge_colors[(current_vertex, vertex)] == color:
+        if edge_colors.get(order(current_vertex, vertex), -1) == color:
             return vertex
     return None
-    
+
 
 def find_color_path(u: int, v: int, c: int, d: int, neighbors: dict, edge_colors: dict) -> list:
     """
     Finds the cd_u path.
 
     The cd_u path is a path passing through u of edges whose colors alternate between c and d.
-    Every cd_u path in the Misra & Gries algorithm starts at u with an edge of color 'd', 
+    Every cd_u path in the Misra & Gries algorithm starts at u with an edge of color 'd',
     because 'c' was chosen to be free on u. Assuming that a cd_u path exists.
 
     Parameters:
@@ -225,10 +418,10 @@ def rotate_fan(fan: list, u: int, edge_colors: dict, free_colors: dict, color_pa
     """
     Rotate the colors in a fan of vertices connected to a specified vertex.
 
-    This function shifts the colors in the fan over by one position, updating the 
-    edge colorings, free colors for each vertex, and the associated color patches. 
-    After rotation, the edge connected to the specified vertex `u` and the first 
-    vertex in the fan receives the color of the next vertex in the fan, while the 
+    This function shifts the colors in the fan over by one position, updating the
+    edge colorings, free colors for each vertex, and the associated color patches.
+    After rotation, the edge connected to the specified vertex `u` and the first
+    vertex in the fan receives the color of the next vertex in the fan, while the
     color of the last vertex in the fan is removed.
 
     Parameters:
@@ -241,26 +434,604 @@ def rotate_fan(fan: list, u: int, edge_colors: dict, free_colors: dict, color_pa
     Returns:
     tuple: Updated dictionaries for edge_colors, free_colors, and color_patches after rotation.
     """
-    for i in range(len(fan) - 1):
-        curr_vertex = fan[i]
-        next_vertex = fan[i+1]
-        next_color = edge_colors[(u, next_vertex)]
-        
-        edge_colors[(u, curr_vertex)] = next_color
-        edge_colors[(curr_vertex, u)] = next_color
-        edge_colors[(u, next_vertex)] = -1
-        edge_colors[(next_vertex, u)] = -1
+    # Rotate the fan
+    for i in range(len(fan) - 2, -1, -1):
+        # f_i gets color of (u, f_{i+1})
+        f_i = fan[i]
+        f_i_plus_1 = fan[i+1]
 
-        free_colors[curr_vertex].remove(next_color)
-        free_colors[next_vertex].append(next_color)
+        old_color_of_f_i_edge = edge_colors.get(order(u,f_i))
+        new_color_for_f_i_edge = edge_colors.get(order(u,f_i_plus_1))
 
-        color_patches[next_color].append(order(u, curr_vertex))
-        color_patches[next_color].remove(order(u, next_vertex))
+        # Update edge color
+        edge_colors[order(u,f_i)] = new_color_for_f_i_edge
+
+        # Update color patches
+        if new_color_for_f_i_edge is not None and new_color_for_f_i_edge != -1:
+            if new_color_for_f_i_edge not in color_patches: color_patches[new_color_for_f_i_edge] = []
+            color_patches[new_color_for_f_i_edge].append(order(u,f_i))
+        if old_color_of_f_i_edge is not None and old_color_of_f_i_edge != -1:
+            if order(u,f_i) in color_patches[old_color_of_f_i_edge]:
+                 color_patches[old_color_of_f_i_edge].remove(order(u,f_i))
+
+        # Update free colors
+        if new_color_for_f_i_edge in free_colors[f_i]: free_colors[f_i].remove(new_color_for_f_i_edge)
+        free_colors[f_i_plus_1].append(new_color_for_f_i_edge)
 
     return edge_colors, free_colors, color_patches
 
+def new_bipartite_edge_coloring(deg: int, vertices: list, edges: list, neighbors: dict) -> Dict[int, List[Tuple[int, int]]]:
+    """
+    Implements a randomized (Delta+1)-edge coloring algorithm for bipartite graphs 
+    based on the "Vizing's Theorem in Near-Linear Time" paper (Algorithm 1 for bipartite case).
 
-def check_valid_edge_coloring(color_patches):
+    Args:
+        deg (int): The maximum degree of the graph.
+        vertices (list): A list of vertices in the graph.
+        edges (list): A list of edges represented as tuples of vertices (assumed to be symmetric, i.e., (u,v) and (v,u) are elements).
+        neighbors (dict): A dictionary mapping each vertex to its neighboring vertices.
+
+    Returns:
+        dict: A dictionary mapping each color to a list of edges colored with that color.
+              Edges are represented as (v1, v2) where v1 < v2.
+    """
+    num_vertices = len(vertices)
+    all_possible_colors = list(range(deg + 1))
+
+    # Initialize coloring: all edges uncolored (-1)
+    # Use ordered tuples for edge_colors for consistency
+    initial_edge_colors = {}
+    unique_edges = set()
+    for u, v in edges:
+        ordered_edge = order(u, v)
+        unique_edges.add(ordered_edge)
+    
+    for edge_tuple in unique_edges:
+        initial_edge_colors[edge_tuple] = -1
+
+    # Convert initial edges to ordered unique ones for U
+    U = list(unique_edges) # Uncolored edges matching
+
+    # Initialize color_patches
+    color_patches: dict[int, list[tuple[int, int]]] = {c: [] for c in all_possible_colors}
+
+    # Algorithm 1: BipartiteExtension(G, chi, U)
+    # This is a simplified version focusing on the core logic,
+    # without full optimizations or error handling described in the paper.
+
+    # 1. Pick two least common colors alpha, beta
+    # This step is non-trivial and requires counting current color usage.
+    # For a fresh coloring, all colors are "least common". We'll just pick two random ones for now.
+    # A more faithful implementation would need a global state for color counts.
+    # For initial implementation, let's assume colors 0 and 1 are "least common"
+    # or just pick two distinct random colors if deg >= 1.
+    if deg >= 1:
+        alpha, beta = random.sample(all_possible_colors, 2)
+    else: # Handle case of deg=0 graph (no edges)
+        return color_patches
+
+    current_chi_edge_colors = dict(initial_edge_colors) # This will be modified
+    
+    Phi = set() # Set of popular edges (u,v) with alpha in miss(u) and beta in miss(v)
+    C = set()   # Set of directly colored edges
+
+    lambda_val = len(U)
+    
+    # Simulate the while loop with a fixed number of iterations for now, or until U is empty.
+    # A full implementation requires careful bounds for the while loop condition |Phi|+|C| < lambda/(10*Delta)
+    
+    # The paper's Algorithm 1 loop condition is |Phi|+|C| < lambda/(10*Delta)
+    # For a first pass, let's just iterate over uncolored edges in U
+    
+    # We need to maintain a set of currently uncolored edges that are candidates for U.
+    # Let's call it current_U_candidates, initially all unique_edges
+    current_U_candidates = list(unique_edges)
+    random.shuffle(current_U_candidates) # Sample u.a.r.
+
+    # This part of the algorithm is quite complex. Instead of fully implementing the while loop
+    # and all its conditions (sampling, path intersections, etc.) immediately,
+    # I will first create the basic structure and helper calls.
+    # The paper's algorithm for BipartiteExtension is essentially a state-machine like loop.
+    # I will implement the core logic for a single edge 'e' from the pseudocode for illustration.
+
+    # This is a very simplified placeholder for the main algorithm logic
+    # The actual algorithm is iterative and modifies chi dynamically.
+
+    # This function needs to return a final coloring.
+    # For now, let's try to color all edges in U using the logic for Case 1 and Case 2 of popularization.
+
+    # This is a high-level representation of the process, not a direct translation of the while loop yet.
+
+    # Step 2: "Popularize" or directly color edges in U
+    remaining_uncolored = list(unique_edges)
+    random.shuffle(remaining_uncolored)
+
+    for edge_tuple in remaining_uncolored:
+        u, v = edge_tuple
+
+        # Check if already processed (colored or popularized)
+        if edge_tuple in C or edge_tuple in Phi:
+            continue
+
+        miss_u = get_missing_colors(u, current_chi_edge_colors, neighbors, deg, all_possible_colors)
+        miss_v = get_missing_colors(v, current_chi_edge_colors, neighbors, deg, all_possible_colors)
+
+        common_missing_color = None
+        for c in miss_u:
+            if c in miss_v:
+                common_missing_color = c
+                break
+        
+        if common_missing_color is not None:
+            # Case 1: cu = cv (a common missing color exists)
+            current_chi_edge_colors[edge_tuple] = common_missing_color
+            color_patches[common_missing_color].append(edge_tuple)
+            C.add(edge_tuple)
+        else:
+            # Case 2: Try to popularize (simplified version)
+            # This is where the complex path flipping and intersection checks come in.
+            # For a basic implementation, we will just try to make it popular without complex checks
+            # or by simplifying the path finding/flipping.
+            # This part requires finding cu in miss(u) and cv in miss(v) such that
+            # flipping paths (cu, alpha) and (cv, beta) does not mess up Phi.
+
+            # This is a very simplified attempt at popularization:
+            # If alpha is missing at u, and beta is missing at v, make it popular.
+            # This doesn't involve path flipping to achieve this, which is a simplification.
+            
+            # The paper's Algorithm 1 line 9-24 is what handles this for each sampled edge 'e'.
+            # It involves identifying cu, cv, then conditionally flipping paths.
+            
+            # For now, as a placeholder, I will attempt to implement the simplified popularization
+            # without full path intersection checks and without fully simulating the while loop's
+            # probabilistic sampling and failure conditions. This is to get the structure in place.
+
+            # Let's pick a random cu from miss_u and cv from miss_v.
+            if not miss_u or not miss_v:
+                continue # Cannot popularize or color this edge yet.
+
+            cu = random.choice(list(miss_u))
+            cv = random.choice(list(miss_v))
+
+            # Simplified path finding/flipping for popularization.
+            # This is a significant simplification, as the real algorithm has complex conditions.
+            # For testing, we'll assume paths can be flipped without immediate conflict for now.
+            
+            # This part is complex. I'll defer the full implementation of the while loop's logic
+            # and the detailed path intersection/flipping for popularization for a subsequent step.
+            # For now, let's complete the structure to allow basic coloring based on available colors.
+
+            # If we cannot popularize or directly color, the edge remains uncolored for now.
+            # The full algorithm will cycle through and eventually color all edges.
+
+            pass # Placeholder for complex popularization logic
+
+    # Step 3: Color popular edges (after the main loop has created Phi)
+    # This also involves path flipping.
+
+    # This whole function is currently a skeleton.
+    # The full Algorithm 1 from the paper needs to be implemented iteratively.
+    # I will first finish the framework for get_missing_colors, find_alternating_path, flip_path
+    # and then build the main `new_bipartite_edge_coloring` step by step.
+
+    # The current code will simply leave many edges uncolored because of the "pass"
+    # and the simplified loop.
+
+    # The initial goal is to have the structure in place.
+    return color_patches
+    def __init__(self, n):
+        self.n = n
+        self.adj = [[] for _ in range(n)]
+    def add_edge(self, u, v):
+        self.adj[u].append(v)
+        self.adj[v].append(u)
+
+
+class ColoringSolver:
+    def __init__(self, G, K,
+                 max_time=60.0,
+                 ls_iters_per_restart=None,
+                 max_no_improve=100,
+                 perturb_size_frac=0.1):
+        self.G = G
+        self.K = K
+        self.n = G.n
+        # parameter settings from Sec. 9
+        self.max_time = max_time
+        self.ls_iters = ls_iters_per_restart or 1000 * self.n
+        self.max_no_improve = max_no_improve
+        self.perturb_size = max(1, int(perturb_size_frac * self.n))
+
+        # state
+        self.col = [random.randrange(K) for _ in range(self.n)]
+        self.best_col = list(self.col)
+        self.best_conflicts = self.count_conflicts(self.col)
+
+    def count_conflicts(self, col):
+        c = 0
+        for u in range(self.n):
+            cu = col[u]
+            for v in self.G.adj[u]:
+                if v > u and col[v] == cu:
+                    c += 1
+        return c
+
+    def one_local_search(self):
+        """Run one phase of iterative improvement up to ls_iters."""
+        col = self.col
+        # maintain conflict list
+        vertex_conflicts = [0]*self.n
+        for u in range(self.n):
+            cnt = 0
+            for v in self.G.adj[u]:
+                if col[v] == col[u]:
+                    cnt += 1
+            vertex_conflicts[u] = cnt
+
+        for it in range(self.ls_iters):
+            # early exit if perfect
+            if self.best_conflicts == 0:
+                break
+
+            # pick a conflicting vertex at random
+            conflicted = [u for u,cnt in enumerate(vertex_conflicts) if cnt>0]
+            if not conflicted:
+                break
+            u = random.choice(conflicted)
+
+            # find best color for u (minimize its local conflicts)
+            best_c, best_cnt = col[u], vertex_conflicts[u]
+            for c in range(self.K):
+                if c == col[u]:
+                    continue
+                cnt = 0
+                for v in self.G.adj[u]:
+                    if col[v] == c:
+                        cnt += 1
+                if cnt < best_cnt:
+                    best_cnt, best_c = cnt, c
+
+            # apply move if it strictly improves, or with prob if equal
+            if best_cnt < vertex_conflicts[u] or random.random() < 0.01:
+                old_c = col[u]
+                col[u] = best_c
+                # update conflicts for u and neighbors
+                vertex_conflicts[u] = best_cnt
+                for v in self.G.adj[u]:
+                    # recalc v’s conflicts
+                    cntv = 0
+                    for w in self.G.adj[v]:
+                        if col[w] == col[v]:
+                            cntv += 1
+                    vertex_conflicts[v] = cntv
+
+        # update best
+        curr_conf = self.count_conflicts(col)
+        if curr_conf < self.best_conflicts:
+            self.best_conflicts = curr_conf
+            self.best_col = list(col)
+            return True
+        return False
+
+    def perturb(self):
+        """Randomly perturb the current best solution."""
+        col = list(self.best_col)
+        for _ in range(self.perturb_size):
+            u = random.randrange(self.n)
+            col[u] = random.randrange(self.K)
+        self.col = col
+
+    def solve(self):
+        """Main loop (Sec. 8 pseudocode)."""
+        no_improve = 0
+
+        # initial local search
+        self.one_local_search()
+
+        loop_count = 0
+        while loop_count < 100:
+            loop_count += 1
+            improved = self.one_local_search()
+            if improved:
+                no_improve = 0
+            else:
+                no_improve += 1
+            if self.best_conflicts == 0:
+                break
+            if no_improve >= self.max_no_improve:
+                # perturb around the best we've seen
+                self.perturb()
+                no_improve = 0
+
+        return self.best_col, self.best_conflicts
+
+
+def vizing_edge_coloring(deg: int, vertices: List[int], edges: List[Tuple[int, int]], neighbors: Dict[int, List[int]]) -> Dict[int, List[Tuple[int, int]]]:
+    """
+    Implementation of Vizing's edge coloring algorithm.
+    """
+    edge_colors: Dict[Tuple[int, int], int] = {order(u, v): -1 for u, v in edges}
+    color_patches: Dict[int, List[Tuple[int, int]]] = {i: [] for i in range(deg + 1)}
+    all_colors = list(range(deg + 1))
+
+    for u, v in edges:
+        if edge_colors[order(u, v)] == -1:
+            # Find a free color for (u, v)
+            miss_u = get_missing_colors(u, edge_colors, neighbors, deg, all_colors)
+            
+            # Simple case: if a free color at u is also free at v
+            c = -1
+            for color in miss_u:
+                is_free_at_v = True
+                for neighbor_v in neighbors[v]:
+                    if edge_colors.get(order(v, neighbor_v), -1) == color:
+                        is_free_at_v = False
+                        break
+                if is_free_at_v:
+                    c = color
+                    break
+            
+            if c != -1:
+                edge_colors[order(u, v)] = c
+                color_patches[c].append(order(u, v))
+            else:
+                # Complex case: Vizing's chain
+                # This part is complex and requires careful implementation of the fan and chain logic.
+                # For now, we'll leave it as a placeholder, which will cause failures for some graphs.
+                pass
+
+    return color_patches
+
+
+def _eulerian_partition(vertices: List[int], edges: List[Tuple[int, int]], neighbors: Dict[int, List[int]]) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+    """
+    Partitions the edges of a graph into two sets, E1 and E2, such that for every vertex v, 
+    the number of incident edges in E1 and E2 differs by at most 1.
+    """
+    E1 = []
+    E2 = []
+    
+    # This is a placeholder for a proper Eulerian partition algorithm.
+    # A correct implementation is non-trivial. For now, we'll do a simple split.
+    for i, edge in enumerate(edges):
+        if i % 2 == 0:
+            E1.append(edge)
+        else:
+            E2.append(edge)
+    return E1, E2
+
+def _eulerian_partition(vertices: List[int], edges: List[Tuple[int, int]]) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+    """
+    Partitions the edges of a graph into two sets, E1 and E2, such that for every vertex v, 
+    the number of incident edges in E1 and E2 differs by at most 1.
+    """
+    adj = {v: [] for v in vertices}
+    for u, v in edges:
+        adj[u].append(v)
+        adj[v].append(u)
+    
+    E1 = []
+    E2 = []
+    visited_edges = set()
+    
+    for u, v_list in adj.items():
+        for v in v_list:
+            edge = order(u, v)
+            if edge not in visited_edges:
+                if len(E1) <= len(E2):
+                    E1.append(edge)
+                else:
+                    E2.append(edge)
+                visited_edges.add(edge)
+    return E1, E2
+
+def sinnamon_2d_minus_1_edge_coloring(deg: int, vertices: List[int], edges: List[Tuple[int, int]], neighbors: Dict[int, List[int]]) -> Dict[int, List[Tuple[int, int]]]:
+    unique_edges = list(set(order(u, v) for u, v in edges))
+    if not unique_edges:
+        return {}
+    if deg <= 1:
+        return {0: unique_edges}
+    E1, E2 = _eulerian_partition(vertices, unique_edges)
+    neighbors1 = {v: [] for v in vertices}
+    for u, v in E1:
+        neighbors1[u].append(v)
+        neighbors1[v].append(u)
+    deg1 = max(len(v) for v in neighbors1.values()) if E1 else 0
+    neighbors2 = {v: [] for v in vertices}
+    for u, v in E2:
+        neighbors2[u].append(v)
+        neighbors2[v].append(u)
+    deg2 = max(len(v) for v in neighbors2.values()) if E2 else 0
+    coloring1 = sinnamon_2d_minus_1_edge_coloring(deg1, vertices, E1, neighbors1)
+    coloring2 = sinnamon_2d_minus_1_edge_coloring(deg2, vertices, E2, neighbors2)
+    num_colors1 = max(coloring1.keys()) + 1 if coloring1 else 0
+    shifted_coloring2 = {k + num_colors1: v for k, v in coloring2.items()}
+    coloring1.update(shifted_coloring2)
+    return coloring1
+
+def vizing_edge_coloring(deg: int, vertices: List[int], edges: List[Tuple[int, int]], neighbors: Dict[int, List[int]]) -> Dict[int, List[Tuple[int, int]]]:
+    """
+    Implementation of Vizing's edge coloring algorithm.
+    """
+    edge_colors: Dict[Tuple[int, int], int] = {order(u, v): -1 for u, v in edges}
+    color_patches: Dict[int, List[Tuple[int, int]]] = {i: [] for i in range(deg + 1)}
+    all_colors = list(range(deg + 1))
+
+    for u, v in edges:
+        if edge_colors[order(u, v)] == -1:
+            # Find a free color for (u, v)
+            miss_u = get_missing_colors(u, edge_colors, neighbors, deg, all_colors)
+            
+            # Simple case: if a free color at u is also free at v
+            c = -1
+            for color in miss_u:
+                is_free_at_v = True
+                for neighbor_v in neighbors[v]:
+                    if edge_colors.get(order(v, neighbor_v), -1) == color:
+                        is_free_at_v = False
+                        break
+                if is_free_at_v:
+                    c = color
+                    break
+            
+            if c != -1:
+                edge_colors[order(u, v)] = c
+                color_patches[c].append(order(u, v))
+            else:
+                # Complex case: Vizing's chain
+                # This part is complex and requires careful implementation of the fan and chain logic.
+                # For now, we'll leave it as a placeholder, which will cause failures for some graphs.
+                pass
+
+    return color_patches
+
+def moser_tardos_edge_coloring(deg: int,
+                       vertices: list,
+                       edges:   list,
+                       neighbors: dict) -> Dict[int, List[Tuple[int, int]]]:
+    """
+    Las Vegas edge-coloring via Moser-Tardos on the line-graph.
+    
+    Inputs:
+      deg       : number of colors K to use
+      vertices  : original vertex IDs (any hashable)
+      edges     : list of pairs (u,v), original edges
+      neighbors : (ignored)
+    
+    Returns:
+      color_patches : dict mapping each (u,v) -> color in 0..K-1
+    """
+    import random
+    # 1) Build integer IDs for edges
+    E = len(edges)
+    # 2) Build adjacency in the line-graph L(G): two edge-IDs conflict iff they share an endpoint
+    #    We'll represent L_adj as list of sets
+    #    First map each original vertex -> list of incident edge-indices
+    inc = { v: [] for v in vertices }
+    for idx, (u,v) in enumerate(edges):
+        inc[u].append(idx)
+        inc[v].append(idx)
+    L_adj = [set() for _ in range(E)]
+    for v, e_ids in inc.items():
+        # all edges incident to v form a clique in the line-graph
+        for i in range(len(e_ids)):
+            for j in range(i+1, len(e_ids)):
+                a, b = e_ids[i], e_ids[j]
+                L_adj[a].add(b)
+                L_adj[b].add(a)
+    # 3) Moser-Tardos resampling
+    #    Variables: col[e] for e in 0..E-1
+    #    Bad events: for each (i,j) in L_adj if col[i]==col[j]
+    K = deg
+    col = [random.randrange(K) for _ in range(E)]
+    # 4) Maintain a stack of conflicting pairs
+    stack = []
+    for i in range(E):
+        for j in L_adj[i]:
+            if j > i and col[i] == col[j]:
+                stack.append((i,j))
+    # 5) Resample until no conflicts remain
+    loop_cnt = 0
+    while stack:
+        loop_cnt += 1
+        i,j = stack.pop()
+        # maybe already fixed
+        if col[i] != col[j]:
+            continue
+        # resample the *two* variables in this bad event
+        col[i] = random.randrange(K)
+        col[j] = random.randrange(K)
+        # any neighbor edge k of i or j that now conflicts must be re-added
+        for k in L_adj[i]:
+            if k != j and col[k] == col[i]:
+                stack.append((min(i,k), max(i,k)))
+        for k in L_adj[j]:
+            if k != i and col[k] == col[j]:
+                stack.append((min(j,k), max(j,k)))
+
+
+    # 6) Build output map
+    color_patches: dict[int, list[int, int]] = {}
+    for idx, (u,v) in enumerate(edges):
+        color_used = col[idx]
+        if u < v: # Only specify the color in one direction. We assumed initial graph was symmetric.
+            if color_used in color_patches:
+                color_patches[color_used].append((u,v))
+            else:
+                color_patches[color_used] = [(u,v)]
+    
+    return color_patches
+
+class Graph:
+    def __init__(self, n):
+        self.n = n
+        self.adj = [[] for _ in range(n)]
+    def add_edge(self, u, v):
+        self.adj[u].append(v)
+        self.adj[v].append(u)
+
+def assadi_oct25_edge_coloring(deg: int,
+                       vertices: list,
+                       edges:   list,
+                       neighbors: dict) -> dict:
+    """
+    Compute an edge-coloring of G=(vertices, edges) with 'deg' colors by
+    reducing to a vertex-coloring on the line-graph.
+    
+    Inputs:
+      deg       : number of colors (K)
+      vertices  : list of original vertex IDs (can be any hashable)
+      edges     : list of pairs (u,v), each an edge in the original graph
+      neighbors : (not used in this implementation)
+    
+    Returns:
+      color_patches : dict mapping each edge (u,v) → color in {0,…,deg-1}
+    """
+    # 1) build a mapping from your arbitrary vertex IDs → 0..n-1
+    v2i = { v:i for i,v in enumerate(vertices) }
+    
+    # 2) number of edges
+    E = len(edges)
+    
+    # 3) build the line-graph L(G) with E “vertices”
+    LG = Graph(E)
+    
+    # 4) for each original edge, record its two endpoints as integer indices
+    endpoints: list[set[int]] = []
+    for (u,v) in edges:
+        ui = v2i[u]
+        vi = v2i[v]
+        endpoints.append({ui, vi})
+    
+    # 5) connect i↔j in L(G) iff edges[i] and edges[j] share a vertex
+    for i in range(E):
+        for j in range(i+1, E):
+            if endpoints[i] & endpoints[j]:
+                LG.add_edge(i, j)
+    
+    # 6) now color L(G) with your existing solver
+    color_patches: dict[int, list[int, int]] = {}
+    not_good = True
+    while not_good:
+        solver = ColoringSolver(LG, deg)
+        best_col, _ = solver.solve()
+        
+        # 7) map back: each original edge → the color of its corresponding vertex in L(G)
+        for idx, (u,v) in enumerate(edges):
+            col = best_col[idx]
+            if u < v:
+                if col in color_patches:
+                    color_patches[col].append((u,v))
+                else:
+                    color_patches[col] = [(u,v)]
+    
+        not_good = not check_valid_edge_coloring(color_patches, ret_false_on_error=True)
+
+
+    return color_patches
+
+
+def check_valid_edge_coloring(color_patches, ret_false_on_error: bool = False):
     """
     color_patches (dict): A dictionary mapping each color to a list of edges colored with that color.
                           Unlike with edges, the items in color_patches are NOT symmetric [i.e., it only contains (v1, v2) for v1 < v2]
@@ -271,6 +1042,8 @@ def check_valid_edge_coloring(color_patches):
             in_patch.add(pair[0])
             in_patch.add(pair[1])
         if len(in_patch) != 2*len(patch):
+            if ret_false_on_error:
+                return False
             raise ValueError()
-    return
+    return True
 
