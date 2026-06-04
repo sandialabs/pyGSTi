@@ -3,6 +3,7 @@
 from warnings import warn
 from collections import defaultdict
 import os
+import sys
 
 
 try:
@@ -52,7 +53,12 @@ class our_build_ext(build_ext):
 
     def finalize_options(self):
         super().finalize_options()
-        if self.parallel is None:  # respect explicit -j / config
+        if self.parallel is None and sys.platform != "win32":  # respect explicit -j / config
+            """
+            That's a known failure mode of parallel build_ext on Windows:
+            a file-collision race between concurrent cl.exe processes. So
+            we guard on sys.platform != "win32".
+            """
             self.parallel = int(os.environ.get("BUILD_JOBS", os.cpu_count()))
     
     def build_extensions(self):
