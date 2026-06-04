@@ -119,9 +119,15 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     plot_html = _to_html(fig, config, auto_play=False, include_plotlyjs=False,
                             include_mathjax=False, post_script=None, full_html=False,
                             animation_opts=None, validate=validate)
-    assert(plot_html.startswith("<div>") and plot_html.endswith("</div>"))
-    plot_html = plot_html[len("<div>"):-len("</div>")].strip()
-    assert(plot_html.endswith("</script>"))
+    
+    # strip off the outer div
+    assert plot_html.endswith("</div>")
+    plot_html = plot_html[:-len("</div>")].strip()
+    assert plot_html.startswith("<div")
+    loc_opening_div_end = plot_html.find('>')
+    plot_html = plot_html[loc_opening_div_end+1:].strip()
+
+    assert(plot_html.endswith("</script>")) # < sanity check
     id_index = plot_html.find('id="')
     id_index_end = plot_html.find('"', id_index + len('id="'))
     plotdivid = _uuid.UUID(plot_html[id_index + len('id="'):id_index_end])
