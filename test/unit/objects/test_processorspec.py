@@ -2,11 +2,14 @@ import unittest
 
 import numpy as np
 import scipy
+import itertools
+import pygsti.tools.symplectic as st
 
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import modelconstruction as mc
 from pygsti.circuits import Circuit
 from pygsti.baseobjs.qubitgraph import QubitGraph
+from pygsti.baseobjs.label import Label
 from ..util import BaseCase, with_temp_path
 
 
@@ -108,3 +111,119 @@ class ProcessorSpecTester(BaseCase):
         self.assertEqual(set(computed_graph.node_names), set(expected_graph.node_names))
         self.assertEqual(set(computed_graph.edges()), set(expected_graph.edges()))
 
+    def test_gate_num_qubits(self):
+        ps = QubitProcessorSpec(2, gate_names=['Gx', 'Gcnot'], geometry='line')
+        self.assertEqual(ps.gate_num_qubits('Gx'), 1)
+        self.assertEqual(ps.gate_num_qubits('Gcnot'), 2)
+
+    def test_rename_gate_inplace(self):
+        ps = QubitProcessorSpec(1, gate_names=['Gx', 'Gy'], availability={'Gx': [(0,)], 'Gy': [(0,)]})
+        ps.rename_gate_inplace('Gx', 'MyGx')
+        self.assertNotIn('Gx', ps.gate_names)
+        self.assertIn('MyGx', ps.gate_names)
+        self.assertNotIn('Gx', ps.gate_unitaries)
+        self.assertIn('MyGx', ps.gate_unitaries)
+        self.assertNotIn('Gx', ps.availability)
+        self.assertIn('MyGx', ps.availability)
+
+    def test_resolved_availability_modes(self):
+        ps = QubitProcessorSpec(3, gate_names=['Gcnot'], availability={'Gcnot': [(0, 1)]}, geometry='line')
+        self.assertEqual(ps.resolved_availability('Gcnot', 'tuple'), [(0, 1)])
+
+        avail_fn = ps.resolved_availability('Gcnot', 'function')
+        self.assertTrue(avail_fn((0, 1)))
+        self.assertFalse(avail_fn((1, 0)))
+        self.assertFalse(avail_fn((0, 2)))
+
+    def test_availability_specifiers(self):
+        qubit_labels = [0, 1, 2]
+        # Test "all-permutations"
+        ps_perm = QubitProcessorSpec(3, gate_names=['Gcnot'], availability={'Gcnot': 'all-permutations'}, qubit_labels=qubit_labels)
+        self.assertEqual(set(ps_perm.resolved_availability('Gcnot', 'tuple')), set(itertools.permutations(qubit_labels, 2)))
+
+        # Test "all-combinations"
+        ps_comb = QubitProcessorSpec(3, gate_names=['Gcnot'], availability={'Gcnot': 'all-combinations'}, qubit_labels=qubit_labels)
+        self.assertEqual(set(ps_comb.resolved_availability('Gcnot', 'tuple')), set(itertools.combinations(qubit_labels, 2)))
+
+        # Test "all-edges"
+        ps_edges = QubitProcessorSpec(3, gate_names=['Gcnot'], geometry='line', qubit_labels=qubit_labels)
+        self.assertEqual(set(ps_edges.resolved_availability('Gcnot', 'tuple')), { (0, 1), (1, 0), (1, 2), (2, 1)})
+
+    def test_available_gatenames(self):
+        qubit_labels = [0, 1, 2]
+        gate_names = ['Gx', 'Gy', 'Gcnot']
+        availability = {'Gx': [(0,)], 'Gy': [(1,)], 'Gcnot': [(0, 1)]}
+        ps = QubitProcessorSpec(3, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        self.assertEqual(set(ps.available_gatenames((0,))), {'Gx'})
+        self.assertEqual(set(ps.available_gatenames((1,))), {'Gy'})
+        self.assertEqual(set(ps.available_gatenames((0, 1))), {'Gx', 'Gy', 'Gcnot'})
+        self.assertEqual(set(ps.available_gatenames((2,))), set())
+
+    def test_available_gatelabels(self):
+        qubit_labels = [0, 1, 2]
+        gate_names = ['Gx', 'Gcnot']
+        availability = {'Gx': [(0,), (1,)], 'Gcnot': 'all-permutations'}
+        ps = QubitProcessorSpec(3, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        self.assertEqual(set(ps.available_gatelabels('Gx', (0, 1))), {Label('Gx', (0,)), Label('Gx', (1,))})
+        self.assertEqual(set(ps.available_gatelabels('Gx', (0, 2))), {Label('Gx', (0,))})
+        self.assertEqual(set(ps.available_gatelabels('Gcnot', (0, 1, 2))), set(map(lambda t: Label('Gcnot', t), itertools.permutations([0, 1, 2], 2))))
+
+    def test_compute_ops_on_qudits(self):
+        qubit_labels = [0, 1]
+        gate_names = ['Gx', 'Gcnot']
+        availability = {'Gx': [(0,)], 'Gcnot': [(0, 1)]}
+        ps = QubitProcessorSpec(2, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        ops_on_qudits = ps.compute_ops_on_qudits()
+        self.assertEqual(ops_on_qudits, {(0,): [Label('Gx', (0,))], (0, 1): [Label('Gcnot', (0, 1))]})
+
+    def test_subset(self):
+        qubit_labels = [0, 1, 2]
+        gate_names = ['Gx', 'Gy', 'Gcnot']
+        availability = {'Gx': [(0,), (1,)], 'Gy': [(1,), (2,)], 'Gcnot': [(0, 1), (1, 2)]}
+        ps = QubitProcessorSpec(3, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        subset_ps = ps.subset(gate_names_to_include=['Gx', 'Gcnot'], qubit_labels_to_keep=[0, 1])
+
+        self.assertEqual(subset_ps.gate_names, ('Gx', 'Gcnot'))
+        self.assertEqual(subset_ps.qubit_labels, (0, 1))
+        self.assertEqual(subset_ps.availability, {'Gx': ((0,), (1,)), 'Gcnot': ((0, 1),)})
+
+    def test_map_qudit_labels(self):
+        qubit_labels = [0, 1]
+        gate_names = ['Gx', 'Gcnot']
+        availability = {'Gx': [(0,)], 'Gcnot': [(0, 1)]}
+        ps = QubitProcessorSpec(2, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        mapped_ps = ps.map_qudit_labels({0: 'a', 1: 'b'})
+
+        self.assertEqual(mapped_ps.qubit_labels, ('a', 'b'))
+        self.assertEqual(mapped_ps.availability, {'Gx': (('a',),), 'Gcnot': (('a', 'b'),)})
+
+    def test_compute_clifford_symplectic_reps(self):
+        # Create a non-Clifford gate unitary
+        non_clifford_U = np.array([[1, 0], [0, np.exp(1j * np.pi / 8)]], 'D')
+
+        ps = QubitProcessorSpec(1, gate_names=['Gh', 'Gp', 'Gnc'], 
+                                nonstd_gate_unitaries={'Gnc': non_clifford_U})
+        
+        srep_dict = ps.compute_clifford_symplectic_reps()
+        
+        internal_srep_dict = st.compute_internal_gate_symplectic_representations()
+        
+        self.assertIn('Gh', srep_dict)
+        self.assertIn('Gp', srep_dict)
+        self.assertNotIn('Gnc', srep_dict)
+        
+        expected_Gh_s, expected_Gh_p = internal_srep_dict['H']
+        expected_Gp_s, expected_Gp_p = internal_srep_dict['P']
+        
+        actual_Gh_s, actual_Gh_p = srep_dict['Gh']
+        actual_Gp_s, actual_Gp_p = srep_dict['Gp']
+        
+        self.assertArraysEqual(actual_Gh_s, expected_Gh_s)
+        self.assertArraysEqual(actual_Gh_p, expected_Gh_p)
+        self.assertArraysEqual(actual_Gp_s, expected_Gp_s)
+        self.assertArraysEqual(actual_Gp_p, expected_Gp_p)
