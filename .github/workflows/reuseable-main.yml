@@ -60,15 +60,24 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
+    # uv gives fast, parallel installs and CPU-only torch resolution (see env above).
+    # The astral-sh/setup-uv action is blocked by the org Actions allowlist, so we
+    # bootstrap uv from PyPI with the stock pip (a `run:` step is not an action) and
+    # cache its downloads with the GitHub-owned actions/cache.
     - name: Set up uv
-      uses: astral-sh/setup-uv@v5
+      run: python -m pip install --upgrade pip uv
+    - name: Cache uv downloads
+      uses: actions/cache@v4
       with:
-        enable-cache: true
-        # Key the uv cache on the real dependency manifests. (The old pip cache
-        # hashed setup.py + requirements.txt, but the deps actually live in pyproject.toml.)
-        cache-dependency-glob: |
-          **/pyproject.toml
-          **/setup.py
+        # Default uv cache dir, listed for each OS; non-matching paths are skipped.
+        path: |
+          ~/.cache/uv
+          ~/Library/Caches/uv
+          ~\AppData\Local\uv\cache
+        # Key on the real dependency manifests (deps live in pyproject.toml).
+        key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-uv-
     - name: Install build and lint tools
       # setuptools is needed by the explicit `setup.py build_ext` call below (an
       # editable install does not leave it in the environment); flake8 for linting.
