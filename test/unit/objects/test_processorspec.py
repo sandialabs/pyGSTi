@@ -6,6 +6,7 @@ import scipy
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import modelconstruction as mc
 from pygsti.circuits import Circuit
+from pygsti.baseobjs.qubitgraph import QubitGraph
 from ..util import BaseCase, with_temp_path
 
 
@@ -62,3 +63,48 @@ class ProcessorSpecTester(BaseCase):
         pspec_defaults = save_and_load(pspec_defaults, pth)
         pspec_names = save_and_load(pspec_names, pth)
         pspec_vecs = save_and_load(pspec_vecs, pth)
+
+    def test_resolved_availability_contradiction(self):
+        nQubits = 1
+        qubit_labels = [0]
+        
+        gate_names = ['Ga', 'Gb']
+        
+        # Define two distinct dummy unitaries for the gates
+        Ua = np.array([[1, 0], [0, 1]], 'd')
+        Ub = np.array([[0, 1], [1, 0]], 'd')
+        
+        nonstd_gate_unitaries = {'Ga': Ua, 'Gb': Ub}
+        
+        # Both gates are available on the same qubit
+        availability = {'Ga': [(0,)], 'Gb': [(0,)]}
+        
+        ps = QubitProcessorSpec(nQubits, gate_names, nonstd_gate_unitaries=nonstd_gate_unitaries, 
+                                availability=availability, qubit_labels=qubit_labels)
+        
+        ga_available = ps.is_available(('Ga', 0))
+        gb_available = ps.is_available(('Gb', 0))
+        
+        self.assertTrue(ga_available and gb_available)
+
+    def test_compute_2Q_connectivity(self):
+        qubit_labels = ['q0', 'q1', 'q2']
+        gate_names = ['Gcnot']
+        availability = {'Gcnot': [('q0', 'q1'), ('q1', 'q2')]}
+        
+        ps = QubitProcessorSpec(3, gate_names, availability=availability, qubit_labels=qubit_labels)
+        
+        # Manually create the expected graph
+        expected_graph = QubitGraph(qubit_labels)
+        expected_graph.add_edge('q0', 'q1')
+        expected_graph.add_edge('q1', 'q2')
+        
+        # The function compute_2Q_connectivity returns a QubitGraph with symmetric edges, so we need to add the reverse edges to our expected graph
+        expected_graph.add_edge('q1', 'q0')
+        expected_graph.add_edge('q2', 'q1')
+
+        computed_graph = ps.compute_2Q_connectivity()
+
+        self.assertEqual(set(computed_graph.node_names), set(expected_graph.node_names))
+        self.assertEqual(set(computed_graph.edges()), set(expected_graph.edges()))
+

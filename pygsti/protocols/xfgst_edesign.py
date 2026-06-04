@@ -1,5 +1,6 @@
 import numpy as np
 from pygsti.protocols import CircuitListsDesign, HasProcessorSpec
+from pygsti.processors import QubitProcessorSpec
 from pygsti.circuits.circuitlist import CircuitList
 from pygsti.circuits.circuit import Circuit
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
@@ -213,7 +214,7 @@ def generate_edge_colorings(vertices: list, edges: list) -> list:
     return list_of_edge_colorings
 
 
-def make_xfgst_design(nq_pspec, oneq_gstdesign, twoq_gstdesign, seed=0):
+def make_xfgst_design(nq_pspec: QubitProcessorSpec, oneq_gstdesign, twoq_gstdesign, seed=0):
     vertices = nq_pspec.qubit_labels
     edges = nq_pspec.compute_2Q_connectivity().edges()
 
