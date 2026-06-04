@@ -223,7 +223,7 @@ from pygsti.baseobjs import Label
 def pauli_expectation_exact(error_propagator, target_model, circuit, pauli):
     #get the eoc error channel, and the process matrix for the ideal circuit:
     eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
-    ideal_channel = target_model.circuit_operator(circuit)
+    ideal_channel = target_model.sim.product(circuit)
     #also get the ideal state prep and povm:
     ideal_prep = target_model.circuit_layer_operator(Label('rho0'), typ='prep').copy()
     
