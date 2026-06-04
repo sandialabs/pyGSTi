@@ -4,7 +4,6 @@ import numpy as np
 
 import pygsti
 from pygsti.extras import drift
-from pygsti.modelpacks.legacy import std1Q_XYI
 from ..testutils import BaseTestCase
 
 
@@ -101,6 +100,53 @@ class DriftTestCase(BaseTestCase):
         trmodel.parameters_copy()
         trmodel.set_parameters([0.2])
         trmodel.hyperparameters
+
+    def test_core_and_stabilityanalyzer(self):
+
+        ds = pygsti.io.read_time_dependent_dataset("cmp_chk_files/timeseries_data_trunc.txt")
+
+        # This test used to also call drift.do_stability_analysis(...), a one-call
+        # routine that wrapped the steps below. That routine has since been removed;
+        # the StabilityAnalyzer is now the public entry point, so we drive it directly.
+        # The drift *report* layer this test also exercised (the Workspace drift plots
+        # and drift.report.create_drift_report) is currently broken against the present
+        # StabilityAnalyzer API and is intentionally not covered here.
+        results = drift.StabilityAnalyzer(ds, ids=True)
+        str(results)  # smoke-test __str__ at each stage, as the original test did
+        results.compute_spectra()
+        str(results)
+        results.run_instability_detection(verbosity=0)
+        str(results)
+        results.run_instability_characterization(estimator='filter', modelselector=('default', ()),
+                                                  verbosity=0)
+        str(results)
+
+        # Register additional detectors using different multi-test corrections and
+        # test classes, exercising the inclass_correction / tests / saveas arguments.
+        inclass_correction = {'dataset': 'Bonferroni', 'circuit': 'Bonferroni',
+                              'spectrum': 'Benjamini-Hochberg'}
+        results.run_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),),
+                                          saveas='fdr-1', default=False, verbosity=0)
+        inclass_correction = {'dataset': 'Bonferroni', 'circuit': 'Benjamini-Hochberg',
+                              'spectrum': 'Benjamini-Hochberg'}
+        results.run_instability_detection(inclass_correction=inclass_correction, tests=((), ('circuit',)),
+                                          saveas='fdr-2', default=False, verbosity=0)
+        results.run_instability_detection(inclass_correction=inclass_correction, tests=(('circuit',),),
+                                          saveas='fdr-3', default=False, verbosity=0)
+
+        # The truncated timeseries dataset has injected drift, so detection must fire.
+        self.assertTrue(results.instability_detected())
+
+        unstable = results.unstable_circuits(fromtests=[(), ('circuit',)])
+        self.assertIsInstance(unstable, dict)
+
+        freq, power = results.power_spectrum()
+        self.assertEqual(len(freq), len(power))
+
+        # The maximum TVD bound is a total-variation distance, so it lies in [0, 1].
+        bound = results.maxmax_tvd_bound()
+        self.assertGreaterEqual(bound, 0.0)
+        self.assertLessEqual(bound, 1.0)
 
 
 if __name__ == '__main__':

@@ -345,7 +345,7 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
             layout = go.Layout(width=800 * scale, height=400 * scale, title=dict(font=dict(size=16)),
                                # , rangeslider=dict(visible = True)),
                                xaxis=dict(title=dict(text="Time (seconds)", font=dict(size=14)), range=xlim),
-                               yaxis=dict(title=dict("Probability", font=dict(size=14)), range=ylim),
+                               yaxis=dict(title=dict(text="Probability", font=dict(size=14)), range=ylim),
                                legend=dict(
                 #                    x=0.05,
                 #                    y=1.05,
@@ -588,8 +588,10 @@ def create_drift_report(results, circuits, filename, title={'text': "auto"},
     advanced_options = advanced_options or {}
     ws = ws or _ws.Workspace(advanced_options.get('cachefile', None))
 
+    # NOTE: the factory derives the circuit list from ``results.data.edesign``; the
+    # ``circuits`` argument is retained only for backward compatibility and is unused.
     report = create_drift_report(
-        results, circuits, title, ws, verbosity
+        results, title, ws, verbosity
     )
 
     advanced_options = advanced_options or {}
