@@ -191,8 +191,13 @@ class Polynomial(object):
                     indx = nxt
             #assert(len(ret) <= max_order) #TODO: is this needed anymore?
             return tuple(sorted(ret))
-
-        return {int_to_vinds(k): val for k, val in self._rep.int_coeffs.items()}
+        from collections import defaultdict
+        temp = defaultdict(complex)
+        for k,v in self._rep.int_coeffs.items():
+            temp[int_to_vinds(k)] += v
+        out = dict()
+        out.update(temp)
+        return out
 
     @property
     def max_num_vars(self):  # so we can convert back to python Polys

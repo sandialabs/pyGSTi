@@ -19,9 +19,6 @@ class AlgorithmsBase(BaseTestCase):
 
         self.maxLengthList = [1,2,4,8]
 
-        self.elgstStrings = pygsti.circuits.create_elgst_lists(
-            self.op_labels, self.germs, self.maxLengthList )
-
         self.lsgstStrings = pygsti.circuits.create_lsgst_circuit_lists(
             self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
 
@@ -31,7 +28,7 @@ class AlgorithmsBase(BaseTestCase):
                 self.op_labels, self.fiducials, self.fiducials, self.germs, self.maxLengthList )
             ds = pygsti.data.simulate_data(self.datagen_gateset, expList,
                                                    num_samples=10000, sample_error='binomial', seed=100)
-            ds.save(compare_files + "/analysis.dataset")
+            ds.write_binary(compare_files + "/analysis.dataset")
 
         self.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
 
@@ -39,6 +36,6 @@ class AlgorithmsBase(BaseTestCase):
         if regenerate_references():
             ds_lgst = pygsti.data.simulate_data(self.datagen_gateset, self.lgstStrings,
                                                         num_samples=10000, sample_error='binomial', seed=100)
-            ds_lgst.save(compare_files + "/analysis_lgst.dataset")
+            ds_lgst.write_binary(compare_files + "/analysis_lgst.dataset")
 
         self.ds_lgst = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis_lgst.dataset")

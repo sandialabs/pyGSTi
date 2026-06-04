@@ -5,15 +5,15 @@ import warnings
 import itertools
 
 import numpy as np
+import pytest
 
 import pytest
 pytest.skip("idletomography subsystem is broken; quarantined per issue #741", allow_module_level=True)
 
 import pygsti
-import pygsti.models.modelconstruction as mc
-from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.extras import idletomography as idt
-from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references, build_XYCNOT_cloudnoise_model
 
 #Helper functions
 #Global dicts describing how to prep and measure in various bases
@@ -26,34 +26,6 @@ measDict = { 'X': ('Gy',)*3, 'Y': ('Gx',), 'Z': (),
 hamiltonian=True
 stochastic=True
 affine=False
-
-#Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
-def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
-                                  maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                  extraWeight1Hops=0, extraGateWeight=0,
-                                  roughNoise=None, simulator="matrix", parameterization="H+S",
-                                  spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                  errcomp_type="gates", evotype="default", return_clouds=False, verbosity=0):
-
-    availability = {}; nonstd_gate_unitaries = {}
-    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    pspec = _ProcessorSpec(nQubits, ['{idle}', 'Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability, geometry)
-    assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
-    mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
-        pspec, None,
-        maxIdleWeight, maxSpamWeight, maxhops,
-        extraWeight1Hops, extraGateWeight,
-        simulator, evotype, parameterization, parameterization,
-        "add_global" if addIdleNoiseToAllGates else "none",
-        errcomp_type, True, True, True, 'pp', verbosity)
-
-    if return_clouds:
-        #FUTURE - just return cloud *keys*? (operation label values are never used
-        # downstream, but may still be useful for debugging, so keep for now)
-        return mdl, mdl.clouds
-    else:
-        return mdl
-
 
 def get_fileroot(nQubits, maxMaxLen, errMag, spamMag, nSamples, simulator, idleErrorInFiducials):
     return temp_files + "/idletomog_%dQ_maxLen%d_errMag%.5f_spamMag%.5f_%s_%s_%s" % \
@@ -108,17 +80,21 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
                 gateset_idleInFids, listOfExperiments, num_samples=Nsamp,
                 sample_error=sampleError, seed=8675309)
             fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simulator, True)
-            pickle.dump(gateset_idleInFids, open("%s_gs.pkl" % fileroot, "wb"))
-            pickle.dump(ds_idleInFids, open("%s_ds.pkl" % fileroot, "wb"))
+            with open("%s_gs.pkl" % fileroot, "wb") as f:
+                pickle.dump(gateset_idleInFids, f)
+            with open("%s_ds.pkl" % fileroot, "wb") as f:
+                pickle.dump(ds_idleInFids, f)
             print("Wrote fileroot ",fileroot)
 
             ds_noIdleInFids = pygsti.data.simulate_data(
                                 gateset_noIdleInFids, listOfExperiments, num_samples=Nsamp,
-                                sample_error=sampleError, seed=8675309)            
+                                sample_error=sampleError, seed=8675309)
 
             fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simulator, False)
-            pickle.dump(gateset_noIdleInFids, open("%s_gs.pkl" % fileroot, "wb"))
-            pickle.dump(ds_noIdleInFids, open("%s_ds.pkl" % fileroot, "wb"))
+            with open("%s_gs.pkl" % fileroot, "wb") as f:
+                pickle.dump(gateset_noIdleInFids, f)
+            with open("%s_ds.pkl" % fileroot, "wb") as f:
+                pickle.dump(ds_noIdleInFids, f)
 
             #FROM DEBUGGING Python2 vs Python3 issue (ended up being an ordered-dict)
             ##pygsti.io.write_dataset("%s_ds_chk.txt" % fileroot, ds_noIdleInFids)
@@ -137,8 +113,10 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
     if fileroot is None:
         fileroot = get_fileroot(nQubits, file_maxLen, errMag, spamMag, nSamples, simulator, idleErrorInFiducials)
 
-    mdl_datagen = pickle.load(open("%s_gs.pkl" % fileroot, "rb"))
-    ds = pickle.load(open("%s_ds.pkl" % fileroot, "rb"))
+    with open("%s_gs.pkl" % fileroot, "rb") as f:
+        mdl_datagen = pickle.load(f)
+    with open("%s_ds.pkl" % fileroot, "rb") as f:
+        ds = pickle.load(f)
 
     #print("DB: ",ds[ ('Gi',) ])
     #print("DB: ",ds[ ('Gi','Gi') ])
@@ -241,16 +219,18 @@ class IDTTestCase(BaseTestCase):
         self.assertLess(maxA, 1e-6)
 
     def test_idletomog_gstdata_std1Q(self):
-        from pygsti.modelpacks.legacy import std1Q_XYI as std
-        std = pygsti.modelpacks.stdtarget.stdmodule_to_smqmodule(std)
+        from pygsti.modelpacks import smq1Q_XYI as std
 
         maxLens = [1,2,4]
-        expList = pygsti.circuits.create_lsgst_circuits(std.target_model(), std.prepStrs,
-                                                            std.effectStrs, std.germs_lite, maxLens)
+        prep_fids = std.prep_fiducials()
+        meas_fids = std.meas_fiducials()
+        germs_lite = std.germs(lite=True)
+        expList = pygsti.circuits.create_lsgst_circuits(std.target_model(), prep_fids,
+                                                            meas_fids, germs_lite, maxLens)
         ds = pygsti.data.simulate_data(std.target_model().depolarize(0.01, 0.01),
                                        expList, 1000, 'multinomial', seed=1234)
 
-        result = pygsti.run_long_sequence_gst(ds, std.target_model(), std.prepStrs, std.effectStrs, std.germs_lite, maxLens, verbosity=3)
+        result = pygsti.run_long_sequence_gst(ds, std.target_model(), prep_fids, meas_fids, germs_lite, maxLens, verbosity=3)
 
         #standard report will run idle tomography
         report = pygsti.report.construct_standard_report(result, "Test GST Report w/Idle Tomography Tab: StdXYI",
@@ -266,14 +246,15 @@ class IDTTestCase(BaseTestCase):
 
     def test_idletomog_gstdata_1Qofstd2Q(self):
         # perform idle tomography on first qubit of 2Q
-        from pygsti.modelpacks.legacy import std2Q_XYICNOT as std2Q
-        from pygsti.modelpacks.legacy import std1Q_XYI as std
-        std2Q = pygsti.modelpacks.stdtarget.stdmodule_to_smqmodule(std2Q)
-        std = pygsti.modelpacks.stdtarget.stdmodule_to_smqmodule(std)
+        from pygsti.modelpacks import smq2Q_XYICNOT as std2Q
+        from pygsti.modelpacks import smq1Q_XYI as std
 
         maxLens = [1,2,4]
-        expList = pygsti.circuits.create_lsgst_circuits(std2Q.target_model(), std2Q.prepStrs,
-                                                            std2Q.effectStrs, std2Q.germs_lite, maxLens)
+        std2Q_prep = std2Q.prep_fiducials()
+        std2Q_meas = std2Q.meas_fiducials()
+        std2Q_germs_lite = std2Q.germs(lite=True)
+        expList = pygsti.circuits.create_lsgst_circuits(std2Q.target_model(), std2Q_prep,
+                                                            std2Q_meas, std2Q_germs_lite, maxLens)
         mdl_datagen = std2Q.target_model().depolarize(0.01, 0.01)
         ds2Q = pygsti.data.simulate_data(mdl_datagen, expList, 1000, 'multinomial', seed=1234)
 
@@ -282,8 +263,11 @@ class IDTTestCase(BaseTestCase):
 
         start = std.target_model()
         start.set_all_parameterizations("full TP")
-        result = pygsti.run_long_sequence_gst(ds, start, std.prepStrs[0:4], std.effectStrs[0:4],
-                                              std.germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
+        std_prep = std.prep_fiducials()
+        std_meas = std.meas_fiducials()
+        std_germs_lite = std.germs(lite=True)
+        result = pygsti.run_long_sequence_gst(ds, start, std_prep[0:4], std_meas[0:4],
+                                              std_germs_lite, maxLens, verbosity=3, advanced_options={'objective': 'chi2'})
 
         report = pygsti.report.construct_standard_report(result, "Test GST Report w/Idle Tomog.: StdXYI from StdXYICNOT",
                                                          advanced_options={'idt_idle_oplabel': ()}, verbosity=3)
@@ -319,12 +303,18 @@ class IDTTestCase(BaseTestCase):
         if regenerate_references():
             c = {} #Uncomment to re-generate cache SAVE
         else:
-            c = pickle.load(open(compare_files+"/idt_nQsequenceCache.pkl", 'rb'))
+            with open(compare_files+"/idt_nQsequenceCache.pkl", 'rb') as f:
+                c = pickle.load(f)
 
         t = time.time()
-        gss = pygsti.circuits.cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
-            nQubits, maxLengths, 'line', [(0,1)], max_idle_weight=2,
-            idle_only=False, parameterization="H+S", cache=c, verbosity=3)
+        with pytest.warns(pyGSTiDeprecationWarning):
+            # _create_xycnot_cloudnoise_circuits is deprecated, but the replacement
+            # function, create_cloudnoise_circuits, is not a 1-to-1 match. Just suppressing
+            # this warning for now. Will need to go back and add a test for create_cloudnoise_circuits
+            # in the future.
+            gss = pygsti.circuits.cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
+                nQubits, maxLengths, 'line', [(0,1)], max_idle_weight=2,
+                idle_only=False, parameterization="H+S", cache=c, verbosity=3)
         #print("GSS STRINGS: ")
         #print('\n'.join(["%s: %s" % (s.str,str(s.tup)) for s in gss.allstrs]))
 

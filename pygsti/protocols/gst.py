@@ -50,6 +50,7 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti.circuits import Circuit
 from pygsti.forwardsims import ForwardSimulator
 from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
@@ -1810,9 +1811,10 @@ class StandardGST(_proto.Protocol):
         if isinstance(modes, str):
             if ',' in modes:
                 self.modes = modes.split(',')
-                _warnings.warn("The use of a comma-separated string as input for 'modes' is deprecated " 
+                _warnings.warn("The use of a comma-separated string as input for 'modes' is deprecated "
                             + " and may be removed in a future release. Please pass in a list or tuple"
-                                +" (or other iterable) of strings")
+                                +" (or other iterable) of strings",
+                               _pyGSTiDeprecationWarning)
             else:
                 self.modes = [modes] #Cast to a list for uniformity
         else:

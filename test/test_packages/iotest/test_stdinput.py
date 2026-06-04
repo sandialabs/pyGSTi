@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 import pygsti
 import pygsti.io.stdinput as stdin
@@ -8,6 +9,7 @@ from pygsti import io
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.circuits import Circuit
 from pygsti.baseobjs.label import CircuitLabel
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from . import IOBase, with_temp_path, with_temp_file
 
 
@@ -573,7 +575,10 @@ BASIS: pp
     def _test_gateset_writeload(self, tmp_path, param):
         mdl = std.target_model()
         mdl.set_all_parameterizations(param)
-        io.write_model(mdl, tmp_path)
+        # Legacy .txt round-trip; Model.write only supports JSON.
+        # See issues/706/c2-io-load-write-model-format-mismatch.md
+        with pytest.warns(pyGSTiDeprecationWarning):
+            io.write_model(mdl, tmp_path)
 
         gs2 = stdin.parse_model(tmp_path)
         self.assertAlmostEqual(mdl.frobeniusdist(gs2), 0.0)

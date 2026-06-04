@@ -60,25 +60,25 @@ class TestDataSetMethods(BaseTestCase):
         ds2.add_counts_from_dataset(ds)
 
         #Loading and saving
-        ds2.save(temp_files + "/nonstatic_dataset.saved")
-        ds2.save(temp_files + "/nonstatic_dataset.saved.gz")
+        ds2.write_binary(temp_files + "/nonstatic_dataset.saved")
+        ds2.write_binary(temp_files + "/nonstatic_dataset.saved.gz")
         with open(temp_files + "/nonstatic_dataset.stream","wb") as streamfile:
-            ds2.save(streamfile)
+            ds2.write_binary(streamfile)
 
-        ds4.save(temp_files + "/static_dataset.saved")
-        ds4.save(temp_files + "/static_dataset.saved.gz")
+        ds4.write_binary(temp_files + "/static_dataset.saved")
+        ds4.write_binary(temp_files + "/static_dataset.saved.gz")
         with open(temp_files + "/static_dataset.stream","wb") as streamfile:
-            ds4.save(streamfile)
+            ds4.write_binary(streamfile)
 
-        ds2.load(temp_files + "/nonstatic_dataset.saved")
-        ds2.load(temp_files + "/nonstatic_dataset.saved.gz")
+        ds2.read_binary(temp_files + "/nonstatic_dataset.saved")
+        ds2.read_binary(temp_files + "/nonstatic_dataset.saved.gz")
         with open(temp_files + "/nonstatic_dataset.stream","rb") as streamfile:
-            ds2.load(streamfile)
+            ds2.read_binary(streamfile)
 
-        ds4.load(temp_files + "/static_dataset.saved")
-        ds4.load(temp_files + "/static_dataset.saved.gz")
+        ds4.read_binary(temp_files + "/static_dataset.saved")
+        ds4.read_binary(temp_files + "/static_dataset.saved.gz")
         with open(temp_files + "/static_dataset.stream","rb") as streamfile:
-            ds2.load(streamfile)
+            ds2.read_binary(streamfile)
 
         #Test loading a deprecated dataset file
         #dsDeprecated = pygsti.data.DataSet(file_to_load_from=compare_files + "/deprecated.dataset")
@@ -239,17 +239,17 @@ Gx^4 20 80 20 80
         self.assertEqual(mds_from_pkl['DS0'][('Gx',)]['0'], 10)
 
         #Loading and saving
-        multiDS.save(temp_files + "/multidataset.saved")
-        multiDS.save(temp_files + "/multidataset.saved.gz")
-        mdsNoReps.save(temp_files + "/multidataset_noreps.saved")
+        multiDS.write_binary(temp_files + "/multidataset.saved")
+        multiDS.write_binary(temp_files + "/multidataset.saved.gz")
+        mdsNoReps.write_binary(temp_files + "/multidataset_noreps.saved")
         with open(temp_files + "/multidataset.stream","wb") as streamfile:
-            multiDS.save(streamfile)
+            multiDS.write_binary(streamfile)
 
-        multiDS.load(temp_files + "/multidataset.saved")
-        multiDS.load(temp_files + "/multidataset.saved.gz")
-        mdsNoReps.load(temp_files + "/multidataset_noreps.saved")
+        multiDS.read_binary(temp_files + "/multidataset.saved")
+        multiDS.read_binary(temp_files + "/multidataset.saved.gz")
+        mdsNoReps.read_binary(temp_files + "/multidataset_noreps.saved")
         with open(temp_files + "/multidataset.stream","rb") as streamfile:
-            multiDS.load(streamfile)
+            multiDS.read_binary(streamfile)
         multiDS2 = pygsti.data.MultiDataSet(file_to_load_from=temp_files + "/multidataset.saved")
 
         #Finally, add a dataset w/reps to a multidataset without them
@@ -271,7 +271,7 @@ Gx^4 20 80 20 80
                                     None, oli) #no rep data is OK - just assumes 1; bStatic=False is default
 
         #Test loading a non-static set from a saved file
-        ds.save(temp_files + "/test_tddataset.saved")
+        ds.write_binary(temp_files + "/test_tddataset.saved")
         ds3 = pygsti.data.DataSet(file_to_load_from=temp_files + "/test_tddataset.saved")
 
 
@@ -293,7 +293,7 @@ Gx^4 20 80 20 80
                                     None, oli, static=True) #no rep data is OK - just assumes 1
 
         #Test loading a static set from a saved file
-        ds.save(temp_files + "/test_tddataset.saved")
+        ds.write_binary(temp_files + "/test_tddataset.saved")
         ds3 = pygsti.data.DataSet(file_to_load_from=temp_files + "/test_tddataset.saved")
 
     def test_tddataset_methods(self):
@@ -380,25 +380,25 @@ Gx^4 20 80 20 80
 
 
         #Loading and saving
-        ds.save(temp_files + "/nonstatic_tddataset.saved")
-        ds.save(temp_files + "/nonstatic_tddataset.saved.gz")
+        ds.write_binary(temp_files + "/nonstatic_tddataset.saved")
+        ds.write_binary(temp_files + "/nonstatic_tddataset.saved.gz")
         with open(temp_files + "/nonstatic_tddataset.stream","wb") as streamfile:
-            ds.save(streamfile)
+            ds.write_binary(streamfile)
 
-        dsWritable.save(temp_files + "/static_tddataset.saved")
-        dsWritable.save(temp_files + "/static_tddataset.saved.gz")
+        dsWritable.write_binary(temp_files + "/static_tddataset.saved")
+        dsWritable.write_binary(temp_files + "/static_tddataset.saved.gz")
         with open(temp_files + "/static_tddataset.stream","wb") as streamfile:
-            dsWritable.save(streamfile)
+            dsWritable.write_binary(streamfile)
 
-        ds.load(temp_files + "/nonstatic_tddataset.saved")
-        ds.load(temp_files + "/nonstatic_tddataset.saved.gz")
+        ds.read_binary(temp_files + "/nonstatic_tddataset.saved")
+        ds.read_binary(temp_files + "/nonstatic_tddataset.saved.gz")
         with open(temp_files + "/nonstatic_tddataset.stream","rb") as streamfile:
-            ds.load(streamfile)
+            ds.read_binary(streamfile)
 
-        dsWritable.load(temp_files + "/static_tddataset.saved")
-        dsWritable.load(temp_files + "/static_tddataset.saved.gz")
+        dsWritable.read_binary(temp_files + "/static_tddataset.saved")
+        dsWritable.read_binary(temp_files + "/static_tddataset.saved.gz")
         with open(temp_files + "/static_tddataset.stream","rb") as streamfile:
-            dsWritable.load(streamfile)
+            dsWritable.read_binary(streamfile)
 
     def test_deprecated_dataset(self):
         with open(compare_files + '/deprecated.dataset', 'rb') as datasetfile:
