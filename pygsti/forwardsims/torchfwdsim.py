@@ -41,7 +41,7 @@ try:
         elif torch.xpu.device_count() > 0:
             return {'dtype': torch.float32, 'device': 'xpu:0'}
         else:
-            return {'dtype': torch.float32, 'device': -1}
+            return {'dtype': torch.float32, 'device': 'cpu'}
     DEVICE_KWARGS = todevice_kwargs()
 
 except ImportError:
