@@ -479,9 +479,13 @@ class CircuitMethodTester(BaseCase):
     def test_logically_equivalent_circuits_are_equal(self):
         circ1 = circuit.Circuit([[("Gxpi2", 0), ("Gypi2", 1)]])
         circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]], editable=True)
+        from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
 
         self.assertTrue(circ1 == circ2)
-        self.assertTrue(hash(circ1) == hash(circ2))
+
+        circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]], editable=True)
+        with self.assertWarns(ImplicitlyDoneEditingCircuitWarning):
+            self.assertTrue(hash(circ1) == hash(circ2))
 
         circ3 = circuit.Circuit([("Gxpi2", 0), ("Gypi2", 1)])  # initialize circ1 as a new circuit with 2 layers.
         circ4 = circuit.Circuit([("Gypi2", 1), ("Gxpi2", 0)])
