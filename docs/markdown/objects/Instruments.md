@@ -13,11 +13,11 @@ kernelspec:
 
 # Instruments and Intermediate Measurements
 
-This tutorial demonstrates how to model, simulate, and perform tomography on quantum *instruments*: maps that act on a qubit state (density matrix) and produce a qubit state *together with* a classical outcome.  Formally, an instrument is a map from $\mathcal{B}(\mathcal{H})$, the space of density matrices, to $\mathcal{B}(\mathcal{H}) \otimes K(n)$, where $K(n)$ is a classical space of $n$ elements.  Instruments are the natural model for **mid-circuit measurements** (MCMs): operations that read out a qubit partway through a circuit and leave behind a (possibly disturbed) post-measurement state.
+This tutorial demonstrates how to model, simulate, and perform tomography on quantum *instruments*: maps that act on a qudit state (density matrix) and produce a qudit state *together with* a classical outcome.  Formally, an instrument is a map from $\mathcal{B}(\mathcal{H})$, the space of density matrices, to $\mathcal{B}(\mathcal{H}) \otimes K(n)$, where $K(n)$ is a classical space of $n$ elements.  Instruments are the natural model for **mid-circuit measurements** (MCMs): operations that read out a qudit partway through a circuit and leave behind a (possibly disturbed) post-measurement state.
 
 In pyGSTi, an instrument is represented as a collection of operations -- one *member* for each classical outcome.  Writing the instrument as $\mathcal{I} = \{\mathcal{I}_k\}_k$, member $\mathcal{I}_k$ is a completely-positive, trace-*non-increasing* (CPTR) map, and the members jointly form a trace-preserving (CPTP) map $\sum_k \mathcal{I}_k$.  The probability of recording outcome $k$ on state $\rho$ is $\mathrm{tr}\,\mathcal{I}_k(\rho)$, and the (subnormalized) post-measurement state is $\mathcal{I}_k(\rho)$.
 
-This tutorial pays particular attention to *how that collection of members is parameterized*, because the parameterization determines whether a fitted instrument is physically valid.  A recent characterization of mid-circuit measurement on a transmon qubit ([arXiv:2602.03938](https://arxiv.org/abs/2602.03938)) shows that an interpretable MCM model decomposes into physically meaningful error mechanisms -- amplitude damping, readout (assignment) error, and imperfect collapse.  We will build a data-generating instrument out of exactly these effects, then recover it with gate set tomography (GST) and show why a *completely-positive* parameterization matters.
+This tutorial pays particular attention to *how that collection of members is parameterized*, because the parameterization determines whether a fitted instrument is physically valid.  A recent characterization of mid-circuit measurement on a transmon qubit ([arXiv:2602.03938](https://arxiv.org/abs/2602.03938)) shows that an interpretable MCM model decomposes into physically meaningful error mechanisms -- amplitude damping, readout (assignment) error, and imperfect collapse.  We will build a data-generating instrument out of these effects (although in a slightly different way than in the paper), then recover it with GST and show why a *completely-positive* parameterization matters.
 
 We start with a few familiar imports:
 
@@ -40,12 +40,12 @@ We will add an instrument to our "standard" 1-qubit model -- which contains $I$,
 mdl_ideal = std.target_model()
 
 # Build the ideal projective Z-measurement instrument from the POVM effects.
-E0 = mdl_ideal.effects['0']
-E1 = mdl_ideal.effects['1']
+E0 = mdl_ideal.effects['0'].to_dense()
+E1 = mdl_ideal.effects['1'].to_dense()
 # Alternate indexing that names the POVM explicitly:
-#   E0 = mdl_ideal['Mdefault']['0']   # 'Mdefault' = POVM label, '0' = effect label
-Gmz_plus  = E0 @ E0.T   # note: effect vectors are stored as column vectors
-Gmz_minus = E1 @ E1.T
+#   E0 = mdl_ideal['Mdefault']['0'].to_dense()   # 'Mdefault' = POVM label, '0' = effect label
+Gmz_plus  = np.outer(E0, E0)
+Gmz_minus = np.outer(E1, E1)
 mdl_ideal[('Iz', 0)] = Instrument({'p0': Gmz_plus, 'p1': Gmz_minus})
 ```
 
@@ -87,7 +87,11 @@ So complete positivity of the members is something you *opt into* by choosing a 
 You can build such an instrument directly with `kraus_polar_instrument`, passing the members as dense superoperators:
 
 ```{code-cell} ipython3
-kp = kraus_polar_instrument({'p0': Gmz_plus, 'p1': Gmz_minus}, basis)
+kp = kraus_polar_instrument(
+    {'p0': Gmz_plus, 'p1': Gmz_minus}, 
+    basis,
+    post_unitary_error='CPTPLND'  # setting to 'full TP' or 'GLND' would relax the "CP" requirement
+)
 print(type(kp).__name__, "num_params =", kp.num_params)
 for outcome, member in kp.items():
     print(f"  member {outcome!s:6s}: {type(member).__name__}")
