@@ -20,7 +20,6 @@ class TestGraphColoring(object):
         for i in range(num_vertices):
             u, v = i, (i + 1) % num_vertices
             edges.append((u, v))
-            edges.append((v, u)) # Ensure symmetric edges as expected by the function
             neighbors[u].append(v)
             neighbors[v].append(u)
         
@@ -84,7 +83,6 @@ class TestGraphColoring(object):
         for i in range(num_vertices - 1):
             u, v = i, i + 1
             edges.append((u, v))
-            edges.append((v, u))  # Ensure symmetric edges
             neighbors[u].append(v)
             neighbors[v].append(u)
 
@@ -143,7 +141,6 @@ class TestGraphColoring(object):
         for i in range(1, 6):
             u, v = high_degree_vertex, i
             edges.append((u, v))
-            edges.append((v, u))
             neighbors[u].append(v)
             neighbors[v].append(u)
         
@@ -157,7 +154,6 @@ class TestGraphColoring(object):
         for u, v in edges_to_add:
             if (u, v) not in edges and (v, u) not in edges: # Avoid duplicate edges
                 edges.append((u, v))
-                edges.append((v, u))
                 neighbors[u].append(v)
                 neighbors[v].append(u)
 

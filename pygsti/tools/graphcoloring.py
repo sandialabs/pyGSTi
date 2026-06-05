@@ -7,7 +7,10 @@ import networkx
 def find_edge_coloring(deg: int, vertices: list[int],
                        edges:list[tuple[[int,int]]],
                        neighbors: dict[int, list[int]]) -> dict[int, list[tuple[int,int]]]:
+
     # First we need to build a Linegraph rom the edges.
+    # We are assuming there is only one copy of each edge
+    # or you want to have discrete colors for (u,v) and (v,u).
 
     new_vertices = np.arange(len(edges))
 
@@ -19,7 +22,6 @@ def find_edge_coloring(deg: int, vertices: list[int],
             wz = edges[j]
             if uv[0] in wz or uv[1] in wz:
                 mygraph.add_edge(i,j)
-                mygraph.add_edge(j,i)
 
     verts_in_line_graph_to_color = networkx.algorithms.coloring.greedy_color(mygraph, strategy="random_sequential")
     # Networkx will always choose the smallest available color.
