@@ -40,6 +40,13 @@ def test_json_encode(label):
     l2 = jsoncodec.decode_obj(j, False)
     assert type(label) == type(l2)
 
+
+@pytest.mark.parametrize('label', labels)
+def test_hashable(label):
+    # __hash__ is needed for insertion into a set
+    s = {label}
+    assert label in s
+
 class LabelTester(BaseCase):
     def test_circuit_init(self):
         #Check that parallel operation labels get converted to circuits properly
@@ -82,12 +89,14 @@ class LabelTester(BaseCase):
         l1 = L('Gx', time=1.2)
         l2 = L('Gx')
         self.assertEqual(l1, l2)
-        self.assertTrue(l1.time != l2.time)
+        self.assertEqual(l1.time, 1.2)
+        self.assertNotEqual(l1.time, l2.time) # LabelStr can still have a time attribute if parsed.
 
         l1 = L('Gx', (0,), time=1.2)
         l2 = L('Gx', (0,))
         self.assertEqual(l1, l2)
-        self.assertTrue(l1.time != l2.time)
+        self.assertEqual(l1.time, 1.2)
+        self.assertTrue(not hasattr(l2, "time"))
 
     def test_only_nonzero_time_is_printed(self):
         l = L('GrotX', (0, 1), args=('1.4',))
@@ -702,6 +711,25 @@ class LabelTupWithArgsTester(BaseCase):
         self.assertEqual(l.num_qubits, 1)
         self.assertEqual(l.components, (l,))
 
+        l = L(("Gx", 0), args=(1,))
+        self.assertTrue(isinstance(l, LabelTupWithArgs))
+        l2 = L("Gx", 0, args=(1,))
+        self.assertTrue(isinstance(l2, LabelTupWithArgs))
+        l3 = L("Gx", (0,), args=(1,))
+        self.assertTrue(isinstance(l3, LabelTupWithArgs))
+
+        with self.assertRaises(AssertionError):
+            l4 = L(("Gx", 0, (1,))) # Is interpreted as a statespace label
+        with self.assertRaises(AssertionError):
+            l5 = L(("Gx", 0, 0.0, (1,))) # Still looks like a statespace label.
+
+        l6 = L(("Gx", 0, ";1"))
+        self.assertTrue(isinstance(l6, LabelTupWithArgs))
+        self.assertEqual(l6.args, ("1",))
+
+        with self.assertRaises(AssertionError):
+            L(("Gx", 0, ";1"), args=(1,))
+
     def test_labeltupwithargs_replace_name(self):
         l = LabelTupWithArgs.init('Gx', (0,), args=('foo',))
         l2 = l.replace_name('Gx', 'Gy')
@@ -878,8 +906,6 @@ class CircuitLabelTester(BaseCase):
         self.assertTrue(l.has_prefix('my'))
         self.assertFalse(l.has_prefix('your'))
 
-
-
 class CircuitLabelTester(BaseCase):
     def test_circuitlabel_properties(self):
         l = CircuitLabel('mycirc', [L('Gx', 0)], (0,), 5, 1.2)
@@ -927,35 +953,6 @@ class CircuitLabelTester(BaseCase):
         l = CircuitLabel('mycirc', [L('Gx', 0)], None, 5, 1.2)
         with self.assertRaises(NotImplementedError):
             l.strip_args()
-
-# class LabelConcateTester(BaseCase):
-#     def test_concate_labeltup(self):
-#         l1 = L(('Gx', 0))
-#         l2 = L(('Gy', 1))
-#         l3 = L((('Gz', 2), ('Ga', 3)))
-#         # cl = CircuitLabel('circuit', [l3], (2, 3), 1, None)
-
-#         # LabelTup with LabelTup
-#         concatenated = l1.concate(l2)
-#         self.assertIsInstance(concatenated, LabelTupTup)
-#         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1))))
-
-#         # LabelTup with LabelTupTup
-#         concatenated = l1.concate(l3)
-#         self.assertIsInstance(concatenated, LabelTupTup)
-#         self.assertEqual(concatenated, L((('Gx', 0), ('Gz', 2), ('Ga', 3))))
-
-#         # LabelTup with CircuitLabel (depth 1)
-#         # concatenated = l1.concate(cl)
-#         # self.assertIsInstance(concatenated, LabelTupTup)
-#         # self.assertEqual(concatenated, L((L('Gx', 0), L((('Gz', 2), ('Ga', 3))))))
-
-#     # def test_concate_circuitlabel(self):
-#     #     l1 = CircuitLabel('circuit1', [L('Gx', 0)], (0,), 1, None)
-#     #     l2 = L(('Gy', 1))
-#     #     concatenated = l1.concate(l2)
-#     #     self.assertIsInstance(concatenated, LabelTupTup)
-#     #     self.assertEqual(concatenated, L((L('Gx', 0), L('Gy', 1))))
 
 class LabelConcateTester(BaseCase):
     def test_concate_labeltup(self):
@@ -1074,8 +1071,11 @@ class LabelConcateTester(BaseCase):
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Gz', 2))))
 
         # LabelTupTupWithTime with LabelTupTupWithTime (different time)
-        with self.assertRaises(ValueError):
+        with self.assertWarns(RuntimeWarning):
             l1.concate(l3)
+        # LabelTupTupWithTime with LabelTupTupWithTime (different time)
+        with self.assertWarns(RuntimeWarning):
+            l3.concate(l1)
 
         # LabelTupTupWithTime with LabelTupWithTime (same time)
         l_tup_with_time = L(('Gb', 4), time=0.1)
@@ -1085,7 +1085,7 @@ class LabelConcateTester(BaseCase):
 
         # LabelTupTupWithTime with LabelTupWithTime (different time)
         l_tup_with_time_different = L(('Gc', 5), time=0.2)
-        with self.assertRaises(ValueError):
+        with self.assertWarns(RuntimeWarning):
             l1.concate(l_tup_with_time_different)
 
     def test_concate_labeltupwithtime(self):
