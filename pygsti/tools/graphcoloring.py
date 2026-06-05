@@ -1,12 +1,12 @@
 import numpy as np
 import copy
 import random
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple
 import networkx
 
-def find_edge_coloring(deg: int, vertices: list[int], edges:list[tuple[[int,int]]], neighbors: dict[int, list[int]]) -> dict[int, list[tuple[int,int]]]:
-
-
+def find_edge_coloring(deg: int, vertices: list[int],
+                       edges:list[tuple[[int,int]]],
+                       neighbors: dict[int, list[int]]) -> dict[int, list[tuple[int,int]]]:
     # First we need to build a Linegraph rom the edges.
 
     new_vertices = np.arange(len(edges))
@@ -139,11 +139,11 @@ def sinnamon_euler_color_edge_coloring(deg: int, vertices: List[int], edges: Lis
 
     for edge in edges_canonical:
         u, v = edge
-        _sinnamon_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors)
+        _sinnamon_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors, vertices)
 
     return color_patches
 
-def _sinnamon_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors):
+def _sinnamon_color_edge(u, v, deg, free_colors, edge_colors, color_patches, neighbors, vertices):
     # Simple case
     miss_u = free_colors[u]
     
@@ -166,7 +166,7 @@ def _sinnamon_color_edge(u, v, deg, free_colors, edge_colors, color_patches, nei
         return
 
     # Randomized case
-    for _ in range(int(math.log(len(vertices)))+1):
+    for _ in range(int(np.log(len(vertices)))+1):
         fan = build_maximal_fan(u, v, neighbors, free_colors, edge_colors)
         k = fan[-1]
         
