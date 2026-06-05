@@ -13,6 +13,7 @@ Defines the Label class
 from __future__ import annotations
 
 from typing import Union, Optional, Literal, Any, Sequence, Callable
+from warnings import warn
 import itertools as _itertools
 import numbers as _numbers
 import sys as _sys
@@ -370,13 +371,6 @@ class LabelTup(Label, tuple):
         return obj
 
     __new__ = tuple.__new__
-
-    @property
-    def time(self) -> float:
-        """
-        This label's name time (always 0)
-        """
-        return 0.0
 
     @property
     def is_sorted(self) -> Literal[True]:
@@ -1042,13 +1036,6 @@ class LabelTupTup(Label, tuple):
         return ret
 
     @property
-    def time(self) -> float:  # always zero
-        """
-        This label's name time (always 0)
-        """
-        return 0.0
-
-    @property
     def name(self) -> Literal['COMPOUND']:
         """
         This label's name (a string).
@@ -1451,7 +1438,8 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
     
     def concate(self, other):
         if hasattr(other, 'time') and self.time != other.time:
-            raise ValueError(f"Trying to concate two Labels with distinct time values {self.time}, and {other.time}")
+            warn.RuntimeWarning(f"Trying to concate two Labels with distinct time values {self.time}, and {other.time}")
+            super().concate(other) # note this will not propagate the time.
 
         if self.sslbls and other.sslbls and set(self.sslbls) & set(other.sslbls):
             raise ValueError("Cannot concatenate labels with overlapping qubits")
