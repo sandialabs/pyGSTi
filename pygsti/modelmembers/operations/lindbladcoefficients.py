@@ -1450,7 +1450,7 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
                 error_generator_labels = [_LEEL('S', (lbl,)) for lbl in basis_element_labels]
             else: # 'other'
                 error_generator_labels = []
-                for i, lbl1 in basis_element_labels:
+                for i, lbl1 in enumerate(basis_element_labels):
                     error_generator_labels.append(_LEEL('S', (lbl1,)))
                     for j, lbl2 in enumerate(basis_element_labels[i+1:], start=i+1):
                         error_generator_labels.append(_LEEL('C', (lbl1, lbl2)))
@@ -1536,7 +1536,7 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
     def _num_params_other(self):
         if self._param_mode == 'static':
             return 0
-        elif self._param_mode in 'elements':
+        elif self._param_mode == 'elements':
             return len(self._eeg_labels)
         else:
             raise InvalidParamModeError(self._param_mode, self._block_type)
@@ -2082,11 +2082,6 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
 
     def _from_vector_other(self, v: _np.ndarray):
         """Inverse of _block_data_to_params_other: load block_data from v for full 'other' block."""
-        num_bels = len(self._bel_labels)
-        params = v.reshape((num_bels, num_bels))
-
-        params_upper_indices = triu_indices(num_bels)
-
         if self._param_mode == 'elements':
             self.block_data[:] = v
         else:
@@ -2137,7 +2132,7 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
             raise InvalidParamModeError(self._param_mode, self._block_type)
 
     def _deriv_wrt_params_otherdiag(self) -> _np.ndarray:
-        num_eegs = len(self._eegs_labels)
+        num_eegs = len(self._eeg_labels)
 
         if self._param_mode == 'reldepol':
             mat = _np.ones((num_eegs,1), dtype=_np.double)
@@ -2250,7 +2245,7 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
 
     def _superop_deriv_wrt_params_other(self, superops, superops_are_flat):
         """superop_deriv_wrt_params for the full 'other' block."""
-        num_eegs = len(self._eegs_labels)
+        num_eegs = len(self._eeg_labels)
         if self._param_mode == 'elements':
             if superops_are_flat:
                 transposed = _np.transpose(superops, (1, 2, 0))  # shape = (d, d, nEEGs)
