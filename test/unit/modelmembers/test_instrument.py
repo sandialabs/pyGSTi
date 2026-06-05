@@ -1,8 +1,8 @@
 import numpy as np
 
+import pygsti
 import pygsti.modelmembers.operations as op
 from pygsti.modelmembers import instruments as inst
-from pygsti.modelmembers.instruments import kraus_polar_instrument, instrument_superops_from_effects
 from pygsti.modelmembers.instruments import Instrument, TPInstrument, convert
 from pygsti.modelmembers.operations import RootConjOperator, SummedOperator
 from pygsti.modelmembers import povms as pv
@@ -10,6 +10,40 @@ from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.models.gaugegroup import FullGaugeGroupElement
 from ..util import BaseCase
 from .test_operation import ImmutableDenseOpBase
+
+
+def _noisy_z_op_arrays(gamma=0.05, theta=np.deg2rad(10), eps=0.02):
+    """Dense CPTR superops for a noisy Z measurement whose members have Kraus rank 2.
+
+    Amplitude damping composed with a weak Z measurement gives each "true" outcome
+    Kraus rank 2; a classical assignment-error mix keeps every member completely
+    positive and the pair jointly trace-preserving.
+    """
+    A0 = np.array([[1, 0], [0, np.sqrt(1 - gamma)]], dtype=complex)
+    A1 = np.array([[0, np.sqrt(gamma)], [0, 0]], dtype=complex)
+    M0 = np.array([[np.cos(theta), 0], [0, np.sin(theta)]], dtype=complex)
+    M1 = np.array([[np.sin(theta), 0], [0, np.cos(theta)]], dtype=complex)
+    S0 = op.FullArbitraryOp.from_kraus_operators([M0 @ A0, M0 @ A1], 'pp').to_dense()
+    S1 = op.FullArbitraryOp.from_kraus_operators([M1 @ A0, M1 @ A1], 'pp').to_dense()
+    R0 = (1 - eps) * S0 + eps * S1
+    R1 = eps * S0 + (1 - eps) * S1
+    return {'p0': R0, 'p1': R1}
+
+
+def _weak_z_op_arrays(off_eigenvalue):
+    """Dense CPTR superops for a weak Z measurement with diagonal effects.
+
+    The effects are ``diag(1 - off_eigenvalue, off_eigenvalue)`` and its complement,
+    so `off_eigenvalue` controls how close each effect is to a rank-1 projector
+    (and whether the small eigenvalue falls below the kernel ``trunc_tol``).
+    """
+    s = np.sqrt(off_eigenvalue)
+    c = np.sqrt(1 - off_eigenvalue)
+    K0 = np.diag([c, s]).astype(complex)
+    K1 = np.diag([s, c]).astype(complex)
+    I0 = op.FullArbitraryOp.from_kraus_operators([K0], 'pp').to_dense()
+    I1 = op.FullArbitraryOp.from_kraus_operators([K1], 'pp').to_dense()
+    return {'p0': I0, 'p1': I1}
 
 
 class InstrumentTestBase(BaseCase):
@@ -87,20 +121,29 @@ class TPInstrumentInstanceTester(InstrumentTestBase):
             self.instrument['plus'] = None
 
 
-class KrausPolarInstrumentTester(BaseCase):
-    """Tests for kraus_polar_instrument and the CPTR operation primitives."""
+class FromCptrSuperopsTester(BaseCase):
+    """Tests for Instrument.from_cptr_superops and the CPTR operation primitives."""
 
     def setUp(self):
         model = std.target_model()
-        E = model.povms['Mdefault']['0']
-        Erem = model.povms['Mdefault']['1']
-        self.Gmz_plus  = np.dot(E, E.T)
-        self.Gmz_minus = np.dot(Erem, Erem.T)
+        self.E0 = np.asarray(model.povms['Mdefault']['0'].to_dense()).reshape(-1)
+        self.E1 = np.asarray(model.povms['Mdefault']['1'].to_dense()).reshape(-1)
+        self.Gmz_plus = np.outer(self.E0, self.E0)
+        self.Gmz_minus = np.outer(self.E1, self.E1)
         self.basis = model.basis
+        # The default fixture is an ideal projective Z measurement: each effect is a
+        # rank-1 projector (singular E_k), which exercises the gate kernel completion.
         self.op_arrays = {'plus': self.Gmz_plus, 'minus': self.Gmz_minus}
-        self.instrument = kraus_polar_instrument(self.op_arrays, self.basis)
+        self.instrument = Instrument.from_cptr_superops(self.op_arrays, self.basis)
 
-    # --- kraus_polar_instrument factory tests ---
+    def _members(self, instrument):
+        return {k: v.to_dense('HilbertSchmidt') for k, v in instrument.items()}
+
+    def _assert_cp(self, member_superop, atol=1e-8):
+        viol = pygsti.tools.sum_of_negative_choi_eigenvalues_gate(member_superop, 'pp')
+        self.assertGreaterEqual(viol, -atol)
+
+    # --- factory / structure tests ---
 
     def test_construction_returns_instrument(self):
         self.assertIsInstance(self.instrument, Instrument)
@@ -108,10 +151,29 @@ class KrausPolarInstrumentTester(BaseCase):
     def test_construction_keys(self):
         self.assertSetEqual(set(self.instrument.keys()), {'plus', 'minus'})
 
+    def test_member_dense_shapes(self):
+        dim = self.basis.dim
+        for member in self.instrument.values():
+            mx = member.to_dense('HilbertSchmidt')
+            self.assertEqual(mx.shape, (dim, dim))
+
+    def test_each_member_is_single_composed_op(self):
+        # Every member is one ComposedOp([RootConjOperator, gate]) -- never a
+        # SummedOperator, regardless of Kraus rank.
+        for member in self.instrument.values():
+            self.assertIsInstance(member, op.ComposedOp)
+            self.assertNotIsInstance(member, SummedOperator)
+            self.assertIsInstance(member.factorops[0], RootConjOperator)
+
+    def test_shared_povm_has_n_effects(self):
+        # Regression against the old Kraus-polar proliferation (which produced one
+        # effect per Kraus term): there must be exactly one effect per outcome.
+        effects = {id(member.factorops[0].submembers()[0]) for member in self.instrument.values()}
+        self.assertEqual(len(effects), len(self.instrument))
+
     def test_to_from_vector_roundtrip(self):
         v0 = self.instrument.to_vector()
         self.assertEqual(len(v0), self.instrument.num_params)
-        # Perturb and restore; dense output should change then return.
         v_perturbed = v0 + 1e-3 * np.random.default_rng(0).standard_normal(len(v0))
         self.instrument.from_vector(v_perturbed)
         v1 = self.instrument.to_vector()
@@ -126,25 +188,74 @@ class KrausPolarInstrumentTester(BaseCase):
         self.assertIsInstance(converted, Instrument)
         self.assertSetEqual(set(converted.keys()), {'plus', 'minus'})
 
-    def test_member_dense_shapes(self):
-        dim = self.basis.dim
-        for op in self.instrument.values():
-            mx = op.to_dense('HilbertSchmidt')
-            self.assertEqual(mx.shape, (dim, dim))
+    def test_convert_to_glnd(self):
+        plain = inst.Instrument({'plus': self.Gmz_plus, 'minus': self.Gmz_minus})
+        converted = inst.convert(plain, 'GLND', self.basis)
+        self.assertIsInstance(converted, Instrument)
 
     def test_sum_of_members_is_cptp_like(self):
-        # The sum of all instrument members' superoperators should equal the
-        # superoperator of the total channel (which is CPTP), i.e. the first
-        # row of the sum must be [1, 0, 0, 0] in the pp basis.
-        total = sum(op.to_dense('HilbertSchmidt') for op in self.instrument.values())
-        # First row encodes trace preservation: tr(rho) is preserved.
+        # The sum of all members' superoperators is the (CPTP) total channel; in the
+        # pp basis its first row must be [1, 0, 0, 0] (trace preservation).
+        total = sum(self._members(self.instrument).values())
         np.testing.assert_allclose(total[0, 0], 1.0, atol=1e-6)
         np.testing.assert_allclose(total[0, 1:], 0.0, atol=1e-6)
+
+    # --- numerical correctness: effect-then-CPTP-gate reconstruction ---
+
+    def test_ideal_projector_singular_effect(self):
+        # Singular (rank-1) effects: the recovered gate is the canonical CPTP
+        # completion G_k = Q_k + P_k; the members reproduce the ideal projectors and
+        # are completely positive.
+        members = self._members(self.instrument)
+        self.assertArraysAlmostEqual(members['plus'], self.Gmz_plus)
+        self.assertArraysAlmostEqual(members['minus'], self.Gmz_minus)
+        for mx in members.values():
+            self._assert_cp(mx)
+
+    def test_rank2_members_stay_single_composed_op(self):
+        # A Kraus-rank-2 member still yields a single ComposedOp (no SummedOperator)
+        # and a single shared effect per outcome, while reproducing the input.
+        arrays = _noisy_z_op_arrays()
+        instrument = Instrument.from_cptr_superops(arrays, self.basis)
+        members = self._members(instrument)
+        for k, member in instrument.items():
+            self.assertIsInstance(member, op.ComposedOp)
+            self.assertNotIsInstance(member, SummedOperator)
+            self.assertIsInstance(member.factorops[0], RootConjOperator)
+            self.assertArraysAlmostEqual(members[k], arrays[k])
+            self._assert_cp(members[k])
+        effects = {id(member.factorops[0].submembers()[0]) for member in instrument.values()}
+        self.assertEqual(len(effects), len(instrument))
+
+    def test_perturbed_projector_kernel_threshold(self):
+        # A small effect eigenvalue *above* trunc_tol is kept (exact reconstruction);
+        # one *below* trunc_tol is treated as kernel and completed (reconstruction
+        # then degrades only in that barely-measured direction).  Both stay CP and TP.
+        for off, recon_atol in [(1e-5, 1e-6), (1e-9, 1e-3)]:
+            arrays = _weak_z_op_arrays(off)
+            instrument = Instrument.from_cptr_superops(arrays, self.basis)
+            members = self._members(instrument)
+            total = sum(members.values())
+            np.testing.assert_allclose(total[0], [1, 0, 0, 0], atol=1e-9)
+            for k, mx in members.items():
+                self._assert_cp(mx)
+                np.testing.assert_allclose(mx, arrays[k], atol=recon_atol)
+
+    def test_raises_when_members_not_tp(self):
+        # Effects E_k = I_k^dagger(I) that do not sum to I -> not a TP channel.
+        with self.assertRaises(ValueError):
+            Instrument.from_cptr_superops({'plus': self.Gmz_plus, 'minus': self.Gmz_plus}, self.basis)
+
+    def test_raises_on_non_cp_member(self):
+        # A member with a negative Choi spectrum is not completely positive.
+        non_cp = 1.5 * self.Gmz_plus - 0.5 * self.Gmz_minus
+        complement = np.eye(self.basis.dim) - non_cp  # keeps the pair trace-preserving
+        with self.assertRaises(ValueError):
+            Instrument.from_cptr_superops({'plus': non_cp, 'minus': complement}, self.basis)
 
     # --- RootConjOperator unit tests ---
 
     def test_root_conj_operator_to_dense_shape(self):
-        # Build a real StaticPOVMEffect from the plus POVM effect
         effect = pv.StaticPOVMEffect(self.Gmz_plus[:, 0])
         rcop = RootConjOperator(effect, self.basis)
         mx = rcop.to_dense('HilbertSchmidt')
@@ -189,8 +300,8 @@ class KrausPolarInstrumentTester(BaseCase):
             sop.deriv_wrt_params()
 
 
-class InstrumentSuperopsFromEffectsTester(BaseCase):
-    """Tests for the instrument_superops_from_effects convenience constructor."""
+class FromEffectsTester(BaseCase):
+    """Tests for the Instrument.from_effects convenience constructor."""
 
     def setUp(self):
         model = std.target_model()
@@ -201,39 +312,40 @@ class InstrumentSuperopsFromEffectsTester(BaseCase):
         self.Gmz_plus = np.outer(self.E0, self.E0)
         self.Gmz_minus = np.outer(self.E1, self.E1)
 
-    def test_returns_superop_dict(self):
-        superops = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
-        self.assertIsInstance(superops, dict)
-        self.assertSetEqual(set(superops.keys()), {'p0', 'p1'})
-        for mx in superops.values():
-            self.assertEqual(np.asarray(mx).shape, (self.basis.dim, self.basis.dim))
+    def _members(self, instrument):
+        return {k: v.to_dense('HilbertSchmidt') for k, v in instrument.items()}
+
+    def test_returns_instrument_with_keys(self):
+        instrument = Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        self.assertIsInstance(instrument, Instrument)
+        self.assertSetEqual(set(instrument.keys()), {'p0', 'p1'})
+        for mx in self._members(instrument).values():
+            self.assertEqual(mx.shape, (self.basis.dim, self.basis.dim))
 
     def test_effect_only_reproduces_projectors(self):
-        # With the gate defaulting to the identity, the members are the
-        # ideal projective measurement maps rho -> E^1/2 rho E^1/2.
-        superops = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
-        self.assertArraysAlmostEqual(superops['p0'], self.Gmz_plus)
-        self.assertArraysAlmostEqual(superops['p1'], self.Gmz_minus)
+        # With the gate defaulting to the identity, the members are the ideal
+        # projective measurement maps rho -> E^1/2 rho E^1/2.
+        members = self._members(Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis))
+        self.assertArraysAlmostEqual(members['p0'], self.Gmz_plus)
+        self.assertArraysAlmostEqual(members['p1'], self.Gmz_minus)
 
     def test_identity_gate_matches_effect_only(self):
-        bare = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
-        with_gate = instrument_superops_from_effects(
-            {'p0': (self.E0, np.eye(4)), 'p1': (self.E1, None)}, self.basis)
+        bare = self._members(Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis))
+        with_gate = self._members(Instrument.from_effects(
+            {'p0': (self.E0, np.eye(4)), 'p1': (self.E1, None)}, self.basis))
         for k in bare.keys():
             self.assertArraysAlmostEqual(with_gate[k], bare[k])
 
     def test_total_channel_is_trace_preserving(self):
-        superops = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
-        total = sum(superops.values())
-        # First row encodes trace preservation in the (normalized) pp basis.
+        members = self._members(Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis))
+        total = sum(members.values())
         np.testing.assert_allclose(total[0], [1, 0, 0, 0], atol=1e-9)
 
-    def test_feeds_downstream_constructors(self):
-        # The returned dict is exactly the op_arrays consumed downstream.
-        superops = instrument_superops_from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
-        self.assertIsInstance(Instrument(superops), Instrument)
-        self.assertIsInstance(kraus_polar_instrument(superops, self.basis), Instrument)
-        self.assertIsInstance(convert(Instrument(superops), 'full TP', self.basis), TPInstrument)
+    def test_members_are_cp(self):
+        instrument = Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+        for mx in self._members(instrument).values():
+            viol = pygsti.tools.sum_of_negative_choi_eigenvalues_gate(mx, 'pp')
+            self.assertGreaterEqual(viol, -1e-8)
 
     def test_unitary_gate_and_matrix_effect(self):
         # A post-measurement Z on outcome p1, and effects given as 2x2 matrices.
@@ -241,19 +353,42 @@ class InstrumentSuperopsFromEffectsTester(BaseCase):
         proj0 = np.array([[1, 0], [0, 0]], dtype=complex)
         proj1 = np.array([[0, 0], [0, 1]], dtype=complex)
         Z = np.array([[1, 0], [0, -1]], dtype=complex)
-        superops = instrument_superops_from_effects(
-            {'p0': (proj0, np.eye(2)), 'p1': (proj1, Z)}, self.basis)
+        members = self._members(Instrument.from_effects(
+            {'p0': (proj0, np.eye(2)), 'p1': (proj1, Z)}, self.basis))
         expected_p1 = ot.unitary_to_superop(Z, self.basis) @ ot.rootconj_superop(self.E1, self.basis)
-        self.assertArraysAlmostEqual(superops['p0'], self.Gmz_plus)
-        self.assertArraysAlmostEqual(superops['p1'], expected_p1)
+        self.assertArraysAlmostEqual(members['p0'], self.Gmz_plus)
+        self.assertArraysAlmostEqual(members['p1'], expected_p1)
+
+    def test_relaxed_cp_full_tp_gate(self):
+        # 'full TP' relaxes the per-member CP constraint while keeping the instrument
+        # jointly trace-preserving; each gate factor is a FullTPOp.
+        instrument = Instrument.from_effects(
+            {'p0': self.E0, 'p1': self.E1}, self.basis, gate_parameterization='full TP')
+        for member in instrument.values():
+            self.assertIsInstance(member, op.ComposedOp)
+            self.assertIsInstance(member.factorops[1], op.FullTPOp)
+        total = sum(self._members(instrument).values())
+        np.testing.assert_allclose(total[0], [1, 0, 0, 0], atol=1e-9)
+
+    def test_rejects_full_gate_parameterization(self):
+        # 'full' is not trace-preserving and would break the instrument's joint TP.
+        with self.assertRaises(ValueError):
+            Instrument.from_effects(
+                {'p0': self.E0, 'p1': self.E1}, self.basis, gate_parameterization='full')
+
+    def test_feeds_plain_instrument(self):
+        # The same (effect, gate) data is also valid for the plain dense constructor.
+        superops = {'p0': self.Gmz_plus, 'p1': self.Gmz_minus}
+        self.assertIsInstance(Instrument(superops), Instrument)
+        self.assertIsInstance(convert(Instrument(superops), 'full TP', self.basis), TPInstrument)
 
     def test_raises_when_effects_incomplete(self):
         with self.assertRaises(ValueError):
-            instrument_superops_from_effects({'p0': self.E0, 'p1': self.E0}, self.basis)
+            Instrument.from_effects({'p0': self.E0, 'p1': self.E0}, self.basis)
 
     def test_raises_on_non_tp_gate(self):
         with self.assertRaises(ValueError):
-            instrument_superops_from_effects({'p0': (self.E0, 0.9 * np.eye(4)), 'p1': self.E1}, self.basis)
+            Instrument.from_effects({'p0': (self.E0, 0.9 * np.eye(4)), 'p1': self.E1}, self.basis)
 
 
 class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):

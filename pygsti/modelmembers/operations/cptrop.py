@@ -92,6 +92,17 @@ class RootConjOperator(LinearOperator):
     def submembers(self):
         return [self._effect]
 
+    def to_memoized_dict(self, mmg_memo):
+        mm_dict = super().to_memoized_dict(mmg_memo)
+        mm_dict['basis'] = self._basis.to_nice_serialization()
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        effect = serial_memo[mm_dict['submembers'][0]]
+        basis = Basis.from_nice_serialization(mm_dict['basis'])
+        return cls(effect, basis)
+
     def _update_rep_base(self):
         # Analogous to TPInstrumentOp._construct_matrix.
         self._rep.base.flags.writeable = True
@@ -135,9 +146,10 @@ class SummedOperator(LinearOperator):
     """
     A linear operator whose superoperator is the sum of a list of constituent operators.
 
-    This class is used inside :func:`~pygsti.modelmembers.instruments.kraus_polar_instrument`
-    when a CPTR map requires more than one Kraus term: each term contributes a separate
-    summand, and the full map is their sum.
+    This class represents a map as a sum of constituent maps -- for example a
+    multi-Kraus-term CPTR map written as a sum of single-Kraus-term summands.  It is
+    retained as a tested general-purpose building block, although it is not used
+    elsewhere in pyGSTi itself.
 
     The parameter vector is the concatenation (with shared-index deduplication via
     gpindices) of the submembers' parameter vectors.  The constituent operators' ``_rep``

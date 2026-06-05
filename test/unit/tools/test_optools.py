@@ -484,8 +484,8 @@ class MinimalKrausDecompositionTester(BaseCase):
     invisible for transpose-symmetric channels such as unitaries and rank-1
     projectors, but corrupts the Kraus operators of a non-unital channel:
     the returned operators implement the wrong map and fail to satisfy the
-    completeness relation sum_i K_i^dagger K_i = I.  See the discussion around
-    ``kraus_polar_instrument``, which relies on this routine.
+    completeness relation sum_i K_i^dagger K_i = I.  This routine underpins the
+    complete-positivity check in ``Instrument.from_cptr_superops``.
     """
 
     def setUp(self):

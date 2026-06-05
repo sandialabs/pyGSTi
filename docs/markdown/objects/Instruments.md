@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.3
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -27,8 +27,7 @@ from pygsti.modelpacks import smq1Q_XYI as std
 import numpy as np
 from pprint import pprint
 
-from pygsti.modelmembers.instruments import (
-    Instrument, TPInstrument, kraus_polar_instrument, convert)
+from pygsti.modelmembers.instruments import Instrument, TPInstrument, convert
 from pygsti.modelmembers.operations import FullArbitraryOp
 ```
 
@@ -51,13 +50,13 @@ mdl_ideal[('Iz', 0)] = Instrument({'p0': Gmz_plus, 'p1': Gmz_minus})
 
 ## How instruments are parameterized
 
-Before we add noise, it is worth understanding the three ways pyGSTi can parameterize an instrument's members.  They differ in *which constraints they enforce on the fit*, and therefore in their parameter counts:
+Before we add noise, it is worth understanding the ways pyGSTi can parameterize an instrument's members.  They differ in *which constraints they enforce on the fit*, and therefore in their parameter counts:
 
 - **`Instrument`** stores each member as an independent, unconstrained dense superoperator.  Nothing ties the members together or keeps them physical -- during a fit the members can drift to maps that are neither completely positive nor jointly trace-preserving.
 - **`TPInstrument`** constrains the members to *sum* to a trace-preserving map.  This is the right number of degrees of freedom for a physical instrument, but it constrains only the *sum*: an individual member can still be non-completely-positive (it can have negative Choi eigenvalues), which is unphysical.
-- **Kraus-polar instruments** keep the whole instrument trace-preserving and build each member from a Kraus/polar decomposition (described below). This is a strategy that can be used to produce a family of Lindblad-like parameterizations -- `"CPTPLND"`, `"GLND"`, `"H+S"`, `"H+s"`, ... -- introduced for modeling physically-meaningful instruments. It is the focus of this tutorial. Whether each member is additionally *completely positive* is a choice you make through the parameterization; trace preservation is guaranteed either way.
+- **CP-constrained, Lindblad-parameterized instruments** keep the whole instrument trace-preserving *and* make each member individually completely positive.  They are built from the physical decomposition described in the next section, and support a family of Lindblad-like parameterizations -- `"CPTPLND"`, `"GLND"`, `"H+S"`, `"H+s"`, ... -- for modeling physically-meaningful instruments.  Whether each member is additionally *completely positive* is a choice you make through the parameterization; trace preservation is guaranteed either way.
 
-The `convert` function moves a plain `Instrument` between parameterizations.  String parameterization types such as `"CPTPLND"` (the completely-positive, trace-preserving Lindbladian parameterization) and `"GLND"` (the general, trace-preserving-but-not-necessarily-CP Lindbladian) route to the Kraus-polar construction:
+The `convert` function moves a plain `Instrument` between parameterizations.  String parameterization types such as `"CPTPLND"` (the completely-positive, trace-preserving Lindbladian parameterization) and `"GLND"` (the general, trace-preserving-but-not-necessarily-CP Lindbladian) route to the effect-then-gate construction described below:
 
 ```{code-cell} ipython3
 basis = mdl_ideal.basis
@@ -68,32 +67,36 @@ for to_type in ['static', 'H+s', 'full TP', 'full', 'CPTPLND', 'GLND']:
     print(f"{to_type:8s} -> {type(conv).__name__:14s} num_params = {conv.num_params}")
 ```
 
-`"full TP"` yields a `TPInstrument`; the remaining types yield an `Instrument` built from the Kraus-polar construction.  All of these keep the instrument trace-preserving.  They differ in whether the *individual members* are also completely positive: `"CPTPLND"` and `"H+S"` constrain the members to be CP, while `"GLND"` and `"H+s"` are trace-preserving but allow non-CP members (`"GLND"` is the general Lindbladian; `"H+s"` is the non-CP-constrained cousin of the CP-constrained `"H+S"`).
+`"full TP"` yields a `TPInstrument`; the remaining types yield an `Instrument` built from the effect-then-gate construction.  All of these keep the instrument trace-preserving.  They differ in whether the *individual members* are also completely positive: `"CPTPLND"` and `"H+S"` constrain the members to be CP, while `"GLND"` and `"H+s"` are trace-preserving but allow non-CP members (`"GLND"` is the general Lindbladian; `"H+s"` is the non-CP-constrained cousin of the CP-constrained `"H+S"`).
 
-### What the Kraus-polar representation does
+### The effect-then-CPTP-gate representation
 
-For each member -- a CPTR map -- pyGSTi computes a Kraus decomposition and polar-decomposes each Kraus operator $K = u\,p^{1/2}$ into a unitary part $u$ and a positive-semidefinite part $p^{1/2}$.  The member is then represented as a composition of
+Every completely-positive instrument member factors as a **measurement effect followed by a post-measurement CPTP gate**:
 
-1. a **root-conjugation** operator $\rho \mapsto p^{1/2}\,\rho\,p^{1/2}$ (a `RootConjOperator`), built from the positive-semidefinite part, and
-2. a (parameterized) **post-conjugation** channel $\rho \mapsto u\,\rho\,u^{\dagger}$, ideally a unitary.
+$$\mathcal{I}_k(\rho) = \mathcal{G}_k\!\left( E_k^{1/2}\,\rho\,E_k^{1/2} \right), \qquad E_k = \mathcal{I}_k^{\dagger}(I).$$
 
-These two factors play different roles and are constrained differently:
+This is a "soft" measurement of the POVM effect $E_k$ -- which sets the outcome probability $\mathrm{tr}\,\mathcal{I}_k(\rho)$ -- followed by the trace-preserving back-action $\mathcal{G}_k$ on the surviving state.  The effect $E_k$ is just the Heisenberg-dual of the member applied to the identity, so no Kraus or polar decomposition is needed to extract it.  This is exactly the *measurement-then-disturbance* picture used to describe the physical mechanisms in [arXiv:2602.03938](https://arxiv.org/abs/2602.03938).
 
-- The positive-semidefinite parts must stay positive, and across the whole instrument they must sum to the identity -- i.e. they are the effects of a single POVM.  pyGSTi collects them into one shared `ComposedPOVM` whose error map is *always* promoted to a CP-constrained parameterization: `convert` uses the least-expressive CP parameterization that subsumes your request (`"GLND"` → `"CPTPLND"`, `"H+s"` → `"H+S"`).  This is what guarantees the root-conjugation factors are genuinely positive and that the instrument is trace-preserving.
-- The post-conjugation channels take whatever parameterization you requested.  If that parameterization is itself CP-constrained (`"CPTPLND"`, `"H+S"`), each member is completely positive.  If it is only trace-preserving (`"GLND"`, `"H+s"`), the members remain jointly trace-preserving but may individually fail to be CP.
+pyGSTi represents each member as a single `ComposedOp([RootConjOperator(E_k), G_k])`, and the two physical guarantees come apart cleanly:
 
-So complete positivity of the members is something you *opt into* by choosing a CP-constrained post-conjugation parameterization -- it is not an automatic consequence of the Kraus-polar structure, which by itself guarantees only trace preservation.
+- **Trace preservation** of the *whole instrument* is exactly the statement that the effects $\{E_k\}$ form one POVM, $\sum_k E_k = I$.  pyGSTi gathers them into a single shared `ComposedPOVM` whose error map is *always* promoted to a CP-constrained parameterization (`convert` uses the least-expressive CP parameterization that subsumes your request: `"GLND"` → `"CPTPLND"`, `"H+s"` → `"H+S"`).  This keeps every $E_k$ positive and their sum equal to the identity.
+- **Complete positivity** of an *individual member* is the statement that its post-measurement gate $\mathcal{G}_k$ is CP (the `RootConjOperator` is always CP).  So you *opt into* per-member CP by choosing a CP-constrained gate parameterization (`"CPTPLND"`, `"H+S"`); a trace-preserving-only choice (`"GLND"`, `"H+s"`, `"full TP"`) keeps the instrument TP but allows non-CP members.
 
-You can build such an instrument directly with `kraus_polar_instrument`, passing the members as dense superoperators:
+An $n$-outcome instrument therefore needs only **one POVM ($n$ effects) and $n$ gates**, regardless of any member's Kraus rank.  Two constructors build instruments in this form directly: `Instrument.from_effects`, when you have the measurement effects $\{E_k\}$ (and, optionally, explicit post-measurement gates), and `Instrument.from_cptr_superops`, when you have arbitrary dense CPTR member superoperators and want pyGSTi to recover the $(E_k, \mathcal{G}_k)$ decomposition for you:
 
 ```{code-cell} ipython3
-kp = kraus_polar_instrument(
-    {'p0': Gmz_plus, 'p1': Gmz_minus}, 
+# From the measurement effects (post-measurement gates default to the identity):
+fe = Instrument.from_effects({'p0': E0, 'p1': E1}, basis)
+print("from_effects      :", type(fe).__name__, "num_params =", fe.num_params)
+
+# From arbitrary dense CPTR superoperators (here the ideal projectors):
+cptr = Instrument.from_cptr_superops(
+    {'p0': Gmz_plus, 'p1': Gmz_minus},
     basis,
-    post_unitary_error='CPTPLND'  # setting to 'full TP' or 'GLND' would relax the "CP" requirement
+    gate_parameterization='CPTPLND'  # 'GLND' / 'H+s' / 'full TP' relax the per-member CP constraint
 )
-print(type(kp).__name__, "num_params =", kp.num_params)
-for outcome, member in kp.items():
+print("from_cptr_superops:", type(cptr).__name__, "num_params =", cptr.num_params)
+for outcome, member in cptr.items():
     print(f"  member {outcome!s:6s}: {type(member).__name__}")
 ```
 
@@ -199,7 +202,7 @@ Notice the format of [intermediate_meas_dataset.txt](../../tutorial_files/interm
 
 ### Running GST under two parameterizations
 
-We fit the data with `StandardGST` under two parameterizations: `"full TP"` (a `TPInstrument`, which constrains only the *sum* of the instrument members) and `"CPTPLND"` (the Kraus-polar representation, which makes *every* member completely positive).  Both use the ideal model as the target.
+We fit the data with `StandardGST` under two parameterizations: `"full TP"` (a `TPInstrument`, which constrains only the *sum* of the instrument members) and `"CPTPLND"` (the effect-then-CPTP-gate representation, which makes *every* member completely positive).  Both use the ideal model as the target.
 
 ```{code-cell} ipython3
 from pygsti.protocols import StandardGST, ProtocolData
@@ -218,7 +221,7 @@ for mode in ('full TP', 'CPTPLND'):
 
 ## Why a completely-positive parameterization matters
 
-The two fits agree on the physics, but they differ in a way that matters for interpretation.  A `TPInstrument` only constrains the members to *sum* to a trace-preserving map -- so when fit to finite, noisy data, its individual members can drift slightly outside the set of completely-positive maps.  Such members have **negative Choi eigenvalues**, which makes them physically meaningless: they are not valid quantum operations on their own.  The Kraus-polar `"CPTPLND"` instrument cannot do this, because each member is completely positive by construction.
+The two fits agree on the physics, but they differ in a way that matters for interpretation.  A `TPInstrument` only constrains the members to *sum* to a trace-preserving map -- so when fit to finite, noisy data, its individual members can drift slightly outside the set of completely-positive maps.  Such members have **negative Choi eigenvalues**, which makes them physically meaningless: they are not valid quantum operations on their own.  The `"CPTPLND"` instrument cannot do this, because each member is completely positive by construction.
 
 We can see the difference directly by summing the negative Choi eigenvalues of each fitted instrument member (a value of zero means the member is completely positive):
 

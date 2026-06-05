@@ -1,14 +1,13 @@
-"""
-Defines the Instrument class
-"""
 #***************************************************************************************************
-# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+
 import collections as _collections
 import numpy as _np
 
@@ -17,6 +16,7 @@ from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import states as _state
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import BasisLike as _BasisLike
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import basistools as _bt
@@ -106,6 +106,139 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         if not called_from_reduce:  # if called from reduce, gpindices are already initialized
             self.init_gpindices()  # initialize our gpindices based on sub-members
         self._readonly = True
+
+    @staticmethod
+    def from_effects(members, basis: _BasisLike, gate_parameterization='CPTPLND',
+                     povm_errormap='CPTPLND', atol=1e-6) -> Instrument:
+        r"""
+        Construct a parameterized instrument from measurement effects (and optional
+        post-measurement gates).
+
+        Each member is built in the canonical *measure-then-gate* form
+
+            I_k(rho) = G_k( E_k^{1/2} rho E_k^{1/2} ),
+
+        a soft measurement of the POVM effect `E_k` followed by the
+        post-measurement (CP)TP gate `G_k`.  The effects `{E_k}` are gathered
+        into a single shared :class:`ComposedPOVM` whose CP-constrained error map
+        keeps every `E_k` positive and makes them sum to the identity. Each
+        gate `G_k` is parameterized independently.
+
+        The constraints decouple cleanly: POVM completeness gives joint trace
+        preservation, and a CP-constrained `gate_parameterization` makes each
+        member completely positive.  An `n`-outcome instrument needs only `n`
+        effects and `n` gates.
+
+        Parameters
+        ----------
+        members : dict
+            Maps each outcome label to either an `(effect, gate)` pair or a bare
+            `effect` (in which case the gate defaults to the identity).
+            
+            Each `effect` may be a length-`d**2` superket in `basis`, or a `d x d`
+            Hermitian matrix, or a :class:`POVMEffect`. The effects must comprise
+            a physically meaningful POVM.
+
+            Each `gate` may be a `d**2 x d**2` superoperator, a `d x d` unitary,
+            a :class:`LinearOperator`, or None. The last of these is equivalent
+            to setting `gate` to the identity matrix. Each gate must be TP.
+
+        basis : _BasisLike
+            The basis in which dense arrays are represented.
+
+        gate_parameterization : str, optional
+            A TP parameterization for the gates `{G_k}`. CP-constrained Lindblad
+            types (`'CPTPLND'`, `'H+S'`) make each member completely positive;
+            non-CP-constrained Lindblad types (`'GLND'`, `'H+s'`, `'full TP'`)
+            keep the instrument TP but allow non-CP members. `'static'` freezes
+            the gates. `'full'` is rejected (it is not TP).
+
+        povm_errormap : LinearOperator or str, optional
+            A CP-by-construction :class:`LinearOperator`, or a string spec for one,
+            used as the shared error map of the effects' :class:`ComposedPOVM`.
+
+        atol : float, optional
+            Absolute tolerance for the per-gate TP check and the completeness check.
+
+        Returns
+        -------
+        Instrument
+        """
+        from pygsti.modelmembers.instruments._construction import (
+            _normalize_effects_and_gates, _parameterized_instrument
+        )
+        basis, superkets, superops = _normalize_effects_and_gates(members, basis, atol)
+        member_ops = _parameterized_instrument(
+            basis, superkets, superops, gate_parameterization, povm_errormap
+        )
+        return Instrument(member_ops)
+
+    @staticmethod
+    def from_cptr_superops(
+            op_arrays, basis, gate_parameterization='CPTPLND',
+            povm_errormap='CPTPLND', error_tol=1e-6, trunc_tol=1e-7
+        ):
+        r"""
+        Construct a parameterized instrument from arbitrary dense CPTR member superops.
+
+        Every completely-positive instrument member factors as a measurement effect
+        followed by a post-measurement CPTP gate,
+
+            I_k(rho) = G_k( E_k^{1/2} rho E_k^{1/2} ),   E_k = I_k^dagger(I),
+
+        and this constructor recovers that decomposition directly from each dense
+        superop. The effect is the Heisenberg-dual applied to the identity; the gate
+        is the CPTP completion `G_k = Q_k + P_k` with `Q_k = I_k . pinv(rootconj(E_k))`
+        and `P_k` a conjugation by the projector onto `ker(E_k)`.  The effects are
+        gathered into a single shared :class:`ComposedPOVM` and each gate is
+        parameterized independently, so an `n`-outcome instrument needs only `n`
+        effects and `n` gates regardless of any member's Kraus rank.
+
+        Parameters
+        ----------
+        op_arrays : dict[str, np.ndarray]
+            Maps each outcome label to a dense `d**2 x d**2` CPTR superoperator in
+            `basis`.  Each must be completely positive, and together they must sum
+            to a trace-preserving channel (`sum_k E_k == I`).
+
+        basis : BasisLike
+            The basis in which the superoperators are represented.
+
+        gate_parameterization : str, optional
+            See :meth:`from_effects`.
+
+        povm_errormap : LinearOperator or str, optional
+            See :meth:`from_effects`.
+
+        error_tol : float, optional
+            Tolerance for the per-member complete-positivity check (negative Choi
+            eigenvalues below `-error_tol` raise an error).
+
+        trunc_tol : float, optional
+            Cutoff below which an effect eigenvalue is treated as zero when forming
+            the `ker(E_k)` projector that completes each gate.
+
+        Returns
+        -------
+        Instrument
+        """
+        from pygsti.modelmembers.instruments._construction import (
+            _decompose_cptr, _check_effects_complete,
+            _parameterized_instrument
+        )
+        dim = next(iter(op_arrays.values())).shape[0]
+        basis = _Basis.cast(basis, dim)
+        superkets = dict()
+        superops  = dict()
+        for lbl, I_k in op_arrays.items():
+            E_k, G_k = _decompose_cptr(I_k, basis, error_tol, trunc_tol)
+            superkets[lbl] = E_k 
+            superops[lbl]  = G_k
+        _check_effects_complete(superkets, basis, error_tol)
+        member_ops = _parameterized_instrument(
+            basis, superkets, superops, gate_parameterization, povm_errormap
+        )
+        return Instrument(member_ops)
 
     def submembers(self):
         """
