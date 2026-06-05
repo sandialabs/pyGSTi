@@ -11,7 +11,7 @@ from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
-from functools import lru_cache
+from functools import lru_cache, partial 
 try:
     from pygsti.tools import fastcalc as _fc
     triu_indices = _fc.fast_triu_indices
@@ -272,7 +272,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         elif self._block_type == 'other_diagonal':
             superops = [None] * nMxs if sparse else _np.empty((nMxs, d2, d2), 'complex')
             for i, Lm in enumerate(mxs):
-                superops[i] = _lt.create_lindbladian_term_errorgen('O', Lm, Lm, sparse)  # in std basis
+                superops[i] = _lt.create_lindbladian_term_errorgen('O', Lm, Lm, sparse)
         elif self._block_type == 'other':
             superops = [None] * nMxs**2 if sparse else _np.empty((nMxs**2, d2, d2), 'complex')
             for i, Lm in enumerate(mxs):
@@ -1390,7 +1390,7 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
             and 'other' (for Pauli stochastic, Pauli correlation and active error generators).
         
         basis : `Basis`
-            `Basis` object to be used by this coefficient block. Not this must be an actual `Basis` object, and not
+            `Basis` object to be used by this coefficient block. Note this must be an actual `Basis` object, and not
             a string (as the coefficient block doesn't have the requisite dimensionality information needed for casting).
         
         basis_element_labels : list or tuple of str
@@ -1608,8 +1608,12 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
         nMxs = len(self._eeg_labels)
         superops = [None] * nMxs if sparse else _np.empty((nMxs, d2, d2), 'complex')
         basis_tensor_prod_comps = set(basis.name.split('*'))
-        is_pauli = basis_tensor_prod_comps == set(['PP']) or basis_tensor_prod_comps == set(['pp'])
-        create_fn = _lt.create_elementary_errorgen_pauli if is_pauli else _lt.create_elementary_errorgen
+        if basis_tensor_prod_comps == set(['PP']):
+            create_fn = _lt.create_elementary_errorgen_pauli
+        elif basis_tensor_prod_comps == set(['pp']):
+            create_fn = partial(_lt.create_elementary_errorgen_pauli, normalized_paulis=True)
+        else:
+            create_fn = _lt.create_elementary_errorgen
 
         for i, eeg_lbl in enumerate(self._eeg_labels):
             bel_mxs = [basis[lbl] for lbl in eeg_lbl.basis_element_labels]
@@ -1807,7 +1811,9 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
 
         return elementary_errorgens
 
-    def set_elementary_errorgens(self, elementary_errorgens: dict[_LEEL,float], on_missing: Optional[Literal['ignore', 'warn', 'raise']]):
+    def set_elementary_errorgens(self, elementary_errorgens: dict[_LEEL,float], 
+                                 on_missing: Optional[Literal['ignore', 'warn', 'raise']] = 'ignore',
+                                 truncate: bool=False):
         """
         Update this block's parameters based on the values of the specified elementary error generator
         dictionary.
@@ -1825,6 +1831,9 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
             - 'ignore': Set missing value to zero, without raising warning or raising an exception.
             - 'warn': Set missing value to zero and raise a warning.
             - 'raise': Raise a ValueError.
+
+        truncate : bool
+            Kwarg present for API compatibility with LindbladCoefficientBlock.
         
         Returns
         -------
