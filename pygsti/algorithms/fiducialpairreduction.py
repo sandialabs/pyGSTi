@@ -2109,7 +2109,7 @@ def _copy_to_static_explicitop_model(mdl):
                            default_prep_type='static',
                            default_povm_type='static',
                            default_instrument_type='static',
-                           simulator=mdl.sim.copy(), evotype=mdl.evotype)
+                           simulator=mdl.sim.copy(keep_model_attached=False), evotype=mdl.evotype)
         for k, v in mdl.prep_blks['layers'].items():
             ret.preps[k] = v.to_dense()
         for k, v in mdl.povm_blks['layers'].items():

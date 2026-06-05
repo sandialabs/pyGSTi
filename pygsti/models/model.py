@@ -2194,7 +2194,7 @@ class OpModel(Model):
             raise ValueError("Cannot create operator for non-primitive circuit layer: %s" % str(layerlbl))
         else:
             return fns[typ](self, layerlbl, self._opcaches)
-
+        
     def circuit_operator(self, circuit):
         """
         Construct or retrieve the operation associated with a circuit.

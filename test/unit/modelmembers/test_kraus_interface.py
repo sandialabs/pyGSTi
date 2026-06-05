@@ -209,7 +209,10 @@ class KrausInterfaceModelTestBase(object):
     def test_depol_model_histogram(self):
         if self.forwardsim is None:
             self.skipTest("Forward simulator could not be constructed (unavailable?)")
+        else:
+            self.forwardsim.model = None
         pspec = smq1Q_XYI.processor_spec()
+
         mdl_sto = create_explicit_model(
             pspec, evotype=self.evotype,
             simulator=self.forwardsim,

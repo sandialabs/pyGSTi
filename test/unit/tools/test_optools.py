@@ -3,6 +3,7 @@ from unittest import mock
 
 import sys
 import numpy as np
+import pytest
 import scipy
 import scipy.linalg as la
 from pygsti.baseobjs.basis import Basis
@@ -15,6 +16,7 @@ import pygsti.tools.sdptools as sdps
 import pygsti.tools.leakage as pgleak
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock
 from pygsti.modelpacks.legacy import std2Q_XXYYII
+from pygsti.tools.exceptions import NumericalDomainWarning
 from ..util import BaseCase, needs_cvxpy
 
 
@@ -465,9 +467,12 @@ class GateOpsTester(BaseCase):
     def test_fidelity_upper_bound(self):
         np.random.seed(0)
         Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
-        Q[:, 0] = 0.0  # zero out the first column
+        Q[:, 0] = 0.0  # zero out the first column — deliberate rank deficiency
         bad_superoperator = ot.unitary_to_superop(Q)
-        upperBound, _ = ot.fidelity_upper_bound(bad_superoperator)
+        # The rank-deficient input is exactly what makes this test interesting,
+        # so fidelity()'s NumericalDomainWarning is part of the contract.
+        with pytest.warns(NumericalDomainWarning):
+            upperBound, _ = ot.fidelity_upper_bound(bad_superoperator)
         self.assertAlmostEqual(upperBound, 0.75)
 
 

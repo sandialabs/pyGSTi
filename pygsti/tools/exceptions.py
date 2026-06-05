@@ -50,19 +50,22 @@ class NumericalDomainWarning(UserWarning):
     pass
 
 
+class ProbabilityClippingWarning(NumericalDomainWarning):
+    """
+    A simulated outcome probability fell outside [0, 1] (or a set of
+    outcome probabilities did not sum to 1) by more than the configured
+    tolerance, and was clipped/renormalized. Subclass of
+    NumericalDomainWarning so the existing strict-mode filter on the
+    parent catches these too.
+    """
+    pass
+
+
 class pyGSTiDeprecationWarning(UserWarning, DeprecationWarning):
     """
     A helper class so users (and pyGSTi developers) can distinguish
     between deprecation warnings raised by us versus by other
     libraries.
-    """
-    pass
-
-
-class ForwardSimulatorSuitabilityWarning(UserWarning):
-    """
-    Inform the user that they should consider using a different
-    forward simulator class in a given context.
     """
     pass
 
@@ -148,3 +151,33 @@ class DubiousTargetWarning(UserWarning):
     be what they intended.
     """
     pass
+
+
+class QiskitInteropWarning(UserWarning):
+    """
+    Inform the user about a qiskit-interoperability issue: a qiskit
+    version mismatch against the version pyGSTi was developed/tested
+    against, or a lossy round-trip (e.g., pyGSTi circuit mapping that
+    does not preserve qreg structure or classical registers), or a
+    qiskit-specific argument that's being ignored. Distinct from
+    MissingDependencyWarning, which is raised when qiskit is not
+    installed at all.
+    """
+    pass
+
+
+class ForwardSimDiagnosticWarning(UserWarning):
+    """
+    Inner-loop numerical-scaling diagnostic from the forward simulator
+    (e.g., 'Scaled dProd small to keep prod manageable', 'hProd is
+    small'). The scaling code is working as designed; these messages
+    fire frequently and are rarely actionable for end users.
+
+    Suppressed by default via the class-level ``enabled`` flag --
+    emit sites are expected to guard ``warnings.warn`` on this flag,
+    so the warning literally does not fire unless the flag is flipped.
+    Set ``ForwardSimDiagnosticWarning.enabled = True`` at runtime
+    (e.g., when debugging a numerical issue in the forward simulator)
+    to surface them.
+    """
+    enabled = False

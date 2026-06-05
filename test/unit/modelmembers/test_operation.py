@@ -1,5 +1,5 @@
 import pickle
-
+import pytest
 import sys
 import numpy as np
 import scipy.sparse as sps
@@ -138,6 +138,7 @@ class DenseOpBase(OpBase):
         with self.assertRaises((ValueError, AssertionError)):
             self.gate.set_dense(np.zeros((1, 1), 'd'))  # bad size
 
+    @pytest.mark.filterwarnings("ignore:divide by zero encountered in divide:RuntimeWarning")
     def test_arithmetic(self):
         result = self.gate + self.gate
         self.assertEqual(type(result), np.ndarray)
