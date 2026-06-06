@@ -155,8 +155,8 @@ class SummedOperator(LinearOperator):
     elsewhere in pyGSTi itself.
 
     The parameter vector is the concatenation (with shared-index deduplication via
-    gpindices) of the submembers' parameter vectors.  The constituent operators' ``_rep``
-    objects are linked directly, so calling ``from_vector`` on a submember automatically
+    gpindices) of the submembers' parameter vectors.  The constituent operators' `_rep`
+    objects are linked directly, so calling `from_vector` on a submember automatically
     updates this operator's representation.
 
     Parameters
@@ -170,7 +170,7 @@ class SummedOperator(LinearOperator):
 
     Notes
     -----
-    ``deriv_wrt_params`` is not implemented for this class.
+    `deriv_wrt_params` is not implemented for this class.
     """
 
     def __init__(self, operators: list[LinearOperator], basis: BasisLike):
