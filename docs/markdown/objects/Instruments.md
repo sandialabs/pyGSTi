@@ -50,11 +50,11 @@ mdl_ideal[('Iz', 0)] = Instrument({'p0': Gmz_plus, 'p1': Gmz_minus})
 
 ## How instruments are parameterized
 
-Before we add noise, it is worth understanding the ways pyGSTi can parameterize an instrument's members.  They differ in *which constraints they enforce on the fit*, and therefore in their parameter counts:
+Before we add noise, it is worth understanding how pyGSTi represents an instrument's members and what keeps a fitted instrument physical.  `Instrument` itself is just a container; the constraints that make a fit physical come from *how its members are parameterized*, and the options below differ in *which* constraints they enforce -- and therefore in their parameter counts:
 
-- **`Instrument`** stores each member as an independent, unconstrained dense superoperator.  Nothing ties the members together or keeps them physical -- during a fit the members can drift to maps that are neither completely positive nor jointly trace-preserving.
+- **`Instrument`** is a lightweight wrapper around pyGSTi LinearOperator objects. Whether the instrument is physical depends entirely on how the parameters of those objects relate to each other. You can ensure a physically meaningful instrument by calling `Instrument.from_effects` or `Instrument.from_cptr_superops` with appropriate arguments (the defaults suffice). The downside of physical instruments constructed in this way is that they use a higher-dimensional representation in order for pyGSTi to do model fitting.
 - **`TPInstrument`** constrains the members to *sum* to a trace-preserving map.  This is the right number of degrees of freedom for a physical instrument, but it constrains only the *sum*: an individual member can still be non-completely-positive (it can have negative Choi eigenvalues), which is unphysical.
-- **CP-constrained, Lindblad-parameterized instruments** keep the whole instrument trace-preserving *and* make each member individually completely positive.  They are built from the physical decomposition described in the next section, and support a family of Lindblad-like parameterizations -- `"CPTPLND"`, `"GLND"`, `"H+S"`, `"H+s"`, ... -- for modeling physically-meaningful instruments.  Whether each member is additionally *completely positive* is a choice you make through the parameterization; trace preservation is guaranteed either way.
+- **CP-constrained, Lindblad-parameterized instruments** are not a separate class -- they are `Instrument` objects whose members carry the effect-then-gate structure of the next section (exactly what `Instrument.from_effects` and `Instrument.from_cptr_superops` build).  They keep the whole instrument trace-preserving *and* make each member individually completely positive, and support a family of Lindblad-like parameterizations (`"CPTPLND"`, `"GLND"`, `"H+S"`, `"H+s"`, ...).  Whether each member is additionally *completely positive* is a choice you make through the parameterization; trace preservation is guaranteed either way.
 
 The `convert` function moves a plain `Instrument` between parameterizations.  String parameterization types such as `"CPTPLND"` (the completely-positive, trace-preserving Lindbladian parameterization) and `"GLND"` (the general, trace-preserving-but-not-necessarily-CP Lindbladian) route to the effect-then-gate construction described below:
 
@@ -67,7 +67,7 @@ for to_type in ['static', 'H+s', 'full TP', 'full', 'CPTPLND', 'GLND']:
     print(f"{to_type:8s} -> {type(conv).__name__:14s} num_params = {conv.num_params}")
 ```
 
-`"full TP"` yields a `TPInstrument`; the remaining types yield an `Instrument` built from the effect-then-gate construction.  All of these keep the instrument trace-preserving.  They differ in whether the *individual members* are also completely positive: `"CPTPLND"` and `"H+S"` constrain the members to be CP, while `"GLND"` and `"H+s"` are trace-preserving but allow non-CP members (`"GLND"` is the general Lindbladian; `"H+s"` is the non-CP-constrained cousin of the CP-constrained `"H+S"`).
+`"full TP"` yields a `TPInstrument`; the remaining types yield an `Instrument` built from the effect-then-gate construction.  As the printed type names show, a CP-constrained instrument is still an `Instrument` -- the physical constraints live in how its members are parameterized, not in a distinct container class.  All of these keep the instrument trace-preserving.  They differ in whether the *individual members* are also completely positive: `"CPTPLND"` and `"H+S"` constrain the members to be CP, while `"GLND"` and `"H+s"` are trace-preserving but allow non-CP members (`"GLND"` is the general Lindbladian; `"H+s"` is the non-CP-constrained cousin of the CP-constrained `"H+S"`).
 
 ### The effect-then-CPTP-gate representation
 
@@ -75,7 +75,7 @@ Every completely-positive instrument member factors as a **measurement effect fo
 
 $$\mathcal{I}_k(\rho) = \mathcal{G}_k\!\left( E_k^{1/2}\,\rho\,E_k^{1/2} \right), \qquad E_k = \mathcal{I}_k^{\dagger}(I).$$
 
-This is a "soft" measurement of the POVM effect $E_k$ -- which sets the outcome probability $\mathrm{tr}\,\mathcal{I}_k(\rho)$ -- followed by the trace-preserving back-action $\mathcal{G}_k$ on the surviving state.  The effect $E_k$ is just the Heisenberg-dual of the member applied to the identity, so no Kraus or polar decomposition is needed to extract it.  This is exactly the *measurement-then-disturbance* picture used to describe the physical mechanisms in [arXiv:2602.03938](https://arxiv.org/abs/2602.03938).
+This is a "soft" measurement of the POVM effect $E_k$ -- which sets the outcome probability $\mathrm{tr}\,\mathcal{I}_k(\rho)$ -- followed by the trace-preserving back-action $\mathcal{G}_k$ on the surviving state.  The effect $E_k$ is just the Heisenberg-dual of the member applied to the identity. This is the *measurement-then-disturbance* picture used to describe the physical mechanisms in [arXiv:2602.03938](https://arxiv.org/abs/2602.03938).
 
 pyGSTi represents each member as a single `ComposedOp([RootConjOperator(E_k), G_k])`, and the two physical guarantees come apart cleanly:
 
@@ -235,7 +235,7 @@ for mode in ('full TP', 'CPTPLND'):
         print(f"    member {outcome!s:6s}: CP violation = {viol:.2e}")
 ```
 
-The `"full TP"` fit produces small but nonzero CP violations, while the `"CPTPLND"` fit has none.  When a downstream analysis needs to treat each instrument member as a bona-fide quantum operation -- for example, to decompose it into the physically meaningful error mechanisms of [arXiv:2602.03938](https://arxiv.org/abs/2602.03938) -- the completely-positive parameterization is the one to use.
+The `"full TP"` fit produces small but nonzero CP violations, while the `"CPTPLND"` fit has none.  Here too, the reported type confirms the framing from the start of the tutorial: the CP-constrained estimate is an ordinary `Instrument` (the `"full TP"` estimate is a `TPInstrument`), and its members are completely positive because of how they are parameterized -- the higher-dimensional representation noted earlier -- not because of the container type.  When a downstream analysis needs to treat each instrument member as a bona-fide quantum operation -- for example, to decompose it into the physically meaningful error mechanisms of [arXiv:2602.03938](https://arxiv.org/abs/2602.03938) -- the completely-positive parameterization is the one to use.
 
 ```{admonition} Reporting
 :class: tip
