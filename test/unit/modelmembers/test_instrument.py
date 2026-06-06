@@ -58,10 +58,10 @@ class InstrumentTestBase(BaseCase):
     def setUp(self):
         self.n_elements = 32
         self.model = std.target_model()
-        E = self.model.povms['Mdefault']['0']
-        Erem = self.model.povms['Mdefault']['1']
-        self.Gmz_plus = np.dot(E, E.T)
-        self.Gmz_minus = np.dot(Erem, Erem.T)
+        E = self.model.povms['Mdefault']['0'].to_dense().ravel()
+        Erem = self.model.povms['Mdefault']['1'].to_dense().ravel()
+        self.Gmz_plus = np.outer(E, E)
+        self.Gmz_minus = np.outer(Erem, Erem)
         self.instrument: Instrument = self.constructor({'plus': self.Gmz_plus, 'minus': self.Gmz_minus})
         self.model.instruments['Iz'] = self.instrument
 
