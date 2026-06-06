@@ -193,9 +193,9 @@ class FromCptrSuperopsTester(BaseCase):
         converted = inst.convert(plain, 'GLND', self.basis)
         self.assertIsInstance(converted, Instrument)
 
-    def test_sum_of_members_is_cptp_like(self):
+    def test_sum_of_members_is_tp(self):
         # The sum of all members' superoperators is the (CPTP) total channel; in the
-        # pp basis its first row must be [1, 0, 0, 0] (trace preservation).
+        # pp basis the TP constraint means first rows sum to [1, 0, 0, 0].
         total = sum(self._members(self.instrument).values())
         np.testing.assert_allclose(total[0, 0], 1.0, atol=1e-6)
         np.testing.assert_allclose(total[0, 1:], 0.0, atol=1e-6)
