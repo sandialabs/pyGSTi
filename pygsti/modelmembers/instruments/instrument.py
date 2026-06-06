@@ -123,11 +123,12 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             items = []
         self._readonly = False  # until init is done
         if len(items) > 0:
-            assert(member_ops is None), "`items` was given when op_matrices != None"
+            assert(member_ops is None), "`items` was given when member_ops != None"
 
         if member_ops is not None:
             member_list = _as_ordered_member_list(member_ops)
             member_list, state_space, evotype = _infer_space_and_evotype(member_list, state_space, evotype)
+            # ^ That line promotes ndarrays into pyGSTi FullArbitraryOp objects.
             _validate_member_consistency(member_list, state_space, evotype)
             items = list(member_list)
         else:
