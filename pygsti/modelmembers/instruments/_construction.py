@@ -8,33 +8,35 @@
 #***************************************************************************************************
 
 r"""
-A quantum instrument member ``I_k`` factors as a measurement effect ``E_k``
-followed by a post-measurement CPTP gate ``G_k``::
+A quantum instrument member `I_k` factors as a measurement effect `E_k`
+followed by a post-measurement CPTP gate `G_k`::
 
     I_k(rho) = G_k( E_k^{1/2} rho E_k^{1/2} ),   E_k = I_k^dagger(I).
 
 This module builds a parameterized :class:`Instrument` from that decomposition.
-A single :class:`ComposedPOVM` carries the ``n`` measurement effects ``{E_k}``:
-its (shared, CP-constrained) error map keeps each ``E_k`` positive and makes the
+A single :class:`ComposedPOVM` carries the `n` measurement effects `{E_k}`:
+its (shared, CP-constrained) error map keeps each `E_k` positive and makes the
 effects sum to the identity, which is exactly the statement that the whole
-instrument is trace-preserving.  One parameterized gate ``G_k`` per outcome then
+instrument is trace-preserving.  One parameterized gate `G_k` per outcome then
 carries the post-measurement back-action.  Each member is the single
 :class:`ComposedOp`::
 
     ComposedOp([ RootConjOperator(E_k), G_k ]).
 
-This needs only ``n`` effects and ``n`` gates.  Complete positivity of a member is
-opt-in through ``gate_parameterization`` (a CP-constrained Lindblad type such as
-``'CPTPLND'`` / ``'H+S'``); trace preservation holds for any TP gate parameterization.
+This needs only `n` effects and `n` gates.  Complete positivity of a member is
+opt-in through `gate_parameterization` (a CP-constrained Lindblad type such as
+`'CPTPLND'` / `'H+S'`); trace preservation holds for any TP gate parameterization.
 
 This module deliberately never imports :class:`Instrument` (to avoid an import
-cycle): the builders return a ``dict`` mapping outcome label -> :class:`ComposedOp`,
-which the classmethods wrap with ``cls(...)``.
+cycle): the builders return a `dict` mapping outcome label -> :class:`ComposedOp`,
+which the classmethods wrap with `cls(...)`.
 """
+from __future__ import annotations
 
 import numpy as _np
 
 from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs import BasisLike as _BasisLike
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _pv
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
@@ -42,30 +44,34 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from pygsti.modelmembers.instruments.instrument import EffectSpec, GateSpec, InstMemberSpec
 
-def _conjugation_superop(herm_mat, basis):
+
+def _conjugation_superop(herm_mat: _np.ndarray, basis: _BasisLike) -> _np.ndarray:
     """
-    Dense superop (in `basis`) of the conjugation map ``sigma -> M sigma M`` for a
-    Hermitian matrix ``M = herm_mat``.  Mirrors the core of
-    :func:`~pygsti.tools.optools.rootconj_superop` (which builds ``kron(M, M.T)`` in
-    the standard basis), but takes ``M`` directly rather than ``M = E^{1/2}``.
+    Dense superop (in `basis`) of the conjugation map `sigma -> M sigma M` for a
+    Hermitian matrix `M = herm_mat`.  Mirrors the core of
+    :func:`~pygsti.tools.optools.rootconj_superop` (which builds `kron(M, M.T)` in
+    the standard basis), but takes `M` directly rather than `M = E^{1/2}`.
     """
     mx_std = _np.kron(herm_mat, herm_mat.T)
     return _bt.change_basis(mx_std, 'std', basis, expect_real=True)
 
 
-def _is_lindblad_type(spec):
+def _is_lindblad_type(spec: str) -> bool:
     """Whether `spec` names a Lindblad error-generator parameterization."""
     return isinstance(spec, str) and _ot.is_valid_lindblad_paramtype(spec)
 
 
-def _validate_gate_parameterization(gate_parameterization):
+def _validate_gate_parameterization(gate_parameterization: str) -> None:
     """
     Reject post-measurement gate parameterizations that are not trace-preserving.
 
     A non-TP gate would break the instrument's joint trace preservation, so we
-    only allow a Lindblad type (always TP), ``'full TP'``, or ``'static'``.  The
-    unconstrained ``'full'`` parameterization is rejected explicitly.
+    only allow a Lindblad type (always TP), `'full TP'`, or `'static'`.  The
+    unconstrained `'full'` parameterization is rejected explicitly.
     """
     if _is_lindblad_type(gate_parameterization):
         return
@@ -82,25 +88,26 @@ def _validate_gate_parameterization(gate_parameterization):
         f"type ('CPTPLND', 'GLND', 'H+S', 'H+s', ...), 'full TP', or 'static'.")
 
 
-def _normalize_effects_and_gates(members, basis, atol=1e-6):
+def _normalize_effects_and_gates(members: dict[str, InstMemberSpec], basis: _BasisLike,
+                                 atol: float = 1e-6) -> tuple[_Basis, dict[str, _np.ndarray], dict[str, _np.ndarray]]:
     """
-    Normalize a ``{label: (effect, gate)}`` (or ``{label: effect}``) mapping into
+    Normalize a `{label: (effect, gate)}` (or `{label: effect}`) mapping into
     separate dicts of effect superkets and post-measurement gate superops.
 
     Validates that each gate is trace-preserving and that the effects satisfy the
-    POVM completeness relation ``sum_k E_k == I`` (i.e. the instrument is TP).
-    The effect ``E_k`` and gate ``G_k`` are kept *separate* (not pre-composed into
-    a single ``G_k @ rootconj(E_k)`` member superop) so each can be parameterized
+    POVM completeness relation `sum_k E_k == I` (i.e. the instrument is TP).
+    The effect `E_k` and gate `G_k` are kept *separate* (not pre-composed into
+    a single `G_k @ rootconj(E_k)` member superop) so each can be parameterized
     independently downstream.
 
     Parameters
     ----------
     members : dict
-        Maps each outcome label to either an ``(effect, gate)`` pair or a bare
-        ``effect`` (gate defaults to the identity).  ``effect`` may be a length-
-        ``d**2`` superket in ``basis``, a Hermitian ``d x d`` matrix, or a
-        :class:`POVMEffect`.  ``gate`` may be a ``d**2 x d**2`` superop, a
-        ``d x d`` unitary, ``None``, or a :class:`LinearOperator`.
+        Maps each outcome label to either an `(effect, gate)` pair or a bare
+        `effect` (gate defaults to the identity).  `effect` may be a length-
+        `d**2` superket in `basis`, a Hermitian `d x d` matrix, or a
+        :class:`POVMEffect`.  `gate` may be a `d**2 x d**2` superop, a
+        `d x d` unitary, `None`, or a :class:`LinearOperator`.
 
     basis : Basis or str
         The basis in which dense arrays are represented.  If a string, the
@@ -115,10 +122,10 @@ def _normalize_effects_and_gates(members, basis, atol=1e-6):
     effect_superkets : dict[label, numpy.ndarray]
     gate_superops : dict[label, numpy.ndarray]
     """
-    def _effect_of(val):
+    def _effect_of(val: InstMemberSpec) -> EffectSpec:
         return val[0] if isinstance(val, tuple) else val
 
-    def _gate_of(val):
+    def _gate_of(val: InstMemberSpec) -> GateSpec:
         return val[1] if isinstance(val, tuple) and len(val) > 1 else None
 
     if isinstance(basis, str):
@@ -141,13 +148,13 @@ def _normalize_effects_and_gates(members, basis, atol=1e-6):
     I_hilbert = _np.eye(udim)
     I_superket = _bt.stdmx_to_vec(I_hilbert, basis).reshape(-1)  # <<I| extracts the trace
 
-    def as_superket(effect):
+    def as_superket(effect: EffectSpec) -> _np.ndarray:
         arr = _np.asarray(effect.to_dense() if hasattr(effect, 'to_dense') else effect)
         if arr.ndim == 2 and arr.shape == (udim, udim):
             arr = _bt.stdmx_to_vec(arr, basis)   # Hermitian d x d matrix -> superket
         return arr.reshape(-1)
 
-    def as_superop(gate):
+    def as_superop(gate: GateSpec) -> _np.ndarray:
         if gate is None:
             return _np.eye(dim)
         if hasattr(gate, 'to_dense'):
@@ -181,37 +188,38 @@ def _normalize_effects_and_gates(members, basis, atol=1e-6):
     return basis, superkets, superops
 
 
-def _decompose_cptr(superop, basis, error_tol=1e-6, trunc_tol=1e-7):
+def _decompose_cptr(superop: _np.ndarray, basis: _BasisLike,
+                    error_tol: float = 1e-6, trunc_tol: float = 1e-7) -> tuple[_np.ndarray, _np.ndarray]:
     r"""
-    Decompose a dense CPTR member superop ``I_k`` (in ``basis``) into its
+    Decompose a dense CPTR member superop `I_k` (in `basis`) into its
     measurement effect and a canonical CPTP post-measurement gate.
 
     The effect is the Heisenberg-dual applied to the identity,
-    ``E_k = I_k^dagger(I)`` -- computed directly from the superop, with no Kraus
-    decomposition.  The gate is ``G_k = Q_k + P_k``, where
-    ``Q_k = I_k . pinv(rootconj(E_k))`` is the on-support part and ``P_k`` (a
-    conjugation by the projector onto ``ker(E_k)``) completes ``G_k`` so it is
-    trace-preserving.  When ``E_k`` is full rank ``P_k = 0`` and ``G_k = Q_k``.
+    `E_k = I_k^dagger(I)` -- computed directly from the superop, with no Kraus
+    decomposition.  The gate is `G_k = Q_k + P_k`, where
+    `Q_k = I_k . pinv(rootconj(E_k))` is the on-support part and `P_k` (a
+    conjugation by the projector onto `ker(E_k)`) completes `G_k` so it is
+    trace-preserving.  When `E_k` is full rank `P_k = 0` and `G_k = Q_k`.
 
     Parameters
     ----------
     superop : numpy.ndarray
-        A ``d**2 x d**2`` CPTR superoperator in ``basis``.
+        A `d**2 x d**2` CPTR superoperator in `basis`.
 
     basis : Basis or str
         The basis in which `superop` is represented.
 
     error_tol, trunc_tol : float, optional
         Tolerances for the complete-positivity check (negative Choi eigenvalues
-        below ``-error_tol`` raise; those in ``[-error_tol, trunc_tol)`` are
-        truncated) and for the ``ker(E_k)`` cutoff.
+        below `-error_tol` raise; those in `[-error_tol, trunc_tol)` are
+        truncated) and for the `ker(E_k)` cutoff.
 
     Returns
     -------
     E_superket : numpy.ndarray
-        The length-``d**2`` effect superket ``E_k`` in ``basis``.
+        The length-`d**2` effect superket `E_k` in `basis`.
     G_superop : numpy.ndarray
-        The ``d**2 x d**2`` CPTP post-measurement gate superop ``G_k`` in ``basis``.
+        The `d**2 x d**2` CPTP post-measurement gate superop `G_k` in `basis`.
     """
     basis = _Basis.cast(basis)
     dim = basis.dim
@@ -225,11 +233,11 @@ def _decompose_cptr(superop, basis, error_tol=1e-6, trunc_tol=1e-7):
     _ot.minimal_kraus_decomposition(I_k, basis, error_tol, trunc_tol)
 
     I_hilbert = _np.eye(udim)
-    I_superket = _bt.stdmx_to_vec(I_hilbert, basis).reshape(-1)
+    I_superket = _bt.stdmx_to_vec(I_hilbert, basis).ravel().real
 
     # 1. Effect E_k = I_k^dagger(I): the Heisenberg-dual superop is I_k.T (real,
     #    Hermitian-preserving map in a Hermitian basis), applied to the trace functional.
-    E_superket = (I_k.T @ I_superket).real
+    E_superket = I_k.T @ I_superket
 
     # Eigendecompose the effect once and split support / kernel at a SINGLE threshold
     # (trunc_tol).  Using a consistent threshold for both the on-support inverse (in
@@ -269,7 +277,8 @@ def _decompose_cptr(superop, basis, error_tol=1e-6, trunc_tol=1e-7):
     return E_superket, G_k
 
 
-def _check_effects_complete(effect_superkets, basis, atol=1e-6):
+def _check_effects_complete(effect_superkets: dict[str, _np.ndarray], basis: _BasisLike,
+                            atol: float = 1e-6) -> None:
     """Raise unless the effects sum to the identity (i.e. the instrument is TP)."""
     basis = _Basis.cast(basis)
     udim = round(basis.dim ** 0.5)
@@ -278,19 +287,21 @@ def _check_effects_complete(effect_superkets, basis, atol=1e-6):
     for E in effect_superkets.values():
         effect_sum += _bt.vec_to_stdmx(E, basis, keep_complex=True)
     if not _np.allclose(effect_sum, I_hilbert, atol=atol):
-        raise ValueError("The CPTR member superops do not sum to a TP channel: their "
-                         "measurement effects E_k = I_k^dagger(I) must satisfy sum_k E_k == I.")
+        msg = "The CPTR member superops do not sum to a TP channel: their " \
+            "measurement effects E_k = I_k^dagger(I) must satisfy sum_k E_k == I."
+        raise ValueError(msg)
 
 
-def _parameterize_gate(G_superop, basis, gate_parameterization):
+def _parameterize_gate(G_superop: _np.ndarray, basis: _BasisLike,
+                       gate_parameterization: str) -> _op.LinearOperator:
     """
-    Wrap the dense post-measurement gate superop ``G_k`` in the requested
-    TP parameterization, seeded so that it reproduces ``G_k`` exactly
+    Wrap the dense post-measurement gate superop `G_k` in the requested
+    TP parameterization, seeded so that it reproduces `G_k` exactly
     at zero error.
 
     For Lindblad types we compose a fresh, zero-initialized CP/TP error generator
-    onto a static base ``G_k``.  Crucially, the error generator is built from the
-    *identity* (not from ``G_k``), so this works even when ``G_k`` is singular --
+    onto a static base `G_k`.  Crucially, the error generator is built from the
+    *identity* (not from `G_k`), so this works even when `G_k` is singular --
     e.g. the complete-dephasing gate produced by an ideal projective effect.
     """
     basis = _Basis.cast(basis)
@@ -307,16 +318,18 @@ def _parameterize_gate(G_superop, basis, gate_parameterization):
     return _op.ComposedOp([G_static, error_map])
 
 
-def _parameterized_instrument(basis, effect_superkets, gate_superops,
-                                    gate_parameterization='CPTPLND',
-                                    povm_errormap='CPTPLND'):
+def _parameterized_instrument(basis: _BasisLike,
+                              effect_superkets: dict[str, _np.ndarray],
+                              gate_superops: dict[str, _np.ndarray],
+                              gate_parameterization: str = 'CPTPLND',
+                              povm_errormap: _op.LinearOperator | str = 'CPTPLND') -> dict[str, _op.ComposedOp]:
     """
-    Assemble the ``{label: ComposedOp([RootConjOperator(E_k), G_k])}`` member dict.
+    Assemble the `{label: ComposedOp([RootConjOperator(E_k), G_k])}` member dict.
 
-    A single :class:`ComposedPOVM` (a CP-constrained error map ``povm_errormap``
-    over the static effects ``{E_k}``) supplies the measurement effects; each gate
-    ``G_k`` is parameterized per ``gate_parameterization``.  Returns the member
-    dict (the classmethod wraps it with ``Instrument(...)``).
+    A single :class:`ComposedPOVM` (a CP-constrained error map `povm_errormap`
+    over the static effects `{E_k}`) supplies the measurement effects; each gate
+    `G_k` is parameterized per `gate_parameterization`.  Returns the member
+    dict (the classmethod wraps it with `Instrument(...)`).
 
     Parameters
     ----------
@@ -324,17 +337,17 @@ def _parameterized_instrument(basis, effect_superkets, gate_superops,
         The operator basis.
 
     effect_superkets : dict[label, numpy.ndarray]
-        Effect superkets ``E_k`` in ``basis``.
+        Effect superkets `E_k` in `basis`.
 
     gate_superops : dict[label, numpy.ndarray]
-        Post-measurement gate superops ``G_k`` in ``basis`` (same keys as
+        Post-measurement gate superops `G_k` in `basis` (same keys as
         `effect_superkets`).
 
     gate_parameterization : str, optional
-        TP parameterization for the gates ``{G_k}``.  A CP-constrained
-        Lindblad type (``'CPTPLND'`` / ``'H+S'``) makes each member CP; a
-        non-CP-constrained one (``'GLND'`` / ``'H+s'`` / ``'full TP'``) keeps the
-        instrument TP but allows non-CP members.  ``'static'`` freezes the gates.
+        TP parameterization for the gates `{G_k}`.  A CP-constrained
+        Lindblad type (`'CPTPLND'` / `'H+S'`) makes each member CP; a
+        non-CP-constrained one (`'GLND'` / `'H+s'` / `'full TP'`) keeps the
+        instrument TP but allows non-CP members.  `'static'` freezes the gates.
 
     povm_errormap : LinearOperator or str
         A CP-by-construction :class:`LinearOperator`, or a string spec for one,

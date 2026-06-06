@@ -24,7 +24,7 @@ InstrumentLike = Instrument | TPInstrument
 
 
 
-def instrument_type_from_op_type(op_type):
+def instrument_type_from_op_type(op_type: str | list[str]) -> str:
     """Decode an op type into an appropriate instrument type.
 
     Parameters:
