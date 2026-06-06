@@ -27,6 +27,7 @@ from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pygsti.modelmembers.povms.effect import POVMEffect
     from pygsti.modelmembers.states.state import State
     from pygsti.models.gaugegroup import GaugeGroupElement
@@ -34,8 +35,57 @@ if TYPE_CHECKING:
     EffectSpec = _np.ndarray | POVMEffect                     # a POVM effect (superket, Hermitian matrix, or object)
     GateSpec   = _np.ndarray | _op.LinearOperator | None      # a post-measurement gate (None means the identity)
     MemberSpec = EffectSpec | tuple[EffectSpec, GateSpec]     # one outcome's (effect[, gate]) spec
-    MemberOps = (dict[str, _op.LinearOperator | _np.ndarray]  # member ops as a dict or ordered (label, op) pairs
-                 | list[tuple[str, _op.LinearOperator | _np.ndarray]])
+    MemberPairs = list[tuple[str, _op.LinearOperator | _np.ndarray]]      # ordered (label, op) pairs
+    MemberOps = Mapping[str, _op.LinearOperator | _np.ndarray] | MemberPairs  # a mapping or ordered (label, op) pairs
+
+
+def _as_ordered_member_list(member_ops: MemberOps) -> MemberPairs:
+    """Normalize `member_ops` (a dict or ordered (label, op) list) into an ordered list of pairs."""
+    if isinstance(member_ops, dict):
+        return [(k, v) for k, v in member_ops.items()]  # gives definite ordering
+    if isinstance(member_ops, list):
+        return member_ops  # assume already an ordered (key, value) list
+    raise ValueError("Invalid `member_ops` arg of type %s" % type(member_ops))
+
+
+def _infer_space_and_evotype(member_list: MemberPairs, state_space: _StateSpace | None,
+                             evotype: _Evotype | str | None) -> tuple[MemberPairs, _StateSpace, _Evotype]:
+    """
+    Resolve the state space and evotype for `member_list`, wrapping any dense-array members in
+    :class:`FullArbitraryOp` along the way.
+
+    When the members are dense matrices, a default state space (from the first member's dimension)
+    and evotype are inferred wherever not supplied.  Returns the (possibly op-wrapped) member list
+    together with the resolved `state_space` and `evotype`.
+    """
+    # Special case: dense matrices -> infer a default state space/evotype and wrap in FullArbitraryOp.
+    if len(member_list) > 0 and not isinstance(member_list[0][1], _op.LinearOperator):
+        if state_space is None:
+            state_space = _statespace.default_space_for_dim(member_list[0][1].shape[0])
+        if evotype is None:
+            evotype = _Evotype.cast('default', state_space=state_space)
+        member_list = [(k, v if isinstance(v, _op.LinearOperator) else
+                        _op.FullArbitraryOp(v, None, evotype, state_space)) for k, v in member_list]
+
+    assert (len(member_list) > 0 or state_space is not None), \
+        "Must specify `state_space` when there are no instrument members!"
+    assert (len(member_list) > 0 or evotype is not None), \
+        "Must specify `evotype` when there are no instrument members!"
+    state_space = member_list[0][1].state_space if (state_space is None) \
+        else _statespace.StateSpace.cast(state_space)
+    evotype = _Evotype.cast(evotype, state_space=state_space) if (evotype is not None) \
+        else member_list[0][1].evotype
+    return member_list, state_space, evotype
+
+
+def _validate_member_consistency(member_list: MemberPairs, state_space: _StateSpace,
+                                 evotype: _Evotype) -> None:
+    """Assert every member shares `evotype` and a compatible state space."""
+    for _, member in member_list:
+        assert (evotype == member.evotype), \
+            "All instrument members must have the same evolution type"
+        assert (state_space.is_compatible_with(member.state_space)), \
+            "All instrument members must have compatible state spaces!"
 
 
 class Instrument(_mm.ModelMember, _collections.OrderedDict):
@@ -76,37 +126,10 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             assert(member_ops is None), "`items` was given when op_matrices != None"
 
         if member_ops is not None:
-            if isinstance(member_ops, dict):
-                member_list = [(k, v) for k, v in member_ops.items()]  # gives definite ordering
-            elif isinstance(member_ops, list):
-                member_list = member_ops  # assume it's is already an ordered (key,value) list
-            else:
-                raise ValueError("Invalid `member_ops` arg of type %s" % type(member_ops))
-
-            #Special case when we're given matrices: infer a default state space and evotype:
-            if len(member_list) > 0 and not isinstance(member_list[0][1], _op.LinearOperator):
-                if state_space is None:
-                    state_space = _statespace.default_space_for_dim(member_list[0][1].shape[0])
-                if evotype is None:
-                    evotype = _Evotype.cast('default', state_space=state_space)
-                member_list = [(k, v if isinstance(v, _op.LinearOperator) else
-                                _op.FullArbitraryOp(v, None, evotype, state_space)) for k, v in member_list]
-
-            assert(len(member_list) > 0 or state_space is not None), \
-                "Must specify `state_space` when there are no instrument members!"
-            assert(len(member_list) > 0 or evotype is not None), \
-                "Must specify `evotype` when there are no instrument members!"
-            state_space = member_list[0][1].state_space if (state_space is None) \
-                else _statespace.StateSpace.cast(state_space)
-            evotype = _Evotype.cast(evotype, state_space=state_space) if (evotype is not None)\
-                else member_list[0][1].evotype
-            items = []
-            for k, member in member_list:
-                assert(evotype == member.evotype), \
-                    "All instrument members must have the same evolution type"
-                assert(state_space.is_compatible_with(member.state_space)), \
-                    "All instrument members must have compatible state spaces!"
-                items.append((k, member))
+            member_list = _as_ordered_member_list(member_ops)
+            member_list, state_space, evotype = _infer_space_and_evotype(member_list, state_space, evotype)
+            _validate_member_consistency(member_list, state_space, evotype)
+            items = list(member_list)
         else:
             if len(items) > 0:  # HACK so that OrderedDict.copy() works, which creates a new object with only items...
                 if state_space is None: state_space = items[0][1].state_space
