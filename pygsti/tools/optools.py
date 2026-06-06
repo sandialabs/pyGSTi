@@ -619,12 +619,25 @@ def tensorized_with_eye(op: _np.ndarray, op_basis: _Basis, ten_basis: Optional[_
     return ten_op, ten_basis
 
 
-def rootconj_superop(effect_superket: _np.ndarray, basis: _Basis, abstol_warn: float=1e-10, abstol_error: float=1e-8) -> _np.ndarray:
+#: Single source of truth for how far a (POVM-effect) eigenvalue may fall outside [0, 1]
+#: before :func:`rootconj_superop` warns / raises, respectively, when forming E½.  These are
+#: the defaults below and are also referenced by
+#: :class:`~pygsti.modelmembers.operations.RootConjOperator`.
+EFFECT_EIGVAL_ABSTOL_WARN = 1e-10
+EFFECT_EIGVAL_ABSTOL_ERROR = 1e-8
+
+
+def rootconj_superop(effect_superket: _np.ndarray, basis: _Basis,
+                     abstol_warn: float = EFFECT_EIGVAL_ABSTOL_WARN,
+                     abstol_error: float = EFFECT_EIGVAL_ABSTOL_ERROR) -> _np.ndarray:
     """
     Let E denote the Hermitian matrix representation effect_superket, where 0 ≤ E ≤ 1.
 
     This function returns the array representation (in `basis`) of the map that takes
     a Hermitian matrix ρ to the Hermitian matrix E½ ρ E½.
+
+    `abstol_warn` and `abstol_error` set how far an eigenvalue of E may fall outside
+    [0, 1] before a warning or a ValueError (respectively) is raised.
     """
     effect_mat = _bt.vec_to_stdmx(effect_superket, basis, keep_complex=True)
     vecs, vals, inv_vecs = _mt.eigendecomposition(effect_mat, assume_hermitian=True)

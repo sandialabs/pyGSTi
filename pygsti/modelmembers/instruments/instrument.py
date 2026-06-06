@@ -25,6 +25,18 @@ from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from pygsti.modelmembers.povms.effect import POVMEffect
+    from pygsti.modelmembers.states.state import State
+    from pygsti.models.gaugegroup import GaugeGroupElement
+    # Type vocabulary for the effect-then-gate construction API:
+    EffectSpec = _np.ndarray | POVMEffect                     # a POVM effect (superket, Hermitian matrix, or object)
+    GateSpec   = _np.ndarray | _op.LinearOperator | None      # a post-measurement gate (None means the identity)
+    MemberSpec = EffectSpec | tuple[EffectSpec, GateSpec]     # one outcome's (effect[, gate]) spec
+    MemberOps = (dict[str, _op.LinearOperator | _np.ndarray]  # member ops as a dict or ordered (label, op) pairs
+                 | list[tuple[str, _op.LinearOperator | _np.ndarray]])
+
 
 class Instrument(_mm.ModelMember, _collections.OrderedDict):
     """
@@ -54,7 +66,9 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         Initial values.  This should only be used internally in de-serialization.
     """
 
-    def __init__(self, member_ops, evotype=None, state_space=None, called_from_reduce=False, items=None):
+    def __init__(self, member_ops: MemberOps | None, evotype: _Evotype | str | None = None,
+                 state_space: _StateSpace | None = None, called_from_reduce: bool = False,
+                 items: list | None = None):
         if items is None:
             items = []
         self._readonly = False  # until init is done
@@ -108,8 +122,8 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         self._readonly = True
 
     @staticmethod
-    def from_effects(members, basis: _BasisLike, gate_parameterization='CPTPLND',
-                     povm_errormap='CPTPLND', atol=1e-6) -> Instrument:
+    def from_effects(members: dict[str, MemberSpec], basis: _BasisLike, gate_parameterization: str = 'CPTPLND',
+                     povm_errormap: _op.LinearOperator | str = 'CPTPLND', atol: float = 1e-6) -> Instrument:
         r"""
         Construct a parameterized instrument from measurement effects (and optional
         post-measurement gates).
@@ -175,9 +189,11 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
 
     @staticmethod
     def from_cptr_superops(
-            op_arrays, basis, gate_parameterization='CPTPLND',
-            povm_errormap='CPTPLND', error_tol=1e-6, trunc_tol=1e-7
-        ):
+            op_arrays: dict[str, _np.ndarray], basis: _BasisLike,
+            gate_parameterization: str = 'CPTPLND',
+            povm_errormap: _op.LinearOperator | str = 'CPTPLND',
+            error_tol: float = 1e-6, trunc_tol: float = 1e-7
+        ) -> Instrument:
         r"""
         Construct a parameterized instrument from arbitrary dense CPTR member superops.
 
@@ -240,7 +256,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         )
         return Instrument(member_ops)
 
-    def submembers(self):
+    def submembers(self) -> list:
         """
         Get the ModelMember-derived objects contained in this one.
 
@@ -250,7 +266,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         """
         return list(self.values())
 
-    def to_memoized_dict(self, mmg_memo):
+    def to_memoized_dict(self, mmg_memo: dict) -> dict:
         """Create a serializable dict with references to other objects in the memo.
 
         Parameters
@@ -275,22 +291,22 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         return mm_dict
 
     @classmethod
-    def _from_memoized_dict(cls, mm_dict, serial_memo):
+    def _from_memoized_dict(cls, mm_dict: dict, serial_memo: dict) -> Instrument:
         state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
         members = [(lbl, serial_memo[subm_serial_id])
                    for lbl, subm_serial_id in zip(mm_dict['member_labels'], mm_dict['submembers'])]
         return cls(members, mm_dict['evotype'], state_space)
 
-    def _is_similar(self, other, rtol, atol):
+    def _is_similar(self, other: Instrument, rtol: float, atol: float) -> bool:
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
             the same local structure, i.e., not considering parameter values or submembers """
         return list(self.keys()) == list(other.keys())
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value) -> None:
         if self._readonly: raise ValueError("Cannot alter Instrument elements")
         else: return _collections.OrderedDict.__setitem__(self, key, value)
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple:
         """ Needed for OrderedDict-derived classes (to set dict items) """
         #need to *not* pickle parent, as __reduce__ bypasses ModelMember.__getstate__
         dict_to_pickle = self.__dict__.copy()
@@ -301,10 +317,10 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
                              [(key, gate.copy()) for key, gate in self.items()]),
                 dict_to_pickle)
 
-    def __pygsti_reduce__(self):
+    def __pygsti_reduce__(self) -> tuple:
         return self.__reduce__()
 
-    def simplify_operations(self, prefix=""):
+    def simplify_operations(self, prefix: str | _Label = "") -> _collections.OrderedDict:
         """
         Creates a dictionary of simplified instrument operations.
 
@@ -335,7 +351,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         return simplified
 
     @property
-    def parameter_labels(self):
+    def parameter_labels(self) -> _np.ndarray:
         """
         An array of labels (usually strings) describing this model member's parameters.
         """
@@ -350,7 +366,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         return vl
 
     @property
-    def num_elements(self):
+    def num_elements(self) -> int:
         """
         Return the number of total gate elements in this instrument.
 
@@ -365,7 +381,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         return sum([g.size for g in self.values()])
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """
         Get the number of independent parameters which specify this Instrument.
 
@@ -376,7 +392,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         """
         return len(self.gpindices_as_array())
 
-    def to_vector(self):
+    def to_vector(self) -> _np.ndarray:
         """
         Extract a vector of the underlying gate parameters from this Instrument.
 
@@ -391,7 +407,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             v[factor_local_inds] = operation.to_vector()
         return v
 
-    def from_vector(self, v, close=False, dirty_value=True):
+    def from_vector(self, v: _np.ndarray, close: bool = False, dirty_value: bool = True) -> None:
         """
         Initialize the Instrument using a vector of its parameters.
 
@@ -420,7 +436,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             operation.from_vector(v[factor_local_inds], close, dirty_value)
         self.dirty = dirty_value
 
-    def transform_inplace(self, s):
+    def transform_inplace(self, s: GaugeGroupElement) -> None:
         """
         Update each Instrument element matrix `O` with `inv(s) * O * s`.
 
@@ -440,7 +456,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             gate.transform_inplace(s)
         self.dirty = True
 
-    def depolarize(self, amount):
+    def depolarize(self, amount: float | tuple) -> None:
         """
         Depolarize this Instrument by the given `amount`.
 
@@ -463,7 +479,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             gate.depolarize(amount)
         self.dirty = True
 
-    def rotate(self, amount, mx_basis='gm'):
+    def rotate(self, amount: tuple, mx_basis: _BasisLike = 'gm') -> None:
         """
         Rotate this instrument by the given `amount`.
 
@@ -492,7 +508,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             gate.rotate(amount, mx_basis)
         self.dirty = True
 
-    def acton(self, state):
+    def acton(self, state: State) -> _collections.OrderedDict[str, tuple[float, State]]:
         """
         Act with this instrument upon `state`
 
@@ -525,7 +541,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
 
         return outcome_probs_and_states
 
-    def __str__(self):
+    def __str__(self) -> str:
         s = "Instrument with elements:\n"
         for lbl, element in self.items():
             s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.to_dense(), width=4, prec=2))

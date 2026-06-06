@@ -46,7 +46,7 @@ from pygsti.tools import matrixtools as _mt
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from pygsti.modelmembers.instruments.instrument import EffectSpec, GateSpec, InstMemberSpec
+    from pygsti.modelmembers.instruments.instrument import EffectSpec, GateSpec, MemberSpec
 
 
 def _conjugation_superop(herm_mat: _np.ndarray, basis: _BasisLike) -> _np.ndarray:
@@ -88,7 +88,7 @@ def _validate_gate_parameterization(gate_parameterization: str) -> None:
         f"type ('CPTPLND', 'GLND', 'H+S', 'H+s', ...), 'full TP', or 'static'.")
 
 
-def _normalize_effects_and_gates(members: dict[str, InstMemberSpec], basis: _BasisLike,
+def _normalize_effects_and_gates(members: dict[str, MemberSpec], basis: _BasisLike,
                                  atol: float = 1e-6) -> tuple[_Basis, dict[str, _np.ndarray], dict[str, _np.ndarray]]:
     """
     Normalize a `{label: (effect, gate)}` (or `{label: effect}`) mapping into
@@ -122,10 +122,10 @@ def _normalize_effects_and_gates(members: dict[str, InstMemberSpec], basis: _Bas
     effect_superkets : dict[label, numpy.ndarray]
     gate_superops : dict[label, numpy.ndarray]
     """
-    def _effect_of(val: InstMemberSpec) -> EffectSpec:
+    def _effect_of(val: MemberSpec) -> EffectSpec:
         return val[0] if isinstance(val, tuple) else val
 
-    def _gate_of(val: InstMemberSpec) -> GateSpec:
+    def _gate_of(val: MemberSpec) -> GateSpec:
         return val[1] if isinstance(val, tuple) and len(val) > 1 else None
 
     if isinstance(basis, str):
