@@ -15,13 +15,12 @@ from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from pygsti.baseobjs.basis import BasisLike
 from pygsti.modelmembers import operations as _op
 
-
-InstrumentLike = Instrument | TPInstrument
-
+if TYPE_CHECKING:
+    InstrumentLike = Instrument | TPInstrument
 
 
 def instrument_type_from_op_type(op_type: str | list[str]) -> str:
