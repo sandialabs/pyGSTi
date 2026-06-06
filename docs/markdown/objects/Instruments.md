@@ -221,7 +221,7 @@ for mode in ('full TP', 'CPTPLND'):
 
 ## Why a completely-positive parameterization matters
 
-The two fits agree on the physics, but they differ in a way that matters for interpretation.  A `TPInstrument` only constrains the members to *sum* to a trace-preserving map -- so when fit to finite, noisy data, its individual members can drift slightly outside the set of completely-positive maps.  Such members have **negative Choi eigenvalues**, which makes them physically meaningless: they are not valid quantum operations on their own.  The `"CPTPLND"` instrument cannot do this, because each member is completely positive by construction.
+A `TPInstrument` only constrains the members to sum to a trace-preserving map -- so when fit to finite, noisy data, its individual members can drift slightly outside the set of completely-positive maps.  Such members have **negative Choi eigenvalues**, which makes them physically meaningless: they are not valid quantum operations on their own.  The `"CPTPLND"` instrument cannot do this, because each member is completely positive by construction.
 
 We can see the difference directly by summing the negative Choi eigenvalues of each fitted instrument member (a value of zero means the member is completely positive):
 
