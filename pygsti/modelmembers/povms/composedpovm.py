@@ -283,12 +283,11 @@ class ComposedPOVM(_POVM, _Torchable):
         return self.error_map.to_vector()
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
-        """Constants for the torch path (issue 607).
-
-        Returns ``(base_effect_rows, error_map_type, error_map_sd)``.  All parameters belong to the
+        """
+        Returns `(base_effect_rows, error_map_type, error_map_sd)`.  All parameters belong to the
         (Torchable) error map; the base POVM is static (0 params).  Each composed effect is
-        ``<E_base| error_map``, so the POVM matrix (one row per effect, in this POVM's effect order) is
-        ``base_effect_rows @ error_map_superop`` -- and ``povm_matrix @ super_ket`` gives the outcome
+        `<E_base| error_map`, so the POVM matrix (one row per effect, in this POVM's effect order) is
+        `base_effect_rows @ error_map_superop` -- and `povm_matrix @ super_ket` gives the outcome
         probabilities.
         """
         base_rows = _np.ascontiguousarray(
@@ -298,7 +297,7 @@ class ComposedPOVM(_POVM, _Torchable):
 
     @staticmethod
     def torch_base(sd, t_param):
-        """Differentiable POVM matrix ``base_effect_rows @ error_map_superop`` from the parameter tensor."""
+        """Differentiable POVM matrix `base_effect_rows @ error_map_superop` from the parameter tensor."""
         t_base_rows, emap_type, emap_sd = sd
         superop = emap_type.torch_base(emap_sd, t_param)
         return t_base_rows @ superop

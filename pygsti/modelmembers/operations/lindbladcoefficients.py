@@ -93,7 +93,7 @@ class InvalidParamModeError(ValueError):
 
 
 # =====================================================================================================
-# Parameterization strategies (Approach A: composition).
+# Parameterization strategies
 #
 # A `_BlockParameterization` encapsulates the map  phi : (real parameter vector v) -> block_data  for a
 # coefficient block, together with its inverse, its Jacobian d(block_data)/dv, and a *differentiable*
@@ -101,11 +101,11 @@ class InvalidParamModeError(ValueError):
 # for it via a `_PARAM_CLASSES` dict {param_mode: parameterization class}; the block holds one instance
 # in `self._parameterization` and delegates all param_mode-dependent numeric work to it.
 #
-# This is the key to GitHub issue 607: the *only* new primitive needed to make a block Torchable is the
-# parameterization's differentiable `block_data_torch` (see LindbladCoefficientBlock.torch_base), and the
-# numpy `block_data_jacobian` is what the standard MapForwardSimulator path (and the sparse-Cholesky
-# reduced-order CPTP idea) needs.  Adding a new parameterization = adding one _BlockParameterization
-# subclass and registering it.
+# The *only* primitive needed to make a block Torchable is the parameterization's differentiable
+# `block_data_torch` (see LindbladCoefficientBlock.torch_base), and the numpy `block_data_jacobian`
+# is what the standard MapForwardSimulator path needs.
+# 
+#   --> Adding a new parameterization = adding one _BlockParameterization subclass and registering it.
 #
 # Methods take the owning block `blk` so they can read/write blk.block_data and read blk._bel_labels /
 # blk._cache_mx / blk._coeff_shape.
@@ -622,7 +622,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         _pcls = type(self)._PARAM_CLASSES.get(param_mode)
         if _pcls is None:
             raise InvalidParamModeError(param_mode, block_type)
-        self._parameterization = _pcls()  # composition: owns the param_mode-specific maps (Approach A)
+        self._parameterization = _pcls()  # composition: owns the param_mode-specific maps
         self._basis = basis  # must be a full Basis object, not just a string, as we otherwise don't know dimension
         self._bel_labels = tuple(basis_element_labels) if (basis_element_labels is not None) \
             else tuple(basis.labels[1:])  # Note: don't include identity
@@ -992,7 +992,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         # The error generator is linear in block_data (superop = sum_i block_data_flat[i] * G_i), so by
         # the chain rule  d(superop)/dv = einsum('Dp,Djk->jkp', d(block_data)/dv, G).  Only the
-        # parameterization's Jacobian is param_mode-specific (issue 607).
+        # parameterization's Jacobian is param_mode-specific
         v = self.to_vector() if (v is None) else v
         nP = len(v)
         if self._superops_matrix_structured and not superops_are_flat:
@@ -1032,24 +1032,23 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return _np.real(d2)
 
     def stateless_data(self, real_dtype, device):
-        """Block data considered constant during model fitting, for the PyTorch path (issue 607).
-
-        Returns ``(parameterization_class, torch_ctx)``, where ``torch_ctx`` carries the constants that
-        ``torch_base`` needs.  This mirrors the Torchable API (``stateless_data`` / ``torch_base`` on
+        """
+        Returns `(parameterization_class, torch_ctx)`, where `torch_ctx` carries the constants that
+        `torch_base` needs.  This mirrors the Torchable API (`stateless_data` / `torch_base` on
         TPState / FullTPOp / TPPOVM) but lives on the (non-ModelMember) coefficient block, so that a
-        Torchable ``LindbladErrorgen`` can compose its blocks' contributions.
+        Torchable `LindbladErrorgen` can compose its blocks' contributions.
         """
         return (type(self._parameterization), self._parameterization.torch_stateless_data(self))
 
     @staticmethod
     def torch_base(sd, t_param):
-        """Differentiable reconstruction of ``block_data`` from the parameter tensor ``t_param``.
+        """Differentiable reconstruction of `block_data` from the parameter tensor `t_param`.
 
-        With ``sd = blk.stateless_data(...)`` and ``t_param = torch.from_numpy(blk.to_vector())``,
-        ``type(blk).torch_base(sd, t_param)`` reproduces ``blk.block_data`` as a torch Tensor whose
-        autodiff Jacobian w.r.t. ``t_param`` equals ``blk.deriv_wrt_params(...)``.  The error generator
-        at the ``LindbladErrorgen`` level is then ``einsum('i,ijk->jk', torch_base(...).ravel(), G)``
-        with ``G`` the (constant) term-generator superoperators.
+        With `sd = blk.stateless_data(...)` and `t_param = torch.from_numpy(blk.to_vector())`,
+        `type(blk).torch_base(sd, t_param)` reproduces `blk.block_data` as a torch Tensor whose
+        autodiff Jacobian w.r.t. `t_param` equals `blk.deriv_wrt_params(...)`.  The error generator
+        at the `LindbladErrorgen` level is then `einsum('i,ijk->jk', torch_base(...).ravel(), G)`
+        with `G` the (constant) term-generator superoperators.
         """
         param_cls, torch_ctx = sd
         return param_cls.block_data_torch(torch_ctx, t_param)

@@ -154,11 +154,10 @@ class ComposedState(_State, _Torchable):
         return _np.dot(self.error_map.to_dense(on_space), self.state_vec.to_dense(on_space))
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
-        """Constants for the torch path (issue 607).
-
-        Returns ``(static_ket, error_map_type, error_map_sd)``.  All parameters belong to the (Torchable)
-        error map; the prepared super-ket is ``error_map_superop @ static_ket`` (cf. ``to_dense``), where
-        ``static_ket`` is the constant base state in Hilbert-Schmidt space.
+        """
+        Returns `(static_ket, error_map_type, error_map_sd)`.  All parameters belong to the (Torchable)
+        error map; the prepared super-ket is `error_map_superop @ static_ket` (cf. `to_dense`), where
+        `static_ket` is the constant base state in Hilbert-Schmidt space.
         """
         static_ket = _np.ascontiguousarray(self.state_vec.to_dense('HilbertSchmidt'))
         err_sld = self.error_map.stateless_data(real_dtype, device)
@@ -166,7 +165,7 @@ class ComposedState(_State, _Torchable):
 
     @staticmethod
     def torch_base(sd, t_param):
-        """Differentiable super-ket ``error_map_superop @ static_ket`` from the parameter tensor."""
+        """Differentiable super-ket `error_map_superop @ static_ket` from the parameter tensor."""
         t_static_ket, emap_type, emap_sd = sd
         superop = emap_type.torch_base(emap_sd, t_param)
         return superop @ t_static_ket
