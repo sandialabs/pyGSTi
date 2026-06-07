@@ -17,32 +17,24 @@ See also: pyGSTi/modelmembers/torchable.py.
 
 
 from __future__ import annotations
-from typing import Tuple, Optional, Dict, TYPE_CHECKING
+from typing import Tuple, Optional, Dict, Any, Type, TYPE_CHECKING
+from pygsti.modelmembers.torchable import Torchable
+from pygsti.forwardsims.forwardsim import ForwardSimulator
+
 if TYPE_CHECKING:
     from pygsti.baseobjs.label import Label
-    from pygsti.models.explicitmodel import ExplicitOpModel
+    from pygsti.models import ExplicitOpModel
     from pygsti.circuits.circuit import SeparatePOVMCircuit
     from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout
     import torch
 
 import warnings as warnings
-from pygsti.modelmembers.torchable import Torchable
-from pygsti.forwardsims.forwardsim import ForwardSimulator
+
 
 try:
     import torch
     TORCH_ENABLED = True
     DEFAULT_REAL_TYPE = torch.float32
-
-    def todevice_kwargs():
-        if torch.cuda.device_count() > 0:
-            return {'dtype': DEFAULT_REAL_TYPE, 'device': 'cuda:0'}
-        elif torch.mps.device_count() > 0:
-            return {'dtype': DEFAULT_REAL_TYPE, 'device': 'mps:0'}
-        elif torch.xpu.device_count() > 0:
-            return {'dtype': DEFAULT_REAL_TYPE, 'device': 'xpu:0'}
-        else:
-            return {'dtype': DEFAULT_REAL_TYPE, 'device': 'cpu'}
 
 except ImportError:
     TORCH_ENABLED = False
@@ -83,20 +75,24 @@ class StatelessModel:
     the sophiciated machinery in TorchForwardSimulator's base class.
     """
 
-    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout, use_gpu: bool):
+    circuits         : list[StatelessCircuit]
+    param_metadata   : list[tuple[Label, Type[Torchable], tuple[Any,...]]]
+    free_param_sizes : list[int]
+    params_dim       : int
+
+
+    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout, dtype: torch.dtype, device: torch.Device):
         circuits = []
         self.outcome_probs_dim = 0
-        # TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
         for _, circuit, outcomes in layout.iter_unique_circuits():
             expanded_circuits = model.expand_instruments_and_separate_povm(circuit, outcomes)
             if len(expanded_circuits) > 1:
-                raise NotImplementedError("I don't know what to do with this.")
+                raise NotImplementedError()
             spc = next(iter(expanded_circuits))
             c = StatelessCircuit(spc)
             circuits.append(c)
             self.outcome_probs_dim += c.outcome_probs_dim
         self.circuits = circuits
-        self.use_gpu = use_gpu
 
         # We need to verify assumptions on what layout.iter_unique_circuits() returns.
         # Looking at the implementation of that function, the assumptions can be
@@ -114,30 +110,19 @@ class StatelessModel:
             k_prev = k
             v_prev = v
         assert self.outcome_probs_dim == v_prev.stop
-        to_args = todevice_kwargs()
-        if not self.use_gpu:
-            to_args['device'] = 'cpu'
-        if 'mps' in to_args['device']:
-            # This branch must come AFTER the possible overwrite of 
-            # to_args['device']. It's only here because using MPS
-            # requires float32.
-            to_args['dtype'] = torch.float32
         self.param_metadata = []
         for lbl, obj in model._iter_parameterized_objs():
-            assert isinstance(obj, Torchable), f"{type(obj)} does not subclass {Torchable}."
-            param_type = type(obj)
-            sld = obj.stateless_data(to_args['dtype'], to_args['device'])
-            # sld = tuple((i.to(**to_args) if isinstance(i, torch.Tensor) else i) for i in sld)
-            param_data = (lbl, param_type) + (sld,)
+            sld = obj.stateless_data(dtype, device)
+            param_data = (lbl, type(obj), sld)
             self.param_metadata.append(param_data)
 
-        self.params_dim = []
+        self.params_dim = 0
         self.free_param_sizes = []
         self.default_to_reverse_ad = False
         # ^ Those are set in get_free_params
         return
     
-    def get_free_params(self, model: ExplicitOpModel) -> Tuple[torch.Tensor]:
+    def get_free_params(self, model: ExplicitOpModel, dtype: torch.dtype, device: torch.Device) -> Tuple[torch.Tensor]:
         """
         Return a tuple of Tensors that encode the states of the provided model's ModelMembers
         (where "state" in meant the sense of  object-oriented programming).
@@ -148,14 +133,6 @@ class StatelessModel:
         free_params = []
         free_param_sizes = []
         prev_idx = 0
-        to_args = todevice_kwargs()
-        if not self.use_gpu:
-            to_args['device'] = 'cpu'
-        if 'mps' in to_args['device']:
-            # This branch must come AFTER the possible overwrite of 
-            # to_args['device']. It's only here because using MPS
-            # requires float32.
-            to_args['dtype'] = torch.float32
         for i, (lbl, obj) in enumerate(model._iter_parameterized_objs()):
             gpind = obj.gpindices_as_array()
             vec = obj.to_vector()
@@ -167,19 +144,15 @@ class StatelessModel:
             prev_idx += vec_size
             if self.param_metadata[i][0] != lbl:
                 message = """
-                The model passed to get_free_params has a qualitatively different structure from
-                the model used to construct this StatelessModel. Specifically, the two models have
-                qualitative differences in the output of "model._iter_parameterized_objs()".
-
-                The presence of this structral difference essentially gaurantees that a subsequent
-                call to get_torch_bases would silently fail, so we're forced to raise an error here.
+                The structure of the model's parameterizered objects provided to `get_free_params`
+                differs from that of the model passed to `__init__`.
                 """
                 raise ValueError(message)
-            vec = vec.to(**to_args)
+            vec = vec.to(dtype=dtype, device=device)
             free_params.append(vec)
             free_param_sizes.append(vec_size)
-        self.free_param_sizes = free_param_sizes
         self.params_dim = prev_idx
+        self.free_param_sizes = free_param_sizes
         self.default_to_reverse_ad = self.outcome_probs_dim < self.params_dim
         return tuple(free_params)
 
@@ -244,31 +217,50 @@ class StatelessModel:
         return probs
 
 
+def get_device():
+    if torch.cuda.device_count() > 0:
+        return 'cuda:0'
+    elif torch.mps.device_count() > 0:
+        return 'mps:0'
+    elif torch.xpu.device_count() > 0:
+        return 'xpu:0'
+    else:
+        return 'cpu'
+
+
 class TorchForwardSimulator(ForwardSimulator):
     """
     A forward simulator that leverages automatic differentiation in PyTorch.
     """
 
     ENABLED = TORCH_ENABLED
+    model   : ExplicitOpModel | None
 
     def __init__(self, model : Optional[ExplicitOpModel] = None, use_gpu: Optional[bool]=None):
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
-        if 'mps' in todevice_kwargs()['device']:
-            self.use_gpu = DEFAULT_REAL_TYPE == torch.float32
-            if use_gpu:
-                warnings.warn('Apple Metal Performance Shaders not supported; ignoring use_gpu=True.')
-        else:
-            if use_gpu is None:
-                use_gpu = True
-            self.use_gpu = use_gpu
+
+        dtype  = DEFAULT_REAL_TYPE
+        device = get_device()
+        if use_gpu and 'cpu' in device:
+            raise ValueError('No GPU detected.')
+        if use_gpu and 'mps' in device:
+            dtype = torch.float32  # we clobber with only supported dtype
+        if use_gpu is None and 'mps' in device:
+            device = 'cpu'         # we override per our discretion
+        if not use_gpu:
+            device = 'cpu'         # user clobbers supported GPU
+
+        self.dtype  = dtype
+        self.device = device
         super(ForwardSimulator, self).__init__(model)
 
     def _bulk_fill_probs(self, array_to_fill, layout, split_model = None) -> None:
+        assert self.model is not None
         if split_model is None:
-            slm = StatelessModel(self.model, layout, self.use_gpu)
-            free_params = slm.get_free_params(self.model)
+            slm = StatelessModel(self.model, layout, self.dtype, self.device)
+            free_params = slm.get_free_params(self.model, self.dtype, self.device)
             torch_bases = slm.get_torch_bases(free_params)
         else:
             slm, torch_bases = split_model
@@ -278,11 +270,12 @@ class TorchForwardSimulator(ForwardSimulator):
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
-        slm = StatelessModel(self.model, layout, self.use_gpu)
+        assert self.model is not None
+        slm = StatelessModel(self.model, layout, self.dtype, self.device)
         # ^ TODO: figure out how to safely recycle StatelessModel objects from one
         #   call to another. The current implementation is wasteful if we need to 
         #   compute many jacobians without structural changes to layout or self.model.
-        free_params = slm.get_free_params(self.model)
+        free_params = slm.get_free_params(self.model, self.dtype, self.device)
     
         if pr_array_to_fill is not None:
             torch_bases = slm.get_torch_bases(free_params)
@@ -294,14 +287,7 @@ class TorchForwardSimulator(ForwardSimulator):
             J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
         else:
             J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
-        # ^ Note that this _bulk_fill_dprobs function doesn't accept parameters that
-        #   could be used to override the default behavior of the StatelessModel. If we
-        #   have a need to override the default in the future then we'd need to override
-        #   the ForwardSimulator function(s) that call self._bulk_fill_dprobs(...).
 
-        # if self.use_gpu:
-        #     J_func = make_fx(J_func, tracing_mode='fake')
-            # ^ see https://github.com/pytorch/pytorch/issues/152701#issuecomment-2847838362
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
