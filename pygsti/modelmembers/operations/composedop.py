@@ -311,25 +311,21 @@ class ComposedOp(_LinearOperator, _Torchable):
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         """
-        Returns `(factors,)` where each entry is `(type(factor), factor.stateless_data(...), inds)` and
+        Returns `factors` where each entry is `(type(factor), factor.stateless_data(...), inds)` and
         `inds` are the factor's local parameter indices (from `_submember_rpindices`, the same arrays
         `to_vector`/`from_vector` use).  Every factor must itself be `Torchable` -- including the
         static ideal/target prefactor, which is handled by `StaticTorchable`.
         """
-        factors = [(type(op), op.stateless_data(real_dtype, device), _slct.to_array(inds))
-                   for op, inds in zip(self.factorops, self._submember_rpindices)]
-        return (factors,)
+        factors = []
+        for op, inds in zip(self.factorops, self._submember_rpindices):
+            sld = (type(op), op.stateless_data(real_dtype, device), _slct.to_array(inds))
+            factors.append(sld)
+        return tuple(factors)
 
     @staticmethod
     def torch_base(sd, t_param):
-        """Differentiable dense HS process matrix = product of the factors' ``torch_base`` outputs.
-
-        Composes in the same order as ``to_dense``/``_update_denserep``:
-        ``mx = mats[0]; for m in mats[1:]: mx = m @ mx`` (factor 0 is the prefactor, applied first).
-        Each factor receives its own parameter slice ``t_param[inds]`` (empty for static factors).
-        """
-        (factors,) = sd
-        mats = [ftype.torch_base(fsd, t_param[inds]) for ftype, fsd, inds in factors]
+        """Differentiable process matrix = product of the factors' `torch_base` outputs."""
+        mats = [ftype.torch_base(fsd, t_param[inds]) for (ftype, fsd, inds) in sd]
         mx = mats[0]
         for m in mats[1:]:
             mx = m @ mx

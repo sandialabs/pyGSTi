@@ -166,13 +166,13 @@ class TPState(_DenseState, _Torchable):
         self._ptr_has_changed()
         self.dirty = dirty_value
 
-    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[int]:
-        return (self.dim,)
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[_torch.Tensor]:
+        t_const = (self.dim ** -0.25) * _torch.ones(1, dtype=real_dtype, device=device) 
+        return (t_const,)
 
     @staticmethod
-    def torch_base(sd: Tuple[int], t_param: _torch.Tensor) -> _torch.Tensor:
-        dim = sd[0]
-        t_const = (dim ** -0.25) * _torch.ones(1, dtype=t_param.dtype, device=t_param.device) 
+    def torch_base(sd: Tuple[_torch.Tensor], t_param: _torch.Tensor) -> _torch.Tensor:
+        t_const = sd[0]
         t = _torch.concat((t_const, t_param)) 
         return t
 

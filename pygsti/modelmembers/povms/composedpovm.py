@@ -284,20 +284,20 @@ class ComposedPOVM(_POVM, _Torchable):
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         """
-        Returns `(base_effect_rows, error_map_type, error_map_sd)`.  All parameters belong to the
-        (Torchable) error map; the base POVM is static (0 params).  Each composed effect is
-        `<E_base| error_map`, so the POVM matrix (one row per effect, in this POVM's effect order) is
-        `base_effect_rows @ error_map_superop` -- and `povm_matrix @ super_ket` gives the outcome
-        probabilities.
+        Returns `(base_povm, error_map_type, error_map_sd)`.  All parameters belong to the
+        (Torchable) error map; the base POVM is static (0 params).  The rows of base_povm
+        are ordered according to self.keys().
         """
-        base_rows = _np.ascontiguousarray(
-            _np.stack([self.base_povm[k].to_dense('HilbertSchmidt') for k in self.keys()]))
+        base_effects = [self.base_povm[k].to_dense('HilbertSchmidt') for k in self.keys()]
+        base_povm_np = _np.ascontiguousarray(_np.stack(base_effects))
+        base_povm    = _torch.from_numpy(base_povm_np).to(dtype=real_dtype, device=device)
+        assert isinstance(self.error_map, _Torchable)
         err_sld = self.error_map.stateless_data(real_dtype, device)
-        return (_torch.from_numpy(base_rows).to(dtype=real_dtype, device=device), type(self.error_map), err_sld)
+        return (base_povm, type(self.error_map), err_sld)
 
     @staticmethod
     def torch_base(sd, t_param):
-        """Differentiable POVM matrix `base_effect_rows @ error_map_superop` from the parameter tensor."""
+        """Differentiable POVM matrix `base_povm @ error_map_superop` from the parameter tensor."""
         t_base_rows, emap_type, emap_sd = sd
         superop = emap_type.torch_base(emap_sd, t_param)
         return t_base_rows @ superop

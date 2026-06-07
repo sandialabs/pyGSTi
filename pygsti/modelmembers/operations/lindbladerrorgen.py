@@ -745,10 +745,11 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         """
-        Returns ``(G, blocks)`` where ``G`` is the constant ``(N, d2, d2)`` term-superoperator stack
+        Returns `(G, blocks)` where `G` is the constant `(N, d2, d2)` term-superoperator stack
         (`combined_lindblad_term_superops`) as a torch tensor, and `blocks` is a list, in
-        `coefficient_blocks` order, of `(blk.stateless_data(...), blk.num_params)`.  The error generator
-        is linear in the (per-block) block_data, so `torch_base` rebuilds it as
+        `coefficient_blocks` order, of `blk.stateless_data(...)`.
+        
+        The error generator is linear in the (per-block) block_data, so `torch_base` rebuilds it as
         `einsum('i,ijk->jk', concat(block torch_bases), G).real` -- the differentiable analog of
         `to_dense('HilbertSchmidt')`.  Dense path only.
         """
@@ -758,21 +759,22 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         G_dtype = _torch.complex64 if real_dtype.itemsize == 4 else _torch.complex128
         G = _torch.from_numpy(const)
         G = G.to(device=device, dtype=G_dtype)
-        blocks = [(blk.stateless_data(real_dtype, device), blk.num_params) for blk in self.coefficient_blocks]
-        return (G, blocks)
+        blocks     = [ blk.stateless_data(real_dtype, device) for blk in self.coefficient_blocks ]
+        param_dims = [ blk.num_params for blk in self.coefficient_blocks ]
+        return (G, blocks, param_dims)
 
     @staticmethod
     def torch_base(sd, t_param):
-        """Differentiable dense HS error generator from the parameter tensor ``t_param``.
+        """Differentiable dense HS error generator from the parameter tensor `t_param`.
 
-        Mirrors ``to_dense('HilbertSchmidt')``: split ``t_param`` per block (``coefficient_blocks`` order),
-        rebuild each block's block_data via ``LindbladCoefficientBlock.torch_base``, concatenate the
-        raveled block_datas, and contract against the constant superop stack ``G``.
+        Mirrors `to_dense('HilbertSchmidt')`: split `t_param` per block (`coefficient_blocks` order),
+        rebuild each block's block_data via `LindbladCoefficientBlock.torch_base`, concatenate the
+        raveled block_datas, and contract against the constant superop stack `G`.
         """
-        G, blocks = sd
+        G, blocks, param_dims = sd
         comb = []
         off = 0
-        for blk_sd, nP in blocks:
+        for blk_sd, nP in zip(blocks, param_dims):
             t_slice = t_param[off:off + nP]
             off += nP
             bd = _LindbladCoefficientBlock.torch_base(blk_sd, t_slice)

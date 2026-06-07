@@ -196,16 +196,14 @@ class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
             return _spl.expm(self.errorgen.to_dense(on_space))
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
+        assert isinstance(self.errorgen, _Torchable)
         return self.errorgen.stateless_data(real_dtype, device)
 
     @staticmethod
     def torch_base(sd, t_param):
-        """Differentiable dense HS process matrix `exp(L)` from the parameter tensor `t_param`.
-
-        The op is the matrix exponential of its error generator (cf. `to_dense` / `_update_rep`,
-        which use `scipy.linalg.expm`); here `torch.linalg.matrix_exp` keeps it differentiable.
-        """
-        return _torch.linalg.matrix_exp(_LindbladErrorgen.torch_base(sd, t_param))
+        """Differentiable process matrix `exp(L)` from the parameter tensor `t_param`."""
+        L = _LindbladErrorgen.torch_base(sd, t_param)
+        return _torch.linalg.matrix_exp(L)
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
     def to_sparse(self, on_space: SpaceT='minimal'):

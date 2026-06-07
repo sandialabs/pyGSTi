@@ -1034,11 +1034,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
     def stateless_data(self, real_dtype, device):
         """
         Returns `(parameterization_class, torch_ctx)`, where `torch_ctx` carries the constants that
-        `torch_base` needs.  This mirrors the Torchable API (`stateless_data` / `torch_base` on
-        TPState / FullTPOp / TPPOVM) but lives on the (non-ModelMember) coefficient block, so that a
-        Torchable `LindbladErrorgen` can compose its blocks' contributions.
+        `torch_base` needs.  This mirrors the Torchable API, but lives on the (non-ModelMember)
+        coefficient block, so that a Torchable `LindbladErrorgen` can compose its blocks' contributions.
         """
-        return (type(self._parameterization), self._parameterization.torch_stateless_data(self))
+        inner_sd = self._parameterization.torch_stateless_data(self)
+        return (type(self._parameterization), inner_sd)
 
     @staticmethod
     def torch_base(sd, t_param):
@@ -1046,12 +1046,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         With `sd = blk.stateless_data(...)` and `t_param = torch.from_numpy(blk.to_vector())`,
         `type(blk).torch_base(sd, t_param)` reproduces `blk.block_data` as a torch Tensor whose
-        autodiff Jacobian w.r.t. `t_param` equals `blk.deriv_wrt_params(...)`.  The error generator
-        at the `LindbladErrorgen` level is then `einsum('i,ijk->jk', torch_base(...).ravel(), G)`
-        with `G` the (constant) term-generator superoperators.
+        autodiff Jacobian w.r.t. `t_param` equals `blk.deriv_wrt_params(...)`. 
         """
-        param_cls, torch_ctx = sd
-        return param_cls.block_data_torch(torch_ctx, t_param)
+        param_cls, inner_sd = sd
+        return param_cls.block_data_torch(inner_sd, t_param)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()

@@ -159,16 +159,17 @@ class ComposedState(_State, _Torchable):
         error map; the prepared super-ket is `error_map_superop @ static_ket` (cf. `to_dense`), where
         `static_ket` is the constant base state in Hilbert-Schmidt space.
         """
-        static_ket = _np.ascontiguousarray(self.state_vec.to_dense('HilbertSchmidt'))
-        err_sld = self.error_map.stateless_data(real_dtype, device)
-        return (_torch.from_numpy(static_ket).to(dtype=real_dtype, device=device), type(self.error_map), err_sld)
+        superket_np  = _np.ascontiguousarray(self.state_vec.to_dense('HilbertSchmidt').ravel())
+        superket     = _torch.from_numpy(superket_np).to(dtype=real_dtype, device=device)
+        error_map_sd = self.error_map.stateless_data(real_dtype, device)
+        return (superket, type(self.error_map), error_map_sd)
 
     @staticmethod
     def torch_base(sd, t_param):
-        """Differentiable super-ket `error_map_superop @ static_ket` from the parameter tensor."""
-        t_static_ket, emap_type, emap_sd = sd
+        """Differentiable super-ket `error_map_superop @ static_supket` from the parameter tensor."""
+        static_superket, emap_type, emap_sd = sd
         superop = emap_type.torch_base(emap_sd, t_param)
-        return superop @ t_static_ket
+        return superop @ static_superket
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
