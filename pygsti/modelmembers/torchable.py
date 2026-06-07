@@ -61,11 +61,7 @@ class StaticTorchable(Torchable):
     Mixin for static (non-parameterized) operations on the dense torch path.
 
     A static op contributes a constant dense superoperator and has no free parameters, so its
-    ``torch_base`` simply returns the baked-in matrix and ignores the (empty) parameter slice.
-    This lets a composite op (e.g. ``ComposedOp``) treat all of its factors uniformly, including a
-    static ideal/target prefactor.  Any static linear-op ModelMember whose ``to_dense('HilbertSchmidt')``
-    yields its process matrix can use this mixin (``ComposedOp._update_denserep`` already relies on that
-    call for the static prefactor).
+    `torch_base` simply returns the baked-in matrix and ignores the (empty) parameter slice.
     """
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[_torch.Tensor]:
