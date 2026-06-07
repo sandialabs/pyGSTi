@@ -138,7 +138,7 @@ class _BlockParameterization:
         raise NotImplementedError
 
     # --- Torchable support (differentiable params -> block_data) ---
-    def torch_stateless_data(self, blk):
+    def torch_stateless_data(self, blk, real_dtype, device):
         """Constants (independent of the free params) needed by `block_data_torch`."""
         return (len(blk._bel_labels),)
 
@@ -173,14 +173,15 @@ class _StaticParam(_BlockParameterization):
             return _np.zeros((superops.shape[1], superops.shape[2], 0, 0), 'd')
         return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
 
-    def torch_stateless_data(self, blk):
-        return (_np.ascontiguousarray(blk.block_data),)
+    def torch_stateless_data(self, blk, real_dtype, device):
+        import torch as _torch
+        arr = _np.ascontiguousarray(blk.block_data)
+        ten = _torch.from_numpy(arr).to(dtype=real_dtype, device=device)
+        return (ten,)
 
     @staticmethod
     def block_data_torch(sd, t_param):
-        import torch as _torch
-        arr = sd[0]
-        return _torch.from_numpy(arr).to(dtype=t_param.dtype, device=t_param.device)
+        return sd[0]
 
 
 class _RealVectorElements(_BlockParameterization):
@@ -1037,7 +1038,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         `torch_base` needs.  This mirrors the Torchable API, but lives on the (non-ModelMember)
         coefficient block, so that a Torchable `LindbladErrorgen` can compose its blocks' contributions.
         """
-        inner_sd = self._parameterization.torch_stateless_data(self)
+        inner_sd = self._parameterization.torch_stateless_data(self, real_dtype, device)
         return (type(self._parameterization), inner_sd)
 
     @staticmethod
