@@ -2,7 +2,7 @@
 Defines a ForwardSimulator class called "TorchForwardSimulator" that can leverage the automatic
 differentation features of PyTorch.
 
-This file also defines two helper classes: StatelessCircuit and StatelessModel.
+This file also defines two helper classes: StatelessCircuit and StatelessModelCircuitStore.
 
 See also: pyGSTi/modelmembers/torchable.py.
 """
@@ -57,15 +57,15 @@ class StatelessCircuit:
         return
 
 
-class StatelessModel:
+class StatelessModelCircuitStore:
     """
-    A container for the information in an ExplicitOpModel that's "stateless" in the sense of
-    object-oriented programming:
+    A container for the information in a (layout, ExplicitOpModel) pair that's "stateless"
+    in the sense of object-oriented programming:
     
         * A list of StatelessCircuits
         * Metadata for parameterized ModelMembers
 
-    StatelessModels have instance functions to facilitate computation of (differentable!)
+    StatelessModelCircuitStores have instance functions to facilitate computation of differentiable
     circuit outcome probabilities.
 
     Design notes
@@ -128,7 +128,7 @@ class StatelessModel:
         (where "state" in meant the sense of  object-oriented programming).
         
         We compare the labels of the input model's ModelMembers to those of the model provided
-        to StatelessModel.__init__(...). We raise an error if an inconsistency is detected.
+        to StatelessModelCircuitStore.__init__(...). We raise an error if an inconsistency is detected.
         """
         free_params = []
         free_param_sizes = []
@@ -181,7 +181,7 @@ class StatelessModel:
 
     def circuit_probs_from_torch_bases(self, torch_bases: Dict[Label, torch.Tensor]) -> torch.Tensor:
         """
-        Compute the circuit outcome probabilities that result when all of this StatelessModel's
+        Compute the circuit outcome probabilities that result when all of this StatelessModelCircuitStore's
         StatelessCircuits are run with data in torch_bases.
     
         Return the results as a single (vectorized) torch Tensor.
@@ -201,7 +201,7 @@ class StatelessModel:
     def circuit_probs_from_free_params(self, *free_params: Tuple[torch.Tensor], enable_backward=False) -> torch.Tensor:
         """
         This is the basic function we expose to pytorch for automatic differentiation. It returns the circuit
-        outcome probabilities resulting when the states of ModelMembers associated with this StatelessModel
+        outcome probabilities resulting when the states of ModelMembers associated with this StatelessModelCircuitStore
         are set based on free_params. 
 
         If you want to call PyTorch's .backward() on the returned Tensor (or a function of that Tensor), then
@@ -259,34 +259,34 @@ class TorchForwardSimulator(ForwardSimulator):
     def _bulk_fill_probs(self, array_to_fill, layout, split_model = None) -> None:
         assert self.model is not None
         if split_model is None:
-            slm = StatelessModel(self.model, layout, self.dtype, self.device)
-            free_params = slm.get_free_params(self.model, self.dtype, self.device)
-            torch_bases = slm.get_torch_bases(free_params)
+            smcs = StatelessModelCircuitStore(self.model, layout, self.dtype, self.device)
+            free_params = smcs.get_free_params(self.model, self.dtype, self.device)
+            torch_bases = smcs.get_torch_bases(free_params)
         else:
-            slm, torch_bases = split_model
+            smcs, torch_bases = split_model
 
-        probs = slm.circuit_probs_from_torch_bases(torch_bases)
-        array_to_fill[:slm.outcome_probs_dim] = probs.cpu().detach().numpy().ravel()
+        probs = smcs.circuit_probs_from_torch_bases(torch_bases)
+        array_to_fill[:smcs.outcome_probs_dim] = probs.cpu().detach().numpy().ravel()
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
         assert self.model is not None
-        slm = StatelessModel(self.model, layout, self.dtype, self.device)
-        # ^ TODO: figure out how to safely recycle StatelessModel objects from one
+        smcs = StatelessModelCircuitStore(self.model, layout, self.dtype, self.device)
+        # ^ TODO: figure out how to safely recycle StatelessModelCircuitStore objects from one
         #   call to another. The current implementation is wasteful if we need to 
         #   compute many jacobians without structural changes to layout or self.model.
-        free_params = slm.get_free_params(self.model, self.dtype, self.device)
+        free_params = smcs.get_free_params(self.model, self.dtype, self.device)
     
         if pr_array_to_fill is not None:
-            torch_bases = slm.get_torch_bases(free_params)
-            splitm = (slm, torch_bases)
+            torch_bases = smcs.get_torch_bases(free_params)
+            splitm = (smcs, torch_bases)
             self._bulk_fill_probs(pr_array_to_fill, layout, splitm)
 
-        argnums = tuple(range(len(slm.param_metadata)))
-        if slm.default_to_reverse_ad:
-            J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
+        argnums = tuple(range(len(smcs.param_metadata)))
+        if smcs.default_to_reverse_ad:
+            J_func = torch.func.jacrev(smcs.circuit_probs_from_free_params, argnums=argnums) # type: ignore
         else:
-            J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums) # type: ignore
+            J_func = torch.func.jacfwd(smcs.circuit_probs_from_free_params, argnums=argnums) # type: ignore
 
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
