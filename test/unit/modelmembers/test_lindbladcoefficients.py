@@ -463,9 +463,8 @@ def test_invalid_param_mode_raises():
     from pygsti.modelmembers.operations.lindbladcoefficients import InvalidParamModeError
     pp = Basis.cast('pp', 4)
     for bt, pm in [('ham', 'cholesky'), ('other_diagonal', 'not_a_mode')]:
-        blk = LCB(bt, pp, param_mode=pm)   # invalid param_mode is not validated at construction
         with pytest.raises(InvalidParamModeError):
-            _ = blk.num_params             # ...it surfaces on first use
+            _ = LCB(bt, pp, param_mode=pm)
 
 
 @pytest.mark.parametrize("case", [c for c in FD_CASES if c[2] == 'other'], ids=_config_as_string)
