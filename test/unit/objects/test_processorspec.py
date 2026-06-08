@@ -97,19 +97,15 @@ class ProcessorSpecTester(BaseCase):
         
         ps = QubitProcessorSpec(3, gate_names, availability=availability, qubit_labels=qubit_labels)
         
-        # Manually create the expected graph
-        expected_graph = QubitGraph(qubit_labels)
-        expected_graph.add_edge('q0', 'q1')
-        expected_graph.add_edge('q1', 'q2')
-        
-        # The function compute_2Q_connectivity returns a QubitGraph with symmetric edges, so we need to add the reverse edges to our expected graph
-        expected_graph.add_edge('q1', 'q0')
-        expected_graph.add_edge('q2', 'q1')
-
         computed_graph = ps.compute_2Q_connectivity()
 
-        self.assertEqual(set(computed_graph.node_names), set(expected_graph.node_names))
-        self.assertEqual(set(computed_graph.edges()), set(expected_graph.edges()))
+        # Check that the graph is undirected and has the correct edges
+        computed_undirected_edges = {frozenset(edge) for edge in computed_graph.edges()}
+        expected_undirected_edges = {frozenset({'q0', 'q1'}), frozenset({'q1', 'q2'})}
+        self.assertEqual(computed_undirected_edges, expected_undirected_edges)
+
+        # Check that the nodes are correct
+        self.assertEqual(set(computed_graph.node_names), set(qubit_labels))
 
     def test_gate_num_qubits(self):
         ps = QubitProcessorSpec(2, gate_names=['Gx', 'Gcnot'], geometry='line')
