@@ -74,10 +74,12 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
             else:
                 t = time  # Note: time in labels == duration
                 rholabel = spc.circuit_without_povm[0]
-                op = self.model.circuit_layer_operator(rholabel, 'prep'); op.set_time(t); t += rholabel.time
+                op = self.model.circuit_layer_operator(rholabel, 'prep'); op.set_time(t)
+                t += rholabel.time if hasattr(rholabel, "time") else 0
                 state = op._rep
                 for ol in spc.circuit_without_povm[1:]:
-                    op = self.model.circuit_layer_operator(ol, 'op'); op.set_time(t); t += ol.time
+                    op = self.model.circuit_layer_operator(ol, 'op'); op.set_time(t)
+                    t += ol.time if hasattr(ol, "time") else 0.0
                     state = op._rep.acton(state)
                 ps = []
                 for elabel in spc.full_effect_labels:
