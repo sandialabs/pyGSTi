@@ -29,6 +29,18 @@ class CircuitTester(BaseCase):
         self.assertEqual(c.num_lines, 5)
         self.assertEqual(c.line_labels, tuple(range(5)))
 
+    def test_quil_string_helpers(self):
+        # Test the helper functions for creating quil strings.
+        num_to_str = circuit._num_to_rqc_str
+        self.assertEqual(num_to_str(1.0), '1.0')
+        self.assertEqual(num_to_str(1+2j), '1.0+2.0i')
+        self.assertEqual(num_to_str(1-2j), '1.0-2.0i')
+        self.assertEqual(num_to_str(3j), '0.0+3.0i')
+
+        np_to_def = circuit._np_to_quil_def_str
+        expected_def = 'DEFGATE FOO:\n    1.0, 0.0\n    0.0, 1.0\n'
+        self.assertEqual(np_to_def('FOO', np.identity(2)), expected_def)
+
     def test_construct_from_label(self):
         # Test initializing a circuit from a non-empty circuit that is a list
         # containing Label objects. Also test that it can have non-integer line_labels
@@ -324,6 +336,49 @@ class CircuitMethodTester(BaseCase):
         self.c.replace_layer_with_circuit_inplace(self.c.copy(), 1)
         self.assertEqual(self.c.depth, 2 * 5 - 1)
 
+    def test_set_line_labels_editable(self):
+        # Test setting line labels on an editable circuit, ensuring non-specified lines (active or idling) are removed.
+
+        # Initial labels are ('Q0', 'Q1'). Add an idling line 'Q2'.
+        self.c._append_idling_lines(['Q2'])
+        self.assertEqual(self.c.line_labels, ('Q0', 'Q1', 'Q2'))
+        self.assertEqual(set(self.c.idling_lines()), {'Q2'})
+
+        # New labels: keep 'Q0', remove active 'Q1', remove idling 'Q2', add new 'Q3'
+        new_line_labels = ('Q0', 'Q3')
+        self.c.line_labels = new_line_labels
+
+        # Assert the final labels are *exactly* the new labels.
+        # This confirms that 'Q1' and 'Q2' were removed.
+        self.assertEqual(self.c.line_labels, new_line_labels)
+
+        # 'Q0' should still have gates. 'Q3' is new and should be idling.
+        self.assertEqual(set(self.c.idling_lines()), {'Q3'})
+
+
+    def test_set_line_labels_non_editable(self):
+        # Test that setting line labels on a non-editable circuit raises an AssertionError
+        non_editable_circuit = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1'], editable=False)
+        with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit!"):
+            non_editable_circuit.line_labels = ('Qalpha', 'Qbeta')
+
+    def test_set_line_labels_equivalent(self):
+        # Test that setting line_labels to the same value does nothing
+        original_circuit = self.c.copy()
+        self.c.line_labels = self.c.line_labels
+        self.assertEqual(self.c, original_circuit)
+
+    def test_set_occurrence(self):
+        # Test setting occurrence id on an editable circuit
+        self.c.occurrence = 123
+        self.assertEqual(self.c.occurrence, 123)
+
+        # Test that setting occurrence id on a non-editable circuit raises an AssertionError
+        non_editable_circuit = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1'], editable=False)
+        with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit!"):
+            non_editable_circuit.occurrence = 456
+
+
     def test_delete_layers(self):
         # Test layer deletion
         layer = [Label('Gx', 'Q1'), ]
@@ -462,6 +517,16 @@ class CircuitMethodTester(BaseCase):
         test_s = "Qubit Q0 ---|Gx|-|Gx|-|Gy|-|Gi|-|  |---\nQubit Q1 ---|Gy|-|Gy|-|Gx|-|  |-|Gi|---\n"
         s = str(self.c)
         self.assertEqual(test_s, s)
+
+    def test_str_props(self):
+        c_with_labels = circuit.Circuit('Gx:0@(0,1)', line_labels=(0, 1))
+        self.assertEqual(c_with_labels.layerstr, 'Gx:0')
+        self.assertEqual(c_with_labels.linesstr, '(0,1)')
+
+        c_no_labels = circuit.Circuit('Gx')
+        self.assertEqual(c_no_labels.layerstr, 'Gx')
+        self.assertEqual(c_no_labels.linesstr, None)
+
 
     def test_compress_depth(self):
         ls = [Label('H', 1), Label('P', 1), Label('P', 1), Label(()), Label('CNOT', (2, 3))]
