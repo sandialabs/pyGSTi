@@ -1469,8 +1469,6 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
         
         self._bel_labels = tuple(basis_element_labels) if (basis_element_labels is not None) \
             else tuple(basis.labels[1:])  # Note: don't include identity
-        self._cache_mx = _np.zeros((len(self._bel_labels), len(self._bel_labels)), 'complex') \
-            if self._block_type == 'other' else None #check this!
 
         #this would get set to True in the very next method call anyway
         self._coefficients_need_update = True
@@ -2333,7 +2331,7 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
         state = super()._to_nice_serialization()
         state.update({'block_type': self._block_type,
                       'parameterization_mode': self._param_mode,
-                      'elementary_element_labels': list(self._bel_labels),
+                      'elementary_errorgen_labels': list(self._eeg_labels),
                       'basis': self._basis.to_nice_serialization(),
                       'block_data': self._encodemx(self.block_data)})
         return state
@@ -2342,15 +2340,16 @@ class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
     def _from_nice_serialization(cls, state):
         block_data = cls._decodemx(state['block_data'])
         basis = _Basis.from_nice_serialization(state['basis'])
-        return cls(state['block_type'], basis, state['basis_element_labels'], block_data,
+        return cls(state['block_type'], basis, None, state['elementary_errorgen_labels'], block_data,
                    state['parameterization_mode'])
 
     def is_similar(self, other_coeff_block):
         """ TODO: docstring """
-        if not isinstance(other_coeff_block, LindbladCoefficientBlock): return False
+        if not isinstance(other_coeff_block, UnconstrainedLindbladCoefficientBlock): 
+            return False
         return ((self._block_type == other_coeff_block._block_type)
                 and (self._param_mode == other_coeff_block._param_mode)
-                and (self._bel_labels == other_coeff_block._bel_labels)
+                and (self._eeg_labels == other_coeff_block._eeg_labels)
                 and (self._basis == other_coeff_block._basis))
 
     def convert(self, param_mode):
