@@ -1,6 +1,6 @@
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label
-from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
+from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit, batch_tensor
 import numpy as np
 
 
@@ -138,3 +138,93 @@ def test_find_qubit_to_lane_splitting():
         for qu in lane_to_qubits[lane]:
             assert qu in qubit_to_lane
             assert lane == qubit_to_lane[qu]
+
+
+def test_batch_tensor_diff_lengths():
+    c1 = _Circuit("Gx:0", line_labels=(0,))
+    c2 = _Circuit("Gy:0Gz:0", line_labels=(0,))
+
+    idle_label = Label(()) # empty label is the idle
+    labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), Label("Gz", 0), idle_label]
+    map_d = {l: l for l in labels_in_circuits}
+    map_d[idle_label] = Label("Gi")
+    layer_mappers = {1: map_d, 2: map_d}
+
+    # Call batch_tensor
+    tensored_c = batch_tensor([c1, c2], layer_mappers)
+
+    expected_c = c1.tensor_circuit(c2.map_state_space_labels({0:1}))
+
+    # manually construct the expected circuit
+    assert tensored_c != expected_c # explicit idles.
+    assert tensored_c[0] == expected_c[0]
+    assert tensored_c[1][1] == expected_c[1]
+
+def test_batch_tensor_reorder():
+    c1 = _Circuit("Gx:0", line_labels=(0,))
+    c2 = _Circuit("Gy:0", line_labels=(0,))
+    idle_label = Label(()) # empty label is the idle
+    labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), idle_label]
+    map_d = {l: l for l in labels_in_circuits}
+    map_d[idle_label] = Label("Gi")
+    layer_mappers = {1: map_d, 2: map_d}
+
+    # Call batch_tensor
+    tensored_c = batch_tensor([c1, c2], layer_mappers, global_line_order=('Q1', 'Q0'), target_lines=(('Q0',), ('Q1',)))
+    expected_c = _Circuit([Label([('Gx', 'Q0'), ('Gy', 'Q1')])], line_labels=['Q1', 'Q0'])
+
+    assert tensored_c == expected_c
+    assert tensored_c.line_labels == ("Q1", "Q0")
+    # We store them still in the canonically ordered form.
+    # However, we will print them in the order specified by line labels.
+    assert tensored_c[0][1] == Label(("Gy", "Q1"))
+    assert tensored_c[0][0] == Label(("Gx", "Q0"))
+
+def test_batch_tensor_string_labels():
+    c1 = _Circuit("Gx:0", line_labels=(0,))
+    c2 = _Circuit("Gy:0", line_labels=(0,))
+    idle_label = Label(()) # empty label is the idle
+    labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), idle_label]
+    map_d = {l: l for l in labels_in_circuits}
+    map_d[idle_label] = Label("Gi")
+    layer_mappers = {1: map_d, 2: map_d}
+
+    # Call batch_tensor
+    tensored_c = batch_tensor([c1, c2], layer_mappers, target_lines=(('Q0',), ('Q1',)))
+    expected_c = _Circuit([Label([('Gx', 'Q0'), ('Gy', 'Q1')])], line_labels=['Q0', 'Q1'])
+
+    assert tensored_c == expected_c
+
+def test_batch_tensor_5_circuits_with_2q_gate():
+    c1 = _Circuit("Gx:0", line_labels=(0,))
+    c2 = _Circuit("Gy:0", line_labels=(0,))
+    c3 = _Circuit([Label("Gcnot", (0, 1))], line_labels=(0, 1))
+    c4 = _Circuit("Gz:0", line_labels=(0,))
+    c5 = _Circuit("Gh:0", line_labels=(0,))
+
+    circuits = [c1, c2, c3, c4, c5]
+
+    idle_label = Label(())  # empty label is the idle
+    labels_in_circuits = [
+        Label('Gx', (0,)), Label('Gy', (0,)), Label('Gz', (0,)), Label('Gh', (0,)),
+        idle_label
+    ]
+    map_d = {l: l for l in labels_in_circuits}
+    map_d[idle_label] = Label("Gi")
+    map_2d = {l: l for l in map_d}
+    map_2d[Label('Gcnot', (0, 1))] = Label('Gcnot', (0, 1))
+    layer_mappers = {1: map_d, 2: map_2d}
+
+    tensored_c = batch_tensor(circuits, layer_mappers)
+
+    expected_c = _Circuit([
+        Label([
+            ('Gx', 0),
+            ('Gy', 1),
+            ('Gcnot', (2, 3)),
+            ('Gz', 4),
+            ('Gh', 5)
+        ])
+    ])
+
+    assert tensored_c == expected_c
