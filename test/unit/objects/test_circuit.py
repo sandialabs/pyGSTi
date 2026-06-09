@@ -518,6 +518,53 @@ class CircuitMethodTester(BaseCase):
         s = str(self.c)
         self.assertEqual(test_s, s)
 
+    def test_serialize_increases_depth_when_labeltuptup(self):
+        from pygsti.baseobjs.label import Label as L, CircuitLabel
+        labels = [
+            L('Gx', 0),  # a LabelTup
+            L('Gx', (0, 1)),  # a LabelTup
+            L(('Gx', 0, 1)),  # a LabelTup
+            L('Gx'),  # a LabelStr
+            L('Gx', None),  # still a LabelStr
+            L([('Gx', 0), ('Gy', 1)]),  # a LabelTupTup of LabelTup objs
+            L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
+            L([('Gx', 0)]),  # just a LabelTup b/c only one component
+            L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
+            L(L('Gx')),  # Init from another label
+            CircuitLabel('circuit', [("Gx", 1), ("Gz", 2)], None, 1, None)
+        ]
+
+        circs = [circuit.Circuit([lbl], expand_subcircuits=False) for lbl in labels]
+        contain_labeltuptup = [5,6,8]
+
+        for i,circ in enumerate(circs):
+            serial = circ.serialize()
+            with_expansion = circ.serialize(True)
+            if i in contain_labeltuptup:
+                self.assertGreater(serial.num_layers, circ.num_layers)
+            else:
+                self.assertEqual(serial.num_layers, circ.num_layers, f"Test case {i} failed with a label {circ[0].__repr__()}")
+
+            if i not in [len(circs) -1]:
+                self.assertEqual(serial.depth, with_expansion.depth)
+                self.assertEqual(serial.num_layers, with_expansion.num_layers)
+            else:
+                self.assertLess(serial.num_layers, with_expansion.num_layers)
+
+    def test_parallelize_serialize_inverse(self):
+        # Test that with adjacent_only=True, serialize is the inverse of parallelize
+        serial_c = circuit.Circuit("Gx:0Gy:1Gx:0", line_labels=(0, 1))
+        parallel_c = serial_c.parallelize(adjacent_only=True)
+        serial_c_from_parallel = parallel_c.serialize()
+        self.assertEqual(serial_c, serial_c_from_parallel)
+
+    def test_parallelize_serialize_not_inverse(self):
+        # Test that with adjacent_only=False, serialize is NOT the inverse of parallelize
+        serial_c = circuit.Circuit([('Gx', 0), ('Gy', 0), ('Gx', 1)], num_lines=2)
+        parallel_c = serial_c.parallelize(adjacent_only=False)  # default
+        serial_c_from_parallel = parallel_c.serialize()
+        self.assertNotEqual(serial_c, serial_c_from_parallel)
+
     def test_str_props(self):
         c_with_labels = circuit.Circuit('Gx:0@(0,1)', line_labels=(0, 1))
         self.assertEqual(c_with_labels.layerstr, 'Gx:0')
