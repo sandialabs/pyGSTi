@@ -642,6 +642,12 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
 
             else:
                 raise ValueError("Invalid to_type argument: %s" % to_type)
+        except Warning:
+            # A pyGSTi UserWarning subclass escalated to an exception by a
+            # caller's warning filter (e.g., `pytest -W error::PrepareThyself`).
+            # Don't silently swallow it as a "conversion failed" message —
+            # let it propagate so the caller sees the real diagnostic.
+            raise
         except Exception as e:
             error_msgs[to_type] = str(e)  # try next to_type
 

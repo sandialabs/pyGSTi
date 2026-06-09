@@ -30,6 +30,8 @@ from pygsti.tools import listtools as _lt
 from pygsti import SpaceT
 from pygsti.circuits import CircuitList as _CircuitList
 
+from pygsti.tools.legacytools import deprecate as _deprecated
+
 _dummy_profiler = _DummyProfiler()
 
 # FUTURE: use enum
@@ -185,7 +187,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                    derivative_eps=state.get('derivative_epsilon', 1e-7),
                    hessian_eps=state.get('hessian_epsilon', 1e-5))
 
-    def copy(self):
+    def copy(self, keep_model_attached=True):
         """
         Return a shallow copy of this MapForwardSimulator
 
@@ -193,8 +195,13 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         -------
         MapForwardSimulator
         """
-        return MapForwardSimulator(self.model, self._max_cache_size, self._num_atoms,
-                                   self._processor_grid, self._pblk_sizes)
+        out = MapForwardSimulator(
+            self.model, self._max_cache_size, self._num_atoms,
+            self._processor_grid, self._pblk_sizes
+        )
+        if not keep_model_attached:
+            out.model = None  # type: ignore
+        return out
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None,
@@ -704,77 +711,3 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dloglpp, logl_array_to_fill, loglpp)
 
-    
-    #Utility method for generating process matrices for circuits. Should not be used for forward
-    #simulation when using the MapForwardSimulator.
-    def product(self, circuit, scale=False):
-        """
-        Compute the product of a specified sequence of operation labels.
-
-        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of circuit can be thought of as the first gate operation
-        performed, which is on the far right of the product of matrices.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        Returns
-        -------
-        product : numpy array
-            The product or scaled product of the operation matrices.
-        scale : float
-            Only returned when scale == True, in which case the
-            actual product == product * scale.  The purpose of this
-            is to allow a trace or other linear operation to be done
-            prior to the scaling.
-        """
-        superop_dim = self.model.evotype.minimal_dim(self.model.state_space)
-        if superop_dim <= 16:
-            msg = \
-            """
-            Generating dense process matrix representations of circuits or gates
-            can be inefficient and should be avoided for the purposes of forward
-            simulation/calculation of circuit outcome probability distributions
-            when using the MapForwardSimulator. This operator is small enough
-            that it could be computed with MatrixForwardSimulator instead.
-            """
-            from pygsti.tools.exceptions import ForwardSimulatorSuitabilityWarning
-            _warnings.warn(msg, ForwardSimulatorSuitabilityWarning)
-
-        # Smallness tolerances, used internally for conditional scaling required
-        # to control bulk products, their gradients, and their Hessians.
-        _PSMALL = 1e-100
-        G = _np.identity(superop_dim)
-        if scale:
-            scaledGatesAndExps = {}
-            scale_exp = 0
-            for lOp in circuit:
-                if lOp not in scaledGatesAndExps:
-                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
-                    ng = max(_nla.norm(opmx), 1.0)
-                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
-
-                gate, ex = scaledGatesAndExps[lOp]
-                H = _np.dot(gate, G)   # product of gates, starting with identity
-                scale_exp += ex   # scale and keep track of exponent
-                if H.max() < _PSMALL and H.min() > -_PSMALL:
-                    nG = max(_nla.norm(G), _np.exp(-scale_exp))
-                    G = _np.dot(gate, G / nG); scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
-                else: G = H
-
-            old_err = _np.seterr(over='ignore')
-            scale = _np.exp(scale_exp)
-            _np.seterr(**old_err)
-
-            return G, scale
-
-        else:
-            for lOp in circuit:
-                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
-                # above line: LEXICOGRAPHICAL VS MATRIX ORDER
-            return G

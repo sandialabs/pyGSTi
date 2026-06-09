@@ -13,6 +13,7 @@ Utility functions operating on operation matrices
 from __future__ import annotations
 
 import warnings as _warnings
+from contextlib import contextmanager as _contextmanager
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -54,6 +55,33 @@ working with a matrix whose dtype is `d`, then we set
 
 or a modest multiple thereof.
 """
+
+
+@_contextmanager
+def relaxed_scalar_tolerance(exponent: float = 0.05):
+    """
+    Temporarily lower the global ``__SCALAR_TOL_EXPONENT__`` used by
+    :func:`fidelity` (and any other consumer of that global) to gate
+    ``NumericalDomainWarning`` emission.
+
+    The effective tolerance becomes ``np.finfo(dtype).eps ** exponent``.
+    Smaller `exponent` => looser tolerance. In float64,
+    ``eps ** 0.05 ≈ 0.165``, which gives roughly a 2× margin over the
+    drift typically observed during gauge optimization over non-unitary
+    gauge groups (largest seen: ~0.08 trace deviation, ~-0.06 minimum
+    eigenvalue). Pass a larger `exponent` (e.g. 0.15 ≈ 0.017) when
+    wrapping calls on already-converged inputs that should be cleaner.
+
+    Not thread-safe: mutates a module-level global. Safe under
+    pytest-xdist (forked workers have independent module state).
+    """
+    global __SCALAR_TOL_EXPONENT__
+    old = __SCALAR_TOL_EXPONENT__
+    __SCALAR_TOL_EXPONENT__ = exponent
+    try:
+        yield
+    finally:
+        __SCALAR_TOL_EXPONENT__ = old
 
 
 def _flat_mut_blks(i, j, block_dims):
@@ -155,6 +183,7 @@ def fidelity(a, b):
     """
     __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** __SCALAR_TOL_EXPONENT__
     # ^ use for checks that have no dimensional dependence; about 1e-8 for double precision.
+    __RANK_TOL__   = _np.finfo(a.dtype).eps ** max(__SCALAR_TOL_EXPONENT__, 0.5)
     
     _mt.assert_hermitian(a, __SCALAR_TOL__)
     _mt.assert_hermitian(b, __SCALAR_TOL__)
@@ -168,13 +197,13 @@ def fidelity(a, b):
     if _np.abs(tr_b - 1) > __SCALAR_TOL__:
         _warnings.warn(trace_warning % ('b', str(tr_b)), _NumericalDomainWarning)
 
-    r, vec = fast_density_rank(a, __SCALAR_TOL__)
+    r, vec = fast_density_rank(a, __RANK_TOL__)
     if r <= 1:
         # special case when a is rank 1, a = vec * vec^T.
         f = (vec.T.conj() @ b @ vec).real  # vec^T * b * vec
         return f
 
-    r, vec = fast_density_rank(b, __SCALAR_TOL__)
+    r, vec = fast_density_rank(b, __RANK_TOL__)
     if r <= 1:
         # special case when b is rank 1 (recall fidelity is sym in args)
         f = (vec.T.conj() @ a @ vec).real  # vec^T * a * vec

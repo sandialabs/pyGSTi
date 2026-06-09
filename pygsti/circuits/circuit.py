@@ -28,6 +28,7 @@ from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
+from pygsti.tools.exceptions import QiskitInteropWarning as _QiskitInteropWarning
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 
@@ -4436,7 +4437,8 @@ class Circuit(object):
             import qiskit
             if qiskit.__version__ != '2.1.1':
                 _warnings.warn("Circuit class method `from_qiskit()` is designed for qiskit version 2.1.1 and may not \
-                                function properly for your qiskit version, which is " + qiskit.__version__)
+                                function properly for your qiskit version, which is " + qiskit.__version__,
+                               _QiskitInteropWarning)
         except:
             raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
 
@@ -4453,10 +4455,12 @@ class Circuit(object):
 
         # get all of the qubits in the Qiskit circuit
         if len(circuit.qregs) > 1:
-            _warnings.warn('pyGSTi circuit mapping does not preserve Qiskit qreg structure.')
+            _warnings.warn('pyGSTi circuit mapping does not preserve Qiskit qreg structure.',
+                           _QiskitInteropWarning)
 
         if len(circuit.cregs):
-            _warnings.warn('pyGSTi circuit mapping discards classical registers.')
+            _warnings.warn('pyGSTi circuit mapping discards classical registers.',
+                           _QiskitInteropWarning)
 
         qubits = circuit.qubits
 
@@ -4791,7 +4795,8 @@ class Circuit(object):
             import qiskit
             if qiskit.__version__ != '2.1.1':
                 _warnings.warn("Circuit class method `convert_to_qiskit()` is designed for qiskit version 2.1.1 and may not \
-                                function properly for your qiskit version, which is " + qiskit.__version__)
+                                function properly for your qiskit version, which is " + qiskit.__version__,
+                               _QiskitInteropWarning)
         except:
             raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
 

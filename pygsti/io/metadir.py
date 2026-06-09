@@ -33,6 +33,7 @@ except ImportError:
 
 from pygsti.io import readers as _load
 from pygsti.io import writers as _write
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
@@ -248,7 +249,8 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
     elif cur_typ in ('text-circuit-lists', 'protocolobj', 'list-of-protocolobjs', 'dict-of-resultsobjs'):
         # TODO LATER -- REMOVE this entire block - this is for backward compatibility only.
         _warnings.warn(("Loading in an old and deprecated aux-file format - "
-                        "you should re-save this data to update the format!"))
+                        "you should re-save this data to update the format!"),
+                       _pyGSTiDeprecationWarning)
         ext = _get_auxfile_ext(cur_typ)
         key = filenm
 

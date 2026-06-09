@@ -31,6 +31,7 @@ from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning as _ImplicitlyDoneEditingCircuitWarning
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
 # import scipy.special as _sps
 # import scipy.fftpack as _fft
@@ -2826,7 +2827,8 @@ class DataSet(_MongoSerializable):
         bStatic = state_dict['bStatic']
 
         if "gsIndexKeys" in state_dict:
-            _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.",
+                           _pyGSTiDeprecationWarning)
             cirIndexKeys = [cgstr.expand() for cgstr in state_dict['gsIndexKeys']]
             cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['gsIndexVals'])))
         else:
@@ -2835,7 +2837,8 @@ class DataSet(_MongoSerializable):
 
         if "slIndex" in state_dict:
             #print("DB: UNPICKLING AN OLD DATASET"); print("Keys = ",state_dict.keys())
-            _warnings.warn("Unpickling a *very* deprecated-format DataSet.  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling a *very* deprecated-format DataSet.  Please re-save/pickle asap.",
+                           _pyGSTiDeprecationWarning)
 
             #Turn spam labels into outcome labels
             self.cirIndex = _OrderedDict()
@@ -2930,18 +2933,20 @@ class DataSet(_MongoSerializable):
         else:
             f = file_or_filename
 
-        _pickle.dump(toPickle, f)
-        if self.bStatic:
-            _np.save(f, self.oliData)
-            _np.save(f, self.timeData)
-            if self.repData is not None:
-                _np.save(f, self.repData)
-        else:
-            for row in self.oliData: _np.save(f, row)
-            for row in self.timeData: _np.save(f, row)
-            if self.repData is not None:
-                for row in self.repData: _np.save(f, row)
-        if bOpen: f.close()
+        try:
+            _pickle.dump(toPickle, f)
+            if self.bStatic:
+                _np.save(f, self.oliData)
+                _np.save(f, self.timeData)
+                if self.repData is not None:
+                    _np.save(f, self.repData)
+            else:
+                for row in self.oliData: _np.save(f, row)
+                for row in self.timeData: _np.save(f, row)
+                if self.repData is not None:
+                    for row in self.repData: _np.save(f, row)
+        finally:
+            if bOpen: f.close()
 
     @_deprecated_fn('read_binary')
     def load(self, file_or_filename):
@@ -2972,69 +2977,72 @@ class DataSet(_MongoSerializable):
         else:
             f = file_or_filename
 
-        state_dict = _pickle.load(f)
+        try:
+            state_dict = _pickle.load(f)
 
-        if "gsIndexKeys" in state_dict:
-            _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.")
-            state_dict['cirIndexKeys'] = state_dict['gsIndexKeys']
-            state_dict['cirIndexVals'] = state_dict['gsIndexVals']
-            del state_dict['gsIndexKeys']
-            del state_dict['gsIndexVals']
+            if "gsIndexKeys" in state_dict:
+                _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.",
+                               _pyGSTiDeprecationWarning)
+                state_dict['cirIndexKeys'] = state_dict['gsIndexKeys']
+                state_dict['cirIndexVals'] = state_dict['gsIndexVals']
+                del state_dict['gsIndexKeys']
+                del state_dict['gsIndexVals']
 
-        def expand(x):  # to be backward compatible
-            """ Expand a compressed circuit """
-            if isinstance(x, _cir.CompressedCircuit): return x.expand()
-            elif hasattr(x, '__class__') and x.__class__.__name__ == "dummy_CompressedGateString":
-                return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x._tup), stringrep=x.str)
-                #for backward compatibility, needed for Python2 only, which doesn't call __new__ when
-                # unpickling protocol=0 (the default) info.
+            def expand(x):  # to be backward compatible
+                """ Expand a compressed circuit """
+                if isinstance(x, _cir.CompressedCircuit): return x.expand()
+                elif hasattr(x, '__class__') and x.__class__.__name__ == "dummy_CompressedGateString":
+                    return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x._tup), stringrep=x.str)
+                    #for backward compatibility, needed for Python2 only, which doesn't call __new__ when
+                    # unpickling protocol=0 (the default) info.
+                else:
+                    _warnings.warn("Deprecated dataset format.  Please re-save "
+                                   "this dataset soon to avoid future incompatibility.",
+                                   _pyGSTiDeprecationWarning)
+                    return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
+            cirIndexKeys = [expand(cgstr) for cgstr in state_dict['cirIndexKeys']]
+
+            #cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
+            self.cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
+            self.olIndex = state_dict['olIndex']
+            self.olIndex_max = state_dict.get('olIndex_max',
+                                              max(self.olIndex.values()) if len(self.olIndex) > 0 else -1)
+            self.ol = state_dict['ol']
+            self.bStatic = state_dict['bStatic']
+            self.oliType = state_dict['oliType']
+            self.timeType = state_dict['timeType']
+            self.repType = state_dict['repType']
+            self.collisionAction = state_dict['collisionAction']
+            self.uuid = state_dict['uuid']
+            self.auxInfo = state_dict.get('auxInfo', _defaultdict(dict))  # backward compat
+            self.comment = state_dict.get('comment', '')  # backward compat
+
+            useReps = state_dict['useReps']
+
+            if self.bStatic:
+                self.oliData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
+                self.timeData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
+                if useReps:
+                    self.repData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
+                self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}  # init cnt_cache afresh
             else:
-                _warnings.warn("Deprecated dataset format.  Please re-save "
-                               "this dataset soon to avoid future incompatibility.")
-                return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
-        cirIndexKeys = [expand(cgstr) for cgstr in state_dict['cirIndexKeys']]
-
-        #cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
-        self.cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
-        self.olIndex = state_dict['olIndex']
-        self.olIndex_max = state_dict.get('olIndex_max',
-                                          max(self.olIndex.values()) if len(self.olIndex) > 0 else -1)
-        self.ol = state_dict['ol']
-        self.bStatic = state_dict['bStatic']
-        self.oliType = state_dict['oliType']
-        self.timeType = state_dict['timeType']
-        self.repType = state_dict['repType']
-        self.collisionAction = state_dict['collisionAction']
-        self.uuid = state_dict['uuid']
-        self.auxInfo = state_dict.get('auxInfo', _defaultdict(dict))  # backward compat
-        self.comment = state_dict.get('comment', '')  # backward compat
-
-        useReps = state_dict['useReps']
-
-        if self.bStatic:
-            self.oliData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
-            self.timeData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
-            if useReps:
-                self.repData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
-            self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}  # init cnt_cache afresh
-        else:
-            self.oliData = []
-            for _ in range(state_dict['nRows']):
-                self.oliData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
-
-            self.timeData = []
-            for _ in range(state_dict['nRows']):
-                self.timeData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
-
-            if useReps:
-                self.repData = []
+                self.oliData = []
                 for _ in range(state_dict['nRows']):
-                    self.repData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
-            else:
-                self.repData = None
-            self.cnt_cache = None
+                    self.oliData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
 
-        if bOpen: f.close()
+                self.timeData = []
+                for _ in range(state_dict['nRows']):
+                    self.timeData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
+
+                if useReps:
+                    self.repData = []
+                    for _ in range(state_dict['nRows']):
+                        self.repData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
+                else:
+                    self.repData = None
+                self.cnt_cache = None
+        finally:
+            if bOpen: f.close()
 
     def rename_outcome_labels(self, old_to_new_dict):
         """

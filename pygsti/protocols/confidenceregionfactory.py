@@ -1168,8 +1168,9 @@ class ConfidenceRegionFactoryView(object):
         _, bestGS = _alg.core.run_gst_fit_simple(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.model)  # maybe more params here?
         norms = _np.array([_np.dot(grad_f[i], grad_f[i]) for i in range(grad_f.shape[0])])
-        delta2 = _np.abs(_np.dot(grad_f, bestGS.to_vector() - self.model.to_vector())
-                         * _np.where(norms > 1e-10, 1.0 / norms, 0.0))
+        with _np.errstate(divide='ignore', invalid='ignore'):
+            delta2 = _np.abs(_np.dot(grad_f, bestGS.to_vector() - self.model.to_vector())
+                            * _np.where(norms > 1e-10, 1.0 / norms, 0.0))
         delta2 *= self._C1  # scaling appropriate for confidence level
         delta = _np.sqrt(delta2)  # error^2 -> error
 
