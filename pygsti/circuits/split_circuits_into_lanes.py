@@ -1,6 +1,6 @@
 import numpy as _np
 
-from typing import Sequence, Dict, Tuple, Optional, Set
+from typing import Sequence, Dict, Tuple, Optional, Set, Union
 from pygsti.circuits import Circuit as Circuit
 from pygsti.baseobjs.label import Label, LabelTupTup
 
@@ -136,12 +136,14 @@ def compute_subcircuits(circuit: Circuit,
 def batch_tensor(
     circuits : Sequence[Circuit],
     layer_mappers: Dict[int, Dict],
-    global_line_order: Optional[Tuple[int,...]] = None,
-    target_lines : Optional[Sequence[Tuple[int,...]]] = None
+    global_line_order: Optional[Tuple[Union[int, str], ...]] = None,
+    target_lines : Optional[Sequence[Tuple[Union[int, str], ...]]] = None
     ) -> Circuit:
     """
     `circuits`: Sequence of `Circuit` the circuits you want to tensor together.
     `layer_mappers`: dictionary of lane size to a dictionary of `Label` to `Label`.
+        Need to ensure that you have something that maps from () -> Idle gate.
+        Else you may get spurious "COMPOUND" gates.
     'target_lines' : Optional sequence of state space labels used by each circuit.
     `global_line_order`: The final order of the state space labels (used if one wants to make it not just arange(total_lines))
 
@@ -149,12 +151,17 @@ def batch_tensor(
     with noisy idles.
     """
     assert len(circuits) > 0
+    if __debug__:
+        for num_lines in layer_mappers:
+            if Label(()) in layer_mappers[num_lines]:
+                assert layer_mappers[num_lines][Label(())] != Label(())
 
     if target_lines is None:
         target_lines = []
         total_lines = 0
         max_cir_len = 0
         for c in circuits:
+            # We are just going to build the target_lines as arange(num_lines)
             target_lines.append(tuple(range(total_lines, total_lines + c.num_lines)))
             total_lines += c.num_lines
             max_cir_len = max(max_cir_len, len(c))
