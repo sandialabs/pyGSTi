@@ -27,3 +27,13 @@ In order to run on your machine:
 1. Once all jobs are completed, run `extract_timings.py` to generate a JSON file and the 2D speedup plot.
 
 1. Compare to the reference values and hope nothing has gotten slower.
+
+## Circuit microbenchmarks
+
+`circuit_microbench.py` times the Circuit identity/creation hot paths (construction
+tiers, hashing, parsing, concatenation) plus a real experiment-design macro, and
+prints a markdown table — the before/after evidence format used on PRs #445/#692.
+Run it manually with the same interpreter before and after any change to
+`pygsti/circuits/circuit.py`; it is intentionally not part of CI.
+
+    python test/performance/circuit_microbench.py --repeats 7 --json out.json
