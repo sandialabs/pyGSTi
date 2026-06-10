@@ -211,8 +211,9 @@ def test_batch_tensor_5_circuits_with_2q_gate():
     ]
     map_d = {l: l for l in labels_in_circuits}
     map_d[idle_label] = Label("Gi")
-    map_2d = {l: l for l in map_d}
+    map_2d = {k: v for k,v in map_d.items()}
     map_2d[Label('Gcnot', (0, 1))] = Label('Gcnot', (0, 1))
+    
     layer_mappers = {1: map_d, 2: map_2d}
 
     tensored_c = batch_tensor(circuits, layer_mappers)
@@ -221,7 +222,7 @@ def test_batch_tensor_5_circuits_with_2q_gate():
         Label([
             ('Gx', 0),
             ('Gy', 1),
-            ('Gcnot', (2, 3)),
+            ('Gcnot', 2, 3),
             ('Gz', 4),
             ('Gh', 5)
         ])
