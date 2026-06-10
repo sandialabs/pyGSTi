@@ -8,6 +8,7 @@ PR. Never "fix" a failing pin by casually changing production code.
 Pinned here:
   * the .tup wire grammar:
       layertup [+ ('@',)+line_labels] [+ ('@',occurrence)] [+ ('__CMPLBL__',)+indices]
+      (the line-label '@' separator always appears when occurrence does)
   * hash/eq laws (hash == hash(.tup) == hash(._hashable_tup); eq vs non-Circuit
     compares layertup only; tup metadata affects Circuit-Circuit eq; name/auxinfo don't)
   * implicit done_editing() on hashing an editable circuit (mutation + warning)
@@ -50,6 +51,12 @@ def test_tup_compilable_indices():
     assert c.tup == (Label(('Gx', 0)), Label(('Gy', 0)), '@', 0, '__CMPLBL__', 1)
 
 
+def test_tup_compilable_indices_without_line_labels():
+    c = Circuit(['Gx', 'Gy'], compilable_layer_indices=(1,))
+    # no '@' separator: '__CMPLBL__' directly abuts the layer labels
+    assert c.tup == (Label('Gx'), Label('Gy'), '__CMPLBL__', 1)
+
+
 def test_tup_full_grammar():
     layer_list = [('Gx', 0), ('Gy', 0)]
     c = Circuit(layer_list, line_labels=(0,), occurrence=2, compilable_layer_indices=(0,))
@@ -74,6 +81,10 @@ def test_eq_ignores_name_and_auxinfo():
     c2.auxinfo['key'] = 'value'
     assert c1 == c2
     assert hash(c1) == hash(c2)
+
+
+def test_eq_with_none_is_false():
+    assert Circuit('Gx') != None  # noqa: E711  — pins the explicit None branch of __eq__
 
 
 def test_eq_with_non_circuit_compares_layertup_only():
@@ -107,7 +118,7 @@ def test_hashing_editable_circuit_mutates_it():
     c = Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1), editable=True)
     with pytest.warns(ImplicitlyDoneEditingCircuitWarning):
         h = hash(c)
-    assert c._static  # hashing flipped it to read-only (dataset.py:1415-1432 exploits this)
+    assert c._static  # hashing flipped it to read-only (DataSet._collisionaction_update_circuit relies on this)
     assert c.layertup[0] == Label((('Gx', 0), ('Gy', 1)))  # and canonicalized (sorted)
     assert h == hash(c.tup)
 
@@ -115,6 +126,7 @@ def test_hashing_editable_circuit_mutates_it():
 def test_ordering_follows_tup():
     a = Circuit('Gx:0@(0)')
     b = Circuit('Gy:0@(0)')
+    assert a < b
     assert (a < b) == (a.tup < b.tup)
     assert (a > b) == (a.tup > b.tup)
 
