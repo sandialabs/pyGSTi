@@ -2506,9 +2506,11 @@ class Circuit(object):
         # lines, so a gate with implicit sslbls cannot sit in a layer that the insertion below
         # writes to (the first circuit.num_layers layers): it would straddle the new lines.
         # Layers beyond the insertion region are unaffected (e.g. a trailing global idle).
-        if circuit.num_layers > 0 and len(circuit._line_labels) > 0 and len(self._line_labels) > 0 \
-           and (_sslbls_of_nested_lists_of_simple_labels(self._labels[:circuit.num_layers]) is None \
-            or _sslbls_of_nested_lists_of_simple_labels(circuit._labels[:self.num_layers]) is None):
+        circ_nonempty: bool = circuit.num_layers > 0 and len(circuit._line_labels) > 0
+        self_nonempty: bool = self.num_layers > 0 and len(self._line_labels) > 0
+        expanded_self_has_implicit_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels[:circuit.num_layers]) is None
+        expanded_circ_has_implicit_sslbls = _sslbls_of_nested_lists_of_simple_labels(circuit._labels[:self.num_layers]) is None
+        if circ_nonempty and self_nonempty and (expanded_self_has_implicit_sslbls or expanded_circ_has_implicit_sslbls):
             raise ValueError("Cannot tensor: this circuit contains gates with implicit (None) state-space "
                              "labels in the layers being tensored, which are interpreted as acting on *all* "
                              "of the circuit's lines and so cannot coexist with the new lines being added.  "
