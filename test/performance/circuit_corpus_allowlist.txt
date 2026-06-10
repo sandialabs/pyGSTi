@@ -1,0 +1,4 @@
+# Differential-corpus allowlist: mismatches between baseline and candidate
+# fingerprint files that are EXPECTED and approved. One entry per line:
+# field<TAB>circuit-str<TAB>reason
+# (No entries yet — every future entry must come with a written reason.)

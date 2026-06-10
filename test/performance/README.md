@@ -37,3 +37,19 @@ Run it manually with the same interpreter before and after any change to
 `pygsti/circuits/circuit.py`; it is intentionally not part of CI.
 
     python test/performance/circuit_microbench.py --repeats 7 --json out.json
+
+## Circuit differential corpus
+
+`circuit_corpus.py` builds a deterministic corpus of realistic circuits (~18.8k circuits
+at --size full: GST experiment designs, seeded random circuits, and re-parsed
+variants through the dataset-loading path), fingerprints every identity-relevant
+behavior (str/tup/hash/slices/concat, with exceptions recorded as values), and
+compares fingerprint files across implementations. Differences must be listed in
+`circuit_corpus_allowlist.txt` (field, circuit, reason) or the compare fails.
+Hash stability across processes is handled via an automatic PYTHONHASHSEED=0 re-exec.
+
+    python test/performance/circuit_corpus.py generate --out develop.jsonl --size full
+    # ...switch to the candidate branch/env...
+    python test/performance/circuit_corpus.py generate --out candidate.jsonl --size full
+    python test/performance/circuit_corpus.py compare develop.jsonl candidate.jsonl \
+        --allowlist test/performance/circuit_corpus_allowlist.txt
