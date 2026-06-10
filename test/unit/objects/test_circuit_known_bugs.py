@@ -5,6 +5,8 @@ the eventual fix is forced to flip the pin in the same PR that fixes it.
 Convention:   # KNOWN BUG, pyGSTi issue #NNN — assertions pin the bug.
 Repros taken verbatim from the issue reports (verified by execution 2026-06-10
 at develop@47b3dcae5, re-verified here at 3e7dd411e).
+If one of these tests goes red after your change, you have probably fixed the
+referenced issue: flip or delete the pin in the same PR and note the issue number.
 """
 import pytest
 
@@ -40,7 +42,7 @@ def test_758_add_drops_compilable_but_leaks_markers():
     a = Circuit("Gx~Gy@(0)")
     b = Circuit("Gz@(0)")
     s = a + b
-    assert s.compilable_layer_indices == ()   # metadata hard-dropped
+    assert s.compilable_layer_indices == ()   # metadata hard-dropped (keep/drop policy matrix: test_circuit_metadata_policy.py)
     assert '~' in s.str                       # KNOWN BUG #758: marker leaked into cached str
     assert Circuit(s.str) != s                # KNOWN BUG #758: round-trip broken
 
@@ -54,12 +56,15 @@ def test_759_editable_slice_aliases_parent_sublists():
     assert s._labels[0] is p._labels[0]       # KNOWN BUG #759: same list object
 
 
-def test_759_editable_copy_is_only_one_level_deep():
-    # KNOWN BUG #759: copy(editable=True) copies one level; deeper nesting stays shared
-    p = Circuit("[Gx:0Gy:1][Gz:0]", line_labels=(0, 1), editable=True)
+def test_759_editable_copy_shares_nested_compound_label_lists():
+    # KNOWN BUG #759: copy(editable=True) copies per-layer lists but the nested
+    # lists representing compound labels within a layer remain shared
+    inner = Label((('Gx', 0), ('Gy', 1)))
+    p = Circuit([[inner, ('Gz', 2)]], line_labels=(0, 1, 2), editable=True)
     q = p.copy(editable=True)
-    assert q._labels    is not p._labels      # outer list copied...
-    assert q._labels[0] is not p._labels[0]   # ...and per-layer lists copied (one level)
+    assert q._labels       is not p._labels        # outer list copied...
+    assert q._labels[0]    is not p._labels[0]     # ...per-layer list copied (one level)...
+    assert q._labels[0][0] is     p._labels[0][0]  # KNOWN BUG #759: nested list shared
 
 
 # ---- KNOWN BUG, pyGSTi issue #761: str-setter consistency check uses zip without
