@@ -28,3 +28,9 @@ def build_golden_circuits():
     d['args_and_time']    = Circuit('Gx;theta:0!1.5@(0)')
     d['long_periodic']    = Circuit([('Gx', 0), ('Gy', 0)] * 15, line_labels=(0,))
     return d
+
+
+def golden_counts(i):
+    """Outcome counts for the i-th golden circuit in the golden DataSet fixture."""
+    counts = {'0': 10 + i, '1': 90 - i}
+    return counts

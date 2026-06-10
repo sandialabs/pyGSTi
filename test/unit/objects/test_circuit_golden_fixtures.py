@@ -3,6 +3,10 @@ loading and must equal freshly constructed circuits on the identity surface
 (eq / hash-consistency / str / tup). The fixtures are bytes written by the code
 version that baselined them; golden_circuit_defs constructs the same circuits
 with current code, so any drift between the two is a contract break.
+
+The compressed and dataset comparisons go through ``_compressed_roundtrip_form``
+/ ``_dataset_binary_key_form``, which encode the known-lossy parts of those
+round trips.
 """
 import json
 import os
@@ -22,7 +26,11 @@ def _compressed_roundtrip_form(circuit):
     """What a CompressedCircuit round trip reproduces: the layer labels (with any
     CircuitLabels expanded, because Circuit.default_expand_subcircuits is True),
     the line labels, and the occurrence id survive; compilable_layer_indices are
-    silently dropped (CompressedCircuit never stores them)."""
+    silently dropped (CompressedCircuit never stores them).
+
+    Note: both sides of the comparison pass through the CURRENT Circuit
+    constructor, so constructor-level normalization changes are masked here
+    (the manifest test covers fresh-constructor drift)."""
     layers = circuit.layertup
     lines  = circuit.line_labels
     return Circuit(layers, lines, occurrence=circuit.occurrence)
@@ -31,7 +39,11 @@ def _compressed_roundtrip_form(circuit):
 def _dataset_binary_key_form(circuit):
     """What survives as a DataSet key after a write_binary/load round trip: like
     the CompressedCircuit form, but the occurrence id is dropped too (DataSet
-    strips it on insertion)."""
+    strips it on insertion).
+
+    Note: both sides of the comparison pass through the CURRENT Circuit
+    constructor, so constructor-level normalization changes are masked here
+    (the manifest test covers fresh-constructor drift)."""
     layers = circuit.layertup
     lines  = circuit.line_labels
     return Circuit(layers, lines)
@@ -84,7 +96,8 @@ def test_golden_dataset_loads_with_expected_keys_and_counts(expected):
     expected_counts = {}
     for i, c in enumerate(expected.values()):
         key = _dataset_binary_key_form(c)
-        expected_counts[key] = (10 + i, 90 - i)
+        counts_i = golden_circuit_defs.golden_counts(i)
+        expected_counts[key] = (counts_i['0'], counts_i['1'])
 
     ds = DataSet(file_to_load_from=os.path.join(GOLDEN, 'golden_dataset.pkl.gz'))
     assert set(ds.keys()) == set(expected_counts)

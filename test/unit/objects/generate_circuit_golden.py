@@ -5,6 +5,18 @@ Run from the repo root:
 
 Regenerating REPLACES the fixtures and resets the baseline — only do that
 deliberately, in a reviewed PR that explains why.
+
+Regeneration determinism:
+
+* ``circuits_golden.pkl``, ``compressed_golden.pkl``, and ``golden_manifest.json``
+  regenerate byte-identically under ``PYTHONHASHSEED=0`` and therefore serve as
+  drift detectors: an unexpected diff in any of them means circuit construction
+  or serialization behavior changed.
+* ``golden_dataset.pkl.gz`` is EXPECTED to differ on every run (DataSet generates
+  a random uuid that gets pickled, plus gzip embeds mtime headers). Only
+  re-commit it when the dataset contract deliberately changes.
+* ``PYTHONHASHSEED=0`` is load-bearing for the .pkl byte-stability — do not
+  drop it.
 """
 import json
 import os
@@ -27,11 +39,13 @@ def main():
     circuits = golden_circuit_defs.build_golden_circuits()
 
     with open(os.path.join(OUTDIR, 'circuits_golden.pkl'), 'wb') as f:
+        # protocol 2: frozen format, readable by every Python 3; keeps fixture
+        # bytes stable across interpreter upgrades
         pickle.dump(circuits, f, protocol=2)
 
     compressed = {k: CompressedCircuit(c) for k, c in circuits.items()}
     with open(os.path.join(OUTDIR, 'compressed_golden.pkl'), 'wb') as f:
-        pickle.dump(compressed, f, protocol=2)
+        pickle.dump(compressed, f, protocol=2)  # protocol 2: see above
 
     manifest = {}
     for k, c in circuits.items():
@@ -48,7 +62,7 @@ def main():
 
     ds = DataSet(outcome_labels=['0', '1'])
     for i, c in enumerate(circuits.values()):
-        ds.add_count_dict(c, {'0': 10 + i, '1': 90 - i})
+        ds.add_count_dict(c, golden_circuit_defs.golden_counts(i))
     ds.done_adding_data()
     ds.write_binary(os.path.join(OUTDIR, 'golden_dataset.pkl.gz'))
 
