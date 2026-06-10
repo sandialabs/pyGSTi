@@ -88,6 +88,7 @@ testing_no_cython_mpi = [
     'pytest',
     'pytest-xdist',
     'pytest-cov',
+    'hypothesis',
     'nbval',
     'nbformat',
     'packaging',
