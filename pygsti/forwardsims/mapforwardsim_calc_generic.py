@@ -313,7 +313,8 @@ def mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, la
 
             for gl in remainder:
                 op = fwdsim.model._circuit_layer_operator(gl, 'op')
-                op.set_time(t); t += gl.time  # time in gate label == gate duration?
+                op.set_time(t)
+                t += gl.time if hasattr(gl, "time") else 0.0  # time in gate label == gate duration?
                 rho = op._rep.acton(rho)
 
             j = outcome_to_elbl_index[outcome]
