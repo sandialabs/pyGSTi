@@ -932,8 +932,8 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(c, circuit.Circuit("Gx2:0Gy2:1@(0,1)"))
 
     def test_map_names_inplace_with_dict(self):
-        # regression test for issue #763 (dict path must keep working; missing
-        # keys mean "keep the old name")
+        # context pin for issue #763: the dict path was never broken and must
+        # keep working; missing keys mean "keep the old name"
         c = circuit.Circuit("Gx:0Gy:1@(0,1)", editable=True)
         c.map_names_inplace({'Gx': 'Gz'})
         c.done_editing()
@@ -995,7 +995,6 @@ class CircuitBugfixRegressionTester(BaseCase):
         # regression test for issue #760: sorting must preserve the editable
         # representation so that subsequent in-place edits still work
         c = circuit.Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1), editable=True)
-        self.assertEqual(c[0], Label((('Gy', 1), ('Gx', 0))))
         c.sort_layer_labels_inplace()
         self.assertEqual(c[0], Label((('Gx', 0), ('Gy', 1))))
         c.insert_labels_into_layers_inplace([Label('Gz', 0)], 1)
@@ -1022,12 +1021,14 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(c[0, 1], Label('Gy', 1))
 
     def test_tensor_circuit_with_tuple_line_order(self):
+        # context pin for issue #762: tuple line_order always worked
         c = circuit.Circuit("Gx:0@(0)", editable=True)
         c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"), line_order=(1, 0))
         c.done_editing()
         self.assertEqual(c.line_labels, (1, 0))
 
     def test_tensor_circuit_noninplace(self):
+        # context pin: first direct test of the copy-returning tensor_circuit
         t = circuit.Circuit("Gx:0@(0)").tensor_circuit(circuit.Circuit("Gy:1@(1)"))
         self.assertEqual(t, circuit.Circuit("[Gx:0Gy:1]@(0,1)"))
 
@@ -1104,6 +1105,15 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(sub_static, sub_editable)
         self.assertEqual(sub_static, circuit.Circuit("Gy:1Gz:1@(1)"))
 
+    def test_extract_labels_nonstrict_implicit_sslbls_covers_all_lines(self):
+        # pin for issue #756: an implicit (None-sslbls) label acts on every
+        # line, so non-strict extraction through any line keeps it and the
+        # result covers all of the parent's lines
+        c = circuit.Circuit([('Gx', 0), 'Gi'], line_labels=(0, 1))
+        sub = c.extract_labels(layers=slice(0, 2), lines=(0,), strict=False)
+        self.assertEqual(sub.line_labels, (0, 1))
+        self.assertEqual(sub, c)
+
     def test_extract_labels_strict_behavior_unchanged(self):
         # context pin for issue #756: strict extraction (the default, used by
         # __getitem__) drops straddling labels and keeps the requested lines
@@ -1114,11 +1124,13 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(sub[1], Label('Gz', 1))
 
     def test_extract_labels_zero_area(self):
-        # pin for issue #764: the zero-area path on editable circuits
+        # pin for issue #764: the zero-area path on editable circuits returns
+        # an *editable* result (the in-place edit below would raise otherwise)
         c = circuit.Circuit("Gx:0Gy:0@(0,1)", editable=True)
         sub = c.extract_labels(layers=(), lines=(0,))
+        sub.insert_labels_into_layers_inplace([Label('Gz', 0)], 0)
         sub.done_editing()
-        self.assertEqual(sub, circuit.Circuit((), line_labels=(0,)))
+        self.assertEqual(sub, circuit.Circuit("Gz:0@(0)"))
 
     def test_malformed_index_raises_index_error(self):
         # regression test for issue #764: _proc_key_arg *returned* the

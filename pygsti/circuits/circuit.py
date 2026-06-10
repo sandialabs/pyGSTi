@@ -1365,7 +1365,9 @@ class Circuit(object):
                 # so the result can act on more lines than requested -- extend the
                 # line labels to cover them (in this circuit's line-label order).
                 extra_lines = observed_sslbls - set(lines)
-                lines = tuple(lines) + tuple(ll for ll in self._line_labels if ll in extra_lines)
+                # (filter, not a genexpr: a genexpr would close over extra_lines and put a
+                #  MAKE_CELL prologue on every call, measurably slowing the int fast path)
+                lines = tuple(lines) + tuple(filter(extra_lines.__contains__, self._line_labels))
             # don't worry about string rep for now...
 
             return Circuit._fastinit(tuple(ret) if self._static else ret,
