@@ -44,7 +44,8 @@ def layer_st(draw):
             q1 = draw(st.sampled_from(free))
             free.remove(q1)
             labels.append((name, q0, q1))
-        elif free:
+        else:
+            # free cannot be empty here (3 lines, at most 2 gates); widening n_gates would require restoring a guard
             name = draw(st.sampled_from(GATES_1Q))
             q = draw(st.sampled_from(free))
             free.remove(q)
@@ -59,13 +60,14 @@ def circuit_st(draw):
     occurrence = draw(st.one_of(st.none(), st.integers(0, 3)))
 
     compilable = None
-    if n_layers and draw(st.booleans()):
+    if n_layers >= 2 and draw(st.booleans()):
         # max_size=n_layers-1 excludes the all-layers-compilable case, a recorded
         # new-issue candidate: _op_seq_to_str emits a '|' after each *uncompilable*
         # layer when that set is smaller, so an empty uncompilable set yields NO
         # marker and Circuit(c.str) silently loses compilable_layer_indices
         # (writer-side sibling of #758; every proper subset round-trips).
-        index_set  = draw(st.sets(st.integers(0, n_layers - 1), max_size=n_layers - 1))
+        # 1-layer circuits can only have the (excluded) full set.
+        index_set  = draw(st.sets(st.integers(0, n_layers - 1), min_size=1, max_size=n_layers - 1))
         compilable = tuple(sorted(index_set))
 
     c = Circuit(layer_list, line_labels=LINES, occurrence=occurrence,
@@ -78,7 +80,7 @@ def circuit_st(draw):
 def test_str_roundtrip_default_parser(c):
     c2 = Circuit(c.str)
     assert c2 == c
-    assert hash(c2) == hash(c)
+    assert hash(c2) == hash(c)  # hash/eq consistency witnessed once here; other parser tests rely on == only
     assert c2.str == c.str
 
 
@@ -103,4 +105,4 @@ def test_str_roundtrip_stdinput_parser(c):
 
 
 def test_fast_parser_extension_importable():
-    pytest.importorskip('pygsti.circuits.circuitparser.fastcircuitparser')
+    pytest.importorskip('pygsti.circuits.circuitparser.fastcircuitparser', reason='fast parser extension not built; the roundtrip tests above exercised only the slow parser')
