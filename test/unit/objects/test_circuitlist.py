@@ -107,7 +107,6 @@ class CircuitListTester(BaseCase):
             Circuit([('Gx', 0)]),
             Circuit([(('Gx', 0))]),
             Circuit('Gx:0'),
-            Circuit('Gx@0'),
             Circuit([Label('Gx', 0)]),
             Circuit(layer_labels=[('Gx',0)])
         ]
@@ -117,7 +116,6 @@ class CircuitListTester(BaseCase):
             Circuit([('Gy', 1)]),
             Circuit([(('Gy', 1))]),
             Circuit('Gy:1'),
-            Circuit('Gy@1'),
             Circuit([Label('Gy', 1)]),
             Circuit(layer_labels=[('Gy',1)])
         ]
@@ -138,3 +136,27 @@ class CircuitListTester(BaseCase):
                 self.assertEqual(len(tensored_reverse_list), 1)
                 self.assertEqual(tensored_reverse_list[0], expected_revc, f"Testing options {i1} and {i2}")
 
+        # The following combinations are expected to error on account of ambiguity.
+        c2_bad_options = [
+            Circuit('Gy@1')
+        ]
+        c1_bad_options = [
+            Circuit('Gx@0')
+        ]
+        for i1, c1 in enumerate(c1_options):
+            for i2, c2 in enumerate(c2_bad_options):
+                cl1 = CircuitList([c1])
+                cl2 = CircuitList([c2])
+                with self.assertRaises(ValueError):
+                    cl1.tensor_circuits(cl2)
+                with self.assertRaises(ValueError):
+                    cl2.tensor_circuits(cl1)
+
+        for i1, c1 in enumerate(c1_bad_options):
+            for i2, c2 in enumerate(c2_options):
+                cl1 = CircuitList([c1])
+                cl2 = CircuitList([c2])
+                with self.assertRaises(ValueError):
+                    cl1.tensor_circuits(cl2)
+                with self.assertRaises(ValueError):
+                    cl2.tensor_circuits(cl1)

@@ -147,7 +147,7 @@ def test_batch_tensor_diff_lengths():
     idle_label = Label(()) # empty label is the idle
     labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), Label("Gz", 0), idle_label]
     map_d = {l: l for l in labels_in_circuits}
-    map_d[idle_label] = Label("Gi")
+    map_d[idle_label] = Label("Gi", 0)
     layer_mappers = {1: map_d, 2: map_d}
 
     # Call batch_tensor
@@ -166,7 +166,7 @@ def test_batch_tensor_reorder():
     idle_label = Label(()) # empty label is the idle
     labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), idle_label]
     map_d = {l: l for l in labels_in_circuits}
-    map_d[idle_label] = Label("Gi")
+    map_d[idle_label] = Label("Gi", 0)
     layer_mappers = {1: map_d, 2: map_d}
 
     # Call batch_tensor
@@ -186,7 +186,7 @@ def test_batch_tensor_string_labels():
     idle_label = Label(()) # empty label is the idle
     labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), idle_label]
     map_d = {l: l for l in labels_in_circuits}
-    map_d[idle_label] = Label("Gi")
+    map_d[idle_label] = Label("Gi", 0)
     layer_mappers = {1: map_d, 2: map_d}
 
     # Call batch_tensor
@@ -210,7 +210,7 @@ def test_batch_tensor_5_circuits_with_2q_gate():
         idle_label
     ]
     map_d = {l: l for l in labels_in_circuits}
-    map_d[idle_label] = Label("Gi")
+    map_d[idle_label] = Label("Gi", 0)
     map_2d = {k: v for k,v in map_d.items()}
     map_2d[Label('Gcnot', (0, 1))] = Label('Gcnot', (0, 1))
     

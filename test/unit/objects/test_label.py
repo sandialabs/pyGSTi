@@ -288,7 +288,6 @@ class LabelStrTester(BaseCase):
         self.assertEqual(l.expand_subcircuits(), (l,))
 
     
- 
 
     def test_labelstr_has_prefix(self):
         l = L('Gx_foo')
@@ -448,6 +447,26 @@ class LabelTupTupTester(BaseCase):
         self.assertTrue(L(('Gx', 0)) in l)
         self.assertFalse(L(('Gz', 0)) in l)
 
+    def test_labeltuptup_init_preserves_component_metadata(self):
+        l1 = L('Gx', (0,), time=0.1)
+        l2 = L('Gy', (1,), args=('foo',))
+        
+        # Create a LabelTupTup from components with metadata
+        # Note: Label() factory should upgrade this to a LabelTupTupWithArgs
+        l_tup_tup = L((l1, l2))
+        
+        # Check that the components within the new label still have their metadata
+        self.assertEqual(l_tup_tup.components[0].time, 0.1)
+        self.assertEqual(l_tup_tup.components[1].args, ('foo',))
+
+        ltt = LabelTupTup.init((l1,l2))        
+        # Also check with the init methods directly
+        self.assertEqual(ltt.components[0].time, 0.1)
+        self.assertEqual(ltt.components[1].args, ('foo',))
+
+        # Check that component args are collected properly
+        self.assertEqual(ltt.collect_args(), ('foo',))
+
 
 class LabelTupTupWithTimeTester(BaseCase):
     def test_labeltuptupwithtime(self):
@@ -490,6 +509,13 @@ class LabelTupTupWithTimeTester(BaseCase):
         l = LabelTupTupWithTime.init((('Gx', 0), ('Gy', 1)), time=0.1)
         self.assertEqual(l.expand_subcircuits(), (l,))
 
+    def test_labeltuptupwithtime_reinit_preserves_toplevel_metadata(self):
+        # Test LabelTupTupWithTime
+        l_with_time1 = LabelTupTupWithTime.init((('Gx', 0),), time=0.5)
+        l_with_time2 = LabelTupTupWithTime.init(l_with_time1)
+        self.assertEqual(l_with_time1.time, 0.5)
+        self.assertEqual(l_with_time2.time, 0.5)
+        self.assertEqual(l_with_time1, l_with_time2)
 
 class LabelTupTupWithArgsTester(BaseCase):
     def test_labeltuptupwithargs(self):
@@ -516,9 +542,12 @@ class LabelTupTupWithArgsTester(BaseCase):
         self.assertTrue(l1 < l3)
 
     def test_labeltuptupwithargs_map_state_space_labels(self):
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
+        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=(1,))
         l2 = l.map_state_space_labels(lambda x: x + 1)
-        self.assertEqual(l2, LabelTupTupWithArgs.init((('Gx', 1), ('Gy', 2)), args=('foo',)))
+        self.assertEqual(l2, LabelTupTupWithArgs.init((('Gx', 1), ('Gy', 2)), args=(1,)))
+        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=(1,))
+        l2 = l.map_state_space_labels({0:1, 1:2})
+        self.assertEqual(l2, LabelTupTupWithArgs.init((('Gx', 1), ('Gy', 2)), args=(1,)))
 
     def test_labeltuptupwithargs_replace_name_no_match(self):
         l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
@@ -529,6 +558,42 @@ class LabelTupTupWithArgsTester(BaseCase):
         l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
         self.assertEqual(l.expand_subcircuits(), (l,))
 
+    def test_labeltuptupwithargs_reinit_preserves_metadata(self):
+        # Test LabelTupTupWithArgs
+        l_with_args1 = LabelTupTupWithArgs.init((('Gx', 0),), time=0.2, args=('foo',))
+        l_with_args2 = LabelTupTupWithArgs.init(l_with_args1)
+        self.assertEqual(l_with_args1.time, 0.2)
+        self.assertEqual(l_with_args1.args, ('foo',))
+        self.assertEqual(l_with_args2.time, 0.2)
+        self.assertEqual(l_with_args2.args, ('foo',))
+        self.assertEqual(l_with_args1, l_with_args2)
+
+    def test_labeltuptupwithargs_init_preserves_component_metadata(self):
+        l1 = L('Gx', (0,), time=0.1)
+        l2 = L('Gy', (1,), args=('foo',))
+        ltt_wa = LabelTupTupWithArgs.init((l1, l2), args=('bar',))
+        self.assertEqual(ltt_wa.components[0].time, 0.1)
+        self.assertEqual(ltt_wa.components[1].args, ('foo',))
+        self.assertEqual(ltt_wa.collect_args(), ('bar', 'foo'))
+
+        ltt_wa_time = LabelTupTupWithArgs.init((l1,l2), time=5.0, args=("bar",))
+        self.assertEqual(ltt_wa_time.components[0].time, 0.1)
+        self.assertEqual(ltt_wa_time.components[1].args, ('foo',))
+        self.assertEqual(ltt_wa_time.collect_args(), ('bar', 'foo'))
+        self.assertEqual(ltt_wa_time.time, 5.0)
+
+        ltt_just_time = LabelTupTupWithArgs.init((l1,l2), time=5.0)
+        self.assertEqual(ltt_just_time.components[0].time, 0.1)
+        self.assertEqual(ltt_just_time.components[1].args, ('foo',))
+        self.assertEqual(ltt_just_time.collect_args(), ('foo',))
+        self.assertEqual(ltt_just_time.time, 5.0)
+        self.assertIsInstance(ltt_just_time, LabelTupTupWithArgs) #only because we directly call it.
+
+    def test_labeltuptupwithargs_add(self):
+        l1 = LabelTupTupWithArgs.init((('A', 0), ('B', 1)), args=('foo',))
+        l2 = LabelTupTupWithArgs.init((('A', 0), ('C', 1)), args=('foo',))
+        with self.assertRaises(NotImplementedError):
+            l1 + l2
 
 class LabelTupWithTimeTester(BaseCase):
     def test_labeltupwithtime(self):
@@ -559,7 +624,7 @@ class LabelTupWithTimeTester(BaseCase):
         l2 = l.map_state_space_labels(lambda x: x + 1)
         self.assertEqual(l2, LabelTupWithTime.init('Gx', (1, 2), time=0.1))
 
-        l2 = l.map_state_space_labels({0:1, 1:2})
+        l2 = l.map_state_space_labels({0: 1, 1: 2})
         self.assertEqual(l2, LabelTupWithTime.init('Gx', (1, 2), time=0.1))
 
     def test_labeltupwithtime_replace_name_no_match(self):
@@ -619,292 +684,6 @@ class LabelTupWithArgsTester(BaseCase):
         self.assertEqual(l.expand_subcircuits(), (l,))
 
 
-class LabelTupTupWithArgsTester(BaseCase):
-    def test_labeltuptupwithargs(self):
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
-        self.assertEqual(l.args, ('foo',))
-        self.assertEqual(l.to_native(), (2, 'foo', ('Gx', 0), ('Gy', 1)))
-        self.assertEqual(l.name, 'COMPOUND')
-        self.assertEqual(l.sslbls, (0, 1))
-        self.assertEqual(l.qubits, (0, 1))
-        self.assertEqual(l.num_qubits, 2)
-        self.assertEqual(l.components, (L(('Gx', 0)), L(('Gy', 1))))
-
-    def test_labeltuptupwithargs_replace_name(self):
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
-        l2 = l.replace_name('Gx', 'Gz')
-        self.assertEqual(l2, LabelTupTupWithArgs.init((('Gz', 0), ('Gy', 1)), args=('foo',)))
-
-    def test_labeltuptupwithargs_lt_gt(self):
-        l1 = LabelTupTupWithArgs.init((('A', 0), ('B', 1)), args=('foo',))
-        l2 = LabelTupTupWithArgs.init((('A', 0), ('C', 1)), args=('foo',))
-        l3 = LabelTupTupWithArgs.init((('B', 0), ('A', 1)), args=('foo',))
-        self.assertTrue(l1 < l2)
-        self.assertFalse(l1 > l2)
-        self.assertTrue(l1 < l3)
-
-    def test_labeltuptupwithargs_map_state_space_labels(self):
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
-        l2 = l.map_state_space_labels(lambda x: x + 1)
-        self.assertEqual(l2, LabelTupTupWithArgs.init((('Gx', 1), ('Gy', 2)), args=('foo',)))
-
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
-        l2 = l.map_state_space_labels({0:1, 1:2})
-        self.assertEqual(l2, LabelTupTupWithArgs.init((('Gx', 1), ('Gy', 2)), args=('foo',)))
-
-    def test_labeltuptupwithargs_replace_name_no_match(self):
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
-        l2 = l.replace_name('Gz', 'Ga')
-        self.assertEqual(l, l2)
-
-
-class LabelTupWithTimeTester(BaseCase):
-    def test_labeltupwithtime(self):
-        l = LabelTupWithTime.init('Gx', (0,), time=0.1)
-        self.assertEqual(l.time, 0.1)
-        self.assertEqual(l.to_native(), ('Gx', 0))
-        self.assertEqual(l.name, 'Gx')
-        self.assertEqual(l.sslbls, (0,))
-        self.assertEqual(l.qubits, (0,))
-        self.assertEqual(l.num_qubits, 1)
-        self.assertEqual(l.components, (l,))
-
-    def test_labeltupwithtime_replace_name(self):
-        l = LabelTupWithTime.init('Gx', (0,), time=0.1)
-        l2 = l.replace_name('Gx', 'Gy')
-        self.assertEqual(l2, LabelTupWithTime.init('Gy', (0,), time=0.1))
-
-    def test_labeltupwithtime_lt_gt(self):
-        l1 = LabelTupWithTime.init('A', (0,), time=0.1)
-        l2 = LabelTupWithTime.init('B', (0,), time=0.1)
-        l3 = LabelTupWithTime.init('A', (1,), time=0.1)
-        self.assertTrue(l1 < l2)
-        self.assertFalse(l1 > l2)
-        self.assertTrue(l1 < l3)
-
-    def test_labeltupwithtime_map_state_space_labels(self):
-        l = LabelTupWithTime.init('Gx', (0, 1), time=0.1)
-        l2 = l.map_state_space_labels(lambda x: x + 1)
-        self.assertEqual(l2, LabelTupWithTime.init('Gx', (1, 2), time=0.1))
-
-    def test_labeltupwithtime_replace_name_no_match(self):
-        l = LabelTupWithTime.init('Gx', (0,), time=0.1)
-        l2 = l.replace_name('Gz', 'Ga')
-        self.assertEqual(l, l2)
-
-    def test_labeltupwithtime_add(self):
-        l = LabelTupWithTime.init('Gx', (0,), time=0.1)
-        l2 = l+"foo"
-        self.assertEqual(l2, L(("Gxfoo", 0), time=0.1))
-
-        with self.assertRaises(NotImplementedError):
-            l + l
-
-class LabelTupWithArgsTester(BaseCase):
-    def test_labeltupwithargs(self):
-        l = LabelTupWithArgs.init('Gx', (0,), args=('foo',))
-        self.assertEqual(l.args, ('foo',))
-        self.assertEqual(l.to_native(), ('Gx', 3, 'foo', 0))
-        self.assertEqual(l.name, 'Gx')
-        self.assertEqual(l.sslbls, (0,))
-        self.assertEqual(l.qubits, (0,))
-        self.assertEqual(l.num_qubits, 1)
-        self.assertEqual(l.components, (l,))
-
-        l = L(("Gx", 0), args=(1,))
-        self.assertTrue(isinstance(l, LabelTupWithArgs))
-        l2 = L("Gx", 0, args=(1,))
-        self.assertTrue(isinstance(l2, LabelTupWithArgs))
-        l3 = L("Gx", (0,), args=(1,))
-        self.assertTrue(isinstance(l3, LabelTupWithArgs))
-
-        with self.assertRaises(AssertionError):
-            l4 = L(("Gx", 0, (1,))) # Is interpreted as a statespace label
-        with self.assertRaises(AssertionError):
-            l5 = L(("Gx", 0, 0.0, (1,))) # Still looks like a statespace label.
-
-        l6 = L(("Gx", 0, ";1"))
-        self.assertTrue(isinstance(l6, LabelTupWithArgs))
-        self.assertEqual(l6.args, ("1",))
-
-        with self.assertRaises(AssertionError):
-            L(("Gx", 0, ";1"), args=(1,))
-
-    def test_labeltupwithargs_replace_name(self):
-        l = LabelTupWithArgs.init('Gx', (0,), args=('foo',))
-        l2 = l.replace_name('Gx', 'Gy')
-        self.assertEqual(l2, LabelTupWithArgs.init('Gy', (0,), args=('foo',)))
-
-    def test_labeltupwithargs_lt_gt(self):
-        l1 = LabelTupWithArgs.init('A', (0,), args=('foo',))
-        l2 = LabelTupWithArgs.init('B', (0,), args=('foo',))
-        l3 = LabelTupWithArgs.init('A', (1,), args=('foo',))
-        self.assertTrue(l1 < l2)
-        self.assertFalse(l1 > l2)
-        self.assertTrue(l1 < l3)
-
-    def test_labeltupwithargs_add(self):
-        l = L(("Gx", 0), args=(1,))
-        l2 = l+"foo"
-        self.assertEqual(l2, L(("Gxfoo", 0), args=(1,)))
-        self.assertFalse(isinstance(l, str))
-
-        with self.assertRaises(NotImplementedError):
-            self.assertTrue(isinstance(l, LabelTupWithArgs))
-            self.assertFalse(isinstance(l, str))
-            l + l
-
-    def test_labeltupwithargs_map_state_space_labels(self):
-        l = LabelTupWithArgs.init('Gx', (0, 1), args=('foo',))
-        l2 = l.map_state_space_labels(lambda x: x + 1)
-        self.assertEqual(l2, LabelTupWithArgs.init('Gx', (1, 2), args=('foo',)))
-
-        # test also using a dictionary.
-        l = LabelTupWithArgs.init('Gx', (0, 1), args=('foo',))
-        l2 = l.map_state_space_labels({0:1, 1:2})
-        self.assertEqual(l2, LabelTupWithArgs.init('Gx', (1, 2), args=('foo',)))
-
-    def test_labeltupwithargs_replace_name_no_match(self):
-        l = LabelTupWithArgs.init('Gx', (0,), args=('foo',))
-        l2 = l.replace_name('Gz', 'Ga')
-        self.assertEqual(l, l2)
-
-    def test_labeltupwithargs_construct_empty_sslbls(self):
-        l = LabelTupWithArgs.init("Gx", (), time=0.1, args=("bar",))
-        self.assertEqual(l.args, ("bar",))
-        self.assertEqual(l.sslbls, None)
-
-        l = LabelTupWithArgs.init("Gx", ("Q0"), time=0.1, args=("bar",))
-        self.assertEqual(l.args, ("bar",))
-        self.assertEqual(l.sslbls, ("Q0",))
-
-class LabelTupTupWithArgsTester(BaseCase):
-    def test_labeltuptupwithargs(self):
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
-        self.assertEqual(l.args, ('foo',))
-        self.assertEqual(l.to_native(), (2, 'foo', ('Gx', 0), ('Gy', 1)))
-        self.assertEqual(l.name, 'COMPOUND')
-        self.assertEqual(l.sslbls, (0, 1))
-        self.assertEqual(l.qubits, (0, 1))
-        self.assertEqual(l.num_qubits, 2)
-        self.assertEqual(l.components, (L(('Gx', 0)), L(('Gy', 1))))
-
-    def test_labeltuptupwithargs_replace_name(self):
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
-        l2 = l.replace_name('Gx', 'Gz')
-        self.assertEqual(l2, LabelTupTupWithArgs.init((('Gz', 0), ('Gy', 1)), args=('foo',)))
-
-    def test_labeltuptupwithargs_lt_gt(self):
-        l1 = LabelTupTupWithArgs.init((('A', 0), ('B', 1)), args=('foo',))
-        l2 = LabelTupTupWithArgs.init((('A', 0), ('C', 1)), args=('foo',))
-        l3 = LabelTupTupWithArgs.init((('B', 0), ('A', 1)), args=('foo',))
-        self.assertTrue(l1 < l2)
-        self.assertFalse(l1 > l2)
-        self.assertTrue(l1 < l3)
-
-    def test_labeltuptupwithargs_add(self):
-        l1 = LabelTupTupWithArgs.init((('A', 0), ('B', 1)), args=('foo',))
-        l2 = LabelTupTupWithArgs.init((('A', 0), ('C', 1)), args=('foo',))
-        with self.assertRaises(NotImplementedError):
-            l3 = l1 + l2
-
-    def test_labeltuptupwithargs_map_state_space_labels(self):
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=(1,))
-        l2 = l.map_state_space_labels(lambda x: x + 1)
-        self.assertEqual(l2, LabelTupTupWithArgs.init((('Gx', 1), ('Gy', 2)), args=(1,)))
-        l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=(1,))
-        l2 = l.map_state_space_labels({0:1, 1:2})
-        self.assertEqual(l2, LabelTupTupWithArgs.init((('Gx', 1), ('Gy', 2)), args=(1,)))
-
-class LabelTupWithTimeTester(BaseCase):
-    def test_labeltupwithtime(self):
-        l = LabelTupWithTime.init('Gx', (0,), time=0.1)
-        self.assertEqual(l.time, 0.1)
-        self.assertEqual(l.to_native(), ('Gx', 0))
-        self.assertEqual(l.name, 'Gx')
-        self.assertEqual(l.sslbls, (0,))
-        self.assertEqual(l.qubits, (0,))
-        self.assertEqual(l.num_qubits, 1)
-        self.assertEqual(l.components, (l,))
-
-    def test_labeltupwithtime_replace_name(self):
-        l = LabelTupWithTime.init('Gx', (0,), time=0.1)
-        l2 = l.replace_name('Gx', 'Gy')
-        self.assertEqual(l2, LabelTupWithTime.init('Gy', (0,),time=0.1))
-
-    def test_labeltupwithtime_lt_gt(self):
-        l1 = LabelTupWithTime.init('A', (0,), time=0.1)
-        l2 = LabelTupWithTime.init('B', (0,), time=0.1)
-        l3 = LabelTupWithTime.init('A', (1,), time=0.1)
-        self.assertTrue(l1 < l2)
-        self.assertFalse(l1 > l2)
-        self.assertTrue(l1 < l3)
-
-    def test_labeltupwithtime_map_state_space_labels(self):
-        l = LabelTupWithTime.init('Gx', (0, 1), time=0.1)
-        l2 = l.map_state_space_labels(lambda x: x + 1)
-        self.assertEqual(l2, LabelTupWithTime.init('Gx', (1, 2), time=0.1))
-
-        # Dictionary inputs as well.
-        l = LabelTupWithTime.init('Gx', (0, 1), time=0.1)
-        l2 = l.map_state_space_labels({0: 1, 1:2})
-        self.assertEqual(l2, LabelTupWithTime.init('Gx', (1, 2), time=0.1))
-
-    def test_labeltupwithtime_replace_name(self):
-        l = LabelTupWithTime.init('Gx', (0,), time=1.0)
-        l2 = l.replace_name('Gx', 'Gy')
-        self.assertEqual(l2, LabelTupWithTime.init('Gy', (0,), time=1.0))
-
-        l3 = l2.replace_name("Gx", "Gy")
-        # Nothing to replace.
-        self.assertEqual(l2, l3)
-
-    def test_labeltupwithtime_expand_subcircuits(self):
-        l = LabelTupWithTime.init('Gx', (0,), time=0.1)
-        self.assertEqual(l.expand_subcircuits(), (l,))
-
-class CircuitLabelTester(BaseCase):
-    def test_circuitlabel_properties(self):
-        l = CircuitLabel('mycirc', [L('Gx', 0)], (0,), 5, 1.2)
-        self.assertEqual(l.name, 'mycirc')
-        self.assertEqual(l.sslbls, (0,))
-        self.assertEqual(l.qubits, (0,))
-        self.assertEqual(l.num_qubits, 1)
-        self.assertEqual(l.components, (L('Gx', 0),))
-        self.assertEqual(l.reps, 5)
-        self.assertEqual(l.time, 1.2)
-        self.assertEqual(l.args, ())
-        self.assertEqual(l.depth, 1)
-
-    def test_circuitlabel_expand_subcircuits(self):
-        l = CircuitLabel('mycirc', [L('Gx', 0)], None, 2, 1.2)
-        self.assertEqual(l.expand_subcircuits(), (L('Gx', 0), L('Gx', 0)))
-
-    def test_circuitlabel_add(self):
-        l = CircuitLabel('mycirc', [L('Gx', 0)], None, 5, 1.2)
-        with self.assertRaises(NotImplementedError):
-            l + "_foo"
-
-    def test_circuitlabel_lt_gt(self):
-        l1 = CircuitLabel('mycirc1', [L('Gx', 0)], None, 5, 1.2)
-        l2 = CircuitLabel('mycirc2', [L('Gx', 0)], None, 5, 1.2)
-        self.assertTrue(l1 < l2)
-        self.assertFalse(l1 > l2)
-
-    def test_circuitlabel_replace_name(self):
-        l = CircuitLabel('mycirc', [L('Gx', 0)], (0,), 5, 1.2)
-        l2 = l.replace_name('Gx', 'Gy')
-        self.assertEqual(l2, CircuitLabel('mycirc', [L('Gy', 0)], (0,), 5, 1.2))
-
-    def test_circuitlabel_map_state_space_labels(self):
-        l = CircuitLabel('mycirc', [L('Gx', 0)], (0,), 5, 1.2)
-        l2 = l.map_state_space_labels(lambda x: x + 1)
-        self.assertEqual(l2, CircuitLabel('mycirc', [L('Gx', 1)], (1,), 5, 1.2))
-
-    def test_circuitlabel_has_prefix(self):
-        l = CircuitLabel('mycirc', [L('Gx', 0)], None, 5, 1.2)
-        self.assertTrue(l.has_prefix('my'))
-        self.assertFalse(l.has_prefix('your'))
 
 class CircuitLabelTester(BaseCase):
     def test_circuitlabel_properties(self):
@@ -949,10 +728,6 @@ class CircuitLabelTester(BaseCase):
         self.assertTrue(l.has_prefix('my'))
         self.assertFalse(l.has_prefix('your'))
 
-    def test_circuitlabel_strip_args(self):
-        l = CircuitLabel('mycirc', [L('Gx', 0)], None, 5, 1.2)
-        with self.assertRaises(NotImplementedError):
-            l.strip_args()
 
 class LabelConcateTester(BaseCase):
     def test_concate_labeltup(self):

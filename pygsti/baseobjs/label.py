@@ -159,9 +159,23 @@ class Label(object):
                     return LabelTupTupWithTime.init((), time)
             elif isinstance(name[0], (tuple, list, Label)):
                 if len(name) > 1:
-                    if args: return LabelTupTupWithArgs.init(name, time, args)
-                    elif time is None or time == 0: return LabelTupTup.init(name)
-                    else: return LabelTupTupWithTime.init(name, time)
+                    #Check for metadata on components if not passed in args/time
+                    if args is None:
+                        collected_args = []
+                        for c in name:
+                            if isinstance(c, Label):
+                                collected_args.extend(c.collect_args())
+                        if collected_args:
+                            args = tuple(collected_args)
+
+                    if time is None:
+                        component_times = [getattr(c, 'time', 0) for c in name if isinstance(c, Label)]
+                        if component_times and any(t != 0 for t in component_times):
+                            time = max(component_times)
+
+                    if args: return LabelTupTupWithArgs.init(name, time=time, args=args)
+                    elif time is not None and time != 0.0: return LabelTupTupWithTime.init(name, time=time)
+                    else: return LabelTupTup.init(name)
                 else:
                     return Label(name[0], time=time, args=args)
             elif len(name) >= 3 and isinstance(name[0], str) and \
@@ -1036,7 +1050,11 @@ class LabelTupTup(Label, tuple):
         -------
         LabelTupTup
         """
-        tupOfLabels : tuple[ConcreteLabel, ...] = tuple([Label(tup) for tup in tup_of_tups]) 
+        if isinstance(tup_of_tups, Label):
+            tup_of_tups_to_iterate = tup_of_tups.components
+        else:
+            tup_of_tups_to_iterate = tup_of_tups
+        tupOfLabels : tuple[ConcreteLabel, ...] = tuple([tup if isinstance(tup, Label) else Label(tup) for tup in tup_of_tups_to_iterate]) 
         # ^ Note: constituent `tup`s in the list comprehension can also be a Label obj
         if __debug__ and tupOfLabels: # Debug flag is so that the check gets optimized out later in production runs.
             for lbl in tupOfLabels:
@@ -1306,8 +1324,15 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         -------
         LabelTupTupWithTime
         """
+        if time is None and hasattr(tup_of_tups, 'time'):
+            time = tup_of_tups.time
+
         assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
-        tupOfLabels = tuple((Label(tup) for tup in tup_of_tups))  # Note: tup can also be a Label obj
+        if isinstance(tup_of_tups, Label):
+            tup_of_tups_to_iterate = tup_of_tups.components
+        else:
+            tup_of_tups_to_iterate = tup_of_tups
+        tupOfLabels = tuple(tup if isinstance(tup, Label) else Label(tup) for tup in tup_of_tups_to_iterate)  # Note: tup can also be a Label obj
         if time is None:
             time = 0.0 if len(tupOfLabels) == 0 else \
                 max([lbl.time for lbl in tupOfLabels if hasattr(lbl, "time")] + [0.0])
@@ -1909,9 +1934,17 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         -------
         LabelTupTupWithArgs
         """
+        if time is None and hasattr(tup_of_tups, 'time'):
+            time = tup_of_tups.time
+        if not args and hasattr(tup_of_tups, 'args'):
+            args = tup_of_tups.args
+
         assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
-        assert(len(args) > 0), "`args` must be a nonempty list/tuple of hashable arguments"
-        tup_of_lbls = tuple((Label(tup) for tup in tup_of_tups))
+        if isinstance(tup_of_tups, Label):
+            tup_of_tups_to_iterate = tup_of_tups.components
+        else:
+            tup_of_tups_to_iterate = tup_of_tups
+        tup_of_lbls = tuple(tup if isinstance(tup, Label) else Label(tup) for tup in tup_of_tups_to_iterate)
         tup_rep = (1 + len(args),) + tuple(args) + tup_of_lbls
         if time is None:
             time = 0.0 if len(tup_of_lbls) == 0 else \
@@ -2031,6 +2064,32 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         """
         replaced_components = tuple((x.replace_name(oldname, newname) for x in self.components))
         return LabelTupTupWithArgs.init(replaced_components, self.time, self.args)
+
+    def expand_subcircuits(self) -> tuple['LabelTupTupWithArgs', ...]:
+        """
+        Expand any sub-circuits within this label.
+
+        Returns a list of component labels which doesn't include any
+        :class:`CircuitLabel` labels.  This effectively expands any "boxes" or
+        "exponentiation" within this label.
+
+        Returns
+        -------
+        tuple
+            A tuple of component Labels (none of which should be
+            :class:`CircuitLabel` objects).
+        """
+        ret = []
+        expanded_comps = [x.expand_subcircuits() for x in self.components]
+
+        for i in range(self.depth):  # depth == # of layers when expanded
+            ec = []
+            for expanded_comp in expanded_comps:
+                if i < len(expanded_comp):
+                    ec.extend(expanded_comp[i].components)
+            ret.append(LabelTupTupWithArgs.init(ec, args=self.args))
+        return tuple(ret)
+
 
 
 ConcreteLabel = Union[
