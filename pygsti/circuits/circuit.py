@@ -215,7 +215,7 @@ def validate_line_labels(linelabels):
         test_str = f'Gi:{str(line_lbl)}'
         parsed = str(parse_label(test_str))  # can trigger a ValueError.
         if parsed != test_str:
-            msg = "Line label '{line_lbl}' could not round-trip through the parse_label function."
+            msg = f"Line label '{line_lbl}' could not round-trip through the parse_label function."
             raise ValueError(msg)
     return
 
@@ -1204,7 +1204,7 @@ class Circuit(object):
         """ Pre-process the key argument used by many methods """
         if isinstance(key, tuple):
             if len(key) != 2:
-                return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
+                raise IndexError("Index must be of the form <layerIndex>,<lineIndex>")
             else:
                 return key[0], key[1]
         else:
@@ -1332,9 +1332,7 @@ class Circuit(object):
             if self._static:
                 return Circuit._fastinit((), tuple(lines), False)  # zero-area region
             else:
-                return Circuit._fastinit(() if self._static else [],
-                                        tuple(lines) if self._static else lines,
-                                        not self._static)  # zero-area region
+                return Circuit._fastinit([], lines, True)  # zero-area region
 
         ret = []
         observed_sslbls = set()  # the sslbls of all labels kept when strict=False (unused when strict=True)
@@ -2633,7 +2631,7 @@ class Circuit(object):
             _warnings.warn(f'Casting `old_gatename` of type {type(old_gatename)} to the string "{str(old_gatename)}".')
             old_gatename = str(old_gatename)
         if not isinstance(new_gatename, str):
-            _warnings.warn(f'Casting `old_gatename` of type {type(new_gatename)} to the string "{str(new_gatename)}".')
+            _warnings.warn(f'Casting `new_gatename` of type {type(new_gatename)} to the string "{str(new_gatename)}".')
             new_gatename = str(new_gatename)
         
         if ':' in old_gatename or ':' in new_gatename:
@@ -3117,12 +3115,7 @@ class Circuit(object):
         if idle_layer_labels:
             assert(all([_Label(x).sslbls is None for x in idle_layer_labels])), "Idle layer labels must be *global*"
 
-        if self._static:
-            layers = [x for x in self._labels if x not in idle_layer_labels] if idle_layer_labels else self._labels
-            all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
-                else set([sslbl for layer in layers for sslbl in layer.sslbls])
-        else:
-            all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
+        all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
 
         if all_sslbls is None:
             return  # no lines are idling
@@ -3832,68 +3825,6 @@ class Circuit(object):
         print("--- LABEL INFO for %s (%d layers) ---" % (self.str, self.num_layers))
         for j in range(0, self.num_layers):
             plbl(self[j], "self[%d]" % j)
-
-    def _write_q_circuit_tex(self, filename):  # TODO
-        """
-        Writes a LaTeX file for rendering this circuit nicely.
-
-        Creates a file containing LaTex that will display this circuit using the
-        Qcircuit.tex LaTex import (compiling the LaTex requires that you have the
-        Qcircuit.tex file).
-
-        Parameters
-        ----------
-        filename : str
-            The file to write the LaTex into. Should end with '.tex'
-
-        Returns
-        -------
-        None
-        """
-        raise NotImplementedError("TODO: need to upgrade this method")
-        n = self.num_lines
-        d = self.num_layers
-
-        f = open(filename, 'w')
-        f.write("\\documentclass{article}\n")
-        f.write("\\usepackage{mathtools}\n")
-        f.write("\\usepackage{xcolor}\n")
-        f.write("\\usepackage[paperwidth=" + str(5. + d * 0.3)
-                + "in, paperheight=" + str(2 + n * 0.2) + "in,margin=0.5in]{geometry}")
-        f.write("\\input{Qcircuit}\n")
-        f.write("\\begin{document}\n")
-        f.write("\\begin{equation*}\n")
-        f.write("\\Qcircuit @C=1.0em @R=0.5em {\n")
-
-        for q in range(0, n):
-            qstring = '&'
-            # The quantum wire for qubit q
-            circuit_for_q = self.line_items[q]
-            for gate in circuit_for_q:
-                gate_qubits = gate.qubits if (gate.qubits is not None) else self._line_labels
-                nqubits = len(gate_qubits)
-                if gate.name == self.identity:
-                    qstring += r' \qw &'
-                elif gate.name in ('CNOT', 'Gcnot') and nqubits == 2:
-                    if gate_qubits[0] == q:
-                        qstring += r' \ctrl{' + str(gate_qubits[1] - q) + '} &'
-                    else:
-                        qstring += r' \targ &'
-                elif gate.name in ('CPHASE', 'Gcphase') and nqubits == 2:
-                    if gate_qubits[0] == q:
-                        qstring += r' \ctrl{' + str(gate_qubits[1] - q) + '} &'
-                    else:
-                        qstring += r' \control \qw &'
-
-                else:
-                    qstring += r' \gate{' + str(gate.name) + '} &'
-
-            qstring += r' \qw & \\' + '\\ \n'
-            f.write(qstring)
-
-        f.write("}\\end{equation*}\n")
-        f.write("\\end{document}")
-        f.close()
 
     def convert_to_stim_tableau_layers(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None,
                                        num_qubits: Optional[int] = None,

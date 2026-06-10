@@ -1073,3 +1073,32 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(sub.line_labels, (1,))
         self.assertEqual(sub[0], Label(()))
         self.assertEqual(sub[1], Label('Gz', 1))
+
+    def test_extract_labels_zero_area(self):
+        # pin for issue #764: the zero-area path on editable circuits
+        c = circuit.Circuit("Gx:0Gy:0@(0,1)", editable=True)
+        sub = c.extract_labels(layers=(), lines=(0,))
+        sub.done_editing()
+        self.assertEqual(sub, circuit.Circuit((), line_labels=(0,)))
+
+    def test_malformed_index_raises_index_error(self):
+        # regression test for issue #764: _proc_key_arg *returned* the
+        # IndexError, surfacing as an unpacking TypeError downstream
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)")
+        with self.assertRaises(IndexError):
+            c[0, 1, 2]
+
+    def test_validate_line_labels_message_names_the_label(self):
+        # regression test for issue #764: the message was a non-f-string, so
+        # users saw the literal text '{line_lbl}'
+        with self.assertRaises(ValueError) as cm:
+            circuit.validate_line_labels(['01'])
+        self.assertIn("'01'", str(cm.exception))
+
+    def test_replace_gatename_inplace_warning_names_new_gatename(self):
+        # regression test for issue #764: the second cast warning blamed
+        # `old_gatename` while casting `new_gatename`
+        c = circuit.Circuit("Gx:0@(0)", editable=True)
+        with self.assertWarns(UserWarning) as cm:
+            c.replace_gatename_inplace('Gx', 123)
+        self.assertIn('new_gatename', str(cm.warning))
