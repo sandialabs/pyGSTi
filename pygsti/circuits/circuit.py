@@ -2500,12 +2500,17 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         #assert(self.identity == circuit.identity), "The identity labels must be the same!"
 
-        if circuit.num_layers > 0 and len(self._line_labels) > 0 \
-           and _sslbls_of_nested_lists_of_simple_labels(self._labels) is None:
+        # Implicit (None) state-space labels are interpreted as acting on *all* of a circuit's
+        # lines, so a gate with implicit sslbls cannot sit in a layer that the insertion below
+        # writes to (the first circuit.num_layers layers): it would straddle the new lines.
+        # Layers beyond the insertion region are unaffected (e.g. a trailing global idle).
+        if circuit.num_layers > 0 and len(circuit._line_labels) > 0 and len(self._line_labels) > 0 \
+           and _sslbls_of_nested_lists_of_simple_labels(self._labels[:circuit.num_layers]) is None:
             raise ValueError("Cannot tensor: this circuit contains gates with implicit (None) state-space "
-                             "labels, which are interpreted as acting on *all* of the circuit's lines and "
-                             "so cannot coexist with the new lines being added.  Give these gates explicit "
-                             "state-space labels (e.g. 'Gx:0' rather than 'Gx') before tensoring.")
+                             "labels in the layers being tensored, which are interpreted as acting on *all* "
+                             "of the circuit's lines and so cannot coexist with the new lines being added.  "
+                             "Give these gates explicit state-space labels (e.g. 'Gx:0' rather than 'Gx') "
+                             "before tensoring.")
 
         #Construct new line labels (of final circuit)
         overlap = set(self._line_labels).intersection(circuit._line_labels)

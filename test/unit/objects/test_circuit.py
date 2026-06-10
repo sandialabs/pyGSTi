@@ -1019,13 +1019,24 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(t, circuit.Circuit("[Gx:0Gy:1]@(0,1)"))
 
     def test_tensor_circuit_implicit_sslbls_host_with_empty_insertee_ok(self):
-        # pin for issue #762: tensoring idle lines (a depth-0 circuit) onto a
-        # host with implicit-sslbls gates worked before the new guard and must
-        # continue to work
+        # pin for issue #762: adding lines from a depth-0 circuit to a host
+        # with implicit-sslbls gates worked before the new guard and must
+        # continue to work.  (Note the implicit gates then cover the new line
+        # too -- that is what implicit sslbls mean -- so the new line is not
+        # idle; this matches develop's behavior.)
         c = circuit.Circuit("Gx@(0)", editable=True)
         c.tensor_circuit_inplace(circuit.Circuit((), line_labels=(1,)))
         c.done_editing()
         self.assertEqual(c.line_labels, (0, 1))
+
+    def test_tensor_circuit_implicit_idle_beyond_insertee_depth_ok(self):
+        # review follow-up for issue #762: implicit-sslbls labels in layers the
+        # insertion never touches (here a trailing global idle) must not trip
+        # the guard -- develop tensored this successfully
+        c = circuit.Circuit([('Gx', 0), 'Gi'], line_labels=(0,), editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"))
+        c.done_editing()
+        self.assertEqual(c, circuit.Circuit([[('Gx', 0), ('Gy', 1)], 'Gi'], line_labels=(0, 1)))
 
     def test_tensor_circuit_with_empty_layers_ok(self):
         # pin for issue #762: empty (idle) layers contain no implicit-sslbls
