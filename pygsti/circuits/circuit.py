@@ -215,7 +215,7 @@ def validate_line_labels(linelabels):
         test_str = f'Gi:{str(line_lbl)}'
         parsed = str(parse_label(test_str))  # can trigger a ValueError.
         if parsed != test_str:
-            msg = "Line label '{line_lbl}' could not round-trip through the parse_label function."
+            msg = f"Line label '{line_lbl}' could not round-trip through the parse_label function."
             raise ValueError(msg)
     return
 
@@ -1161,7 +1161,9 @@ class Circuit(object):
 
         Updates the circuit inplace.
         """
-        self._labels = _sort_layer_labels(self._labels)
+        assert(not self._static), "Cannot edit a read-only circuit!"
+        self._labels = [_label_to_nested_lists_of_simple_labels(lbl)
+                        for lbl in _sort_layer_labels(self._labels)]
 
     def clear(self):
         """
@@ -1204,7 +1206,7 @@ class Circuit(object):
         """ Pre-process the key argument used by many methods """
         if isinstance(key, tuple):
             if len(key) != 2:
-                return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
+                raise IndexError("Index must be of the form <layerIndex>,<lineIndex>")
             else:
                 return key[0], key[1]
         else:
@@ -1332,11 +1334,10 @@ class Circuit(object):
             if self._static:
                 return Circuit._fastinit((), tuple(lines), False)  # zero-area region
             else:
-                return Circuit._fastinit(() if self._static else [],
-                                        tuple(lines) if self._static else lines,
-                                        not self._static)  # zero-area region
+                return Circuit._fastinit([], lines, True)  # zero-area region
 
         ret = []
+        observed_sslbls = set()  # the sslbls of all labels kept when strict=False (unused when strict=True)
         if self._static:
             def get_sslbls(lbl): return lbl.sslbls
         else:
@@ -1367,16 +1368,22 @@ class Circuit(object):
                     sslbls = set(self._line_labels)
                 else:
                     sslbls = set(sslbls)
-
-                if lines is None:
-                    ret_layer.append(l)
-                elif (strict and sslbls.issubset(lines)) or \
+                if (strict and sslbls.issubset(lines)) or \
                    (not strict and sslbls.intersection(lines)):
                     ret_layer.append(l)
+                    if not strict:
+                        observed_sslbls.update(sslbls)
             ret.append(_Label(ret_layer) if len(ret_layer) != 1 else ret_layer[0])  # Labels b/c we use _fastinit
 
         if nonint_layers:
-            if not strict: lines = "auto"  # since we may have included lbls on other lines
+            if not strict:
+                # Included labels may straddle the boundary of the requested lines,
+                # so the result can act on more lines than requested -- extend the
+                # line labels to cover them (in this circuit's line-label order).
+                extra_lines = observed_sslbls - set(lines)
+                # (filter, not a genexpr: a genexpr would close over extra_lines and put a
+                #  MAKE_CELL prologue on every call, measurably slowing the int fast path)
+                lines = tuple(lines) + tuple(filter(extra_lines.__contains__, self._line_labels))
             # don't worry about string rep for now...
 
             return Circuit._fastinit(tuple(ret) if self._static else ret,
@@ -2517,6 +2524,17 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         #assert(self.identity == circuit.identity), "The identity labels must be the same!"
 
+        # Implicit (None) state-space labels are interpreted as acting on *all* of a circuit's
+        # lines, so a gate with implicit sslbls cannot sit in a layer that the insertion below
+        # writes to (the first circuit.num_layers layers): it would straddle the new lines.
+        # Layers beyond the insertion region are unaffected (e.g. a trailing global idle).
+        if circuit.num_layers > 0 and len(circuit._line_labels) > 0 and len(self._line_labels) > 0 \
+           and _sslbls_of_nested_lists_of_simple_labels(self._labels[:circuit.num_layers]) is None:
+            raise ValueError("Cannot tensor: this circuit contains gates with implicit (None) state-space "
+                             "labels in the layers being tensored, which are interpreted as acting on *all* "
+                             "of the circuit's lines and so cannot coexist with the new lines being added.  "
+                             "Give these gates explicit state-space labels (e.g. 'Gx:0' rather than 'Gx') "
+                             "before tensoring.")
 
         #Construct new line labels (of final circuit)
         overlap = set(self._line_labels).intersection(circuit._line_labels)
@@ -2542,7 +2560,7 @@ class Circuit(object):
             if len(extra) > 0:
                 raise ValueError("`line_order` had nonpresent line labels %s." % str(extra))
 
-            new_line_labels = line_order
+            new_line_labels = tuple(line_order)
         else:
             new_line_labels = self._line_labels + circuit._line_labels
 
@@ -2705,7 +2723,7 @@ class Circuit(object):
             _warnings.warn(f'Casting `old_gatename` of type {type(old_gatename)} to the string "{str(old_gatename)}".')
             old_gatename = str(old_gatename)
         if not isinstance(new_gatename, str):
-            _warnings.warn(f'Casting `old_gatename` of type {type(new_gatename)} to the string "{str(new_gatename)}".')
+            _warnings.warn(f'Casting `new_gatename` of type {type(new_gatename)} to the string "{str(new_gatename)}".')
             new_gatename = str(new_gatename)
         
         if ':' in old_gatename or ':' in new_gatename:
@@ -2998,10 +3016,19 @@ class Circuit(object):
 
         # If the mapper is a dict, turn it into a function
         def mapper_func(gatename): return mapper.get(gatename, None) \
-            if isinstance(mapper, dict) else mapper
+            if isinstance(mapper, dict) else mapper(gatename)
 
         def map_names(obj):  # obj is either a simple label or a list
-            if isinstance(obj, _Label):
+            if isinstance(obj, _CircuitLabel):
+                # CircuitLabel.IS_SIMPLE is True, but rebuilding it through the
+                # simple-label branch below would silently discard its subcircuit.
+                # Map only the label's own (box) name; the component labels inside
+                # the subcircuit are not renamed (matching the dict-mapper behavior
+                # of leaving non-matching CircuitLabels untouched).
+                new_name = mapper_func(obj.name)
+                newobj = _CircuitLabel(new_name, obj.components, obj.sslbls, obj.reps, obj.time) \
+                    if (new_name is not None and new_name != obj.name) else obj
+            elif isinstance(obj, _Label):
                 if obj.IS_SIMPLE:  # *simple* label
                     new_name = mapper_func(obj.name)
                     newobj = _Label(new_name, obj.sslbls) \
@@ -3032,12 +3059,17 @@ class Circuit(object):
 
         # If the mapper is a dict, turn it into a function
         def mapper_func(line_label): return mapper[line_label] \
-            if isinstance(mapper, dict) else mapper
+            if isinstance(mapper, dict) else mapper(line_label)
 
         self._line_labels = tuple((mapper_func(l) for l in self._line_labels))
 
         def map_sslbls(obj):  # obj is either a simple label or a list
-            if isinstance(obj, _Label):
+            if isinstance(obj, _CircuitLabel):
+                # CircuitLabel.IS_SIMPLE is True, but rebuilding it through the
+                # branch below would silently discard its subcircuit; delegate to
+                # the Label-level method, which maps the subcircuit's sslbls too.
+                newobj = obj.map_state_space_labels(mapper_func)
+            elif isinstance(obj, _Label):
                 new_sslbls = [mapper_func(l) for l in obj.sslbls] \
                     if (obj.sslbls is not None) else None
                 newobj = _Label(obj.name, new_sslbls)
@@ -3189,12 +3221,7 @@ class Circuit(object):
         if idle_layer_labels:
             assert(all([_Label(x).sslbls is None for x in idle_layer_labels])), "Idle layer labels must be *global*"
 
-        if self._static:
-            layers = [x for x in self._labels if x not in idle_layer_labels] if idle_layer_labels else self._labels
-            all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
-                else set([sslbl for layer in layers for sslbl in layer.sslbls])
-        else:
-            all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
+        all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
 
         if all_sslbls is None:
             return  # no lines are idling
@@ -3904,68 +3931,6 @@ class Circuit(object):
         print("--- LABEL INFO for %s (%d layers) ---" % (self.str, self.num_layers))
         for j in range(0, self.num_layers):
             plbl(self[j], "self[%d]" % j)
-
-    def _write_q_circuit_tex(self, filename):  # TODO
-        """
-        Writes a LaTeX file for rendering this circuit nicely.
-
-        Creates a file containing LaTex that will display this circuit using the
-        Qcircuit.tex LaTex import (compiling the LaTex requires that you have the
-        Qcircuit.tex file).
-
-        Parameters
-        ----------
-        filename : str
-            The file to write the LaTex into. Should end with '.tex'
-
-        Returns
-        -------
-        None
-        """
-        raise NotImplementedError("TODO: need to upgrade this method")
-        n = self.num_lines
-        d = self.num_layers
-
-        f = open(filename, 'w')
-        f.write("\\documentclass{article}\n")
-        f.write("\\usepackage{mathtools}\n")
-        f.write("\\usepackage{xcolor}\n")
-        f.write("\\usepackage[paperwidth=" + str(5. + d * 0.3)
-                + "in, paperheight=" + str(2 + n * 0.2) + "in,margin=0.5in]{geometry}")
-        f.write("\\input{Qcircuit}\n")
-        f.write("\\begin{document}\n")
-        f.write("\\begin{equation*}\n")
-        f.write("\\Qcircuit @C=1.0em @R=0.5em {\n")
-
-        for q in range(0, n):
-            qstring = '&'
-            # The quantum wire for qubit q
-            circuit_for_q = self.line_items[q]
-            for gate in circuit_for_q:
-                gate_qubits = gate.qubits if (gate.qubits is not None) else self._line_labels
-                nqubits = len(gate_qubits)
-                if gate.name == self.identity:
-                    qstring += r' \qw &'
-                elif gate.name in ('CNOT', 'Gcnot') and nqubits == 2:
-                    if gate_qubits[0] == q:
-                        qstring += r' \ctrl{' + str(gate_qubits[1] - q) + '} &'
-                    else:
-                        qstring += r' \targ &'
-                elif gate.name in ('CPHASE', 'Gcphase') and nqubits == 2:
-                    if gate_qubits[0] == q:
-                        qstring += r' \ctrl{' + str(gate_qubits[1] - q) + '} &'
-                    else:
-                        qstring += r' \control \qw &'
-
-                else:
-                    qstring += r' \gate{' + str(gate.name) + '} &'
-
-            qstring += r' \qw & \\' + '\\ \n'
-            f.write(qstring)
-
-        f.write("}\\end{equation*}\n")
-        f.write("\\end{document}")
-        f.close()
 
     def convert_to_stim_tableau_layers(self, gate_name_conversions: Optional[dict[str, stim.Tableau]] = None,
                                        num_qubits: Optional[int] = None,
@@ -5136,7 +5101,7 @@ class Circuit(object):
         """
         if not self._static:
             self._static = True
-            self.sort_layer_labels_inplace()
+            self._labels = _sort_layer_labels(self._labels)
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
         self._str = None
