@@ -2932,7 +2932,16 @@ class Circuit(object):
             if isinstance(mapper, dict) else mapper(gatename)
 
         def map_names(obj):  # obj is either a simple label or a list
-            if isinstance(obj, _Label):
+            if isinstance(obj, _CircuitLabel):
+                # CircuitLabel.IS_SIMPLE is True, but rebuilding it through the
+                # simple-label branch below would silently discard its subcircuit.
+                # Map only the label's own (box) name; the component labels inside
+                # the subcircuit are not renamed (matching the dict-mapper behavior
+                # of leaving non-matching CircuitLabels untouched).
+                new_name = mapper_func(obj.name)
+                newobj = _CircuitLabel(new_name, obj.components, obj.sslbls, obj.reps, obj.time) \
+                    if (new_name is not None and new_name != obj.name) else obj
+            elif isinstance(obj, _Label):
                 if obj.IS_SIMPLE:  # *simple* label
                     new_name = mapper_func(obj.name)
                     newobj = _Label(new_name, obj.sslbls) \
@@ -2968,7 +2977,12 @@ class Circuit(object):
         self._line_labels = tuple((mapper_func(l) for l in self._line_labels))
 
         def map_sslbls(obj):  # obj is either a simple label or a list
-            if isinstance(obj, _Label):
+            if isinstance(obj, _CircuitLabel):
+                # CircuitLabel.IS_SIMPLE is True, but rebuilding it through the
+                # branch below would silently discard its subcircuit; delegate to
+                # the Label-level method, which maps the subcircuit's sslbls too.
+                newobj = obj.map_state_space_labels(mapper_func)
+            elif isinstance(obj, _Label):
                 new_sslbls = [mapper_func(l) for l in obj.sslbls] \
                     if (obj.sslbls is not None) else None
                 newobj = _Label(obj.name, new_sslbls)

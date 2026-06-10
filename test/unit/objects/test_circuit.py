@@ -948,13 +948,41 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(c, circuit.Circuit("Gx:10Gy:11@(10,11)"))
 
     def test_map_state_space_labels_with_callable_matches_inplace(self):
-        # the non-inplace variant already handled callables; pin that the two agree
+        # issue #763: the non-inplace variant already handled callables; the
+        # fixed inplace variant must agree with it
         c = circuit.Circuit("Gx:0Gy:1@(0,1)")
         mapped = c.map_state_space_labels(lambda ll: ll + 10)
         c2 = c.copy(editable=True)
         c2.map_state_space_labels_inplace(lambda ll: ll + 10)
         c2.done_editing()
         self.assertEqual(mapped, c2)
+
+    def test_map_names_inplace_preserves_circuit_labels(self):
+        # review follow-up for issue #763: CircuitLabel.IS_SIMPLE is True, so
+        # the simple-label rebuild used to silently flatten a CircuitLabel to a
+        # bare Label, discarding its subcircuit
+        cl = CircuitLabel('Gbox', (Label('Gx', 0), Label('Gy', 0)), (0,))
+        c = circuit.Circuit([cl], line_labels=(0,), editable=True, expand_subcircuits=False)
+        c.map_names_inplace(lambda name: name + '2' if name == 'Gbox' else name)
+        self.assertIsInstance(c[0], CircuitLabel)
+        self.assertEqual(c[0].name, 'Gbox2')
+        self.assertEqual(c[0].components, (Label('Gx', 0), Label('Gy', 0)))
+        c2 = circuit.Circuit([cl], line_labels=(0,), editable=True, expand_subcircuits=False)
+        c2.map_names_inplace({'Gbox': 'Gbox2'})
+        self.assertIsInstance(c2[0], CircuitLabel)
+        self.assertEqual(c2[0].name, 'Gbox2')
+
+    def test_map_state_space_labels_inplace_preserves_circuit_labels(self):
+        # review follow-up for issue #763: same flattening hazard as above; the
+        # CircuitLabel's own sslbls and its subcircuit's sslbls both map
+        cl = CircuitLabel('Gbox', (Label('Gx', 0), Label('Gy', 0)), (0,))
+        c = circuit.Circuit([cl], line_labels=(0,), editable=True, expand_subcircuits=False)
+        c.map_state_space_labels_inplace(lambda ll: ll + 10)
+        c.done_editing()
+        self.assertEqual(c.line_labels, (10,))
+        self.assertIsInstance(c[0], CircuitLabel)
+        self.assertEqual(c[0].sslbls, (10,))
+        self.assertEqual(c[0].components, (Label('Gx', 10), Label('Gy', 10)))
 
     def test_sort_layer_labels_inplace_raises_on_static(self):
         # regression test for issue #760: previously this silently rewrote
