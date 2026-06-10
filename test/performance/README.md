@@ -47,6 +47,9 @@ behavior (str/tup/hash/slices/concat, with exceptions recorded as values), and
 compares fingerprint files across implementations. Differences must be listed in
 `circuit_corpus_allowlist.txt` (field, circuit, reason) or the compare fails.
 Hash stability across processes is handled via an automatic PYTHONHASHSEED=0 re-exec.
+Generate both fingerprint files with the same interpreter version and platform:
+PYTHONHASHSEED=0 fixes hash salting, not the hash algorithm itself, which can differ
+across Python versions and platforms.
 
     python test/performance/circuit_corpus.py generate --out develop.jsonl --size full
     # ...switch to the candidate branch/env...

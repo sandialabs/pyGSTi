@@ -4,16 +4,31 @@
 and demand that every behavioral difference is on a human-readable allowlist.
 
 Usage:
-    python test/performance/circuit_corpus.py generate --out develop.jsonl [--size full|small]
+    python test/performance/circuit_corpus.py generate --out develop.jsonl [--size full|small|smoke]
     python test/performance/circuit_corpus.py compare develop.jsonl rewrite.jsonl \
         --allowlist test/performance/circuit_corpus_allowlist.txt
 
 Fingerprints include hash values, which are only process-stable under a fixed
 PYTHONHASHSEED — the CLI re-execs itself with PYTHONHASHSEED=0 automatically.
+Generate both fingerprint files with the same interpreter version and platform:
+PYTHONHASHSEED=0 fixes hash salting, not the hash algorithm itself, which can
+differ across Python versions and platforms.
 
 Allowlist format (tab-separated, '#' comments):
     field<TAB>circuit-str<TAB>reason
 A mismatch is permitted iff some line matches its (field, baseline str) exactly.
+The circuit-str column is the Python repr of the baseline circuit string exactly
+as shown in compare output, including the surrounding quotes.
+For a reviewed systematic change (e.g. a deliberate hash change affecting every
+circuit), the intended procedure is to regenerate the baseline after sign-off —
+do NOT bulk-populate the allowlist; the allowlist is for narrow, named exceptions.
+
+Known coverage gaps: the corpus does NOT contain circuits with occurrence ids,
+compilable_layer_indices, CircuitLabel subcircuits (the reparse pass uses
+create_subcircuits=False), string line labels (e.g. 'Q0'), the '*' default line
+labels, labels with args or time, or editable circuits; line labels are only
+(0,) and (0, 1). Those constructs are covered statically by the golden-fixture
+tests in test_circuit_golden_fixtures.py, which complement this corpus.
 """
 import argparse
 import json
@@ -70,7 +85,9 @@ def _outcome(fn):
 
 
 def fingerprint(c):
-    n = len(c)
+    # len(c) is computed inside each slice lambda (not once up front) so that a
+    # raising __len__ records EXC values for the slice fields instead of
+    # crashing generate; the standalone 'len' field captures len() behavior.
     fp = {
         'str':          _outcome(lambda: c.str),
         'len':          _outcome(lambda: len(c)),
@@ -79,8 +96,8 @@ def fingerprint(c):
         'layertup':     _outcome(lambda: c.layertup),
         'line_labels':  _outcome(lambda: c.line_labels),
         'hash':         _outcome(lambda: hash(c)),
-        'slice_head':   _outcome(lambda: c[0:min(2, n)].tup),
-        'slice_tail':   _outcome(lambda: c[n // 2:].tup),
+        'slice_head':   _outcome(lambda: c[0:min(2, len(c))].tup),
+        'slice_tail':   _outcome(lambda: c[len(c) // 2:].tup),
         'concat_tup':   _outcome(lambda: (c + c).tup),
         'concat_str':   _outcome(lambda: (c + c).str),
     }
@@ -101,6 +118,16 @@ def compare_fingerprints(base, other, allowlist):
         mismatches.append({'id': None, 'src': 'CORPUS', 'field': 'length',
                            'base': len(base), 'other': len(other)})
         return mismatches
+    # Misalignment check: if most records disagree on 'str' or 'id', the two
+    # corpora were almost certainly generated differently (different size,
+    # builder version, or record order) and per-field comparison is meaningless.
+    n_str_diff = sum(1 for rb, ro in zip(base, other)
+                     if rb['fp']['str'] != ro['fp']['str'])
+    n_id_diff = sum(1 for rb, ro in zip(base, other) if rb['id'] != ro['id'])
+    if n_str_diff > len(base) / 2 or n_id_diff > len(base) / 2:
+        mismatches.append({'id': None, 'src': 'CORPUS', 'field': 'CORPUS_ALIGNMENT',
+                           'base': f'{n_str_diff}/{len(base)} circuit strs differ',
+                           'other': f'{n_id_diff}/{len(base)} record ids differ'})
     allowed = {(field, cstr) for field, cstr, _reason in allowlist}
     for rec_b, rec_o in zip(base, other):
         base_str = rec_b['fp']['str']
@@ -111,7 +138,7 @@ def compare_fingerprints(base, other, allowlist):
             if (field, base_str) in allowed:
                 continue
             mismatch = {'id': rec_b['id'], 'src': rec_b['src'], 'field': field,
-                        'base': val_b, 'other': val_o}
+                        'str': base_str, 'base': val_b, 'other': val_o}
             mismatches.append(mismatch)
     return mismatches
 
@@ -120,11 +147,16 @@ def load_allowlist(path):
     entries = []
     if path and os.path.exists(path):
         with open(path) as f:
-            for line in f:
+            for lineno, line in enumerate(f, start=1):
                 line = line.rstrip('\n')
                 if not line or line.startswith('#'):
                     continue
-                field, cstr, reason = line.split('\t', 2)
+                try:
+                    field, cstr, reason = line.split('\t', 2)
+                except ValueError as e:
+                    raise ValueError(
+                        f"malformed allowlist line {lineno} of {path} "
+                        f"(expected field<TAB>circuit-str<TAB>reason): {line!r}") from e
                 entries.append((field, cstr, reason))
     return entries
 
@@ -164,9 +196,17 @@ def main():
         allow = load_allowlist(args.allowlist)
         mismatches = compare_fingerprints(base, other, allow)
         if mismatches:
+            if any(m['field'] == 'CORPUS_ALIGNMENT' for m in mismatches):
+                print("=" * 78)
+                print("WARNING: baseline and candidate corpora appear to have been")
+                print("generated differently — per-field comparison below is unreliable.")
+                print("Regenerate both fingerprint files from the same corpus settings.")
+                print("=" * 78)
             print(f"{len(mismatches)} NON-ALLOWLISTED mismatches:")
             for m in mismatches[:50]:
                 print(f"  [{m['id']} {m['src']}] {m['field']}:")
+                if 'str' in m:
+                    print(f"    circuit-str (paste into allowlist): {m['str']}")
                 print(f"    base:   {m['base']}")
                 print(f"    other:  {m['other']}")
             if len(mismatches) > 50:
