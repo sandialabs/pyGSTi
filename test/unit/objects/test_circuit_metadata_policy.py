@@ -8,12 +8,16 @@ wrongness is pinned in test_circuit_known_bugs.py, not here.
 """
 import pytest
 
+from pygsti.baseobjs import Label
 from pygsti.circuits import Circuit
 
 
 def _base():
     layer_list = [('Gx', 0), ('Gy', 0), ('Gz', 0)]
-    return Circuit(layer_list, line_labels=(0,), occurrence=7, compilable_layer_indices=(1,))
+    c = Circuit(layer_list, line_labels=(0,), occurrence=7, compilable_layer_indices=(1,))
+    assert c.occurrence == 7
+    assert c.compilable_layer_indices == (1,)
+    return c
 
 
 def _copy_editable_roundtrip(c):
@@ -36,6 +40,8 @@ CASES = [
     ('parallelize',             lambda c: c.parallelize(),                  True,    False),
     # SURPRISE: replace_gatename keeps occurrence but drops compilable_layer_indices.
     ('replace_gatename',        lambda c: c.replace_gatename('Gx', 'Ga'),   True,    False),
+    # SURPRISE: same keep-occurrence/drop-compilable asymmetry as replace_gatename
+    ('map_state_space_labels',   lambda c: c.map_state_space_labels({0: 1}),  True,    False),
 ]
 
 
@@ -53,7 +59,7 @@ def test_mul_repeat_raises_when_occurrence_is_set():
     # separator (e.g. 'Gx:0@(0)@7'), so multiplying any circuit that has an
     # occurrence set raises ValueError instead of returning a circuit.
     c = _base()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"too many values to unpack"):
         c * 2
 
 
@@ -67,7 +73,6 @@ def test_mul_repeat_drops_compilable_indices_when_no_occurrence():
 
 
 def test_getitem_single_layer_returns_label_not_circuit():
-    from pygsti.baseobjs import Label
     out = _base()[1]
     assert isinstance(out, Label)
     assert not isinstance(out, Circuit)
