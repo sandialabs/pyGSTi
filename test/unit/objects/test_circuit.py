@@ -955,3 +955,30 @@ class CircuitBugfixRegressionTester(BaseCase):
         c2.map_state_space_labels_inplace(lambda ll: ll + 10)
         c2.done_editing()
         self.assertEqual(mapped, c2)
+
+    def test_sort_layer_labels_inplace_raises_on_static(self):
+        # regression test for issue #760: previously this silently rewrote
+        # _labels while leaving the cached hash/tup/str stale
+        s = circuit.Circuit("Gx:0Gy:1@(0,1)")
+        with self.assertRaises(AssertionError):
+            s.sort_layer_labels_inplace()
+
+    def test_sort_layer_labels_inplace_on_editable(self):
+        # regression test for issue #760: sorting must preserve the editable
+        # representation so that subsequent in-place edits still work
+        c = circuit.Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1), editable=True)
+        self.assertEqual(c[0], Label((('Gy', 1), ('Gx', 0))))
+        c.sort_layer_labels_inplace()
+        self.assertEqual(c[0], Label((('Gx', 0), ('Gy', 1))))
+        c.insert_labels_into_layers_inplace([Label('Gz', 0)], 1)
+        c.done_editing()
+        self.assertEqual(c, circuit.Circuit([[('Gx', 0), ('Gy', 1)], [('Gz', 0)]], line_labels=(0, 1)))
+
+    def test_done_editing_still_sorts_layers(self):
+        # pin for issue #760's done_editing change: the editable->static
+        # transition must still canonicalize within-layer label order
+        c = circuit.Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1), editable=True)
+        c.done_editing()
+        canonical = circuit.Circuit([[('Gx', 0), ('Gy', 1)]], line_labels=(0, 1))
+        self.assertEqual(c, canonical)
+        self.assertEqual(hash(c), hash(canonical))

@@ -1159,7 +1159,9 @@ class Circuit(object):
 
         Updates the circuit inplace.
         """
-        self._labels = _sort_layer_labels(self._labels)
+        assert(not self._static), "Cannot edit a read-only circuit!"
+        self._labels = [_label_to_nested_lists_of_simple_labels(lbl)
+                        for lbl in _sort_layer_labels(self._labels)]
 
     def clear(self):
         """
@@ -5047,7 +5049,7 @@ class Circuit(object):
         """
         if not self._static:
             self._static = True
-            self.sort_layer_labels_inplace()
+            self._labels = _sort_layer_labels(self._labels)
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
         self._str = None
