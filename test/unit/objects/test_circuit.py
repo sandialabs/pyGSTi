@@ -919,3 +919,39 @@ class CompressedCircuitTester(BaseCase):
     def test_raise_on_construct_from_non_circuit(self):
         with self.assertRaises(ValueError):
             circuit.CompressedCircuit(('Gx',))  # can only create from Circuits
+
+
+class CircuitBugfixRegressionTester(BaseCase):
+    """Regression tests for the batch of circuit.py bug fixes (issues #756, #760, #762, #763, #764)."""
+
+    def test_map_names_inplace_with_callable(self):
+        # regression test for issue #763
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)", editable=True)
+        c.map_names_inplace(lambda name: name + '2')
+        c.done_editing()
+        self.assertEqual(c, circuit.Circuit("Gx2:0Gy2:1@(0,1)"))
+
+    def test_map_names_inplace_with_dict(self):
+        # regression test for issue #763 (dict path must keep working; missing
+        # keys mean "keep the old name")
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)", editable=True)
+        c.map_names_inplace({'Gx': 'Gz'})
+        c.done_editing()
+        self.assertEqual(c, circuit.Circuit("Gz:0Gy:1@(0,1)"))
+
+    def test_map_state_space_labels_inplace_with_callable(self):
+        # regression test for issue #763
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)", editable=True)
+        c.map_state_space_labels_inplace(lambda ll: ll + 10)
+        c.done_editing()
+        self.assertEqual(c.line_labels, (10, 11))
+        self.assertEqual(c, circuit.Circuit("Gx:10Gy:11@(10,11)"))
+
+    def test_map_state_space_labels_with_callable_matches_inplace(self):
+        # the non-inplace variant already handled callables; pin that the two agree
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)")
+        mapped = c.map_state_space_labels(lambda ll: ll + 10)
+        c2 = c.copy(editable=True)
+        c2.map_state_space_labels_inplace(lambda ll: ll + 10)
+        c2.done_editing()
+        self.assertEqual(mapped, c2)

@@ -2909,7 +2909,7 @@ class Circuit(object):
 
         # If the mapper is a dict, turn it into a function
         def mapper_func(gatename): return mapper.get(gatename, None) \
-            if isinstance(mapper, dict) else mapper
+            if isinstance(mapper, dict) else mapper(gatename)
 
         def map_names(obj):  # obj is either a simple label or a list
             if isinstance(obj, _Label):
@@ -2943,7 +2943,7 @@ class Circuit(object):
 
         # If the mapper is a dict, turn it into a function
         def mapper_func(line_label): return mapper[line_label] \
-            if isinstance(mapper, dict) else mapper
+            if isinstance(mapper, dict) else mapper(line_label)
 
         self._line_labels = tuple((mapper_func(l) for l in self._line_labels))
 
