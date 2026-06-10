@@ -2494,6 +2494,13 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         #assert(self.identity == circuit.identity), "The identity labels must be the same!"
 
+        if circuit.num_layers > 0 and len(self._line_labels) > 0 \
+           and _sslbls_of_nested_lists_of_simple_labels(self._labels) is None:
+            raise ValueError("Cannot tensor: this circuit contains gates with implicit (None) state-space "
+                             "labels, which are interpreted as acting on *all* of the circuit's lines and "
+                             "so cannot coexist with the new lines being added.  Give these gates explicit "
+                             "state-space labels (e.g. 'Gx:0' rather than 'Gx') before tensoring.")
+
         #Construct new line labels (of final circuit)
         overlap = set(self._line_labels).intersection(circuit._line_labels)
         if len(overlap) > 0:
@@ -2514,7 +2521,7 @@ class Circuit(object):
             if len(extra) > 0:
                 raise ValueError("`line_order` had nonpresent line labels %s." % str(extra))
 
-            new_line_labels = line_order
+            new_line_labels = tuple(line_order)
         else:
             new_line_labels = self._line_labels + circuit._line_labels
 

@@ -982,3 +982,56 @@ class CircuitBugfixRegressionTester(BaseCase):
         canonical = circuit.Circuit([[('Gx', 0), ('Gy', 1)]], line_labels=(0, 1))
         self.assertEqual(c, canonical)
         self.assertEqual(hash(c), hash(canonical))
+
+    def test_tensor_circuit_with_list_line_order(self):
+        # regression test for issue #762: a list line_order was stored
+        # un-tupled, crashing later in done_editing
+        c = circuit.Circuit("Gx:0@(0)", editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"), line_order=[1, 0])
+        c.done_editing()
+        self.assertEqual(c.line_labels, (1, 0))
+        self.assertEqual(c[0, 0], Label('Gx', 0))
+        self.assertEqual(c[0, 1], Label('Gy', 1))
+
+    def test_tensor_circuit_with_tuple_line_order(self):
+        c = circuit.Circuit("Gx:0@(0)", editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"), line_order=(1, 0))
+        c.done_editing()
+        self.assertEqual(c.line_labels, (1, 0))
+
+    def test_tensor_circuit_noninplace(self):
+        t = circuit.Circuit("Gx:0@(0)").tensor_circuit(circuit.Circuit("Gy:1@(1)"))
+        self.assertEqual(t, circuit.Circuit("[Gx:0Gy:1]@(0,1)"))
+
+    def test_tensor_circuit_implicit_sslbls_host_raises(self):
+        # regression test for issue #762: previously failed deep inside
+        # _clear_labels with "Cannot operate on a block that is straddled by Gx!"
+        c = circuit.Circuit("Gx@(0)", editable=True)
+        with self.assertRaises(ValueError) as cm:
+            c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"))
+        self.assertIn("implicit", str(cm.exception))
+
+    def test_tensor_circuit_implicit_sslbls_insertee_ok(self):
+        # pin for issue #762: an implicit-sslbls *insertee* is explicified
+        # onto its own lines during insertion and must keep working
+        # (SimultaneousExperimentDesign relies on this)
+        t = circuit.Circuit("Gx:0@(0)").tensor_circuit(circuit.Circuit("Gy@(1)"))
+        self.assertEqual(t, circuit.Circuit("[Gx:0Gy:1]@(0,1)"))
+
+    def test_tensor_circuit_implicit_sslbls_host_with_empty_insertee_ok(self):
+        # pin for issue #762: tensoring idle lines (a depth-0 circuit) onto a
+        # host with implicit-sslbls gates worked before the new guard and must
+        # continue to work
+        c = circuit.Circuit("Gx@(0)", editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit((), line_labels=(1,)))
+        c.done_editing()
+        self.assertEqual(c.line_labels, (0, 1))
+
+    def test_tensor_circuit_with_empty_layers_ok(self):
+        # pin for issue #762: empty (idle) layers contain no implicit-sslbls
+        # gates and must not trip the new guard
+        c = circuit.Circuit([('Gx', 0), (), ('Gy', 0)], line_labels=(0,), editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit("Gz:1@(1)"))
+        c.done_editing()
+        self.assertEqual(c.line_labels, (0, 1))
+        self.assertEqual(c.depth, 3)
