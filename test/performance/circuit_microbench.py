@@ -11,14 +11,18 @@ Usage:
 Reference numbers from this script (2026-06-10, dev container, linux/aarch64, py313,
 production code identical to develop@3e7dd411e):
     depth-30 2Q __init__ check=True ~141us | check=False ~124us | _fastinit ~0.76us
-    static copy ~0.25us | cached hash ~50ns | __add__ ~16us
+    static copy ~0.25us | cached hash ~50ns | add_nostr ~16us | add_withstr ~17us
     smq1Q_XYI ML=64 edesign: ~0.13s wall, Circuit.__add__ ~73% of wall
 """
 import argparse
 import cProfile
+import datetime
 import json
+import platform
 import pstats
 import statistics
+import subprocess
+import sys
 import time
 import timeit
 
@@ -39,7 +43,14 @@ def run_microbenches(repeats):
     layers = depth30_2q_layers()
     lbl_layers = _label_layers(layers)
     static_c = Circuit(layers, line_labels=(0, 1))
-    half_a, half_b = static_c[0:15], static_c[15:30]
+    # __getitem__ slices carry stringrep=None, so adding these hits the no-string
+    # early-out in Circuit.__add__ (s = None when either operand lacks _str).
+    half_a_nostr, half_b_nostr = static_c[0:15], static_c[15:30]
+    # Pre-touching .str caches the string rep on these static circuits, so adding
+    # them exercises the string-concat path. This is the path ALL __add__ calls in
+    # real edesign creation take (both operands arrive with _str cached).
+    half_a_str, half_b_str = static_c[0:15], static_c[15:30]
+    half_a_str.str; half_b_str.str
     cstr = static_c.str
     sip = stdinput.StdInputParser()
     sip.use_global_parse_cache = False  # otherwise the parse bench times a dict lookup
@@ -49,10 +60,14 @@ def run_microbenches(repeats):
         ('init_check_false',    lambda: Circuit(layers, line_labels=(0, 1), check=False),               500   ),
         ('fastinit',            lambda: Circuit._fastinit(lbl_layers, (0, 1), False),                   5000  ),
         ('static_copy',         lambda: static_c.copy(),                                                10000 ),
+        # cached_hash: ~50ns is near the lambda-dispatch floor of this harness, so the
+        # reading is meaningful as a regression tripwire (a de-cached hash would jump
+        # to microseconds), not as a true attribute-access cost.
         ('cached_hash',         lambda: hash(static_c),                                                 100000),
         ('parse_via_init',      lambda: Circuit(cstr),                                                  200   ),
         ('parse_via_stdinput',  lambda: sip.parse_circuit(cstr, create_subcircuits=False),              500   ),
-        ('add',                 lambda: half_a + half_b,                                                2000  ),
+        ('add_nostr',           lambda: half_a_nostr + half_b_nostr,                                    2000  ),
+        ('add_withstr',         lambda: half_a_str + half_b_str,                                        2000  ),
         ('layer_slice',         lambda: static_c[5:25],                                                 2000  ),
     ]
     results = {}
@@ -67,7 +82,11 @@ def run_microbenches(repeats):
 
 
 def run_edesign_macro():
-    """Wall time + __add__ share for a real experiment-design creation."""
+    """Wall time + __add__ share for a real experiment-design creation.
+
+    Note: the share is measured under cProfile; profiling overhead skews toward
+    call-heavy code, so the share reads high.
+    """
     from pygsti.modelpacks import smq1Q_XYI
     profiler = cProfile.Profile()
     t0 = time.perf_counter()
@@ -95,30 +114,49 @@ def run_edesign_macro():
     return macro
 
 
+def _git_head():
+    try:
+        out = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True)
+        return out.stdout.strip()
+    except Exception:
+        return 'unknown'
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--repeats', type=int, default=7)
     parser.add_argument('--json', default=None)
     args = parser.parse_args()
 
+    # Print micro results before running the macro, so a macro failure doesn't
+    # discard completed measurements.
     micro = run_microbenches(args.repeats)
-    macro = run_edesign_macro()
-
     print('\n| benchmark | best | median |')
     print('|---|---|---|')
     for name, r in micro.items():
         print(f"| {name} | {r['best_us']:.3f} us | {r['median_us']:.3f} us |")
 
-    n_circuits  = macro['n_circuits']
-    wall_s      = macro['wall_s']
-    add_cum_s   = macro['circuit_add_cumtime_s']
-    add_share   = macro['circuit_add_share']
-    print(f"\nsmq1Q_XYI ML=64 edesign: {n_circuits} circuits in {wall_s:.2f}s")
-    print(f"Circuit.__add__ cumtime: {add_cum_s:.2f}s ({add_share:.0%} of wall)")
+    try:
+        macro = run_edesign_macro()
+        n_circuits  = macro['n_circuits']
+        wall_s      = macro['wall_s']
+        add_cum_s   = macro['circuit_add_cumtime_s']
+        add_share   = macro['circuit_add_share']
+        print(f"\nsmq1Q_XYI ML=64 edesign: {n_circuits} circuits in {wall_s:.2f}s")
+        print(f"Circuit.__add__ cumtime: {add_cum_s:.2f}s ({add_share:.0%} of wall)")
+    except Exception as exc:
+        macro = {'error': str(exc)}
+        print(f"\nWARNING: edesign macro benchmark failed: {exc}")
 
     if args.json:
+        meta = {
+            'python':   sys.version,
+            'platform': platform.platform(),
+            'date':     datetime.date.today().isoformat(),
+            'git_head': _git_head(),
+        }
         with open(args.json, 'w') as f:
-            json.dump({'micro': micro, 'macro': macro}, f, indent=2)
+            json.dump({'meta': meta, 'micro': micro, 'macro': macro}, f, indent=2)
         print(f"wrote {args.json}")
 
 
