@@ -1337,6 +1337,7 @@ class Circuit(object):
                                         not self._static)  # zero-area region
 
         ret = []
+        observed_sslbls = set()  # the sslbls of all labels kept when strict=False (unused when strict=True)
         if self._static:
             def get_sslbls(lbl): return lbl.sslbls
         else:
@@ -1354,12 +1355,19 @@ class Circuit(object):
                 else:
                     sslbls = set(sslbls)
                 if (strict and sslbls.issubset(lines)) or \
-                   (not strict and len(sslbls.intersection(lines)) >= 0):
+                   (not strict and sslbls.intersection(lines)):
                     ret_layer.append(l)
+                    if not strict:
+                        observed_sslbls.update(sslbls)
             ret.append(_Label(ret_layer) if len(ret_layer) != 1 else ret_layer[0])  # Labels b/c we use _fastinit
 
         if nonint_layers:
-            if not strict: lines = "auto"  # since we may have included lbls on other lines
+            if not strict:
+                # Included labels may straddle the boundary of the requested lines,
+                # so the result can act on more lines than requested -- extend the
+                # line labels to cover them (in this circuit's line-label order).
+                extra_lines = observed_sslbls - set(lines)
+                lines = tuple(lines) + tuple(ll for ll in self._line_labels if ll in extra_lines)
             # don't worry about string rep for now...
 
             return Circuit._fastinit(tuple(ret) if self._static else ret,

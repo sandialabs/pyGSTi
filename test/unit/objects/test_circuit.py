@@ -1035,3 +1035,41 @@ class CircuitBugfixRegressionTester(BaseCase):
         c.done_editing()
         self.assertEqual(c.line_labels, (0, 1))
         self.assertEqual(c.depth, 3)
+
+    def test_extract_labels_nonstrict_filters_and_line_labels(self):
+        # regression test for issue #756: the non-strict membership test was
+        # always true (so no filtering happened) and the result's line labels
+        # were tuple('auto') == ('a', 'u', 't', 'o')
+        c = circuit.Circuit("[Gx:0Gy:1][Gz:1]@(0,1)")
+        sub = c.extract_labels(layers=slice(0, 2), lines=(1,), strict=False)
+        self.assertEqual(sub.line_labels, (1,))
+        self.assertEqual(sub[0], Label('Gy', 1))
+        self.assertEqual(sub[1], Label('Gz', 1))
+
+    def test_extract_labels_nonstrict_includes_straddlers(self):
+        # issue #756: labels straddling the requested-lines boundary are kept
+        # (per the docstring) and the result's line labels grow to cover them;
+        # layers with no intersecting labels come back empty
+        c = circuit.Circuit("[Gcnot:0:1][Gz:1]@(0,1,2)")
+        sub = c.extract_labels(layers=slice(0, 2), lines=(0,), strict=False)
+        self.assertEqual(sub.line_labels, (0, 1))
+        self.assertEqual(sub[0], Label('Gcnot', (0, 1)))
+        self.assertEqual(sub[1], Label(()))
+
+    def test_extract_labels_nonstrict_editable_matches_static(self):
+        # issue #756: the editable and static code paths must agree
+        text = "[Gx:0Gy:1][Gz:1]@(0,1)"
+        sub_static = circuit.Circuit(text).extract_labels(layers=slice(0, 2), lines=(1,), strict=False)
+        sub_editable = circuit.Circuit(text, editable=True).extract_labels(layers=slice(0, 2), lines=(1,), strict=False)
+        sub_editable.done_editing()
+        self.assertEqual(sub_static, sub_editable)
+        self.assertEqual(sub_static, circuit.Circuit("Gy:1Gz:1@(1)"))
+
+    def test_extract_labels_strict_behavior_unchanged(self):
+        # context pin for issue #756: strict extraction (the default, used by
+        # __getitem__) drops straddling labels and keeps the requested lines
+        c = circuit.Circuit("[Gcnot:0:1][Gz:1]@(0,1)")
+        sub = c.extract_labels(layers=slice(0, 2), lines=(1,))
+        self.assertEqual(sub.line_labels, (1,))
+        self.assertEqual(sub[0], Label(()))
+        self.assertEqual(sub[1], Label('Gz', 1))
