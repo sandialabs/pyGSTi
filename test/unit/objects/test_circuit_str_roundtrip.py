@@ -105,4 +105,5 @@ def test_str_roundtrip_stdinput_parser(c):
 
 
 def test_fast_parser_extension_importable():
-    pytest.importorskip('pygsti.circuits.circuitparser.fastcircuitparser', reason='fast parser extension not built; the roundtrip tests above exercised only the slow parser')
+    reason = 'fast parser extension not built; the roundtrip tests above exercised only the slow parser'
+    pytest.importorskip('pygsti.circuits.circuitparser.fastcircuitparser', reason=reason)

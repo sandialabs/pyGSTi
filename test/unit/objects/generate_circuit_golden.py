@@ -6,6 +6,9 @@ Run from the repo root:
 Regenerating REPLACES the fixtures and resets the baseline — only do that
 deliberately, in a reviewed PR that explains why.
 
+The fixtures live under ``test/unit/objects/golden/`` and are exempted from the
+repo-root ``.gitignore`` patterns (``*.pkl``, ``*.gz``) via negation rules.
+
 Regeneration determinism:
 
 * ``circuits_golden.pkl``, ``compressed_golden.pkl``, and ``golden_manifest.json``
@@ -59,6 +62,7 @@ def main():
         }
     with open(os.path.join(OUTDIR, 'golden_manifest.json'), 'w') as f:
         json.dump(manifest, f, indent=2, sort_keys=True)
+        f.write('\n')
 
     ds = DataSet(outcome_labels=['0', '1'])
     for i, c in enumerate(circuits.values()):

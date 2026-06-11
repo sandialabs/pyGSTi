@@ -2,9 +2,11 @@
 metadata fields that participate in identity (occurrence, compilable_layer_indices).
 
 The CASES table below is the behavioral contract. It was pinned from code reading
-at develop@3e7dd411e and reconciled by execution. Where current behavior is
-arguably wrong (e.g. __add__ dropping metadata while leaking string markers) the
-wrongness is pinned in test_circuit_known_bugs.py, not here.
+at develop@3e7dd411e and reconciled by execution. Pin convention: KNOWN BUG pins
+(behavior with a filed issue, e.g. __add__ dropping metadata while leaking string
+markers) live in test_circuit_known_bugs.py; SURPRISE pins (newly found,
+not-yet-filed behavior, like the mul-with-occurrence ValueError crash below) are
+pinned in the module where they were found and recorded for issue filing.
 """
 import pytest
 

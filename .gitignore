@@ -110,3 +110,7 @@ HighImpactPaper1/texFiles/.DS_Store
 local
 pygsti/_version.py
 1_1.profile/0.prof
+
+# committed golden fixtures for the Circuit characterization tests
+!test/unit/objects/golden/*.pkl
+!test/unit/objects/golden/*.pkl.gz

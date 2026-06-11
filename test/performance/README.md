@@ -32,7 +32,7 @@ In order to run on your machine:
 
 `circuit_microbench.py` times the Circuit identity/creation hot paths (construction
 tiers, hashing, parsing, concatenation) plus a real experiment-design macro, and
-prints a markdown table — the before/after evidence format used on PRs #445/#692.
+prints a markdown table — the before/after evidence format used on PRs [#445](https://github.com/sandialabs/pyGSTi/pull/445)/[#692](https://github.com/sandialabs/pyGSTi/pull/692).
 Run it manually with the same interpreter before and after any change to
 `pygsti/circuits/circuit.py`; it is intentionally not part of CI.
 

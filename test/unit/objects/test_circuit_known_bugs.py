@@ -7,6 +7,8 @@ Repros taken verbatim from the issue reports (verified by execution 2026-06-10
 at develop@47b3dcae5, re-verified here at 3e7dd411e).
 If one of these tests goes red after your change, you have probably fixed the
 referenced issue: flip or delete the pin in the same PR and note the issue number.
+Newly discovered, not-yet-filed bugs are pinned as SURPRISE comments in the
+module where they were found, and graduate here once filed.
 """
 import pytest
 

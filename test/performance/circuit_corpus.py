@@ -5,7 +5,7 @@ and demand that every behavioral difference is on a human-readable allowlist.
 
 Usage:
     python test/performance/circuit_corpus.py generate --out develop.jsonl [--size full|small|smoke]
-    python test/performance/circuit_corpus.py compare develop.jsonl rewrite.jsonl \
+    python test/performance/circuit_corpus.py compare baseline.jsonl candidate.jsonl \
         --allowlist test/performance/circuit_corpus_allowlist.txt
 
 Fingerprints include hash values, which are only process-stable under a fixed
