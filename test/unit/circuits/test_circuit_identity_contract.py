@@ -100,11 +100,10 @@ class CircuitIdentityContractTester(BaseCase):
         via_tuples   = Circuit([('Gx', 0), ('Gy', 0)],               line_labels=(0,))
         via_editable = Circuit([('Gx', 0), ('Gy', 0)],               line_labels=(0,), editable=True)
         via_editable.done_editing()
-        all_paths = [via_string, via_labels, via_tuples, via_editable]
-        for other in all_paths[1:]:
-            with self.subTest(circuit=other):
-                self.assertEqual(other, all_paths[0])
-                self.assertEqual(hash(other), hash(all_paths[0]))
+        reference = via_string
+        for name, other in [('labels', via_labels), ('tuples', via_tuples), ('editable', via_editable)]:
+            self.assertEqual(other, reference, msg=name)
+            self.assertEqual(hash(other), hash(reference), msg=name)
 
     def test_hashing_editable_circuit_mutates_it(self):
         c = Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1), editable=True)
