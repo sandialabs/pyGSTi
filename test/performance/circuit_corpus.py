@@ -1,12 +1,23 @@
 #!/usr/bin/env python
 """Differential behavior corpus for pygsti Circuits: generate fingerprints of
-~10-50k realistic circuits under one version of the code, replay under another,
-and demand that every behavioral difference is on a human-readable allowlist.
+realistic circuits (~23k at --size full) under one version of the code, replay
+under another, and demand that every behavioral difference is on a
+human-readable allowlist.
 
 Usage:
-    python test/performance/circuit_corpus.py generate --out develop.jsonl [--size full|small|smoke]
-    python test/performance/circuit_corpus.py compare baseline.jsonl candidate.jsonl \
+    # Any --out / compare path ending in '.gz' is gzip-(de)compressed
+    # transparently, detected by suffix. A full uncompressed corpus is ~120 MB,
+    # so prefer .gz; the tracked reference baseline is stored compressed at
+    # test/performance/circuit_corpus_baseline.jsonl.gz (~2 MB).
+    python test/performance/circuit_corpus.py generate \
+        --out test/performance/circuit_corpus_baseline.jsonl.gz [--size full|small|smoke]
+    python test/performance/circuit_corpus.py compare \
+        test/performance/circuit_corpus_baseline.jsonl.gz candidate.jsonl.gz \
         --allowlist test/performance/circuit_corpus_allowlist.txt
+
+Regenerating the baseline to the same path is byte-reproducible (fixed gzip
+mtime), so a no-op regeneration leaves git clean. Uncompressed '*.jsonl' outputs
+are gitignored under test/performance/.
 
 Fingerprints include hash values, which are only process-stable under a fixed
 PYTHONHASHSEED — the CLI re-execs itself with PYTHONHASHSEED=0 automatically.
@@ -25,21 +36,49 @@ do NOT bulk-populate the allowlist; the allowlist is for narrow, named exception
 
 Known coverage gaps: the corpus does NOT contain circuits with occurrence ids,
 compilable_layer_indices, CircuitLabel subcircuits (the reparse pass uses
-create_subcircuits=False), string line labels (e.g. 'Q0'), the '*' default line
-labels, labels with args or time, or editable circuits; line labels are only
-(0,) and (0, 1). Those constructs are covered statically by the golden-fixture
+create_subcircuits=False), the '*' default line labels, labels with args or
+time, or editable circuits; line labels are (0,), (0, 1), ('Q0',), and
+('Q0', 'Q1'). Those constructs are covered statically by the golden-fixture
 tests in test_circuit_golden_fixtures.py, which complement this corpus.
+
+At --size full the large 2-qubit GST designs are deterministically subsampled to
+a fixed per-design cap (see SIZES and _subsample) so the committed baseline stays
+~2 MB compressed; the subsample keeps the first and last circuit, so the deepest
+max-length circuits stay represented. The 1-qubit designs are below the cap and
+kept in full.
 """
 import argparse
+import gzip
+import io
 import json
 import os
 import sys
 
+# gst_cap bounds how many circuits are kept from EACH GST design (deterministic
+# even stride that keeps both endpoints; see _subsample), so the committed
+# compressed baseline stays small (~2 MB gzipped) without dropping the deepest
+# max-length circuits. None keeps the whole design. The 1-qubit designs are well
+# under the cap and so are kept in full; only the large 2-qubit designs are thinned.
 SIZES = {
-    'smoke': dict(ml_1q=4,  ml_2q=None, n_random=40,    reparse_every=5 ),
-    'small': dict(ml_1q=8,  ml_2q=None, n_random=500,   reparse_every=10),
-    'full':  dict(ml_1q=64, ml_2q=8,    n_random=10000, reparse_every=10),
+    'smoke': dict(ml_1q=4,   ml_2q=None, n_random=40,   reparse_every=5,  gst_cap=None),
+    'small': dict(ml_1q=8,   ml_2q=None, n_random=500,  reparse_every=10, gst_cap=None),
+    'full':  dict(ml_1q=256, ml_2q=128,  n_random=4000, reparse_every=10, gst_cap=7000),
 }
+
+
+def _subsample(circuits, cap):
+    """Deterministically thin `circuits` to at most `cap` entries via an even
+    stride that always keeps the first and last element. The GST circuit lists are
+    ordered by increasing max-length, so keeping the endpoints preserves the full
+    depth range -- including the deepest max-length circuits -- in the slimmed
+    corpus. `cap=None` (or cap >= len) keeps every circuit."""
+    n = len(circuits)
+    if cap is None or n <= cap:
+        return list(circuits)
+    if cap <= 1:
+        return [circuits[0]] if n else []
+    idxs = sorted({(i * (n - 1)) // (cap - 1) for i in range(cap)})
+    return [circuits[i] for i in idxs]
 
 
 def build_corpus(size='full'):
@@ -53,13 +92,23 @@ def build_corpus(size='full'):
     cfg = SIZES[size]
     corpus = []
 
+    cap = cfg['gst_cap']
+
     design = smq1Q_XYI.create_gst_experiment_design(cfg['ml_1q'])
-    corpus += [('gst_1q', c) for c in design.all_circuits_needing_data]
+    corpus += [('gst_1q', c) for c in _subsample(design.all_circuits_needing_data, cap)]
+
+    # the same 1-qubit design relabeled with a string qubit label ('Q0'), so the
+    # corpus exercises string line labels through every fingerprint field and the
+    # reparse path -- not just the integer labels (0,) / (0, 1).
+    design_q = smq1Q_XYI.create_gst_experiment_design(cfg['ml_1q'], qubit_labels=('Q0',))
+    corpus += [('gst_1q_strlbl', c) for c in _subsample(design_q.all_circuits_needing_data, cap)]
 
     if cfg['ml_2q']:
         from pygsti.modelpacks import smq2Q_XYICNOT
         design2 = smq2Q_XYICNOT.create_gst_experiment_design(cfg['ml_2q'])
-        corpus += [('gst_2q', c) for c in design2.all_circuits_needing_data]
+        corpus += [('gst_2q', c) for c in _subsample(design2.all_circuits_needing_data, cap)]
+        design2_q = smq2Q_XYICNOT.create_gst_experiment_design(cfg['ml_2q'], qubit_labels=('Q0', 'Q1'))
+        corpus += [('gst_2q_strlbl', c) for c in _subsample(design2_q.all_circuits_needing_data, cap)]
 
     pspec = QubitProcessorSpec(2, ['Gi', 'Gxpi2', 'Gypi2', 'Gcnot'], geometry='line')
     rng = np.random.RandomState(20260610)
@@ -167,6 +216,22 @@ def _ensure_fixed_hashseed():
         os.execve(sys.executable, [sys.executable] + sys.argv, env)
 
 
+def _open_text(path, mode):
+    """Open a fingerprint file for text I/O, choosing gzip by suffix: any path
+    ending in '.gz' is (de)compressed transparently, so the committed baseline can
+    be stored compressed and `generate`/`compare` handle it without a separate
+    step. `mode` is 'rt' or 'wt'. Compressed writes fix the gzip mtime to 0 so
+    regenerating identical content yields byte-identical output (git diffs of the
+    committed baseline stay meaningful)."""
+    if not path.endswith('.gz'):
+        return open(path, mode, encoding='utf-8')
+    if 'w' in mode:
+        gz = gzip.GzipFile(path, 'wb', compresslevel=9, mtime=0)
+    else:
+        gz = gzip.GzipFile(path, 'rb')
+    return io.TextIOWrapper(gz, encoding='utf-8')
+
+
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest='cmd', required=True)
@@ -184,14 +249,14 @@ def main():
     if args.cmd == 'generate':
         corpus = build_corpus(args.size)
         records = fingerprint_all(corpus)
-        with open(args.out, 'w') as f:
+        with _open_text(args.out, 'wt') as f:
             for rec in records:
                 f.write(json.dumps(rec) + '\n')
         print(f"wrote {len(records)} fingerprints ({args.size}) to {args.out}")
     else:
-        with open(args.baseline) as f:
+        with _open_text(args.baseline, 'rt') as f:
             base = [json.loads(line) for line in f]
-        with open(args.candidate) as f:
+        with _open_text(args.candidate, 'rt') as f:
             other = [json.loads(line) for line in f]
         allow = load_allowlist(args.allowlist)
         mismatches = compare_fingerprints(base, other, allow)
