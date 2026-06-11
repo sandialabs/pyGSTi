@@ -22,6 +22,8 @@ from pygsti.circuits import Circuit  # noqa: E402
 from pygsti.circuits.circuitparser import slowcircuitparser  # noqa: E402
 from pygsti.io import stdinput  # noqa: E402
 
+from ..util import BaseCase  # noqa: E402
+
 LINES    = (0, 1, 2)
 GATES_1Q = ('Gx', 'Gy', 'Gz', 'Gi')
 GATES_2Q = ('Gcnot', 'Gcphase')
@@ -75,35 +77,38 @@ def circuit_st(draw):
     return c
 
 
-@ROUNDTRIP_SETTINGS
-@given(c=circuit_st())
-def test_str_roundtrip_default_parser(c):
-    c2 = Circuit(c.str)
-    assert c2 == c
-    assert hash(c2) == hash(c)  # hash/eq consistency witnessed once here; other parser tests rely on == only
-    assert c2.str == c.str
+class CircuitStrRoundtripTester(BaseCase):
 
-
-@ROUNDTRIP_SETTINGS
-@given(c=circuit_st())
-def test_str_roundtrip_slow_parser(c):
-    slow_parse = slowcircuitparser.parse_circuit
-    with mock.patch.object(cparser_mod, 'parse_circuit', slow_parse):
+    @ROUNDTRIP_SETTINGS
+    @given(c=circuit_st())
+    def test_str_roundtrip_default_parser(self, c):
         c2 = Circuit(c.str)
-    assert c2 == c
-    assert c2.str == c.str
+        self.assertEqual(c2, c)
+        # hash/eq consistency witnessed once here; other parser tests rely on == only
+        self.assertEqual(hash(c2), hash(c))
+        self.assertEqual(c2.str, c.str)
 
+    @ROUNDTRIP_SETTINGS
+    @given(c=circuit_st())
+    def test_str_roundtrip_slow_parser(self, c):
+        slow_parse = slowcircuitparser.parse_circuit
+        with mock.patch.object(cparser_mod, 'parse_circuit', slow_parse):
+            c2 = Circuit(c.str)
+        self.assertEqual(c2, c)
+        self.assertEqual(c2.str, c.str)
 
-@ROUNDTRIP_SETTINGS
-@given(c=circuit_st())
-def test_str_roundtrip_stdinput_parser(c):
-    # crosses the Circuit._fastinit path; generator output is canonically sorted,
-    # so this holds despite the issue #757 bug (which needs *unsorted* source text)
-    sip = stdinput.StdInputParser()
-    c2 = sip.parse_circuit(c.str, create_subcircuits=False)
-    assert c2 == c
+    @ROUNDTRIP_SETTINGS
+    @given(c=circuit_st())
+    def test_str_roundtrip_stdinput_parser(self, c):
+        # crosses the Circuit._fastinit path; generator output is canonically sorted,
+        # so this holds despite the issue #757 bug (which needs *unsorted* source text)
+        sip = stdinput.StdInputParser()
+        c2 = sip.parse_circuit(c.str, create_subcircuits=False)
+        self.assertEqual(c2, c)
 
-
-def test_fast_parser_extension_importable():
-    reason = 'fast parser extension not built; the roundtrip tests above exercised only the slow parser'
-    pytest.importorskip('pygsti.circuits.circuitparser.fastcircuitparser', reason=reason)
+    def test_fast_parser_extension_importable(self):
+        reason = 'fast parser extension not built; the roundtrip tests above exercised only the slow parser'
+        try:
+            import pygsti.circuits.circuitparser.fastcircuitparser  # noqa: F401
+        except ImportError:
+            self.skipTest(reason)

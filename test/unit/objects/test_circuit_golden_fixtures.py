@@ -12,11 +12,10 @@ import json
 import os
 import pickle
 
-import pytest
-
 from pygsti.circuits import Circuit
 from pygsti.data import DataSet
 
+from ..util import BaseCase
 from . import golden_circuit_defs
 
 GOLDEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'golden')
@@ -49,59 +48,58 @@ def _dataset_binary_key_form(circuit):
     return Circuit(layers, lines)
 
 
-@pytest.fixture(scope='module')
-def expected():
-    return golden_circuit_defs.build_golden_circuits()
+class CircuitGoldenFixturesTester(BaseCase):
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.expected = golden_circuit_defs.build_golden_circuits()
+        with open(os.path.join(GOLDEN, 'golden_manifest.json')) as f:
+            cls.manifest = json.load(f)
 
-@pytest.fixture(scope='module')
-def manifest():
-    with open(os.path.join(GOLDEN, 'golden_manifest.json')) as f:
-        return json.load(f)
+    def test_pickled_circuits_load_and_match(self):
+        with open(os.path.join(GOLDEN, 'circuits_golden.pkl'), 'rb') as f:
+            loaded = pickle.load(f)
+        self.assertEqual(set(loaded), set(self.expected))
+        for key, c_old in loaded.items():
+            with self.subTest(key=key):
+                c_new = self.expected[key]
+                self.assertEqual(c_old, c_new)
+                self.assertEqual(hash(c_old), hash(c_new))
+                self.assertEqual(c_old.str, self.manifest[key]['str'])
+                self.assertEqual(repr(c_old.tup), self.manifest[key]['tup'])
+                self.assertEqual(len(c_old), self.manifest[key]['len'])
 
+    def test_freshly_constructed_circuits_match_manifest(self):
+        # guards against defs-module drift AND against changes to str/tup bytes
+        for key, c in self.expected.items():
+            with self.subTest(key=key):
+                self.assertEqual(c.str, self.manifest[key]['str'])
+                self.assertEqual(repr(c.tup), self.manifest[key]['tup'])
 
-def test_pickled_circuits_load_and_match(expected, manifest):
-    with open(os.path.join(GOLDEN, 'circuits_golden.pkl'), 'rb') as f:
-        loaded = pickle.load(f)
-    assert set(loaded) == set(expected)
-    for key, c_old in loaded.items():
-        c_new = expected[key]
-        assert c_old == c_new, key
-        assert hash(c_old) == hash(c_new), key
-        assert c_old.str == manifest[key]['str'], key
-        assert repr(c_old.tup) == manifest[key]['tup'], key
-        assert len(c_old) == manifest[key]['len'], key
+    def test_compressed_circuits_expand_to_expected(self):
+        with open(os.path.join(GOLDEN, 'compressed_golden.pkl'), 'rb') as f:
+            compressed = pickle.load(f)
+        self.assertEqual(set(compressed), set(self.expected))
+        for key, cc in compressed.items():
+            with self.subTest(key=key):
+                self.assertEqual(cc.expand(), _compressed_roundtrip_form(self.expected[key]))
 
+    def test_golden_dataset_loads_with_expected_keys_and_counts(self):
+        # The binary round trip normalizes keys via _dataset_binary_key_form, so the
+        # compilable_tilde and compilable_pipe entries collide into one key.  On load
+        # the later row shadows the earlier one (last writer wins, NOT aggregation),
+        # which the overwrite-style dict build below reproduces.
+        expected_counts = {}
+        for i, c in enumerate(self.expected.values()):
+            key = _dataset_binary_key_form(c)
+            counts_i = golden_circuit_defs.golden_counts(i)
+            expected_counts[key] = (counts_i['0'], counts_i['1'])
 
-def test_freshly_constructed_circuits_match_manifest(expected, manifest):
-    # guards against defs-module drift AND against changes to str/tup bytes
-    for key, c in expected.items():
-        assert c.str == manifest[key]['str'], key
-        assert repr(c.tup) == manifest[key]['tup'], key
-
-
-def test_compressed_circuits_expand_to_expected(expected):
-    with open(os.path.join(GOLDEN, 'compressed_golden.pkl'), 'rb') as f:
-        compressed = pickle.load(f)
-    assert set(compressed) == set(expected)
-    for key, cc in compressed.items():
-        assert cc.expand() == _compressed_roundtrip_form(expected[key]), key
-
-
-def test_golden_dataset_loads_with_expected_keys_and_counts(expected):
-    # The binary round trip normalizes keys via _dataset_binary_key_form, so the
-    # compilable_tilde and compilable_pipe entries collide into one key.  On load
-    # the later row shadows the earlier one (last writer wins, NOT aggregation),
-    # which the overwrite-style dict build below reproduces.
-    expected_counts = {}
-    for i, c in enumerate(expected.values()):
-        key = _dataset_binary_key_form(c)
-        counts_i = golden_circuit_defs.golden_counts(i)
-        expected_counts[key] = (counts_i['0'], counts_i['1'])
-
-    ds = DataSet(file_to_load_from=os.path.join(GOLDEN, 'golden_dataset.pkl.gz'))
-    assert set(ds.keys()) == set(expected_counts)
-    for key, (n0, n1) in expected_counts.items():
-        counts = ds[key].counts
-        assert counts[('0',)] == n0, key.str
-        assert counts[('1',)] == n1, key.str
+        ds = DataSet(file_to_load_from=os.path.join(GOLDEN, 'golden_dataset.pkl.gz'))
+        self.assertEqual(set(ds.keys()), set(expected_counts))
+        for key, (n0, n1) in expected_counts.items():
+            with self.subTest(key=key.str):
+                counts = ds[key].counts
+                self.assertEqual(counts[('0',)], n0)
+                self.assertEqual(counts[('1',)], n1)

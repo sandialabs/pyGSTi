@@ -8,18 +8,10 @@ markers) live in test_circuit_known_bugs.py; SURPRISE pins (newly found,
 not-yet-filed behavior, like the mul-with-occurrence ValueError crash below) are
 pinned in the module where they were found and recorded for issue filing.
 """
-import pytest
-
 from pygsti.baseobjs import Label
 from pygsti.circuits import Circuit
 
-
-def _base():
-    layer_list = [('Gx', 0), ('Gy', 0), ('Gz', 0)]
-    c = Circuit(layer_list, line_labels=(0,), occurrence=7, compilable_layer_indices=(1,))
-    assert c.occurrence == 7
-    assert c.compilable_layer_indices == (1,)
-    return c
+from ..util import BaseCase
 
 
 def _copy_editable_roundtrip(c):
@@ -47,34 +39,40 @@ CASES = [
 ]
 
 
-@pytest.mark.parametrize('case', CASES, ids=lambda case: case[0])
-def test_metadata_policy(case):
-    case_id, operation, occ_kept, cmp_kept = case
-    out = operation(_base())
-    assert out.occurrence == (7 if occ_kept else None), case_id
-    assert out.compilable_layer_indices == ((1,) if cmp_kept else ()), case_id
+class CircuitMetadataPolicyTester(BaseCase):
 
+    def _base(self):
+        layer_list = [('Gx', 0), ('Gy', 0), ('Gz', 0)]
+        c = Circuit(layer_list, line_labels=(0,), occurrence=7, compilable_layer_indices=(1,))
+        self.assertEqual(c.occurrence, 7)
+        self.assertEqual(c.compilable_layer_indices, (1,))
+        return c
 
-def test_mul_repeat_raises_when_occurrence_is_set():
-    # SURPRISE: Circuit.repeat (hence __mul__) parses self.str via str.split('@')
-    # and unpacks exactly two parts.  An occurrence id appends a second '@'
-    # separator (e.g. 'Gx:0@(0)@7'), so multiplying any circuit that has an
-    # occurrence set raises ValueError instead of returning a circuit.
-    c = _base()
-    with pytest.raises(ValueError, match=r"too many values to unpack"):
-        c * 2
+    def test_metadata_policy(self):
+        for case_id, operation, occ_kept, cmp_kept in CASES:
+            with self.subTest(case=case_id):
+                out = operation(self._base())
+                self.assertEqual(out.occurrence, 7 if occ_kept else None)
+                self.assertEqual(out.compilable_layer_indices, (1,) if cmp_kept else ())
 
+    def test_mul_repeat_raises_when_occurrence_is_set(self):
+        # SURPRISE: Circuit.repeat (hence __mul__) parses self.str via str.split('@')
+        # and unpacks exactly two parts.  An occurrence id appends a second '@'
+        # separator (e.g. 'Gx:0@(0)@7'), so multiplying any circuit that has an
+        # occurrence set raises ValueError instead of returning a circuit.
+        c = self._base()
+        with self.assertRaisesRegex(ValueError, r"too many values to unpack"):
+            c * 2
 
-def test_mul_repeat_drops_compilable_indices_when_no_occurrence():
-    # Companion pin: with occurrence unset, __mul__ works and drops the
-    # compilable_layer_indices metadata.
-    c = Circuit([('Gx', 0), ('Gy', 0)], line_labels=(0,), compilable_layer_indices=(1,))
-    out = c * 2
-    assert out.occurrence is None
-    assert out.compilable_layer_indices == ()
+    def test_mul_repeat_drops_compilable_indices_when_no_occurrence(self):
+        # Companion pin: with occurrence unset, __mul__ works and drops the
+        # compilable_layer_indices metadata.
+        c = Circuit([('Gx', 0), ('Gy', 0)], line_labels=(0,), compilable_layer_indices=(1,))
+        out = c * 2
+        self.assertIsNone(out.occurrence)
+        self.assertEqual(out.compilable_layer_indices, ())
 
-
-def test_getitem_single_layer_returns_label_not_circuit():
-    out = _base()[1]
-    assert isinstance(out, Label)
-    assert not isinstance(out, Circuit)
+    def test_getitem_single_layer_returns_label_not_circuit(self):
+        out = self._base()[1]
+        self.assertIsInstance(out, Label)
+        self.assertNotIsInstance(out, Circuit)
