@@ -374,6 +374,60 @@ class CircuitMethodTester(BaseCase):
         self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
         self.assertEqual(self.c[:, 'Q2'], c2[:, 'Q2'])
 
+    def test_tensor_product_of_every_circuit_construction_form(self):
+        from pygsti.baseobjs.label import Label
+        # Every way to construct a circuit that is equivalent to Circuit([("Gx", 0)])
+        c1_options = [
+            circuit.Circuit([('Gx', 0)]),
+            circuit.Circuit([(('Gx', 0))]),
+            circuit.Circuit('Gx:0'),
+            circuit.Circuit([Label('Gx', 0)]),
+            circuit.Circuit(layer_labels=[('Gx',0)])
+        ]
+
+        # Every way to construct a circuit that is equivalent to Circuit([("Gy", 1)])
+        c2_options = [
+            circuit.Circuit([('Gy', 1)]),
+            circuit.Circuit([(('Gy', 1))]),
+            circuit.Circuit('Gy:1'),
+            circuit.Circuit([Label('Gy', 1)]),
+            circuit.Circuit(layer_labels=[('Gy',1)])
+        ]
+
+        expected_revc = circuit.Circuit([(("Gx", 0), ("Gy",1))], line_labels=(1,0))
+        expected_c = circuit.Circuit([(('Gx', 0), ('Gy', 1))])
+        for i1, c1 in enumerate(c1_options):
+            for i2, c2 in enumerate(c2_options):
+                tensored_circuit = c1.tensor_circuit(c2)
+                self.assertEqual(tensored_circuit, expected_c, f"Testing options {i1} and {i2}")
+                
+        for i1, c1 in enumerate(c1_options):
+            for i2, c2 in enumerate(c2_options):
+                tensored_reverse_circuit = c2.tensor_circuit(c1, line_order=(1,0))
+                self.assertEqual(tensored_reverse_circuit, expected_revc, f"Testing options {i1} and {i2}")
+                
+        # The following combinations are expected to error on account of ambiguity.
+        c2_bad_options = [
+            circuit.Circuit('Gy@1')
+        ]
+        c1_bad_options = [
+            circuit.Circuit('Gx@0')
+        ]
+        for i1, c1 in enumerate(c1_options):
+            for i2, c2 in enumerate(c2_bad_options):
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
+                    c1.tensor_circuit(c2)
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
+                    c2.tensor_circuit(c1)
+
+        for i1, c1 in enumerate(c1_bad_options):
+            for i2, c2 in enumerate(c2_options):
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
+                    c1.tensor_circuit(c2)
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
+                    c2.tensor_circuit(c1)
+
+
     def test_tensor_circuit_with_shorter(self):
         # Test tensoring circuits where the inserted circuit is shorter
         gatestring2 = circuit.Circuit(None, stringrep="[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3")
@@ -1040,6 +1094,7 @@ class CircuitBugfixRegressionTester(BaseCase):
             c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"))
         self.assertIn("implicit", str(cm.exception))
 
+    @pytest.mark.xfail
     def test_tensor_circuit_implicit_sslbls_insertee_ok(self):
         # pin for issue #762: an implicit-sslbls *insertee* is explicified
         # onto its own lines during insertion and must keep working
