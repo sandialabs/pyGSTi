@@ -159,20 +159,6 @@ class Label(object):
                     return LabelTupTupWithTime.init((), time)
             elif isinstance(name[0], (tuple, list, Label)):
                 if len(name) > 1:
-                    #Check for metadata on components if not passed in args/time
-                    if args is None:
-                        collected_args = []
-                        for c in name:
-                            if isinstance(c, Label):
-                                collected_args.extend(c.collect_args())
-                        if collected_args:
-                            args = tuple(collected_args)
-
-                    if time is None:
-                        component_times = [getattr(c, 'time', 0) for c in name if isinstance(c, Label)]
-                        if component_times and any(t != 0 for t in component_times):
-                            time = max(component_times)
-
                     if args: return LabelTupTupWithArgs.init(name, time=time, args=args)
                     elif time is not None and time != 0.0: return LabelTupTupWithTime.init(name, time=time)
                     else: return LabelTupTup.init(name)
@@ -1057,9 +1043,28 @@ class LabelTupTup(Label, tuple):
         tupOfLabels : tuple[ConcreteLabel, ...] = tuple([tup if isinstance(tup, Label) else Label(tup) for tup in tup_of_tups_to_iterate]) 
         # ^ Note: constituent `tup`s in the list comprehension can also be a Label obj
         if __debug__ and tupOfLabels: # Debug flag is so that the check gets optimized out later in production runs.
+            atleast_one_missing_time = False
+            somewith_nonemptyargs = False
+            ctimes = set()
             for lbl in tupOfLabels:
                 if hasattr(lbl, "time"):
-                    assert lbl.time == 0, "Cannot create a LabelTupTup containing labels with time != 0"
+                    ctimes.add(lbl.time)
+                else:
+                    atleast_one_missing_time = True
+                if hasattr(lbl, "args"):
+                    if len(lbl.args) > 0:
+                        somewith_nonemptyargs = True
+            if not atleast_one_missing_time and ctimes == set([0.0]) and somewith_nonemptyargs:
+                # This is likely a LabelTupTup containing LabelsWithArgs. We do not know if they just got defaulted to time = 0.
+                warn("The interior labels have args which sets the default time to 0.0." \
+                "If you want to also label this collection LabelTupTup with time = 0.0 you must include the time in the constructor.", RuntimeWarning) 
+            elif not atleast_one_missing_time and len(ctimes) == 1 and 0.0 not in ctimes:
+                warn("You may want to consider a LabelTupTupWithTime as all of the entries have the same time" \
+                    " and it had to be user specified.", RuntimeWarning)
+            elif not atleast_one_missing_time and len(ctimes) == 1:
+                warn("You may want to consider a LabelTupTupWithTime as all of the entries have the same time " \
+                    "which was previously the default time.", RuntimeWarning)
+
         ret = cls.__new__(cls, tupOfLabels)
         return ret
     
@@ -1342,6 +1347,7 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         ret = tuple.__new__(cls, tup_of_labels)  # creates a LabelTupTupWithTime object using tuple's __new__
         ret.time : float = time  # type: ignore
         ret._sslbls : Optional[tuple] = None  # type: ignore
+        ret._is_sorted = False
         return ret
 
     @property
@@ -1955,6 +1961,7 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         ret = tuple.__new__(cls, tup_rep)
         ret.time : float = time  # type: ignore
         ret._sslbls : Optional[tuple] = None  # type: ignore
+        ret._is_sorted = False
         return ret
 
     @property

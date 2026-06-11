@@ -149,6 +149,23 @@ class LabelTester(BaseCase):
         self.assertEqual(sorted_l.qubits, (0, 1))
         self.assertEqual(sorted_l.num_qubits, 2)
 
+    def test_labeltuptup_args_not_propagated(self):
+        l1 = L('Gzr', ('Q0',), args=('1.025087886927528',))
+        l2 = L('Gzr', ('Q1',), args=('1.3957662527842025',))
+
+        # Create a compound label from components with arguments
+        with self.assertWarns(RuntimeWarning):
+            compound = L((l1, l2))
+
+        # Check that the compound label itself has no arguments
+        self.assertEqual(compound.args, ())
+
+        # Check that the string representation is clean
+        self.assertEqual(
+            repr(compound),
+            "Label((Label('Gzr',('Q0',),args=('1.025087886927528',)), Label('Gzr',('Q1',),args=('1.3957662527842025',))))"
+        )
+
     def test_label_copy(self):
         l = L('Gx')
         l_copy = l.copy()
@@ -467,6 +484,23 @@ class LabelTupTupTester(BaseCase):
         # Check that component args are collected properly
         self.assertEqual(ltt.collect_args(), ('foo',))
 
+    def test_with_sorted_inner_labels_raises_on_duplicates_tuptup(self):
+        l = LabelTupTup.init((('Gx', 0), ('Gy', 0)))
+        with self.assertRaises(ValueError):
+            l.with_sorted_inner_labels()
+
+    def test_labeltuptup_warns_on_same_time(self):
+        l1 = L('Gx', (0,), time=0.1)
+        l2 = L('Gy', (1,), time=0.1)
+        with self.assertWarns(RuntimeWarning):
+            L((l1, l2))
+
+    def test_labeltuptup_warns_on_same_time_zero(self):
+        l1 = LabelTupWithTime.init('Gx', (0,), time=0.0)
+        l2 = LabelTupWithTime.init('Gy', (1,), time=0.0)
+        with self.assertWarns(RuntimeWarning):
+            L((l1, l2))
+
 
 class LabelTupTupWithTimeTester(BaseCase):
     def test_labeltuptupwithtime(self):
@@ -594,6 +628,8 @@ class LabelTupTupWithArgsTester(BaseCase):
         l2 = LabelTupTupWithArgs.init((('A', 0), ('C', 1)), args=('foo',))
         with self.assertRaises(NotImplementedError):
             l1 + l2
+
+
 
 class LabelTupWithTimeTester(BaseCase):
     def test_labeltupwithtime(self):
