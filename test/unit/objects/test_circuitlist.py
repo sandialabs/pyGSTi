@@ -147,16 +147,16 @@ class CircuitListTester(BaseCase):
             for i2, c2 in enumerate(c2_bad_options):
                 cl1 = CircuitList([c1])
                 cl2 = CircuitList([c2])
-                with self.assertRaises(ValueError):
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
                     cl1.tensor_circuits(cl2)
-                with self.assertRaises(ValueError):
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
                     cl2.tensor_circuits(cl1)
 
         for i1, c1 in enumerate(c1_bad_options):
             for i2, c2 in enumerate(c2_options):
                 cl1 = CircuitList([c1])
                 cl2 = CircuitList([c2])
-                with self.assertRaises(ValueError):
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
                     cl1.tensor_circuits(cl2)
-                with self.assertRaises(ValueError):
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
                     cl2.tensor_circuits(cl1)
