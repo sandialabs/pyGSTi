@@ -10,7 +10,11 @@ build:
   commands:
     # rtd-requirements.txt installs `.[docs]` which pulls in pyGSTi itself
     # plus jupyter-book, jupytext, matplotlib, numpy.
-    - pip install -r rtd-requirements.txt
+    # PYGSTI_SKIP_CYTHON: the API docs only need pyGSTi importable; the
+    # pure-Python fallback reps suffice, so don't spend build time compiling.
+    - PYGSTI_SKIP_CYTHON=1 pip install -r rtd-requirements.txt
     - jb build docs/
+    # .doctrees is Sphinx's intermediate cache (~130 MB); don't publish it.
+    - rm -rf docs/_build/html/.doctrees
     - mkdir -p $READTHEDOCS_OUTPUT/html
     - cp -r docs/_build/html/. $READTHEDOCS_OUTPUT/html/
