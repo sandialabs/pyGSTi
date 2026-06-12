@@ -16,6 +16,7 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
 
+# from .basepovm import _BasePOVM  # TODO: rename to BasePOVM and import here?
 from .complementeffect import ComplementPOVMEffect
 from .composedeffect import ComposedPOVMEffect
 from .composedpovm import ComposedPOVM
@@ -26,7 +27,7 @@ from .effect import POVMEffect
 from .fulleffect import FullPOVMEffect
 from .fullpureeffect import FullPOVMPureEffect
 from .marginalizedpovm import MarginalizedPOVM
-from .povm import POVM
+from .povm import POVM  # TODO: replace implementation with that of _BasePOVM ?
 from .staticeffect import StaticPOVMEffect
 from .staticpureeffect import StaticPOVMPureEffect
 from .tensorprodeffect import TensorProductPOVMEffect
@@ -618,7 +619,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                                         tol=1e-13) 
                 if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                     raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
-                errgen_vec = _np.linalg.lstsq(phys_directions, soln.x)[0]
+                errgen_vec = _np.linalg.lstsq(phys_directions, soln.x, rcond=None)[0]
                 errorgen.from_vector(errgen_vec)
                 
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
