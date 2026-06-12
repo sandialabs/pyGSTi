@@ -75,7 +75,7 @@ Every completely-positive instrument member factors as a **measurement effect fo
 
 $$\mathcal{I}_k(\rho) = \mathcal{G}_k\!\left( E_k^{1/2}\,\rho\,E_k^{1/2} \right), \qquad E_k = \mathcal{I}_k^{\dagger}(I).$$
 
-This is a "soft" measurement of the POVM effect $E_k$ -- which sets the outcome probability $\mathrm{tr}\,\mathcal{I}_k(\rho)$ -- followed by the trace-preserving back-action $\mathcal{G}_k$ on the surviving state.  The effect $E_k$ is just the Heisenberg-dual of the member applied to the identity. This is the *measurement-then-disturbance* picture used to describe the physical mechanisms in [arXiv:2602.03938](https://arxiv.org/abs/2602.03938).
+This is a "soft" measurement of the POVM effect $E_k$ -- which sets the outcome probability $\mathrm{tr}\,\mathcal{I}_k(\rho)$ -- followed by the trace-preserving back-action $\mathcal{G}_k$ on the surviving state.  The effect $E_k$ is just the Heisenberg-dual of the member applied to the identity.
 
 pyGSTi represents each member as a single `ComposedOp([RootConjOperator(E_k), G_k])`, and the two physical guarantees come apart cleanly:
 
