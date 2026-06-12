@@ -22,19 +22,26 @@ labels = [
     CircuitLabel('circuit', [("Gx", 1), ("Gz", 2)], None, 1, None)
 ]
 
+native_breaks_labels = [
+    L(('Gx', 0), time=0.1), # LabelTupWithTime
+    L(('Gx', 0), time=0.1, args=("foo",)), # LabelTupWithArgs
+    L([("Gx", 0), ("Gy", 1)], time=3.1), # LabelTupTupWithTime
+    L([("Gx", 0), ("Gy", 1)], time=0.0459, args=("bar",)) # LabelTupTupWithArgs
+]
+
 @pytest.mark.parametrize('label', labels)
 def test_to_native(label):
     native = label.to_native()
     from_native = L(native)
     assert label == from_native
 
-@pytest.mark.parametrize('label', labels)
+@pytest.mark.parametrize('label', labels + native_breaks_labels)
 def test_pickle(label):
     s = pickle.dumps(label)
     l2 = pickle.loads(s)
     assert type(label) == type(l2)
 
-@pytest.mark.parametrize('label', labels)
+@pytest.mark.parametrize('label', labels + native_breaks_labels)
 def test_json_encode(label):
     j = jsoncodec.encode_obj(label, False)
     l2 = jsoncodec.decode_obj(j, False)
@@ -54,6 +61,19 @@ class LabelTester(BaseCase):
         c = Circuit(layer_labels=opstr, num_lines=2)
         print(c._labels)
         self.assertEqual(c._labels, (L((('Gx', 0), ('Gy', 1))), L('Gcnot', (0, 1))))
+
+    def test_to_native_breaking(self):
+        for lbl in native_breaks_labels:
+            native = lbl.to_native()
+            if isinstance(lbl, (LabelTupWithArgs, LabelTupTupWithArgs)):
+                with self.assertRaises(AssertionError, msg=f"lbl repr = {lbl.__repr__()}"):
+                    from_native = L(native)
+                    assert from_native == lbl
+            elif isinstance(lbl, (LabelTupWithTime, LabelTupTupWithTime)):
+                from_native = L(native)
+                self.assertEqual(lbl, from_native) # Time gets dropped.
+                self.assertNotIsInstance(from_native, (LabelTupWithTime, LabelTupTupWithTime))
+
 
     def test_labels_with_time_and_arguments(self):
         #Label with time and args

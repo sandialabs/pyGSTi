@@ -51,8 +51,8 @@ class CircuitListTester(BaseCase):
         self.assertEqual(truncated_list[0], Circuit('Gx'))
 
     def test_tensor_circuits(self):
-        cl1 = CircuitList([Circuit('Gx', line_labels=[0]), Circuit('Gy', line_labels=[0])])
-        cl2 = CircuitList([Circuit('Gz', line_labels=[1]), Circuit('Ga', line_labels=[1])])
+        cl1 = CircuitList([Circuit([('Gx', 0)], line_labels=[0]), Circuit([('Gy', 0)], line_labels=[0])])
+        cl2 = CircuitList([Circuit([('Gz', 1)], line_labels=[1]), Circuit([('Ga', 1)], line_labels=[1])])
         tensored_list = cl1.tensor_circuits(cl2)
         self.assertEqual(len(tensored_list), 2)
         c1 = Circuit([(('Gx', 0), ('Gz', 1))])
