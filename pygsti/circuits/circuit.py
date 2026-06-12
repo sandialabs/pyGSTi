@@ -2510,7 +2510,24 @@ class Circuit(object):
         self_nonempty: bool = self.num_layers > 0 and len(self._line_labels) > 0
         expanded_self_has_implicit_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels[:circuit.num_layers]) is None
         expanded_circ_has_implicit_sslbls = _sslbls_of_nested_lists_of_simple_labels(circuit._labels[:self.num_layers]) is None
-        if circ_nonempty and self_nonempty and (expanded_self_has_implicit_sslbls or expanded_circ_has_implicit_sslbls):
+        idle_circ_with_unknown_sslbls =  Circuit([_Label(())])
+        implicit_sslbls_matter = False
+        for i in range(min(len(self), len(circuit))):
+            lbl = self[i]
+            lbl2 = circuit[i]
+            assert isinstance(lbl, _Label)
+            assert isinstance(lbl2, _Label)
+            if lbl == idle_circ_with_unknown_sslbls and lbl2 != idle_circ_with_unknown_sslbls:
+                implicit_sslbls_matter = True
+                break
+            elif lbl != idle_circ_with_unknown_sslbls and lbl2 == idle_circ_with_unknown_sslbls:
+                implicit_sslbls_matter = True
+                break
+            elif lbl != lbl2 and (lbl.sslbls is None or lbl2.sslbls is None):
+                implicit_sslbls_matter = True
+                break
+
+        if circ_nonempty and self_nonempty and (expanded_self_has_implicit_sslbls or expanded_circ_has_implicit_sslbls) and (implicit_sslbls_matter):
             raise ValueError("Cannot tensor: this circuit contains gates with implicit (None) state-space "
                              "labels in the layers being tensored, which are interpreted as acting on *all* "
                              "of the circuit's lines and so cannot coexist with the new lines being added.  "
