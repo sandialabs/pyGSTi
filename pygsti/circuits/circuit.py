@@ -2510,20 +2510,20 @@ class Circuit(object):
         self_nonempty: bool = self.num_layers > 0 and len(self._line_labels) > 0
         expanded_self_has_implicit_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels[:circuit.num_layers]) is None
         expanded_circ_has_implicit_sslbls = _sslbls_of_nested_lists_of_simple_labels(circuit._labels[:self.num_layers]) is None
-        idle_circ_with_unknown_sslbls =  Circuit([_Label(())])
+        implicit_idle_layer = _Label(())
         implicit_sslbls_matter = False
         for i in range(min(len(self), len(circuit))):
             lbl = self[i]
             lbl2 = circuit[i]
             assert isinstance(lbl, _Label)
             assert isinstance(lbl2, _Label)
-            if lbl == idle_circ_with_unknown_sslbls and lbl2 != idle_circ_with_unknown_sslbls:
+            if lbl == implicit_idle_layer and lbl2 != implicit_idle_layer:
                 implicit_sslbls_matter = True
                 break
-            elif lbl != idle_circ_with_unknown_sslbls and lbl2 == idle_circ_with_unknown_sslbls:
+            elif lbl != implicit_idle_layer and lbl2 == implicit_idle_layer:
                 implicit_sslbls_matter = True
                 break
-            elif lbl != lbl2 and (lbl.sslbls is None or lbl2.sslbls is None):
+            elif lbl != implicit_idle_layer and lbl2 != implicit_idle_layer and (lbl.sslbls is None or lbl2.sslbls is None):
                 implicit_sslbls_matter = True
                 break
 
