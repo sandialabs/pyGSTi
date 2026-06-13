@@ -1,14 +1,13 @@
-"""
-Defines the Instrument class
-"""
 #***************************************************************************************************
-# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2025, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+
 import collections as _collections
 import numpy as _np
 
@@ -17,10 +16,76 @@ from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import states as _state
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import BasisLike as _BasisLike
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
+from pygsti.tools import basistools as _bt
+from pygsti.tools import optools as _ot
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pygsti.modelmembers.povms.effect import POVMEffect
+    from pygsti.modelmembers.states.state import State
+    from pygsti.models.gaugegroup import GaugeGroupElement
+    # Type vocabulary for the effect-then-gate construction API:
+    EffectSpec = _np.ndarray | POVMEffect                     # a POVM effect (superket, Hermitian matrix, or object)
+    GateSpec   = _np.ndarray | _op.LinearOperator | None      # a post-measurement gate (None means the identity)
+    MemberSpec = EffectSpec | tuple[EffectSpec, GateSpec]     # one outcome's (effect[, gate]) spec
+    MemberPairs = list[tuple[str, _op.LinearOperator | _np.ndarray]]      # ordered (label, op) pairs
+    MemberOps = Mapping[str, _op.LinearOperator | _np.ndarray] | MemberPairs  # a mapping or ordered (label, op) pairs
+
+
+def _as_ordered_member_list(member_ops: MemberOps) -> MemberPairs:
+    """Normalize `member_ops` (a dict or ordered (label, op) list) into an ordered list of pairs."""
+    if isinstance(member_ops, dict):
+        return [(k, v) for k, v in member_ops.items()]  # gives definite ordering
+    if isinstance(member_ops, list):
+        return member_ops  # assume already an ordered (key, value) list
+    raise ValueError("Invalid `member_ops` arg of type %s" % type(member_ops))
+
+
+def _infer_space_and_evotype(member_list: MemberPairs, state_space: _StateSpace | None,
+                             evotype: _Evotype | str | None) -> tuple[MemberPairs, _StateSpace, _Evotype]:
+    """
+    Resolve the state space and evotype for `member_list`, wrapping any dense-array members in
+    :class:`FullArbitraryOp` along the way.
+
+    When the members are dense matrices, a default state space (from the first member's dimension)
+    and evotype are inferred wherever not supplied.  Returns the (possibly op-wrapped) member list
+    together with the resolved `state_space` and `evotype`.
+    """
+    # Special case: dense matrices -> infer a default state space/evotype and wrap in FullArbitraryOp.
+    if len(member_list) > 0 and not isinstance(member_list[0][1], _op.LinearOperator):
+        if state_space is None:
+            state_space = _statespace.default_space_for_dim(member_list[0][1].shape[0])
+        if evotype is None:
+            evotype = _Evotype.cast('default', state_space=state_space)
+        member_list = [(k, v if isinstance(v, _op.LinearOperator) else
+                        _op.FullArbitraryOp(v, None, evotype, state_space)) for k, v in member_list]
+
+    assert (len(member_list) > 0 or state_space is not None), \
+        "Must specify `state_space` when there are no instrument members!"
+    assert (len(member_list) > 0 or evotype is not None), \
+        "Must specify `evotype` when there are no instrument members!"
+    state_space = member_list[0][1].state_space if (state_space is None) \
+        else _statespace.StateSpace.cast(state_space)
+    evotype = _Evotype.cast(evotype, state_space=state_space) if (evotype is not None) \
+        else member_list[0][1].evotype
+    return member_list, state_space, evotype
+
+
+def _validate_member_consistency(member_list: MemberPairs, state_space: _StateSpace,
+                                 evotype: _Evotype) -> None:
+    """Assert every member shares `evotype` and a compatible state space."""
+    for _, member in member_list:
+        assert (evotype == member.evotype), \
+            "All instrument members must have the same evolution type"
+        assert (state_space.is_compatible_with(member.state_space)), \
+            "All instrument members must have compatible state spaces!"
 
 
 class Instrument(_mm.ModelMember, _collections.OrderedDict):
@@ -51,45 +116,21 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         Initial values.  This should only be used internally in de-serialization.
     """
 
-    def __init__(self, member_ops, evotype=None, state_space=None, called_from_reduce=False, items=None):
+    def __init__(self, member_ops: MemberOps | None, evotype: _Evotype | str | None = None,
+                 state_space: _StateSpace | None = None, called_from_reduce: bool = False,
+                 items: list | None = None):
         if items is None:
             items = []
         self._readonly = False  # until init is done
         if len(items) > 0:
-            assert(member_ops is None), "`items` was given when op_matrices != None"
+            assert(member_ops is None), "`items` was given when member_ops != None"
 
         if member_ops is not None:
-            if isinstance(member_ops, dict):
-                member_list = [(k, v) for k, v in member_ops.items()]  # gives definite ordering
-            elif isinstance(member_ops, list):
-                member_list = member_ops  # assume it's is already an ordered (key,value) list
-            else:
-                raise ValueError("Invalid `member_ops` arg of type %s" % type(member_ops))
-
-            #Special case when we're given matrices: infer a default state space and evotype:
-            if len(member_list) > 0 and not isinstance(member_list[0][1], _op.LinearOperator):
-                if state_space is None:
-                    state_space = _statespace.default_space_for_dim(member_list[0][1].shape[0])
-                if evotype is None:
-                    evotype = _Evotype.cast('default', state_space=state_space)
-                member_list = [(k, v if isinstance(v, _op.LinearOperator) else
-                                _op.FullArbitraryOp(v, None, evotype, state_space)) for k, v in member_list]
-
-            assert(len(member_list) > 0 or state_space is not None), \
-                "Must specify `state_space` when there are no instrument members!"
-            assert(len(member_list) > 0 or evotype is not None), \
-                "Must specify `evotype` when there are no instrument members!"
-            state_space = member_list[0][1].state_space if (state_space is None) \
-                else _statespace.StateSpace.cast(state_space)
-            evotype = _Evotype.cast(evotype, state_space=state_space) if (evotype is not None)\
-                else member_list[0][1].evotype
-            items = []
-            for k, member in member_list:
-                assert(evotype == member.evotype), \
-                    "All instrument members must have the same evolution type"
-                assert(state_space.is_compatible_with(member.state_space)), \
-                    "All instrument members must have compatible state spaces!"
-                items.append((k, member))
+            member_list = _as_ordered_member_list(member_ops)
+            member_list, state_space, evotype = _infer_space_and_evotype(member_list, state_space, evotype)
+            # ^ That line promotes ndarrays into pyGSTi FullArbitraryOp objects.
+            _validate_member_consistency(member_list, state_space, evotype)
+            items = list(member_list)
         else:
             if len(items) > 0:  # HACK so that OrderedDict.copy() works, which creates a new object with only items...
                 if state_space is None: state_space = items[0][1].state_space
@@ -104,7 +145,142 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             self.init_gpindices()  # initialize our gpindices based on sub-members
         self._readonly = True
 
-    def submembers(self):
+    @staticmethod
+    def from_effects(members: dict[str, MemberSpec], basis: _BasisLike, gate_parameterization: str = 'CPTPLND',
+                     povm_errormap: _op.LinearOperator | str = 'CPTPLND', atol: float = 1e-6) -> Instrument:
+        r"""
+        Construct a parameterized instrument from measurement effects (and optional
+        post-measurement gates).
+
+        Each member is built in the canonical *measure-then-gate* form
+
+            I_k(rho) = G_k( E_k^{1/2} rho E_k^{1/2} ),
+
+        a soft measurement of the POVM effect `E_k` followed by the
+        post-measurement (CP)TP gate `G_k`.  The effects `{E_k}` are gathered
+        into a single shared :class:`ComposedPOVM` whose CP-constrained error map
+        keeps every `E_k` positive and makes them sum to the identity. Each
+        gate `G_k` is parameterized independently.
+
+        The constraints decouple cleanly: POVM completeness gives joint trace
+        preservation, and a CP-constrained `gate_parameterization` makes each
+        member completely positive.  An `n`-outcome instrument needs only `n`
+        effects and `n` gates.
+
+        Parameters
+        ----------
+        members : dict
+            Maps each outcome label to either an `(effect, gate)` pair or a bare
+            `effect` (in which case the gate defaults to the identity).
+            
+            Each `effect` may be a length-`d**2` superket in `basis`, or a `d x d`
+            Hermitian matrix, or a :class:`POVMEffect`. The effects must comprise
+            a physically meaningful POVM.
+
+            Each `gate` may be a `d**2 x d**2` superoperator, a `d x d` unitary,
+            a :class:`LinearOperator`, or None. The last of these is equivalent
+            to setting `gate` to the identity matrix. Each gate must be TP.
+
+        basis : _BasisLike
+            The basis in which dense arrays are represented.
+
+        gate_parameterization : str, optional
+            A TP parameterization for the gates `{G_k}`. CP-constrained Lindblad
+            types (`'CPTPLND'`, `'H+S'`) make each member completely positive;
+            non-CP-constrained Lindblad types (`'GLND'`, `'H+s'`, `'full TP'`)
+            keep the instrument TP but allow non-CP members. `'static'` freezes
+            the gates. `'full'` is rejected (it is not TP).
+
+        povm_errormap : LinearOperator or str, optional
+            A CP-by-construction :class:`LinearOperator`, or a string spec for one,
+            used as the shared error map of the effects' :class:`ComposedPOVM`.
+
+        atol : float, optional
+            Absolute tolerance for the per-gate TP check and the completeness check.
+
+        Returns
+        -------
+        Instrument
+        """
+        from pygsti.modelmembers.instruments._construction import (
+            _normalize_effects_and_gates, _parameterized_instrument
+        )
+        basis, superkets, superops = _normalize_effects_and_gates(members, basis, atol)
+        member_ops = _parameterized_instrument(
+            basis, superkets, superops, gate_parameterization, povm_errormap
+        )
+        return Instrument(member_ops)
+
+    @staticmethod
+    def from_cptr_superops(
+            op_arrays: dict[str, _np.ndarray], basis: _BasisLike,
+            gate_parameterization: str = 'CPTPLND',
+            povm_errormap: _op.LinearOperator | str = 'CPTPLND',
+            error_tol: float = 1e-6, trunc_tol: float = 1e-7
+        ) -> Instrument:
+        r"""
+        Construct a parameterized instrument from arbitrary dense CPTR member superops.
+
+        Every completely-positive instrument member factors as a measurement effect
+        followed by a post-measurement CPTP gate,
+
+            I_k(rho) = G_k( E_k^{1/2} rho E_k^{1/2} ),   E_k = I_k^dagger(I),
+
+        and this constructor recovers that decomposition directly from each dense
+        superop. The effect is the Heisenberg-dual applied to the identity; the gate
+        is the CPTP completion `G_k = Q_k + P_k` with `Q_k = I_k . pinv(rootconj(E_k))`
+        and `P_k` a conjugation by the projector onto `ker(E_k)`.  The effects are
+        gathered into a single shared :class:`ComposedPOVM` and each gate is
+        parameterized independently, so an `n`-outcome instrument needs only `n`
+        effects and `n` gates regardless of any member's Kraus rank.
+
+        Parameters
+        ----------
+        op_arrays : dict[str, np.ndarray]
+            Maps each outcome label to a dense `d**2 x d**2` CPTR superoperator in
+            `basis`.  Each must be completely positive, and together they must sum
+            to a trace-preserving channel (`sum_k E_k == I`).
+
+        basis : BasisLike
+            The basis in which the superoperators are represented.
+
+        gate_parameterization : str, optional
+            See :meth:`from_effects`.
+
+        povm_errormap : LinearOperator or str, optional
+            See :meth:`from_effects`.
+
+        error_tol : float, optional
+            Tolerance for the per-member complete-positivity check (negative Choi
+            eigenvalues below `-error_tol` raise an error).
+
+        trunc_tol : float, optional
+            Cutoff below which an effect eigenvalue is treated as zero when forming
+            the `ker(E_k)` projector that completes each gate.
+
+        Returns
+        -------
+        Instrument
+        """
+        from pygsti.modelmembers.instruments._construction import (
+            _decompose_cptr, _check_effects_complete,
+            _parameterized_instrument
+        )
+        dim = next(iter(op_arrays.values())).shape[0]
+        basis = _Basis.cast(basis, dim)
+        superkets = dict()
+        superops  = dict()
+        for lbl, I_k in op_arrays.items():
+            E_k, G_k = _decompose_cptr(I_k, basis, error_tol, trunc_tol)
+            superkets[lbl] = E_k 
+            superops[lbl]  = G_k
+        _check_effects_complete(superkets, basis, error_tol)
+        member_ops = _parameterized_instrument(
+            basis, superkets, superops, gate_parameterization, povm_errormap
+        )
+        return Instrument(member_ops)
+
+    def submembers(self) -> list:
         """
         Get the ModelMember-derived objects contained in this one.
 
@@ -114,7 +290,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         """
         return list(self.values())
 
-    def to_memoized_dict(self, mmg_memo):
+    def to_memoized_dict(self, mmg_memo: dict) -> dict:
         """Create a serializable dict with references to other objects in the memo.
 
         Parameters
@@ -139,22 +315,22 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         return mm_dict
 
     @classmethod
-    def _from_memoized_dict(cls, mm_dict, serial_memo):
+    def _from_memoized_dict(cls, mm_dict: dict, serial_memo: dict) -> Instrument:
         state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
         members = [(lbl, serial_memo[subm_serial_id])
                    for lbl, subm_serial_id in zip(mm_dict['member_labels'], mm_dict['submembers'])]
         return cls(members, mm_dict['evotype'], state_space)
 
-    def _is_similar(self, other, rtol, atol):
+    def _is_similar(self, other: Instrument, rtol: float, atol: float) -> bool:
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
             the same local structure, i.e., not considering parameter values or submembers """
         return list(self.keys()) == list(other.keys())
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value) -> None:
         if self._readonly: raise ValueError("Cannot alter Instrument elements")
         else: return _collections.OrderedDict.__setitem__(self, key, value)
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple:
         """ Needed for OrderedDict-derived classes (to set dict items) """
         #need to *not* pickle parent, as __reduce__ bypasses ModelMember.__getstate__
         dict_to_pickle = self.__dict__.copy()
@@ -165,10 +341,10 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
                              [(key, gate.copy()) for key, gate in self.items()]),
                 dict_to_pickle)
 
-    def __pygsti_reduce__(self):
+    def __pygsti_reduce__(self) -> tuple:
         return self.__reduce__()
 
-    def simplify_operations(self, prefix=""):
+    def simplify_operations(self, prefix: str | _Label = "") -> _collections.OrderedDict:
         """
         Creates a dictionary of simplified instrument operations.
 
@@ -199,7 +375,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         return simplified
 
     @property
-    def parameter_labels(self):
+    def parameter_labels(self) -> _np.ndarray:
         """
         An array of labels (usually strings) describing this model member's parameters.
         """
@@ -214,7 +390,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         return vl
 
     @property
-    def num_elements(self):
+    def num_elements(self) -> int:
         """
         Return the number of total gate elements in this instrument.
 
@@ -229,7 +405,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         return sum([g.size for g in self.values()])
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """
         Get the number of independent parameters which specify this Instrument.
 
@@ -240,7 +416,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         """
         return len(self.gpindices_as_array())
 
-    def to_vector(self):
+    def to_vector(self) -> _np.ndarray:
         """
         Extract a vector of the underlying gate parameters from this Instrument.
 
@@ -255,7 +431,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             v[factor_local_inds] = operation.to_vector()
         return v
 
-    def from_vector(self, v, close=False, dirty_value=True):
+    def from_vector(self, v: _np.ndarray, close: bool = False, dirty_value: bool = True) -> None:
         """
         Initialize the Instrument using a vector of its parameters.
 
@@ -284,7 +460,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             operation.from_vector(v[factor_local_inds], close, dirty_value)
         self.dirty = dirty_value
 
-    def transform_inplace(self, s):
+    def transform_inplace(self, s: GaugeGroupElement) -> None:
         """
         Update each Instrument element matrix `O` with `inv(s) * O * s`.
 
@@ -304,7 +480,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             gate.transform_inplace(s)
         self.dirty = True
 
-    def depolarize(self, amount):
+    def depolarize(self, amount: float | tuple) -> None:
         """
         Depolarize this Instrument by the given `amount`.
 
@@ -327,7 +503,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             gate.depolarize(amount)
         self.dirty = True
 
-    def rotate(self, amount, mx_basis='gm'):
+    def rotate(self, amount: tuple, mx_basis: _BasisLike = 'gm') -> None:
         """
         Rotate this instrument by the given `amount`.
 
@@ -356,7 +532,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
             gate.rotate(amount, mx_basis)
         self.dirty = True
 
-    def acton(self, state):
+    def acton(self, state: State) -> _collections.OrderedDict[str, tuple[float, State]]:
         """
         Act with this instrument upon `state`
 
@@ -378,17 +554,18 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
 
         staterep = state._rep
         outcome_probs_and_states = _collections.OrderedDict()
+
         for lbl, element in self.items():
             output_rep = element._rep.acton(staterep)
-            output_unnormalized_state = output_rep.to_dense()
-            prob = output_unnormalized_state[0] * state.dim**0.25
-            output_normalized_state = output_unnormalized_state / prob  # so [0]th == 1/state_dim**0.25
-            outcome_probs_and_states[lbl] = (prob, _state.StaticState(output_normalized_state, self.evotype,
-                                                                      self.state_space))
+            unnormalized_state_array = output_rep.to_dense()
+            prob = _ot.superket_trace(unnormalized_state_array, element.basis)
+            output_state_array = unnormalized_state_array / prob
+            output_state = _state.StaticState(output_state_array, self.evotype, self.state_space)
+            outcome_probs_and_states[lbl] = (prob, output_state)
 
         return outcome_probs_and_states
 
-    def __str__(self):
+    def __str__(self) -> str:
         s = "Instrument with elements:\n"
         for lbl, element in self.items():
             s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.to_dense(), width=4, prec=2))

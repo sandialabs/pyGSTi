@@ -145,6 +145,14 @@ class StolenResourceWarning(UserWarning):
     pass
 
 
+class DubiousTargetWarning(UserWarning):
+    """
+    Alert the user that a target specification is somehow unusual and may not
+    be what they intended.
+    """
+    pass
+
+
 class QiskitInteropWarning(UserWarning):
     """
     Inform the user about a qiskit-interoperability issue: a qiskit

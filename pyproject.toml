@@ -105,6 +105,7 @@ complete = ['pygsti[multiprocessor,no_mpi]']
 
 [project.urls]
 Homepage = 'https://www.pygsti.info'
+Documentation = 'https://pygsti.readthedocs.io/en/latest/'
 Repository = 'https://github.com/sandialabs/pyGSTi'
 Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
 

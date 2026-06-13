@@ -14,7 +14,7 @@ import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
 
-from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union
+from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union, Literal
 
 import numpy as _np
 import scipy.linalg as _spl

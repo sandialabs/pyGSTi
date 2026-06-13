@@ -1078,7 +1078,7 @@ class ModelMember(ModelChild, _NicelySerializable):
 
         my_gpindices = _slct.list_to_slice(cls._decodemx(mm_dict['model_parameter_indices']), array_ok=True)
         obj._set_only_my_gpindices(my_gpindices, parent=parent_model)
-        obj._submember_rpindices = tuple([_slct.list_to_slice(inds)
+        obj._submember_rpindices = tuple([_slct.list_to_slice(inds, array_ok=True)
                                           for inds in mm_dict['relative_submember_parameter_indices']])
         if mm_dict['parameter_labels'] is not None:
             # 2-step init because otherwise we end up with a 2D array
