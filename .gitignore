@@ -90,6 +90,12 @@ parsetab_string.py
 *.tar
 *.zip
 
+# Uncompressed differential circuit corpus (test/performance/circuit_corpus.py).
+# A full corpus is ~120 MB; only the compressed baseline is tracked (see the
+# negation in test/performance/.gitignore). Guarded here too in case it is
+# generated from the repo root, not just under test/performance/.
+*.jsonl
+
 # Logs and databases #
 ######################
 *.log
@@ -111,3 +117,7 @@ HighImpactPaper1/texFiles/.DS_Store
 local
 pygsti/_version.py
 1_1.profile/0.prof
+
+# committed golden fixtures for the Circuit characterization tests
+!test/unit/circuits/golden/*.pkl
+!test/unit/circuits/golden/*.pkl.gz
