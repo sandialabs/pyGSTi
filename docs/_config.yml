@@ -59,11 +59,19 @@ sphinx:
     autoclass_content: "both"
     autodoc_typehints: "description"
     autodoc_member_order: "groupwise"
-    # Drop the pygsti.report.* API subtree: it is HTML-report *generation*
-    # machinery (sections, templates, builders) that users reach through a few
-    # high-level driver functions, not by importing these modules. Skipping its
-    # ~315 autodoc pages is a large build-time saving for the hosted docs.
-    exclude_patterns: ["notebooks/", "**/*.ipynb", "_autosummary/pygsti.report.*"]
+    # Trim heavy / low-value autodoc subtrees from the hosted build. Each glob
+    # drops the generated stubs (autosummary still writes them; they just aren't
+    # read/rendered). A handful of public symbols from these areas are kept and
+    # documented individually via the "Selected API" block in api.rst.
+    #   - pygsti.report.*            ~315 pages of HTML-report generation machinery
+    #   - pygsti.modelpacks.*        ~85 pages of standard model packs (data, not API)
+    #   - pygsti.drivers.longsequence  the longsequence driver module + its functions
+    exclude_patterns:
+    - "notebooks/"
+    - "**/*.ipynb"
+    - "_autosummary/pygsti.report.*"
+    - "_autosummary/pygsti.modelpacks.*"
+    - "_autosummary/pygsti.drivers.longsequence*"
     suppress_warnings:
     - "etoc.toctree"
     - "myst.xref_missing"

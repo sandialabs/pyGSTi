@@ -6,7 +6,6 @@
    :members:
    :show-inheritance:
    :special-members: __call__
-   :private-members: _collect_kwarg, _resolve_instruction
 
    {% block methods %}
    {% if methods %}

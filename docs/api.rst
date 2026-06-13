@@ -10,3 +10,23 @@ primarily for advanced usage and developers.
    :recursive:
 
    pygsti
+
+Selected API
+------------
+
+A few symbols live in subpackages or modules whose full autodoc tree is
+excluded from the build (``pygsti.report``, ``pygsti.modelpacks``,
+``pygsti.drivers.longsequence``; see ``_config.yml``). The ones below are
+documented individually so they remain part of the reference.
+
+.. autosummary::
+   :toctree: _autosummary_manual
+   :template: custom-class-template.rst
+
+   pygsti.report.Report
+   pygsti.modelpacks.GSTModelPack
+
+.. autosummary::
+   :toctree: _autosummary_manual
+
+   pygsti.report.construct_standard_report
