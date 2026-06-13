@@ -119,5 +119,5 @@ pygsti/_version.py
 1_1.profile/0.prof
 
 # committed golden fixtures for the Circuit characterization tests
-!test/unit/objects/golden/*.pkl
-!test/unit/objects/golden/*.pkl.gz
+!test/unit/circuits/golden/*.pkl
+!test/unit/circuits/golden/*.pkl.gz

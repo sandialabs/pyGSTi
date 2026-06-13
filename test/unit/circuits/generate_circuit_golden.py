@@ -1,12 +1,12 @@
 """One-time generator for the committed golden Circuit fixtures.
 
 Run from the repo root:
-    PYTHONHASHSEED=0 python test/unit/objects/generate_circuit_golden.py
+    PYTHONHASHSEED=0 python test/unit/circuits/generate_circuit_golden.py
 
 Regenerating REPLACES the fixtures and resets the baseline — only do that
 deliberately, in a reviewed PR that explains why.
 
-The fixtures live under ``test/unit/objects/golden/`` and are exempted from the
+The fixtures live under ``test/unit/circuits/golden/`` and are exempted from the
 repo-root ``.gitignore`` patterns (``*.pkl``, ``*.gz``) via negation rules.
 
 Regeneration determinism:
