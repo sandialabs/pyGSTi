@@ -5,7 +5,6 @@
 .. autoclass:: {{ objname }}
    :members:
    :show-inheritance:
-   :inherited-members:
    :special-members: __call__
    :private-members: _collect_kwarg, _resolve_instruction
 

@@ -50,7 +50,6 @@ sphinx:
   - 'sphinx.ext.napoleon'
   - 'sphinx.ext.autodoc'
   - 'sphinx.ext.autosummary'
-  - 'sphinx.ext.viewcode'
   - 'sphinx.ext.doctest'
   - 'sphinx.ext.intersphinx'
   - 'sphinx.ext.mathjax'
@@ -60,7 +59,11 @@ sphinx:
     autoclass_content: "both"
     autodoc_typehints: "description"
     autodoc_member_order: "groupwise"
-    exclude_patterns: ["notebooks/", "**/*.ipynb"]
+    # Drop the pygsti.report.* API subtree: it is HTML-report *generation*
+    # machinery (sections, templates, builders) that users reach through a few
+    # high-level driver functions, not by importing these modules. Skipping its
+    # ~315 autodoc pages is a large build-time saving for the hosted docs.
+    exclude_patterns: ["notebooks/", "**/*.ipynb", "_autosummary/pygsti.report.*"]
     suppress_warnings:
     - "etoc.toctree"
     - "myst.xref_missing"
