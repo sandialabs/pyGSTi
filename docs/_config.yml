@@ -50,7 +50,6 @@ sphinx:
   - 'sphinx.ext.napoleon'
   - 'sphinx.ext.autodoc'
   - 'sphinx.ext.autosummary'
-  - 'sphinx.ext.viewcode'
   - 'sphinx.ext.doctest'
   - 'sphinx.ext.intersphinx'
   - 'sphinx.ext.mathjax'
@@ -60,7 +59,21 @@ sphinx:
     autoclass_content: "both"
     autodoc_typehints: "description"
     autodoc_member_order: "groupwise"
-    exclude_patterns: ["notebooks/", "**/*.ipynb"]
+    # Trim heavy / low-value autodoc subtrees from the hosted build. Each glob
+    # drops the generated stubs (autosummary still writes them; they just aren't
+    # read/rendered). A handful of public symbols from these areas are kept and
+    # documented individually via the "Selected API" block in api.rst.
+    #   - pygsti.report.*            ~315 pages of HTML-report generation machinery
+    #   - pygsti.modelpacks.*        ~85 pages of standard model packs (data, not API)
+    #   - pygsti.drivers.longsequence  the longsequence driver module + its functions
+    #   - pygsti.evotypes.*          ~191 pages of internal evolution-type rep machinery
+    exclude_patterns:
+    - "notebooks/"
+    - "**/*.ipynb"
+    - "_autosummary/pygsti.report.*"
+    - "_autosummary/pygsti.modelpacks.*"
+    - "_autosummary/pygsti.drivers.longsequence*"
+    - "_autosummary/pygsti.evotypes.*"
     suppress_warnings:
     - "etoc.toctree"
     - "myst.xref_missing"
