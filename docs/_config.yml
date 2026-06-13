@@ -66,12 +66,14 @@ sphinx:
     #   - pygsti.report.*            ~315 pages of HTML-report generation machinery
     #   - pygsti.modelpacks.*        ~85 pages of standard model packs (data, not API)
     #   - pygsti.drivers.longsequence  the longsequence driver module + its functions
+    #   - pygsti.evotypes.*          ~191 pages of internal evolution-type rep machinery
     exclude_patterns:
     - "notebooks/"
     - "**/*.ipynb"
     - "_autosummary/pygsti.report.*"
     - "_autosummary/pygsti.modelpacks.*"
     - "_autosummary/pygsti.drivers.longsequence*"
+    - "_autosummary/pygsti.evotypes.*"
     suppress_warnings:
     - "etoc.toctree"
     - "myst.xref_missing"
