@@ -3,7 +3,8 @@
 
 title: PyGSTi Documentation
 author: PyGSTi Developers
-logo: pyGSTi_icon_wht.png
+# Logo is configured below (sphinx html_theme_options.logo) so we can serve a
+# dark-content variant in light mode and the white variant in dark mode.
 
 # Cache executed notebooks between builds.
 # See https://jupyterbook.org/content/execute.html
@@ -24,6 +25,7 @@ parse:
   myst_enable_extensions:
     - dollarmath
     - amsmath
+    - substitution
 
 # Information about where the book exists on the web
 repository:
@@ -46,6 +48,14 @@ launch_buttons:
 
 # Sphinx options
 sphinx:
+  # Merge the settings below into Jupyter Book's generated config recursively,
+  # so html_theme_options.logo is added without clobbering the repository /
+  # launch-button options JB derives from the keys above.
+  recursive_update: true
+  # Local extension that stamps the installed pyGSTi version (read at build time
+  # from package metadata) into the MyST substitution {{ pygsti_version }}.
+  local_extensions:
+    pygsti_version_sub: _ext
   extra_extensions:
   - 'sphinx.ext.napoleon'
   - 'sphinx.ext.autodoc'
@@ -55,6 +65,13 @@ sphinx:
   - 'sphinx.ext.mathjax'
   config:
     add_module_names: False
+    # Light/dark logo: in light mode show the dark-content logo (legible on a
+    # light background); in dark mode show the white-content logo. Files live in
+    # docs/_static, which JB adds to html_static_path automatically.
+    html_theme_options:
+      logo:
+        image_light: pyGSTi_icon_blk.png
+        image_dark: pyGSTi_icon_wht.png
     autosummary_generate: True
     autoclass_content: "both"
     autodoc_typehints: "description"
