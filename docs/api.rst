@@ -386,7 +386,6 @@ General-purpose numerical and quantum-information utilities.
    pygsti.tools.sharedmemtools
    pygsti.tools.slicetools
    pygsti.tools.symplectic
-   pygsti.tools.tqdm
    pygsti.tools.typeddict
 
 Large internal subpackages
