@@ -367,10 +367,10 @@ def create_elementary_errorgen(typ : Literal_HSCA, p, q=None, sparse=False):
 
 #TODO: Should be able to leverage the structure of the paulis as generalized permutation
 #matrices to avoid explicitly doing outer products
-def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False):
+def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False, normalized_paulis=False):
     """
     Construct an elementary error generator as a matrix in the "standard" (matrix-unit) basis.
-    Specialized to the case where p and q are elements of the (unnormalized) pauli basis.
+    Specialized to the case where p and q are elements of the pauli basis.
 
     There are four different types of elementary error generators: 'H' (Hamiltonian),
     'S' (stochastic), 'C' (correlation), and 'A' (active).  See arxiv:2103.01928.
@@ -399,12 +399,21 @@ def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False):
     sparse : bool, optional
         Whether to construct a sparse or dense (the default) matrix.
 
+    normalized_paulis : bool, optional
+        Whether `p` (and `q`) are *normalized* Pauli-basis elements (scaled so that
+        Tr(P^2) = 1) rather than the unnormalized convention (P^2 = I).  When True, the
+        trace-preserving correction term of the 'S' (stochastic) generator is scaled by
+        1/d so the generator stays consistent with the normalized basis.  Only affects
+        'S'-type generators; the H/C/A constructions already scale correctly with `p`/`q`.
+
     Returns
     -------
     ndarray or Scipy CSR matrix
     """
-    d = p.shape[0] 
+    d = p.shape[0]
     d2 = d**2
+    # For normalized Paulis, B^dag B = I/d, so the S-generator's trace-preserving term scales by 1/d.
+    rho_scale = (1 / d) if normalized_paulis else 1
     if sparse:
         elem_errgen = _sps.lil_matrix((d2, d2), dtype=p.dtype)
     else:
@@ -429,7 +438,7 @@ def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False):
             if typ == 'H':
                 rho1 = -1j * (p @ rho0 - rho0 @ p)  # Add "/2" to have PP ham gens match previous versions of pyGSTi
             elif typ == 'S':
-                rho1 = p @ rho0 @ p - rho0
+                rho1 = p @ rho0 @ p - rho_scale * rho0
             elif typ == 'C':
                 rho1 = p @ rho0 @ q + q @ rho0 @ p - 0.5 * (pq_plus_qp @ rho0 + rho0 @ pq_plus_qp)
             elif typ == 'A':
@@ -449,7 +458,7 @@ def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False):
             for i in range(d): 
                 for j in range(d):
                     rho1 = p[:,i].reshape((d,1))@p[j,:].reshape((1,d))
-                    rho1[i,j] += -1
+                    rho1[i,j] += -rho_scale
                     elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
         elif typ == 'C':
             # Loop through the standard basis as all possible input density matrices

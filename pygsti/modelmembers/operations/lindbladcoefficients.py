@@ -11,7 +11,7 @@ from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
-from functools import lru_cache
+from functools import lru_cache, partial
 try:
     from pygsti.tools import fastcalc as _fc
     triu_indices = _fc.fast_triu_indices
@@ -192,6 +192,20 @@ class _HamElements(_RealVectorElements):
 class _DiagElements(_RealVectorElements):
     def param_labels(self, blk):
         return [f"{lbl} stochastic coefficient" for lbl in blk._bel_labels]
+
+
+class _EEGVectorElements(_RealVectorElements):
+    """Unconstrained real-vector parameterization for blocks whose coefficients are in one-to-one
+    correspondence with an explicit list of elementary error generators (block_data == v).  Like
+    ``_RealVectorElements`` but sized by ``blk._eeg_labels`` rather than ``blk._bel_labels``."""
+    def num_params(self, blk):
+        return len(blk._eeg_labels)
+
+    def block_data_jacobian(self, blk, v):
+        return _np.identity(len(blk._eeg_labels), 'd')
+
+    def param_labels(self, blk):
+        return blk._coefficient_labels_impl()
 
 
 class _DiagCholesky(_BlockParameterization):
@@ -510,7 +524,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return super().__new__(cls)
 
     def __init__(self, block_type, basis, basis_element_labels=None, initial_block_data=None, param_mode='static',
-                 truncate=False):
+                 truncate=False, *, error_generator_labels=None):
         """
         Parameters
         ----------
@@ -549,8 +563,14 @@ class LindbladCoefficientBlock(_NicelySerializable):
         
         truncate : bool, optional (default False)
             Flag specifying whether to truncate the parameters given by `initial_block_data` in order to meet
-            constraints (e.g. to preserve CPTP) when necessary. If False, then an error is thrown when the 
-            given intial data cannot be parameterized as specified. 
+            constraints (e.g. to preserve CPTP) when necessary. If False, then an error is thrown when the
+            given intial data cannot be parameterized as specified.
+
+        error_generator_labels : list or tuple of `LocalElementaryErrorgenLabel`, optional (default None)
+            Keyword-only.  Only supported by block types whose `block_data` is keyed directly by elementary
+            error generators (e.g. 'other_unconstrained'); mutually exclusive with `basis_element_labels`.
+            When given, the block manages exactly the listed elementary error generators, enabling reduced /
+            flexible parameterizations.  Must be `None` for the other (basis-element-keyed) block types.
         """
 
         super().__init__()
@@ -561,8 +581,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             raise InvalidParamModeError(param_mode, block_type)
         self._parameterization = _pcls()  # composition: owns the param_mode-specific maps
         self._basis = basis  # must be a full Basis object, not just a string, as we otherwise don't know dimension
-        self._bel_labels = tuple(basis_element_labels) if (basis_element_labels is not None) \
-            else tuple(basis.labels[1:])  # Note: don't include identity
+        self._init_labels(basis, basis_element_labels, error_generator_labels)
         self._cache_mx = _np.zeros((len(self._bel_labels), len(self._bel_labels)), 'complex') \
             if self._uses_cache_mx else None
 
@@ -573,13 +592,27 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         self._set_block_data(initial_block_data, truncate)
 
+    def _init_labels(self, basis, basis_element_labels, error_generator_labels):
+        # Default: this block's coefficients are keyed by basis element labels and it has no explicit
+        # elementary-error-generator label list.  Subclasses whose block_data is keyed directly by
+        # elementary error generators (e.g. _OtherUnconstrainedCoeffBlock) override this.
+        if error_generator_labels is not None:
+            raise ValueError("`error_generator_labels` is not supported by block type '%s'!" % self._block_type)
+        self._bel_labels = tuple(basis_element_labels) if (basis_element_labels is not None) \
+            else tuple(basis.labels[1:])  # Note: don't include identity
+        self._eeg_labels = None
+
+    def _coeff_count(self):
+        """Number of entries along each axis of ``block_data`` (block_data has ``_coeff_ndim`` such axes)."""
+        return len(self._bel_labels)
+
     def _set_block_data(self, block_data, truncate):
         #Sets self.block_data directly, which may later be overwritten by to/from vector calls so this
         # is somewhat dangerous to call, thus a private member.  It should really only be used during
         # initialization and to set/update a param_mode=='static' block.
         # Note: block_data == None can be used to initialize all-zero parameters
-        num_bels = len(self._bel_labels)
-        block_shape = (num_bels,) if self._coeff_ndim == 1 else (num_bels, num_bels)
+        n = self._coeff_count()
+        block_shape = (n,) if self._coeff_ndim == 1 else (n, n)
         block_dtype = self._block_dtype
 
         if block_data is not None:
@@ -611,7 +644,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
     @property
     def _coeff_shape(self):
         """Shape of this block's ``block_data`` array."""
-        n = len(self._bel_labels)
+        n = self._coeff_count()
         return (n,) if self._coeff_ndim == 1 else (n, n)
 
     # --- block-type-specific hooks (implemented by the subclasses in _BLOCK_TYPES) ---
@@ -980,12 +1013,23 @@ class LindbladCoefficientBlock(_NicelySerializable):
                       'basis_element_labels': list(self._bel_labels),
                       'basis': self._basis.to_nice_serialization(),
                       'block_data': self._encodemx(self.block_data)})
+        if self._eeg_labels is not None:
+            # Blocks keyed directly by elementary error generators (e.g. 'other_unconstrained') can't
+            # be reconstructed from basis_element_labels alone (reduced/subset blocks), so store the
+            # explicit eeg labels.  ``class``/``module`` stay pinned to the base name (set above), so
+            # this dict is read back below regardless of the concrete subclass.
+            state['error_generator_labels'] = [[lbl.errorgen_type, list(lbl.basis_element_labels)]
+                                               for lbl in self._eeg_labels]
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
         block_data = cls._decodemx(state['block_data'])
         basis = _Basis.from_nice_serialization(state['basis'])
+        if state.get('error_generator_labels', None) is not None:
+            eeg_labels = [_LEEL(etype, tuple(bels)) for etype, bels in state['error_generator_labels']]
+            return cls(state['block_type'], basis, initial_block_data=block_data,
+                       param_mode=state['parameterization_mode'], error_generator_labels=eeg_labels)
         return cls(state['block_type'], basis, state['basis_element_labels'], block_data,
                    state['parameterization_mode'])
 
@@ -1246,10 +1290,196 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
         return labels
 
 
+class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
+    """Flat, unconstrained non-Hamiltonian (``block_type='other_unconstrained'``) Lindblad
+    coefficient block.
+
+    Unlike ``_OtherCoeffBlock`` (which stores an n x n Hermitian coefficient matrix), this block
+    stores ``block_data`` as a flat 1-D real vector in one-to-one correspondence with an explicit
+    list of elementary error generators (each of type 'S', 'C', or 'A').  This supports reduced /
+    flexible parameterizations over an arbitrary subset of elementary error generators, with each
+    coefficient an independent (unconstrained) real parameter.
+    Valid param modes: 'static', 'elements'.
+    """
+    _coeff_ndim = 1
+    _block_dtype = 'd'
+    _uses_cache_mx = False
+    _superops_matrix_structured = False
+    _PARAM_CLASSES = {'static': _StaticParam, 'elements': _EEGVectorElements}
+
+    def _init_labels(self, basis, basis_element_labels, error_generator_labels):
+        if error_generator_labels is not None:
+            if basis_element_labels is not None:
+                raise ValueError("Specify at most one of `basis_element_labels` and "
+                                 "`error_generator_labels` for an 'other_unconstrained' block!")
+            eeg_labels = tuple(error_generator_labels)
+            for lbl in eeg_labels:
+                if lbl.errorgen_type not in ('S', 'C', 'A'):
+                    raise ValueError("'other_unconstrained' blocks manage only 'S', 'C', and 'A' "
+                                     "error generators; got type '%s'." % lbl.errorgen_type)
+            self._eeg_labels = eeg_labels
+            # distinct basis element labels appearing across the managed eegs, in first-seen order
+            # (so that a block built from the full bel set round-trips its basis_element_labels).
+            bels = []
+            for lbl in eeg_labels:
+                for bl in lbl.basis_element_labels:
+                    if bl not in bels:
+                        bels.append(bl)
+            self._bel_labels = tuple(bels)
+        else:
+            bels = tuple(basis_element_labels) if (basis_element_labels is not None) \
+                else tuple(basis.labels[1:])  # Note: don't include identity
+            self._bel_labels = bels
+            eeg_labels = [_LEEL('S', (P,)) for P in bels]
+            for i, P in enumerate(bels):
+                for Q in bels[i + 1:]:
+                    eeg_labels.append(_LEEL('C', (P, Q)))
+                    eeg_labels.append(_LEEL('A', (P, Q)))
+            self._eeg_labels = tuple(eeg_labels)
+
+    def _coeff_count(self):
+        return len(self._eeg_labels)
+
+    # --- superoperator construction (one superop per elementary error generator) ---
+
+    def _elementary_errorgen_create_fn(self):
+        # choose the elementary-errorgen constructor appropriate to this block's basis
+        comps = set(self._basis.name.split('*'))
+        if comps == {'pp'}:       # normalized Pauli-product basis
+            return partial(_lt.create_elementary_errorgen_pauli, normalized_paulis=True)
+        elif comps == {'PP'}:     # unnormalized Pauli-product basis
+            return _lt.create_elementary_errorgen_pauli
+        else:
+            return _lt.create_elementary_errorgen
+
+    def _compute_term_generators(self, mxs, d2, sparse):
+        # `mxs` is ignored: superops are built per elementary error generator, not per basis element.
+        create_fn = self._elementary_errorgen_create_fn()
+        basis = self._basis
+        nEEG = len(self._eeg_labels)
+        superops = [None] * nEEG if sparse else _np.empty((nEEG, d2, d2), 'complex')
+        for i, eeg in enumerate(self._eeg_labels):
+            bel_mxs = [basis[bl] for bl in eeg.basis_element_labels]
+            superops[i] = create_fn(eeg.errorgen_type, *bel_mxs, sparse=sparse)
+        return superops
+
+    def create_lindblad_term_superoperators(self, mx_basis='pp', sparse: Union[Literal['auto'], bool]="auto",
+                                            include_1norms=False, flat=False):
+        assert(self._basis is not None), "Cannot create lindblad superoperators without a basis!"
+        basis = self._basis
+        sparse = basis.sparse if (sparse == "auto") else sparse
+        if len(self._eeg_labels) == 0:
+            return ([], []) if include_1norms else []  # short circuit - no superops to return
+
+        sample = basis[self._eeg_labels[0].basis_element_labels[0]]
+        d = sample.shape[0]
+        d2 = d**2
+        mx_basis = _Basis.cast(mx_basis, d2, sparse=sparse)
+
+        # NOTE: cache key is on _eeg_labels (not _bel_labels) so two reduced blocks over the same
+        # basis elements but different eeg subsets don't collide in the shared class-level cache.
+        cache_key = (self._block_type, tuple(self._eeg_labels), mx_basis, basis)
+        if cache_key not in self._superops_cache:
+            self._update_superops_cache(None, mx_basis, cache_key)
+        cached_superops, cached_superops_1norms = self._superops_cache[cache_key]
+
+        # _superops_matrix_structured is False, so the flat list/array is always what we return.
+        if include_1norms:
+            return _copy.deepcopy(cached_superops), cached_superops_1norms.copy()
+        else:
+            return _copy.deepcopy(cached_superops)
+
+    # --- term-object construction (for term-based svterm/cterm evotypes) ---
+
+    def _create_lindblad_term_objects_impl(self, evotype, state_space, mpv, pio):
+        Lterms = []
+
+        def O_terms(Um, Un, poly):
+            # rank-1 terms for the 'O'-type Lindbladian generator O(Um,Un): rho -> Un rho Um^dag
+            #   - 0.5 {Um^dag Un, rho}.  Mirrors the construction in _OtherCoeffBlock.
+            Um_dag = Um.conjugate().T
+            Un_dag = Un.conjugate().T
+            return [
+                _term.RankOnePolynomialOpTerm.create_from(1.0 * poly, Un, Um, evotype, state_space),
+                _term.RankOnePolynomialOpTerm.create_from(-0.5 * poly, None, _np.dot(Un_dag, Um),
+                                                           evotype, state_space),
+                _term.RankOnePolynomialOpTerm.create_from(-0.5 * poly, _np.dot(Um_dag, Un), None,
+                                                           evotype, state_space),
+            ]
+
+        def coeff_poly(k, scalar):
+            # polynomial multiplying an O-generator for the k-th elementary error generator
+            if self._param_mode == 'elements':
+                return _Polynomial({(pio + k,): scalar}, mpv)
+            elif self._param_mode == 'static':
+                return _Polynomial({(): scalar * self.block_data[k]}, mpv)
+            else:
+                raise ValueError("Internal error: invalid param mode!!")
+
+        for k, eeg in enumerate(self._eeg_labels):
+            etype = eeg.errorgen_type
+            bels = eeg.basis_element_labels
+            if etype == 'S':  # S(P) == O(P,P)
+                scaleP, U_P = _mt.to_unitary(self._basis[bels[0]])
+                Lterms.extend(O_terms(U_P, U_P, coeff_poly(k, scaleP * scaleP)))
+            elif etype == 'C':  # G_C(P,Q) = O(P,Q) + O(Q,P)
+                scaleP, U_P = _mt.to_unitary(self._basis[bels[0]])
+                scaleQ, U_Q = _mt.to_unitary(self._basis[bels[1]])
+                scale = scaleP * scaleQ
+                Lterms.extend(O_terms(U_P, U_Q, coeff_poly(k, scale)))
+                Lterms.extend(O_terms(U_Q, U_P, coeff_poly(k, scale)))
+            elif etype == 'A':  # G_A(P,Q) = 1j*(O(Q,P) - O(P,Q))
+                scaleP, U_P = _mt.to_unitary(self._basis[bels[0]])
+                scaleQ, U_Q = _mt.to_unitary(self._basis[bels[1]])
+                scale = scaleP * scaleQ
+                Lterms.extend(O_terms(U_P, U_Q, coeff_poly(k, -1j * scale)))
+                Lterms.extend(O_terms(U_Q, U_P, coeff_poly(k, 1j * scale)))
+            else:
+                raise ValueError("Invalid elementary errorgen type: %s" % etype)
+        return Lterms
+
+    # --- elementary-errorgen <-> block_data maps (identity, by construction) ---
+
+    def _elementary_errorgen_indices_impl(self):
+        return _collections.OrderedDict((lbl, [(1.0, i)]) for i, lbl in enumerate(self._eeg_labels))
+
+    def _block_data_indices_impl(self):
+        return {i: [(1.0, lbl)] for i, lbl in enumerate(self._eeg_labels)}
+
+    def _coefficient_labels_impl(self):
+        out = []
+        for lbl in self._eeg_labels:
+            t = lbl.errorgen_type
+            if t == 'S':
+                out.append("%s stochastic coefficient" % lbl)
+            elif t == 'C':
+                out.append("%s pauli-correlation coefficient" % lbl)
+            else:  # 'A'
+                out.append("%s active coefficient" % lbl)
+        return out
+
+    # --- overrides that must account for _eeg_labels (vs. the base's _bel_labels) ---
+
+    def convert(self, param_mode):
+        return LindbladCoefficientBlock(self._block_type, self._basis,
+                                        initial_block_data=self.block_data.copy(),
+                                        param_mode=param_mode,
+                                        error_generator_labels=self._eeg_labels)
+
+    def is_similar(self, other_coeff_block):
+        if not isinstance(other_coeff_block, _OtherUnconstrainedCoeffBlock):
+            return False
+        return ((self._block_type == other_coeff_block._block_type)
+                and (self._param_mode == other_coeff_block._param_mode)
+                and (self._eeg_labels == other_coeff_block._eeg_labels)
+                and (self._basis == other_coeff_block._basis))
+
+
 LindbladCoefficientBlock._BLOCK_TYPES = {
     'ham': _HamCoeffBlock,
     'other_diagonal': _OtherDiagonalCoeffBlock,
     'other': _OtherCoeffBlock,
+    'other_unconstrained': _OtherUnconstrainedCoeffBlock,
 }
 
 
