@@ -36,6 +36,13 @@ env:
   # instead of pip's default CUDA build, which drags in ~2.5 GB of nvidia-* wheels
   # that CI never uses. uv honors this for every resolution in the job.
   UV_TORCH_BACKEND: cpu
+  # Use coverage.py's sys.monitoring core (PEP 669) for --cov runs. Python 3.12's
+  # specializing adaptive interpreter de-optimizes the legacy C trace function,
+  # which made coverage of call-heavy tests (e.g. the errgenproptools error-generator
+  # composition tests) ~40x slower on 3.12 than on 3.9 -- a Python-version effect
+  # previously misread as a numpy-2 regression. sysmon restores near-native speed;
+  # it falls back gracefully (with a CoverageWarning) on Python < 3.12.
+  COVERAGE_CORE: sysmon
 
 jobs:
   build-and-test:
