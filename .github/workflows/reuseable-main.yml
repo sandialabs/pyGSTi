@@ -28,6 +28,14 @@ on:
       run-notebook-tests:
         required: true
         type: string
+      # Whether THIS matrix entry measures coverage. Callers set it true for exactly
+      # one job (ubuntu + highest Python, where coverage.py's sysmon core keeps the
+      # tracer cheap on 3.12+). CI never uploads the report, so measuring it on every
+      # job is pure overhead; one job preserves a human-readable number in the logs.
+      run-coverage:
+        required: false
+        type: string
+        default: 'false'
 
 env:
   SKIP_DEAP: 1
@@ -107,14 +115,21 @@ jobs:
         flake8 . --exit-zero --statistics
     - name: Run unit tests
       if: ${{ inputs.run-unit-tests == 'true' }}
+      # bash on every runner (Git Bash on Windows) so $COV_FLAG expands portably.
+      shell: bash
+      env:
+        COV_FLAG: ${{ inputs.run-coverage == 'true' && '--cov=pygsti' || '' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --dist loadscope --cov=pygsti --durations=25 test/unit
+        python -m pytest -n auto --dist loadscope $COV_FLAG --durations=25 test/unit
     - name: Run workflow tests
       if: ${{ inputs.run-integration-tests == 'true' }}
+      shell: bash
+      env:
+        COV_FLAG: ${{ inputs.run-coverage == 'true' && '--cov=pygsti' || '' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --dist loadscope --cov=pygsti test/integration
+        python -m pytest -n auto --dist loadscope $COV_FLAG test/integration
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |

@@ -21,6 +21,7 @@ jobs:
     with:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}
+      run-coverage: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13' && matrix.use-cython == 'true' }} # cover exactly one job
       use-cython: ${{ matrix.use-cython }}
       run-unit-tests: 'true'
       run-integration-tests: 'true'
