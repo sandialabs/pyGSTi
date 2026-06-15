@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: [3.9, '3.12'] # Only extremal Python versions
+        python-version: ['3.10', '3.13'] # Only extremal Python versions
     uses: ./.github/workflows/reuseable-main.yml
     name: Run pyGSTi tests
     with:

@@ -30,7 +30,7 @@ dependencies=[
     'networkx',
     'tqdm>=4.42.0'
 ]
-requires-python='>=3.9'
+requires-python='>=3.10'
 keywords=[
     'pygsti',
     'tomography',
