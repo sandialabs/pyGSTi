@@ -94,14 +94,16 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-uv-
     - name: Install build and lint tools
-      # setuptools is needed by the explicit `setup.py build_ext` call below (an
-      # editable install does not leave it in the environment); flake8 for linting.
+      # flake8 for the lint step; setuptools/wheel kept on hand for any dependency that
+      # still imports pkg_resources at runtime.
       run: uv pip install --system setuptools wheel flake8
     - name: Install package (Cython)
       if: ${{ inputs.use-cython == 'true' }}
+      # The PEP 660 editable install compiles the Cython extensions in-place via build
+      # isolation, so a separate `setup.py build_ext --inplace` is redundant (verified:
+      # the editable install alone yields importable .so for all 19 extensions).
       run: |
         uv pip install --system -e .[testing]
-        python setup.py build_ext --inplace
     - name: Install package (No Cython, Linux only)
       if: ${{ inputs.use-cython != 'true' && inputs.os == 'ubuntu-latest' }}
       run: |
