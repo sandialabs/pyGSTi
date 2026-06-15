@@ -48,7 +48,9 @@ test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
 docs/_autosummary
 docs/_autosummary_manual
 docs/_build
-docs/notebooks/**/*.ipynb
+# jupytext-generated notebook companions (see docs/jupytext.toml). These are
+# build artifacts on develop; CI commits them on the develop-with-notebooks branch.
+docs/markdown/**/*.ipynb
 docs/tutorial_files
 docs/example_files
 
