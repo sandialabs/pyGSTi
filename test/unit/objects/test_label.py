@@ -336,9 +336,10 @@ class LabelStrTester(BaseCase):
         self.assertFalse(l.has_prefix('Gy'))
 
     def test_labelstr_strip_args(self):
-        l = L('Gx;foo')
+        l = L('Gx_foo')
+        self.assertIsInstance(l, LabelStr)
         l2 = l.strip_args()
-        self.assertEqual(l2, L('Gx;foo'))
+        self.assertEqual(l2, L('Gx_foo'))
 
     def test_labelstr_lt_gt(self):
         l1 = L('A')
@@ -364,6 +365,15 @@ class LabelStrTester(BaseCase):
         # but that means parsing the string which a LayerRule or Model may handle.
         self.assertEqual(l.qubits, None)
         self.assertEqual(l.num_qubits, None)
+
+    def test_labelstr_gets_parsed(self):
+
+        l = L("Gx;foo")
+        self.assertIsInstance(l, LabelTupWithArgs)
+        l = L("Gx!0.1")
+        self.assertIsInstance(l, LabelStr)
+        l = L("Gx:0@0")
+        self.assertIsInstance(l, LabelTup)
 
 
 class LabelTupTester(BaseCase):
@@ -964,7 +974,8 @@ class LabelConcateTester(BaseCase):
         lt = L(('Gy', 1))
         cl = CircuitLabel('circuit', [lt], (1,), 1, None)
 
-        mystr = L("Gx:2@2")
+        mystr = L("Gx")
+        self.assertIsInstance(mystr, LabelStr)
 
         with self.assertRaises(ValueError):
             mystr.concate(ltt_wt)

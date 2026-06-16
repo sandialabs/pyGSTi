@@ -135,10 +135,18 @@ class Label(object):
             `Label('Gx', (0,), args=(pi/3,))`
         """
         
-        time_is_present = False
+        time_is_present = False      
         if isinstance(name, Label) and state_space_labels is None:
             return name  # type: ignore
             # ^ Note: Labels are immutable, so no need to copy
+
+        if isinstance(name, str) and state_space_labels is None and time is None and args is None:
+            if ':' in name or '!' in name or ';' in name:
+                try:
+                    from pygsti.circuits.circuitparser import parse_label
+                    return parse_label(name)
+                except Exception:
+                    pass  # if parsing fails, just treat as a normal (un-parsable) string.
 
         if time is None and args is None:
             match name:
