@@ -14,13 +14,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
-        python-version: [3.9, '3.10', '3.11', '3.12']
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
         use-cython: ['true', 'false']
     uses: ./.github/workflows/reuseable-main.yml
     name: Run pyGSTi tests
     with:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}
+      run-coverage: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13' && matrix.use-cython == 'true' }} # cover exactly one job
       use-cython: ${{ matrix.use-cython }}
       run-unit-tests: 'true'
       run-integration-tests: 'true'
