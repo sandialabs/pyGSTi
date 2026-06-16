@@ -30,7 +30,7 @@ dependencies=[
     'networkx',
     'tqdm>=4.42.0'
 ]
-requires-python='>=3.9'
+requires-python='>=3.10'
 keywords=[
     'pygsti',
     'tomography',
@@ -88,6 +88,7 @@ testing_no_cython_mpi = [
     'pytest',
     'pytest-xdist',
     'pytest-cov',
+    'hypothesis',
     'nbval',
     'nbformat',
     'packaging',
@@ -104,6 +105,7 @@ complete = ['pygsti[multiprocessor,no_mpi]']
 
 [project.urls]
 Homepage = 'https://www.pygsti.info'
+Documentation = 'https://pygsti.readthedocs.io/en/latest/'
 Repository = 'https://github.com/sandialabs/pyGSTi'
 Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
 
