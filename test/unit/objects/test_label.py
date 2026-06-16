@@ -8,6 +8,20 @@ from pygsti.serialization import jsoncodec
 from pygsti.circuits import Circuit
 from ..util import BaseCase
 
+# labels = [
+#     L('Gx', 0),  # a LabelTup
+#     L('Gx', (0, 1)),  # a LabelTup
+#     L(('Gx', 0, 1)),  # a LabelTup
+#     L('Gx'),  # a LabelStr
+#     L('Gx', None),  # still a LabelStr
+#     L([('Gx', 0), ('Gy', 0)]),  # a LabelTupTup of LabelTup objs
+#     L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
+#     L([('Gx', 0)]),  # just a LabelTup b/c only one component
+#     L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
+#     L(L('Gx')),  # Init from another label
+#     CircuitLabel('circuit', [("Gx", 1), ("Gz", 2)], None, 1, None)
+# ]
+
 labels = [
     L('Gx', 0),  # a LabelTup
     L('Gx', (0, 1)),  # a LabelTup
@@ -19,10 +33,7 @@ labels = [
     L([('Gx', 0)]),  # just a LabelTup b/c only one component
     L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
     L(L('Gx')),  # Init from another label
-    CircuitLabel('circuit', [("Gx", 1), ("Gz", 2)], None, 1, None)
-]
-
-native_breaks_labels = [
+    CircuitLabel('circuit', [("Gx", 1), ("Gz", 2)], None, 1, None),
     L(('Gx', 0), time=0.1), # LabelTupWithTime
     L(('Gx', 0), time=0.1, args=("foo",)), # LabelTupWithArgs
     L([("Gx", 0), ("Gy", 1)], time=3.1), # LabelTupTupWithTime
@@ -34,14 +45,16 @@ def test_to_native(label):
     native = label.to_native()
     from_native = L(native)
     assert label == from_native
+    assert type(label) == type(from_native)
 
-@pytest.mark.parametrize('label', labels + native_breaks_labels)
+
+@pytest.mark.parametrize('label', labels)
 def test_pickle(label):
     s = pickle.dumps(label)
     l2 = pickle.loads(s)
     assert type(label) == type(l2)
 
-@pytest.mark.parametrize('label', labels + native_breaks_labels)
+@pytest.mark.parametrize('label', labels)
 def test_json_encode(label):
     j = jsoncodec.encode_obj(label, False)
     l2 = jsoncodec.decode_obj(j, False)
@@ -62,17 +75,7 @@ class LabelTester(BaseCase):
         print(c._labels)
         self.assertEqual(c._labels, (L((('Gx', 0), ('Gy', 1))), L('Gcnot', (0, 1))))
 
-    def test_to_native_breaking(self):
-        for lbl in native_breaks_labels:
-            native = lbl.to_native()
-            if isinstance(lbl, (LabelTupWithArgs, LabelTupTupWithArgs)):
-                with self.assertRaises(AssertionError, msg=f"lbl repr = {lbl.__repr__()}"):
-                    from_native = L(native)
-                    assert from_native == lbl
-            elif isinstance(lbl, (LabelTupWithTime, LabelTupTupWithTime)):
-                from_native = L(native)
-                self.assertEqual(lbl, from_native) # Time gets dropped.
-                self.assertNotIsInstance(from_native, (LabelTupWithTime, LabelTupTupWithTime))
+
 
 
     def test_labels_with_time_and_arguments(self):
@@ -206,14 +209,15 @@ class LabelTester(BaseCase):
 
         for label in labels:
             self.assertTrue(hasattr(label,"is_sorted"), f"label {label} which has type {type(label)} does not have an attribute to check for sorting.")
-            self.assertTrue(hasattr(label,"_is_sorted"), f"label {label} which has type {type(label)} does not have the data member which holds its sorted state.")
 
             if isinstance(label, (LabelTup, LabelStr)):
                 self.assertTrue(label.is_sorted, f"{type(label)} should be sorted by default since there is only one value in it.")
             elif isinstance(label, CircuitLabel):
                 self.assertFalse(label.is_sorted, f"{CircuitLabel} can have multiple objects within a single layer so must be checked for sortedness.")
+                self.assertTrue(hasattr(label,"_is_sorted"), f"label {label} which has type {type(label)} does not have the data member which holds its sorted state.")
             elif isinstance(label, LabelTupTup):
                 self.assertFalse(label.is_sorted, f"{LabelTupTup} can have multiple objects within a single layer so must be checked for sortedness.")
+                self.assertTrue(hasattr(label,"_is_sorted"), f"label {label} which has type {type(label)} does not have the data member which holds its sorted state.")
 
         l = l.with_sorted_inner_labels()
         self.assertTrue(l.is_sorted, f"We just sorted the label {l}!")
@@ -477,7 +481,7 @@ class LabelTupTupTester(BaseCase):
 
     def test_labeltuptup_to_native(self):
         l = L((('Gx', 0), ('Gy', 1)))
-        self.assertEqual(l.to_native(), (('Gx', 0), ('Gy', 1)))
+        self.assertEqual(l.to_native(), (None, None, (('Gx', 0), ('Gy', 1))))
 
     def test_labeltuptup_contains(self):
         l = L((('Gx', 0), ('Gy', 1)))
@@ -526,7 +530,7 @@ class LabelTupTupWithTimeTester(BaseCase):
     def test_labeltuptupwithtime(self):
         l = LabelTupTupWithTime.init((('Gx', 0), ('Gy', 1)), time=0.1)
         self.assertEqual(l.time, 0.1)
-        self.assertEqual(l.to_native(), (('Gx', 0), ('Gy', 1)))
+        self.assertEqual(l.to_native(), (0.1, None, (('Gx', 0), ('Gy', 1))))
         self.assertEqual(l.name, 'COMPOUND')
         self.assertEqual(l.sslbls, (0, 1))
         self.assertEqual(l.qubits, (0, 1))
@@ -575,7 +579,7 @@ class LabelTupTupWithArgsTester(BaseCase):
     def test_labeltuptupwithargs(self):
         l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
         self.assertEqual(l.args, ('foo',))
-        self.assertEqual(l.to_native(), (2, 'foo', ('Gx', 0), ('Gy', 1)))
+        self.assertEqual(l.to_native(), (0.0, ('foo',), (('Gx', 0), ('Gy', 1))))
         self.assertEqual(l.name, 'COMPOUND')
         self.assertEqual(l.sslbls, (0, 1))
         self.assertEqual(l.qubits, (0, 1))
@@ -655,7 +659,7 @@ class LabelTupWithTimeTester(BaseCase):
     def test_labeltupwithtime(self):
         l = LabelTupWithTime.init('Gx', (0,), time=0.1)
         self.assertEqual(l.time, 0.1)
-        self.assertEqual(l.to_native(), ('Gx', 0))
+        self.assertEqual(l.to_native(), ('Gx', 0, '!0.1'))
         self.assertEqual(l.name, 'Gx')
         self.assertEqual(l.sslbls, (0,))
         self.assertEqual(l.qubits, (0,))
@@ -705,7 +709,7 @@ class LabelTupWithArgsTester(BaseCase):
     def test_labeltupwithargs(self):
         l = LabelTupWithArgs.init('Gx', (0,), args=('foo',))
         self.assertEqual(l.args, ('foo',))
-        self.assertEqual(l.to_native(), ('Gx', 3, 'foo', 0))
+        self.assertEqual(l.to_native(), ('Gx', 0, ';', 'foo'))
         self.assertEqual(l.name, 'Gx')
         self.assertEqual(l.sslbls, (0,))
         self.assertEqual(l.qubits, (0,))
