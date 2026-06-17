@@ -253,7 +253,7 @@ class KrausInterfaceCHPTester(KrausInterfaceModelTestBase, BaseCase):
     def setUp(self):
         from pygsti.evotypes import chp
         self.evotype = 'chp'
-        chp_path = None #'/Users/enielse/chp/chp'  
+        chp_path = 'chp_sim'  
         if chp_path is not None:
             chp.chpexe = chp_path
             self.forwardsim = WeakForwardSimulator(shots=100, base_seed=1234)
