@@ -293,6 +293,27 @@ class Label(object):
         """
         return len(self.sslbls) if (self.sslbls is not None) else None
 
+    def has_prefix(self, prefix, typ="all") -> bool:
+        """
+        Whether this label has the given `prefix`.
+
+        Usually used to test whether the label names a given type.
+
+        Parameters
+        ----------
+        prefix : str
+            The prefix to check for.
+
+        typ : {"any","all"}
+            Whether, when there are multiple parts to the label, the prefix
+            must occur in any or all of the parts.
+
+        Returns
+        -------
+        bool
+        """
+        return self.name.startswith(prefix)
+
     @property
     def reps(self) -> int:
         """
@@ -512,27 +533,6 @@ class LabelTup(Label, tuple):
         """
         return (self,)  # just a single "sub-label" component
 
-    def has_prefix(self, prefix, typ="all") -> bool:
-        """
-        Whether this label has the given `prefix`.
-
-        Usually used to test whether the label names a given type.
-
-        Parameters
-        ----------
-        prefix : str
-            The prefix to check for.
-
-        typ : {"any","all"}
-            Whether, when there are multiple parts to the label, the prefix
-            must occur in any or all of the parts.
-
-        Returns
-        -------
-        bool
-        """
-        return self.name.startswith(prefix)
-
     def map_state_space_labels(self, mapper) -> LabelTup:
         """
         Apply a mapping to this Label's state-space (qubit) labels.
@@ -660,8 +660,6 @@ class LabelTupWithTime(LabelTup, tuple):
     more generally, parts of the Hilbert space that is
     acted upon by the object this label refers to.
     """
-
-    IS_SIMPLE = True  # access with self.is_simple property
 
     @classmethod
     def init(cls, name: str, state_space_labels: StateSpaceLabelsCastable, time=0.0) -> LabelTupWithTime:
@@ -898,41 +896,6 @@ class LabelStr(Label, str):
         The sub-label components of this label, or just `(self,)` if no sub-labels exist.
         """
         return (self,)  # just a single "sub-label" component
-
-    @property
-    def qubits(self) -> None:
-        """
-        An alias for sslbls, since commonly these are just qubit indices.
-        """
-        return None
-
-    @property
-    def num_qubits(self) -> None:
-        """
-        The number of qubits this label "acts" on (an integer). `None` if `self.ssbls is None`.
-        """
-        return None
-
-    def has_prefix(self, prefix: str, typ="all") -> bool:
-        """
-        Whether this label has the given `prefix`.
-
-        Usually used to test whether the label names a given type.
-
-        Parameters
-        ----------
-        prefix : str
-            The prefix to check for.
-
-        typ : {"any","all"}
-            Whether, when there are multiple parts to the label, the prefix
-            must occur in any or all of the parts.
-
-        Returns
-        -------
-        bool
-        """
-        return self.startswith(prefix)
 
     def __str__(self) -> str:
         s = self[:]  # converts to a normal str
@@ -1326,8 +1289,6 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
     This typically labels a layer of a circuit (a parallel level of gates).
     """
 
-    IS_SIMPLE = False  # access with self.is_simple property
-
     @classmethod
     def init(cls, tup_of_tups: Sequence[Any], time: Optional[float]=None) -> LabelTupTupWithTime:
         """
@@ -1366,10 +1327,8 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         return cls.__new__(cls, tupOfLabels, time)
 
     def __new__(cls, tup_of_labels: tuple[ConcreteLabel, ...], time: float=0.0):
-        ret = tuple.__new__(cls, tup_of_labels)  # creates a LabelTupTupWithTime object using tuple's __new__
+        ret = super(LabelTupTupWithTime, cls).__new__(cls, tup_of_labels)
         ret.time : float = time  # type: ignore
-        ret._sslbls : Optional[tuple] = None  # type: ignore
-        ret._is_sorted = False
         return ret
 
     @property
@@ -1578,21 +1537,7 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         """
         return self[2]
 
-    # @property
-    # def args(self) -> None:
-    #     """
-    #     This label's arguments.
-    #     """
-    #     raise NotImplementedError("TODO!")
-
-    @property
-    def components(self) -> tuple[ConcreteLabel, ...]:
-        """
-        The sub-label components of this label, or just `(self,)` if no sub-labels exist.
-        """
-        return self[3:]
-
-    def has_prefix(self, prefix: str, typ="all") -> bool:
+    def has_prefix(self, prefix, typ="all") -> bool:
         """
         Whether this label has the given `prefix`.
 
@@ -1611,7 +1556,14 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         -------
         bool
         """
-        return self.name.startswith(prefix)
+        return self.name.startswith(prefix) # Needed since LabelTupTup overrides.
+
+    @property
+    def components(self) -> tuple[ConcreteLabel, ...]:
+        """
+        The sub-label components of this label, or just `(self,)` if no sub-labels exist.
+        """
+        return self[3:]
 
     def map_state_space_labels(self, mapper) -> CircuitLabel:
         """
@@ -1759,8 +1711,6 @@ class LabelTupWithArgs(LabelTupWithTime, tuple):
     refers to.  This label type also supports having arguments and a time value.
     """
 
-    IS_SIMPLE = True  # access with self.is_simple property
-
     @classmethod
     def init(cls, name: str, state_space_labels: StateSpaceLabelsCastable, time: float = 0.0, args: Sequence[Any] = ()) -> LabelTupWithArgs:
         """
@@ -1814,12 +1764,6 @@ class LabelTupWithArgs(LabelTupWithTime, tuple):
         # where K is the index of the start of the sslbls (or 1 more than the last arg index)
 
         return cls.__new__(cls, tup, time)
-
-    def __new__(cls, tup: tuple[Any, ...], time: float = 0.0) -> LabelTupWithArgs:
-        ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
-        ret.time = time
-        return ret
-
 
     @property
     def sslbls(self) -> Optional[StateSpaceLabels]:
@@ -1957,8 +1901,7 @@ class LabelTupWithArgs(LabelTupWithTime, tuple):
         if self.name != oldname:
             return self
         sslbls = tuple() if self.sslbls is None else self.sslbls
-        time : float = self.time  # type: ignore
-        return LabelTupWithArgs.init(newname, sslbls, time, self.args)
+        return LabelTupWithArgs.init(newname, sslbls, self.time, self.args)
 
 
 class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
@@ -1971,8 +1914,6 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
     Contents, as a tuple, are equal to `(K,) + tuple(args) + tup_of_lbls`,
     where K is the index of the start of tup_of_lbls.
     """
-
-    IS_SIMPLE = False  # access with self.is_simple property
 
     @classmethod
     def init(cls, tup_of_tups: Sequence[Any], time: Optional[float]=None, args: Sequence[Any]=()):
@@ -2016,12 +1957,7 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
                 max([lbl.time for lbl in tup_of_lbls if hasattr(lbl, "time")] + [0.0])
         return cls.__new__(cls, tup_rep, time)
 
-    def __new__(cls, tup_rep: tuple[Any, ...], time=0.0):
-        ret = tuple.__new__(cls, tup_rep)
-        ret.time : float = time  # type: ignore
-        ret._sslbls : Optional[tuple] = None  # type: ignore
-        ret._is_sorted = False
-        return ret
+
 
     @property
     def sslbls(self) -> Optional[StateSpaceLabels]:
