@@ -15,6 +15,8 @@ kernelspec:
 This tutorial demonstrates how to compute GST estimates in parallel using MPI. 
 This requires the `mpi4py` python package, which must be able to connect to an underlying MPI library (say, openmpi).
 
+We'll start by setting the stage.
+
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XYI as mp
 from pygsti.protocols import ProtocolData, StandardGST
@@ -28,9 +30,14 @@ data  = simulate_data(mdl_datagen, exp_design.all_circuits_needing_data, num_sam
 pdata = ProtocolData(exp_design, data)
 ```
 
+In this demo we invoke `run_mpi` with an extra `env` argument for added robustness across different types of MPI setups.
+You should try without the `env` argument as well, and omit it unless you need it.
+
 ```{code-cell} ipython3
 protocol = StandardGST(verbosity=2)
-results = protocol.run_mpi(pdata, num_ranks=3, mpiexec='auto')
+results = protocol.run_mpi(pdata,
+    num_ranks=3, mpiexec='auto', env={'FI_PROVIDER': 'sockets'}
+)
 ```
 
 ```{code-cell} ipython3
@@ -39,5 +46,5 @@ from pygsti.report import construct_standard_report
 report = construct_standard_report(
     results, title="MPI Example Report", verbosity=0
 )
-report.write_html('example_files/mpi_example_brief', auto_open=False)
+report.write_html('../../example_files/mpi_example_brief', auto_open=False)
 ```
