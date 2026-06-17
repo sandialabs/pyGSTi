@@ -2309,8 +2309,14 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
     if lindblad_error_coeffs is not None:
 
         if not allow_nonlocal:  # the easy case
-            modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, lindblad_parameterization)
-                                                   for lbl, val in lindblad_error_coeffs.items()}))
+            # Normalize any string error-generator keys (e.g. "HX") to the tuple form
+            # (e.g. ("H", "X")) understood by LindbladErrorgen.from_elementary_errorgens.
+            def _normalize_local_key(k):
+                return (k[0], k[1:]) if isinstance(k, str) else k
+            modelnoises.append(_OpModelPerOpNoise(
+                {lbl: _LindbladNoise({_normalize_local_key(k): v for k, v in val.items()},
+                                     lindblad_parameterization)
+                 for lbl, val in lindblad_error_coeffs.items()}))
         else:  # then need to process labels like ('H', 'XX:0,1') or 'HXX:0,1'
             def process_stencil_labels(flat_lindblad_errs):
                 nonlocal_errors = _collections.OrderedDict()
