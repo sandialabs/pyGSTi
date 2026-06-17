@@ -527,7 +527,7 @@ def mapfill_TDterms(fwdsim, objective, array_to_fill, dest_indices, num_outcomes
                 t = t0
                 rhoVec.set_time(t)
                 rho = rhoVec._rep
-                t += rholabel.time
+                t += hasattr(rholabel, "time", 0.0)
 
                 n_i = datarow_reps[l]
                 outcome = datarow_outcomes[l]
