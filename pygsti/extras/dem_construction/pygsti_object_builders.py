@@ -95,23 +95,38 @@ def pygsti_c_to_stim(pyg_c):
     
     return stim_c
 
-
-def create_processor_spec(pcircuit, qubit_labels, gates=['Gcnot','Gh']):
-    """
-    Creates a processor spec that from a pyGSTi syndrome extraction circuit, containing the 
-    required gates (CNOTs between qubits that are coupled in those circuits). Will then be
-    used to define the noise model we simulate.
-    """
-    ###Note to future self: watch out for the possibility of wanting other gates###
-    pyg_cstr = pcircuit.str
-    # Find all the CNOT gates used in the circuit, using brute force string comprehension
-    cleaned_pcstr = pyg_cstr.replace(']', '').replace('[', '').split('@')[0]
-    connections = [(int(s.split(':')[1]), int(s.split(':')[2])) for s in cleaned_pcstr.split('G') if len(s.split(':')) > 2]
-    availability={'Gcnot':connections}
-    pspec = pygsti.processors.QubitProcessorSpec(len(qubit_labels), gates, qubit_labels=qubit_labels,
-                                             availability=availability)
+def pygsti_c_to_stim_str(pyg_c, include_measurement=True):
+    gatenames_to_stim = {}
+    gatenames_to_stim['Gh'] = 'H'
+    gatenames_to_stim['Gzpi'] = 'Z'
+    gatenames_to_stim['Gypi'] = 'Y'
+    gatenames_to_stim['Gxpi'] = 'X'
+    gatenames_to_stim['Gypi2'] = 'SQRT_Y'
+    gatenames_to_stim['Gympi2'] = 'SQRT_Y_DAG'
+    gatenames_to_stim['Gcnot'] = 'CX'
+    gatenames_to_stim['Gh'] = 'H'
+    gatenames_to_stim['Gcphase'] = 'CZ'
+    gatenames_to_stim['Gxpi2'] = 'SQRT_X'
+    gatenames_to_stim['Gxmpi2'] = 'SQRT_X_DAG'
+    gatenames_to_stim['Gi'] = 'I'
+    gatenames_to_stim['Gt'] = 'T'
+    gatenames_to_stim['Gtdag'] = 'T_DAG'
     
-    return pspec
+    qs = [str(q) for q in pyg_c.line_labels]
+    stim_cstr= 'I '+' '.join(q for q in qs)+'\n'
+    for gate in pyg_c:
+        #assume serialized
+        stim_name = gatenames_to_stim[gate.name]
+        stim_qs = ' '.join([str(q) for q in list(gate.qubits)])
+        stim_cstr += (gatenames_to_stim[gate.name]+' '+' '.join([str(q) for q in list(gate.qubits)])+'\n')
+    #add measurement of all qubits
+    if include_measurement:
+        stim_cstr += ('M '+' '.join(qs))
+
+    
+    return stim_cstr
+
+
 
 # def build_model(error_rates, pspec):
 #     """
@@ -377,7 +392,7 @@ def parse_pauli_product(prod, current_qubit_mapping):
     return (pauli_string, qubits)
 
     
-def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, show_qubit_mappings=False, include_observables=False, separate_observables=False, include_meas_idles=False, include_idles=False):
+def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, show_qubit_mappings=False, include_observables=False, separate_observables=False, include_meas_idles=False, include_idles=False, ignore_measurement=False):
     
     if qubit_relabelling_dict is None:
         qubit_relabelling_dict = {q:q for q in qubit_labels}
@@ -394,7 +409,7 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
                     'SQRT_Y_DAG': 'Gympi2',
                     'SQRT_X_DAG': 'Gxmpi2',
                     'T': 'Gt',
-                    'TDAG': 'Gtdag',
+                    'T_DAG': 'Gtdag',
                     'Z': 'Gzpi',
                     'Y': 'Gypi', 
                     'X':'Gxpi',
@@ -440,7 +455,7 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
     gates_happened = False
     for line in cstr.split('\n'):
         #check if gate layer
-        if 'H' in line.split(' ') or 'SQRT_Y' in line.split(' ') or 'SQRT_Y_DAG' in line.split(' ') or 'Z' in line.split(' ') or 'X' in line.split(' ') or 'Y' in line.split(' ')  or 'SQRT_X_DAG' in line.split(' ') or 'I' in line.split(' '):
+        if 'T' in line.split(' ') or 'T_DAG' in line.split(' ') or 'H' in line.split(' ') or 'SQRT_Y' in line.split(' ') or 'SQRT_Y_DAG' in line.split(' ') or 'Z' in line.split(' ') or 'X' in line.split(' ') or 'Y' in line.split(' ')  or 'SQRT_X_DAG' in line.split(' ') or 'I' in line.split(' '):
             gatename = line.split(' ')[0]
             gate_layers.append(convert_1q_layer(gatename, line, current_qubit_mapping))
             gates_happened = True
@@ -459,7 +474,7 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
             unused_qs = [current_qubit_mapping[k] for k in qubit_labels if str(k) not in line.split(' ')[1:]]
             if include_idles:
                 gate_layers.append('[' + ''.join([f'Gi:'+str(s) for s in unused_qs]) + ']')
-        elif line.split(' ')[0] in ['M','R','MR','MPP']:
+        elif line.split(' ')[0] in ['M','R','MR','MPP'] and not ignore_measurement:
             if line.split(' ')[0] in ['M','MR']:
                 #gate_layers.append(convert_1q_layer('I', line, current_qubit_mapping))
                 measurements.extend([('Z',(current_qubit_mapping[int(q)],)) for q in line.split(' ')[1:]])

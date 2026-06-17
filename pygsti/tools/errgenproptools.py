@@ -8019,7 +8019,7 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
                     return _real_if_close(2*expectation)
                 else:
                     return 0
-    else: # A
+    elif errgen_type == 'A':
         A = basis_element_labels[0]
         B = basis_element_labels[1]
         com_AP = A.commutes(pauli)
@@ -8049,6 +8049,25 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
                     ABP = pauli_product(A*B, pauli)
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
                     return _real_if_close(1j*4*expectation)
+    else: #'Cd' 
+        A = basis_element_labels[0]
+        B = basis_element_labels[1]
+        APB = pauli_product(A*pauli, B)
+        BPA = pauli_product(B*pauli, A)
+        expectation = APB[0]*sim.peek_observable_expectation(APB[1])+BPA[0]*sim.peek_observable_expectation(BPA[1])
+        return _real_if_close(expectation) 
+        # com_AP = A.commutes(pauli)
+        # com_BP = B.commutes(pauli) # TODO: can skip computing this in some cases for minor performance boost.
+        # if com_AP != com_BP:
+        #     return 0
+        # else:
+        #     if A.commutes(B):
+        #         ABP = pauli_product(A*B, pauli)
+        #         expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
+        #         return _real_if_close(-4*expectation)            
+        #     else:
+        #         return 0
+
 
 def alpha_pauli_numerical(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, pauli: stim.PauliString):
     """
