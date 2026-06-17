@@ -22,7 +22,7 @@ PyGSTi is the name of (this) software, which implements the various parts of the
 
 ## How do I run GST (1 or 2 qubits)?
 
-Using pyGSTi, running GST is fairly simple.  Single-qubit GST is demonstrated in full in the [GST overview tutorial](gst/Overview), and 2-qubit GST (though very similar to 1-qubit GST) is separately demonstrated in [this 2Q-GST example](examples/2QGST-RunningIt).  The core GST algorithm is run by calling `pygsti.run_long_sequence_gst` or `pygsti.run_stdpractice_gst`.  There are also example notebooks on [creating 2-qubit GST models](examples/2QGST-CreatingModels) and generating [error bars with 2Q-GST](examples/2QGST-ErrorBars).
+Using pyGSTi, running GST is fairly simple.  Single-qubit GST is demonstrated in full in the [GST overview tutorial](gst/Overview), and 2-qubit GST (though very similar to 1-qubit GST) is separately demonstrated in [this 2Q-GST example](examples/2QGST-RunningIt).  The core GST algorithm is run by calling `pygsti.run_long_sequence_gst` or `pygsti.run_stdpractice_gst`.  See how to add error bars by checking out [this example](examples/ProceduralErrorBars.md)
 ## How do I constrain my gates to be Trace-Preserving (TP)?
 Constraint on the gates (and SPAM operations) in pyGSTi are imposed via the "parameterization" of `Model` objects.  Each `Model` essentially knows how to map some vector of (real-valued) "parameters" to a full set of gate matrices and SPAM vectors - and whether a given set of matrices & vectors can be reached depends on whether there exists a set of parameters that maps onto it.  The parameterization used by an `ExplicitOpModel` object can be changed among commonly used parameterizations via the `set_all_parameterizations` member function.  To constrain gates and SPAM operations to be trace preserving, simply call
 
@@ -69,7 +69,8 @@ Because their computation can be time-consuming, the process of computing error 
 2. Project that Hessian onto a set of non-gauge directions.
 3. Create a report using a non-`None` `confidenceLevel` argument.
 
-In previous pyGSTi versions, simply doing step 3 would automatically trigger steps 1 and 2, but this is no longer the case.  The reason for this is that steps 1 and 2 (especially 1) can take a long time, and one may want to run them on a separate machine with more processing power.  As demonstrated in the [2Q-GST error bars example](examples/2QGST-ErrorBars), you must first add a `ConfidenceRegionFactory` object to your results, then call `compute_hessian` and `project_hessian` (perhaps on a large multiprocessor machine).  After this, you can use `construct_standard_report` with `confidenceLevel=95`, for instance, to create a report with 95% confidence interval error bars.
+In previous pyGSTi versions, simply doing step 3 would automatically trigger steps 1 and 2, but this is no longer the case.  The reason for this is that steps 1 and 2 (especially 1) can take a long time, and one may want to run them on a separate machine with more processing power. 
+You must first add a `ConfidenceRegionFactory` object to your results, then call `compute_hessian` and `project_hessian` (perhaps on a large multiprocessor machine), as demonstrated in [the error bars example](examples/ProceduralErrorBars).  After this, you can use `construct_standard_report` with `confidenceLevel=95`, for instance, to create a report with 95% confidence interval error bars.
 
 **A note about Hessian projection:**
 After computing a Hessian you must specify how the Hessian is projected onto a space orthogonal to the manifold of gauge degrees of freedom.  This is done via `ConfidenceRegionFactory.project_hessian(...)`. The basic idea here is that there is a choice, similar to the choice of which metric to use for gauge optimization, which defines the notion of "orthogonality" and thereby how error bars are constructed for the non-gauge degrees of freedom.  There are several ways pyGSTi can do this, and you specify which way you want by the `projection_type` argument to `project_hessian`.  One, `"optimal gate CIs"`, is to optimize this metric so as to make the error bars as small as possible - the but this can sometimes take a long time.  For faster run times, one can use the `"std"` (standard) option which takes almost no time but just chooses an arbitrary gauge metric.   A third `"intrinsic error"` type attempts to balance speed with small confidence intervals, but is currently just experimental.  Using either of the latter two options is fine, but may result in artificially large error bars.  So if you use `"std"` or `"intrinsic error"` and get error bars you're happy with, then great.  If the error bars seem too large, it's probably worth setting the parameter to `"optimal gate CIs"` and getting some coffee.
@@ -84,7 +85,7 @@ Currently there aren't many options for speeding up the core computation require
 
 #On large & fast computer
 results = pygsti.run_long_sequence_gst(..., comm=my_comm)
-crfact = results.estimates['default'].add_confidence_region_factory('go0', 'final')
+crfact = results.estimates['default'].add_confidence_region_factory('stdgaugeopt', 'final')
 crfact.compute_hessian(comm=comm) # use multiple processors for hessian calc
 crfact.project_hessian('intrinsic error') # see above
 
