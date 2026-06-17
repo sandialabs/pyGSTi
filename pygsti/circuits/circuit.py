@@ -2517,13 +2517,13 @@ class Circuit(object):
             lbl2 = circuit[i]
             assert isinstance(lbl, _Label)
             assert isinstance(lbl2, _Label)
-            if lbl == implicit_idle_layer and lbl2 != implicit_idle_layer:
-                implicit_sslbls_matter = True
-                break
-            elif lbl != implicit_idle_layer and lbl2 == implicit_idle_layer:
-                implicit_sslbls_matter = True
-                break
-            elif lbl != implicit_idle_layer and lbl2 != implicit_idle_layer and (lbl.sslbls is None or lbl2.sslbls is None):
+            # Only an actual *gate* with implicit (None) sslbls straddles the new lines.
+            # An empty idle layer (Label(())) contains no gates and is always safe to tensor
+            # (it just idles its own circuit's lines), so it must not trip this guard --
+            # SimultaneousExperimentDesign pads shorter circuits with such trailing idle layers.
+            lbl_implicit_gate = (lbl != implicit_idle_layer and lbl.sslbls is None)
+            lbl2_implicit_gate = (lbl2 != implicit_idle_layer and lbl2.sslbls is None)
+            if lbl_implicit_gate or lbl2_implicit_gate:
                 implicit_sslbls_matter = True
                 break
 
