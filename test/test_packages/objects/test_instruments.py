@@ -1,10 +1,12 @@
 import pickle
 
 import numpy as np
+import pytest
 
 import pygsti
 from pygsti.models import modelconstruction
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..testutils import BaseTestCase, temp_files
 
 
@@ -23,9 +25,10 @@ class InstrumentTestCase(BaseTestCase):
         self.povm_ident = self.target_model.povms['Mdefault']['0'] + self.target_model.povms['Mdefault']['1']
 
         self.mdl_target_wTP = self.target_model.copy()
-        self.mdl_target_wTP.instruments['IzTP'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_target_wTP.instruments['Iztp'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
 
         super(InstrumentTestCase, self).setUp()
+
 
     def testFutureFunctionality(self):
         #Test instrument construction with elements whose gpindices are already initialized.
@@ -66,7 +69,7 @@ class InstrumentTestCase(BaseTestCase):
 
         self.assertAlmostEqual(mdl.frobeniusdist(self.mdl_target_wTP),0.0)
 
-        for lbl in ('Iz','IzTP'):
+        for lbl in ('Iz','Iztp'):
             v = mdl.to_vector()
             gates = mdl.instruments[lbl].simplify_operations(prefix="ABC")
             for igate in gates.values():
@@ -184,7 +187,7 @@ class InstrumentTestCase(BaseTestCase):
 
         model.instruments["Itest"] = pygsti.modelmembers.instruments.Instrument([('0', P0), ('1', P1)])
 
-        for param in ("full","full TP","CPTP"):
+        for param in ("full","full TP","CPTPLND"):
             print(param)
             model.set_all_parameterizations(param)
             model.to_vector() # builds & cleans paramvec for tests below
@@ -228,8 +231,8 @@ class InstrumentTestCase(BaseTestCase):
 
 
         print("Model IO")
-        pygsti.io.write_model(model, temp_files + "/testGateset.txt")
-        model2 = pygsti.io.load_model(temp_files + "/testGateset.txt")
+        model.write(temp_files + "/testGateset.json")
+        model2 = pygsti.models.ExplicitOpModel.read(temp_files + "/testGateset.json")
         self.assertAlmostEqual(model.frobeniusdist(model2),0.0)
         print("Multiplication")
 
@@ -327,16 +330,20 @@ class InstrumentTestCase(BaseTestCase):
         bulk_probs = model.sim.bulk_probs([circuit_normal, circuit_wprep, circuit_wpovm, circuit_wboth])
 
     def testWriteAndLoad(self):
-        mdl = self.target_model.copy()
+        # Use the wTP model (Iz + Iztp) so the test exercises both a regular
+        # Instrument and a TPInstrument coexisting on a single model.
+        mdl = self.mdl_target_wTP.copy()
 
         s = str(mdl) #stringify with instruments
 
-        for param in ('full','full TP','static'):  # skip 'CPTP' b/c cannot serialize that to text anymore
-            print("Param: ",param)
+        # JSON round-trip via Model.write / ExplicitOpModel.read.
+        # Replaces the legacy .txt round-trip (write_model/parse_model).
+        for param in ('full', 'full TP', 'static'):
+            print("Param: ", param)
             mdl.set_all_parameterizations(param)
-            filename = temp_files + "/gateset_with_instruments_%s.txt" % param
-            pygsti.io.write_model(mdl, filename)
-            gs2 = pygsti.io.parse_model(filename)
+            filename = temp_files + "/gateset_with_instruments_%s.json" % param
+            mdl.write(filename)
+            gs2 = pygsti.models.ExplicitOpModel.read(filename)
 
             self.assertAlmostEqual( mdl.frobeniusdist(gs2), 0.0 )
             for lbl in mdl.operations:

@@ -18,6 +18,7 @@ import numpy as _np
 from pygsti import baseobjs as _baseobjs
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
+from pygsti.tools.optools import relaxed_scalar_tolerance as _relaxed_tol
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
 from pygsti.models import (
@@ -604,6 +605,15 @@ def _legacy_create_scalar_objective(model, target_model,
         tgt_ops.update(gates_with_instruments(target_model))
 
     def _objective_fn(gauge_group_el, oob_check):
+        # Inner-loop tolerance relaxation: gauge optimization over non-unitary
+        # gauge groups (TPGaugeGroup, FullGaugeGroup, etc.) routinely probes
+        # intermediate matrices that are far from physical. The fidelity-based
+        # metrics call _tools.entanglement_fidelity / _tools.fidelity, which
+        # emit NumericalDomainWarning gated by __SCALAR_TOL_EXPONENT__.
+        # Relax that exponent inside the optimizer loop. The warning still
+        # fires for callers outside this loop (e.g., direct `fidelity()`
+        # users), and still fires here if drift is large enough to clear the
+        # relaxed threshold.
         mdl : ExplicitOpModel = _transform_with_oob_check(model, gauge_group_el, oob_check)
         mdl_ops : dict[_baseobjs.Label, _LinearOperator] = gates_with_instruments(mdl)
         ret: _np.floating = _np.float64(0.0)
@@ -620,7 +630,7 @@ def _legacy_create_scalar_objective(model, target_model,
 
         if target_model is None:
             return ret
-        
+
         if "frobenius" in gates_metric:
             if spam_metric == gates_metric:
                 val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
@@ -637,13 +647,14 @@ def _legacy_create_scalar_objective(model, target_model,
 
         elif gates_metric == "fidelity":
             # Leakage-aware metrics NOT available
-            for opLbl in mdl_ops:
-                wt = item_weights.get(opLbl, opWeight)
-                mop = mdl_ops[opLbl].to_dense()
-                top, t = gate_fidelity_targets[opLbl]
-                v = _tools.entanglement_fidelity(mop, top, mxBasis)
-                z = _np.abs(t - v)
-                ret += wt * z
+            with _relaxed_tol(exponent=0.05):
+                for opLbl in mdl_ops:
+                    wt = item_weights.get(opLbl, opWeight)
+                    mop = mdl_ops[opLbl].to_dense()
+                    top, t = gate_fidelity_targets[opLbl]
+                    v = _tools.entanglement_fidelity(mop, top, mxBasis)
+                    z = _np.abs(t - v)
+                    ret += wt * z
 
         elif gates_metric == "tracedist":
             # If n_leak==0, then subspace_jtracedist is just jtracedist.
@@ -669,29 +680,30 @@ def _legacy_create_scalar_objective(model, target_model,
             val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
             if "squared" in spam_metric:
                 val = val ** 2
-            ret += val 
+            ret += val
 
         elif spam_metric == "fidelity":
             # Leakage-aware metrics NOT available
-            val_prep = 0.0
-            for preplbl in target_model.preps:
-                wt_prep = item_weights.get(preplbl, spamWeight)
-                rho_curest = _tools.vec_to_stdmx(model.preps[preplbl].to_dense(), mxBasis)
-                rho_target, t = prep_fidelity_targets[preplbl]
-                v = _tools.fidelity(rho_curest, rho_target)
-                val_prep += wt_prep * abs(t - v)
-            val_povm = 0.0
-            for povmlbl in target_model.povms:
-                wt_povm  = item_weights.get(povmlbl, spamWeight)
-                M_target = target_model.povms[povmlbl]
-                M_curest =        model.povms[povmlbl]
-                Es_target, ts = povm_fidelity_targets[povmlbl]
-                for elbl in M_target:
-                    t_e = ts[elbl]
-                    E   = _tools.vec_to_stdmx(M_curest[elbl].to_dense(), mxBasis)
-                    v_e = _tools.fidelity(E, Es_target[elbl])
-                    val_povm += wt_povm * abs(t_e - v_e)
-            ret += (val_prep + val_povm) # type: ignore
+            with _relaxed_tol(exponent=0.05):
+                val_prep = 0.0
+                for preplbl in target_model.preps:
+                    wt_prep = item_weights.get(preplbl, spamWeight)
+                    rho_curest = _tools.vec_to_stdmx(model.preps[preplbl].to_dense(), mxBasis)
+                    rho_target, t = prep_fidelity_targets[preplbl]
+                    v = _tools.fidelity(rho_curest, rho_target)
+                    val_prep += wt_prep * abs(t - v)
+                val_povm = 0.0
+                for povmlbl in target_model.povms:
+                    wt_povm  = item_weights.get(povmlbl, spamWeight)
+                    M_target = target_model.povms[povmlbl]
+                    M_curest =        model.povms[povmlbl]
+                    Es_target, ts = povm_fidelity_targets[povmlbl]
+                    for elbl in M_target:
+                        t_e = ts[elbl]
+                        E   = _tools.vec_to_stdmx(M_curest[elbl].to_dense(), mxBasis)
+                        v_e = _tools.fidelity(E, Es_target[elbl])
+                        val_povm += wt_povm * abs(t_e - v_e)
+                ret += (val_prep + val_povm) # type: ignore
 
         elif spam_metric == "tracedist":
             # Leakage-aware metrics NOT available.
@@ -830,9 +842,6 @@ def _legacy_create_least_squares_objective(model, target_model,
         allDerivColSlice = slice(0, N)
         derivSlices, myDerivColSlice, derivOwners, mySubComm = \
             _mpit.distribute_slice(allDerivColSlice, comm)
-        if mySubComm is not None:
-            _warnings.warn("Note: more CPUs(%d)" % comm.Get_size()
-                            + " than gauge-opt derivative columns(%d)!" % N)  # pragma: no cover
 
         n = _slct.length(myDerivColSlice)
         wrtIndices = _slct.indices(myDerivColSlice) if (n < N) else None

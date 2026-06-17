@@ -711,18 +711,19 @@ class MultiDataSet(object):
         else:
             f = file_or_filename
 
-        _pickle.dump(toPickle, f)
-        for _, data in self.oliDict.items():
-            _np.save(f, data)
-
-        for _, data in self.timeDict.items():
-            _np.save(f, data)
-
-        if self.repDict:
-            for _, data in self.repDict.items():
+        try:
+            _pickle.dump(toPickle, f)
+            for _, data in self.oliDict.items():
                 _np.save(f, data)
 
-        if bOpen: f.close()
+            for _, data in self.timeDict.items():
+                _np.save(f, data)
+
+            if self.repDict:
+                for _, data in self.repDict.items():
+                    _np.save(f, data)
+        finally:
+            if bOpen: f.close()
 
     @_deprecated_fn('read_binary')
     def load(self, file_or_filename):
@@ -755,42 +756,43 @@ class MultiDataSet(object):
         else:
             f = file_or_filename
 
-        state_dict = _pickle.load(f)
+        try:
+            state_dict = _pickle.load(f)
 
-        def expand(x):
-            """ Expand a comproessed circuit """
-            assert isinstance(x, _cir.CompressedCircuit)
-            return x.expand()
-            #else: #to be backward compatible
-            #  _warnings.warn("Deprecated dataset format.  Please re-save " +
-            #                 "this dataset soon to avoid future incompatibility.")
-            #  return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
-        cirIndexKeys = [expand(cgs) for cgs in state_dict['cirIndexKeys']]
+            def expand(x):
+                """ Expand a comproessed circuit """
+                assert isinstance(x, _cir.CompressedCircuit)
+                return x.expand()
+                #else: #to be backward compatible
+                #  _warnings.warn("Deprecated dataset format.  Please re-save " +
+                #                 "this dataset soon to avoid future incompatibility.")
+                #  return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
+            cirIndexKeys = [expand(cgs) for cgs in state_dict['cirIndexKeys']]
 
-        #cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
-        self.cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
-        self.olIndex = state_dict['olIndex']
-        self.collisionActions = state_dict['collisionActions']
-        self.auxInfo = state_dict.get('auxInfo', _defaultdict(dict))  # backward compat
-        self.comments = state_dict["comments"]
-        self.comment = state_dict["comment"]
+            #cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
+            self.cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
+            self.olIndex = state_dict['olIndex']
+            self.collisionActions = state_dict['collisionActions']
+            self.auxInfo = state_dict.get('auxInfo', _defaultdict(dict))  # backward compat
+            self.comments = state_dict["comments"]
+            self.comment = state_dict["comment"]
 
-        self.oliDict = _OrderedDict()
-        for key in state_dict['oliKeys']:
-            self.oliDict[key] = _np.lib.format.read_array(f)  # np.load(f) doesn't play nice with gzip
+            self.oliDict = _OrderedDict()
+            for key in state_dict['oliKeys']:
+                self.oliDict[key] = _np.lib.format.read_array(f)  # np.load(f) doesn't play nice with gzip
 
-        self.timeDict = _OrderedDict()
-        for key in state_dict['timeKeys']:
-            self.timeDict[key] = _np.lib.format.read_array(f)
+            self.timeDict = _OrderedDict()
+            for key in state_dict['timeKeys']:
+                self.timeDict[key] = _np.lib.format.read_array(f)
 
-        if state_dict['repKeys']:
-            self.repDict = _OrderedDict()
-            for key in state_dict['repKeys']:
-                self.repDict[key] = _np.lib.format.read_array(f)
-        else:
-            self.repDict = None
-
-        if bOpen: f.close()
+            if state_dict['repKeys']:
+                self.repDict = _OrderedDict()
+                for key in state_dict['repKeys']:
+                    self.repDict[key] = _np.lib.format.read_array(f)
+            else:
+                self.repDict = None
+        finally:
+            if bOpen: f.close()
 
     def add_auxiliary_info(self, circuit, aux):
         """

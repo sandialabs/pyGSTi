@@ -158,7 +158,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         # no caches used, so fill methods don't add additional arrays
         return super()._array_types_for_method(method_name)
 
-    def __init__(self, model=None,  # below here are simtype-specific args
+    def __init__(self, model=None,  # below here are simulator-specific args
                  mode="pruned", max_order=3, desired_perr=0.01, allowed_perr=0.1,
                  min_term_mag=None, max_paths_per_outcome=1000, perr_heuristic="none",
                  max_term_stages=5, path_fraction_threshold=0.9, oob_check_interval=10, cache=None,
@@ -243,7 +243,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         # and this is done by the parent model which will cause _set_evotype to be called.
         return state
 
-    def copy(self):
+    def copy(self, keep_model_attached=True):
         """
         Return a shallow copy of this TermForwardSimulator.
 
@@ -251,10 +251,13 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         -------
         TermForwardSimulator
         """
-        return TermForwardSimulator(self.model, self.mode, self.max_order, self.desired_pathmagnitude_gap,
+        out = TermForwardSimulator(self.model, self.mode, self.max_order, self.desired_pathmagnitude_gap,
                                     self.allowed_perr, self.min_term_mag, self.max_paths_per_outcome,
                                     self.perr_heuristic, self. max_term_stages, self.path_fraction_threshold,
                                     self.oob_check_interval, self.cache)
+        if not keep_model_attached:
+            out.model = None  # type: ignore
+        return out
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0, layout_creation_circuit_cache=None):

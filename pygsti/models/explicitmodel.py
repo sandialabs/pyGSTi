@@ -49,6 +49,7 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from typing import Union, Literal
@@ -130,7 +131,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #assert(default_param in ('full','TP','CPTP','H+S','S','static',
         #                         'H+S terms','clifford','H+S clifford terms'))
         def flagfn(typ): return {'auto_embed': True, 'match_parent_statespace': True,
-                                 'match_parent_evotype': True, 'cast_to_type': typ}
+                                 'match_parent_evotype': True, 'cast_to_type': typ,
+                                 'validate_keys': True}
 
         if default_prep_type == "auto":
             default_prep_type = _state.state_type_from_op_type(default_gate_type)
@@ -143,7 +145,9 @@ class ExplicitOpModel(_mdl.OpModel):
         self.povms = _OrderedMemberDict(self, default_povm_type, povm_prefix, flagfn("povm"))
         self.operations = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("operation"))
         self.instruments = _OrderedMemberDict(self, default_instrument_type, instrument_prefix, flagfn("instrument"))
-        self.factories = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("factory"))
+        self.factories = _OrderedMemberDict(self, default_gate_type, gate_prefix,
+                                            {'auto_embed': True, 'match_parent_statespace': True,
+                                             'match_parent_evotype': True, 'cast_to_type': "factory"})
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
 
@@ -525,7 +529,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if "gates" in state_dict:
             #Unpickling an OLD-version Model (or GateSet)
-            _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.",
+                           _pyGSTiDeprecationWarning)
             self.operations = state_dict['gates']
             self.state_space = state_dict['stateSpaceLabels']
             self._paramlbls = None
@@ -1345,7 +1350,7 @@ class ExplicitOpModel(_mdl.OpModel):
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", "auto", "auto", "auto",
                                     self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim.copy())
+                                    self.instruments._prefix, self._sim.copy(keep_model_attached=False))
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
@@ -1427,7 +1432,7 @@ class ExplicitOpModel(_mdl.OpModel):
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", "auto", "auto", "auto",
                                     self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim.copy())
+                                    self.instruments._prefix, self._sim.copy(keep_model_attached=False))
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 

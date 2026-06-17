@@ -15,6 +15,7 @@ import sys as _sys
 import time as _time
 import pathlib as _pathlib
 from typing import Callable, Literal, Union, Tuple, Hashable, Optional
+import warnings as _warnings
 
 import numpy as _np
 
@@ -4641,8 +4642,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         jac = self.dterms(paramvec)
         if shared_mem_leader:
             lsvec = self.lsvec(paramvec)
-            p5over_lsvec = 0.5/lsvec
-            p5over_lsvec[_np.abs(lsvec) < 1e-100] = 0.0
+            with _np.errstate(divide='ignore', invalid='ignore'):
+                p5over_lsvec = 0.5/lsvec                 # can create infinities
+            p5over_lsvec[_np.abs(lsvec) < 1e-100] = 0.0  # zeros-out any infinities
             jac *= p5over_lsvec[:, None]
 
         unit_ralloc.host_comm_barrier()

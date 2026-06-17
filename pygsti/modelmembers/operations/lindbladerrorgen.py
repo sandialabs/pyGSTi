@@ -31,6 +31,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from typing import Literal
 
@@ -468,9 +469,10 @@ class LindbladErrorgen(_LinearOperator):
             if parameterization == "auto" else LindbladParameterization.cast(parameterization)
 
         eegs_by_typ = {
-            'ham':            {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'H' },
-            'other_diagonal': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'S' },
-            'other':          {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type != 'H' }
+            'ham':                 {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'H' },
+            'other_diagonal':      {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'S' },
+            'other':               {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type != 'H' },
+            'other_unconstrained': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type != 'H' },
         }
 
         blocks = []
@@ -478,8 +480,13 @@ class LindbladErrorgen(_LinearOperator):
             relevant_eegs = eegs_by_typ[blk_type]  # KeyError => unrecognized block type!
             #only add block type is relevant_eegs is not empty.
             if relevant_eegs:
-                bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
-                blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
+                if blk_type == 'other_unconstrained':
+                    # flat block keyed directly by the (possibly reduced) set of elementary error generators
+                    blk = _LindbladCoefficientBlock(blk_type, basis, param_mode=blk_param_mode,
+                                                    error_generator_labels=list(relevant_eegs.keys()))
+                else:
+                    bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
+                    blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
                 blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
                 blocks.append(blk)
         return cls(blocks, basis, mx_basis, evotype, state_space)
@@ -1603,7 +1610,8 @@ class LindbladParameterization(_NicelySerializable):
                 meta = '1+'
             elif obj.startswith('lindblad '):
                 _warnings.warn(("Use of 'lindblad <type>' is deprecated and will be removed.  "
-                                "You should use 'exp(<type>)' or '1+(<type>)' instead"))
+                                "You should use 'exp(<type>)' or '1+(<type>)' instead"),
+                               _pyGSTiDeprecationWarning)
                 abbrev = obj[len('lindblad '):]
                 meta = 'exp'
             else:
@@ -1611,12 +1619,17 @@ class LindbladParameterization(_NicelySerializable):
                 meta = None  # 'exp' by default?
 
             if abbrev == "CPTP":
-                _warnings.warn("Using 'CPTP' as a Lindblad type is deprecated, and you should now use 'CPTPLND'")
+                _warnings.warn("Using 'CPTP' as a Lindblad type is deprecated, and you should now use 'CPTPLND'",
+                               _pyGSTiDeprecationWarning)
                 block_types = ['ham', 'other']; param_modes = ['elements', 'cholesky']
             elif abbrev == "CPTPLND":
                 block_types = ['ham', 'other']; param_modes = ['elements', 'cholesky']
             elif abbrev == "GLND":
                 block_types = ['ham', 'other']; param_modes = ['elements', 'elements']
+            elif abbrev == "GLNDU":
+                # like GLND, but the non-Hamiltonian block uses the flat, per-elementary-errorgen
+                # 'other_unconstrained' representation (supports reduced/flexible parameterizations).
+                block_types = ['ham', 'other_unconstrained']; param_modes = ['elements', 'elements']
             else:
                 block_types = []; param_modes = []
                 for p in abbrev.split('+'):

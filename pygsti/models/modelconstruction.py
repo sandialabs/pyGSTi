@@ -47,6 +47,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -802,7 +803,8 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     elif (global_idle_name is not None) and global_idle_name.startswith('(') and global_idle_name.endswith(')'):
         # For backward compatibility
         _warnings.warn(("Use of parenthesized gate names (e.g. '%s') is deprecated!  Processor spec gate names"
-                        " should be updated to use curly braces.") % str(global_idle_name))
+                        " should be updated to use curly braces.") % str(global_idle_name),
+                       _pyGSTiDeprecationWarning)
         gn_to_make_emptytup = global_idle_name
     else:
         gn_to_make_emptytup = None
@@ -1634,8 +1636,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qubits or less, and otherwise selects `"map"`.
+        resulting :class:`Model`.  Using `"auto"` currently selects `"map"`.
 
     on_construction_error : {'raise','warn',ignore'}
         What to do when the creation of a gate with the given
@@ -1842,8 +1843,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qubits or less, and otherwise selects `"map"`.
+        resulting :class:`Model`.  Using `"auto"` currently selects `"map"`.
 
     independent_gates : bool, optional
         Whether gates are allowed independent noise or not.  If False,
@@ -2072,8 +2072,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
         requested probabilities, e.g. from :meth:`probs` or
-        :meth:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qudits or less, and otherwise selects `"map"`.
+        :meth:`bulk_probs`.  Using `"auto"` currently selects `"map"`.
 
     evotype : Evotype or str, optional
         The evolution type of this model, describing how states are
