@@ -208,7 +208,7 @@ To finish up, we'll write the results for processing in other tutorials.  We do 
 Two remarks are in order:
 1. When results are from running a protocol on data that was loaded with the `load_data_from_dir` method (see the beginning of this notebook), then knowledge of this directory is remembered and you don't need to give a directory to `write` (this is the case for all except `results_reduced`, which created a new experiment design containing less experiments).
 
-2. Notice how the `name=` arguments given to protocols above are used as sub-directory names, e.g. under the "tutorial_files/Example_GST_Data/results" parent directory.
+2. Notice how the `name=` arguments given to protocols above are used as sub-directory names, e.g. under the "../../tutorial_files/Example_GST_Data/results" parent directory.
 
 ```{code-cell} ipython3
 results_TP.write()  # uses "../../tutorial_files/Example_GST_Data" (where data was loaded from)
