@@ -631,6 +631,11 @@ class ExplicitOpModel(_mdl.OpModel):
                             " - using total instead"), _UnknownGaugeSpaceDimension)
             return self.num_params
 
+    @num_modeltest_params.setter
+    def num_modeltest_params(self, count):
+        # Overriding the getter above drops the inherited setter, so re-expose it here.
+        self._num_modeltest_params = count
+
 
     @property
     def num_nongauge_params(self):
