@@ -570,7 +570,10 @@ def _create_explicit_model_from_expressions(state_space, basis,
 
     from pygsti.circuits.circuitparser import parse_label
 
-    parsed_op_labels = [parse_label(str(opLabel)) for opLabel in op_labels]
+    # Canonicalize non-string labels through Label first, since e.g. str(('Gxpi2', 0)) and
+    # str(()) (the idle layer) are not directly parseable, whereas str(Label(...)) is.
+    parsed_op_labels = [parse_label(opLabel if isinstance(opLabel, str) else str(_label.Label(opLabel)))
+                        for opLabel in op_labels]
     if len(set(parsed_op_labels)) != len(op_labels):
         msg = f"""
         There are fewer unique Label objects after parsing op_labels than
