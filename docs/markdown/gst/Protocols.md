@@ -25,13 +25,17 @@ Overall, the `GateSetTomography` protocol is more flexible than the `StandardGST
 
 ```{code-cell} ipython3
 import pygsti
+import os
 ```
 
 ## Setup
 In the [DataSet tutorial](../objects/DataSet) we simulate the circuits required by a GST experiment design and save the results.  In this tutorial, we'll be analyzing that data.  This illustrates a typical workflow where at some earlier time you setup an experiment (a "GST experiment in this case) and save the experiment design to disk and at some later time (after the data has been collected) you want to analyze it.  Now *is* that later time, and we start by reading the the data we've collected.
 
 ```{code-cell} ipython3
-data = pygsti.io.read_data_from_dir("../../tutorial_files/Example_GST_Data")
+if os.path.isdir("../../tutorial_files/Example_GST_Data"):
+    data = pygsti.io.read_data_from_dir("../../tutorial_files/Example_GST_Data")
+else:
+    raise ValueError("You have to run the DataSet tutorial first!")
 ```
 
 ## `GateSetTomography`
@@ -215,17 +219,6 @@ results_TP.write()  # uses "../../tutorial_files/Example_GST_Data" (where data w
 results_TP2.write() # ditto
 results_stdprac.write() # ditto
 results_reduced.write("../../tutorial_files/Example_Reduced_GST_Data") # choose a different dir
-```
-
-While it is also possible to **pickle** a results object, this method of serialization is **not recommended** for long-term storage since pickle files are relatively fragile to changes in pyGSTi or other python libraries.
-
-```{code-cell} ipython3
-#Not recommended:
-# import pickle
-# pickle.dump(results_TP, open('../../tutorial_files/exampleResults_TP.pkl',"wb"))
-# pickle.dump(results_TP2, open('../../tutorial_files/exampleResults_TP2.pkl',"wb"))
-# pickle.dump(results_reduced, open('../../tutorial_files/exampleResults_reduced.pkl',"wb"))
-# pickle.dump(results_stdprac, open('../../tutorial_files/exampleResults_stdprac.pkl',"wb"))
 ```
 
 ## Checkpointing/Warmstarting
