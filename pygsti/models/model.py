@@ -1499,14 +1499,14 @@ class OpModel(Model):
                     circuit = ckt[1:]
                 elif len(primitive_prep_labels_tup)==1:
                     prep_lbl = primitive_prep_labels_tup[0]
-                    circuit = None
+                    circuit = ckt  # no explicit prep label to strip; ops circuit is the whole circuit
                 else:
                     if 'prep' in erroron and self._has_primitive_preps():
                         msg = f"Cannot resolve state prep in {ckt}. There are likely multiple preps in this model."
                         raise ValueError(msg)
                     else: 
                         prep_lbl = None
-                        circuit = None
+                        circuit = ckt  # no prep stripped; ops circuit is the whole circuit
 
                 if len(ckt) > 0 and ckt[-1] in primitive_povm_labels_set:
                     povm_lbl = ckt[-1]
