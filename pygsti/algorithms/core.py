@@ -937,6 +937,16 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
     #pre-compute a dictionary caching completed circuits for layout construction performance.
     unique_circuits = list({ckt for circuit_list in circuit_lists for ckt in circuit_list})
+    # Preserve any op-label aliases (e.g. from op_label_aliases / string_manipulation_rules) so that
+    # the precomputed layout cache looks up the *aliased* circuits in the dataset (otherwise circuits
+    # containing aliased labels raise a KeyError during dataset lookup).
+    op_label_aliases = None
+    for circuit_list in circuit_lists:
+        if isinstance(circuit_list, _CircuitList) and circuit_list.op_label_aliases:
+            op_label_aliases = circuit_list.op_label_aliases
+            break
+    if op_label_aliases is not None:
+        unique_circuits = _CircuitList(unique_circuits, op_label_aliases=op_label_aliases)
     if isinstance(mdl.sim, (_fwdsims.MatrixForwardSimulator, _fwdsims.MapForwardSimulator)):
         precomp_layout_circuit_cache = mdl.sim.create_copa_layout_circuit_cache(unique_circuits, mdl, dataset=dataset)
     else:
