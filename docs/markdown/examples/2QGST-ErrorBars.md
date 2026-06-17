@@ -16,6 +16,8 @@ kernelspec:
 ```{attention} Is this redundant with the error bar tutorials in utilities folder?```
 
 ```{code-cell} ipython3
+:tags: [nbval-skip]
+
 import pygsti
 import time
 
@@ -29,6 +31,8 @@ results = pygsti.io.read_results_from_dir("../../example_files/My2QExample", "St
 ```
 
 ```{code-cell} ipython3
+:tags: [nbval-skip]
+
 # error bars in reports require the presence of a fully-initialized
 # "confidence region factory" within the relevant Estimate object.
 # In most cases "fully-initialized" means that a Hessian has been 
