@@ -123,7 +123,7 @@ In order to avoid this, we have also introduced a 1D wildcard solution. This tak
 ```{code-cell} ipython3
 proto = pygsti.protocols.GateSetTomography(
     target_model_TP, name="GSTwithPerGateWildcard",
-    badfit_options={'actions': ['wildcard1d'], 'wildcard1d_reference': 'diamond distance'}
+    badfit_options={'actions': ['wildcard1d']}
     )
 
 # Artifically unset threshold so that wildcard runs. YOU WOULD NOT DO THIS IN PRODUCTION RUNS
