@@ -11,9 +11,10 @@ Utility functions relevant to Lindblad forms and projections
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Literal
+from typing import Literal, Optional, Union
 
 Literal_HSCA = Literal['H', 'S', 'C', 'A']
+Literal_HO = Literal['H', 'O']
 
 import numpy as _np
 import scipy.sparse as _sps
@@ -32,7 +33,8 @@ from pygsti.baseobjs.statespace import (
 )
 
 
-def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_factor='auto'):
+def create_elementary_errorgen_dual(typ: Literal_HSCA, p: _np.ndarray, q: Optional[_np.ndarray]=None, 
+                                    sparse: bool=False, normalization_factor: Optional[Union[float, str]]='auto') -> Union[_np.ndarray, _sps.csr_array]:
     """
     Construct a "dual" elementary error generator matrix in the "standard" (matrix-unit) basis.
 
@@ -49,9 +51,9 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
     error generator `L` on an input density matrix `rho` is given by:
 
     Hamiltonian:  `L(rho) = -1j/(2d^2) * [ p, rho ]`
-    Stochastic:   `L(rho) = 1/(d^2) p * rho * p`
-    Correlation:  `L(rho) = 1/(2d^2) ( p * rho * q + q * rho * p)`
-    Active:       `L(rho) = 1j/(2d^2) ( p * rho * q - q * rho * p)`
+    Stochastic:   `L(rho) = 1/(d^2) p * rho * p^\dag`
+    Correlation:  `L(rho) = 1/(2d^2) ( p * rho * q^\dag + q * rho * p^\dag)`
+    Active:       `L(rho) = 1j/(2d^2) ( p * rho * q^\dag - q * rho * p^\dag)`
 
     where `d` is the dimension of the Hilbert space, e.g. 2 for a single qubit.  Square
     brackets denotes the commutator and curly brackets the anticommutator.
@@ -141,7 +143,8 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
 
 #TODO: Should be able to leverage the structure of the paulis as generalized permutation
 #matrices to avoid explicitly doing outer products
-def create_elementary_errorgen_dual_pauli(typ, p, q=None, sparse=False):
+def create_elementary_errorgen_dual_pauli(typ: Literal_HSCA, p: _np.ndarray, q: Optional[_np.ndarray]=None, 
+                                          sparse: bool=False) -> Union[_np.ndarray, _sps.csr_array]:
     """
     Construct a "dual" elementary error generator matrix in the "standard" (matrix-unit) basis.
     Specialized to p and q being elements of the (unnormalized) pauli basis.
@@ -249,7 +252,8 @@ def create_elementary_errorgen_dual_pauli(typ, p, q=None, sparse=False):
 
 #TODO: The construction can be made a bit more efficient if we know we will be constructing multiple
 #error generators with overlapping indices by reusing intermediate results.
-def create_elementary_errorgen(typ : Literal_HSCA, p, q=None, sparse=False):
+def create_elementary_errorgen(typ : Literal_HSCA, p: _np.ndarray, 
+                               q: Optional[_np.ndarray]=None, sparse: bool=False) -> Union[_np.ndarray, _sps.csr_array]:    
     """
     Construct an elementary error generator as a matrix in the "standard" (matrix-unit) basis.
 
@@ -259,9 +263,9 @@ def create_elementary_errorgen(typ : Literal_HSCA, p, q=None, sparse=False):
     error generator `L` on an input density matrix `rho` is given by:
 
     Hamiltonian:  `L(rho) = -1j * [ p, rho ]`
-    Stochastic:   `L(rho) = p * rho * p - rho`
-    Correlation:  `L(rho) = p * rho * q + q * rho * p - 0.5 {{p,q}, rho}`
-    Active:       `L(rho) = 1j( p * rho * q - q * rho * p + 0.5 {[p,q], rho} )`
+    Stochastic:   `L(rho) = p * rho * p^\dag - 0.5*{p^\dag p, rho}`
+    Correlation:  `L(rho) = p * rho * q^\dag + q * rho * p^\dag - 0.5 {(p^\dag @ q + q^\dag @ p), rho}`
+    Active:       `L(rho) = 1j( p * rho * q^\dag - q * rho * p^\dag + 0.5 {(p^\dag @ q - q^\dag @ p)), rho} )`
 
     Square brackets denotes the commutator and curly brackets the anticommutator.
     `L` is returned as a superoperator matrix that acts on vectorized density matrices.
@@ -367,7 +371,8 @@ def create_elementary_errorgen(typ : Literal_HSCA, p, q=None, sparse=False):
 
 #TODO: Should be able to leverage the structure of the paulis as generalized permutation
 #matrices to avoid explicitly doing outer products
-def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False, normalized_paulis=False):
+def create_elementary_errorgen_pauli(typ: Literal_HSCA, p: _np.ndarray, q: Optional[_np.ndarray]=None, 
+                                     sparse: bool=False, normalized_paulis: bool=False) -> Union[_np.ndarray, _sps.csr_array]:    
     """
     Construct an elementary error generator as a matrix in the "standard" (matrix-unit) basis.
     Specialized to the case where p and q are elements of the pauli basis.
@@ -481,7 +486,8 @@ def create_elementary_errorgen_pauli(typ, p, q=None, sparse=False, normalized_pa
     return elem_errgen
 
 
-def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N803
+def create_lindbladian_term_errorgen(typ: Literal_HO, Lm: _np.ndarray, Ln: Optional[_np.ndarray]=None, 
+                                     sparse: bool=False) -> Union[_np.ndarray, _sps.csr_array]:  # noqa N803
     """
     Construct the superoperator for a term in the common Lindbladian expansion of an error generator.
 
@@ -516,7 +522,8 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
     -------
     ndarray or Scipy CSR matrix
     """
-    d = Lm.shape[0]; d2 = d**2
+    d = Lm.shape[0] 
+    d2 = d**2
     if sparse:
         lind_errgen = _sps.lil_matrix((d2, d2), dtype=Lm.dtype)
     else:

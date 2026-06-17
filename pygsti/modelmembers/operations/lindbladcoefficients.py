@@ -205,8 +205,15 @@ class _EEGVectorElements(_RealVectorElements):
         return _np.identity(len(blk._eeg_labels), 'd')
 
     def param_labels(self, blk):
-        return blk._coefficient_labels_impl()
-
+        labels = []
+        for lbl in blk._eeg_labels:            
+            if lbl.errorgen_type == 'S':
+                labels.append(f"{lbl} stochastic coefficient")
+            elif lbl.errorgen_type == 'C':
+                labels.append(f"{lbl} pauli-correlation coefficient")
+            else: #'A'
+                labels.append(f"{lbl} active coefficient")
+        return labels
 
 class _DiagCholesky(_BlockParameterization):
     """Diagonal Pauli-stochastic CPTP parameterization: block_data[i] = v[i]**2 (>= 0)."""
@@ -534,7 +541,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             and 'other' (for Pauli stochastic, Pauli correlation and active error generators).
         
         basis : `Basis`
-            `Basis` object to be used by this coefficient block. Not this must be an actual `Basis` object, and not
+            `Basis` object to be used by this coefficient block. Note this must be an actual `Basis` object, and not
             a string (as the coefficient block doesn't have the requisite dimensionality information needed for casting).
         
         basis_element_labels : list or tuple of str
@@ -841,11 +848,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return out[1] if return_projected_errorgen else None
 
     @property
-    def coefficient_labels(self):
-        """Labels for the elements of `self.block_data` (flattened if relevant)"""
-        return self._coefficient_labels_impl()
-
-    @property
     def param_labels(self) -> list:
         """
         Generate human-readable labels for the parameters of this block.
@@ -1108,10 +1110,6 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
             block_data_indices[i] = [(1.0, _LEEL('H', (lbl,)))]
         return block_data_indices
 
-    def _coefficient_labels_impl(self):
-        return ["%s Hamiltonian error coefficient" % lbl for lbl in self._bel_labels]
-
-
 class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
     """Pauli-stochastic diagonal (``block_type='other_diagonal'``) Lindblad coefficient block.
 
@@ -1175,10 +1173,6 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
         for i, lbl in enumerate(self._bel_labels):
             block_data_indices[i] = [(1.0, _LEEL('S', (lbl,)))]
         return block_data_indices
-
-    def _coefficient_labels_impl(self):
-        return ["(%s,%s) other error coefficient" % (lbl, lbl) for lbl in self._bel_labels]
-
 
 class _OtherCoeffBlock(LindbladCoefficientBlock):
     """Full non-Hamiltonian (``block_type='other'``) Lindblad coefficient block (Pauli
@@ -1281,14 +1275,6 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
                 block_data_indices[ij] = [(1.0, _LEEL('C', (lbl1, lbl2))), (-1.0j, _LEEL('A', (lbl1, lbl2)))]
                 block_data_indices[ji] = [(1.0, _LEEL('C', (lbl1, lbl2))), (+1.0j, _LEEL('A', (lbl1, lbl2)))]
         return block_data_indices
-
-    def _coefficient_labels_impl(self):
-        labels = []
-        for i, ilbl in enumerate(self._bel_labels):
-            for j, jlbl in enumerate(self._bel_labels):
-                labels.append("(%s,%s) other error coefficient" % (ilbl, jlbl))
-        return labels
-
 
 class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
     """Flat, unconstrained non-Hamiltonian (``block_type='other_unconstrained'``) Lindblad
@@ -1446,17 +1432,6 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
     def _block_data_indices_impl(self):
         return {i: [(1.0, lbl)] for i, lbl in enumerate(self._eeg_labels)}
 
-    def _coefficient_labels_impl(self):
-        out = []
-        for lbl in self._eeg_labels:
-            t = lbl.errorgen_type
-            if t == 'S':
-                out.append("%s stochastic coefficient" % lbl)
-            elif t == 'C':
-                out.append("%s pauli-correlation coefficient" % lbl)
-            else:  # 'A'
-                out.append("%s active coefficient" % lbl)
-        return out
 
     # --- overrides that must account for _eeg_labels (vs. the base's _bel_labels) ---
 
