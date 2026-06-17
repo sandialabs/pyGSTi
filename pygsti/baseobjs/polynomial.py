@@ -198,8 +198,6 @@ class Polynomial(object):
         """
         vindices_per_int = Polynomial._vindices_per_int(max_num_vars)
 
-        #int_coeffs = {_vinds_to_int(k, vindices_per_int, max_num_vars): v for k, v in coeffs.items()}
-
         int_coeffs = {}
         for k, v in coeffs.items():
             ik = _vinds_to_int(k, vindices_per_int, max_num_vars)  # now sorts internally
@@ -264,13 +262,7 @@ class Polynomial(object):
                     indx = nxt
             #assert(len(ret) <= max_order) #TODO: is this needed anymore?
             return tuple(sorted(ret))
-        from collections import defaultdict
-        temp = defaultdict(complex)
-        for k,v in self._rep.int_coeffs.items():
-            temp[int_to_vinds(k)] += v
-        out = dict()
-        out.update(temp)
-        return out
+        return {int_to_vinds(k): val for k, val in self._rep.int_coeffs.items()}
 
     @property
     def max_num_vars(self):  # so we can convert back to python Polys
