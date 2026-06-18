@@ -188,16 +188,17 @@ class ErrgenPolyToolsTester(BaseCase):
                 self.assertAlmostEqual(v, vals[0])
 
     def test_errorgen_gate_contributors(self):
-        test_1 = _epoly.errorgen_gate_contributors(self.error_model, LocalElementaryErrorgenLabel('H', ['XIII']), self.circuit, 1, include_spam=True) 
+        circuit = create_random_circuit(self.pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
+        test_1 = _epoly.errorgen_gate_contributors(self.error_model, LocalElementaryErrorgenLabel('H', ['XIII']), circuit, 1, include_spam=True) 
         assert test_1 == [Label(('Gypi2', 0))]
     
-        test_2 = _epoly.errorgen_gate_contributors(self.error_model, LocalElementaryErrorgenLabel('H', ['IYII']), self.circuit, 2, include_spam=False) 
+        test_2 = _epoly.errorgen_gate_contributors(self.error_model, LocalElementaryErrorgenLabel('H', ['IYII']), circuit, 2, include_spam=False) 
         assert test_2 == [Label(('Gypi2', 1))]
 
-        test_3 = _epoly.errorgen_gate_contributors(self.error_model,LocalElementaryErrorgenLabel('H', ['IIIX']), self.circuit, 3, include_spam=True) 
+        test_3 = _epoly.errorgen_gate_contributors(self.error_model,LocalElementaryErrorgenLabel('H', ['IIIX']), circuit, 3, include_spam=True) 
         assert test_3 == [Label(('Gxpi2', 3))]
 
-        test_4 = _epoly.errorgen_gate_contributors(self.error_model, LocalElementaryErrorgenLabel('H', ['IIYX']), self.circuit, 4, include_spam=True) 
+        test_4 = _epoly.errorgen_gate_contributors(self.error_model, LocalElementaryErrorgenLabel('H', ['IIYX']), circuit, 4, include_spam=True) 
         assert test_4 == [Label(('Gcphase', 2, 3))]
 
     # ------------------------------------------------------------------
