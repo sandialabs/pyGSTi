@@ -146,7 +146,7 @@ class Polynomial(object):
     @staticmethod
     def sum(list_of_polys):
         """
-        Take the product of multiple polynomials.
+        Take the sum of multiple polynomials.
 
         Parameters
         ----------
