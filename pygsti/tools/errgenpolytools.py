@@ -99,7 +99,14 @@ def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map,
     
     Returns
     -------
-    errorgen_var_gate_aggregated_map : 
+    errorgen_var_gate_aggregated_map : dict
+        Dictionary with keys that are tuples with pairs of LocalStimErrorgenLabels and layer indices,
+            and values that are integers corresponding to a Polynomial variable index.
+
+        var_gate_aggregated_errorgen_map : dict
+            Returned if return_reverse == True, this is a dictionary with keys that are Polynomial
+            variable indices, and values that are lists of tuples with pairs of LocalStimErrorgenLabels and layer indices
+            where these lists correspond to all those error generator parameters associated with the same gate's parameters.
     """
     
     if not isinstance(model, _OpModel):
@@ -110,7 +117,6 @@ def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map,
     if include_spam:
         circuit = model.complete_circuit(circuit)
     
-    new_keys = []
     if not aggregate_shared_parameter_gates:
         #keys of errorgen_to_var map are tuples of LSE and integer layer indices.
         aggregated_error_generator_indices_by_gate = dict()
@@ -164,9 +170,6 @@ def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map,
                 aggregated_error_generator_indices_by_gate[gate_name_model_indices_tup] = dict()
             
             #break the error generators into equivalence classes based on truncations, enforcing locality.
-            #print(errorgen)
-            #print(errorgen.basis_element_labels[0])
-            #print(_truncate_lse_support(errorgen, gate_sslbls))
             try:
                 truncated_errorgen = _truncate_lse_support(errorgen, gate_sslbls, validate_locality=True)
             except RuntimeError:
@@ -179,16 +182,12 @@ def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map,
             #keep track of the original errorgen layer pair
             aggregated_error_generator_indices_by_gate[gate_name_model_indices_tup][truncated_errorgen].append((errorgen, layer_idx))
         
-        #print(aggregated_error_generator_indices_by_gate)
-        
         #loop through aggregated_error_generator_indices_by_gate, assign an index to each error generator equivalence class.
         #output map will still consist of maps from error generator layer index tuples, but the output index will be this joint index.
         errorgen_var_gate_aggregated_map = dict()
         var_idx = 0
         for errorgen_classes_by_gate in aggregated_error_generator_indices_by_gate.values():
-            #print(errorgen_classes_by_gate)
             for errorgen_layer_idx_pairs in errorgen_classes_by_gate.values():
-                #print(errorgen_layer_idx_pairs)
                 for pair in errorgen_layer_idx_pairs:
                     errorgen_var_gate_aggregated_map[pair] = var_idx
                 var_idx+=1
