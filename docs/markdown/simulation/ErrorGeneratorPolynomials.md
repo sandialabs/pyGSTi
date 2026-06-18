@@ -34,6 +34,7 @@ Please note: the functionality described here requires the error generator propa
 import pygsti
 import stim
 import numpy as np
+from itertools import product
 
 from pygsti.tools import errgenproptools as eprop
 from pygsti.tools import errgenpolytools as epoly
@@ -153,7 +154,7 @@ for lbl, poly in first_five:
     print(lbl, "->", poly.evaluate(poly_paramvec))
 ```
 
-We can compare these values against the numerical first-order BCH/Magnus propagation result.
+We can compare these values against the first-order BCH/Magnus propagation result computed using numerical rates.
 
 ```{code-cell} ipython3
 propagated_errorgen_layer_first_order = errorgen_propagator.propagate_errorgens_bch(c, bch_order=1)
@@ -172,7 +173,7 @@ second_order_magnus_polys = epoly.magnus_symbolic_polynomial(
 )
 ```
 
-At second order one may observe the appearance of new effective elementary error generator terms arising from non-commutativity of the original elementary error generators.
+At second order one may observe the appearance of new contributions to the effective elementary error generator terms arising from non-commutativity of the original elementary error generators.
 
 ```{code-cell} ipython3
 for i, (lbl, poly) in enumerate(second_order_magnus_polys.items()):
@@ -200,6 +201,7 @@ Once we have a symbolic representation of the effective end-of-circuit error gen
 This function returns a list of dictionaries, one per Taylor order (excluding zeroth order), with the same key structure as the Magnus dictionary.
 
 ### First-order Taylor expansion
+
 ```{code-cell} ipython3
 first_order_taylor_terms = epoly.error_generator_taylor_expansion_symbolic_polynomial(
     first_order_magnus_polys, errorgen_to_var_map, order=1
@@ -215,6 +217,7 @@ for i, (lbl, poly) in enumerate(first_order_taylor_polys.items()):
 ```
 
 ### Second-order Taylor expansion
+
 ```{code-cell} ipython3
 second_order_taylor_terms = epoly.error_generator_taylor_expansion_symbolic_polynomial(
     first_order_magnus_polys, errorgen_to_var_map, order=2
@@ -309,8 +312,9 @@ bulk_prob_corr_polys = epoly.bulk_stabilizer_probability_correction_symbolic_pol
 ```
 
 ```{code-cell} ipython3
-for bs, poly in zip(bitstrings_4Q[:5], bulk_prob_corr_polys[:5]):
+for bs, poly in zip(bitstrings_4Q, bulk_prob_corr_polys):
     print(bs, "->", poly)
+    print('------')
 ```
 
 ### Recovering approximate probabilities
@@ -344,7 +348,7 @@ The relevant functions are:
 Let us compute the correction polynomial for the observable `ZZZZ`.
 
 ```{code-cell} ipython3
-pauli = stim.PauliString('ZZZZ')
+pauli = stim.PauliString('IIXZ')
 pauli_corr_poly_order_1 = epoly.stabilizer_pauli_expectation_correction_symbolic_polynomial(
     first_order_magnus_polys, errorgen_to_var_map, tableau, pauli, order=1
 )
@@ -395,7 +399,7 @@ custom_label_poly = epoly.stabilizer_pauli_expectation_correction_symbolic_polyn
     first_order_magnus_polys,
     errorgen_to_var_map,
     tableau,
-    stim.PauliString('ZZZZ'),
+    stim.PauliString('IIXZ'),
     order=2
 )
 print(custom_label_poly)
