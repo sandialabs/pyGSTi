@@ -1148,7 +1148,7 @@ def _validated_confidence_level(cl: Union[float, int, None]):
 # TODO these factories should really be Report subclasses
 def construct_standard_report(results, title="auto",
                               confidence_level=None, comm=None, ws=None,
-                              advanced_options=None, verbosity=1):
+                              advanced_options=None, verbosity=1) -> _Report:
     """
     Create a "standard" GST report, containing details about each estimate in `results` individually.
 

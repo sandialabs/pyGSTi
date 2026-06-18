@@ -354,3 +354,42 @@ class InstrumentTestCase(BaseTestCase):
                 self.assertEqual( type(mdl.povms[lbl]), type(gs2.povms[lbl]))
             for lbl in mdl.instruments:
                 self.assertEqual( type(mdl.instruments[lbl]), type(gs2.instruments[lbl]))
+
+    def testWriteAndLoadCptrInstrument(self):
+        # Round-trip a model whose instrument is built with the effect-then-CPTP-gate
+        # construction (Instrument.from_cptr_superops).  This exercises serialization
+        # of the nested member structure
+        #   ComposedOp([RootConjOperator(ComposedPOVM effect),
+        #               ComposedOp([StaticArbitraryOp, ExpErrorgenOp])])
+        # including the shared-parameter (POVM) layout that gives the later members
+        # non-contiguous relative submember parameter indices.
+        from pygsti.modelmembers.operations import ComposedOp, RootConjOperator
+
+        mdl = self.target_model.copy()
+        E = mdl.povms['Mdefault']['0']
+        Erem = mdl.povms['Mdefault']['1']
+        Gmz_plus = np.dot(E, E.T)
+        Gmz_minus = np.dot(Erem, Erem.T)
+        cptr_inst = pygsti.modelmembers.instruments.Instrument.from_cptr_superops(
+            {'plus': Gmz_plus, 'minus': Gmz_minus}, mdl.basis, gate_parameterization='CPTPLND')
+        mdl.instruments['Iz'] = cptr_inst
+        mdl.to_vector()  # build & clean the model's parameter vector
+
+        for member in mdl.instruments['Iz'].values():
+            self.assertIsInstance(member, ComposedOp)
+            self.assertIsInstance(member.factorops[0], RootConjOperator)
+
+        # JSON round-trip
+        filename = temp_files + "/gateset_with_cptr_instrument.json"
+        mdl.write(filename)
+        mdl2 = pygsti.models.ExplicitOpModel.read(filename)
+        self.assertAlmostEqual(mdl.frobeniusdist(mdl2), 0.0)
+        self.assertEqual(mdl.num_params, mdl2.num_params)
+        self.assertEqual(type(mdl.instruments['Iz']), type(mdl2.instruments['Iz']))
+        for member in mdl2.instruments['Iz'].values():
+            self.assertIsInstance(member, ComposedOp)
+            self.assertIsInstance(member.factorops[0], RootConjOperator)
+
+        # pickle round-trip
+        g = pickle.loads(pickle.dumps(mdl))
+        self.assertAlmostEqual(mdl.frobeniusdist(g), 0.0)

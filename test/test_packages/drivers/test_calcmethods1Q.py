@@ -54,13 +54,6 @@ class CalcMethods1QTestCase(BaseTestCase):
                                                    num_samples=10000, sample_error="multinomial", seed=1234)
             ds.write_binary(compare_files + "/calcMethods1Q.dataset")
 
-        #DEBUG TEST- was to make sure data files have same info -- seemed ultimately unnecessary
-        #ds_swp = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods1Q.datasetv3") # run in Python3
-        #pygsti.io.write_dataset(temp_files + "/dataset.3to2.txt", ds_swp) # run in Python3
-        #ds_swp = pygsti.io.read_dataset(temp_files + "/dataset.3to2.txt") # run in Python2
-        #ds_swp.save(compare_files + "/calcMethods1Q.dataset") # run in Python2
-        #assert(False),"STOP"
-
         cls.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/calcMethods1Q.dataset")
 
         #Reduced model GST dataset

@@ -474,3 +474,46 @@ class GateOpsTester(BaseCase):
         with pytest.warns(NumericalDomainWarning):
             upperBound, _ = ot.fidelity_upper_bound(bad_superoperator)
         self.assertAlmostEqual(upperBound, 0.75)
+
+
+class MinimalKrausDecompositionTester(BaseCase):
+    """Regression tests for ``minimal_kraus_decomposition``.
+
+    These exercise a *non-unital* channel (amplitude damping).  A transpose
+    in the Choi-eigenvector reshape (e.g. order='F' vs. 'C') is silently
+    invisible for transpose-symmetric channels such as unitaries and rank-1
+    projectors, but corrupts the Kraus operators of a non-unital channel:
+    the returned operators implement the wrong map and fail to satisfy the
+    completeness relation sum_i K_i^dagger K_i = I.  This routine underpins the
+    complete-positivity check in ``Instrument.from_cptr_superops``.
+    """
+
+    def setUp(self):
+        self.basis = Basis.cast('pp', 4)
+        gamma = 0.3  # amplitude-damping probability (non-unital channel)
+        self.kraus = [np.array([[1, 0], [0, np.sqrt(1 - gamma)]], dtype=complex),
+                      np.array([[0, np.sqrt(gamma)], [0, 0]], dtype=complex)]
+        # Dense superoperator (pp basis) in pyGSTi's standard operations convention.
+        std_superop = sum(np.kron(K, K.conj()) for K in self.kraus)
+        self.superop = bt.change_basis(std_superop, 'std', self.basis).real
+
+    def _channel_action(self, kraus_ops, rho):
+        return sum(K @ rho @ K.conj().T for K in kraus_ops)
+
+    def test_kraus_action_matches_channel(self):
+        # The decomposed Kraus operators must reproduce the channel's action,
+        # including on a coherent (off-diagonal) state that distinguishes a
+        # channel from its transpose.
+        kops = ot.minimal_kraus_decomposition(self.superop, self.basis)
+        plus = np.array([1, 1], dtype=complex) / np.sqrt(2)
+        for rho in (np.array([[0, 0], [0, 1]], dtype=complex),  # |1><1|
+                    np.outer(plus, plus.conj())):               # |+><+|
+            expected = self._channel_action(self.kraus, rho)
+            actual = self._channel_action(kops, rho)
+            self.assertArraysAlmostEqual(actual, expected)
+
+    def test_kraus_completeness_relation(self):
+        # sum_i K_i^dagger K_i = I for a trace-preserving channel.
+        kops = ot.minimal_kraus_decomposition(self.superop, self.basis)
+        completeness = sum(K.conj().T @ K for K in kops)
+        self.assertArraysAlmostEqual(completeness, np.eye(2))

@@ -9,18 +9,21 @@ Sub-package holding model instrument objects.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
 
 from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
 
-from pygsti.tools import optools as _ot
+from typing import Optional, TYPE_CHECKING
+from pygsti.baseobjs.basis import BasisLike
+from pygsti.modelmembers import operations as _op
 
-# Avoid circular import
-import pygsti.modelmembers as _mm
+if TYPE_CHECKING:
+    InstrumentLike = Instrument | TPInstrument
 
 
-def instrument_type_from_op_type(op_type):
+def instrument_type_from_op_type(op_type: str | list[str]) -> str:
     """Decode an op type into an appropriate instrument type.
 
     Parameters:
@@ -33,103 +36,83 @@ def instrument_type_from_op_type(op_type):
     instr_type_preferences: tuple of str
         POVM parameterization types
     """
-    op_type_preferences = _mm.operations.verbose_type_from_op_type(op_type)
-
-    # Limited set (only matching what is in convert)
-    instr_conversion = {
-        'auto': 'full',
-        'static unitary': 'static unitary',
-        'static clifford': 'static clifford',
-        'static': 'static',
-        'full': 'full',
-        'full TP': 'full TP',
-        'full CPTP': 'full CPTP',
-        'full unitary': 'full unitary',
-    }
-
-    instr_type_preferences = []
-    for typ in op_type_preferences:
-        instr_type = None
-        if _ot.is_valid_lindblad_paramtype(typ):
-            # Lindblad types are passed through as TP only (matching current convert logic)
-            instr_type = "full TP"
-        else:
-            instr_type = instr_conversion.get(typ, None)
-
-        if instr_type is None:
-            continue
-
-        if instr_type not in instr_type_preferences:
-            instr_type_preferences.append(instr_type)
-
-    if len(instr_type_preferences) == 0:
-        raise ValueError(
-            'Could not convert any op types from {}.\n'.format(op_type_preferences)
-            + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(instr_conversion.keys())))
-            + '\tValid instrument_types: Lindblad types or {}'.format(sorted(list(set(instr_conversion.values()))))
-        )
-
-    return instr_type_preferences
+    op_type_preferences = _op.verbose_type_from_op_type(op_type)
+    return op_type_preferences[0]
 
 
-def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure=False):
+def convert(
+        instrument: InstrumentLike,
+        to_type: str,
+        basis: BasisLike,
+        ideal_instrument: Optional[InstrumentLike]=None,  # pylint: disable=unused-argument
+        flatten_structure: bool=False
+    ) -> InstrumentLike:
     """
-    TODO: update docstring
-    Convert intrument to a new type of parameterization.
-
+    Convert `instrument` to a new type of parameterization.
     This potentially creates a new object.
-    Raises ValueError for invalid conversions.
 
     Parameters
     ----------
-    instrument : Instrument
-        Instrument to convert
+    instrument : InstrumentLike
+        Instrument to convert.
 
-    to_type : {"full","TP","static","static unitary"}
-        The type of parameterizaton to convert to.  See
-        :meth:`Model.set_all_parameterizations` for more details.
+    to_type : str
+        The type of parameterizaton to convert to. Supported types
+        are "full", "full TP", "static", and all Lindblad types.
 
-    basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-        The basis for `povm`.  Allowed values are Matrix-unit (std),
-        Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
-        (or a custom basis object).
+    basis : BasisLike
+        The basis for Hilbert--Schmidt superoperators in instrument.values().
 
     ideal_instrument : Instrument, optional
-        The ideal version of `instrument`, potentially used when
-        converting to an error-generator type.
+        Currently ignored. This argument is retained only to provide polymorphism
+        across pyGSTi's ModelMember `convert` functions.
 
     flatten_structure : bool, optional
-        When `False`, the sub-members of composed and embedded operations
-        are separately converted, leaving the original instrument's structure
-        unchanged.  When `True`, composed and embedded operations are "flattened"
-        into a single instrument of the requested `to_type`.
+        Only relevant when to_type is in {"full", "static"}. In these
+        cases `flatten_structure` is forwarded to :func:`_op.convert` 
+        when converting `instrument`'s constituent CPTR maps.
 
     Returns
     -------
     Instrument
-        The converted instrument, usually a distinct
-        object from the object passed as input.
+
+    Raises
+    ------
+    ValueError for invalid conversions.
     """
-    to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
-    destination_types = {'full TP': TPInstrument}
-    NoneType = type(None)
+    if not isinstance(to_type, str):
+        if len(to_type) > 1:
+            raise ValueError(f"Expected to_type to be a string, but got {to_type}")
+        to_type = to_type[0]
+        assert isinstance(to_type, str)
 
-    for to_type in to_types:
-        try:
-            if isinstance(instrument, destination_types.get(to_type, NoneType)):
-                return instrument
-
-            if to_type == "full TP":
-                return TPInstrument(list(instrument.items()), instrument.evotype, instrument.state_space)
-            elif to_type in ("full", "static", "static unitary"):
-                from ..operations import convert as _op_convert
-                ideal_items = dict(ideal_instrument.items()) if (ideal_instrument is not None) else {}
-                members = [(k, _op_convert(g, to_type, basis, ideal_items.get(k, None), flatten_structure))
-                           for k, g in instrument.items()]
-                return Instrument(members, instrument.evotype, instrument.state_space)
+    if to_type == "full TP":
+        if isinstance(instrument, TPInstrument):
+            return instrument
+        inst_arrays = dict()
+        for k, v in instrument.items():
+            if hasattr(v, 'to_dense'):
+                inst_arrays[k] = v.to_dense('HilbertSchmidt')
             else:
-                raise ValueError("Cannot convert an instrument to type %s" % to_type)
-        except:
-            pass  # try next to_type
+                inst_arrays[k] = v
+        members = list(inst_arrays.items())
+        return TPInstrument(members, instrument.evotype, instrument.state_space)
 
-    raise ValueError("Could not convert instrument to to type(s): %s" % str(to_types))
+    if to_type in ("full", "static"):
+        members = []
+        for k, g in instrument.items():
+            g_conv  = _op.convert(g, to_type, basis, None, flatten_structure)
+            members.append((k, g_conv))
+        return Instrument(members, instrument.evotype, instrument.state_space)
+
+    # Else, route Lindblad-type conversions (e.g. "CPTPLND", "GLND", "H+S", "H+s")
+    # through the effect-then-CPTP-gate construction: a single CP-constrained POVM
+    # for the effects {E_k} plus one parameterized post-measurement gate per outcome.
+    # The POVM error map is always promoted to the minimal CP parameterization that
+    # subsumes `to_type`, which is what keeps the whole instrument trace-preserving.
+    op_arrays   = {k: v.to_dense('HilbertSchmidt') for (k, v) in instrument.items()}
+    povm_errmap = _op.LindbladParameterization.minimal_cp_paramtype(to_type)
+    out = Instrument.from_cptr_superops(
+        op_arrays, basis, gate_parameterization=to_type, povm_errormap=povm_errmap
+    )
+    return out

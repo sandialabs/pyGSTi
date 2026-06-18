@@ -2,7 +2,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import unittest
 
 import pygsti
 import pygsti.io.stdinput as stdin
@@ -248,39 +247,6 @@ G3            20 80
         self.assertWarns(self.std.parse_datafile, tmp_path)
         # TODO assert correctness
 
-#    @with_temp_file("""#Data File with bad columns
-### Columns = 0 frequency, 1 frequency
-#{}            1.0 0.0
-#G1            0.0 1.0
-#G2            0   1.0
-#G3            0.2 0.8
-#""")
-#    def test_parse_datafile_raises_on_bad_columns(self, tmp_path):
-#        with self.assertRaises(ValueError):
-#            self.std.parse_datafile(tmp_path)
-#
-#    @with_temp_file("""#Data File with bad frequency
-### Columns = 1 frequency, count total
-#{}            1.0 100
-#G1            0.0 100
-#G2            3.4 100
-#G3            0.2 100
-#""")
-#    def test_parse_datafile_warns_on_frequency_out_of_range(self, tmp_path):
-#        self.assertWarns(self.std.parse_datafile, tmp_path)
-#        # TODO assert correctness
-#
-#    @with_temp_file("""#Data File with bad counts
-### Columns = 0 count, count total
-#{}            30  100
-#G1            10  100
-#G2            0.2 100
-#G3            0.1 100
-#""")
-#    def test_parse_datafile_warns_on_counts_out_of_range(self, tmp_path):
-#        self.assertWarns(self.std.parse_datafile, tmp_path)
-#        # TODO assert correctness
-
     @with_temp_file("""#Multi Data File with default cols
 {}            30  100
 G1            10  100
@@ -299,36 +265,6 @@ G2            20  100
     def test_parse_multidatafile_raises_on_bad_data(self, tmp_path):
         with self.assertRaises(ValueError):
             self.std.parse_multidatafile(tmp_path)
-
-#    @with_temp_file("""#Multi Data File bad columns
-### Columns = ds1 0 frequency, ds1 1 frequency, ds2 1 count, ds2 count total
-#{}            0.3  0.4  20 200
-#G1            0.1  0.5  10 200
-#G2            0.2  0.3  5  200
-#""")
-#    def test_parse_multidatafile_raises_on_bad_columns(self, tmp_path):
-#        with self.assertRaises(ValueError):
-#            self.std.parse_multidatafile(tmp_path)
-#
-#    @with_temp_file("""#Multi Data File frequency out of range and count before frequency
-### Columns = ds1 count total, ds1 0 frequency, ds2 0 count, ds2 count total
-#{}            100  0.3  20 200
-#G1            100  10   10 200
-#G2            100  0.2  5  200
-#""")
-#    def test_parse_multidatafile_raises_on_frequency_out_of_range(self, tmp_path):
-#        with self.assertRaises(ValueError):
-#            self.std.parse_multidatafile(tmp_path)
-#
-#    @with_temp_file("""#Multi Data File count out of range
-### Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
-#{}            0.3  100  20 200
-#G1            0.1   100  10 200
-#G2            20  100  5  200
-#""")
-#    def test_parse_multidatafile_raises_on_counts_out_of_range(self, tmp_path):
-#        with self.assertRaises(ValueError):
-#            self.std.parse_multidatafile(tmp_path)
 
     @with_temp_file("""#Multi Data File with bad syntax
 ## Columns = ds1 0 count, ds1 count total, ds2 0 count, ds2 count total
@@ -660,10 +596,6 @@ BASIS: pp
 
     def test_read_model_TP_param(self):
         self._test_gateset_writeload('full TP')
-
-    @unittest.skip("Need to fix CPTP model serialization")
-    def test_read_model_CPTP_param(self):
-        self._test_gateset_writeload('CPTP')
 
     def test_read_model_static_param(self):
         self._test_gateset_writeload('static')

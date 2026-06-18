@@ -1583,6 +1583,22 @@ class LindbladParameterization(_NicelySerializable):
         else:
             parameterization = '+'.join(paramtypes)
         return cls.cast(parameterization)
+    
+    @staticmethod
+    def minimal_cp_paramtype(abbrev: str) -> str:
+        """
+        `abbrev` specifies sectors of interest in error generator space.
+
+        This function returns a string specification of the minimal Lindblad parameterization
+        needed to capture all (infinitessimally-generated) CPTP maps on the specified sectors.
+
+        The input-output behavior matches the conventions in LindbladParameterization.cast.
+        """
+        if abbrev in ('CPTP', 'GLND', 'CPTPLND'):
+            t = 'CPTPLND'
+        else:
+            t = abbrev.upper()
+        return t
 
     @classmethod
     def cast(cls, obj):
