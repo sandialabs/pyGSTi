@@ -1495,7 +1495,7 @@ def _compile_cnot_circuit_using_bge_algorithm(s: _np.ndarray, pspec: _QubitProce
            ), "Algorithm has failed! Perhaps the input wasn't a CNOT circuit."
     # The instructions returned are for mapping s -> I, so we need to reverse them.
     instructions.reverse()
-    circuit = _Circuit(gatesring=instructions, line_labels=qubit_labels).parallelize()
+    circuit = _Circuit(layer_labels=instructions, line_labels=qubit_labels).parallelize()
     if check:
         s_implemented, p_implemented = _symp.symplectic_rep_of_clifford_circuit(circuit)
         assert(_np.array_equal(s_implemented, s)), "Algorithm has failed! Perhaps the input wasn't a CNOT circuit."
@@ -3065,7 +3065,7 @@ def compile_conditional_symplectic(s: _np.ndarray, pspec: Optional[_QubitProcess
 
     # Stage 7: Hadamard gates on all qubits acting from the LHS to swap the LR and UR matrices
     # of s, (mapping them to I and 0 resp.,).
-    sout, Hall_layer = _apply_hadamard_to_all_qubits(s, 'row', qubit_labels)
+    sout, Hall_layer = _apply_hadamard_to_all_qubits(sout, 'row', qubit_labels)
 
     if n > 1:
         # If we're using the basic Gauss. elimin. algorithm for the CNOT circuit, we just keep this CNOTs list
@@ -3078,10 +3078,20 @@ def compile_conditional_symplectic(s: _np.ndarray, pspec: Optional[_QubitProcess
             # Finds the CNOT circuit we are trying to compile in the symplectic rep.
             cnot_s, cnot_p = _symp.symplectic_rep_of_clifford_circuit(
                 _Circuit(layer_labels=CNOTs, line_labels=qubit_labels).parallelize())
-            # compile_to_native=False so that the function doesn't change the circuit into the native gate library.
-            circuit = compile_cnot_circuit(cnot_s, pspec, compilation=None, qubit_labels=qubit_labels,
-                                           algorithm=calg, compile_to_native=False, check=False,
-                                           aargs=cargs, rand_state=rand_state)
+            try:
+                # compile_to_native=False so that the function doesn't change the circuit into the native gate
+                # library. check=True so that a silently-incorrect connectivity-adjusted compilation (which the
+                # COiCAGE/OiCAGE algorithm can produce on restricted geometries) raises an AssertionError and
+                # triggers the BGE fallback below, rather than returning a wrong circuit.
+                circuit = compile_cnot_circuit(cnot_s, pspec, compilation=None, qubit_labels=qubit_labels,
+                                               algorithm=calg, compile_to_native=False, check=True,
+                                               aargs=cargs, rand_state=rand_state)
+            except AssertionError:
+                # Fall back to the basic Gaussian-elimination compiler, which assumes all-to-all connectivity and
+                # is therefore guaranteed to succeed. Any non-local CNOTs it emits are routed to native gates by
+                # the later change_gate_library step. (See active-project/direct_rb_detour_audit.md: the COiCAGE
+                # bug this guards against deserves its own fix; this is a safety net.)
+                circuit = _compile_cnot_circuit_using_bge_algorithm(cnot_s, pspec, qubit_labels=qubit_labels, check=False)
         circuit = circuit.copy(editable=True)
     else:
         circuit = _Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
@@ -3101,7 +3111,7 @@ def compile_conditional_symplectic(s: _np.ndarray, pspec: Optional[_QubitProcess
     if check:
         # Only the circuit with the precircuit prefixed as format that can be easily checked as corrected. That
         # circuit should have an s-matrix with the RHS equal to the RHS of `s`.
-        checkcircuit = precircuit.copy()
+        checkcircuit = precircuit.copy(editable=True)
         checkcircuit.append_circuit_inplace(circuit)
         scheck, pcheck = _symp.symplectic_rep_of_clifford_circuit(checkcircuit)
         assert(_np.array_equal(scheck[:, n:2 * n], s[:, n:2 * n])), "Compiler has failed!"
