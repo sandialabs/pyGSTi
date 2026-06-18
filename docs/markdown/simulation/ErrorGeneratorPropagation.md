@@ -257,6 +257,73 @@ print(f'Relative Error Approx to Exact (Second-order taylor, Second-order BCH): 
 
 In this case even with the first-order taylor approximation together with the second-order BCH approximation the relative error to the exact expecation value is roughly half a percent, dropping to below a tenth of a percent when we go up to the second order taylor approximation. As before, by going out to higher-order in either approximation one can achieve even higher levels of accuracy.
 
+## Using a Fixed Per-Layer Error Generator
+Up to this point we have constructed an `ErrorGeneratorPropagator` from a full pyGSTi noise model. In many situations, however, it is useful to work with a simpler setup in which the *same* error generator layer is assumed to occur after every circuit layer, independent of the gate actually appearing there.
+
+This can be done using the `fixed_errorgen_layer` argument of the `ErrorGeneratorPropagator` constructor. Instead of passing a model, one passes a dictionary whose keys are elementary error generator labels and whose values are the corresponding rates. This fixed error generator layer is then used for every circuit layer encountered during propagation.
+
+For example, we can construct a random 4-qubit error generator layer directly:
+
+```{code-cell} ipython3
+fixed_errorgen_layer = random_CPTP_error_generator_rates(
+    num_qubits=4,
+    errorgen_types=('H', 'S'),
+    max_weights={'H': 2, 'S': 1},
+    seed=1234,
+    label_type='local'
+)
+fixed_errorgen_layer
+```
+
+We can now initialize an `ErrorGeneratorPropagator` using this fixed layer directly:
+
+```{code-cell} ipython3
+fixed_layer_propagator = ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_errorgen_layer)
+```
+
+The resulting propagator can be used in essentially the same way as before. For example, we can ask for the constructed error generator layers for a circuit:
+
+```{code-cell} ipython3
+fixed_errorgen_layers = fixed_layer_propagator.construct_errorgen_layers(c, num_qubits)
+fixed_errorgen_layers
+```
+
+Since the same error generator layer is reused for every circuit layer, the output here consists of repeated copies of the same elementary error generator dictionary (with additional empty SPAM layers included by default when appropriate).
+
+We can also construct the transform map exactly as before:
+
+```{code-cell} ipython3
+fixed_errorgen_transform_map = fixed_layer_propagator.errorgen_transform_map(c, include_spam=False)
+list(fixed_errorgen_transform_map.items())[:5]
+```
+
+This is particularly useful when one wants to study how a *single prescribed* noise generator is reshuffled by different Clifford circuits without first building a full gate-by-gate pyGSTi model.
+
+### Using global labels
+If the fixed error generator layer is specified using `GlobalElementaryErrorgenLabel`s instead of local labels, then the constructor also needs to know the state-space labels of the qubits. This is done using the optional `state_space_labels` argument.
+
+For example:
+
+```{code-cell} ipython3
+fixed_errorgen_layer_global = random_CPTP_error_generator_rates(
+    num_qubits=4,
+    errorgen_types=('H', 'S'),
+    max_weights={'H': 2, 'S': 1},
+    seed=1234,
+    label_type='global'
+)
+
+fixed_layer_propagator_global = ErrorGeneratorPropagator(
+    fixed_errorgen_layer=fixed_errorgen_layer_global,
+    state_space_labels=4
+)
+```
+
+In this case, the input global labels are internally converted into the local stim-based label format used throughout the propagation framework.
+
+Please note that `model` and `fixed_errorgen_layer` are mutually exclusive constructor arguments: you must specify exactly one of them when initializing an `ErrorGeneratorPropagator`.
+
+
 ## Other Helpful Utilities:
 In this section we'll highlight a few additional utilities within the error generator propagation related modules which are often useful (some of these you may have even seen us use above!).
 
