@@ -7,6 +7,7 @@ from pygsti.models.modelconstruction import create_crosstalk_free_model, create_
 from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis, QubitGraph
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel
 from pygsti.tools import errgenproptools as _eprop
+from pygsti.tools import errgenpolytools as _epoly
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools.matrixtools import print_mx
 from itertools import product
@@ -117,20 +118,6 @@ class ErrorgenPropTester(BaseCase):
         assert errorgen_input_output_map[(_LSE('S', (stim.PauliString("+X___"),)), 2)] == (_LSE('S', (stim.PauliString("+Z___"),)),  1.0)
         assert errorgen_input_output_map[(_LSE('H', (stim.PauliString("+X___"),)), 3)] == (_LSE('H', (stim.PauliString("+Z___"),)), -1.0)
 
-    def test_errorgen_gate_contributors(self):
-        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
-        test_1 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XIII']), self.circuit, 1, include_spam=True) 
-        assert test_1 == [Label(('Gypi2', 0))]
-    
-        test_2 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IYII']), self.circuit, 2, include_spam=False) 
-        assert test_2 == [Label(('Gypi2', 1))]
-
-        test_3 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIIX']), self.circuit, 3, include_spam=True) 
-        assert test_3 == [Label(('Gxpi2', 3))]
-
-        test_4 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIYX']), self.circuit, 4, include_spam=True) 
-        assert test_4 == [Label(('Gcphase', 2, 3))]
-
     def test_explicit_model(self):
         
         target_model = smq2Q_XYCPHASE.target_model('full TP')
@@ -142,7 +129,7 @@ class ErrorgenPropTester(BaseCase):
 
         #make sure that the various methods don't die.
         propagated_errorgens = errorgen_propagator.propagate_errorgens(circuit_2Q)
-        gate_contributors = errorgen_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XI']), circuit_2Q, 1, include_spam=True) 
+        gate_contributors = _epoly.errorgen_gate_contributors(noisy_model, LocalElementaryErrorgenLabel('H', ['XI']), circuit_2Q, 1, include_spam=True) 
 
     def test_cloud_crosstalk_model(self):
         oq=['Gxpi2','Gypi2','Gzpi2']
@@ -160,7 +147,7 @@ class ErrorgenPropTester(BaseCase):
         mdl_cloudnoise = create_cloud_crosstalk_model(ps, lindblad_error_coeffs=lindblad_error_coeffs, errcomp_type="errorgens")
         errorgen_prop=ErrorGeneratorPropagator(mdl_cloudnoise)
         propagated_errorgens = errorgen_prop.propagate_errorgens(self.circuit)
-        gate_contributors = errorgen_prop.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IZZI']), self.circuit, 1, include_spam=True) 
+        gate_contributors = _epoly.errorgen_gate_contributors(mdl_cloudnoise, LocalElementaryErrorgenLabel('H', ['IZZI']), self.circuit, 1, include_spam=True) 
 
 class LocalStimErrorgenLabelTester(BaseCase):
     def setUp(self):

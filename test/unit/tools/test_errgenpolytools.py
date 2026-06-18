@@ -5,6 +5,8 @@ from itertools import product
 
 from pygsti.algorithms.randomcircuit import create_random_circuit
 from pygsti.baseobjs.polynomial import Polynomial
+from pygsti.baseobjs import Label 
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.models.modelconstruction import create_crosstalk_free_model
@@ -184,6 +186,19 @@ class ErrgenPolyToolsTester(BaseCase):
             vals = [indexed_errorgen_layers[pair] for pair in errgen_pairs]
             for v in vals[1:]:
                 self.assertAlmostEqual(v, vals[0])
+
+    def test_errorgen_gate_contributors(self):
+        test_1 = _epoly.errorgen_gate_contributors(self.error_model, LocalElementaryErrorgenLabel('H', ['XIII']), self.circuit, 1, include_spam=True) 
+        assert test_1 == [Label(('Gypi2', 0))]
+    
+        test_2 = _epoly.errorgen_gate_contributors(self.error_model, LocalElementaryErrorgenLabel('H', ['IYII']), self.circuit, 2, include_spam=False) 
+        assert test_2 == [Label(('Gypi2', 1))]
+
+        test_3 = _epoly.errorgen_gate_contributors(self.error_model,LocalElementaryErrorgenLabel('H', ['IIIX']), self.circuit, 3, include_spam=True) 
+        assert test_3 == [Label(('Gxpi2', 3))]
+
+        test_4 = _epoly.errorgen_gate_contributors(self.error_model, LocalElementaryErrorgenLabel('H', ['IIYX']), self.circuit, 4, include_spam=True) 
+        assert test_4 == [Label(('Gcphase', 2, 3))]
 
     # ------------------------------------------------------------------
     # gate aggregation tests
