@@ -36,24 +36,8 @@ def _sparse_equal(a, b, atol=1e-8):
     """ NOTE: same as matrixtools.sparse_equal - but can't import that here """
     if _np.array_equal(a.shape, b.shape) == 0:
         return False
-
-    r1, c1 = a.nonzero()
-    r2, c2 = b.nonzero()
-
-    lidx1 = _np.ravel_multi_index((r1, c1), a.shape)
-    lidx2 = _np.ravel_multi_index((r2, c2), b.shape)
-    sidx1 = lidx1.argsort()
-    sidx2 = lidx2.argsort()
-
-    index_match = _np.array_equal(lidx1[sidx1], lidx2[sidx2])
-    if index_match == 0:
-        return False
-    else:
-        v1 = a.data
-        v2 = b.data
-        V1 = v1[sidx1]
-        V2 = v2[sidx2]
-    return _np.allclose(V1, V2, atol=atol)
+    diff = a - b
+    return diff.nnz == 0 or _np.allclose(diff.data, 0, atol=atol)
 
 
 class Basis(_NicelySerializable):
@@ -263,6 +247,9 @@ class Basis(_NicelySerializable):
         self.longname = longname
         self.real = real  # whether coefficients must be real (*not* whether elements are real - they're always complex)
         self.sparse = sparse  # whether elements are stored as sparse vectors/matrices
+        if not hasattr(self, '_dim'): self._dim = None
+        if not hasattr(self, '_size'): self._size = None
+        if not hasattr(self, '_elshape'): self._elshape = None
 
     @property
     def dim(self):
@@ -272,7 +259,9 @@ class Basis(_NicelySerializable):
         basis.
         """
         # dimension of vector space this basis fully or partially spans
-        raise NotImplementedError("Derived classes must implement this!")
+        if self._dim is None:
+            raise NotImplementedError("Derived classes must implement this!")
+        return self._dim
 
     @property
     def size(self):
@@ -280,7 +269,9 @@ class Basis(_NicelySerializable):
         The number of elements (or vector-elements) in the basis.
         """
         # number of elements (== dim if a *full* basis)
-        raise NotImplementedError("Derived classes must implement this!")
+        if self._size is None:
+            raise NotImplementedError("Derived classes must implement this!")
+        return self._size
 
     @property
     def elshape(self):
@@ -291,7 +282,9 @@ class Basis(_NicelySerializable):
         in the sparse case).
         """
         # shape of "natural" elements - size may be > self.dim (to display naturally)
-        raise NotImplementedError("Derived classes must implement this!")
+        if self._elshape is None:
+            raise NotImplementedError("Derived classes must implement this!")
+        return self._elshape
 
     @property
     def elndim(self):
@@ -366,6 +359,8 @@ class Basis(_NicelySerializable):
         list
             A list of 1D arrays.
         """
+        if getattr(self, '_vector_elements', None) is not None:
+            return self._vector_elements
         if self.sparse:
             return [_sps.lil_matrix(el).reshape((self.elsize, 1)) for el in self.elements]
         else:
@@ -405,7 +400,15 @@ class Basis(_NicelySerializable):
             return self._copy_with_toggled_sparsity()
 
     def _copy_with_toggled_sparsity(self) -> Basis:
+        if hasattr(self, 'component_bases'):
+            return self.__class__([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
+                                  self.name, self.longname)
         raise NotImplementedError("Derived classes should implement this!")
+
+    def __hash__(self):
+        if hasattr(self, 'component_bases'):
+            return hash((self.__class__, self.name) + tuple((hash(comp) for comp in self.component_bases)))
+        raise TypeError("unhashable type: '%s'" % self.__class__.__name__)
 
     def __str__(self):
         return '{} (dim={}), {} elements of shape {} :\n{}'.format(
@@ -439,6 +442,20 @@ class Basis(_NicelySerializable):
         -------
         bool
         """
+        self_has_comp = hasattr(self, 'component_bases')
+        other_has_comp = hasattr(other, 'component_bases')
+        if self_has_comp or other_has_comp:
+            if not (self_has_comp and other_has_comp):
+                return False
+            if self.__class__ != other.__class__:
+                return False
+            if len(self.component_bases) != len(other.component_bases):
+                return False
+            if sparseness_must_match and (self.sparse != other.sparse):
+                return False
+            return all([c1.is_equivalent(c2, sparseness_must_match)
+                        for (c1, c2) in zip(self.component_bases, other.component_bases)])
+
         otherIsBasis = isinstance(other, Basis)
 
         if otherIsBasis and sparseness_must_match and (self.sparse != other.sparse):
@@ -553,14 +570,19 @@ class Basis(_NicelySerializable):
             of this basis (the length of its vectors) and `size` is the
             size of this basis (its number of vectors).
         """
+        if self.size == 0:
+            if self.sparse:
+                return _sps.lil_matrix((self.dim, 0), dtype='complex')
+            else:
+                return _np.zeros((self.dim, 0), 'complex')
+
         if self.sparse:
             toStd = _sps.lil_matrix((self.dim, self.size), dtype='complex')
+            for i, vel in enumerate(self.vector_elements):
+                toStd[:, i] = vel
+            return toStd
         else:
-            toStd = _np.zeros((self.dim, self.size), 'complex')
-
-        for i, vel in enumerate(self.vector_elements):
-            toStd[:, i] = vel
-        return toStd
+            return _np.column_stack(self.vector_elements).astype('complex', copy=False)
 
     @property
     @lru_cache(maxsize=128)
@@ -664,6 +686,10 @@ class Basis(_NicelySerializable):
         -------
         Basis
         """
+        if hasattr(self, 'component_bases'):
+            equiv_components = [c.create_equivalent(builtin_basis_name) for c in self.component_bases]
+            return self.__class__(equiv_components)
+
         #This default implementation assumes that this basis is simple.
         assert (self.is_simple()), "Incorrectly using a simple-assuming implementation of create_equivalent()"
         return BuiltinBasis(builtin_basis_name, self.dim, sparse=self.sparse)
@@ -695,6 +721,15 @@ class Basis(_NicelySerializable):
         -------
         Basis
         """
+        if hasattr(self, 'component_bases'):
+            if builtin_basis_name is None:
+                builtin_basis_name = self.name  # default
+                if len(self.component_bases) > 0:
+                    first_comp_name = self.component_bases[0].name
+                    if all([c.name == first_comp_name for c in self.component_bases]):
+                        builtin_basis_name = first_comp_name  # if all components have the same name
+            return BuiltinBasis(builtin_basis_name, self.elsize, sparse=self.sparse)
+
         #This default implementation assumes that this basis is simple.
         assert (self.is_simple()), "Incorrectly using a simple-assuming implementation of create_simple_equivalent()"
         if builtin_basis_name is None: return self.copy()
@@ -1002,50 +1037,6 @@ class ExplicitBasis(Basis):
                    state['labels'], state['name'], state['longname'], state['real'],
                    state['sparse'], vels)
 
-    @property
-    def dim(self):
-        """
-        The dimension of the vector space this basis fully or partially
-        spans.  Equivalently, the length of the `vector_elements` of the
-        basis.
-        """
-        # dimension of vector space this basis fully or partially spans
-        return self._dim
-
-    @property
-    def size(self):
-        """
-        The number of elements (or vector-elements) in the basis.
-        """
-        # number of elements (== dim if a *full* basis)
-        return self._size
-
-    @property
-    def elshape(self):
-        """
-        The shape of each element.  Typically either a length-1 or length-2
-        tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
-        in the sparse case).
-        """
-        # shape of "natural" elements - size may be > self.dim (to display naturally)
-        return self._elshape
-
-    @property
-    def vector_elements(self):
-        """
-        The "vectors" of this basis, always 1D (sparse or dense) arrays.
-
-        Returns
-        -------
-        list
-            A list of 1D arrays.
-        """
-        if self._vector_elements is not None:
-            return self._vector_elements
-        else:
-            return Basis.vector_elements.fget(self)  # call base class get-property fn
-
     def _copy_with_toggled_sparsity(self) -> ExplicitBasis:
         return ExplicitBasis(self.elements, self.labels, self.name, self.longname, self.real, not self.sparse,
                              self._vector_elements)
@@ -1130,32 +1121,6 @@ class BuiltinBasis(LazyBasis):
         This means that it will be operated on by matrices of shape (d \times d).
         """
         return self.state_space.udim if self.name == "sv" else self.state_space.dim
-
-    @property
-    def dim(self):
-        """
-        The dimension of the vector space this basis fully or partially
-        spans.  Equivalently, the length of the `vector_elements` of the
-        basis.
-        """
-        return self._dim
-
-    @property
-    def size(self):
-        """
-        The number of elements (or vector-elements) in the basis.
-        """
-        return self._size
-
-    @property
-    def elshape(self):
-        """
-        The shape of each element.  Typically either a length-1 or length-2
-        tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
-        in the sparse case).
-        """
-        return self._elshape
 
     @property
     def first_element_is_identity(self):
@@ -1287,6 +1252,11 @@ class DirectSumBasis(LazyBasis):
 
         #precompute various basis properties. can add more as they are deemed frequently accessed.
         self._dim = sum([c.dim for c in self._component_bases])
+        self._size = sum([c.size for c in self._component_bases])
+        elndim = len(self._component_bases[0].elshape)
+        assert (all([len(c.elshape) == elndim for c in self._component_bases])), \
+            "Inconsistent element ndims among component bases!"
+        self._elshape = tuple([sum([c.elshape[k] for c in self._component_bases]) for k in range(elndim)])
 
         #Init everything but elements and labels & their number/size
         super(DirectSumBasis, self).__init__(name, longname, real, sparse)
@@ -1308,38 +1278,6 @@ class DirectSumBasis(LazyBasis):
     def component_bases(self):
         """A list of the component bases."""
         return self._component_bases
-
-    @property
-    def dim(self):
-        """
-        The dimension of the vector space this basis fully or partially
-        spans.  Equivalently, the length of the `vector_elements` of the
-        basis.
-        """
-        return self._dim
-
-    @property
-    def size(self):
-        """
-        The number of elements (or vector-elements) in the basis.
-        """
-        return sum([c.size for c in self._component_bases])
-
-    @property
-    def elshape(self):
-        """
-        The shape of each element.  Typically either a length-1 or length-2
-        tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
-        in the sparse case).
-        """
-        elndim = len(self._component_bases[0].elshape)
-        assert (all([len(c.elshape) == elndim for c in self._component_bases])), \
-            "Inconsistent element ndims among component bases!"
-        return tuple([sum([c.elshape[k] for c in self._component_bases]) for k in range(elndim)])
-
-    def __hash__(self):
-        return hash((self.name, ) + tuple((hash(comp) for comp in self._component_bases)))
 
     def _lazy_build_vector_elements(self):
         if self.sparse:
@@ -1398,33 +1336,6 @@ class DirectSumBasis(LazyBasis):
             for lbl in compbasis.labels:
                 self._labels.append(lbl + "/%d" % i)
 
-    def _copy_with_toggled_sparsity(self):
-        return DirectSumBasis([cb._copy_with_toggled_sparsity() for cb in self._component_bases],
-                              self.name, self.longname)
-
-    def is_equivalent(self, other, sparseness_must_match=True):
-        """
-        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
-
-        Parameters
-        -----------
-        other : Basis or str
-            The basis to compare with.
-
-        sparseness_must_match : bool, optional
-            If `False` then comparison ignores differing sparseness, and this function
-            returns `True` when the two bases are equal except for their `.sparse` values.
-
-        Returns
-        -------
-        bool
-        """
-        otherIsBasis = isinstance(other, DirectSumBasis)
-        if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
-        if len(self._component_bases) != len(other.component_bases): return False
-        return all([c1.is_equivalent(c2, sparseness_must_match)
-                    for (c1, c2) in zip(self._component_bases, other.component_bases)])
-
     @property
     def vector_elements(self):
         """
@@ -1437,30 +1348,6 @@ class DirectSumBasis(LazyBasis):
         if self._vector_elements is None:
             self._lazy_build_vector_elements()
         return self._vector_elements
-
-    @property
-    @lru_cache(maxsize=128)
-    def to_std_transform_matrix(self):
-        """
-        Retrieve the matrix that transforms a vector from this basis to the standard basis of this basis's dimension.
-
-        Returns
-        -------
-        numpy array or scipy.sparse.lil_matrix
-            An array of shape `(dim, size)` where `dim` is the dimension
-            of this basis (the length of its vectors) and `size` is the
-            size of this basis (its number of vectors).
-        """
-        if self.sparse:
-            toStd = _sps.lil_matrix((self.dim, self.size), dtype='complex')
-        else:
-            toStd = _np.zeros((self.dim, self.size), 'complex')
-
-        #use vector elements, which are not just flattened elements
-        # (and are computed separately)
-        for i, vel in enumerate(self.vector_elements):
-            toStd[:, i] = vel
-        return toStd
 
     @property
     @lru_cache(maxsize=128)
@@ -1495,58 +1382,6 @@ class DirectSumBasis(LazyBasis):
                 vel = el.ravel()
             toSimpleStd[:, i] = vel
         return toSimpleStd
-
-    def create_equivalent(self, builtin_basis_name) -> DirectSumBasis:
-        """
-        Create an equivalent basis with components of type `builtin_basis_name`.
-
-        Create a Basis that is equivalent in structure & dimension to this
-        basis but whose simple components (perhaps just this basis itself) is
-        of the builtin basis type given by `builtin_basis_name`.
-
-        Parameters
-        ----------
-        builtin_basis_name : str
-            The name of a builtin basis, e.g. `"pp"`, `"gm"`, or `"std"`. Used to
-            construct the simple components of the returned basis.
-
-        Returns
-        -------
-        DirectSumBasis
-        """
-        equiv_components = [c.create_equivalent(builtin_basis_name) for c in self._component_bases]
-        return DirectSumBasis(equiv_components)
-
-    def create_simple_equivalent(self, builtin_basis_name=None) -> BuiltinBasis:
-        """
-        Create a basis of type `builtin_basis_name` whose elements are compatible with this basis.
-
-        Create a simple basis *and* one without components (e.g. a
-        :class:`TensorProdBasis`, is a simple basis w/components) of the
-        builtin type specified whose dimension is compatible with the
-        *elements* of this basis.  This function might also be named
-        "element_equivalent", as it returns the `builtin_basis_name`-analogue
-        of the standard basis that this basis's elements are expressed in.
-
-        Parameters
-        ----------
-        builtin_basis_name : str, optional
-            The name of the built-in basis to use.  If `None`, then a
-            copy of this basis is returned (if it's simple) or this
-            basis's name is used to try to construct a simple and
-            component-free version of the same builtin-basis type.
-
-        Returns
-        -------
-        Basis
-        """
-        if builtin_basis_name is None:
-            builtin_basis_name = self.name  # default
-            if len(self._component_bases) > 0:
-                first_comp_name = self._component_bases[0].name
-                if all([c.name == first_comp_name for c in self._component_bases]):
-                    builtin_basis_name = first_comp_name  # if all components have the same name
-        return BuiltinBasis(builtin_basis_name, self.elsize, sparse=self.sparse)  # Note: changes dimension
 
 
 class TensorProdBasis(LazyBasis):
@@ -1622,6 +1457,14 @@ class TensorProdBasis(LazyBasis):
 
         #precompute certain properties. Can add more as deemed frequently accessed.
         self._dim = int(_np.prod([c.dim for c in self._component_bases]))
+        self._size = int(_np.prod([c.size for c in self._component_bases]))
+        elndim = max([c.elndim for c in self._component_bases])
+        elshape = [1] * elndim
+        for c in self._component_bases:
+            off = elndim - c.elndim
+            for k, d in enumerate(c.elshape):
+                elshape[k + off] *= d
+        self._elshape = tuple(elshape)
 
         #NOTE: this is actually to restrictive -- what we need is a test/flag for whether the elements of a
         # basis are in their "natrual" representation where it makes sense to take tensor products.  For
@@ -1651,41 +1494,6 @@ class TensorProdBasis(LazyBasis):
     def component_bases(self):
         """A list of the component bases."""
         return self._component_bases
-
-    @property
-    def dim(self):
-        """
-        The dimension of the vector space this basis fully or partially
-        spans.  Equivalently, the length of the `vector_elements` of the
-        basis.
-        """
-        return self._dim
-
-    @property
-    def size(self):
-        """
-        The number of elements (or vector-elements) in the basis.
-        """
-        return int(_np.prod([c.size for c in self._component_bases]))
-
-    @property
-    def elshape(self):
-        """
-        The shape of each element.  Typically either a length-1 or length-2
-        tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
-        in the sparse case).
-        """
-        elndim = max([c.elndim for c in self._component_bases])
-        elshape = [1] * elndim
-        for c in self._component_bases:
-            off = elndim - c.elndim
-            for k, d in enumerate(c.elshape):
-                elshape[k + off] *= d
-        return tuple(elshape)
-
-    def __hash__(self):
-        return hash((self.name, ) + tuple((hash(comp) for comp in self._component_bases)))
 
     def _lazy_build_elements(self):
         #LAZY building of elements (in case we never need them)
@@ -1717,99 +1525,3 @@ class TensorProdBasis(LazyBasis):
         for i, factor_lbls in enumerate(_itertools.product(*comp_lbls)):
             self._labels.append(''.join(factor_lbls))
 
-    def _copy_with_toggled_sparsity(self) -> TensorProdBasis:
-        return TensorProdBasis([cb._copy_with_toggled_sparsity() for cb in self._component_bases],
-                               self.name, self.longname)
-
-    def is_equivalent(self, other, sparseness_must_match=True):
-        """
-        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
-
-        Parameters
-        -----------
-        other : Basis or str
-            The basis to compare with.
-
-        sparseness_must_match : bool, optional
-            If `False` then comparison ignores differing sparseness, and this function
-            returns `True` when the two bases are equal except for their `.sparse` values.
-
-        Returns
-        -------
-        bool
-        """
-        otherIsBasis = isinstance(other, TensorProdBasis)
-        if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
-        if len(self._component_bases) != len(other.component_bases): return False
-        if self.sparse != other.sparse: return False
-        return all([c1.is_equivalent(c2, sparseness_must_match)
-                    for (c1, c2) in zip(self._component_bases, other.component_bases)])
-
-    def create_equivalent(self, builtin_basis_name):
-        """
-        Create an equivalent basis with components of type `builtin_basis_name`.
-
-        Create a Basis that is equivalent in structure & dimension to this
-        basis but whose simple components (perhaps just this basis itself) is
-        of the builtin basis type given by `builtin_basis_name`.
-
-        Parameters
-        ----------
-        builtin_basis_name : str
-            The name of a builtin basis, e.g. `"pp"`, `"gm"`, or `"std"`. Used to
-            construct the simple components of the returned basis.
-
-        Returns
-        -------
-        TensorProdBasis
-        """
-        # FUTURE: we may want a way of creating a 'std' equivalent of tensor product bases that include classical lines.
-        # This is a part of what woudl go into that... but it's not complete.
-        # if builtin_basis_name == 'std':  # special case when we change classical components to 'cl'
-        #     equiv_components = []
-        #     for c in self._component_bases:
-        #         if c.elndim == 1: equiv_components.append(c.create_equivalent('cl'))
-        #         else: equiv_components.append(c.create_equivalent('std'))
-        # else:
-        equiv_components = [c.create_equivalent(builtin_basis_name) for c in self._component_bases]
-        return TensorProdBasis(equiv_components)
-
-    def create_simple_equivalent(self, builtin_basis_name=None):
-        """
-        Create a basis of type `builtin_basis_name` whose elements are compatible with this basis.
-
-        Create a simple basis *and* one without components (e.g. a
-        :class:`TensorProdBasis`, is a simple basis w/components) of the
-        builtin type specified whose dimension is compatible with the
-        *elements* of this basis.  This function might also be named
-        "element_equivalent", as it returns the `builtin_basis_name`-analogue
-        of the standard basis that this basis's elements are expressed in.
-
-        Parameters
-        ----------
-        builtin_basis_name : str, optional
-            The name of the built-in basis to use.  If `None`, then a
-            copy of this basis is returned (if it's simple) or this
-            basis's name is used to try to construct a simple and
-            component-free version of the same builtin-basis type.
-
-        Returns
-        -------
-        Basis
-        """
-        #if builtin_basis_name == 'std':  # special case when we change classical components to 'clmx'
-        #    equiv_components = []
-        #    for c in self._component_bases:
-        #        if c.elndim == 1: equiv_components.append(BuiltinBasis('clmx', c.dim**2, sparse=self.sparse))
-        #        # c.create_simple_equivalent('clmx'))
-        #        else: equiv_components.append(c.create_simple_equivalent('std'))
-        #    expanded_basis = TensorProdBasis(equiv_components)
-        #    return BuiltinBasis('std', expanded_basis.elsize, sparse=expanded_basis.sparse)
-
-        if builtin_basis_name is None:
-            builtin_basis_name = self.name  # default
-            if len(self._component_bases) > 0:
-                first_comp_name = self._component_bases[0].name
-                if all([c.name == first_comp_name for c in self._component_bases]):
-                    builtin_basis_name = first_comp_name  # if all components have the same name
-        return BuiltinBasis(builtin_basis_name, self.elsize, sparse=self.sparse)
