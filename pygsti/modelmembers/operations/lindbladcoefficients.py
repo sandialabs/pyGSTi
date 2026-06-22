@@ -255,7 +255,7 @@ class _Depol(_BlockParameterization):
         nonneg = [val >= ttol for val in blk.block_data]
         assert all(nonneg), f"Lindblad stochastic coefficients are not positive! (tol={ttol})"
         first = blk.block_data[0]
-        all_equal = [_np.isclose(val, first, atol=1e-6) for val in blk.block_data]
+        all_equal = _np.isclose(blk.block_data, first, atol=1e-6)
         assert all(all_equal), f"Diagonal lindblad coefficients are not equal! (tol={ttol})"
         avg = _np.mean(blk.block_data.clip(0, 1e100))
         return _np.array([_np.sqrt(_np.real(avg))], 'd')
@@ -912,7 +912,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
         Jacobian of block_data w.r.t. the real parameters v.
         Dispatches to _deriv_wrt_params_<block_type>.
         """
-        num_bels = len(self._bel_labels)
         v = self.to_vector() if (v is None) else v
         nP = len(v)
         assert(nP == self.num_params), f"Expected {self.num_params} parameters, got {nP}!"

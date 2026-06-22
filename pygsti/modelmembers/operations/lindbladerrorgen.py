@@ -1628,6 +1628,10 @@ class LindbladParameterization(_NicelySerializable):
             elif abbrev == "GLNDU":
                 # like GLND, but the non-Hamiltonian block uses the flat, per-elementary-errorgen
                 # 'other_unconstrained' representation (supports reduced/flexible parameterizations).
+                #
+                # TODO: Per Corey's PR comment,
+                #   https://github.com/sandialabs/pyGSTi/pull/755#discussion_r3424540867,
+                # he'd prefer that this GLNDU parameterization replace GLND entirely.
                 block_types = ['ham', 'other_unconstrained']; param_modes = ['elements', 'elements']
             else:
                 block_types = []; param_modes = []
