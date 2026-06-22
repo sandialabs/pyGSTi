@@ -252,10 +252,10 @@ class KrausInterfaceStateVecTester(KrausInterfaceModelTestBase, BaseCase):
 class KrausInterfaceCHPTester(KrausInterfaceModelTestBase, BaseCase):
     def setUp(self):
         from pygsti.evotypes import chp
+        import importlib.util as importlib
         self.evotype = 'chp'
-        chp_path = 'chp_sim'  
-        if chp_path is not None:
-            chp.chpexe = chp_path
+        if importlib.find_spec('chp_sim'):
+            chp.chpexe = 'chp_sim'
             self.forwardsim = WeakForwardSimulator(shots=100, base_seed=1234)
         else:
             self.forwardsim = None
