@@ -11,7 +11,7 @@ Protocol object
 # ***************************************************************************************************
 from __future__ import annotations
 
-from typing import Optional, Literal
+from typing import Optional, Literal, Union
 import collections as _collections
 import copy as _copy
 import dataclasses as _dataclasses
@@ -30,6 +30,8 @@ from pygsti.tools import mpitools as _mpitools
 from pygsti.tools.dataframetools import _process_dataframe
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+
+QUDIT_LABELS_T = tuple[Union[int, str], ...]
 
 
 @_dataclasses.dataclass
@@ -1022,7 +1024,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
             raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
         return cls(edesign.all_circuits_needing_data, edesign.qubit_labels)
 
-    def __init__(self, circuits=None, qubit_labels=None,
+    def __init__(self, circuits=None, qubit_labels: Optional[Union[QUDIT_LABELS_T, Literal['multiple']]]=None,
                  children=None, children_dirs=None):
         """
         Create a new ExperimentDesign object, which holds a set of circuits (needing data).

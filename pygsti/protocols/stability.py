@@ -30,7 +30,7 @@ class StabilityAnalysisDesign(_proto.ExperimentDesign):
         be the line labels of `circuits`.
     """
 
-    def __init__(self, circuits: list[_Circuit], qubit_labels: Optional[Union[tuple[Union[int, str], ...], Literal['multiple']]]=None):
+    def __init__(self, circuits: list[_Circuit], qubit_labels: Optional[Union[_proto.QUDIT_LABELS_T, Literal['multiple']]]=None):
         self.needs_timestamps = True
         super().__init__(circuits, qubit_labels=qubit_labels)
 
