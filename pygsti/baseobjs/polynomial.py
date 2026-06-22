@@ -16,7 +16,7 @@ import numpy as _np
 
 from pygsti.evotypes.basereps import PolynomialRep as _PolynomialRep
 
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Tuple, Union
 
 assert(_platform.architecture()[0].endswith("bit"))  # e.g. "64bit"
 PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
@@ -206,36 +206,39 @@ class Polynomial(object):
         self._rep = _PolynomialRep(int_coeffs, max_num_vars, vindices_per_int)
 
     @classmethod
-    def from_variable_and_coefficient_lists(cls, variables, coefficients, max_num_vars=100):
+    def from_variable_and_coefficient_lists(cls, variables: Sequence[Tuple[int, ...]],
+                                            coefficients: Sequence[complex],
+                                            max_num_vars: int = 100) -> "Polynomial":
         """
-        Alternative constructor for Polynomial objects which allows initialization from a list of
-        monomial terms with corresponding weights.
+        Construct a Polynomial from parallel lists of monomials and coefficients.
+
+        Unlike the dict-based constructor, `variables` may list the same monomial
+        more than once; repeated monomials have their coefficients summed.
 
         Parameters
         ----------
-        variables : iterable of tuples
-            Iterable of tuples of integers corrrespondng to the monomial terms 
+        variables : sequence of tuple of int
+            Monomial terms, each a tuple of variable indices (e.g. `(0, 0, 1)` for
+            `x0^2 x1`).  May contain repeats.
+
+        coefficients : sequence of complex
+            The coefficient multiplying each monomial in `variables`; must be the
+            same length as `variables`.
 
         max_num_vars : int, optional
-            The maximum number of variables the represenatation is allowed to
-            have (x_0 to x_(`max_num_vars-1`)).  This sets the maximum allowed
-            variable index within this polynomial.
+            The maximum number of variables the representation may have
+            (x_0 to x_(`max_num_vars-1`)).
+
         Returns
         -------
         Polynomial
         """
         assert len(variables) == len(coefficients), "Iterable of variables and coefficients must have the same length."
-        
-        ret = cls.__new__(cls)
-        vindices_per_int = Polynomial._vindices_per_int(max_num_vars)
-        int_coeffs = {}
 
+        coeffs = {}
         for k, v in zip(variables, coefficients):
-            ik = _vinds_to_int(k, vindices_per_int, max_num_vars)  # now sorts internally
-            int_coeffs[ik] = int_coeffs.get(ik, 0) + v
-
-        ret._rep = _PolynomialRep(int_coeffs, max_num_vars, vindices_per_int)
-        return ret
+            coeffs[k] = coeffs.get(k, 0) + v
+        return cls(coeffs, max_num_vars)
 
     @property
     def coeffs(self):
