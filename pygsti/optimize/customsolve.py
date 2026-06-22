@@ -14,6 +14,7 @@ import numpy as _np
 import scipy as _scipy
 
 from pygsti.optimize.arraysinterface import DistributedArraysInterface as _DistributedArraysInterface
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 
@@ -485,7 +486,7 @@ def _tallskinny_custom_solve(a, b, resource_alloc):
         displacements = _np.concatenate(([0], _np.cumsum(sizes)))
         Rprime = _np.empty(displacements[-1], 'd')
         comm.Gatherv(Ri, [Rprime, sizes, displacements[0:-1], MPI.DOUBLE], root=0)
-        Rprime.shape = (displacements[-1] // nColsPerProc, nColsPerProc)
+        Rprime = _compat.reshape_no_copy(Rprime, (displacements[-1] // nColsPerProc, nColsPerProc))
         Q2, R = _scipy.linalg.qr(Rprime, mode='economic', check_finite=True)
         Q2 = _np.ascontiguousarray(Q2)
         Q2_sizes = _np.array([(s // nColsPerProc) * Q2.shape[1] for s in sizes], 'd')

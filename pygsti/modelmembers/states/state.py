@@ -500,11 +500,11 @@ class State(_modelmember.ModelMember):
         """
         if isinstance(v, State):
             vector = v.to_dense("minimal").copy()
-            vector.shape = (vector.size, 1)
+            vector = _compat.reshape_no_copy(vector, (vector.size, 1))
         elif isinstance(v, _np.ndarray):
             vector = v.copy()
             if len(vector.shape) == 1:  # convert (N,) shape vecs to (N,1)
-                vector.shape = (vector.size, 1)
+                vector = _compat.reshape_no_copy(vector, (vector.size, 1))
         else:
             try:
                 len(v)
