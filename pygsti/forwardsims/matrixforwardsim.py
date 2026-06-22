@@ -25,6 +25,7 @@ from pygsti.layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
@@ -471,7 +472,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                 if m < l:
                     x0 = _np.kron(_np.transpose(prods[(0, m - 1)]), prods[(m + 1, l - 1)])  # (dim**2, dim**2)
                     x = _np.dot(_np.transpose(dop_dopLabel1[opLabel1]), x0); xv = x.view()  # (nDerivCols1,dim**2)
-                    xv.shape = (nDerivCols1, dim, dim)  # (reshape without copying - throws error if copy is needed)
+                    xv = _compat.reshape_no_copy(xv, (nDerivCols1, dim, dim))  # (reshape without copying - throws error if copy is needed)
                     y = _np.dot(_np.kron(xv, _np.transpose(prods[(l + 1, N - 1)])), dop_dopLabel2[opLabel2])
                     # above: (nDerivCols1,dim**2,dim**2) * (dim**2,nDerivCols2) = (nDerivCols1,dim**2,nDerivCols2)
                     flattened_d2prod[:, inds1, inds2] += _np.swapaxes(y, 0, 1)
@@ -480,7 +481,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                 elif l < m:
                     x0 = _np.kron(_np.transpose(prods[(l + 1, m - 1)]), prods[(m + 1, N - 1)])  # (dim**2, dim**2)
                     x = _np.dot(_np.transpose(dop_dopLabel1[opLabel1]), x0); xv = x.view()  # (nDerivCols1,dim**2)
-                    xv.shape = (nDerivCols1, dim, dim)  # (reshape without copying - throws error if copy is needed)
+                    xv = _compat.reshape_no_copy(xv, (nDerivCols1, dim, dim))  # (reshape without copying - throws error if copy is needed)
                     # transposes each of the now un-vectorized dim x dim mxs corresponding to a single kl
                     xv = _np.swapaxes(xv, 1, 2)
                     y = _np.dot(_np.kron(prods[(0, l - 1)], xv), dop_dopLabel2[opLabel2])

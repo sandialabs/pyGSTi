@@ -24,6 +24,7 @@ from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
 from pygsti import circuits as _circuits
 from pygsti import baseobjs as _baseobjs
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import mpitools as _mpit
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models import ImplicitOpModel as _ImplicitOpModel
@@ -1449,7 +1450,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
     op_dim = model.dim
     dprods = model.sim.bulk_dproduct(germToPowL, flat=True)  # shape (nGerms*flattened_op_dim, vec_model_dim)
-    dprods.shape = (nGerms, op_dim**2, dprods.shape[1])
+    dprods = _compat.reshape_no_copy(dprods, (nGerms, op_dim**2, dprods.shape[1]))
 
     germLengths = _np.array([len(germ) for germ in germs_to_test], 'd')
 

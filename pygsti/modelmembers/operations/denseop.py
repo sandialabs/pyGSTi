@@ -20,6 +20,7 @@ from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOpe
 from pygsti.modelmembers.operations.krausop import KrausOperatorInterface as _KrausOperatorInterface
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
@@ -66,7 +67,7 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
         op2.from_vector(p_plus_dp)
         fd_deriv[:, :, i] = (op2 - operation) / eps
 
-    fd_deriv.shape = [dim**2, operation.num_params]
+    fd_deriv = _compat.reshape_no_copy(fd_deriv, [dim**2, operation.num_params])
     if wrt_filter is None:
         return fd_deriv
     else:

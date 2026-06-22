@@ -29,6 +29,7 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.models.model import OpModel as _OpModel, Model as _Model
 
 
@@ -4602,7 +4603,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.model.from_vector(paramvec)
     
         dprobs = self.jac[0:self.nelements, :]
-        dprobs.shape = (self.nelements, self.nparams)
+        dprobs = _compat.reshape_no_copy(dprobs, (self.nelements, self.nparams))
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
@@ -5521,7 +5522,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         """
         tm = _time.time()
         dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
-        dprobs.shape = (self.nelements, self.nparams)
+        dprobs = _compat.reshape_no_copy(dprobs, (self.nelements, self.nparams))
         if paramvec is not None: self.model.from_vector(paramvec)
 
         fsim = self.model.sim
@@ -5666,7 +5667,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
                                       self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval,
                                       self._ds_cache)
         v = _np.sqrt(v)
-        v.shape = [self.nelements]  # reshape ensuring no copy is needed
+        v = _compat.reshape_no_copy(v, [self.nelements])  # reshape ensuring no copy is needed
 
         self.raw_objfn.resource_alloc.profiler.add_time("Time-dep dlogl: OBJECTIVE", tm)
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
@@ -5700,7 +5701,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         """
         tm = _time.time()
         dlogl = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dlogl
-        dlogl.shape = (self.nelements, self.nparams)
+        dlogl = _compat.reshape_no_copy(dlogl, (self.nelements, self.nparams))
         if paramvec is not None: self.model.from_vector(paramvec)
         unit_ralloc = self.layout.resource_alloc('param-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
@@ -5838,7 +5839,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
         #OLD: dGdp = mdl.dproduct((gl,)) but wasteful
         dgate_dp = gate.deriv_wrt_params()  # shape (dim**2, nP)
         dgate_dp = _np.swapaxes(dgate_dp, 0, 1)  # shape (nP, dim**2, )
-        dgate_dp.shape = (nparams, mdl.dim, mdl.dim)
+        dgate_dp = _compat.reshape_no_copy(dgate_dp, (nparams, mdl.dim, mdl.dim))
 
         # Let M be the "shuffle" operation performed by fast_jamiolkowski_iso_std
         # which maps a gate onto the choi-jamiolkowsky "basis" (i.e. performs that C-J

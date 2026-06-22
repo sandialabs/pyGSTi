@@ -913,7 +913,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
 
     rshape = (_slct.length(loc_row_slice), _slct.length(loc_col_slice))
     loc_result_flat = _np.empty(rshape[0] * rshape[1], a.dtype)
-    loc_result = loc_result_flat.view(); loc_result.shape = rshape
+    loc_result = loc_result_flat.view(); loc_result = _compat.reshape_no_copy(loc_result, rshape)
     loc_result[:, :] = _np.dot(a[loc_row_slice, :], b[:, loc_col_slice])
 
     # broadcast_com defines the group of processors this processor communicates with.
@@ -930,7 +930,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         cur_shape = (_slct.length(cur_row_slice), _slct.length(cur_col_slice))
         buf = loc_result_flat if (broadcast_comm.rank == r) else _np.empty(cur_shape[0] * cur_shape[1], a.dtype)
         broadcast_comm.Bcast(buf, root=r)
-        if broadcast_comm.rank != r: buf.shape = cur_shape
+        if broadcast_comm.rank != r: buf = _compat.reshape_no_copy(buf, cur_shape)
         else: buf = loc_result  # already of correct shape
         result[cur_row_slice, cur_col_slice] = buf
     comm.barrier()  # wait for all ranks to finish writing to result

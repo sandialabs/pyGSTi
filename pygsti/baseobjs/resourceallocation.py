@@ -18,6 +18,7 @@ from hashlib import blake2b as _blake2b
 
 import numpy as _np
 
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 
 _dummy_profiler = _DummyProfiler()
@@ -343,7 +344,7 @@ class ResourceAllocation(object):
                 offset = 0
                 for slc_or_indx_array, shape, size in zip(slices, shapes, sizes):
                     if slc_or_indx_array is None: continue  # signals a non-unit-leader proc that shouldn't do anything
-                    data = gathered_data[offset:offset + size]; offset += size; data.shape = shape
+                    data = gathered_data[offset:offset + size]; offset += size; data = _compat.reshape_no_copy(data, shape)
                     result[slc_or_indx_array] = data
 
         self.comm.barrier()  # make sure result is completely filled before returniing

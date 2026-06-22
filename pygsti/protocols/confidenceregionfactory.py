@@ -22,6 +22,7 @@ import scipy.stats as _stats
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.models.explicitcalc import P_RANK_TOL
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
@@ -1151,10 +1152,10 @@ class ConfidenceRegionFactoryView(object):
         # to that expected by _do_mlgst_base, which is
         # (flat_f0_size, num_params)
         if len(grad_f.shape) == 1:
-            grad_f.shape = (1, grad_f.shape[0])
+            grad_f = _compat.reshape_no_copy(grad_f, (1, grad_f.shape[0]))
         else:
             flatDim = _np.prod(f0.shape)
-            grad_f.shape = (grad_f.shape[0], flatDim)
+            grad_f = _compat.reshape_no_copy(grad_f, (grad_f.shape[0], flatDim))
             grad_f = _np.transpose(grad_f)  # now shape == (flatDim, num_params)
         assert(len(grad_f.shape) == 2)
 
@@ -1175,7 +1176,7 @@ class ConfidenceRegionFactoryView(object):
         delta = _np.sqrt(delta2)  # error^2 -> error
 
         if hasattr(f0, 'shape'):
-            delta.shape = f0.shape  # reshape to un-flattened
+            delta = _compat.reshape_no_copy(delta, f0.shape)  # reshape to un-flattened
         else:
             assert(isinstance(f0, float))
             delta = delta.item()

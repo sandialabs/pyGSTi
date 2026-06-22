@@ -23,6 +23,7 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
 from pygsti.tools.basistools import change_basis
+from pygsti.baseobjs import _compatibility as _compat
 
 try:
     from . import fastcalc as _fastcalc
@@ -1465,7 +1466,7 @@ def _findx(a, inds, always_copy=False):
         if len(indx_tups) > 0:  # b/c a[()] just returns the entire array!
             inds = tuple(zip(*indx_tups))  # un-zips to one list per dim
             a_inds = a[inds].copy()  # a 1D array of flattened "fancy" a[inds]
-            a_inds.shape = a_inds_shape  # reshape
+            a_inds = _compat.reshape_no_copy(a_inds, a_inds_shape)  # reshape
         else:
             a_inds = _np.zeros(a_inds_shape, a.dtype)  # has zero elements
             assert(a_inds.size == 0)
