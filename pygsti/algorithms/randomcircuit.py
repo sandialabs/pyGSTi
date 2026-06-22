@@ -1063,7 +1063,7 @@ def _sample_clifford_circuit(pspec, clifford_compilations, qubit_labels, citerat
         For more information on these options, see the `:func:compile_clifford()` docstring.
     
     exact_compilation_key: str, optional
-        The key into `clifford_compilations` to use for exact deterministic completion of Cliffords.
+        The key into `clifford_compilations` to use for exact deterministic compilation of Cliffords.
         The underlying :class:`CompilationRules` object must provide compilations for all possible
         n-qubit Cliffords that will be generated. This also requires the pspec is able to generate the
         symplectic representations for all n-qubit Cliffords in :meth:`compute_clifford_symplectic_reps`.
@@ -1221,7 +1221,7 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         Whether to return the number of native gates in the first `length`+1 compiled Cliffords
     
     exact_compilation_key: str, optional
-        The key into `clifford_compilations` to use for exact deterministic completion of Cliffords.
+        The key into `clifford_compilations` to use for exact deterministic compilation of Cliffords.
         The underlying :class:`CompilationRules` object must provide compilations for all possible
         n-qubit Cliffords that will be generated. This also requires the pspec is able to generate the
         symplectic representations for all n-qubit Cliffords in :meth:`compute_clifford_symplectic_reps`.

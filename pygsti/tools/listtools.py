@@ -254,7 +254,7 @@ def partitions(n):
         previous = tuple()
         for pp in _itertools.permutations(p[::-1]):  # flip p so it's in *ascending* order
             if pp > previous:  # only *unique* permutations
-                previous = pp  # (relies in itertools implementations detail that
+                previous = pp  # (relies in itertools implementation detail that
                 yield pp      # any permutations of a sorted iterable are in
                 # sorted order unless they are duplicates of prior permutations
 
@@ -321,7 +321,7 @@ def _partition_into_slow(n, nbins):
         p = _np.concatenate((p, _np.zeros(nbins - len(p), _np.int64)))  # pad with zeros
         for pp in _itertools.permutations(p[::-1]):
             if pp > previous:  # only *unique* permutations
-                previous = pp  # (relies in itertools implementations detail that
+                previous = pp  # (relies in itertools implementation detail that
                 yield pp      # any permutations of a sorted iterable are in
                 # sorted order unless they are duplicates of prior permutations
 

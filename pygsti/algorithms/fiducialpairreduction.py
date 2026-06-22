@@ -2077,7 +2077,7 @@ def _copy_to_static_explicitop_model(mdl):
     """Create and return an "effective" a copy of `mdl` that is an ExplicitOpModel with static elements.
     
     If `mdl` is already an ExplicitOpModel it is copied and returned
-     after setting all parametrizations to 'static'.
+     after setting all parameterizations to 'static'.
     Otherwise an ExplicitOpModel is constructed from quantities within
      `mdl` (for instance, if `mdl` is an ImplicitOpModel), namely:
       mdl.state_space, mdl.basis, mdl.sim, and mdl.evotype.  Then elements

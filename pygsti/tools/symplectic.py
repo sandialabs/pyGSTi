@@ -1536,9 +1536,9 @@ def random_clifford(n, rand_state=None):
     Returns
     -------
     s : numpy array
-        The symplectic matrix representation the uniformly sampled random Clifford.
+        The symplectic matrix representing the uniformly sampled random Clifford.
     p : numpy array
-        The phase vector representation the uniformly sampled random Clifford.
+        The phase vector representing the uniformly sampled random Clifford.
     """
     if rand_state is None:
         rand_state = _np.random.RandomState()
