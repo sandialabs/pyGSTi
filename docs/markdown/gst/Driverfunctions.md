@@ -22,7 +22,7 @@ There are several different "driver routines" for running GST, and we'll cover i
 
 Each function returns a single `pygsti.objects.Results` object (see the [Result object tutorial](../objects/Results)), which contains the *single* input `DataSet` and one or more *estimates* (`pygsti.objects.Estimate` objects). 
 
-Note: The abbreviation **LSGST** (lowercase in function names to follow Python naming conventions) stands for *Long Sequence LinearOperator Set Tomography*, and refers to the more powerful and flexible of GST that utilizes long sequences to find model estimates.  LSGST can be compared to *Linear GST*, or **LGST**, which only uses short sequences and as a result provides much less accurate estimates.
+Note: The abbreviation **LSGST** (lowercase in function names to follow Python naming conventions) stands for *Long Sequence Gate Set Tomography*, and refers to the more powerful and flexible of GST that utilizes long sequences to find model estimates.  LSGST can be compared to *Linear GST*, or **LGST**, which only uses short sequences and as a result provides much less accurate estimates.
 
 ```{code-cell} ipython3
 import pygsti

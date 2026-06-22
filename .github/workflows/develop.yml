@@ -15,13 +15,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest] # No Mac
-        python-version: [3.9, '3.10', '3.11', '3.12']
+        python-version: ['3.10', '3.11', '3.12', '3.13']
         use-cython: ['true', 'false']
     uses: ./.github/workflows/reuseable-main.yml
     name: Run pyGSTi tests
     with:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}
+      run-coverage: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13' && matrix.use-cython == 'true' }} # cover exactly one job
       use-cython: 'true' # Cython only
       run-unit-tests: 'true'
       run-integration-tests: 'true'
@@ -46,6 +47,52 @@ jobs:
         git config --global user.email 'pygsti@noreply.github.com'
         git checkout beta
         git merge --ff-only ${GITHUB_SHA} && git push origin beta
+
+  docs-notebooks: # Rebuild the ReadTheDocs "develop-with-notebooks" branch
+    # ReadTheDocs builds the hosted docs from `develop-with-notebooks`, NOT from
+    # `develop`. That branch is `develop` plus jupytext-generated *.ipynb
+    # companions committed next to each notebook *.md, so the Colab/Binder launch
+    # buttons (which fetch from GitHub) resolve to real notebooks. We regenerate
+    # the whole branch as a single atomic, force-pushed commit so RTD never sees
+    # a half-built state.
+    runs-on: ubuntu-latest
+
+    # Only after tests pass on a push to develop.
+    needs: build
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.PYGSTI_TOKEN }}
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install jupytext
+      run: pip install 'jupytext>=1.16'
+    - name: Build develop-with-notebooks branch
+      run: |
+        git config --global user.name 'PyGSTi'
+        git config --global user.email 'pygsti@noreply.github.com'
+        # Start the branch from the exact develop commit that just passed tests.
+        git checkout -B develop-with-notebooks ${GITHUB_SHA}
+        # Generate an .ipynb next to each notebook .md. --sync honors
+        # docs/jupytext.toml (formats = "ipynb,md:myst") and skips plain-markdown
+        # pages that lack a jupytext header (index/landing pages).
+        shopt -s globstar
+        jupytext --sync docs/markdown/**/*.md
+        # Point the hosted build's launch links at this branch (the
+        # edit_button_branch extension keeps Show source / Suggest edit on develop).
+        # Only the repository.branch key (2-space indent) is rewritten; the
+        # pygsti_edit_branch value stays on develop. The trailing comment is kept.
+        sed -i -E 's|^(  branch: )develop\b(.*)$|\1develop-with-notebooks\2|' docs/_config.yml
+        grep -q '^  branch: develop-with-notebooks' docs/_config.yml  # fail loudly if the rewrite missed
+        # Force-add the generated notebooks (gitignored on develop) + config change.
+        git add -f docs/markdown
+        git add docs/_config.yml
+        git commit -m "Auto-build notebooks for ReadTheDocs [skip ci]"
+        git push --force origin develop-with-notebooks
 
 
 

@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Low-level Algorithm API
-Once we have data for GST, there are several *algorithms* we can run on it to produce tomographic estimates. Depending on the amount of data you have, and time available for running LinearOperator Set Tomography, one algorithm may be preferable over the others.  **What is typically thought of as "standard GST" is the iterative maximum-likelihood optimization implemented by `run_iterative_gst`** which optimizes one or more objective functions iteratively, meaning it daisy-chains multiple optimizations, changing (typically *adding* to) the circuits under consideration or the objective function itself (e.g. from $\chi^2$ to the log-likelihood).
+Once we have data for GST, there are several *algorithms* we can run on it to produce tomographic estimates. Depending on the amount of data you have, and time available for running Gate Set Tomography, one algorithm may be preferable over the others.  **What is typically thought of as "standard GST" is the iterative maximum-likelihood optimization implemented by `run_iterative_gst`** which optimizes one or more objective functions iteratively, meaning it daisy-chains multiple optimizations, changing (typically *adding* to) the circuits under consideration or the objective function itself (e.g. from $\chi^2$ to the log-likelihood).
 
 `pygsti` contains two main low-level algorithms that form the base of the GST protocol(s):
 
