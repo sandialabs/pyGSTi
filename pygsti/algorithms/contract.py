@@ -27,7 +27,7 @@ def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct
     Contract a Model to a specified space.
 
     All contraction operations except 'vSPAM' operate entirely on the gate
-    matrices and leave state preparations and measurments alone, while 'vSPAM'
+    matrices and leave state preparations and measurements alone, while 'vSPAM'
     operations only on SPAM.
 
     Parameters

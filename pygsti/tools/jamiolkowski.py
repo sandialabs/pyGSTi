@@ -413,7 +413,7 @@ def magnitudes_of_negative_choi_eigenvalues(model):
     Returns
     -------
     list of floats
-        list of the magnitues of all negative Choi eigenvalues.  The length of
+        list of the magnitudes of all negative Choi eigenvalues.  The length of
         this list will vary based on how many negative eigenvalues are found,
         as positive eigenvalues contribute nothing to this list.
     """

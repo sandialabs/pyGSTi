@@ -77,10 +77,10 @@ class Basis(_NicelySerializable):
     of the elements (such as viewing them as matrices) that can
     be helpful for their display and interpretation.  The elements
     are also sometimes referred to as the "natural elements" because
-    they represent how to display the element in a natrual way.  A
+    they represent how to display the element in a natural way.  A
     non-simple basis occurs when vector_elements need to be stored as
     elements in a larger "embedded" way so that these elements can be
-    displayed and interpeted naturally.
+    displayed and interpreted naturally.
 
     A second important note is that there is assumed to be some underlying
     "standard" basis underneath all the bases in pyGSTi.  The elements in
@@ -1624,7 +1624,7 @@ class TensorProdBasis(LazyBasis):
         self._dim = int(_np.prod([c.dim for c in self._component_bases]))
 
         #NOTE: this is actually to restrictive -- what we need is a test/flag for whether the elements of a
-        # basis are in their "natrual" representation where it makes sense to take tensor products.  For
+        # basis are in their "natural" representation where it makes sense to take tensor products.  For
         # example, a direct-sum basis may hold elements in a compact way that violate this... but I'm not sure if they
         # do and this needs to be checked.  For now, we could just disable this overly-restrictive assert:
         assert (all([c.is_simple() for c in self._component_bases])), \
@@ -1764,7 +1764,7 @@ class TensorProdBasis(LazyBasis):
         TensorProdBasis
         """
         # FUTURE: we may want a way of creating a 'std' equivalent of tensor product bases that include classical lines.
-        # This is a part of what woudl go into that... but it's not complete.
+        # This is a part of what would go into that... but it's not complete.
         # if builtin_basis_name == 'std':  # special case when we change classical components to 'cl'
         #     equiv_components = []
         #     for c in self._component_bases:

@@ -34,7 +34,7 @@ class ProcessorSpec(_NicelySerializable):
 
     Operation names and ideal actions (e.g. gate names and their unitaries) are stored in
     a processor specification, as is the availability of the different operations and overall
-    proccesor geometry.  Processor specifications do not include any information about how
+    processor geometry.  Processor specifications do not include any information about how
     operations are parameterized or can be adjusted (at least not yet).
     """
     # base class for potentially other types of processors (not composed of just qubits)
@@ -159,7 +159,7 @@ class QuditProcessorSpec(ProcessorSpec):
                 1. They can be strings which directly correspond to the desired output bit/ditstring in the standard basis.
                    E.g. "0000" or "2212" 
                 2. Strings prefixed by either 'E_' or 'E' (w/o an underscore). In the first case any digits proceeding the
-                   "E_" are interpretted as a bit/ditstring written in whatever base is appropriate given the qudit dimensions.
+                   "E_" are interpreted as a bit/ditstring written in whatever base is appropriate given the qudit dimensions.
                    If prefixed by "E" (w/o an underscore) the proceeding digits are interpreted as an integer and converted into
                    a base d number using right-LSB convention. E.g. 'E_0000' corresponds to the state |0000>, and E15 corresponds
                    to |1111> (assuming this was acting on 4-qubits).
@@ -203,7 +203,7 @@ class QuditProcessorSpec(ProcessorSpec):
         self.instrument_names = tuple(instrument_names[:])
         self.nonstd_instruments = nonstd_instruments.copy() if (nonstd_instruments is not None) else {}
 
-        # Store the unitary matrices defining the gates, as it is convenient to have these easily accessable.
+        # Store the unitary matrices defining the gates, as it is convenient to have these easily accessible.
         self.gate_unitaries = dict()
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
         for gname in gate_names:
@@ -947,7 +947,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
                 1. They can be strings which directly correspond to the desired output bit/ditstring in the standard basis.
                     E.g. "0000" or "1001". 
                 2. Strings prefixed by either 'E_' or 'E' (w/o an underscore). In the first case any digits proceeding the
-                    "E_" are interpretted as a bitstring.
+                    "E_" are interpreted as a bitstring.
                     If prefixed by "E" (w/o an underscore) the proceeding digits are interpreted as an integer and converted into
                     a base d number using right-LSB convention. E.g. 'E_0000' corresponds to the state |0000>, and E15 corresponds
                     to |1111> (assuming this was acting on 4-qubits).

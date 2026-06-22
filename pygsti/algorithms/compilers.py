@@ -1128,7 +1128,7 @@ def _compile_symplectic_using_iag_algorithm(s: _np.ndarray, pspec: Optional[_Qub
     Creates a :class:`Circuit` that implements a Clifford gate using the IAG algorithm.
 
     A single iteration of the algorithm in _compile_symplectic_using_riag_algoritm(). See that functions
-    docstring for more information. Note that it is normallly better to access this algorithm through that
+    docstring for more information. Note that it is normally better to access this algorithm through that
     function even when only a single iteration of the randomization is desired: this function does *not* change
     into the native gate library of `pspec`.
 
@@ -2490,7 +2490,7 @@ def _convert_submatrix_to_echelon_form_using_cnots(s: _np.ndarray, optype: Liter
                     break
 
                 # If we've gone through all the qubits and failed to find one to swap in, the
-                # algorithm fails (the portion of the matrix we are operationg on must be
+                # algorithm fails (the portion of the matrix we are operating on must be
                 # non-invertable). Note that this doesn't raise an error, as we want to sometimes
                 # use this algorithm when that is going to happen, and to just report it.
                 if j == n - 1: return sout, None, False

@@ -64,7 +64,7 @@ def create_spam_vector(vec_expr, state_space, basis):
     Parameters
     ----------
     vec_expr : string
-        the expression which determines which vector to build.  Currenlty, only
+        the expression which determines which vector to build.  Currently, only
         integers are allowed, which specify a the vector for the pure state of
         that index.  For example, "1" means return vectorize(``|1><1|``).  The
         index labels the absolute index of the state within the entire state
@@ -664,7 +664,7 @@ def create_explicit_model_from_expressions(state_space,
 
         - "std" = operation matrix operates on density mx expressed as sum of matrix
           units
-        - "gm"  = operation matrix operates on dentity mx expressed as sum of
+        - "gm"  = operation matrix operates on density mx expressed as sum of
           normalized Gell-Mann matrices
         - "pp"  = operation matrix operates on density mx expresses as sum of
           tensor-product of Pauli matrices
@@ -1856,7 +1856,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         available gate placement.
 
     independent_spam : bool, optional
-        Similar to `indepenent_gates` but for SPAM operations.
+        Similar to `independent_gates` but for SPAM operations.
 
     errcomp_type : {'gates', 'errorgens'}
         Whether errors should be combined by composing error maps (`gates`) or by
@@ -2064,7 +2064,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qudits (taken as a "base
+        Additional weight, beyond the number of target qudits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qudit gates can have up to weight-2
         errors and 2-qudit gates can have up to weight-3 errors.
@@ -2417,7 +2417,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
+        Additional weight, beyond the number of target qubits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
@@ -2436,7 +2436,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
 
     bidirectional_cnots : bool
         Whether CNOT gates can be performed in either direction (and each direction should
-        be treated as an indepedent gate)
+        be treated as an independent gate)
 
     verbosity : int, optional
         An integer >= 0 dictating how much output to send to stdout.

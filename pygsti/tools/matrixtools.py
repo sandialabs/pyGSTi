@@ -558,7 +558,7 @@ def print_mx(mx, width=9, prec=4, withbrackets=False):
     mx : numpy array
         the matrix (2-D array) to print.
 
-    width : int, opitonal
+    width : int, optional
         the width (in characters) of each printed element
 
     prec : int optional
@@ -587,7 +587,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     m : numpy.ndarray
         array to print.
 
-    width : int, opitonal
+    width : int, optional
         the width (in characters) of each converted element
 
     prec : int optional
@@ -600,7 +600,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     Returns
     -------
     string
-        matrix m as a pretty formated string.
+        matrix m as a pretty formatted string.
     """
     if m.size == 0: return ""
     s = ""; tol = 10**(-prec)
@@ -629,10 +629,10 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     m : numpy array
         array to format.
 
-    real_width : int, opitonal
+    real_width : int, optional
         the width (in characters) of the real part of each element.
 
-    im_width : int, opitonal
+    im_width : int, optional
         the width (in characters) of the imaginary part of each element.
 
     prec : int optional
@@ -641,7 +641,7 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     Returns
     -------
     string
-        matrix m as a pretty formated string.
+        matrix m as a pretty formatted string.
     """
     if len(m.shape) == 1: m = m[None, :]  # so it works w/vectors too
     s = ""; tol = 10**(-prec)
@@ -750,12 +750,12 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
         The target logarithm
 
     target_weight : float
-        A weighting factor used to blance the exactness-of-log term
+        A weighting factor used to balance the exactness-of-log term
         with the closeness-to-target term in the optimized objective
         function.  This value multiplies the latter term.
 
     tol : float, optional
-        Optimzer tolerance.
+        Optimizer tolerance.
 
     Returns
     -------
@@ -1292,7 +1292,7 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
             raise ValueError(("Vectors `a` and `b` don't have the same conjugate-pair structure, "
                               " and so they cannot be matched in a way the preserves this structure."))
     #Note: problem with this approach is that we might convert a
-    # real-pair -> conj-pair sub-optimally (i.e. there might be muliple
+    # real-pair -> conj-pair sub-optimally (i.e. there might be multiple
     # such conversions and we just choose one at random).
 
     _, pairs1 = minweight_match(a[a_real], b[b_real], metricfn, True,
@@ -1318,7 +1318,7 @@ def _fas(a, inds, rhs, add=False):
     """
     Fancy Assignment, equivalent to `a[*inds] = rhs` but with
     the elements of inds (allowed to be integers, slices, or
-    integer arrays) always specifing a generalize-slice along
+    integer arrays) always specifying a generalize-slice along
     the given dimension.  This avoids some weird numpy indexing
     rules that make using square brackets a pain.
     """
@@ -1437,7 +1437,7 @@ def _findx(a, inds, always_copy=False):
     """
     Fancy Indexing, equivalent to `a[*inds].copy()` but with
     the elements of inds (allowed to be integers, slices, or
-    integer arrays) always specifing a generalize-slice along
+    integer arrays) always specifying a generalize-slice along
     the given dimension.  This avoids some weird numpy indexing
     rules that make using square brackets a pain.
     """
@@ -2418,7 +2418,7 @@ def sign_fix_qr(q, r, tol=1e-6):
 
     Flips the signs of Q-columns and R-rows from a QR decomposition so that the
     largest absolute element in each Q-column is positive.  This is an arbitrary
-    but consisten convention that resolves sign-ambiguity in the output of a QR
+    but consistent convention that resolves sign-ambiguity in the output of a QR
     decomposition.
 
     Parameters
