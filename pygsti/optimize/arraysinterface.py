@@ -12,6 +12,7 @@ Implements the ArraysInterface object and supporting functionality.
 
 import numpy as _np
 
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import sharedmemtools as _smt
 
 
@@ -1024,7 +1025,7 @@ class DistributedArraysInterface(ArraysInterface):
         """
         # assumes x's are in "fine" mode
         local_dot = _np.array(_np.dot(x1, x2))
-        local_dot.shape = (1,)  # for compatibility with allreduce_sum
+        local_dot = _compat.reshape_no_copy(local_dot, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -1063,7 +1064,7 @@ class DistributedArraysInterface(ArraysInterface):
         """
         # assumes x's are in "fine" mode
         local_infnorm = _np.array(_np.linalg.norm(x, ord=_np.inf))
-        local_infnorm.shape = (1,)  # for compatibility with allreduce_sum
+        local_infnorm = _compat.reshape_no_copy(local_infnorm, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_infnorm,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -1087,7 +1088,7 @@ class DistributedArraysInterface(ArraysInterface):
         """
         # assumes x's are in "fine" mode
         local_min = _np.array(_np.min(x))
-        local_min.shape = (1,)  # for compatibility with allreduce_sum
+        local_min = _compat.reshape_no_copy(local_min, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_min(result, local_min,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -1111,7 +1112,7 @@ class DistributedArraysInterface(ArraysInterface):
         """
         # assumes x's are in "fine" mode
         local_max = _np.array(_np.max(x))
-        local_max.shape = (1,)  # for compatibility with allreduce_sum
+        local_max = _compat.reshape_no_copy(local_max, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_max(result, local_max,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
@@ -1134,7 +1135,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         local_dot = _np.array(_np.dot(f, f))
-        local_dot.shape = (1,)  # for compatibility with allreduce_sum
+        local_dot = _compat.reshape_no_copy(local_dot, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
                                           unit_ralloc=self.layout.resource_alloc('atom-processing'))
@@ -1157,7 +1158,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         local_norm2 = _np.array(_np.linalg.norm(j)**2)
-        local_norm2.shape = (1,)  # for compatibility with allreduce_sum
+        local_norm2 = _compat.reshape_no_copy(local_norm2, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_norm2,
                                           unit_ralloc=self.layout.resource_alloc('param-processing'))
@@ -1180,7 +1181,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         local_norm2 = _np.array(_np.linalg.norm(jtj)**2)
-        local_norm2.shape = (1,)  # for compatibility with allreduce_sum
+        local_norm2 = _compat.reshape_no_copy(local_norm2, (1,))  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_norm2,
                                           unit_ralloc=self.layout.resource_alloc('param-fine'))
