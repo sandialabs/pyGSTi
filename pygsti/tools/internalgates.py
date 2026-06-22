@@ -138,7 +138,7 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
 
     The correspondence between the standard names and unitaries is w.r.t the
     internally-used gatenames (see internal_gate_unitaries()).  For example, one use
-    of this function is to check whether some gate specifed by a user with the name
+    of this function is to check whether some gate specified by a user with the name
     'Ghadamard' is the Hadamard gate, denoted internally by 'H'.
 
     Parameters

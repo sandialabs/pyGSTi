@@ -169,7 +169,7 @@ class GaugeoptToTargetArgs:
         distances of each "SPAM gate", weighted by the weights.
 
     gauge_group : GaugeGroup, optional
-        The gauge group which defines which gauge trasformations are optimized
+        The gauge group which defines which gauge transformations are optimized
         over.  If None, then the `model`'s default gauge group is used.
 
     method : string, optional
@@ -203,7 +203,7 @@ class GaugeoptToTargetArgs:
         across multiple processors.
 
     n_leak : int
-       Used in leakage modeling. If positive, this specifies how modify defintiions
+       Used in leakage modeling. If positive, this specifies how modify definitions
        of gate and SPAM metrics to reflect the fact that target gates do not have
        well-defined actions outside the computational subspace.
     """
@@ -257,7 +257,7 @@ def gaugeopt_to_target(model, target_model, *args, **kwargs):
     """
     This function handles a strange situation where `target_model` can be None.
 
-    In this case, the objective function will only depend on `cptp_penality_factor`
+    In this case, the objective function will only depend on `cptp_penalty_factor`
     and `spam_penalty_factor`; it's forbidden to use method == 'ls'; and the
     returned OpModel might not have its basis set.
     """
@@ -331,7 +331,7 @@ def gaugeopt_custom(model, objective_fn: GGElObjective, gauge_group=None,
         method != 'ls' then objective_fn must return a float.
 
     gauge_group : GaugeGroup, optional
-        The gauge group which defines which gauge trasformations are optimized
+        The gauge group which defines which gauge transformations are optimized
         over.  If None, then the `model`'s default gauge group is used.
 
     method : string, optional
@@ -910,7 +910,7 @@ def _legacy_create_least_squares_objective(model, target_model,
         # -- penalty terms  -- Note: still use original gauge transform applied to `model`
         # -------------------------
         if cptp_penalty_factor > 0 or spam_penalty_factor > 0:
-            if frobenius_transform_target:  # reset back to non-target-tranform "mode"
+            if frobenius_transform_target:  # reset back to non-target-transform "mode"
                 gauge_group_el = original_gauge_group_el
                 mdl_pre = model.copy()
                 mdl_post = mdl_pre.copy()
@@ -1071,7 +1071,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         cp_penalty_vec_grad_to_fill[i, :] = v.real
         chi = sgnchi = dchi_std = v = None  # free mem
 
-    return len(mdl_pre.operations)  # the number of leading-dim indicies we filled in
+    return len(mdl_pre.operations)  # the number of leading-dim indices we filled in
 
 
 def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
@@ -1184,5 +1184,5 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
             denMx = sgndm = dVdp = v = None  # free mem
             i += 1
 
-    #return the number of leading-dim indicies we filled in
+    #return the number of leading-dim indices we filled in
     return len(mdl_post.preps) + sum([len(povm) for povm in mdl_post.povms.values()])

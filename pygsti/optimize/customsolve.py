@@ -381,7 +381,7 @@ def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, ari, resource_a
     #    #x_values[ii] = xval
 
     # now need to send the x-values we computed locally to the appropriate processor
-    # i.e. *we* need to recive the x-values for x-indices == my_row_slice.
+    # i.e. *we* need to receive the x-values for x-indices == my_row_slice.
     # Algorithm: all procs loop through *global* list of indices by destination processor.
     #    If this proc *is* the destination processor, then (if it isn't also the source)
     #    it needs to receive from the source processor.  If this proc is the source, it

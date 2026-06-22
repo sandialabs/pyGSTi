@@ -744,7 +744,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
         gauge-optimization parameter dictionaries, as specified by the
         `gauge_opt_params` argument of :func:`run_long_sequence_gst`.  The key
         names of `gaugeopt_suite` then label the gauge optimizations within
-        the resuling `Estimate` objects.  The built-in suites are:
+        the resulting `Estimate` objects.  The built-in suites are:
 
           - "single" : performs only a single "best guess" gauge optimization.
           - "varySpam" : varies spam weight and toggles SPAM penalty (0 or 1).

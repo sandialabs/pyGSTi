@@ -43,7 +43,7 @@ def _create_display_progress_fn(show_progress):
     """
     Create and return a progress-displaying function.
 
-    Only return a function that does somethign if `show_progress == True`
+    Only return a function that does something if `show_progress == True`
     and the current environment is interactive. Otherwise, return a
     do-nothing function.
 
@@ -160,9 +160,9 @@ class StdInputParser(object):
         label_tuple: tuple
             Tuple of operation labels representing the circuit's layers.
         line_labels: tuple or None
-            A tuple or `None` giving the parsed line labels (follwing the '@' symbol) of the circuit.
+            A tuple or `None` giving the parsed line labels (following the '@' symbol) of the circuit.
         occurrence_id: int or None
-            The "occurence id" - an integer following a second '@' symbol that identifies a particular
+            The "occurrence id" - an integer following a second '@' symbol that identifies a particular
             copy of this circuit.
         compilable_indices : tuple
             A tuple of layer indices (into `label_tuple`) marking the layers that can be "compiled",
@@ -264,7 +264,7 @@ class StdInputParser(object):
         circuitStr : string
             The circuit as represented as a string in the dictline.
         circuitLineLabels : tuple
-            The line labels of the cirucit.
+            The line labels of the circuit.
         occurrence : object
             Circuit's occurrence id, or `None` if there is none.
         compilable_indices : tuple or None
@@ -518,7 +518,7 @@ class StdInputParser(object):
                     # long-format (with times, reps, etc, lines) block OR could just be a circuit that doesn't have
                     # any count data.  This case figures out which one based on the line that follows.
                     if len(dataline) == 0 or dataline.split()[0] in ('times:', 'outcomes:', 'repetitions:', 'aux:'):
-                        looking_for = "circuit_data"  # blank lines shoudl process acumulated data
+                        looking_for = "circuit_data"  # blank lines should process accumulated data
                     else:
                         # previous blank line was just a circuit without any data (*not* the beginning of a timestamped
                         # section), so add it with zero counts (if we don't ignore it), and look for next circuit.
@@ -578,7 +578,7 @@ class StdInputParser(object):
 
                         if all([(abs(v) < 1e-9) for v in count_values]):
                             if ignore_zero_count_lines is True:
-                                if not ('BAD' in valueList):  # supress "no data" warning for known-bad circuits
+                                if not ('BAD' in valueList):  # suppress "no data" warning for known-bad circuits
                                     s = circuit.str if len(circuit.str) < 40 else circuit.str[0:37] + "..."
                                     warnings.append("Dataline for circuit '%s' has zero counts and will be ignored" % s)
                                 continue  # skip lines in dataset file with zero counts (no experiments done)
@@ -751,7 +751,7 @@ class StdInputParser(object):
                 except ValueError as e:
                     raise ValueError("%s Line %d: %s" % (filename, iLine, str(e)))
 
-                bBad = ('BAD' in valueList)  # supresses warnings
+                bBad = ('BAD' in valueList)  # suppresses warnings
                 for count_dict in dsCountDicts.values(): count_dict.clear()  # reset before filling
                 self._fill_multi_data_count_dicts(dsCountDicts, fillInfo, valueList)
 
@@ -867,7 +867,7 @@ class StdInputParser(object):
     def parse_tddatafile(self, filename, show_progress=True, record_zero_counts=True,
                          create_subcircuits=True):
         """
-        Parse a timstamped data set file into a DataSet object.
+        Parse a timestamped data set file into a DataSet object.
 
         Parameters
         ----------
@@ -1021,7 +1021,7 @@ def parse_model(filename):
                 state_space = _statespace.ExplicitStateSpace(tpbs_lbls, tpbs_udims)
 
     if basis_dim is not None:
-        # then specfy a dimensionful basis at the outset
+        # then specify a dimensionful basis at the outset
         # basis_dims should be just a single int now that the *vector-space* dimension
         basis = _baseobjs.BuiltinBasis(basis_abbrev, basis_dim)
     else:

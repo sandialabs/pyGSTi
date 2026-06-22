@@ -625,7 +625,7 @@ def fill_in_empty_dataset_with_fake_data(dataset_filename, model, num_samples, s
         What type of sample error is included in the counts.  Can be:
 
         - "none"  - no sample error: counts are floating point numbers such
-          that the exact probabilty can be found by the ratio of count / total.
+          that the exact probability can be found by the ratio of count / total.
         - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
           counts are always positive.
         - "round" - same as "clip", except counts are rounded to the nearest

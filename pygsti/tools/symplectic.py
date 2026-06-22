@@ -77,7 +77,7 @@ def change_symplectic_form_convention(s, outconvention='standard'):
     That is, if the input is a symplectic matrix with respect to the 'directsum'
     convention and outconvention ='standard' the output of this function is the
     equivalent symplectic matrix in the 'standard' symplectic form
-    convention. Similarily, if the input is a symplectic matrix with respect to the
+    convention. Similarly, if the input is a symplectic matrix with respect to the
     'standard' convention and outconvention = 'directsum' the output of this function
     is the equivalent symplectic matrix in the 'directsum' symplectic form
     convention.
@@ -174,7 +174,7 @@ def inverse_clifford(s, p):
     """
     Returns the inverse of a Clifford gate in the symplectic representation.
 
-    This uses the formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
+    This uses the formulas derived in Hostens and De Moor PRA 71, 042315 (2005).
 
     Parameters
     ----------
@@ -234,7 +234,7 @@ def check_valid_clifford(s, p):
     """
     Checks if a symplectic matrix - phase vector pair (s,p) is the symplectic representation of a Clifford.
 
-    This uses the formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
+    This uses the formulas derived in Hostens and De Moor PRA 71, 042315 (2005).
 
     Parameters
     ----------
@@ -345,7 +345,7 @@ def find_postmultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     Returns
     -------
     list
-        A list that defines a Pauli layer, with the ith element containig one of the
+        A list that defines a Pauli layer, with the ith element containing one of the
         4 tuples (P,qubit_labels[i]) with P = 'I', 'Z', 'Y' and 'Z'
     """
     n = _np.shape(s)[0] // 2
@@ -402,7 +402,7 @@ def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     Returns
     -------
     list
-        A list that defines a Pauli layer, with the ith element containig one of the
+        A list that defines a Pauli layer, with the ith element containing one of the
         4 tuples ('I',i), ('X',i), ('Y',i), ('Z',i).
     """
     n = _np.shape(s)[0] // 2
@@ -452,7 +452,7 @@ def compose_cliffords(s1, p1, s2, p2, do_checks=True):
 
     The output corresponds to the symplectic representation of C2 times C1 (i.e., C1
     acts first) where s1 (s2) and p1 (p2) are the symplectic matrix and phase vector,
-    respectively, for Clifford C1 (C2). This uses the formualas derived in Hostens
+    respectively, for Clifford C1 (C2). This uses the formulas derived in Hostens
     and De Moor PRA 71, 042315 (2005).
 
     Parameters
@@ -478,7 +478,7 @@ def compose_cliffords(s1, p1, s2, p2, do_checks=True):
     s : numpy array
         The symplectic matrix over the integers mod 2 representing the composite Clifford
     p : numpy array
-        The 'phase vector' over the integers mod 4 representing the compsite Clifford
+        The 'phase vector' over the integers mod 4 representing the composite Clifford
     """
     assert(_np.shape(s1) == _np.shape(s2)), "Input must be Cliffords acting on the same number of qubits!"
     if do_checks:
@@ -555,7 +555,7 @@ def symplectic_kronecker(sp_factors):
 
 def prep_stabilizer_state(nqubits, zvals=None):
     """
-    Contruct the `(s,p)` stabilizer representation for a computational basis state given by `zvals`.
+    Construct the `(s,p)` stabilizer representation for a computational basis state given by `zvals`.
 
     Parameters
     ----------
@@ -680,8 +680,8 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
     #This algorithm follows that of PRA 70, 052328 (2004),
     # except note:
     # 0) columns & rows are reversed
-    # 1) that states carry arount full "mod 4"
-    # phase vectors instead of the minmal "mod 2" ones
+    # 1) that states carry around full "mod 4"
+    # phase vectors instead of the minimal "mod 2" ones
     # comprised of the higher-order-bit of each "mod 4" vector.
     # 2) that the stabilizer is held in the *first* n
     # columns of state_s rather than the last n.
@@ -944,7 +944,7 @@ def compute_internal_gate_symplectic_representations(gllist=None):
     Returns a dictionary containing the symplectic matrices and phase vectors that represent
     the specified 'standard' Clifford gates, or the representations of *all* the standard gates
     if no list of operation labels is supplied. These 'standard' Clifford gates are those gates that
-    are already known to the code gates (e.g., the label 'CNOT' has a specfic meaning in the
+    are already known to the code gates (e.g., the label 'CNOT' has a specific meaning in the
     code), and are recorded as unitaries in "internalgates.py".
 
     Parameters
@@ -1062,7 +1062,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     """
     Returns the symplectic representation of the composite Clifford implemented by the specified Clifford circuit.
 
-    This uses the formualas derived in Hostens and De Moor PRA 71, 042315 (2005).
+    This uses the formulas derived in Hostens and De Moor PRA 71, 042315 (2005).
 
     Parameters
     ----------
@@ -1074,7 +1074,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         If not None, a dictionary providing the (symplectic matrix, phase vector)
         tuples associated with each operation label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this
-        may be None. Alternatively, if `pspec` is specifed and it contains the
+        may be None. Alternatively, if `pspec` is specified and it contains the
         gates in `circuit` in a Clifford model, it also does not need to be
         specified (and it is ignored if it is specified). Otherwise it must be
         specified.
@@ -1150,7 +1150,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         tuples associated with each operation label. If the circuit layer contains only
         'standard' gates which have a hard-coded symplectic representation this
         may be None. Otherwise it must be specified. If the layer contains some
-        standard gates it is not necesary to specify the symplectic represenation
+        standard gates it is not necessary to specify the symplectic representation
         for those gates.
 
     add_internal_sreps : bool, optional
@@ -1217,7 +1217,7 @@ def one_q_clifford_symplectic_group_relations():
     Pauli operator. E,g, ('P','P') = 'I'.
 
     This dictionary is important for Compiling multi-qubit Clifford
-    gates without unneccessary 1-qubit gate over-heads. But note that
+    gates without unnecessary 1-qubit gate over-heads. But note that
     this dictionary should not be used for compressing circuits containing
     these gates when the exact action of the circuit is of importance (not
     only the up-to-Paulis action of the circuit).
@@ -1536,9 +1536,9 @@ def random_clifford(n, rand_state=None):
     Returns
     -------
     s : numpy array
-        The symplectic matrix representating the uniformly sampled random Clifford.
+        The symplectic matrix representation the uniformly sampled random Clifford.
     p : numpy array
-        The phase vector representating the uniformly sampled random Clifford.
+        The phase vector representation the uniformly sampled random Clifford.
     """
     if rand_state is None:
         rand_state = _np.random.RandomState()

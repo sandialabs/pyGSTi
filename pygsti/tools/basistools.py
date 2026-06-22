@@ -21,7 +21,7 @@ from pygsti.baseobjs import basis as _basis
 @lru_cache(maxsize=1)
 def basis_matrices(name_or_basis, dim, sparse=False):
     """
-    Get the elements of the specifed basis-type which spans the density-matrix space given by `dim`.
+    Get the elements of the specified basis-type which spans the density-matrix space given by `dim`.
 
     Parameters
     ----------
@@ -256,7 +256,7 @@ def create_basis_pair(mx, from_basis, to_basis):
 
 def create_basis_for_matrix(mx, basis):
     """
-    Construct a Basis object with type given by `basis` and dimension approprate for transforming `mx`.
+    Construct a Basis object with type given by `basis` and dimension appropriate for transforming `mx`.
 
     Dimension is taken from `mx` (if it's not given by `basis`) that is `sqrt(mx.shape[0])`.
 

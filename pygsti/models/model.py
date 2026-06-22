@@ -2511,7 +2511,7 @@ class OpModel(Model):
         F = _np.dot(invDeriv, fogi_vecs)
         F = _np.concatenate((prefix_mx, F), axis=1)
 
-        #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shoudn't?
+        #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shouldn't?
         #fogi_param_names = ["P%d" % i for i in range(len(unused_param_indices))] \
         #    + ham_fogi_vec_names + other_fogi_vec_names
 
