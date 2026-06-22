@@ -2,6 +2,8 @@
 
 from warnings import warn
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
 import os
 import sys
 
@@ -50,25 +52,154 @@ for compiler, args in [
 
 
 class our_build_ext(build_ext):
+    """Two-phase, race-free parallel build of the Cython/C++ extensions.
 
-    def finalize_options(self):
-        super().finalize_options()
-        if self.parallel is None and sys.platform != "win32":  # respect explicit -j / config
-            """
-            That's a known failure mode of parallel build_ext on Windows:
-            a file-collision race between concurrent cl.exe processes. So
-            we guard on sys.platform != "win32".
-            """
-            self.parallel = int(os.environ.get("BUILD_JOBS", os.cpu_count()))
-    
+    Several extensions share the same hand-written ``.cpp`` sources (e.g.
+    ``statecreps.cpp`` is a source of four stabilizer extensions). setuptools'
+    built-in ``parallel`` builds *whole extensions* concurrently and names each
+    object file purely from its source path, so two extensions sharing a source
+    write the *same* ``.o`` at the same time -- a file-collision race that links a
+    truncated object and yields ``undefined symbol`` import errors (issue #791).
+
+    Instead we:
+      1. compile each distinct *compile job* exactly once, in parallel; then
+      2. link each extension sequentially from the already-built objects.
+
+    A "compile job" is a ``(source, compile-settings)`` pair, where the settings
+    are the macros, include dirs and compile flags that affect the emitted object.
+    Extensions that compile a shared source with **identical** settings share a
+    single object file (the common case: compiled once, not once-per-extension).
+    Extensions that ask for **different** settings on the same source each get
+    their own object, built with exactly their own flags -- so per-extension
+    compile flags are always respected, and a single (default) set of flags is
+    simply used for every job. Distinct settings are isolated in their own object
+    subdirectory so their object files never collide (and thus never race).
+    """
+
+    def _ext_compile_settings(self, ext):
+        """The object-affecting compile settings for ``ext`` (matches distutils)."""
+        macros = ext.define_macros[:]
+        for undef in ext.undef_macros:
+            macros.append((undef,))
+        return {
+            'macros': macros,
+            'include_dirs': list(ext.include_dirs or []),
+            'extra_postargs': list(ext.extra_compile_args or []),
+        }
+
+    def _plan_compiles(self):
+        """Group compiles by (settings, source) and assign each group an output dir.
+
+        Returns ``(jobs, ext_output_dir)`` where ``jobs`` maps each unique
+        ``(output_dir, source)`` to its compile parameters, and ``ext_output_dir``
+        maps each extension to the directory holding its objects. Extensions whose
+        settings are byte-for-byte identical map to the same output dir, so a
+        source they share is compiled exactly once; extensions with differing
+        settings get distinct dirs, so the same source can be compiled separately
+        with each extension's own flags without the two objects colliding.
+        """
+        jobs = {}
+        ext_output_dir = {}
+        sig_to_dir = {}
+        for ext in self.extensions:
+            settings = self._ext_compile_settings(ext)
+            # A stable key for the settings; identical settings -> identical key.
+            sig = repr((settings['macros'], settings['include_dirs'], settings['extra_postargs']))
+            if sig not in sig_to_dir:
+                if len(sig_to_dir) == 0:
+                    # First/most-common settings live directly in build_temp so the
+                    # usual single-flag-set build keeps the conventional layout.
+                    sig_to_dir[sig] = self.build_temp
+                else:
+                    digest = hashlib.sha1(sig.encode('utf-8')).hexdigest()[:12]
+                    sig_to_dir[sig] = os.path.join(self.build_temp, 'flags-' + digest)
+            output_dir = sig_to_dir[sig]
+            ext_output_dir[id(ext)] = output_dir
+            for src in ext.sources:
+                key = (output_dir, src)
+                if key not in jobs:
+                    jobs[key] = {
+                        'src': src,
+                        'output_dir': output_dir,
+                        'macros': list(settings['macros']),
+                        'include_dirs': list(settings['include_dirs']),
+                        'extra_postargs': list(settings['extra_postargs']),
+                        'depends': list(ext.depends or []),
+                    }
+                else:
+                    # Same source + same settings -> same object. Settings already
+                    # match (they define the key); only union the rebuild triggers.
+                    for d in (ext.depends or []):
+                        if d not in jobs[key]['depends']:
+                            jobs[key]['depends'].append(d)
+        return jobs, ext_output_dir
+
     def build_extensions(self):
         compiler = self.compiler.compiler_type
         args = BUILD_ARGS[compiler]
-        print("\n\nCompiler: ",compiler,"\n")
+        print("\n\nCompiler: ", compiler, "\n")
         for ext in self.extensions:
             if ext.language == "c++":  # only do this for c++ files, so we can specify -std=c++11, etc.
                 ext.extra_compile_args = args
-        build_ext.build_extensions(self)
+
+        jobs, ext_output_dir = self._plan_compiles()
+
+        # Pre-create every object output directory up front; distutils' mkpath is
+        # not safe to call concurrently from the compile workers below.
+        for job in jobs.values():
+            obj = self.compiler.object_filenames([job['src']], output_dir=job['output_dir'])[0]
+            os.makedirs(os.path.dirname(obj), exist_ok=True)
+
+        # ---- Phase 1: compile each distinct (source, settings) job once ----
+        def _compile_one(job):
+            self.compiler.compile(
+                [job['src']],
+                output_dir=job['output_dir'],
+                macros=job['macros'],
+                include_dirs=job['include_dirs'],
+                debug=self.debug,
+                extra_postargs=job['extra_postargs'],
+                depends=job['depends'],
+            )
+
+        # Keep Windows serial: concurrent cl.exe invocations have their own
+        # documented collision modes (e.g. shared PDBs). The compile-once dedup
+        # still makes the serial Windows build faster than before.
+        if sys.platform == "win32":
+            max_workers = 1
+        else:
+            max_workers = int(os.environ.get("BUILD_JOBS", os.cpu_count() or 1))
+
+        job_list = list(jobs.values())
+        if max_workers > 1:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                # list() forces iteration so exceptions from workers propagate.
+                list(pool.map(_compile_one, job_list))
+        else:
+            for job in job_list:
+                _compile_one(job)
+
+        # ---- Phase 2: link each extension sequentially from prebuilt objects ----
+        for ext in self.extensions:
+            output_dir = ext_output_dir[id(ext)]
+            ext_objects = self.compiler.object_filenames(ext.sources, output_dir=output_dir)
+            if ext.extra_objects:
+                ext_objects = ext_objects + list(ext.extra_objects)
+            ext_path = self.get_ext_fullpath(ext.name)
+            os.makedirs(os.path.dirname(ext_path), exist_ok=True)
+            language = ext.language or self.compiler.detect_language(ext.sources)
+            self.compiler.link_shared_object(
+                ext_objects,
+                ext_path,
+                libraries=self.get_libraries(ext),
+                library_dirs=ext.library_dirs,
+                runtime_library_dirs=ext.runtime_library_dirs,
+                extra_postargs=ext.extra_link_args or [],
+                export_symbols=self.get_export_symbols(ext),
+                debug=self.debug,
+                build_temp=self.build_temp,
+                target_lang=language,
+            )
 
 
 # Check if environment can try to build extensions
