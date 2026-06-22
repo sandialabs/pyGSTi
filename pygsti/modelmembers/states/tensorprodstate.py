@@ -19,6 +19,7 @@ import numpy as _np
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import listtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti import SpaceT
@@ -296,7 +297,7 @@ class TensorProductState(_State):
 
             if vec.num_params == 0: continue  # no contribution
             deriv = vec.deriv_wrt_params(None)  # TODO: use filter?? / make relative to this gate...
-            deriv.shape = (fct_dim, vec.num_params)
+            deriv = _compat.reshape_no_copy(deriv, (fct_dim, vec.num_params))
 
             if i > 0:  # factors before ith
                 pre = self.factors[0].to_dense("minimal")
@@ -314,7 +315,7 @@ class TensorProductState(_State):
                 "Error: gpindices has not been initialized for factor %d - cannot compute derivative!" % i
             derivMx[:, fct_local_inds] += deriv
 
-        derivMx.shape = (dim, self.num_params)  # necessary?
+        derivMx = _compat.reshape_no_copy(derivMx, (dim, self.num_params))  # necessary?
         if wrt_filter is None:
             return derivMx
         else:
