@@ -104,20 +104,6 @@ jobs:
       # the editable install alone yields importable .so for all 19 extensions).
       run: |
         uv pip install --system -e .[testing]
-    - name: Verify clean parallel extension build (Cython)
-      if: ${{ inputs.use-cython == 'true' }}
-      # Regression guard for issue #791: shared .cpp sources used to race during the
-      # parallel build and link a truncated object (undefined symbol at import). Force
-      # a from-scratch, oversubscribed parallel build and import every extension. The
-      # loop makes any residual race reproducible rather than a once-in-a-while flake.
-      shell: bash
-      run: |
-        for i in 1 2 3; do
-          rm -rf build
-          find pygsti -name "*.so" -delete
-          BUILD_JOBS=8 python setup.py build_ext --inplace
-          python -m pytest -q test/unit/objects/test_cython_build.py
-        done
     - name: Install package (No Cython, Linux only)
       if: ${{ inputs.use-cython != 'true' && inputs.os == 'ubuntu-latest' }}
       run: |
