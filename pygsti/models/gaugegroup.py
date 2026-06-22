@@ -25,6 +25,7 @@ from pygsti.baseobjs import (
     statespace as _statespace,
     ExplicitStateSpace as _ExplicitStateSpace
 )
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -260,7 +261,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         dT = self.inverse_element.deriv_wrt_params(wrt_filter)  # shape (d*d, n)
         d, n = int(round(_np.sqrt(dT.shape[0]))), dT.shape[1]
 
-        dT.shape = (d, d, n)  # call it (d1,d2,n)
+        dT = _compat.reshape_no_copy(dT, (d, d, n))  # call it (d1,d2,n)
         dT = _np.rollaxis(dT, 2)  # shape (n, d1, d2)
         deriv = -_np.dot(Tinv, _np.dot(dT, Tinv))  # d,d * (n,d,d * d,d) => d,d * n,d,d => d,n,d
         return _np.swapaxes(deriv, 1, 2).reshape(d * d, n)  # d,n,d => d,d,n => (d*d, n)

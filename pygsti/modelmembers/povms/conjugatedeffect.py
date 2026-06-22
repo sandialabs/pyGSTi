@@ -16,6 +16,7 @@ import copy as _copy
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 from pygsti.modelmembers import term as _term
 from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti import SpaceT
 
 
@@ -41,7 +42,7 @@ class DenseEffectInterface(object):
         Direct access the the underlying data as column vector, i.e, a (dim,1)-shaped array.
         """
         bv = self._ptr.view()
-        bv.shape = (bv.size, 1)  # 'base' is by convention a (N,1)-shaped array
+        bv = _compat.reshape_no_copy(bv, (bv.size, 1))  # 'base' is by convention a (N,1)-shaped array
         return bv
 
     def __copy__(self):
