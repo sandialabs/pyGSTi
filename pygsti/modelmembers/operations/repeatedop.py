@@ -15,6 +15,7 @@ import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti import SpaceT
 
 
@@ -200,7 +201,7 @@ class RepeatedOp(_LinearOperator):
             mx_powers[i] = _np.dot(mx_powers[i - 1], mx)
 
         dmx = _np.transpose(self.repeated_op.deriv_wrt_params(wrt_filter))  # (num_params, dim^2)
-        dmx.shape = (dmx.shape[0], self.dim, self.dim)  # set shape for multiplication below
+        dmx = _compat.reshape_no_copy(dmx, (dmx.shape[0], self.dim, self.dim))  # set shape for multiplication below
 
         deriv = _np.zeros((self.dim, dmx.shape[0], self.dim), 'd')
         for k in range(1, self.num_repetitions + 1):
