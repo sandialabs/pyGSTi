@@ -138,7 +138,9 @@ jobs:
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/notebooks --durations=25 test/test_packages
     - name: Run notebook regression
-      if: ${{ inputs.run-notebook-tests == 'true' }}
+      # Linux-only: this step compiles CHP with gcc and writes it to /usr/local/bin,
+      # so it cannot run on the Windows/macOS runners even if a caller requests it.
+      if: ${{ inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
       run: |
         # Tutorials live as MyST Markdown under docs/markdown/; jupytext pairs each
         # .md with an .ipynb sitting NEXT TO IT in the same directory (see
