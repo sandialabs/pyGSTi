@@ -173,31 +173,42 @@ class ImplicitOpModel(_mdl.OpModel):
         """
         gfilter = set(oplabel_filter) if oplabel_filter is not None \
             else None
+        exact_filter_names = {label.name for label in gfilter if isinstance(label, _Label)} \
+            if gfilter is not None else set()
 
         srep_dict = {}
+        sreps_by_name = _collections.defaultdict(list)
+
+        def include_label(label):
+            return gfilter is None or label in gfilter or label.name in gfilter
+
+        def sreps_equal(srep1, srep2):
+            return _np.array_equal(srep1[0], srep2[0]) and _np.array_equal(srep1[1], srep2[1])
 
         for gl in self.primitive_op_labels:
             gate = self.operation_blks['layers'][gl]
-            if (gfilter is not None) and (gl not in gfilter): continue
+            if not include_label(gl):
+                continue
 
             if isinstance(gate, _op.EmbeddedOp):
                 assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
                     "EmbeddedClifforGate contains a non-StaticCliffordOp!"
-                lbl = gl.name  # strip state space labels off since this is a
-                # symplectic rep for the *embedded* gate
                 srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
             elif isinstance(gate, _op.StaticCliffordOp):
-                lbl = gl.name
                 srep = (gate.smatrix, gate.svector)
             else:
-                lbl = srep = None
+                srep = None
 
-            if srep:
-                if lbl in srep_dict:
-                    assert(srep == srep_dict[lbl]), \
-                        "Inconsistent symplectic reps for %s label!" % lbl
-                else:
-                    srep_dict[lbl] = srep
+            if srep is not None:
+                sreps_by_name[gl.name].append((gl, srep))
+
+        for name, entries in sreps_by_name.items():
+            first_srep = entries[0][1]
+            if name not in exact_filter_names and all((sreps_equal(first_srep, srep) for _, srep in entries[1:])):
+                srep_dict[name] = first_srep
+            else:
+                for label, srep in entries:
+                    srep_dict[label] = srep
 
         return srep_dict
 
