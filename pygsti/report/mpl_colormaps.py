@@ -128,7 +128,7 @@ def mpl_make_linear_cmap(rgb_colors, name=None):
 
 def mpl_besttxtcolor(x, cmap, norm):
     """
-    Determinining function for whether text should be white or black
+    Determining function for whether text should be white or black
 
     Parameters
     ----------

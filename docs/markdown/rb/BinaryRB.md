@@ -108,7 +108,7 @@ design = pygsti.protocols.BinaryRBDesign(pspec, compilations['absolute'], depths
 
 pygsti.io.write_empty_protocol_data('../../tutorial_files/test_birb_dir', design, clobber_ok=True)
 
-# -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
+# -- fill in the dataset file in ../../tutorial_files/test_birb_dir/data/dataset.txt --
 simulate_taking_data('../../tutorial_files/test_birb_dir/data/dataset.txt') # REPLACE with actual data-taking
 
 data = pygsti.io.read_data_from_dir('../../tutorial_files/test_birb_dir')

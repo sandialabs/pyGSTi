@@ -61,7 +61,7 @@ class ExplicitOpModel(_mdl.OpModel):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
 
-    An ExplictOpModel stores a set of labeled LinearOperator objects and
+    An ExplicitOpModel stores a set of labeled LinearOperator objects and
     provides dictionary-like access to their matrices.  State preparation
     and POVM effect operations are represented as column vectors.
 
@@ -79,23 +79,23 @@ class ExplicitOpModel(_mdl.OpModel):
         which also gives a description of each parameterization type.
 
     prep_prefix: string, optional
-        Key prefixe for state preparations, allowing the model to determing what
+        Key prefix for state preparations, allowing the model to determining what
         type of object a key corresponds to.
 
     effect_prefix : string, optional
-        Key prefix for POVM effects, allowing the model to determing what
+        Key prefix for POVM effects, allowing the model to determining what
         type of object a key corresponds to.
 
     gate_prefix : string, optional
-        Key prefix for gates, allowing the model to determing what
+        Key prefix for gates, allowing the model to determining what
         type of object a key corresponds to.
 
     povm_prefix : string, optional
-        Key prefix for POVMs, allowing the model to determing what
+        Key prefix for POVMs, allowing the model to determining what
         type of object a key corresponds to.
 
     instrument_prefix : string, optional
-        Key prefix for instruments, allowing the model to determing what
+        Key prefix for instruments, allowing the model to determining what
         type of object a key corresponds to.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
@@ -419,7 +419,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
                     self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
 
-        self._clean_paramvec()  # param indices were probabaly updated
+        self._clean_paramvec()  # param indices were probably updated
         if set_default_gauge_group:
             self.set_default_gauge_group_for_member_type(to_type)
 
@@ -630,6 +630,11 @@ class ExplicitOpModel(_mdl.OpModel):
             _warnings.warn(("ExplicOpModel.num_modeltest_params could not obtain number of *non-gauge* parameters"
                             " - using total instead"), _UnknownGaugeSpaceDimension)
             return self.num_params
+
+    @num_modeltest_params.setter
+    def num_modeltest_params(self, count):
+        # Overriding the getter above drops the inherited setter, so re-expose it here.
+        self._num_modeltest_params = count
 
 
     @property
@@ -1061,7 +1066,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         spam_noise : float, optional
             apply depolarizing noise of strength ``1-spam_noise`` to all SPAM
-            opeations (state and POVM effects) in the model. (Multiplies the
+            operations (state and POVM effects) in the model. (Multiplies the
             non-identity part of each assumed-Pauli-basis state preparation
             vector and measurement vector by ``(1.0-spam_noise)``).
 
@@ -1502,7 +1507,7 @@ class ExplicitOpModel(_mdl.OpModel):
             delta = absmag * 2.0 * (rndm.random_sample(gate.shape) - 0.5) + bias
             kicked_gs.operations[opLabel] = _op.FullArbitraryOp(kicked_gs.operations[opLabel] + delta)
 
-        #Note: does not alter intruments!
+        #Note: does not alter instruments!
         return kicked_gs
 
     def compute_clifford_symplectic_reps(self, oplabel_filter=None):
@@ -1642,7 +1647,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
         from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
-        #go through ops, building up availability and unitaries, then create procesor spec...
+        #go through ops, building up availability and unitaries, then create processor spec...
 
         nqudits = self.state_space.num_qudits
         gate_unitaries = _collections.OrderedDict()
@@ -1818,7 +1823,7 @@ class ExplicitOpModel(_mdl.OpModel):
         if not normalized_elem_gens:
             def rescale(coeffs):
                 """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
-                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         to be coefficients for the usual un-normalized-Pauli-basis elementary gens.  This
                          is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
                          factor of d2 baked into it.
                 """

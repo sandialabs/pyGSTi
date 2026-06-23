@@ -700,7 +700,7 @@ class MultiDataSet(object):
                     'auxInfo': self.auxInfo,
                     'comments': self.comments,
                     'comment': self.comment}  # Don't pickle *Dict numpy data b/c it's inefficient
-        # Compatability for unicode-literal filenames
+        # Compatibility for unicode-literal filenames
         bOpen = not (hasattr(file_or_filename, 'write'))
         if bOpen:
             if file_or_filename.endswith(".gz"):
@@ -745,7 +745,7 @@ class MultiDataSet(object):
         -------
         None
         """
-        # Compatability for unicode-literal filenames
+        # Compatibility for unicode-literal filenames
         bOpen = not (hasattr(file_or_filename, 'write'))
         if bOpen:
             if file_or_filename.endswith(".gz"):

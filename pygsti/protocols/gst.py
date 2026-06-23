@@ -605,7 +605,7 @@ class GSTBadFitOptions(_NicelySerializable):
     actions : tuple, optional
         Actions to take when a GST fit is unsatisfactory. Allowed actions include:
         
-        * 'wildcard': Find an admissable wildcard model.
+        * 'wildcard': Find an admissible wildcard model.
         * 'wildcard1d': Fits a single parameter wildcard model in which
           the amount of wildcard error added to an operation is proportional
           to the diamond distance between that operation and the target.
@@ -2848,7 +2848,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         printer.log("   " + str(budget))
         printer.log("")
 
-        # Test that the found wildcard budget is admissable (there is not a strictly smaller wildcard budget
+        # Test that the found wildcard budget is admissible (there is not a strictly smaller wildcard budget
         # that also satisfies the constraints), and while doing this find the active constraints.
         printer.log("VERIFYING that the final wildcard budget vector is admissable")
 

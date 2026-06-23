@@ -157,7 +157,7 @@ class Polynomial(object):
             (see above). If None, the zero polynomial (no terms) is created.
 
         max_num_vars : int, optional
-            The maximum number of variables the represenatation is allowed to
+            The maximum number of variables the representation is allowed to
             have (x_0 to x_(`max_num_vars-1`)).  This sets the maximum allowed
             variable index within this polynomial.
         """
@@ -205,7 +205,7 @@ class Polynomial(object):
         The maximum number of independent variables this polynomial can hold.
 
         Powers of variables are not "independent", e.g. the polynomial x0^2 + 2*x0 + 3
-        has a single indepdent variable.
+        has a single independent variable.
 
         Returns
         -------
@@ -605,7 +605,7 @@ def bulk_load_compact_polynomials(vtape, ctape, keep_compact=False, max_num_vars
 
 def compact_polynomial_list(list_of_polys):
     """
-    Create a single vtape,ctape pair from a list of normal Polynomals
+    Create a single vtape,ctape pair from a list of normal Polynomials
 
     Parameters
     ----------

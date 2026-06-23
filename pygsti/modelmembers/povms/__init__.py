@@ -530,10 +530,12 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
                     
-                #Collect all ideal effects
+                #Collect all ideal effects.  Iterate over base_povm (built in both
+                #branches above) rather than base_items, which is left unset in the
+                #ComputationalBasisPOVM "easy case" branch.
                 base_dense_effects = []
-                for item in base_items:
-                    dense_effect = item[1].to_dense(on_space='HilbertSchmidt')
+                for _lbl, effect in base_povm.items():
+                    dense_effect = effect.to_dense(on_space='HilbertSchmidt')
                     base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
 
                 dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)

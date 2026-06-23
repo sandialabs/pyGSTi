@@ -33,13 +33,17 @@ First, we set our desired *target model* to be the standard $X(\pi/2)$, $Y(\pi/2
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XY
+import os
 target_model = smq1Q_XY.target_model()
 prep_fiducials, meas_fiducials = smq1Q_XY.prep_fiducials(), smq1Q_XY.meas_fiducials()
 germs = smq1Q_XY.germs()
 
 maxLengths = [1,2,4,8,16]
 
-ds = pygsti.io.load_dataset("../../tutorial_files/Example_Dataset.txt", cache=True)
+if os.path.exists("../../tutorial_files/Example_Dataset.txt"):
+  ds = pygsti.io.load_dataset("../../tutorial_files/Example_Dataset.txt", cache=True)
+else:
+  raise ValueError("You have to run the DataSet tutorial first!")
 ```
 
 ## `run_long_sequence_gst`
@@ -63,7 +67,7 @@ The above example supplies the minimal amount of information required to run the
 
 - Typically we want to apply certain constraints to a GST optimization.  As mentioned in the model tutorial, the space over which a gate-set estimation is carried out is dictated by the parameterization of the `target_model` argument.  For example, to constrain a GST estimate to be trace-preserving, one should call `set_all_parameterizations("TP")` on the target `Model` before calling `run_long_sequence_gst`.  See the [tutorial on explicit models](../objects/ExplicitModel) for more information.
 
-- the `gauge_opt_params` argument specifies a dictionary of parameters ultimately to be passed to the `gaugeopt_to_target` function (which provides full documentation).  By specifying an `item_weights` argument we can set the ratio of the state preparation and measurement (SPAM) weighting to the gate weighting when performing a gauge optimization.  In the example below, the gate parameters are weighted 1000 times more relative to the SPAM parameters.  Mathematically this corresponds to a multiplicative factor of 0.001 preceding the sum-of-squared-difference terms corresponding to SPAM elements in the model.   Typically it is good to weight the gates parameters more heavily since GST amplifies gate parameter errors via long operation sequences but cannot amplify SPAM parameter errors.  If unsure, 0.001 is a good value to start with.  For more details on the arguments of `gaugeopt_to_target`, see the previous tutorial on low-level algorithms.  For more infomation, see the [gauge optimization tutorial](../utilities/GaugeOpt).
+- the `gauge_opt_params` argument specifies a dictionary of parameters ultimately to be passed to the `gaugeopt_to_target` function (which provides full documentation).  By specifying an `item_weights` argument we can set the ratio of the state preparation and measurement (SPAM) weighting to the gate weighting when performing a gauge optimization.  In the example below, the gate parameters are weighted 1000 times more relative to the SPAM parameters.  Mathematically this corresponds to a multiplicative factor of 0.001 preceding the sum-of-squared-difference terms corresponding to SPAM elements in the model.   Typically it is good to weight the gates parameters more heavily since GST amplifies gate parameter errors via long operation sequences but cannot amplify SPAM parameter errors.  If unsure, 0.001 is a good value to start with.  For more details on the arguments of `gaugeopt_to_target`, see the previous tutorial on low-level algorithms.  For more infomation, see the [gauge optimization tutorial](../utilities/GaugeOpt).  Note that to supply your own `gauge_opt_params` you must also pass `gauge_opt_suite_name=None`, which disables the default `'stdgaugeopt'` suite (you can only specify one of the two).
 
 The below call illustrates all three of these.
 
@@ -74,7 +78,8 @@ mdl_target_TP.set_all_parameterizations("full TP") #constrain GST estimate to TP
 
 results_TP = pygsti.run_long_sequence_gst("../../tutorial_files/Example_Dataset.txt", mdl_target_TP,
                                          prep_fiducials, meas_fiducials, germs, maxLengths,
-                                        gauge_opt_params={'item_weights': {'gates': 1.0, 'spam': 0.001}})
+                                        gauge_opt_params={'item_weights': {'gates': 1.0, 'spam': 0.001}},
+                                        gauge_opt_suite_name=None)
 ```
 
 ## `run_long_sequence_gst_base`
