@@ -570,7 +570,10 @@ def _create_explicit_model_from_expressions(state_space, basis,
 
     from pygsti.circuits.circuitparser import parse_label
 
-    parsed_op_labels = [parse_label(str(opLabel)) for opLabel in op_labels]
+    # Canonicalize non-string labels through Label first, since e.g. str(('Gxpi2', 0)) and
+    # str(()) (the idle layer) are not directly parseable, whereas str(Label(...)) is.
+    parsed_op_labels = [parse_label(opLabel if isinstance(opLabel, str) else str(_label.Label(opLabel)))
+                        for opLabel in op_labels]
     if len(set(parsed_op_labels)) != len(op_labels):
         msg = f"""
         There are fewer unique Label objects after parsing op_labels than
@@ -2309,8 +2312,14 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
     if lindblad_error_coeffs is not None:
 
         if not allow_nonlocal:  # the easy case
-            modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, lindblad_parameterization)
-                                                   for lbl, val in lindblad_error_coeffs.items()}))
+            # Normalize any string error-generator keys (e.g. "HX") to the tuple form
+            # (e.g. ("H", "X")) understood by LindbladErrorgen.from_elementary_errorgens.
+            def _normalize_local_key(k):
+                return (k[0], k[1:]) if isinstance(k, str) else k
+            modelnoises.append(_OpModelPerOpNoise(
+                {lbl: _LindbladNoise({_normalize_local_key(k): v for k, v in val.items()},
+                                     lindblad_parameterization)
+                 for lbl, val in lindblad_error_coeffs.items()}))
         else:  # then need to process labels like ('H', 'XX:0,1') or 'HXX:0,1'
             def process_stencil_labels(flat_lindblad_errs):
                 nonlocal_errors = _collections.OrderedDict()

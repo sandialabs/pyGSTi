@@ -319,7 +319,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                           output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
                           disable_checkpointing=False,
                           simulator: Optional[ForwardSimulator.Castable]=None,
-                          gauge_opt_suite_name: str = 'stdgaugeopt'):
+                          gauge_opt_suite_name: Optional[str] = 'stdgaugeopt'):
     """
     Perform long-sequence GST (LSGST).
 
@@ -491,7 +491,12 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
 
     data = _proto.ProtocolData(exp_design, ds)
 
-    assert not (gauge_opt_suite_name and gauge_opt_params), 'Can only specify one of `gauge_opt_suite_name` or `gauge_opt_params`'
+    if gauge_opt_suite_name and gauge_opt_params:
+        msg = "`gauge_opt_params` and `gauge_opt_suite_name` cannot both be truthy.\n" \
+        "This error happens when `gauge_opt_params` is overriden from its default value (None),\n" \
+        "but `gauge_opt_suite_name` is left at its default value ('stdgaugeopt'). The fix in that\n" \
+        "situation is to override `gauge_opt_suite_name=None`."
+        raise ValueError(msg)
 
     if gauge_opt_suite_name is not None:
         gopt_suite = _proto.GSTGaugeOptSuite(
@@ -642,7 +647,12 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
 
-    assert not (gauge_opt_suite_name and gauge_opt_params), 'Can only specify one of `gauge_opt_suite_name` or `gauge_opt_params`'
+    if gauge_opt_suite_name and gauge_opt_params:
+        msg = "`gauge_opt_params` and `gauge_opt_suite_name` cannot both be truthy.\n" \
+        "This error happens when `gauge_opt_params` is overriden from its default value (None),\n" \
+        "but `gauge_opt_suite_name` is left at its default value ('stdgaugeopt'). The fix in that\n" \
+        "situation is to override `gauge_opt_suite_name=None`."
+        raise ValueError(msg)
 
     if gauge_opt_suite_name is not None:
         gopt_suite = _proto.GSTGaugeOptSuite(
