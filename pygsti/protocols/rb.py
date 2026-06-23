@@ -68,7 +68,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         useful for, e.g., detecting leakage/loss/measurement-bias etc.
 
     interleaved_circuit : Circuit, optional (default None)
-        Circuit to use in the constuction of an interleaved CRB experiment. When specified each
+        Circuit to use in the construction of an interleaved CRB experiment. When specified each
         random clifford operation is interleaved with the specified circuit.
 
     citerations : int, optional
@@ -396,7 +396,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
     An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random stabilizer state;
     (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled according to
     some user-specified distribution (specified by `sampler`), (3) a circuit that maps the output of
-    the preceeding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
+    the preceding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
     details.
 
     Parameters
@@ -462,7 +462,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
 
     cliffordtwirl : bool, optional
-        Wether to begin the circuits with a sequence that generates a random stabilizer state. For
+        Whether to begin the circuits with a sequence that generates a random stabilizer state. For
         standard DRB this should be set to True. There are a variety of reasons why it is better
         to have this set to True.
 
@@ -571,7 +571,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
             This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
 
         cliffordtwirl : bool, optional
-            Wether to begin the circuits with a sequence that generates a random stabilizer state. For
+            Whether to begin the circuits with a sequence that generates a random stabilizer state. For
             standard DRB this should be set to True. There are a variety of reasons why it is better
             to have this set to True.
 
@@ -740,7 +740,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
     the option of Pauli randomization and local Clifford twirling. To implement mirror RB it is necessary
     for U^(-1) to in the gate set for every gate U in the gate set.
 
-    **THIS METHOD IS IN DEVELOPEMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES OF PYGSTI!**
+    **THIS METHOD IS IN DEVELOPMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES OF PYGSTI!**
 
     Parameters
     ----------
@@ -877,7 +877,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
             # future: port the starmap functionality to the non-clifford case and merge the two methods
-            # by just callling `create_mirror_rb_circuit` but with a different argument.
+            # by just calling `create_mirror_rb_circuit` but with a different argument.
             if circuit_type == 'clifford':
                 args_list = [(pspec, clifford_compilations['absolute'], l)] * circuits_per_depth
                 kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
@@ -1186,7 +1186,7 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
         The number of (possibly) different CRB circuits sampled at each length.
 
     interleaved_circuit : Circuit
-        Circuit to use in the constuction of the interleaved CRB experiment. This is the circuit
+        Circuit to use in the construction of the interleaved CRB experiment. This is the circuit
         whose error rate is to be estimated by the IRB experiment.
 
     qubit_labels : list, optional

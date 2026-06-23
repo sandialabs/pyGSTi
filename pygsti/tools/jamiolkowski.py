@@ -132,7 +132,7 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
-    opMxInStdBasis_vec = opMxInStdBasis.flatten()
+    opMxInStdBasis_vec = opMxInStdBasis.flatten(order='C')
     # ^ use flatten, not ravel, in case we're using a CVXPY Expression.
     choiMx_rows = []
     for i in range(M):
@@ -413,7 +413,7 @@ def magnitudes_of_negative_choi_eigenvalues(model):
     Returns
     -------
     list of floats
-        list of the magnitues of all negative Choi eigenvalues.  The length of
+        list of the magnitudes of all negative Choi eigenvalues.  The length of
         this list will vary based on how many negative eigenvalues are found,
         as positive eigenvalues contribute nothing to this list.
     """

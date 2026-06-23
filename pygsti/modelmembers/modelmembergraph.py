@@ -196,7 +196,7 @@ class ModelMemberGraph(object):
         -------
         sdict: dict
             Flat dict of the ModelMemberGraph for serialization.
-            Keys are serialize_ids, values are derefernced dicts for each
+            Keys are serialize_ids, values are dereferenced dicts for each
             individual ModelMember.
         """
         sdict = OrderedDict()

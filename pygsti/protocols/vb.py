@@ -331,7 +331,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
     """
     Experiment design for periodic mirror-circuit benchmarking.
 
-    THIS METHOD IS IN DEVELOPEMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES
+    THIS METHOD IS IN DEVELOPMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES
     OF PYGSTI! THE DOCSTRINGS SHOULD ALSO NOT BE TRUSTED -- MANY (MAYBE ALL) OF THEM ARE COPIED FROM THE
     MIRRORBDESIGN OBJECT AND SO SOME BITS ARE WRONG OR NOT APPLICABLE.
 
@@ -857,7 +857,7 @@ class SummaryStatistics(_proto.Protocol):
             data_cache[key] = []
             num_existing = 0
 
-        #extract "base" values from cache, to base boostrap off of
+        #extract "base" values from cache, to base bootstrap off of
         # Wonky try statements aren't working...
         try:
             success_probabilities = data_cache['success_probabilities']

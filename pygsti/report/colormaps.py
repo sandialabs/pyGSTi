@@ -322,7 +322,7 @@ class LinlogColormap(Colormap):
     Parameters
     ----------
     vmin : float
-        The minium value of the data being colormapped.
+        The minimum value of the data being colormapped.
 
     vmax : float
         The maximum value of the data being colormapped.
@@ -428,7 +428,7 @@ class LinlogColormap(Colormap):
         Parameters
         ----------
         vmin : float
-            The minium value of the data being colormapped.
+            The minimum value of the data being colormapped.
 
         vmax : float
             The maximum value of the data being colormapped.
@@ -554,7 +554,7 @@ class DivergingColormap(Colormap):
     Parameters
     ----------
     vmin : float
-        The minium value of the data being colormapped.
+        The minimum value of the data being colormapped.
 
     vmax : float
         The maximum value of the data being colormapped.
@@ -639,7 +639,7 @@ class SequentialColormap(Colormap):
         Parameters
         ----------
         vmin : float
-            The minium value of the data being colormapped.
+            The minimum value of the data being colormapped.
 
         vmax : float
             The maximum value of the data being colormapped.

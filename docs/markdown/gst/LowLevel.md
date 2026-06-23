@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Low-level Algorithm API
-Once we have data for GST, there are several *algorithms* we can run on it to produce tomographic estimates. Depending on the amount of data you have, and time available for running LinearOperator Set Tomography, one algorithm may be preferable over the others.  **What is typically thought of as "standard GST" is the iterative maximum-likelihood optimization implemented by `run_iterative_gst`** which optimizes one or more objective functions iteratively, meaning it daisy-chains multiple optimizations, changing (typically *adding* to) the circuits under consideration or the objective function itself (e.g. from $\chi^2$ to the log-likelihood).
+Once we have data for GST, there are several *algorithms* we can run on it to produce tomographic estimates. Depending on the amount of data you have, and time available for running Gate Set Tomography, one algorithm may be preferable over the others.  **What is typically thought of as "standard GST" is the iterative maximum-likelihood optimization implemented by `run_iterative_gst`** which optimizes one or more objective functions iteratively, meaning it daisy-chains multiple optimizations, changing (typically *adding* to) the circuits under consideration or the objective function itself (e.g. from $\chi^2$ to the log-likelihood).
 
 `pygsti` contains two main low-level algorithms that form the base of the GST protocol(s):
 
@@ -99,7 +99,7 @@ opt_result, mdl_single_optimization = \
 The iterative algorithm, which essentially runs `run_gst_fit` multiple times, is implemented by `run_iterative_gst`.  The number of iterations is set by the number of circuit lists provided as the 3rd argument.  It takes two lists of objective function builders: the first, `iteration_objfn_builders` gives the objective functions to (sequentially) optimize on each iteration, while the second, `final_objfn_builders` gives additional objective functions to optimize on the final iteration.
 
 ```{code-cell} ipython3
-models, opt_results, cache = \
+models, optimums, final_objfn, mdc_store = \
     pygsti.algorithms.run_iterative_gst(ds, mdl_clgst, lsgstListOfLists,
                                        optimizer={'tol': 1e-5}, resource_alloc=None, verbosity=2,
                                        iteration_objfn_builders=['chi2'],

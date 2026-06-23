@@ -164,7 +164,7 @@ class FOGIDiagram(object):
                 vec_rate = sum(fogi_vec)  # sum of elements gives error rate of vector
                 # HERE - intrinsic relational rate addition is still a bit mysterious -- we should allow for
                 # negative rates to balance positive ones to get an overall error rate, but maybe it's more
-                # complicated than just adding teh elements up as we do above...
+                # complicated than just adding the elements up as we do above...
                 error_rate += self.fogi_comps[info['fogi_index']] * vec_rate
             assert(abs(error_rate.imag) < 1e-6)
             return {'error_rate': error_rate.real}  # maybe negative rates are ok (?) -- we could take abs here.

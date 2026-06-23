@@ -49,6 +49,7 @@ from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from typing import Union, Literal
@@ -60,7 +61,7 @@ class ExplicitOpModel(_mdl.OpModel):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
 
-    An ExplictOpModel stores a set of labeled LinearOperator objects and
+    An ExplicitOpModel stores a set of labeled LinearOperator objects and
     provides dictionary-like access to their matrices.  State preparation
     and POVM effect operations are represented as column vectors.
 
@@ -78,23 +79,23 @@ class ExplicitOpModel(_mdl.OpModel):
         which also gives a description of each parameterization type.
 
     prep_prefix: string, optional
-        Key prefixe for state preparations, allowing the model to determing what
+        Key prefix for state preparations, allowing the model to determining what
         type of object a key corresponds to.
 
     effect_prefix : string, optional
-        Key prefix for POVM effects, allowing the model to determing what
+        Key prefix for POVM effects, allowing the model to determining what
         type of object a key corresponds to.
 
     gate_prefix : string, optional
-        Key prefix for gates, allowing the model to determing what
+        Key prefix for gates, allowing the model to determining what
         type of object a key corresponds to.
 
     povm_prefix : string, optional
-        Key prefix for POVMs, allowing the model to determing what
+        Key prefix for POVMs, allowing the model to determining what
         type of object a key corresponds to.
 
     instrument_prefix : string, optional
-        Key prefix for instruments, allowing the model to determing what
+        Key prefix for instruments, allowing the model to determining what
         type of object a key corresponds to.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
@@ -418,7 +419,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
                     self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure, cp_penalty=spam_cp_penalty)
 
-        self._clean_paramvec()  # param indices were probabaly updated
+        self._clean_paramvec()  # param indices were probably updated
         if set_default_gauge_group:
             self.set_default_gauge_group_for_member_type(to_type)
 
@@ -528,7 +529,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if "gates" in state_dict:
             #Unpickling an OLD-version Model (or GateSet)
-            _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling deprecated-format ExplicitOpModel (GateSet).  Please re-save/pickle asap.",
+                           _pyGSTiDeprecationWarning)
             self.operations = state_dict['gates']
             self.state_space = state_dict['stateSpaceLabels']
             self._paramlbls = None
@@ -628,6 +630,11 @@ class ExplicitOpModel(_mdl.OpModel):
             _warnings.warn(("ExplicOpModel.num_modeltest_params could not obtain number of *non-gauge* parameters"
                             " - using total instead"), _UnknownGaugeSpaceDimension)
             return self.num_params
+
+    @num_modeltest_params.setter
+    def num_modeltest_params(self, count):
+        # Overriding the getter above drops the inherited setter, so re-expose it here.
+        self._num_modeltest_params = count
 
 
     @property
@@ -1059,7 +1066,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         spam_noise : float, optional
             apply depolarizing noise of strength ``1-spam_noise`` to all SPAM
-            opeations (state and POVM effects) in the model. (Multiplies the
+            operations (state and POVM effects) in the model. (Multiplies the
             non-identity part of each assumed-Pauli-basis state preparation
             vector and measurement vector by ``(1.0-spam_noise)``).
 
@@ -1348,7 +1355,7 @@ class ExplicitOpModel(_mdl.OpModel):
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", "auto", "auto", "auto",
                                     self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim.copy())
+                                    self.instruments._prefix, self._sim.copy(keep_model_attached=False))
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how increase is being done?
 
@@ -1430,7 +1437,7 @@ class ExplicitOpModel(_mdl.OpModel):
         new_model = ExplicitOpModel(sslbls, dumb_basis, "full", "auto", "auto", "auto",
                                     self.preps._prefix, self.effects_prefix,
                                     self.operations._prefix, self.povms._prefix,
-                                    self.instruments._prefix, self._sim.copy())
+                                    self.instruments._prefix, self._sim.copy(keep_model_attached=False))
         #new_model._dim = new_dimension # dim will be set when elements are added
         #new_model.reset_basis() #FUTURE: maybe user can specify how decrease is being done?
 
@@ -1500,7 +1507,7 @@ class ExplicitOpModel(_mdl.OpModel):
             delta = absmag * 2.0 * (rndm.random_sample(gate.shape) - 0.5) + bias
             kicked_gs.operations[opLabel] = _op.FullArbitraryOp(kicked_gs.operations[opLabel] + delta)
 
-        #Note: does not alter intruments!
+        #Note: does not alter instruments!
         return kicked_gs
 
     def compute_clifford_symplectic_reps(self, oplabel_filter=None):
@@ -1640,7 +1647,7 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
         from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
-        #go through ops, building up availability and unitaries, then create procesor spec...
+        #go through ops, building up availability and unitaries, then create processor spec...
 
         nqudits = self.state_space.num_qudits
         gate_unitaries = _collections.OrderedDict()
@@ -1816,7 +1823,7 @@ class ExplicitOpModel(_mdl.OpModel):
         if not normalized_elem_gens:
             def rescale(coeffs):
                 """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
-                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         to be coefficients for the usual un-normalized-Pauli-basis elementary gens.  This
                          is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
                          factor of d2 baked into it.
                 """
@@ -1847,36 +1854,40 @@ class ExplicitOpModel(_mdl.OpModel):
 
 def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> ExplicitOpModel:
     """
-    Return a copy of `mdl` whose members have been gauge-transformed by `s`,
-    while retaining the parameterization of `mdl`.
+    Return a copy of `mdl` whose members have been gauge-transformed by `s`, while retaining
+    the parameterization of `mdl`.
     
-    This function's implementation requires that `mdl` use ComposedState for
-    stateprep and ComposedPOVM for measurements. It does NOT require that
-    operations be represented with ComposedOp. It ignores any factories that
-    might be present in mdl.
+    Notes
+    -----
+    We require that `mdl` use ComposedState and ComposedPOVM for SPAM modelmembers.
+
+    Each key-value pair in `mdl.operations` will be be updated to replace the value
+    by a suitable ComposedOp object.
+    
+    The key-value pairs `(inst, lbl)` in `mdl.instruments` will be updated in one of 
+    two ways, depending on the type of `inst`.
+
+        If `inst` is of type `Instrument`, then its component operations will be replaced
+        with ComposedOp objects in a way that's consistent with changes to operations in `mdl`.
+
+        If `inst` is of type `TPInstrument`, then it will be updated by calling its
+        `transform_inplace` method. This may result in runtime errors if the gauge group
+        element `s` is not compatible with the structure of `inst`.
+    
+    This function ignores any factories that might be present in mdl.
     """
     from pygsti.models import ExplicitOpModel
     assert isinstance(mdl, ExplicitOpModel)
     if len(mdl.factories) > 0:
         _warnings.warn('The returned model will not retain the factories in mdl.')
-    if len(mdl.instruments) > 0:
-        raise NotImplementedError('Models with instruments are not supported.')
 
     oldmdl = mdl
-
-    def mycopy(_m):
-        # This function is a hack. It makes us robust to errors
-        # arising from copy.deepcopy in (re)linking model members
-        # to parent model objects.
-        s = _m.to_nice_serialization()
-        t = ExplicitOpModel.from_nice_serialization(s)
-        return t
-    
-    mdl = mycopy(oldmdl)
+    mdl = oldmdl.copy()
 
     from pygsti.modelmembers.operations import ComposedOp, StaticArbitraryOp
     from pygsti.modelmembers.povms import ComposedPOVM
     from pygsti.modelmembers.states import ComposedState
+    from pygsti.modelmembers.instruments import TPInstrument
 
     U    = StaticArbitraryOp(s.transform_matrix,         basis=oldmdl.basis)
     invU = StaticArbitraryOp(s.transform_matrix_inverse, basis=oldmdl.basis) 
@@ -1890,7 +1901,7 @@ def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> Ex
         # do this by packing invU into a new ComposedState's error map.
         assert isinstance(rho, ComposedState)
         static_rho = rho.state_vec
-        errmap  = ComposedOp([rho.error_map, invU])
+        errmap  = ComposedOp([rho.error_map, invU], state_space=mdl.state_space) # type: ignore
         mdl.preps[key] = ComposedState(static_rho, errmap)
 
     for key, povm in oldmdl.povms.items():
@@ -1899,13 +1910,24 @@ def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> Ex
         # belonging to `q`. Do this by packing U into the error map of `q`.
         assert isinstance(povm, ComposedPOVM)
         static_povm = povm.base_povm
-        errmap = ComposedOp([U, povm.error_map])
+        errmap = ComposedOp([U, povm.error_map], state_space=mdl.state_space) # type: ignore
         mdl.povms[key] = ComposedPOVM(errmap, static_povm, mx_basis=oldmdl.basis)
 
     for key, op in oldmdl.operations.items():
         # replace each operation `G` with `invU @ G @ U`.
         op_s = ComposedOp([U, op, invU])
         mdl.operations[key] = op_s
+
+    for key, inst in mdl.instruments.items():
+        if isinstance(inst, TPInstrument):
+            inst.transform_inplace(s)
+        else:
+            inst._readonly = False
+            for ek in list(inst.keys()):
+                op = inst[ek]
+                op_s = ComposedOp([U, op, invU], state_space=mdl.state_space) # type: ignore
+                inst[ek] = op_s
+            inst._readonly = True
 
     mdl._clean_paramvec()  # transform may leave dirty members
     return mdl

@@ -68,12 +68,14 @@ with open("../../example_files/mpi_example_script.py","w") as f:
     f.write(mpiScript)
 ```
 
-Next, we run the script with 3 processors using `mpiexec`.  The `mpiexec` executable should have been installed with your MPI distribution -- if it doesn't exist, try replacing `mpiexec` with `mpirun`.
+Next, we run the script with 3 processors using the `mpiexec` shell command.  In the context of a jupyter notebook we execute shell commands by prefixing the line with an exclamation point. We launch `mpiexec` with a temporary environment variable (`FI_PROVIDER=sockets`), since this can be necessary in some MPI distributions.
+
+Note: the `mpiexec` executable should have been installed with your MPI distribution -- if it doesn't exist, try replacing `mpiexec` with `mpirun`.
 
 ```{code-cell} bash
 :tags: [nbval-skip]
 
-mpiexec -n 3 python3 "../../example_files/mpi_example_script.py"
+!env FI_PROVIDER=sockets mpiexec -n 3 python3 "../../example_files/mpi_example_script.py"
 ```
 
 Notice in the above that output within `StandardGST.run` is not duplicated (only the first processor outputs to stdout) so that the output looks identical to running on a single processor.  Finally, we just need to read the saved `ModelEstimateResults` object from file and proceed with any post-processing analysis.  In this case, we'll just create a  report.

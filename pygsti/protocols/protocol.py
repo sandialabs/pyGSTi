@@ -638,7 +638,7 @@ class MultiPassProtocol(Protocol):
         MultiPassResults
         """
         results = MultiPassResults(data, self)
-        for pass_name, sub_data in data.passes.items():  # a multipass DataProtocol object contains per-pass datas
+        for pass_name, sub_data in data.passes.items():  # a multipass DataProtocol object contains per-pass data
             #TODO: print progress: pass X of Y, etc
             sub_results = self.protocol.run(sub_data, memlimit, comm)
             # TODO: maybe blank-out the .data and .protocol of sub_results since we don't need this info?
@@ -654,7 +654,7 @@ class ProtocolRunner(object):
     This class provides a way of combining multiple calls to :meth:`Protocol.run`,
     potentially running multiple protocols on different data.  From the outside, a
     :class:`ProtocolRunner` object behaves similarly, and can often be used
-    interchangably, with a Protocol object.  It posesses a `run` method that takes a
+    interchangeably, with a Protocol object.  It possesses a `run` method that takes a
     :class:`ProtocolData` as input and returns a :class:`ProtocolResultsDir` that can
     contain multiple :class:`ProtocolResults` objects within it.
     """
@@ -915,7 +915,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
     contain all the inputs needed to run any particular QCVV protocol (e.g. there
     may be additional parameters specified when creating a :class:`Protocol` object,
     and it may be the case that the data described by a single :class:`ExperimentDesign`
-    can be used by muliple protocols).  Rather, a :class:`ExperimentDesign`
+    can be used by multiple protocols).  Rather, a :class:`ExperimentDesign`
     specifies what is necessary to acquire and interpret the *data* needed for
     one or more QCVV protocols.
 
@@ -1959,7 +1959,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         what you want).
 
     category : str, optional
-        The category name for the qubit-label-tuples correspoding to the
+        The category name for the qubit-label-tuples corresponding to the
         elements of `edesigns`.
     """
 
@@ -2505,7 +2505,7 @@ class ProtocolData(_TreeNode, _MongoSerializable):
             delineating a path in the data-tree.
 
         paths_are_sorted : bool, optional
-            Whether `paths` has already been sorted lexographically.
+            Whether `paths` has already been sorted lexicographically.
 
         Returns
         -------
@@ -2574,7 +2574,7 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         if self.cache:
             _io.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
 
-        self._write_children(dirname, write_subdir_json=False)  # writes sub-datas
+        self._write_children(dirname, write_subdir_json=False)  # writes sub-data
 
     def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
                                                 overwrite_existing, parent=None, name=None,
@@ -2623,7 +2623,7 @@ class ProtocolData(_TreeNode, _MongoSerializable):
             # Maybe always overwrite_existing should be True?
 
         self._add_children_write_ops_and_update_doc(doc, write_ops, mongodb,
-                                                    overwrite_existing)  # writes sub-datas
+                                                    overwrite_existing)  # writes sub-data
 
     @classmethod
     def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
@@ -2899,7 +2899,7 @@ class ProtocolResults(_MongoSerializable):
     def _my_attributes_as_nameddict(self):
         #This function can be overridden by derived classes - this just
         # tries to give a decent default implementation.  Ideally derived
-        # implementatons would use ValueName and Value columns so results
+        # implementations would use ValueName and Value columns so results
         # can be aggregated easily.
         vals = _NamedDict('ValueName', 'category')
         ignore_members = ('name', 'protocol', 'data', 'auxfile_types')
@@ -3347,7 +3347,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
                                 " the data object didn't have any existing DB coordinates.  This *shouldn't*"
                                 " happen and this re-saving action is a last effort to finish this write operation"
                                 " without failing - you should check the results."))
-                # This may happen if parent data object didn't have all its sub-datas generated before is
+                # This may happen if parent data object didn't have all its sub-data generated before is
                 # was saved.  Accessing the subdata above should have generated it, so re-saving the parent
                 # will hopefully cause the data to be saved correctly (i.e. with link to parent data object)
                 self.data.write_to_mongodb(mongodb, write_ops.session, overwrite_existing)
@@ -3633,7 +3633,7 @@ class DataCountsSimulator(DataSimulator):
         What type of sample error is included in the counts.  Can be:
 
         - "none"  - no sample error: counts are floating point numbers such
-          that the exact probabilty can be found by the ratio of count / total.
+          that the exact probability can be found by the ratio of count / total.
         - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
           counts are always positive.
         - "round" - same as "clip", except counts are rounded to the nearest

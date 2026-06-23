@@ -54,7 +54,7 @@ class ModelTest(_proto.Protocol):
         i.e. the objective function that defines this model test.
 
     badfit_options : GSTBadFitOptions
-        Options specifing what constitutes a "bad fit" (or "failed test") and what
+        Options specifying what constitutes a "bad fit" (or "failed test") and what
         additional actions to take if and when this occurs.
 
     set_trivial_gauge_group : bool, optional
