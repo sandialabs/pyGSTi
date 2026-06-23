@@ -2087,7 +2087,7 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
 
     return_generators : bool, optional
         If True, return the error generators projected against along with the
-        projection values themseves.
+        projection values themselves.
 
     return_scale_fctr : bool, optional
         If True, also return the scaling factor that was used to multiply the

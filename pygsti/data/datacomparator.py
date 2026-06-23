@@ -54,7 +54,7 @@ def _loglikelihood_ratio(n_list_list):
     """
     log(_likelihood ratio) between one-context and multiple-context models.
 
-    Calculates the log-likelood ratio between the null hypothesis
+    Calculates the log-likelihood ratio between the null hypothesis
     that a die has *the same* probabilities in multiple "contexts" and
     that it has *different* probabilities in multiple "contexts".
 
@@ -67,7 +67,7 @@ def _loglikelihood_ratio(n_list_list):
     Returns
     -------
     float
-        The log-likehood ratio for this model comparison.
+        The log-likelihood ratio for this model comparison.
     """
     nListC = _np.sum(n_list_list, axis=0)
     pListC = nListC / _np.float64(_np.sum(nListC))
@@ -112,7 +112,7 @@ def _pval(llrval, dof):
     Parameters
     ----------
     llrval : float
-        The log-likehood ratio
+        The log-likelihood ratio
 
     dof : int
         The number of degrees of freedom associated with
@@ -147,7 +147,7 @@ def _llr_to_signed_nsigma(llrval, dof):
     Parameters
     ----------
     llrval : float
-        The log-likehood ratio
+        The log-likelihood ratio
 
     dof : int
         The number of degrees of freedom associated with
@@ -516,7 +516,7 @@ class DataComparator():
             Precisely, `significance` is what the "family-wise error rate" (FWER) of the full set
             of hypothesis tests (1 "aggregate test", and 1 test per sequence) is controlled to,
             as long as `per_circuit_correction` is set to the default value, or another option
-            that controls the FWER of the per-sequence comparion (see below).
+            that controls the FWER of the per-sequence comparison (see below).
 
         per_circuit_correction : string, optional (default is 'Hochberg')
             The multi-hypothesis test correction used for the per-circuit/sequence comparisons.
@@ -534,7 +534,7 @@ class DataComparator():
             * 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation
               technique. This controls the FWER, and it results in a strictly less powerful test than
               the Hochberg correction.
-            * 'none'. This implements no multi-test compensation for the per-sequence comparsions,
+            * 'none'. This implements no multi-test compensation for the per-sequence comparisons,
               so they are all implemented at a "local" signifincance level that is altered from `significance`
               only by the (inbuilt) Bonferroni-like correction between the "aggregate" test and the per-sequence
               tests. This option does *not* control the FWER, and many sequences may be flagged up as context
@@ -545,7 +545,7 @@ class DataComparator():
               the global significance is maintained for the test of "Is there any context dependence?". I.e.,
               one or more tests will trigger when there is no context dependence with at most a probability of `significance`. 
               But, if one or more per-sequence tests trigger then we are only guaranteed that (in expectation) no 
-              more than a fraction of "local-signifiance" of the circuits that have been flagged up as context dependent actually aren't.
+              more than a fraction of "local-significance" of the circuits that have been flagged up as context dependent actually aren't.
               Here, "local-significance" is the  significance at which the per-sequence tests are, together,
               implemented, which is `significance`*(1 - `aggregate_test_weighting`) if the aggregate test doesn't
               detect context dependence and `significance` if it does (as long as `pass_alpha` is True). This
@@ -555,7 +555,7 @@ class DataComparator():
         aggregate_test_weighting : float in [0,1], optional (default is 0.5)
             The weighting, in a generalized Bonferroni correction, to put on the "aggregate test", that jointly
             tests all of the data for context dependence (in contrast to the per-sequence tests). If this is 0 then
-            the aggreate test is not implemented, and if it is 1 only the aggregate test is implemented (unless it
+            the aggregate test is not implemented, and if it is 1 only the aggregate test is implemented (unless it
             triggers and `pass_alpha` is True).
 
         pass_alpha : Bool, optional (default is True)
@@ -761,7 +761,7 @@ class DataComparator():
         """
         Returns the (multi-test-adjusted) statistical significance pseudo-threshold for the per-sequence p-values.
 
-        The p-values under consideration are those obtained from the log-likehood ratio
+        The p-values under consideration are those obtained from the log-likelihood ratio
         test. This is a "pseudo-threshold", because it is data-dependent in general, but
         all the per-sequence p-values below this value are statistically significant. This
         quantity is given by Eq. (9) in "Probing context-dependent errors in quantum
@@ -1016,7 +1016,7 @@ class DataComparator():
         -------
         list
             A list of tuples containing the worst `number` circuits along
-            with the correpsonding p-values.
+            with the corresponding p-values.
         """
         worst_strings = sorted(self.pVals.items(), key=lambda kv: kv[1])[:number]
         return worst_strings

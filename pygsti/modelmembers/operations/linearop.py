@@ -16,6 +16,7 @@ import numpy as _np
 
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.opcalc import bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.tools import optools as _ot
 from pygsti.tools import matrixtools as _mt
@@ -767,7 +768,7 @@ def finite_difference_deriv_wrt_params(operation, wrt_filter, eps=1e-7):
         op2.from_vector(p_plus_dp)
         fd_deriv[:, :, ii] = (op2.to_dense("minimal") - dense_operation) / eps
 
-    fd_deriv.shape = [dim**2, len(wrt_filter)]
+    fd_deriv = _compat.reshape_no_copy(fd_deriv, [dim**2, len(wrt_filter)])
     return fd_deriv
 
 

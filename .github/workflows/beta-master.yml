@@ -26,7 +26,9 @@ jobs:
       run-unit-tests: 'true'
       run-integration-tests: 'true'
       run-extra-tests: 'true'
-      run-notebook-tests: 'false' # TODO: Turn off failing notebook tests for runner failures starting end of May 2024
+      # Run the docs notebook regression on exactly one job (Linux + Python 3.13 +
+      # Cython). The suite is slow, so we don't fan it out across the full OS/Python matrix.
+      run-notebook-tests: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13' && matrix.use-cython == 'true' }}
 
 
 

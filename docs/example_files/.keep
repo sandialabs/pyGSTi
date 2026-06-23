@@ -1,0 +1,3 @@
+Placeholder so this directory exists on a fresh checkout. The example notebooks
+under docs/markdown/ read and write files here via ../../example_files; those
+generated files are gitignored (see .gitignore).

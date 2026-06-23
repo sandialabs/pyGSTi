@@ -1331,7 +1331,7 @@ if _CVXPY_AVAILABLE:
 
     class HalfDiamondNorm(_modf.ModelFunction):
         """
-        Half the diamond distance bewteen `model_a.operations[op_label]` and `model_b.operations[op_label]`
+        Half the diamond distance between `model_a.operations[op_label]` and `model_b.operations[op_label]`
 
         Parameters
         ----------

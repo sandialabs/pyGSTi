@@ -44,7 +44,7 @@ class ImplicitOpModel(_mdl.OpModel):
     layer_rules : LayerRules
         The "layer rules" used for constructing operators for circuit
         layers.  This functionality is essential to using this model to
-        simulate ciruits, and is typically supplied by derived classes.
+        simulate circuits, and is typically supplied by derived classes.
 
     basis : Basis
         The basis used for the state space by dense operator representations.
@@ -314,7 +314,7 @@ class ImplicitOpModel(_mdl.OpModel):
                 for k, g in inst.simplify_operations(inst_lbl).items():
                     simplified_op_blks['op-' + inst_dict_lbl][k] = g
 
-        #FUTURE: allow cache "cateogories"?  Now we just flatten the work we did above:
+        #FUTURE: allow cache "categories"?  Now we just flatten the work we did above:
         self._opcaches.update(simplified_effect_blks)
         self._opcaches.update(simplified_op_blks)
         self._opcaches['complete-layers'] = {}  # used to hold final layers (of any type) if needed

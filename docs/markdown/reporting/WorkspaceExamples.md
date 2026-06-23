@@ -61,9 +61,9 @@ ds1 = results1.dataset
 ds2 = results2.dataset
 ds3 = results3.dataset
 
-mdl1 = results1.estimates['GateSetTomography'].models['go0']
-mdl2 = results2.estimates['GateSetTomography'].models['go0']
-mdl3 = results3.estimates['GateSetTomography'].models['go0']
+mdl1 = results1.estimates['GateSetTomography'].models['stdgaugeopt']
+mdl2 = results2.estimates['GateSetTomography'].models['stdgaugeopt']
+mdl3 = results3.estimates['GateSetTomography'].models['stdgaugeopt']
 
 gss = results1.circuit_lists['final']
 ```
@@ -138,7 +138,7 @@ w.GateMatrixPlot(pygsti.tools.error_generator(mdl1[('Gxpi2',0)], tgt[('Gxpi2',0)
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq2Q_XYCNOT
-w.GateMatrixPlot(smq2Q_XYCNOT.target_model()[('Gxpi2',0)],scale=1.0, box_labels=False,ylabel="hello",mx_basis="pp")
+w.GateMatrixPlot(smq2Q_XYCNOT.target_model()[('Gxpi2',0)],scale=1.0, box_labels=False,ylabel="hello",mx_basis_x="pp")
 ```
 
 ```{code-cell} ipython3

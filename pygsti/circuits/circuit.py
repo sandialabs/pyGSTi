@@ -2517,13 +2517,13 @@ class Circuit(object):
             lbl2 = circuit[i]
             assert isinstance(lbl, _Label)
             assert isinstance(lbl2, _Label)
-            if lbl == implicit_idle_layer and lbl2 != implicit_idle_layer:
-                implicit_sslbls_matter = True
-                break
-            elif lbl != implicit_idle_layer and lbl2 == implicit_idle_layer:
-                implicit_sslbls_matter = True
-                break
-            elif lbl != implicit_idle_layer and lbl2 != implicit_idle_layer and (lbl.sslbls is None or lbl2.sslbls is None):
+            # Only an actual *gate* with implicit (None) sslbls straddles the new lines.
+            # An empty idle layer (Label(())) contains no gates and is always safe to tensor
+            # (it just idles its own circuit's lines), so it must not trip this guard --
+            # SimultaneousExperimentDesign pads shorter circuits with such trailing idle layers.
+            lbl_implicit_gate = (lbl != implicit_idle_layer and lbl.sslbls is None)
+            lbl2_implicit_gate = (lbl2 != implicit_idle_layer and lbl2.sslbls is None)
+            if lbl_implicit_gate or lbl2_implicit_gate:
                 implicit_sslbls_matter = True
                 break
 
@@ -3274,7 +3274,7 @@ class Circuit(object):
 
         while productive:  # keep iterating
             productive = False
-            # Loop through all the qubits, to try and compress squences of 1-qubit gates on the qubit in question.
+            # Loop through all the qubits, to try and compress sequences of 1-qubit gates on the qubit in question.
             for ilayer in range(0, len(self._labels) - 1):
                 layerA_comps = self._layer_components(ilayer)
                 layerB_comps = self._layer_components(ilayer + 1)
@@ -5226,7 +5226,7 @@ class SeparatePOVMCircuit(object):
     Separately holds a POVM-less :class:`Circuit` object, a POVM label, and a list of effect labels.
 
     This is often used to hold "expanded" circuits whose instrument labels have been replaced with
-    specific instrument members and whose POVMs have simillarly been "expanded" except that we keep
+    specific instrument members and whose POVMs have similarly been "expanded" except that we keep
     the entire expanded POVM together in this one data structure.  (There's no especially good reason
     for this other than practicality - that since almost *all* circuits end with a POVM, holding each
     POVM outcome (effect) separately would be very wasteful.

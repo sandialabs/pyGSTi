@@ -76,7 +76,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         The base name (without extension) of the ".pdf" or ".pkl" files that are
         to be linked to by menu items.  For example, if `link_to` equals
         `("pdf",)` and `link_to_id` equals "plot1234", then a menu item linking
-        to the file "plot1234.pdf" will be added to the renderd plot.
+        to the file "plot1234.pdf" will be added to the rendered plot.
 
     rel_figure_dir : str, optional
         A relative path from the "current" path (the path of the generated
@@ -151,21 +151,21 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
 
     full_script = ''
 
-    #Note: in this case, upper logic (usually in an on-ready hander of the table/plot
+    #Note: in this case, upper logic (usually in an on-ready handler of the table/plot
     # group creation) is responsible for triggering a "create" event on the plot div
     # when appropriate (see workspace.py).
 
     #Get javascript for create and (possibly) resize handlers
-    plotly_create_js = plot_js  # the ususal plotly creation javascript
+    plotly_create_js = plot_js  # the usual plotly creation javascript
     plotly_resize_js = None
 
     if resizable:
-        #the ususal plotly resize javascript
+        #the usual plotly resize javascript
         plotly_resize_js = '  Plotly.Plots.resize(document.getElementById("{id}"));'.format(id=plotdivid)
 
         if 'angularaxis' in fig['layout']:
             #Special case of polar plots: Plotly does *not* allow resizing of polar plots.
-            # (I don't know why, and it's not documented, but in plotly.js there are explict conditions
+            # (I don't know why, and it's not documented, but in plotly.js there are explicit conditions
             #  in Plotly.relayout that short-circuit when "gd.frameworks.isPolar" is true).  So,
             #  we just re-create the plot with a different size to mimic resizing.
             plot_js = plot_js.replace('"width": 123', '"width": pw').replace('"height": 123', '"height": ph')
@@ -325,7 +325,7 @@ def format_plotlylib_inclusion_js():
                          "templates", "offline", "plotly-3.0.1.min.js")
 
     #EGN this block mocks-up resource_string to also work when using a
-    # local package... could look into whether this is unecessary if we
+    # local package... could look into whether this is unnecessary if we
     # just do a "pip -e pygsti" install instead of install_locally.py...
     with open(path, 'r', encoding='utf-8') as f:
         plotlyjs = f.read()
