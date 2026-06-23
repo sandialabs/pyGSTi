@@ -17,8 +17,8 @@ def chpexe_path():
     from pathlib import Path as _Path
     if chpexe is None:
         raise ValueError(("To use 'chp' evotype, please set `pygsti.evotypes.chp.chpexe` "
-                          "to the path to your chp executable, or 'chp_sim' to use the "
-                          "python 'chp_sim' package (which is currently not installed)."))
+                          "to the path to your chp executable, or install the `chp_sim` "
+                          "python package and set chpexe='chp_sim'."))
     return _Path(chpexe)
 
 
