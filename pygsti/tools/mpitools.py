@@ -56,7 +56,7 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         A dictionary mapping the elements of `indices` to integer ranks, such
         that `owners[el]` gives the rank of the processor responsible for
         communicating that element's results to the other processors.  Note that
-        in the case when `allow_split_comm=True` and multiple procesors have
+        in the case when `allow_split_comm=True` and multiple processors have
         computed the results for a given element, only a single (the first)
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
@@ -145,7 +145,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
         A dictionary mapping the elements of `indices` to integer ranks, such
         that `owners[el]` gives the rank of the processor responsible for
         communicating that element's results to the other processors.  Note that
-        in the case when `allow_split_comm=True` and multiple procesors have
+        in the case when `allow_split_comm=True` and multiple processors have
         computed the results for a given element, only a single (the first)
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
@@ -394,7 +394,7 @@ def gather_slices(slices, slice_owners, ar_to_fill,
         `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentially like
         passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
@@ -557,7 +557,7 @@ def gather_slices_by_owner(current_slices, ar_to_fill, ar_to_fill_inds,
         `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentially like
         passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
@@ -674,7 +674,7 @@ def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
         `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentially like
         passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
@@ -782,7 +782,7 @@ def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
 
 def distribute_for_dot(a_shape, b_shape, comm):
     """
-    Prepares for one or muliple distributed dot products given the dimensions to be dotted.
+    Prepares for one or multiple distributed dot products given the dimensions to be dotted.
 
     The returned values should be passed as `loc_slices` to :func:`mpidot`.
 
@@ -877,7 +877,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         same type of array (size, and whether it's shared or not) as this
         function would have created if `out` were `None`.
 
-    out_shm : multiprocessing.shared_memory.SharedMemory, optinal
+    out_shm : multiprocessing.shared_memory.SharedMemory, optional
         The shared memory object corresponding to `out` when it uses
         shared memory.
 
@@ -989,7 +989,7 @@ def sum_across_procs(x, comm):
     Parameters
     ----------
     x : object
-        Local value - the current processor's contrubution to the sum.
+        Local value - the current processor's contribution to the sum.
 
     comm : mpi4py.MPI.Comm
         MPI communicator
@@ -1206,7 +1206,7 @@ def write_mpi_runner_artifacts(
     * ``protocol/`` — the serialized protocol (via ``protocol_obj.write``).
 
     * ``volatile_run_kwargs.pkl`` — pickled keyword arguments for ``protocol.run``.
-        The "volatile" prfix indicates that this file's contents shouldn't be
+        The "volatile" prefix indicates that this file's contents shouldn't be
         treated as portable or long-lived.
 
     * ``mpi_runner.py`` — a stand-alone Python script that each MPI worker

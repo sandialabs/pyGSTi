@@ -212,7 +212,7 @@ def subcircuit_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit]
     aggregate_subcircs : bool
         Whether or not the provided Qiskit circuits should be used to create
         one combined subcircuit experiment design or kept separate.
-        Circuit aggregration can be useful if the provided circuits are all
+        Circuit aggregation can be useful if the provided circuits are all
         instances of the same 'kind' of the circuit, e.g., all
         Bernstein-Vazirani circuits with different secret keys.
 

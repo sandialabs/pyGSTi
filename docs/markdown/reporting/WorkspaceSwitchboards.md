@@ -54,9 +54,9 @@ ds1 = results1.dataset
 ds2 = results2.dataset
 ds3 = results3.dataset
 
-mdl1 = results1.estimates['GateSetTomography'].models['go0']
-mdl2 = results2.estimates['GateSetTomography'].models['go0']
-mdl3 = results3.estimates['GateSetTomography'].models['go0']
+mdl1 = results1.estimates['GateSetTomography'].models['stdgaugeopt']
+mdl2 = results2.estimates['GateSetTomography'].models['stdgaugeopt']
+mdl3 = results3.estimates['GateSetTomography'].models['stdgaugeopt']
 
 circuits = results1.circuit_lists['final']
 ```

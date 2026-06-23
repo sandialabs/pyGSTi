@@ -27,7 +27,7 @@ class ArraysInterface(object):
     that the algorithm doesn't need to worry about how the arrays are actually stored in memory,
     e.g. whether shared memory is used or not.
     """
-    pass  # just a base class - maybe make an abc abtract class in FUTURE?
+    pass  # just a base class - maybe make an abc abstract class in FUTURE?
 
 
 class UndistributedArraysInterface(ArraysInterface):
@@ -127,7 +127,7 @@ class UndistributedArraysInterface(ArraysInterface):
         Parameters
         ----------
         only_if_leader : bool, optional
-            If `True`, the current processor's parameter slice is ony returned if
+            If `True`, the current processor's parameter slice is only returned if
             the processor is the "leader" (i.e. the first) of the processors that
             calculate the same parameter slice.  All non-leader processors return
             the zero-slice `slice(0,0)`.
@@ -232,7 +232,7 @@ class UndistributedArraysInterface(ArraysInterface):
 
     def allgather_f(self, f, global_f):
         """
-        Gather an objective funtion (`f`) vector onto all the processors.
+        Gather an objective function (`f`) vector onto all the processors.
 
         Parameters
         ----------
@@ -261,7 +261,7 @@ class UndistributedArraysInterface(ArraysInterface):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -306,7 +306,7 @@ class UndistributedArraysInterface(ArraysInterface):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -662,7 +662,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         None
         """
-        self.layout.free_local_array(jtf)  # cleaup shared memory, if it was used
+        self.layout.free_local_array(jtf)  # cleanup shared memory, if it was used
 
     def deallocate_jtj(self, jtj):
         """
@@ -672,7 +672,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         None
         """
-        self.layout.free_local_array(jtj)  # cleaup shared memory, if it was used
+        self.layout.free_local_array(jtj)  # cleanup shared memory, if it was used
 
     def deallocate_jac(self, jac):
         """
@@ -682,7 +682,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         None
         """
-        self.layout.free_local_array(jac)  # cleaup shared memory, if it was used
+        self.layout.free_local_array(jac)  # cleanup shared memory, if it was used
 
     def global_num_elements(self):
         """
@@ -708,7 +708,7 @@ class DistributedArraysInterface(ArraysInterface):
         Parameters
         ----------
         only_if_leader : bool, optional
-            If `True`, the current processor's parameter slice is ony returned if
+            If `True`, the current processor's parameter slice is only returned if
             the processor is the "leader" (i.e. the first) of the processors that
             calculate the same parameter slice.  All non-leader processors return
             the zero-slice `slice(0,0)`.
@@ -817,7 +817,7 @@ class DistributedArraysInterface(ArraysInterface):
 
     def allgather_f(self, f, global_f):
         """
-        Gather an objective funtion (`f`) vector onto all the processors.
+        Gather an objective function (`f`) vector onto all the processors.
 
         Parameters
         ----------
@@ -853,7 +853,7 @@ class DistributedArraysInterface(ArraysInterface):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
@@ -906,7 +906,7 @@ class DistributedArraysInterface(ArraysInterface):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns

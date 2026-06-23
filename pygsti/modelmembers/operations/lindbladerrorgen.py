@@ -1129,7 +1129,6 @@ class LindbladErrorgen(_LinearOperator):
         """
         return self.coefficients(return_basis=False, logscale_nonham=True, label_type=label_type)
 
-    #TODO: This needs a unit test for correctness (there was an uncaught bug here).
     def set_coefficients(self, elementary_errorgens, action: Literal['update', 'add', 'reset'] = "update", 
                          logscale_nonham=False, truncate=True):
         """
@@ -1180,7 +1179,7 @@ class LindbladErrorgen(_LinearOperator):
             #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
             identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
             sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
-            elementary_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
+            elem_errorgens = {_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q): v
                               for k, v in elementary_errorgens.items()}
         else:
             assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
@@ -1193,7 +1192,7 @@ class LindbladErrorgen(_LinearOperator):
                 for k in blk_elem_errorgens:
                     blk_elem_errorgens[k] = 0.0
 
-            for k, v in elementary_errorgens.items():
+            for k, v in elem_errorgens.items():
                 if logscale_nonham and k.errorgen_type == "S":
                     # treat the value being set in lindblad_term_dict as the *channel* stochastic error rate, and
                     # set the errgen coefficient to the value that would, in a depolarizing channel, give
@@ -1645,6 +1644,10 @@ class LindbladParameterization(_NicelySerializable):
             elif abbrev == "GLNDU":
                 # like GLND, but the non-Hamiltonian block uses the flat, per-elementary-errorgen
                 # 'other_unconstrained' representation (supports reduced/flexible parameterizations).
+                #
+                # TODO: Per Corey's PR comment,
+                #   https://github.com/sandialabs/pyGSTi/pull/755#discussion_r3424540867,
+                # he'd prefer that this GLNDU parameterization replace GLND entirely.
                 block_types = ['ham', 'other_unconstrained']; param_modes = ['elements', 'elements']
             else:
                 block_types = []; param_modes = []

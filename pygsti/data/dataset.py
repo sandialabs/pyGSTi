@@ -1149,7 +1149,7 @@ class DataSet(_MongoSerializable):
 
     def __setitem__(self, circuit, outcome_dict_or_series):
         ca = self.collisionAction
-        self.collisionAction = 'overwrite'  # overwrite data when assigning (this seems mose natural)
+        self.collisionAction = 'overwrite'  # overwrite data when assigning (this seems more natural)
         try:
             ret = self._set_row(circuit, outcome_dict_or_series)
         finally:
@@ -1337,12 +1337,12 @@ class DataSet(_MongoSerializable):
             present (usually = non-zero) outcomes recorded minus one. 'tuned' should
             be the most accurate, as it accounts for low-N "Poisson bump" behavior,
             but it is not the default because it is still under development. For
-            timestamped data, see `aggreate_times` below.
+            timestamped data, see `aggregate_times` below.
 
         aggregate_times : bool, optional
             Whether counts that occur at different times should be tallied separately.
             If True, then even when counts occur at different times degrees of freedom
-            are tallied on a per-circuit basis.  If False, then counts occuring at
+            are tallied on a per-circuit basis.  If False, then counts occurring at
             distinct times are treated as independent of those an any other time, and
             are tallied separately.  So, for example, if `aggregate_times` is False and
             a data row has 0- and 1-counts of 45 & 55 at time=0 and 42 and 58 at time=1
@@ -1605,7 +1605,7 @@ class DataSet(_MongoSerializable):
         key : str
             The string key of the measurement. Set by cirq.measure.
 
-        convert_int_to_binary : bool, optional (defaut True)
+        convert_int_to_binary : bool, optional (default True)
             By default the keys in the cirq Results object are the integers representing
             the bitstrings of the measurements on a set of qubits, in big-endian convention.
             If True this converts back to a binary string before adding the counts as a 
@@ -1732,7 +1732,7 @@ class DataSet(_MongoSerializable):
         else:
             if self.repData is None:
                 #rep count data was given, but we're not currently holding repdata,
-                # so we need to build this up for all existings sequences:
+                # so we need to build this up for all existing sequences:
                 self._add_explicit_repetition_counts()
 
         if rep_array is not None:
@@ -2334,7 +2334,7 @@ class DataSet(_MongoSerializable):
                     raise ValueError("Invalid `missing_action`: %s" % str(missing_action))
 
         if len(missingStrs) > 0:
-            missingStrs.append("...")  # so elipses are shown when there's more strings
+            missingStrs.append("...")  # so ellipses are shown when there's more strings
             _warnings.warn(("DataSet.truncate(...) was given %s strings to keep"
                             " that weren't in the original dataset:\n%s") %
                            (len(missingStrs) - 1, "\n".join(map(str, missingStrs[0:10]))))
@@ -2486,7 +2486,7 @@ class DataSet(_MongoSerializable):
         """
         Manipulate this DataSet's timestamps according to `processor_fn`.
 
-        For example, using, the folloing `process_times_array_fn` would change
+        For example, using, the following `process_times_array_fn` would change
         the timestamps for each circuit to sequential integers. ::
         
             def process_times_array_fn(times):
@@ -2530,7 +2530,7 @@ class DataSet(_MongoSerializable):
             `None`, in which case the data for that string is deleted.
 
         aggregate : bool, optional
-            When `True`, aggregate the data for ciruits that `processor_fn`
+            When `True`, aggregate the data for circuits that `processor_fn`
             assigns to the same "new" circuit.  When `False`, use the data
             from the *last* original circuit that maps to a given "new" circuit.
 
@@ -2559,7 +2559,7 @@ class DataSet(_MongoSerializable):
             `None`, in which case the data for that string is deleted.
 
         aggregate : bool, optional
-            When `True`, aggregate the data for ciruits that `processor_fn`
+            When `True`, aggregate the data for circuits that `processor_fn`
             assigns to the same "new" circuit.  When `False`, use the data
             from the *last* original circuit that maps to a given "new" circuit.
 
@@ -2656,7 +2656,7 @@ class DataSet(_MongoSerializable):
             del self.auxInfo[ky]
 
         if len(missingStrs) > 0:  # Print a warning with missing strings
-            missingStrs.append("...")  # so elipses are shown when there's more strings
+            missingStrs.append("...")  # so ellipses are shown when there's more strings
             _warnings.warn(("DataSet.remove(...) cannot remove %s strings because"
                             " they don't exist in the original dataset:\n%s") %
                            (len(missingStrs) - 1, "\n".join(map(str, missingStrs[0:10]))))

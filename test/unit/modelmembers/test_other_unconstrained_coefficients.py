@@ -74,7 +74,7 @@ def test_elementary_errorgen_indices_are_identity_map():
 def test_coefficient_and_param_labels():
     pp = Basis.cast('pp', 4)
     blk = LCB('other_unconstrained', pp, param_mode='elements')
-    labels = blk.param_labels
+    labels = blk.coefficient_labels
     assert len(labels) == blk.num_params
     assert any('stochastic' in s for s in labels)
     assert any('pauli-correlation' in s for s in labels)

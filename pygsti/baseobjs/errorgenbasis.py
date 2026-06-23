@@ -32,7 +32,7 @@ class ElementaryErrorgenBasis(_NicelySerializable):
     def label_indices(self, labels, ok_if_missing=False):
         """ 
         Return a list of indices into this basis's label list
-        for the specifed list of `ElementaryErrorgenLabels`.
+        for the specified list of `ElementaryErrorgenLabels`.
 
         Parameters
         ----------
@@ -77,7 +77,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         Parameters
         ----------
         state_space : `StateSpace`
-            An object describing the struture of the entire state space upon which the elements
+            An object describing the structure of the entire state space upon which the elements
             of this error generator basis act.
 
         labels : list or tuple of `ElementaryErrorgenLabel`
@@ -520,7 +520,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             `ElementaryErrorgenLabels` in `labels`.
 
         state_space : `StateSpace`
-            An object describing the struture of the entire state space upon which the elements
+            An object describing the structure of the entire state space upon which the elements
             of this error generator basis act.
 
         elementary_errorgen_types : tuple of str, optional (default ('H', 'S', 'C', 'A'))
@@ -612,7 +612,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #                      [(ntriv,ntriv), (ntriv,triv)] or   (XX,XI)
         #                      [(ntriv,ntriv), (ntriv,ntriv)] or   (XX,XX) -- k^4 elements (up to k^(2n) in general)
         #    e.g. for 3 qubit: (IIX,XXI)  # start with weight-1's on left
-        #                      (IIX,XXX)  #   loop over filling in the (at least 1) nontrivial left-index with trival
+        #                      (IIX,XXX)  #   loop over filling in the (at least 1) nontrivial left-index with trivial
         #                      (IXI,XIX)  #                                                     & nontrivial on right
         #                      (IXI,XXX)
         #                      ...

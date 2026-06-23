@@ -188,23 +188,21 @@ Assuming you've followed the *local installation* directions above:
 * Change to the docs directory, by running:
     ``cd docs``
 
-* Convert the Markdown files to their corresponding notebooks:
-    ``jupytext --sync markdown/**/*.md``
-
-* Change to the newly populated `notebooks` directory:
-    ``cd notebooks``
+* Build the notebooks from their Markdown sources, by running:
+    ``jupytext --to notebook markdown/**/*.md`` 
+  This writes an `.ipynb` next to each `.md` under `markdown/`.
 
 * Start up the Jupyter notebook server by running ``jupyter notebook`` or a JupyterLab server by running ``jupyter lab``.
 
 The Jupyter server should open up your web browser to the server root, from
-where you can start the first `intro.ipynb` notebook.  Note that the key
+where you can start the first `markdown/intro.ipynb` notebook.  Note that the key
 command to execute a cell within the Jupyter notebook is ``Shift+Enter``, not
 just ``Enter``.
 
 #### Contributing notebook changes
-**Only the `docs/markdown/*.md` files are version-controlled.** The `docs/notebooks/` directory is gitignored —
-it's a build artifact materialized by `jupytext --sync`. The canonical source is the `.md` file, and edits there
-"win" on the next sync. So:
+**Only the `docs/markdown/*.md` files are version-controlled.** The paired `.ipynb` files — generated next to
+each `.md` under `docs/markdown/` — are gitignored build artifacts. The canonical source is the `.md` file, and
+edits there "win" on the next sync. So:
 
 - If you find it more convenient to edit the `.ipynb` (e.g. for interactive iteration), **sync your edits back to
   Markdown before committing**: from the `docs/` folder run `jupytext --sync markdown/**/*.md`, then commit the updated `.md`.

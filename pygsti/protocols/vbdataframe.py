@@ -133,7 +133,7 @@ def classify_circuit_shape(success_probabilities, total_counts, threshold, signi
 
     # If the hypothesis test doesn't reject the hypothesis that they're all above the threshold, and it does
     # reject the hypothesis that they're all below the threshold we say that all the circuits
-    # suceeded.
+    # succeeded.
     if reject_all_below and (not reject_all_above):
         return 2
     # If the hypothesis test doesn't reject the hypothesis that they're all below the threshold, and it does

@@ -463,7 +463,7 @@ def create_elementary_errorgen_pauli(typ: Literal_HSCA, p: _np.ndarray, q: Optio
             for i in range(d): 
                 for j in range(d):
                     rho1 = p[:,i].reshape((d,1))@p[j,:].reshape((1,d))
-                    rho1[i,j] += -rho_scale
+                    rho1[i,j] -= rho_scale
                     elem_errgen[:, d*i+j] = rho1.flatten()[:, None] if sparse else rho1.flatten()
         elif typ == 'C':
             # Loop through the standard basis as all possible input density matrices

@@ -23,7 +23,7 @@ except ImportError:
     triu_indices = _np.triu_indices
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
-from typing import Union, Literal, Optional
+from typing import Union, Literal
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 
 
@@ -205,15 +205,8 @@ class _EEGVectorElements(_RealVectorElements):
         return _np.identity(len(blk._eeg_labels), 'd')
 
     def param_labels(self, blk):
-        labels = []
-        for lbl in blk._eeg_labels:            
-            if lbl.errorgen_type == 'S':
-                labels.append(f"{lbl} stochastic coefficient")
-            elif lbl.errorgen_type == 'C':
-                labels.append(f"{lbl} pauli-correlation coefficient")
-            else: #'A'
-                labels.append(f"{lbl} active coefficient")
-        return labels
+        return blk._coefficient_labels_impl()
+
 
 class _DiagCholesky(_BlockParameterization):
     """Diagonal Pauli-stochastic CPTP parameterization: block_data[i] = v[i]**2 (>= 0)."""
@@ -262,7 +255,7 @@ class _Depol(_BlockParameterization):
         nonneg = [val >= ttol for val in blk.block_data]
         assert all(nonneg), f"Lindblad stochastic coefficients are not positive! (tol={ttol})"
         first = blk.block_data[0]
-        all_equal = [_np.isclose(val, first, atol=1e-6) for val in blk.block_data]
+        all_equal = _np.isclose(blk.block_data, first, atol=1e-6)
         assert all(all_equal), f"Diagonal lindblad coefficients are not equal! (tol={ttol})"
         avg = _np.mean(blk.block_data.clip(0, 1e100))
         return _np.array([_np.sqrt(_np.real(avg))], 'd')
@@ -541,7 +534,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             and 'other' (for Pauli stochastic, Pauli correlation and active error generators).
         
         basis : `Basis`
-            `Basis` object to be used by this coefficient block. Note this must be an actual `Basis` object, and not
+            `Basis` object to be used by this coefficient block. Not this must be an actual `Basis` object, and not
             a string (as the coefficient block doesn't have the requisite dimensionality information needed for casting).
         
         basis_element_labels : list or tuple of str
@@ -555,9 +548,9 @@ class LindbladCoefficientBlock(_NicelySerializable):
             String specifying the type of internal parameterization used by this coefficient block. Allowed options are:
             
             - For all block types: 'static'
-            - For 'ham': 'elements', 'direct'
-            - For 'other_diagonal': 'elements', 'cholesky', 'depol', 'reldepol', 'direct'
-            - For 'other': 'elements', 'cholesky', 'direct'
+            - For 'ham': 'elements'
+            - For 'other_diagonal': 'elements', 'cholesky', 'depol', 'reldepol'
+            - For 'other': 'elements', 'cholesky'
 
             Note that the most commonly encounted settings in practice are 'elements' and 'cholesky',
             which when used in the right combination are utilized in the construction of GLND and CPTPLND
@@ -566,10 +559,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             
             'depol' and 'reldepol' are special modes used only for Pauli stochastic only coefficient blocks
             (i.e. 'other_diagonal'), and correspond to special reduced parameterizations applicable to depolarizing
-            channels. For 'depol' this depolarization rate is CP-constrained, while for 'reldepol' it is not.
-
-            'direct' mode corresponds to a direct one-to-one correspondenc between coefficients and individual
-            error generator rates.
+            channels. (TODO: Add better explanation of the difference between depol and reldepol).
         
         truncate : bool, optional (default False)
             Flag specifying whether to truncate the parameters given by `initial_block_data` in order to meet
@@ -754,6 +744,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             return self._cached_elementary_errorgen_indices
 
         idx = self._elementary_errorgen_indices_impl()
+
         self._cached_elementary_errorgen_indices = idx
         return idx
 
@@ -850,6 +841,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
         return out[1] if return_projected_errorgen else None
 
     @property
+    def coefficient_labels(self):
+        """Labels for the elements of `self.block_data` (flattened if relevant)"""
+        return self._coefficient_labels_impl()
+
+    @property
     def param_labels(self) -> list:
         """
         Generate human-readable labels for the parameters of this block.
@@ -916,7 +912,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
         Jacobian of block_data w.r.t. the real parameters v.
         Dispatches to _deriv_wrt_params_<block_type>.
         """
-        num_bels = len(self._bel_labels)
         v = self.to_vector() if (v is None) else v
         nP = len(v)
         assert(nP == self.num_params), f"Expected {self.num_params} parameters, got {nP}!"
@@ -1112,6 +1107,10 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
             block_data_indices[i] = [(1.0, _LEEL('H', (lbl,)))]
         return block_data_indices
 
+    def _coefficient_labels_impl(self):
+        return ["%s Hamiltonian error coefficient" % lbl for lbl in self._bel_labels]
+
+
 class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
     """Pauli-stochastic diagonal (``block_type='other_diagonal'``) Lindblad coefficient block.
 
@@ -1175,6 +1174,10 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
         for i, lbl in enumerate(self._bel_labels):
             block_data_indices[i] = [(1.0, _LEEL('S', (lbl,)))]
         return block_data_indices
+
+    def _coefficient_labels_impl(self):
+        return ["(%s,%s) other error coefficient" % (lbl, lbl) for lbl in self._bel_labels]
+
 
 class _OtherCoeffBlock(LindbladCoefficientBlock):
     """Full non-Hamiltonian (``block_type='other'``) Lindblad coefficient block (Pauli
@@ -1277,6 +1280,14 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
                 block_data_indices[ij] = [(1.0, _LEEL('C', (lbl1, lbl2))), (-1.0j, _LEEL('A', (lbl1, lbl2)))]
                 block_data_indices[ji] = [(1.0, _LEEL('C', (lbl1, lbl2))), (+1.0j, _LEEL('A', (lbl1, lbl2)))]
         return block_data_indices
+
+    def _coefficient_labels_impl(self):
+        labels = []
+        for i, ilbl in enumerate(self._bel_labels):
+            for j, jlbl in enumerate(self._bel_labels):
+                labels.append("(%s,%s) other error coefficient" % (ilbl, jlbl))
+        return labels
+
 
 class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
     """Flat, unconstrained non-Hamiltonian (``block_type='other_unconstrained'``) Lindblad
@@ -1434,6 +1445,17 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
     def _block_data_indices_impl(self):
         return {i: [(1.0, lbl)] for i, lbl in enumerate(self._eeg_labels)}
 
+    def _coefficient_labels_impl(self):
+        out = []
+        for lbl in self._eeg_labels:
+            t = lbl.errorgen_type
+            if t == 'S':
+                out.append("%s stochastic coefficient" % lbl)
+            elif t == 'C':
+                out.append("%s pauli-correlation coefficient" % lbl)
+            else:  # 'A'
+                out.append("%s active coefficient" % lbl)
+        return out
 
     # --- overrides that must account for _eeg_labels (vs. the base's _bel_labels) ---
 
@@ -1463,997 +1485,3 @@ LindbladCoefficientBlock._BLOCK_TYPES = {
 @lru_cache(maxsize=16)
 def cached_diag_indices(n):
     return _np.diag_indices(n)
-
-
-class UnconstrainedLindbladCoefficientBlock(_NicelySerializable):
-    """ 
-    Class for storing and managing the parameters associated with particular subblocks of error-generator
-    parameters. Responsible for management of different internal representations utilized when employing
-    various error generator constraints.
-    """
-
-    _superops_cache = {}  # a custom cache for create_lindblad_term_superoperators method calls
-
-    def __init__(self, block_type, basis, basis_element_labels=None, error_generator_labels=None, initial_block_data=None, 
-                 param_mode='static'):
-        """
-        Parameters
-        ----------
-        block_type : str
-            String specifying the type of error generator parameters contained within this block. Allowed
-            values are 'ham' (for Hamiltonian error generators), 'other_diagonal' (for Pauli stochastic error generators),
-            and 'other' (for Pauli stochastic, Pauli correlation and active error generators).
-        
-        basis : `Basis`
-            `Basis` object to be used by this coefficient block. Not this must be an actual `Basis` object, and not
-            a string (as the coefficient block doesn't have the requisite dimensionality information needed for casting).
-        
-        basis_element_labels : list or tuple of str
-            Iterable of strings corresponding to the basis element subscripts used by the error generators managed by
-            this coefficient block. Cannot be specified in conjunction with error_generator_labels, only one of these
-            two kwargs should be used. When this argument is used with the 'other' block this corresponds to a block
-            consisting of C and A terms for all valid pairwise combinations of these basis element indices (i.e. up to ordering).
-        
-        error_generator_labels : iterable of `LocalElementaryErrorgenLabel` objects
-            Iterable of `LocalElementaryErrorgenLabel` objects corresponding to the the error generators managed by this block.
-            Cannot be specified in conjunction with basis_element_labels, only one of these two kwargs should be used. 
-            For C and A terms this option enables more flexible use of reduced parameterizations.
-
-        initial_block_data : _np.ndarray, optional (default None)
-            Numpy array with initial parameter values to use in setting initial state of this coefficient block.
-        
-        param_mode : str, optional (default 'static')
-            String specifying the type of internal parameterization used by this coefficient block. Allowed options are:
-            
-            - For all block types: 'static'
-            - For 'ham': 'elements'
-            - For 'other_diagonal': 'elements', 'reldepol' 
-            - For 'other': 'elements'
-
-            Note that the most commonly encounted setting in practice is 'elements' which is utilized in the construction 
-            of GLND parameterized models. 
-            
-            'reldepol' is a special mode used only for Pauli stochastic only coefficient blocks
-            (i.e. 'other_diagonal'), and correspond to special reduced parameterizations applicable to depolarizing
-            channels.
-        """
-
-        #TODO: compatibility of reldepol when passing in error generator labels.
-
-        super().__init__()
-        if block_type not in ['ham', 'other_diagonal', 'other']:
-            raise InvalidBlockTypeError()
-        
-        self._block_type = block_type  # 'ham' or 'other' or 'other_diagonal'
-        self._param_mode = param_mode  # 'static', 'elements', 'reldepol'
-        self._basis = basis  # must be a full Basis object, not just a string, as we otherwise don't know dimension
-        #TODO: Resolve this, need proper handling for case where basis_element_labels come from basis.
-        if (basis_element_labels is not None) and (error_generator_labels is not None):
-            msg = 'Cannot specify both `basis_element_labels` or `error_generator_labels`.' 
-            raise RuntimeError(msg)
-        if (basis_element_labels is None) and (error_generator_labels is None):
-            msg = 'Must specity one of `basis_element_labels` or `error_generator_labels`.' 
-            raise RuntimeError(msg)
-        
-
-        # if we haven't passed in a set of error generator labels managed by this block then
-        # generate these from the basis_element_labels:        
-        if error_generator_labels is None:
-            if block_type == 'ham':
-                error_generator_labels = [_LEEL('H', (lbl,)) for lbl in basis_element_labels]
-            elif block_type == 'other_diagonal':
-                error_generator_labels = [_LEEL('S', (lbl,)) for lbl in basis_element_labels]
-            else: # 'other'
-                error_generator_labels = []
-                for i, lbl1 in basis_element_labels:
-                    error_generator_labels.append(_LEEL('S', (lbl1,)))
-                    for j, lbl2 in enumerate(basis_element_labels[i+1:], start=i+1):
-                        error_generator_labels.append(_LEEL('C', (lbl1, lbl2)))
-                        error_generator_labels.append(_LEEL('A', (lbl1, lbl2)))
-        else: # validate compatibility with the selected block type
-            msg = 'A specified error generator label is incompatible with the block type.'
-            if block_type == 'ham':
-                assert all([eeg.errorgen_type == 'H' for eeg in error_generator_labels]), msg
-            elif block_type == 'other_diagonal':
-                assert all([eeg.errorgen_type == 'S' for eeg in error_generator_labels]), msg
-            else: #other
-                allowed_types = ['S', 'C', 'A']
-                assert all([eeg.errorgen_type in allowed_types for eeg in error_generator_labels]), msg
-
-        self._eeg_labels = tuple(error_generator_labels)
-        
-        self._bel_labels = tuple(basis_element_labels) if (basis_element_labels is not None) \
-            else tuple(basis.labels[1:])  # Note: don't include identity
-        self._cache_mx = _np.zeros((len(self._bel_labels), len(self._bel_labels)), 'complex') \
-            if self._block_type == 'other' else None #check this!
-
-        #this would get set to True in the very next method call anyway
-        self._coefficients_need_update = True
-        self._cached_elementary_errorgens = None
-        self._cached_elementary_errorgen_indices = None
-
-        self._set_block_data(initial_block_data)
-
-    def _set_block_data(self, block_data):
-        #Sets self.block_data directly, which may later be overwritten by to/from vector calls so this
-        # is somewhat dangerous to call, thus a private member.  It should really only be used during
-        # initialization and to set/update a param_mode=='static' block.
-        # Note: block_data == None can be used to initialize all-zero parameters
-        num_eegs = len(self._eeg_labels)
-        block_shape = (num_eegs,)
-
-        if block_data is not None:
-            assert(block_data.shape == block_shape), \
-                f"Invalid `initial_block_data` shape: expected {block_shape}, received {block_data.shape}"
-            assert(block_data.dtype == _np.double), \
-                f"Invalid `initial_block_data` dtype: expected 'np.double', received {block_data.dtype}" 
-            self.block_data = _np.ascontiguousarray(block_data)
-        else:
-            self.block_data = _np.zeros(block_shape, dtype=_np.double)
-
-        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
-        #need to be updated.
-        self._coefficients_need_update = True
-
-    @property
-    def basis_element_labels(self):
-        return self._bel_labels
-
-    @property
-    def num_params(self) -> int:
-        if self._block_type == 'ham':
-            return self._num_params_ham()
-        elif self._block_type == 'other_diagonal':
-            return self._num_params_otherdiag()
-        elif self._block_type == 'other':
-            return self._num_params_other()
-        else:
-            raise InvalidBlockTypeError()
-
-    def _num_params_ham(self):
-        if self._param_mode == 'static':
-            return 0
-        elif self._param_mode ==  'elements':
-            return len(self._eeg_labels)
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-    
-    def _num_params_otherdiag(self):
-        if self._param_mode == 'static':
-            return 0
-        elif self._param_mode == 'reldepol':
-            return 1
-        elif self._param_mode == 'elements':
-            return len(self._eeg_labels)
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _num_params_other(self):
-        if self._param_mode == 'static':
-            return 0
-        elif self._param_mode in 'elements':
-            return len(self._eeg_labels)
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def create_lindblad_term_superoperators(self, mx_basis: Union[str, _Basis]='pp', sparse: Union[Literal['auto'], bool]="auto", 
-                                            include_1norms: Optional[bool]=False, flat:Optional[bool]=False):
-        """
-        Construct the superoperators for the elementary error generators managed by this coefficient block,
-        optionally along with corresponding one-norms, in the specified matrix basis.
-        
-        Parameters
-        ----------
-        mx_basis : str or Basis, optional (default 'pp')
-            Basis to return superoperators in.
-        
-        sparse : bool or str, optional (default 'auto')
-            Flag controlling whether the resulting superoperators are returned as dense numpy arrays
-            or as sparse arrays. If 'auto' this is determined based on the value of the `sparse` attribute
-            for this coefficient block's basis attribute.
-        
-        include_1norms : bool, optional (default False)
-            If true then the values of the 1-norms of each superoperator are returned.
-        
-        flat : bool, optional (default False)
-            Only affects 'other' block type. When True flatten the first two dimensions of the
-            superoperator array. 
-        """
-        assert(self._basis is not None), "Cannot create lindblad superoperators without a basis!"
-        basis = self._basis
-        sparse = basis.sparse if (sparse == "auto") else sparse
-
-        if len(self._eeg_labels) == 0:
-            return ([], []) if include_1norms else []  # short circuit - no superops to return
-
-        d2 = basis.dim  # if mxs[0] is sparse, then d2 != mxs[0].size.
-        mx_basis = _Basis.cast(mx_basis, d2, sparse=sparse)
-
-        cache_key = (self._block_type, tuple(self._eeg_labels), mx_basis, basis)
-        if cache_key not in self._superops_cache:
-            self._update_superops_cache(mx_basis, cache_key)
-        cached_superops, cached_superops_1norms = self._superops_cache[cache_key]
-
-        if flat or self._block_type in ('ham', 'other_diagonal'):
-            if include_1norms:
-                return _copy.deepcopy(cached_superops), cached_superops_1norms.copy()
-            else:
-                return _copy.deepcopy(cached_superops)
-
-        out = _unflatten_cached_other_lindblad_term_superoperators(cached_superops, cached_superops_1norms, include_1norms)
-        return out
-
-    def _update_superops_cache(self, mx_basis: _Basis, cache_key: tuple[str, tuple[_LEEL], _Basis, _Basis]):
-        """
-        Construct the superoperator corresponding to the error generators in this coefficient block and perform
-        an in-place update of this coefficient block's cache with the result, only recomputing this if not previously computed.
-
-        Parameters
-        ----------
-        mx_basis : `Basis`
-            Basis for the returned values of the constructed superoperators.
-
-        cache_key : tuple
-            A tuple consisting of: 1. a string for the block type, 2. tuple of LocalElementaryErrorgenLabels,
-            3. output matrix basis, and 4. coefficient block matrix basis.
-        """
-        d2 = mx_basis.dim
-        basis = self._basis
-        sparse = mx_basis.sparse
-        nMxs = len(self._eeg_labels)
-        superops = [None] * nMxs if sparse else _np.empty((nMxs, d2, d2), 'complex')
-        basis_tensor_prod_comps = set(basis.name.split('*'))
-        is_pauli = basis_tensor_prod_comps == set(['PP']) or basis_tensor_prod_comps == set(['pp'])
-        create_fn = _lt.create_elementary_errorgen_pauli if is_pauli else _lt.create_elementary_errorgen
-
-        for i, eeg_lbl in enumerate(self._eeg_labels):
-            bel_mxs = [basis[lbl] for lbl in eeg_lbl.basis_element_labels]
-            superops[i] = create_fn(eeg_lbl.errorgen_type, *bel_mxs, sparse=sparse)
-
-        # Convert matrices to desired `mx_basis` basis
-        if mx_basis.name != "std":
-            superops = _custom_superops_stdbasis_conversion(mx_basis, sparse, superops)
-        
-        superop_1norms = _np.array([_mt.safe_onenorm(mx) for mx in superops], 'd')
-
-        self._superops_cache[cache_key] = (superops, superop_1norms)
-
-    def create_lindblad_term_objects(self, parameter_index_offset, max_polynomial_vars, evotype, state_space):
-        mpv = max_polynomial_vars
-        pio = parameter_index_offset
-
-        if self._block_type == 'ham':
-            Lterms = self._create_lindblad_term_objects_ham(evotype, state_space, mpv, pio)
-
-        elif self._block_type == 'other_diagonal':
-            Lterms = self._create_lindblad_term_objects_otherdiag(evotype, state_space, mpv, pio)
-
-        elif self._block_type == 'other':
-            Lterms = self._create_lindblad_term_objects_other(evotype, state_space, mpv, pio)
-    
-        else:
-            raise ValueError("Invalid block_type '%s'" % str(self._block_type))
-
-        return Lterms
-
-    def _create_lindblad_term_objects_other(self, evotype, state_space, mpv, pio):
-        Lterms = []
-        num_bels = len(self._bel_labels)
-        for i, bel_labeli in enumerate(self._bel_labels):
-            for j, bel_labelj in enumerate(self._bel_labels):
-                scalem, Um = _mt.to_unitary(self._basis[bel_labeli])  # ensure all Rank1Term operators are *unitary*
-                scalen, Un = _mt.to_unitary(self._basis[bel_labelj])  # ensure all Rank1Term operators are *unitary*
-                Lm, Ln = Um, Un
-                Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-                scale = scalem * scalen
-
-                polyTerms = {}
-                if self._param_mode == 'cholesky':
-                        # coeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-                        # coeffs_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
-                        #           = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
-                    def i_re(a, b): return pio + (a * num_bels + b)
-                    def i_im(a, b): return pio + (b * num_bels + a)
-                    for k in range(0, min(i, j) + 1):
-                        if k <= i and k <= j:
-                            polyTerms[(i_re(i, k), i_re(j, k))] = 1.0
-                        if k <= i and k < j:
-                            polyTerms[(i_re(i, k), i_im(j, k))] = -1.0j
-                        if k < i and k <= j:
-                            polyTerms[(i_im(i, k), i_re(j, k))] = 1.0j
-                        if k < i and k < j:
-                            polyTerms[(i_im(i, k), i_im(j, k))] = 1.0
-                elif self._param_mode == 'elements':  # unconstrained
-                        # coeffs_ij = param[i,j] + 1j*param[j,i] (coeffs == block_data is Hermitian)
-                    ijIndx = pio + (i * num_bels + j)
-                    jiIndx = pio + (j * num_bels + i)
-                    polyTerms = {(ijIndx,): 1.0, (jiIndx,): 1.0j}
-                elif self._param_mode == 'static':
-                    polyTerms = {(): self.block_data[i, j]}
-                else: raise ValueError("Internal error: invalid param mode!!")
-
-                    #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
-                base_poly = _Polynomial(polyTerms, mpv) * scale
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        1.0 * base_poly, Ln, Lm, evotype, state_space))
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        -0.5 * base_poly, None, _np.dot(Ln_dag, Lm), evotype, state_space))  # adjoint(dot(Lm_dag,Ln))
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                        -0.5 * base_poly, _np.dot(Lm_dag, Ln), None, evotype, state_space))
-        return Lterms
-
-    def _create_lindblad_term_objects_otherdiag(self, evotype, state_space, mpv, pio):
-        Lterms = []
-        for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
-                # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
-            scale, U = _mt.to_unitary(self._basis[bel_label])
-            scale = scale**2  # because there are two "U"s in each overall term below
-
-            if self._param_mode in ('depol', 'reldepol'):
-                cpi = (pio + 0,)
-            elif self._param_mode in ('cholesky', 'elements'):
-                cpi = (pio + k,)  # coefficient's parameter indices (with offset)
-            elif self._param_mode == 'static':
-                cpi = ()  # not multiplied by any parameters
-                scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
-            else: raise ValueError("Internal error: invalid param mode!!")
-
-            pw = 2 if self._param_mode in ("cholesky", "depol") else 1
-            Lm = Ln = U
-            Lm_dag = Lm.conjugate().T  # assumes basis is dense (TODO: make sure works
-            Ln_dag = Ln.conjugate().T  # for sparse case too - and np.dots below!)
-
-                #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
-                # e.g. in 2nd term, _np.dot(Ln_dag, Lm) == adjoint(_np.dot(Lm_dag,Ln))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi * pw: 1.0 * scale}, mpv), Ln, Lm, evotype, state_space))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi * pw: -0.5 * scale}, mpv), None, _np.dot(Ln_dag, Lm), evotype, state_space))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi * pw: -0.5 * scale}, mpv), _np.dot(Lm_dag, Ln), None, evotype, state_space))
-        return Lterms
-
-    def _create_lindblad_term_objects_ham(self, evotype, state_space, mpv, pio):
-        Lterms = []
-        for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
-                # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
-            scale, U = _mt.to_unitary(self._basis[bel_label])
-                #scale /= 2  # DEBUG REMOVE - this makes ham terms w/PP the same as earlier versions of pyGSTi
-
-            if self._param_mode == 'elements':
-                cpi = (pio + k,)  # coefficient's parameter indices (with offset)
-            elif self._param_mode == 'static':
-                cpi = ()  # not multiplied by any parameters
-                scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
-            else: raise ValueError("Internal error: invalid param mode!!")
-
-                #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi: -1j * scale}, mpv), U, None, evotype, state_space))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi: +1j * scale}, mpv), None, U.conjugate().T, evotype, state_space))
-        return Lterms
-
-    @property
-    def elementary_errorgen_indices(self):
-        """
-        Construct a dictionary from elementary error generator labels to indices into the
-        corresponding index into the 1D array formed of coefficients for error generators
-        managed by this block.
-
-        Returns
-        -------
-        indices : dict
-            A dictionary whose keys are `LocalElementaryErrorgenLabel` and whose values are integer indices.
-        """
-        if not self._coefficients_need_update and self._cached_elementary_errorgen_indices is not None:
-            return self._cached_elementary_errorgen_indices
-        else:
-            indices = {lbl:i for i,lbl in enumerate(self._eeg_labels)}
-            self._cached_elementary_errorgen_indices = indices
-            return indices
-
-    @property
-    def _block_data_indices(self):
-        """
-        Effectively the inverse of elementary_errorgen_indices.
-
-        The keys of the returned dict are block_data indices and the
-        values corresponding elementary errorgen labels.
-
-        Returns
-        -------
-        indices : dict
-            A dictionary whose keys integer indices and whose values are `LocalElementaryErrorgenLabel`.
-        """
-        indices = {i:lbl for i,lbl in enumerate(self._eeg_labels)}
-        return indices
-    
-    @property
-    def elementary_errorgens(self):
-        """
-        Converts a set of coefficients for this block into a linear combination of elementary error generators.
-
-        This linear combination is given by a dictionary with keys equal to elementary
-        error generator labels and values equal to their coefficients in the linear combination.
-
-        Parameters
-        ----------
-        block_data : numpy.ndarray
-            A 1- or 2-dimensional array with each dimension of size `len(self.basis_element_labels)`,
-            specifying the coefficients of this block.  Array is 1-dimensional when this block is
-            of type `'ham'` or `'other_diagonal'` and is 2-dimensional for type `'other'`.
-
-        Returns
-        -------
-        elementary_errorgens : dict
-            Returns a dictionary corresponding to the elementary error generators managed
-            by this coefficient block and their rates.Keys are :class:`LocalElementaryErrorgenLabel` objects
-            and values are floats.
-        """
-        if not self._coefficients_need_update and self._cached_elementary_errorgens is not None:
-            return self._cached_elementary_errorgens
-
-        elementary_errorgens = {lbl:rate for lbl,rate in zip(self._eeg_labels, self.block_data)}
-
-        #cache the error generator dictionary for future use
-        self._cached_elementary_errorgens = elementary_errorgens
-        self._coefficients_need_update = False
-
-        return elementary_errorgens
-
-    def set_elementary_errorgens(self, elementary_errorgens: dict[_LEEL,float], on_missing: Optional[Literal['ignore', 'warn', 'raise']]):
-        """
-        Update this block's parameters based on the values of the specified elementary error generator
-        dictionary.
-
-        Parameters
-        ----------
-        elementary_errorgens : dict
-            A dictionary whose keys are `LocalElementaryErrorgenLabel` and whose values are floats for the
-            corresponding rates.
-
-        on_missing : str, optional (default 'ignore')
-            Controls behavior when an error generator coefficient which is managed by this
-            block is not found within elementary_errorgens. Options are:
-            
-            - 'ignore': Set missing value to zero, without raising warning or raising an exception.
-            - 'warn': Set missing value to zero and raise a warning.
-            - 'raise': Raise a ValueError.
-        
-        Returns
-        -------
-        unused_elementary_errorgens : dict
-            Dictionary corresponding to the error generators in elementary_errorgens
-            which were not used. I.e. not part of the error generator coefficients
-            managed by this block.
-        """
-
-        # Note: could return a "stripped" version of elementary_errorgens
-        # expects a dict with keys == local elem errgen labels
-        new_data = self.block_data.copy()
-        unused_elementary_errorgens = elementary_errorgens.copy()  # to return
-        for i, eeg_lbl in self._block_data_indices.items():
-            val = 0
-            if eeg_lbl in elementary_errorgens:
-                val = elementary_errorgens[eeg_lbl]
-                if eeg_lbl in unused_elementary_errorgens:
-                    del unused_elementary_errorgens[eeg_lbl]
-            elif on_missing == 'warn':
-                _warnings.warn(f"Missing entry for {eeg_lbl} in dictionary of elementary errorgens.  Assuming 0.")
-            elif on_missing == 'raise':
-                raise ValueError(f"Missing entry for {eeg_lbl} in dictionary of elementary errorgens.")
-            new_data[i] = val
-
-        self.block_data = new_data
-
-        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
-        #need to be updated.
-        self._coefficients_need_update = True
-
-        return unused_elementary_errorgens
-
-    def set_from_errorgen_projections(self, errorgen: _np.ndarray, errorgen_basis: Optional[Union[str,_Basis]]='pp', 
-                                      return_projected_errorgen: Optional[bool]=False):
-        """
-        Update this block's parameters based on the values extracted from the input error generator array.
-
-        Parameters
-        ----------
-        errorgen : np.ndarray
-            Error generator matrix.
-        
-        errogen_basis : str or `Basis`, optional (default 'pp')
-            Basis that the input error generator is specified in and used in construction of appropriate
-            elementary error generator dual matrices for extracting rates.
-
-        return_projected_errorgen : bool, optional (default False)
-            If True return a new dense error generator matrix which has been
-            projected onto the subspace of error generators spanned by 
-            the elementary error generator coefficients managed by this block.
-        """
-        
-        elementary_errorgen_lbls = self._eeg_labels
-        out = _ot.extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_lbls,
-                                                           self._basis, errorgen_basis,
-                                                           return_projected_errorgen)
-        elementary_errorgens = out[0] if return_projected_errorgen else out
-        unused = self.set_elementary_errorgens(elementary_errorgens, on_missing='raise')
-        assert(len(unused) == 0)
-
-        #set a flag to indicate that the coefficients (as returned by elementary_errorgens)
-        #need to be updated.
-        self._coefficients_need_update = True
-
-        return out[1] if return_projected_errorgen else None
-
-    #TODO: Improve this and/or see if we even need it.
-    @property
-    def coefficient_labels(self):
-        """Labels for the elements of `self.block_data` (flattened if relevant)"""
-        if self._block_type == 'ham':
-            return self._coefficient_labels_ham()
-        elif self._block_type == 'other_diagonal':
-            return self._coefficient_labels_otherdiag()
-        elif self._block_type == 'other':
-            return self._coefficient_labels_other()
-        else:
-            raise InvalidBlockTypeError()
-    
-    def _coefficient_labels_ham(self):
-        return ["%s Hamiltonian error coefficient" % lbl for lbl in self._bel_labels]
-    
-    def _coefficient_labels_otherdiag(self):
-        return ["(%s,%s) other error coefficient" % (lbl, lbl) for lbl in self._bel_labels]
-    
-    def _coefficient_labels_other(self):
-        labels = []
-        for i, ilbl in enumerate(self._bel_labels):
-            for j, jlbl in enumerate(self._bel_labels):
-                labels.append("(%s,%s) other error coefficient" % (ilbl, jlbl))
-        return labels
-
-    @property
-    def param_labels(self) -> list:
-        """
-        Generate human-readable labels for the parameters of this block.
-        """
-        if self._block_type == 'ham':
-            return self._param_labels_ham()
-        elif self._block_type == 'other_diagonal':
-            return self._param_labels_otherdiag()
-        elif self._block_type == 'other':
-            return self._param_labels_other()
-        else:
-            raise InvalidBlockTypeError()
-
-    def _param_labels_ham(self) -> list:
-        if   self._param_mode == 'static':
-            return []
-        elif self._param_mode == 'elements':
-            return [f"{lbl} Hamiltonian error coefficient" for lbl in self._eeg_labels]
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _param_labels_otherdiag(self) -> list:
-        if   self._param_mode == 'static':
-            return []
-        elif self._param_mode == 'reldepol':
-            return ["common stochastic error coefficient for depolarization"]
-        elif self._param_mode == "elements":
-            return [f"{lbl} stochastic coefficient" for lbl in self._eeg_labels]
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _param_labels_other(self) -> list:
-        labels = []
-        if self._param_mode == 'static':
-            return labels
-        
-        elif self._param_mode == "elements":
-            for lbl in self._eeg_labels:            
-                if lbl.errorgen_type == 'S':
-                    labels.append(f"{lbl} stochastic coefficient")
-                elif lbl.errorgen_type == 'C':
-                    labels.append(f"{lbl} pauli-correlation coefficient")
-                else: #'A'
-                    labels.append(f"{lbl} active coefficient")
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-        return labels
-
-    def _block_data_to_params(self) -> _np.ndarray:
-        """
-        Compute parameter values implied by self.block_data.
-        (The public method now simply dispatches on block type.) 
-        """
-        if self._param_mode == 'static':
-            return _np.empty(0, 'd')
-
-        if self._block_type == 'ham':
-            params = self._block_data_to_params_ham()
-        elif self._block_type == 'other_diagonal':
-            params = self._block_data_to_params_otherdiag()
-        elif self._block_type == 'other':
-            params = self._block_data_to_params_other()
-        else:
-            raise InvalidBlockTypeError()
-
-        assert(not _np.iscomplexobj(params))
-        assert(len(params) == self.num_params)
-        return params
-
-    def _block_data_to_params_ham(self) -> _np.ndarray:
-        if self._param_mode == "elements":
-            return self.block_data # type: ignore
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _block_data_to_params_otherdiag(self) -> _np.ndarray:
-        # depol / reldepol share a one-parameter constraint
-        if self._param_mode == "reldepol":
-            # check all diagonal entries are equal
-            first = self.block_data[0]
-            all_equal = [_np.isclose(v, first, atol=1e-6) for v in self.block_data]
-            assert all(all_equal), f"Diagonal lindblad coefficients are not equal!"
-            # build the single parameter
-            return _np.array([first], 'd') # shape (1,)
-        # elements: unconstrained real diag
-        elif self._param_mode == "elements":
-            return self.block_data
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _block_data_to_params_other(self):
-        """Handle the 'other' block"""
-        if self._param_mode == "elements":
-            return self.block_data
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def to_vector(self):
-        """
-        Compute parameter values for this coefficient block.
-
-        Returns
-        -------
-        param_vals : numpy.ndarray
-        """
-        return self._block_data_to_params()
-
-    def from_vector(self, v: _np.ndarray):
-        """
-        Construct Lindblad coefficients (for this block) from a set of parameter values.
-        This is now just a dispatcher into the three block-type specific implementations.
-        """
-        # static blocks carry no parameters
-        if self._param_mode == 'static':
-            assert len(v) == 0, "'static' parameterized blocks should have zero parameters!"
-            return
-
-        # dispatch on block type
-        if   self._block_type == 'ham':
-            self._from_vector_ham(v)
-        elif self._block_type == 'other_diagonal':
-            self._from_vector_otherdiag(v)
-        elif self._block_type == 'other':
-            self._from_vector_other(v)
-        else:
-            raise InvalidBlockTypeError()
-
-        # mark cache stale
-        self._coefficients_need_update = True
-        return
-
-    def _from_vector_ham(self, v: _np.ndarray):
-        """Inverse of _block_data_to_params_ham: load block_data from v for 'ham'."""
-        if self._param_mode == 'elements':
-            self.block_data[:] = v
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _from_vector_otherdiag(self, v: _np.ndarray):
-        """Inverse of _block_data_to_params_otherdiag: load block_data from v for 'other_diagonal'."""
-        num_eegs = len(self._eeg_labels)
-
-        if self._param_mode == 'reldepol':
-            v = v.item() * _np.ones(num_eegs, 'd')
-        else:
-            assert v.shape == (num_eegs,)
-
-        if self._param_mode in ('reldepol', 'elements'):
-            self.block_data[:] = v
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _from_vector_other(self, v: _np.ndarray):
-        """Inverse of _block_data_to_params_other: load block_data from v for full 'other' block."""
-        num_bels = len(self._bel_labels)
-        params = v.reshape((num_bels, num_bels))
-
-        params_upper_indices = triu_indices(num_bels)
-
-        if self._param_mode == 'elements':
-            self.block_data[:] = v
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def deriv_wrt_params(self, v=None):
-        """
-        Jacobian of block_data w.r.t. model parameters evaluated at v.
-        Dispatches to _deriv_wrt_params_<block_type>.
-
-        Parameters
-        ----------
-        v : numpy.ndarray, optional
-            A 1D array of real parameter values. If not specified, then self.to_vector() is used.
-            Does not affect result for `UnconstrainedLindbladCoefficientBlock`, only for API compatibility.
-        Returns
-        -------
-        block_data_deriv : numpy.ndarray
-            A real array of shape `(nEEG,nP)` where `nEEG` is the number of elementary error
-            generators managed by this block, and `nP` is the number of parameters as returned
-            by `num_params`.
-        """        
-        num_eegs = len(self._eeg_labels)
-        v = self.to_vector() if (v is None) else v
-        nP = len(v)
-        assert(nP == self.num_params), f"Expected {self.num_params} parameters, got {nP}!"
-
-        # static blocks have zero‐dimensional parameter space
-        if self._param_mode == 'static':
-            return _np.zeros((num_eegs, 0), 'd')
-
-        # dispatch by block type
-        if self._block_type == 'ham':
-            return self._deriv_wrt_params_ham()
-        elif self._block_type == 'other_diagonal':
-            return self._deriv_wrt_params_otherdiag()
-        elif self._block_type == 'other':
-            return self._deriv_wrt_params_other()
-        else:
-            raise InvalidBlockTypeError()
-
-    def _deriv_wrt_params_ham(self) -> _np.ndarray:
-        num_eegs = len(self._eeg_labels)
-        if self._param_mode == 'elements':
-            # d(block_data[i])/d v[j] = δ_{i,j}
-            return _np.identity(num_eegs, 'd')
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _deriv_wrt_params_otherdiag(self) -> _np.ndarray:
-        num_eegs = len(self._eegs_labels)
-
-        if self._param_mode == 'reldepol':
-            mat = _np.ones((num_eegs,1), dtype=_np.double)
-
-        elif self._param_mode == 'elements':
-            # block_data[i] = v[i]  =>  derivative is identity
-            mat = _np.identity(num_eegs, dtype=_np.double)
-
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-        return mat
-
-    def _deriv_wrt_params_other(self) -> _np.ndarray:
-        num_eegs = len(self._eeg_labels)
-        
-        if self._param_mode == 'elements':
-            # block_data[i] = v[i]  =>  derivative is identity
-            mat = _np.identity(num_eegs, dtype=_np.double)
-            return mat
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def elementary_errorgen_deriv_wrt_params(self, v=None):
-        """
-        Derivative of elementary error generator coefficients managed by this block
-        with respect to model parameters.
-
-        Parameters
-        ----------
-        v : numpy.ndarray, optional
-            A 1D array of real parameter values. If not specified, then self.to_vector() is used.
-            Does not affect result for `UnconstrainedLindbladCoefficientBlock`, only for API compatibility.
-        Returns
-        -------
-        eeg_deriv : np.ndarray
-            A real-values array of dimension (nEEG, nP), where `nEEG` is the number of elementary error
-            generators managed by this block, and `nP` is the number of parameters as returned
-            by `num_params`.
-
-        """
-        # for `UnconstrainedLindbladCoefficientBlock` there is a one-to-one correspondence between
-        # EEGs and block data. So this can be a thin wrapper around `deriv_wrt_params`.
-        eeg_deriv = self.deriv_wrt_params(v)
-        return eeg_deriv
-
-    def superop_deriv_wrt_params(self, superops : _np.ndarray, v=None, superops_are_flat=False) -> _np.ndarray:
-        """
-        Derivative of the Lindblad-term superoperators w.r.t. the real parameters.
-
-        Parameters
-        ----------
-        superops : ndarray
-            The output of create_lindblad_term_superoperators(..., sparse=False).
-
-        v : array, optional
-            The parameter vector. Only needed for 'other_diagonal' blocks.
-            
-        superops_are_flat : bool, optional
-            True if `superops` is a flat list/array even for the 'other' block.
-        """
-        # --- static case: always zero ---
-        if self._param_mode == 'static':
-            if superops_are_flat or self._block_type != 'other':
-                return _np.zeros((superops.shape[1], superops.shape[2], 0), 'd')
-            else:
-                return _np.zeros((superops.shape[2], superops.shape[3], 0), 'd')
-
-        # --- pull in v for other_diagonal ---
-        if self._block_type == 'other_diagonal' and v is None:
-            v = self.to_vector()
-
-        # --- dispatch by block type ---
-        if   self._block_type == 'ham':
-            dOdp = self._superop_deriv_wrt_params_ham(superops)
-        elif self._block_type == 'other_diagonal':
-            dOdp = self._superop_deriv_wrt_params_otherdiag(superops, v)
-        elif self._block_type == 'other':
-            dOdp = self._superop_deriv_wrt_params_other(superops, superops_are_flat)
-        else:
-            raise InvalidBlockTypeError()
-
-        # --- common checks & real‐cast ---
-        tr = dOdp.ndim
-        assert (tr - 2) in (1, 2), "Currently, dodp can only have 1 or 2 derivative dimensions"
-        assert _np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL
-        return _np.real(dOdp)
-
-    def _superop_deriv_wrt_params_ham(self, superops):
-        if self._param_mode == 'elements':
-            # d/dp_k of H‐term superop = the k’th superop itself
-            return superops.transpose((1, 2, 0)) # PRETRANS, this was:
-            # _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _superop_deriv_wrt_params_otherdiag(self, superops, v):
-        transposed = _np.transpose(superops, (1, 2, 0))  # shape = (d, d, nEEGs)
-
-        # Derivative of exponent wrt other param; shape == [dim,dim,nEEGs]
-        #  except "reldepol" cases, when shape == [dim,dim,1]
-        if self._param_mode == "reldepol":  # all coeffs same & == param
-            # dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
-            return _np.sum(transposed, axis=2)[:, :, None]
-        elif self._param_mode == "elements":  # "unconstrained" (coeff == params)
-            # dOdp  = _np.einsum('alj->lja', self.otherGens)
-            return transposed
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _superop_deriv_wrt_params_other(self, superops, superops_are_flat):
-        """superop_deriv_wrt_params for the full 'other' block."""
-        num_eegs = len(self._eegs_labels)
-        if self._param_mode == 'elements':
-            if superops_are_flat:
-                transposed = _np.transpose(superops, (1, 2, 0))  # shape = (d, d, nEEGs)
-            else:
-                transposed = _np.transpose(superops, (2, 3, 0, 1)) # shape = (d, d, sqrt(nEEGs), sqrt(nEEGs))
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-        return transposed
-    
-    def superop_hessian_wrt_params(self, superops, v=None, superops_are_flat=False):
-        """
-        Hessian of the Lindblad-term superoperators w.r.t. the real parameters.
-
-        Parameters
-        ----------
-        superops : ndarray
-            The output of create_lindblad_term_superoperators(..., sparse=False).
-
-        v : array, optional
-            The parameter vector. Only needed for 'other_diagonal' blocks.
-            
-        superops_are_flat : bool, optional
-            True if `superops` is a flat list/array even for the 'other' block.
-        """
-        # NOTE: `v` is here for consistency with superop_deriv_wrt_params.
-
-        # static blocks always have zero Hessian
-        if self._param_mode == 'static':
-            if superops_are_flat or self._block_type != 'other':
-                return _np.zeros((superops.shape[1], superops.shape[2], 0, 0), 'd')
-            else:
-                return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
-
-        # dispatch to block‐type helper
-        if   self._block_type == 'ham':
-            d2 = self._superop_hessian_wrt_params_ham(superops)
-        elif self._block_type == 'other_diagonal':
-            d2 = self._superop_hessian_wrt_params_otherdiag(superops)
-        elif self._block_type == 'other':
-            d2 = self._superop_hessian_wrt_params_other(superops, superops_are_flat)
-        else:
-            raise InvalidBlockTypeError()
-
-        # sanity checks & real‐cast
-        tr = d2.ndim
-        assert (tr - 2) in (2, 4), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
-        assert _np.linalg.norm(_np.imag(d2)) < IMAG_TOL
-        return _np.real(d2)
-
-    def _superop_hessian_wrt_params_ham(self, superops):
-        """Hessian for the 'ham' block: always zero (linear in parameters)."""
-        if self._param_mode != 'elements':
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-        d1, d2 = superops.shape[1:3]
-        nP = self.num_params
-        return _np.zeros((d1, d2, nP, nP), 'd')
-
-    def _superop_hessian_wrt_params_otherdiag(self, superops):
-        """Hessian for the 'other_diagonal' block."""
-        nP = self.num_params
-
-        if self._param_mode in ('elements', 'reldepol'):
-            # second derivative is zero for direct or relative‐depol modes
-            d1, d2 = superops.shape[1:3]
-            return _np.zeros((d1, d2, nP, nP), 'd')
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _superop_hessian_wrt_params_other(self, superops, superops_are_flat):
-        """Hessian for the full 'other' block (Pauli correlation / active errors)."""
-        nP = self.num_params
-
-        if self._param_mode == 'elements':
-            if superops_are_flat:
-                d2Odp2 = _np.zeros([superops.shape[1], superops.shape[2], nP, nP], 'd')  # all params linear
-            else:
-                sqrt_nP = _np.sqrt(self.num_params)
-                snP = int(sqrt_nP)
-                d2Odp2 = _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')  # all params linear
-            return d2Odp2
-        else:
-            raise InvalidParamModeError(self._param_mode, self._block_type)
-
-    def _to_nice_serialization(self):
-        state = super()._to_nice_serialization()
-        state.update({'block_type': self._block_type,
-                      'parameterization_mode': self._param_mode,
-                      'elementary_element_labels': list(self._bel_labels),
-                      'basis': self._basis.to_nice_serialization(),
-                      'block_data': self._encodemx(self.block_data)})
-        return state
-
-    @classmethod
-    def _from_nice_serialization(cls, state):
-        block_data = cls._decodemx(state['block_data'])
-        basis = _Basis.from_nice_serialization(state['basis'])
-        return cls(state['block_type'], basis, state['basis_element_labels'], block_data,
-                   state['parameterization_mode'])
-
-    def is_similar(self, other_coeff_block):
-        """ TODO: docstring """
-        if not isinstance(other_coeff_block, LindbladCoefficientBlock): return False
-        return ((self._block_type == other_coeff_block._block_type)
-                and (self._param_mode == other_coeff_block._param_mode)
-                and (self._bel_labels == other_coeff_block._bel_labels)
-                and (self._basis == other_coeff_block._basis))
-
-    def convert(self, param_mode):
-        """
-        TODO: docstring  - return a *new* LindbladCoefficientBlock with the same block type and data,
-        but with the given parameterization mode.
-        """
-        return LindbladCoefficientBlock(self._block_type, self._basis, self._bel_labels, self.block_data, param_mode)
-
-    def __str__(self):
-        s = '%s-type lindblad coefficient block with param-mode %s and basis labels %s.' % (
-            self._block_type, self._param_mode, self._bel_labels)
-        if len(self._bel_labels) < 10:
-            s += " Coefficients are:\n" + str(_np.round(self.block_data, 4))
-        return s

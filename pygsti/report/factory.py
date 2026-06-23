@@ -669,7 +669,7 @@ def create_standard_report(results, filename, title="auto",
         files, respectively.  "tex" creates latex source files for
         tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
         Python versions of plots (pickled python data) and tables (pickled
-        pandas DataFrams).
+        pandas DataFrames).
 
     brevity : int, optional
         Amount of detail to include in the report.  Larger values mean smaller
@@ -862,7 +862,7 @@ def create_nqnoise_report(results, filename, title="auto",
         files, respectively.  "tex" creates latex source files for
         tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
         Python versions of plots (pickled python data) and tables (pickled
-        pandas DataFrams).
+        pandas DataFrames).
 
     brevity : int, optional
         Amount of detail to include in the report.  Larger values mean smaller

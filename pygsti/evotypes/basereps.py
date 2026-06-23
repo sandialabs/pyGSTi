@@ -106,7 +106,7 @@ except ImportError:
             ----------
             mapfn_as_vector : numpy.ndarray
                 An array of integers such that `mapfn_as_vector[old_variable_index] = new_variable_index`.
-                An array is used instead of a function for perfomance.
+                An array is used instead of a function for performance.
 
             Returns
             -------

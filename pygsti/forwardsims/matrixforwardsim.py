@@ -64,7 +64,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense("minimal")[:, None]
         Es = [_np.conjugate(_np.transpose(self.model.circuit_layer_operator(
               elabel, 'povm').to_dense("minimal")[:, None]))
-              for elabel in elabels]  # [:, None] becuse of convention: E has shape (1,N)
+              for elabel in elabels]  # [:, None] because of convention: E has shape (1,N)
         return rho, Es
 
     def _process_wrt_filter(self, wrt_filter, obj):
@@ -213,7 +213,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             d_opp_wrt_p2 = d_opp_wrt_p if (wrt_filter2 is None) else smx(d_opp_wrt_p, ops_wrt_filter2, wrt_filter2)
             flattened_hprod = _np.einsum('ijk,jl,km->ilm', flattened_hprod, d_opp_wrt_p1, d_opp_wrt_p2)
 
-            #Update num_deriv_cols variabls (currently = # of op-params) to # of model params in each dimension
+            #Update num_deriv_cols variables (currently = # of op-params) to # of model params in each dimension
             num_deriv_cols1 = self.model._param_interposer.num_params if (wrt_filter1 is None) else len(wrt_filter1)
             num_deriv_cols2 = self.model._param_interposer.num_params if (wrt_filter2 is None) else len(wrt_filter2)
 
@@ -596,7 +596,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         When `True`, treat the data as time dependent, and distribute the computation of outcome
         probabilitiesby assigning groups of processors to the distinct time stamps within the
         dataset.  This means of distribution be used only when the circuits themselves contain
-        no time delay infomation (all circuit layer durations are 0), as operators are cached
+        no time delay information (all circuit layer durations are 0), as operators are cached
         at the "start" time of each circuit, i.e., the timestamp in the data set.  If `False`,
         then the data is treated in a time-independent way, and the overall counts for each outcome
         are used.  If support for intra-circuit time dependence is needed, you must use a different
@@ -682,8 +682,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         dim = self.model.evotype.minimal_dim(self.model.state_space)
 
         #Note: resource_alloc gives procs that could work together to perform
-        # computation, e.g. paralllel dot products but NOT to just partition
-        # futher (e.g. among the wrt_slices) as this is done in the layout.
+        # computation, e.g. parallel dot products but NOT to just partition
+        # further (e.g. among the wrt_slices) as this is done in the layout.
         # This function doesn't make use of resource_alloc - all procs compute the same thing.
 
         eval_tree = layout_atom_tree
@@ -887,7 +887,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         derivative_dimensions : int or tuple[int], optional
             Optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            and second derivatives with respect to the circuit outcome probabilities.  This must be
             non-None when `array_types` contains `'ep'` or `'epp'` types.
             If a tuple, then must be length 1.
 
@@ -906,12 +906,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         MatrixCOPALayout
         """
         # There are two types of quantities we adjust to create a good layout: "group-counts" and "processor-counts"
-        #  - group counts:  natoms, nblks, nblks2 give how many indpendently computed groups/ranges of circuits,
+        #  - group counts:  natoms, nblks, nblks2 give how many independently computed groups/ranges of circuits,
         #                   1st parameters, and 2nd parameters are used.  Making these larger can reduce memory
         #                   consumption by reducing intermediate memory usage.
         #  - processor counts: na, np, np2 give how many "atom-processors", "param-processors" and "param2-processors"
         #                      are used to process data along each given direction.  These values essentially specify
-        #                      how the physical procesors are divided by giving the number of (roughly equal) intervals
+        #                      how the physical processors are divided by giving the number of (roughly equal) intervals
         #                      exist along each dimension of the physical processor "grid".  Thus, thees values are set
         #                      based on the total number of cores available and how many dimensions are being computed.
 
@@ -1297,11 +1297,11 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         if not resource_alloc.is_host_leader:
             # (same as "if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0")
-            # we cannot further utilize multiplie processors when computing a single block.  The required
+            # we cannot further utilize multiple processors when computing a single block.  The required
             # ending condition is that array_to_fill on each processor has been filled.  But if memory
             # is being shared and resource_alloc contains multiple processors on a single host, we only
             # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
-            # shared memory that we don't want to have muliple procs using simultaneously to compute the
+            # shared memory that we don't want to have multiple procs using simultaneously to compute the
             # same thing.  Thus, we just do nothing on all of the non-root host_comm processors.
             # We could also print a warning (?), or we could carefully guard any shared mem updates
             # using "if resource_alloc.is_host_leader" conditions (if we could use  multiple procs elsewhere).

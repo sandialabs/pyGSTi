@@ -333,7 +333,7 @@ def L_matrix(model, target_model, weights=None):  # noqa N802
     normalizer = _np.sum(_np.array([weights[key] for key in list(target_model.operations.keys())]))
     # TODO: improve efficiency
     #
-    #   1. Accumuate the summands in this list comprehension in-place. (Might already happen but that's non-obvious)
+    #   1. Accumulate the summands in this list comprehension in-place. (Might already happen but that's non-obvious)
     #   2. Use the fact that target gates are unitary and so their superoperator representation inverses should
     #      be their transposes.
     #   3. Have the option to return this matrix as an implicit abstract linear operator, so that anyone who wants
@@ -361,7 +361,7 @@ def R_matrix_predicted_rb_decay_parameter(model, group, group_to_model=None, wei
     Parameters
     ----------
     model : Model
-        The model to predict the RB decay paramter for. If `group_to_model` is
+        The model to predict the RB decay parameter for. If `group_to_model` is
         None, the labels of the gates in `model` should be the  same as the labels of the
         group elements in `group`. For Clifford RB this would be the clifford model,
         for direct RB it would be the primitive gates.
@@ -403,14 +403,14 @@ def R_matrix(model, group, group_to_model=None, weights=None):  # noqa N802
     Constructs a generalization of the 'R-matrix' of Proctor et al Phys. Rev. Lett. 119, 130502 (2017).
 
     This matrix described the exact behaviour of the average success
-    probablities of RB sequences. This matrix is super-exponentially large in
+    probabilities of RB sequences. This matrix is super-exponentially large in
     the number of qubits, but can be constructed for 1-qubit models.
 
     Parameters
     ----------
     model : Model
         The noisy model (e.g., the Cliffords) to calculate the R matrix of.
-        The correpsonding `target` model (not required in this function)
+        The corresponding `target` model (not required in this function)
         must be equal to or a subset of (a faithful rep of) the group `group`.
         If `group_to_model `is None, the labels of the gates in model should be
         the same as the labels of the corresponding group elements in `group`.
@@ -498,7 +498,7 @@ def errormaps(model, target_model):
     Returns
     -------
     errormaps : Model
-        The left multplied error gates, along with the average error map,
+        The left multiplied error gates, along with the average error map,
         with the key 'Gavg'.
     """
     errormaps_gate_list = []

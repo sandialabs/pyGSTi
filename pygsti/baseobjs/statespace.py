@@ -570,7 +570,7 @@ class StateSpace(_NicelySerializable):
             ret_lbls = []; ret_udims = []; ret_types = []
             for lbl, udim, typ in zip(lbls, udims, typs):
                 #If the label does appear in the other state space, verify that the 
-                #properties of the label are consistently defined accross the two state spaces
+                #properties of the label are consistently defined across the two state spaces
                 #otherwise raise an error.
                 if other_state_space.contains_label(lbl):
                     other_iTPB = other_state_space.label_tensor_product_block_index(lbl)
@@ -711,7 +711,7 @@ class QuditSpace(StateSpace):
 
     @property
     def qudit_udims(self):
-        """Integer Hilbert (unitary operator) space dimensions of the qudits in ths quantum state space."""
+        """Integer Hilbert (unitary operator) space dimensions of the qudits in the quantum state space."""
         return self._qudit_udims
 
     @property
@@ -1056,7 +1056,7 @@ class ExplicitStateSpace(StateSpace):
         Most generally, this can be a list of tuples, where each tuple
         contains the state-space labels (which can be strings or integers)
         for a single "tensor product block" formed by taking the tensor
-        product of the spaces asociated with the labels.  The full state
+        product of the spaces associated with the labels.  The full state
         space is the direct sum of all the tensor product blocks.
         E.g. `[('Q0','Q1'), ('Q2',)]`.
 

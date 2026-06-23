@@ -48,7 +48,7 @@ class OptimizerResult(object):
         vector of objective function values.
 
     opt_jtj : numpy.ndarray, optional
-        the optimial `dot(transpose(J),J)` value, where `J`
+        the optimal `dot(transpose(J),J)` value, where `J`
         is the Jacobian matrix.  This may be useful for computing
         approximate error bars.
 
@@ -113,7 +113,7 @@ class SimplerLMOptimizer(Optimizer):
     Parameters
     ----------
     maxiter : int, optional
-        The maximum number of (outer) interations.
+        The maximum number of (outer) iterations.
 
     maxfev : int, optional
         The maximum function evaluations.
@@ -413,7 +413,7 @@ def simplish_leastsq(
         `d(|x|)/|x| < rel_xtol` then mark converged.
 
     max_iter : int, optional
-        The maximum number of (outer) interations.
+        The maximum number of (outer) iterations.
 
     num_fd_iters : int optional
         Internally compute the Jacobian using a finite-difference method
@@ -596,7 +596,7 @@ def simplish_leastsq(
                 mu, nu = (tau * max_jtj_diag, 2) if init_munu == 'auto' else init_munu
                 best_x_state = (mu, nu, norm_f, f.copy())
 
-            #determing increment using adaptive damping
+            #determining increment using adaptive damping
             while True:  # inner loop
                 if profiler: profiler.memory_check("simplish_leastsq: begin inner iter")
 

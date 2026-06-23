@@ -106,7 +106,7 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
     force : str or list, optional
         A list of Circuits which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
-        be included.  Seting to None is the same as an empty list.
+        be included.  Setting to None is the same as an empty list.
 
     algorithm : {'greedy', 'grasp', 'slack'}, optional
         Specifies the algorithm to use to generate the germ set. Current
@@ -122,7 +122,7 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
         'slack': From a initial set of germs, add or remove a germ at each step in 
         an attempt to improve the germ-set score. Will allow moves that 
         degrade the score in an attempt to escape local optima as long as 
-        the degredation is within some specified amount of "slack". See 
+        the degradation is within some specified amount of "slack". See 
         :func:`find_germs_integer_slack` for more details.
 
     algorithm_kwargs : dict
@@ -165,12 +165,12 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
         the Jacobians is constructed and is cached. This uses an intermediate amount of memory 
         between singleJac and allJac. When compactEVD mode is selected perform the greedy
         search iterations using an alternative method based on low-rank updates to the 
-        psuedoinverse. This alternative approach means that this mode also only works with the
+        pseudoinverse. This alternative approach means that this mode also only works with the
         score function option set to 'all'.
     
     force_rank_increase : bool, optional (default False) 
         Optional flag that can be used in conjunction with the greedy search algorithm
-        in compactEVD mode. When set we require that each subsequant addition to the germ
+        in compactEVD mode. When set we require that each subsequent addition to the germ
         set must increase the rank of the experiment design's composite Jacobian. Can potentially
         speed up the search when set to True.
         
@@ -921,7 +921,7 @@ def _germ_set_score_slack(weights, model_num, score_func, deriv_dagger_deriv_lis
         Coefficient for a penalty linear in the number of germs.
 
     score_dict : dict, optional
-        A dictionary to cache the score valies for the given `model_num` and
+        A dictionary to cache the score values for the given `model_num` and
         `weights`, i.e. `score_dict[model_num, tuple(weights)]` is set to the
         returned value.
 
@@ -957,7 +957,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     Applies random unitary perturbations to a model or list of models.
 
     If `model_list` is a length-1 list, then `num_copies` determines how
-    many randomizations to create.  If `model_list` containes multiple
+    many randomizations to create.  If `model_list` contains multiple
     models, then `num_copies` must be `None` and each model is
     randomized once to create the corresponding returned model.
 
@@ -1591,15 +1591,15 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
         The model or list of Models to select germs for.
 
     germs_list : list of Circuit
-        The list of germs to contruct a germ set from.
+        The list of germs to construct a germ set from.
 
     randomize : bool, optional
         Whether or not to randomize `model_list` (usually just a single
-        `Model`) with small (see `randomizationStrengh`) unitary maps
+        `Model`) with small (see `randomization_strength`) unitary maps
         in order to avoid "accidental" symmetries which could allow for
         fewer germs but *only* for that particular model.  Setting this
         to `True` will increase the run time by a factor equal to the
-        numer of randomized copies (`num_copies`).
+        number of randomized copies (`num_copies`).
 
     randomization_strength : float, optional
         The strength of the unitary noise used to randomize input Model(s);
@@ -1623,7 +1623,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
 
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
-        the differece between eigenvalues below which they're treated as
+        the difference between eigenvalues below which they're treated as
         degenerate.
 
     threshold : float, optional
@@ -1757,15 +1757,15 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
         The model or list of `Model` objects to select germs for.
 
     germs_list : list of Circuit
-        The list of germs to contruct a germ set from.
+        The list of germs to construct a germ set from.
 
     randomize : bool, optional
         Whether or not to randomize `model_list` (usually just a single
-        `Model`) with small (see `randomizationStrengh`) unitary maps
+        `Model`) with small (see `randomization_strength`) unitary maps
         in order to avoid "accidental" symmetries which could allow for
         fewer germs but *only* for that particular model.  Setting this
         to `True` will increase the run time by a factor equal to the
-        numer of randomized copies (`num_copies`).
+        number of randomized copies (`num_copies`).
 
     randomization_strength : float, optional
         The strength of the unitary noise used to randomize input Model(s);
@@ -1789,7 +1789,7 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
 
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
-        the differece between eigenvalues below which they're treated as
+        the difference between eigenvalues below which they're treated as
         degenerate.
 
     threshold : float, optional
@@ -2223,7 +2223,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
     force : str or list, optional
         A list of Circuits which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
-        be included.  Seting to None is the same as an empty list.
+        be included.  Setting to None is the same as an empty list.
 
     force_score : float, optional (default is 1e100)
         When `force` designates a non-empty set of circuits, the score to
@@ -2497,7 +2497,7 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
         List of all germ circuits to consider.
 
     alpha : float
-        A number between 0 and 1 that roughly specifies a score theshold
+        A number between 0 and 1 that roughly specifies a score threshold
         relative to the spread of scores that a germ must score better than in
         order to be included in the RCL. A value of 0 for `alpha` corresponds
         to a purely greedy algorithm (only the best-scoring germ set is
@@ -2560,7 +2560,7 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
     force : str or list, optional
         A list of Circuits which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
-        be included.  Seting to None is the same as an empty list.
+        be included.  Setting to None is the same as an empty list.
 
     iterations : int, optional
         The number of GRASP iterations to perform.
@@ -2779,7 +2779,7 @@ def create_circuit_cache(model, circuit_list):
         The model (associates operation matrices with operation labels).
 
     ckt_list : list of Circuits
-        Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
+        Full list of all fiducial circuits available for constructing an informationally complete state preparation.
     
     Returns
     -------
@@ -2890,7 +2890,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #equivalently minimize the maximum eigenvalue of the inverse. This is called 'worst' in pygsti. The other option,
 #which is the default, is to minimize the sum of the reciprocals of the eigenvalues of the gramian of 
 #the jacobian. This is called 'all' and corresponds roughly, but not exactly, to minimizing the average
-#covariance. Going forward I will refer to this as the psuedoinverse-trace (since that is indeed what it is).
+#covariance. Going forward I will refer to this as the pseudoinverse-trace (since that is indeed what it is).
 
 #We haven't fully figured out how to low-rank updatify the 'worst' objective function (there are a few
 #half-baked ideas based on used iterative methods we might try to make fully baked if there is a demand
@@ -2903,10 +2903,10 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #candidate germs likewise has a jacobian associated with it that we'll denote by A_i.
 #I'll be referring the the A_i matrices (and interchangeably their gramians) as 'updates'.
 
-#We want to know how each of these updates would change the psuedoinverse-trace (and also rank)
+#We want to know how each of these updates would change the pseudoinverse-trace (and also rank)
 #of the jacobian for the current set of germs were it to be added and then select the germ
-#that improves the psuedoinverse-trace (and rank) the most in a greedy fashion. That is, for each
-#of the updates we want to calculate the psuedoinverse-trace of the matrix J'_i:
+#that improves the pseudoinverse-trace (and rank) the most in a greedy fashion. That is, for each
+#of the updates we want to calculate the pseudoinverse-trace of the matrix J'_i:
 
 #pinvtrace(J'_i)= pinvtrace(J^T@J + A_i^T@A_i)
 
@@ -2946,7 +2946,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #so is full-rank (ditto for C). If this were the case then this would solve our problem.
 #At the start of each iteration we pre-compute the inverse of J^T@J once and then use the formula
 #to calculate the updated inverse after adding A_i^T@A_i. Since J^T@J isn't full-rank, however,
-#we need a version of this that works for the psuedoinverse instead (simply replacing the inverses
+#we need a version of this that works for the pseudoinverse instead (simply replacing the inverses
 #with psuedoinverses in the woodbury formula doesn't work except in a couple special cases that we 
 #won't satisfy). 
 
@@ -2969,8 +2969,8 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #(I-UU^T)A, the component of A that is orthogonal to U. R_B is defined analogously
 #but swapping U->V and A->B.
 
-#K won't have the same psuedoinverse as the matrix we care about, but since K has the same spectrum 
-#it will also have the same psuedoinverse-trace as the matrix we care about. So, for the next stage
+#K won't have the same pseudoinverse as the matrix we care about, but since K has the same spectrum 
+#it will also have the same pseudoinverse-trace as the matrix we care about. So, for the next stage
 #we can instead proceed with respect to K. Since K has a nice block structure this will simplify
 #the application of the result from minamide's paper. 
 
@@ -3022,7 +3022,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #There are a few more tricks to keep in mind that are used to accelerate the calculation even more 
 #(and without knowing about makes the implementation details harder to parse).
 
-#   1. The psuedoinverse of a diagonal matrix is simply a diagonal matrix with the non-zero diagonal
+#   1. The pseudoinverse of a diagonal matrix is simply a diagonal matrix with the non-zero diagonal
 #      entries inverted, so no need for a costly SVD (which is how numpy internally implements pinv)
 #   2. The since it is diagonal the matrix multiplications involving E^+ can be done in quadratic time since all we need to do is 
 #      rescale the rows of the other matrix be the appropriate diagonal element. In numpy this can be done using element-wise multiplication
@@ -3039,7 +3039,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 
 
 #Future Performance Enhancements:
-#Inventory of possible future perofrmance enhancements.
+#Inventory of possible future performance enhancements.
 #   1. At the start of each iteration we compute a so-called 'update cache'. This is really just the eigenvalues and eigenvectors
 #      for the jacobian of our current candidate set as well as the projector onto the orthogonal complement of U's column space.
 #      This is calculated in the standard way using eigh. We could in principle use the second half of the Matthew Brand result
@@ -3049,7 +3049,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #      updates are both small, but will give us diminishing returns as the Jacobian for the current solution set approaches being full-rank.
 #      We could always use some heuristic to swap between the two approaches once the rank is past some threshold, though. For 3-qubit+ 
 #      systems profiling suggests that constructing the update cache takes nearly the same amount of time as running through hundreds of
-#      low-rank updates, so this could be a source of pretty large speedups. Vauge numerical stability concerns (and currently being fast enough)
+#      low-rank updates, so this could be a source of pretty large speedups. Vague numerical stability concerns (and currently being fast enough)
 #      are the main reasons we haven't already done so.
 #   2. Better search space pruning. We can do a better job at identifying useless germs and not including them in future iterations.
 #      We currently have an option called 'force_rank_increase' that is plumbed in. This is currently used to short-circuit the low-rank
@@ -3209,7 +3209,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
     else:
         return sqrteU_list
     
-#New function for computing the compact eigenvalue decompostion of a matrix.
+#New function for computing the compact eigenvalue decomposition of a matrix.
 #Assumes that we are working with a diagonalizable matrix, no safety checks made.
 
 def compact_EVD(mat, threshold= 1e-10):
@@ -3240,7 +3240,7 @@ def compact_EVD(mat, threshold= 1e-10):
     #How many non-zero eigenvalues are there and what are their indices
     nonzero_eigenvalue_indices= _np.nonzero(_np.abs(e)>threshold)
 
-    #extract the corresponding columns and values fom U and s:
+    #extract the corresponding columns and values form U and s:
     #For EVD/eigh We want the columns of U and the rows of Uh:
     nonzero_e_values = e[nonzero_eigenvalue_indices]
     nonzero_U_columns = U[:, nonzero_eigenvalue_indices[0]]
@@ -3282,7 +3282,7 @@ def compact_EVD_via_SVD(mat, threshold= 1e-10):
     #How many non-zero eigenvalues are there and what are their indices
     nonzero_eigenvalue_indices= _np.nonzero(_np.abs(s)>threshold)
 
-    #extract the corresponding columns and values fom U and s:
+    #extract the corresponding columns and values form U and s:
     #For EVD/eigh We want the columns of U and the rows of Uh:
     nonzero_e_values = s[nonzero_eigenvalue_indices]**2
     nonzero_U_columns = Vh.T[:, nonzero_eigenvalue_indices[0]]
@@ -3442,7 +3442,7 @@ def riedel_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=Tr
     output:
     
     trace : float
-        Value of the trace of the updated psuedoinverse matrix.
+        Value of the trace of the updated pseudoinverse matrix.
     
     updated_rank : int
         total rank of the updated matrix.
@@ -3497,7 +3497,7 @@ def riedel_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=Tr
 def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=False):
     """
     This function performs a low-rank update to the components of
-    the psuedo inverse of a matrix relevant to the calculation of that
+    the pseudo inverse of a matrix relevant to the calculation of that
     matrix's updated trace. It takes as input a symmetric update of the form:
     A@A.T, in other words a symmetric rank-decomposition of the update
     matrix. Since the update is symmetric we only pass as input one
@@ -3524,7 +3524,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         original matrix's eigenvectors.
         
     updated_trace : float
-        Value of the trace of the updated psuedoinverse matrix.
+        Value of the trace of the updated pseudoinverse matrix.
     
     updated_rank : int
         total rank of the updated matrix.
@@ -3550,7 +3550,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
     if len(nonzero_indices_update[0])==0 and force_rank_increase:
         return None, None, False
     #We also need to add logic for the case where the projection onto the orthogonal
-    #complement is empty, which reduces the psuedoinverse update such that we can
+    #complement is empty, which reduces the pseudoinverse update such that we can
     #actually use the standard woodbury formula result.
     elif (len(nonzero_indices_update[0])==0) and (not force_rank_increase):
         #I have a bunch of intermediate matrices I need to construct. Some of which are used to build up
@@ -3603,7 +3603,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         updated_rank= len(orig_e)
         rank_increased=False
     
-    #otherwise apply the full minamide result to update the psuedoinverse.
+    #otherwise apply the full minamide result to update the pseudoinverse.
     else:
         updated_rank= len(orig_e)+ len(nonzero_indices_update[0])
         P= q_update[: , nonzero_indices_update[0]]
@@ -3611,7 +3611,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         #Now form the matrix R_update which is given by P.T @ proj_update.
         R_update= P.T@proj_update
         
-        #Get the psuedoinverse of R_update:
+        #Get the pseudoinverse of R_update:
         try:
             pinv_R_update= _np.linalg.pinv(R_update, rcond=1e-10) #hardcoded
         except _np.linalg.LinAlgError:
@@ -3708,15 +3708,15 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
         The model or list of Models to select germs for.
 
     germs_list : list of Circuit
-        The list of germs to contruct a germ set from.
+        The list of germs to construct a germ set from.
 
     randomize : bool, optional
         Whether or not to randomize `model_list` (usually just a single
-        `Model`) with small (see `randomizationStrengh`) unitary maps
+        `Model`) with small (see `randomization_strength`) unitary maps
         in order to avoid "accidental" symmetries which could allow for
         fewer germs but *only* for that particular model.  Setting this
         to `True` will increase the run time by a factor equal to the
-        numer of randomized copies (`num_copies`).
+        number of randomized copies (`num_copies`).
 
     randomization_strength : float, optional
         The strength of the unitary noise used to randomize input Model(s);
@@ -3740,7 +3740,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
 
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
-        the differece between eigenvalues below which they're treated as
+        the difference between eigenvalues below which they're treated as
         degenerate.
 
     threshold : float, optional
@@ -3971,7 +3971,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
             if save_cevd_cache_filename is not None:
                 if len(twirledDerivDaggerDerivList)>1:
                     raise ValueError('Currently not configured to save compactEVD caches to disk when there is more than one model in the model list. i.e. this is not currently compatible with model randomization to get the non-lite germs.')
-                #otherwise conver the first entry of twirledDerivDaggerDerivList,
+                #otherwise convert the first entry of twirledDerivDaggerDerivList,
                 #which itself a list of a half of the symmetric rank decompositions
                 #and save it to disk using _np.savez or _np.savez_compressed
                 printer.log('Saving Compact EVD Cache to Disk', 1)
@@ -4394,7 +4394,7 @@ def compute_composite_germ_set_score_compactevd(current_update_cache: tuple[_np.
         AC_score = -_np.inf
         N_AC = -_np.inf
     else:
-        #I want compatibility eith the lines below that pick off just the non_gauge eigenvalues. Rather than
+        #I want compatibility with the lines below that pick off just the non_gauge eigenvalues. Rather than
         #do some index gymnastics I'll just pad this eigenvalue list (which is compact) and make it the expected
         #length (num params). Pad on the left because the code below assumes eigenvalues in ascending order.
         padded_updated_eigenvalues= _np.pad(updated_eigenvalues, (num_params-len(updated_eigenvalues),0))
@@ -4580,7 +4580,7 @@ def fast_kron(a,b):
     return (a[:, None, :, None]*b[None, :, None, :]).reshape(a.shape[0]*b.shape[0],a.shape[1]*b.shape[1])
    
    
-#Stabler implementation of the psuedoinverse using the alternative lapack driver for SVD:
+#Stabler implementation of the pseudoinverse using the alternative lapack driver for SVD:
 def stable_pinv(mat):
     U, s, Vh = _sla.svd(mat, lapack_driver='gesvd', full_matrices=False)
     pinv_s= _np.zeros((len(s),1))
@@ -4588,16 +4588,16 @@ def stable_pinv(mat):
         if sval>1e-10: #HARDCODED
             pinv_s[i]= 1/sval
     
-    #new form the psuedoinverse:
+    #new form the pseudoinverse:
     pinv= Vh.T@(pinv_s*U.T)
     return pinv
 
 
 #---------- Minimal Germ Spanning Vectors------------#
 #Not a great name for this section of code. Idea here is to
-#take a user-inputed AC germ-set (presumably from a prior germ
+#take a user-inputted AC germ-set (presumably from a prior germ
 #selection run and then identify a minimal set of amplified directions
-#that spans model space collectively accross all germs.
+#that spans model space collectively across all germs.
 #this can then be used as input to a version of FPR that is
 #globally aware of the overlap in amplified directions
 #of parameter space.
@@ -4622,7 +4622,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
     
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
-        the differece between eigenvalues below which they're treated as
+        the difference between eigenvalues below which they're treated as
         degenerate.
     
     pretest : boolean, optional
@@ -4676,7 +4676,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         selected for each other germ in the set we maintain amplificational completeness.
 
     currentDDD : ndarray
-        The J^T@J matrix for subset of twirled derivative columns selected accross
+        The J^T@J matrix for subset of twirled derivative columns selected across
         all of the germs. The spectrum of this matrix provides information about the
         amplificational properties of the reduced vector set. 
     """
@@ -4762,7 +4762,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         
         #for the initial iteration since we're just adding a single vector, independent of the score function used
         #we basically just want to choose the vector associated with the largest eigenvalue (as this will minimize both
-        #the psuedoinverse-trace and the minimum psuedoinverse eigenvalue conditions).
+        #the pseudoinverse-trace and the minimum pseudoinverse eigenvalue conditions).
         best_initial_vec_index= _np.argmax(composite_eigenvalue_array)
         printer.log('Best initial vector found: ' + str(best_initial_vec_index), 2)
         
@@ -4797,12 +4797,12 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
                 current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
             else:
                 if update_cache_low_rank:
-                    #do a rank one psuedoinverse update wrt the best vector from the prior round
+                    #do a rank one pseudoinverse update wrt the best vector from the prior round
                     current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol, 
                                                                            prev_update_cache = prev_update_cache,
                                                                            rank_one_update=composite_twirled_deriv_array[:, [idx_best_candidate_vec]]) # noqa: F821
                 else:
-                    #otherwise rebuild the update cache from scratch using a fresh psuedoinverse. Could be useful if worried about stability.
+                    #otherwise rebuild the update cache from scratch using a fresh pseudoinverse. Could be useful if worried about stability.
                     current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
             
             candidate_vec_indices = _np.where(weights == 0)[0]
@@ -4845,7 +4845,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         
         #if true, perform a final test and verify that the final score 
         if final_test:
-            #restricted version of the psuedoinverse trace that only looks at the non-gauge parameters.
+            #restricted version of the pseudoinverse trace that only looks at the non-gauge parameters.
             #Only care about gramians, so assume hermitian
             def restricted_pinv_trace(mat, num_nongauge):
                 #flip so in descending order
@@ -4994,7 +4994,7 @@ def compute_composite_vector_set_score(current_update_cache, vector_update,
 #version specialized for rank one updates
 def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, rank_one_update=None):
     """
-    Calculates the parts of the psuedoinverse update loop algorithm that we can 
+    Calculates the parts of the pseudoinverse update loop algorithm that we can 
     pre-compute and reuse throughout all of the potential updates.
     
     This is based on a result from Carl Meyer in Generalized Inversion of 
@@ -5016,7 +5016,7 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
     Output:
     
     pinv_A : ndarray
-        The psuedoinverse of the input matrix
+        The pseudoinverse of the input matrix
     
     proj_A : ndarray
         A projectors onto the orthogonal complement of the column space of the input matrix.
@@ -5029,7 +5029,7 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
         
     """
     
-    #Start by constructing the psuedoinverse of the input matrix.
+    #Start by constructing the pseudoinverse of the input matrix.
     
     #if these are both specified then use a rank-one update for the psuedoinversion.
     if ((prev_update_cache is not None) and (rank_one_update is  not None)):
@@ -5040,7 +5040,7 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
         else:
             rank=prev_update_cache[3]
         
-    #Else construct the psuedoinverse from scratch.
+    #Else construct the pseudoinverse from scratch.
     #Use the scipy implementation since I can get the rank out easily
     else:
         try:
@@ -5059,13 +5059,13 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
     #I think that's all we can pre-compute, so return those values:
     return pinv_A, proj_A, _np.trace(pinv_A), rank
     
-#function for doing rank-1 psuedoinverse-trace update:
+#function for doing rank-1 pseudoinverse-trace update:
 def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, force_rank_increase=False):
     """
-        Helper function for calculating rank-one updates to the trace of the psuedoinverse.
-        Takes as input a rank-one update, the psuedo-inverse of the matrix
+        Helper function for calculating rank-one updates to the trace of the pseudoinverse.
+        Takes as input a rank-one update, the pseudo-inverse of the matrix
         we're updating, the projector onto the column space for the matrix whose
-        psuedoinverse we are updating and a flag for specifying if we're requiring
+        pseudoinverse we are updating and a flag for specifying if we're requiring
         the rank to increase.
     """
     #calculate some quantities we need. Following notation from matrix cookbook.
@@ -5122,13 +5122,13 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
     return updated_trace, rank_increase_flag
     
     
-#function for doing rank-1 psuedoinverse update:
+#function for doing rank-1 pseudoinverse update:
 def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_increase=False):
     """
-    Helper function for calculating rank-one psuedoinverse updates.
-    Takes as input a rank-one update, the psuedo-inverse of the matrix
+    Helper function for calculating rank-one pseudoinverse updates.
+    Takes as input a rank-one update, the pseudo-inverse of the matrix
     we're updating, the projector onto the column space for the matrix whose
-    psuedoinverse we are updating and a flag for specifying if we're requiring
+    pseudoinverse we are updating and a flag for specifying if we're requiring
     the rank to increase.
     """
     
