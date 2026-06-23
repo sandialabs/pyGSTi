@@ -33,13 +33,17 @@ First, we set our desired *target model* to be the standard $X(\pi/2)$, $Y(\pi/2
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XY
+import os
 target_model = smq1Q_XY.target_model()
 prep_fiducials, meas_fiducials = smq1Q_XY.prep_fiducials(), smq1Q_XY.meas_fiducials()
 germs = smq1Q_XY.germs()
 
 maxLengths = [1,2,4,8,16]
 
-ds = pygsti.io.load_dataset("../../tutorial_files/Example_Dataset.txt", cache=True)
+if os.path.exists("../../tutorial_files/Example_Dataset.txt"):
+  ds = pygsti.io.load_dataset("../../tutorial_files/Example_Dataset.txt", cache=True)
+else:
+  raise ValueError("You have to run the DataSet tutorial first!")
 ```
 
 ## `run_long_sequence_gst`

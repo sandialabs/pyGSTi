@@ -108,7 +108,6 @@ jobs:
       if: ${{ inputs.use-cython != 'true' && inputs.os == 'ubuntu-latest' }}
       run: |
         PYGSTI_CYTHON_SKIP=1 uv pip install --system -e .[testing_no_cython,pytorch]
-        # TODO: address compilation failure in beta-master builds.
     - name: Lint with flake8 (Linux only)
       if: ${{ inputs.os == 'ubuntu-latest'}}
       run: |
