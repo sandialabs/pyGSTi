@@ -30,13 +30,16 @@ data  = simulate_data(mdl_datagen, exp_design.all_circuits_needing_data, num_sam
 pdata = ProtocolData(exp_design, data)
 ```
 
-In this demo we invoke `run_mpi` with an extra `env` argument for added robustness across different types of MPI setups.
-You should try without the `env` argument as well, and omit it unless you need it.
+In this demo we invoke `run_mpi` with two extra arguments for robustness across MPI setups and machines with few cores:
+
+- `env={'FI_PROVIDER': 'sockets'}` can be needed on some MPI distributions. Try without it as well, and omit it unless you need it.
+- `extra_mpi_args=['--oversubscribe']` lets the launcher start more ranks than the machine has cores. We request `num_ranks=3`, and many machines (including CI runners) have fewer than three cores; without this flag Open MPI refuses to launch and `run_mpi` raises a `CalledProcessError`. Note that `--oversubscribe` is an Open MPI flag — on MPICH or Intel MPI, omit it (they neither recognize nor require it).
 
 ```{code-cell} ipython3
 protocol = StandardGST(verbosity=2)
 results = protocol.run_mpi(pdata,
-    num_ranks=3, mpiexec='auto', env={'FI_PROVIDER': 'sockets'}
+    num_ranks=3, mpiexec='auto', env={'FI_PROVIDER': 'sockets'},
+    extra_mpi_args=['--oversubscribe']
 )
 ```
 
