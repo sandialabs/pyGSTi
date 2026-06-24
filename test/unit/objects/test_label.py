@@ -55,6 +55,7 @@ def test_pickle(label):
     l2 = pickle.loads(s)
     assert type(label) == type(l2)
 
+
 @pytest.mark.parametrize('label', labels)
 def test_json_encode(label):
     j = jsoncodec.encode_obj(label, False)
@@ -67,6 +68,7 @@ def test_hashable(label):
     # __hash__ is needed for insertion into a set
     s = {label}
     assert label in s
+
 
 class LabelTester(BaseCase):
     def test_circuit_init(self):
@@ -586,6 +588,7 @@ class LabelTupTupWithTimeTester(BaseCase):
         self.assertEqual(l_with_time2.time, 0.5)
         self.assertEqual(l_with_time1, l_with_time2)
 
+
 class LabelTupTupWithArgsTester(BaseCase):
     def test_labeltuptupwithargs(self):
         l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
@@ -663,7 +666,6 @@ class LabelTupTupWithArgsTester(BaseCase):
         l2 = LabelTupTupWithArgs.init((('A', 0), ('C', 1)), args=('foo',))
         with self.assertRaises(NotImplementedError):
             l1 + l2
-
 
 
 class LabelTupWithTimeTester(BaseCase):
@@ -753,7 +755,6 @@ class LabelTupWithArgsTester(BaseCase):
     def test_labeltupwithargs_expand_subcircuits(self):
         l = LabelTupWithArgs.init('Gx', (0,), args=('foo',))
         self.assertEqual(l.expand_subcircuits(), (l,))
-
 
 
 class CircuitLabelTester(BaseCase):
