@@ -35,6 +35,11 @@ def unvec_square(vec: _np.ndarray, order):
 mpi_workers_per_process = 1
 
 
+def unvec_square(vec: _np.ndarray, order):
+    n = round(vec.size ** 0.5)
+    mat = vec.reshape((n, n), order=order)
+    return mat
+
 class ExampleProcess(interp.PhysicalProcess):
 
     def __init__(self):
