@@ -64,6 +64,46 @@ class ProcessorSpecTester(BaseCase):
         self.assertArraysAlmostEqual(loaded_srep[0], srep[0])
         self.assertArraysAlmostEqual(loaded_srep[1], srep[1])
 
+    @with_temp_path
+    def test_arity_only_nonstd_gate(self, pth):
+        srep = (np.identity(6, dtype=int), np.zeros(6, dtype=int))
+        pspec = QubitProcessorSpec(
+            3, ['Gglobal'], availability={'Gglobal': [(0, 1, 2)]}, geometry='line',
+            nonstd_gate_num_qubits={'Gglobal': 3},
+            nonstd_gate_symplecticreps={'Gglobal': srep})
+
+        self.assertEqual(pspec.gate_num_qubits('Gglobal'), 3)
+        self.assertNotIn('Gglobal', pspec.gate_unitaries)
+        self.assertEqual(pspec.compute_ops_on_qubits()[(0, 1, 2)], [Label('Gglobal', (0, 1, 2))])
+
+        actual_srep = pspec.clifford_symplectic_rep_of(Label('Gglobal', (0, 1, 2)))
+        self.assertArraysAlmostEqual(actual_srep[0], srep[0])
+        self.assertArraysAlmostEqual(actual_srep[1], srep[1])
+
+        subset_pspec = pspec.subset(['Gglobal'], [0, 1, 2])
+        self.assertEqual(subset_pspec.gate_num_qubits('Gglobal'), 3)
+        self.assertNotIn('Gglobal', subset_pspec.gate_unitaries)
+
+        mapped_pspec = pspec.map_qubit_labels({0: 'Q0', 1: 'Q1', 2: 'Q2'})
+        self.assertEqual(mapped_pspec.gate_num_qubits('Gglobal'), 3)
+        self.assertEqual(mapped_pspec.compute_ops_on_qubits()[('Q0', 'Q1', 'Q2')],
+                         [Label('Gglobal', ('Q0', 'Q1', 'Q2'))])
+
+        loaded_pspec = save_and_load(pspec, pth)
+        self.assertEqual(loaded_pspec.gate_num_qubits('Gglobal'), 3)
+        self.assertNotIn('Gglobal', loaded_pspec.gate_unitaries)
+        loaded_srep = loaded_pspec.clifford_symplectic_rep_of(Label('Gglobal', (0, 1, 2)))
+        self.assertArraysAlmostEqual(loaded_srep[0], srep[0])
+        self.assertArraysAlmostEqual(loaded_srep[1], srep[1])
+
+    def test_arity_only_gate_requires_explicit_symplectic_rep(self):
+        pspec = QubitProcessorSpec(
+            3, ['Gglobal'], availability={'Gglobal': [(0, 1, 2)]}, geometry='line',
+            nonstd_gate_num_qubits={'Gglobal': 3})
+
+        with self.assertRaisesRegex(ValueError, "No unitary is available for arity-only gate"):
+            pspec.clifford_symplectic_rep_of(Label('Gglobal', (0, 1, 2)))
+
     @unittest.skip("REMOVEME")
     def test_construct_with_nonstd_gate_unitary_factory(self):
         nQubits = 2
