@@ -23,8 +23,8 @@ import numpy as _np
 
 # Unclear why we use _numbers.Integral below. We had it in isinstance checks
 # before adding type annotations.
-StateSpaceLabels     = tuple[Union[str, _numbers.Integral, int], ...]
-StateSpaceLabelsCastable =   Union[str, _numbers.Integral, int, StateSpaceLabels]
+StateSpaceLabels = tuple[Union[str, _numbers.Integral, int], ...]
+StateSpaceLabelsCastable = Union[str, _numbers.Integral, int, StateSpaceLabels]
 
 # TODO: define a ConcreteLabel protocol! (See type alias at EOF.)
 
@@ -104,10 +104,10 @@ class Label(object):
 
     # this is just an abstract base class for isinstance checking.
     # actual labels will either be LabelTup or LabelStr instances,
-        # depending on whether the tuple of sector names exists or not.
-        # (the reason for separate classes is for hashing speed)
+    # depending on whether the tuple of sector names exists or not.
+    # (the reason for separate classes is for hashing speed)
 
-    def __new__(cls, name: Any, state_space_labels: Optional[StateSpaceLabels]=None, time=None, args=None) -> ConcreteLabel:
+    def __new__(cls, name: Any, state_space_labels: Optional[StateSpaceLabels] = None, time=None, args=None) -> ConcreteLabel:
         """
         Creates a new Model-item label, which is divided into a simple string
         label and a tuple specifying the part of the Hilbert space upon which the
@@ -138,8 +138,8 @@ class Label(object):
             could be an argument of a gate label, and one might create a label:
             `Label('Gx', (0,), args=(pi/3,))`
         """
-        
-        time_is_present = False      
+
+        time_is_present = False
         if isinstance(name, Label) and state_space_labels is None:
             return name  # type: ignore
             # ^ Note: Labels are immutable, so no need to copy
@@ -159,7 +159,7 @@ class Label(object):
                     return LabelTupTupWithArgs.init((Label(tmp) for tmp in tup), time=ctime, args=cargs)
                 case [float() as ctime, None as cargs, tuple() | list() as tup]:
                     return LabelTupTupWithTime.init((Label(tmp) for tmp in tup), time=ctime)
-                case [None as ctime, None as cargs, tuple() | list() as tup]: # Just a single tuple.
+                case [None as ctime, None as cargs, tuple() | list() as tup]:  # Just a single tuple.
                     return LabelTupTup.init((Label(tmp) for tmp in tup))
 
         if isinstance(name, (tuple, list)) and state_space_labels is None:
@@ -188,7 +188,7 @@ class Label(object):
                 else:
                     return Label(name[0], time=time, args=args)
             elif len(name) >= 3 and isinstance(name[0], str) and \
-                (isinstance(name[1], tuple) or name[1] is None) and isinstance(name[2], int):
+                    (isinstance(name[1], tuple) or name[1] is None) and isinstance(name[2], int):
                 # We are building a CircuitLabel.
                 loc_name = name[0]
                 sslbls = name[1]
@@ -214,14 +214,14 @@ class Label(object):
 
                     if isinstance(x, str):
                         if x.startswith(';'):
-                            assert(args is None), "Cannot supply args in tuple when `args` is given!"
+                            assert (args is None), "Cannot supply args in tuple when `args` is given!"
                             if x == ';':
                                 next_is_arg = True
                             else:
                                 tup_args.append(x[1:])
                             continue
                         if x.startswith('!'):
-                            assert(time is None), "Cannot supply time in tuple when `time` is given!"
+                            assert (time is None), "Cannot supply time in tuple when `time` is given!"
                             time_is_present = True
                             if x == '!':
                                 next_is_time = True
@@ -241,8 +241,8 @@ class Label(object):
         #print(" -> preproc with name=", name, "sslbls=", state_space_labels, "t=", time, "args=", args)
         # If numpy object, we have to check size=0 for empty; otherwise, check for empty tuple
         if state_space_labels is None \
-            or (isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels.size == 0) \
-            or (not isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels in ((), (None,))):
+                or (isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels.size == 0) \
+                or (not isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels in ((), (None,))):
             if args is not None:
                 return LabelTupWithArgs.init(name, (), time, args)  # just use empty sslbls
             else:
@@ -260,7 +260,7 @@ class Label(object):
     @property
     def args(self) -> tuple:
         raise NotImplementedError()
-    
+
     @property
     def components(self) -> tuple:
         raise NotImplementedError()
@@ -278,7 +278,7 @@ class Label(object):
         Whether the internal labels are sorted in increasing qubit order.
         """
         return self._is_sorted
-    
+
     @is_sorted.setter
     def is_sorted(self, val: bool):
         self._is_sorted = val
@@ -357,11 +357,11 @@ class Label(object):
             :class:`CircuitLabel` objects).
         """
         return (self,)  # most labels just expand to themselves
-    
+
     @property
     def is_simple(self) -> bool:
         """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.    
+        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
         """
         return self.IS_SIMPLE  # type: ignore
 
@@ -373,22 +373,22 @@ class Label(object):
         In all other situations, we return a LabelTupTup whose inner labels are sorted
         according to their sslbls. This may raise an error if any of the sslbls are not
         comparable to one another.
-        
+
         Note that we are sorting in increasing order of the first qubit that the label
         acts on and respect the order of the sslbls for each label.
         """
 
         if not isinstance(self, LabelTupTup):
             return self  # type: ignore
-        
+
         assert isinstance(self, tuple)
         # ^ make static analysis tools happy
         assert hasattr(self, 'components')
-        
+
         if len(self) <= 1:
             # The inner labels are trivially sorted.
             return self  # type: ignore
-        
+
         if self.is_sorted:
             return self
 
@@ -409,20 +409,20 @@ class Label(object):
             sslbls = inner.sslbls
             if sslbls is None:
                 return self  # type: ignore
-            tmp1[sslbls] = inner.with_sorted_inner_labels() # Recurse so that all parallel sections are in sorted order locally.
-        tmp2 = tuple( (tmp1[k] for k in sorted(tmp1.keys())) )
+            tmp1[sslbls] = inner.with_sorted_inner_labels()  # Recurse so that all parallel sections are in sorted order locally.
+        tmp2 = tuple((tmp1[k] for k in sorted(tmp1.keys())))
 
         if len(tmp2) != len(self.components):
             msg = f"duplicate sslbls among inner labels of = {self}"
             raise ValueError(msg)
-        
+
         args = None if getattr(self, 'args', ()) == () else self.args  # type: ignore
         # ^ We override an empty tuple with None to make sure we hit the right
         #   codepath in Label.__new__.
         out = Label(tmp2,
-            time=getattr(self, 'time', None),
-            args=args
-        )
+                    time=getattr(self, 'time', None),
+                    args=args
+                    )
         out.is_sorted = True
         # ^ We don't pass state_space_labels=self.sslbls in order to make sure
         #   we hit the right codepath in Label.__new__; all codepaths that
@@ -434,7 +434,7 @@ class Label(object):
 
     def replace_name(self, oldname, newname):
         raise NotImplementedError()
-    
+
     def concate(self, other: Label):
         """
         Combine two labels together so that they are one label which could be a single layer.
@@ -481,12 +481,12 @@ class LabelTup(Label, tuple):
         """
 
         #Type checking
-        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
-        assert(state_space_labels is not None), "LabelTup must be initialized with non-None state-space labels"
+        assert (isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
+        assert (state_space_labels is not None), "LabelTup must be initialized with non-None state-space labels"
         if not isinstance(state_space_labels, (tuple, list)):
             state_space_labels = (state_space_labels,)
         for ssl in state_space_labels:
-            assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
+            assert (isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
 
         #Try to convert integer-strings to ints (for parsing from files...)
@@ -696,13 +696,13 @@ class LabelTupWithTime(LabelTup, tuple):
         """
 
         #Type checking
-        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
-        assert(state_space_labels is not None), "LabelTupWithTime must be initialized with non-None state-space labels"
-        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        assert (isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
+        assert (state_space_labels is not None), "LabelTupWithTime must be initialized with non-None state-space labels"
+        assert (isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         if not isinstance(state_space_labels, (tuple, list)):
             state_space_labels = (state_space_labels,)
         for ssl in state_space_labels:
-            assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
+            assert (isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
 
         #Try to convert integer-strings to ints (for parsing from files...)
@@ -712,20 +712,20 @@ class LabelTupWithTime(LabelTup, tuple):
         tup = (_sys.intern(name),) + sslbls
         return cls.__new__(cls, tup, time)
 
-    def __new__(cls, prepended_tup : tuple[Any, ...], time=0.0) -> LabelTupWithTime:
+    def __new__(cls, prepended_tup: tuple[Any, ...], time=0.0) -> LabelTupWithTime:
         # require len(prepended_tup) >= 1
         # require prepended_tup[0] is a str
         ret = tuple.__new__(cls, prepended_tup)  # creates a LabelTupWithTime object using tuple's __new__
-        ret.time : float = time  # type: ignore
+        ret.time: float = time  # type: ignore
         return ret
-    
+
     @property
     def time(self) -> float:
         """
         The time value associated with this label.
         """
         return self._time
-    
+
     @time.setter
     def time(self, val: float):
         self._time = val
@@ -756,7 +756,7 @@ class LabelTupWithTime(LabelTup, tuple):
         else:  # assume mapper is callable
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
         mapped_prepended_tup = (self.name,) + tuple(mapped_sslbls)
-        time :  float = self.time  # type: ignore
+        time: float = self.time  # type: ignore
         return LabelTupWithTime.__new__(LabelTupWithTime, mapped_prepended_tup, time=time)
 
     def __str__(self) -> str:
@@ -822,7 +822,7 @@ class LabelTupWithTime(LabelTup, tuple):
             return self
         sslbls = self.sslbls
         new_tup = (newname,) if sslbls is None else ((newname,) + sslbls)
-        time : float = self.time  # type: ignore
+        time: float = self.time  # type: ignore
         return LabelTupWithTime.__new__(LabelTupWithTime, new_tup, time)
 
 
@@ -842,7 +842,7 @@ class LabelStr(Label, str):
     time: float
 
     @classmethod
-    def init(cls, name: str, time: float=0.0) -> LabelStr:
+    def init(cls, name: str, time: float = 0.0) -> LabelStr:
         """
         Creates a new Model-item label, which is just a simple string label.
 
@@ -859,14 +859,14 @@ class LabelStr(Label, str):
         LabelStr
         """
         #Type checking
-        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
-        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        assert (isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
+        assert (isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         return cls.__new__(cls, name, time)
 
     def __new__(cls, name, time=0.0) -> LabelStr:
         ret = str.__new__(cls, name)
         ret.time = time
-        ret._is_sorted = True # there is only one value so it must be sorted.
+        ret._is_sorted = True  # there is only one value so it must be sorted.
         return ret
 
     @property
@@ -943,7 +943,7 @@ class LabelStr(Label, str):
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelStr, (str(self), self.time), None)
-    
+
     def __contains__(self, x) -> bool:
         #need to get a string rep of the tested label.
         return str(x) in str(self)
@@ -981,8 +981,8 @@ class LabelStr(Label, str):
         return LabelStr(newname) if (self.name == oldname) else self
 
     def concate(self, other):
-        raise ValueError("Cannot concate a `LabelStr` to another `Label` as `LabelStr` " \
-                        "do not have a qubits associated without parsing.")
+        raise ValueError("Cannot concate a `LabelStr` to another `Label` as `LabelStr` "
+                         "do not have a qubits associated without parsing.")
 
     __hash__ = str.__hash__
     # ^ this is why we derive from tuple - using the
@@ -994,7 +994,7 @@ class LabelStr(Label, str):
 
 def _tuptup_sslbls(obj: Union[LabelTupTup, LabelTupTupWithArgs, LabelTupTupWithTime], offset: int) -> Optional[StateSpaceLabels]:
     """
-    A helper function used to retrieve obj.sslbls; the return value is cached 
+    A helper function used to retrieve obj.sslbls; the return value is cached
     in obj._sslbls if it's not None.
     """
     if len(obj) == 0:
@@ -1002,7 +1002,7 @@ def _tuptup_sslbls(obj: Union[LabelTupTup, LabelTupTupWithArgs, LabelTupTupWithT
     if getattr(obj, '_sslbls', None) is not None:
         # The getattr(...) guard is for backward compatibility in case
         # someone picked a Label. In principle, all types of `obj`
-        # allowed in this function have a None-initialized _sslbls 
+        # allowed in this function have a None-initialized _sslbls
         # attribute set in their __new__ methods.
         return obj._sslbls  # type: ignore
     s = set()
@@ -1010,8 +1010,8 @@ def _tuptup_sslbls(obj: Union[LabelTupTup, LabelTupTupWithArgs, LabelTupTupWithT
         if lbl.sslbls is None:
             return None
         s.update(lbl.sslbls)
-    obj._sslbls = tuple(sorted(list(s))) # type: ignore
-    return obj._sslbls # type: ignore
+    obj._sslbls = tuple(sorted(list(s)))  # type: ignore
+    return obj._sslbls  # type: ignore
 
 
 class LabelTupTup(Label, tuple):
@@ -1046,9 +1046,9 @@ class LabelTupTup(Label, tuple):
             tup_of_tups_to_iterate = tup_of_tups.components
         else:
             tup_of_tups_to_iterate = tup_of_tups
-        tupOfLabels : tuple[ConcreteLabel, ...] = tuple([tup if isinstance(tup, Label) else Label(tup) for tup in tup_of_tups_to_iterate]) 
+        tupOfLabels: tuple[ConcreteLabel, ...] = tuple([tup if isinstance(tup, Label) else Label(tup) for tup in tup_of_tups_to_iterate])
         # ^ Note: constituent `tup`s in the list comprehension can also be a Label obj
-        if __debug__ and tupOfLabels: # Debug flag is so that the check gets optimized out later in production runs.
+        if __debug__ and tupOfLabels:  # Debug flag is so that the check gets optimized out later in production runs.
             atleast_one_missing_time = False
             somewith_nonemptyargs = False
             ctimes = set()
@@ -1062,21 +1062,21 @@ class LabelTupTup(Label, tuple):
                         somewith_nonemptyargs = True
             if not atleast_one_missing_time and ctimes == set([0.0]) and somewith_nonemptyargs:
                 # This is likely a LabelTupTup containing LabelsWithArgs. We do not know if they just got defaulted to time = 0.
-                warn("The interior labels have args which sets the default time to 0.0." \
-                "If you want to also label this collection LabelTupTup with time = 0.0 you must include the time in the constructor.", RuntimeWarning) 
+                warn("The interior labels have args which sets the default time to 0.0."
+                     "If you want to also label this collection LabelTupTup with time = 0.0 you must include the time in the constructor.", RuntimeWarning)
             elif not atleast_one_missing_time and len(ctimes) == 1 and 0.0 not in ctimes:
-                warn("You may want to consider a LabelTupTupWithTime as all of the entries have the same time" \
-                    " and it had to be user specified.", RuntimeWarning)
+                warn("You may want to consider a LabelTupTupWithTime as all of the entries have the same time"
+                     " and it had to be user specified.", RuntimeWarning)
             elif not atleast_one_missing_time and len(ctimes) == 1:
-                warn("You may want to consider a LabelTupTupWithTime as all of the entries have the same time " \
-                    "which was previously the default time.", RuntimeWarning)
+                warn("You may want to consider a LabelTupTupWithTime as all of the entries have the same time "
+                     "which was previously the default time.", RuntimeWarning)
 
         ret = cls.__new__(cls, tupOfLabels)
         return ret
-    
+
     def __new__(cls, tup_of_labels: tuple[ConcreteLabel, ...]) -> LabelTupTup:
         ret = tuple.__new__(cls, tup_of_labels)
-        ret._sslbls : Optional[tuple] = None  # type: ignore
+        ret._sslbls: Optional[tuple] = None  # type: ignore
         ret._is_sorted = False
         return ret
 
@@ -1114,7 +1114,7 @@ class LabelTupTup(Label, tuple):
         """
         return self  # self is a tuple of "sub-label" components
 
-    def has_prefix(self, prefix: str, typ: Literal['any', 'all']='all') -> bool:
+    def has_prefix(self, prefix: str, typ: Literal['any', 'all'] = 'all') -> bool:
         """
         Whether this label has the given `prefix`.
 
@@ -1297,7 +1297,7 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
     """
 
     @classmethod
-    def init(cls, tup_of_tups: Sequence[Any], time: Optional[float]=None) -> LabelTupTupWithTime:
+    def init(cls, tup_of_tups: Sequence[Any], time: Optional[float] = None) -> LabelTupTupWithTime:
         """
         Creates a new Model-item tuple-of-tuples label.
 
@@ -1322,7 +1322,7 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         if time is None:
             time = getattr(tup_of_tups, 'time', None)
 
-        assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        assert (time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         if isinstance(tup_of_tups, Label):
             tup_of_tups_to_iterate = tup_of_tups.components
         else:
@@ -1332,9 +1332,9 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
             time = max([getattr(lbl, 'time', 0.0) for lbl in tupOfLabels], default=0.0)
         return cls.__new__(cls, tupOfLabels, time)
 
-    def __new__(cls, tup_of_labels: tuple[ConcreteLabel, ...], time: float=0.0):
+    def __new__(cls, tup_of_labels: tuple[ConcreteLabel, ...], time: float = 0.0):
         ret = super(LabelTupTupWithTime, cls).__new__(cls, tup_of_labels)
-        ret.time : float = time  # type: ignore
+        ret.time: float = time  # type: ignore
         return ret
 
     @property
@@ -1343,7 +1343,7 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         The time value associated with this label.
         """
         return self._time
-    
+
     @time.setter
     def time(self, val: float):
         self._time = val
@@ -1370,25 +1370,25 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         Label
         """
         mapped = tuple((lbl.map_state_space_labels(mapper) for lbl in self))
-        time : float = self.time  # type: ignore
+        time: float = self.time  # type: ignore
         return LabelTupTupWithTime.__new__(LabelTupTupWithTime, mapped, time)
 
     def strip_args(self) -> LabelTupTupWithTime:
         """ Return version of self with all arguments removed """
         # default, appropriate for a label without args or components
         stripped = tuple((comp.strip_args() for comp in self))
-        time : float = self.time  # type: ignore
+        time: float = self.time  # type: ignore
         return LabelTupTupWithTime.__new__(LabelTupTupWithTime, stripped, time)
 
     def __repr__(self) -> str:
-        time : float = self.time  # type: ignore
+        time: float = self.time  # type: ignore
         timearg = ",time=" + repr(time) if (time != 0.0) else ""
         return "Label(" + repr(self[:]) + timearg + ")"
 
     def __reduce__(self) -> tuple[type, tuple[tuple, float], None]:
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
-        time : float = self.time  # type: ignore
+        time: float = self.time  # type: ignore
         return (LabelTupTupWithTime, (self[:], time), None)
 
     def to_native(self) -> tuple:
@@ -1420,7 +1420,7 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         LabelTupTupWithTime
         """
         renamed = tuple((x.replace_name(oldname, newname) for x in self))
-        time : float = self.time # type: ignore
+        time: float = self.time  # type: ignore
         return LabelTupTupWithTime.__new__(LabelTupTupWithTime, renamed, time)
 
     def expand_subcircuits(self) -> tuple[LabelTupTupWithTime, ...]:
@@ -1468,8 +1468,8 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
 
     def __new__(cls, name: str, tup_of_layers: Sequence[Any],
                 state_space_labels: Optional[StateSpaceLabels],
-                reps: int=1, time: Optional[float]=None
-        ) -> CircuitLabel:
+                reps: int = 1, time: Optional[float] = None
+                ) -> CircuitLabel:
         """
         Creates a new Model-item label, which defines a set of other labels
         as a sub-circuit and allows that sub-circuit to be repeated some integer
@@ -1503,17 +1503,17 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         time : float
             The time at which this label occurs (can be relative or absolute)
         """
-        assert(isinstance(reps, _numbers.Integral) and isinstance(name, str)
-               ), "Invalid name or reps: %s %s" % (str(name), str(reps))
-        tupOfLabels : tuple[ConcreteLabel, ...] = tuple((Label(tup) for tup in tup_of_layers))
+        assert (isinstance(reps, _numbers.Integral) and isinstance(name, str)
+                ), "Invalid name or reps: %s %s" % (str(name), str(reps))
+        tupOfLabels: tuple[ConcreteLabel, ...] = tuple((Label(tup) for tup in tup_of_layers))
 
         if state_space_labels is not None:
             # The PR that added type annotations to this class also added type this checking.
             # The type checking is necessary to comply with the Label API.
             assert isinstance(state_space_labels, tuple)
             for sslbl in state_space_labels:
-                assert isinstance(sslbl, (int, str, _numbers.Integral)) 
-        
+                assert isinstance(sslbl, (int, str, _numbers.Integral))
+
         ret = tuple.__new__(cls, (name, state_space_labels, reps) + tupOfLabels)
         if time is None:
             ret.time = sum([getattr(lbl, 'time', 0.0) for lbl in tupOfLabels], start=0.0)
@@ -1563,7 +1563,7 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         -------
         bool
         """
-        return self.name.startswith(prefix) # Needed since LabelTupTup overrides.
+        return self.name.startswith(prefix)  # Needed since LabelTupTup overrides.
 
     @property
     def components(self) -> tuple[ConcreteLabel, ...]:
@@ -1598,7 +1598,7 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         else:  # assume mapper is callable
             mapped_sslbls = tuple((mapper(sslbl) for sslbl in self.sslbls))
         mapped_layers = [lbl.map_state_space_labels(mapper) for lbl in self.components]
-        time : float = self.time  # type: ignore
+        time: float = self.time  # type: ignore
         return CircuitLabel.__new__(CircuitLabel, self.name, mapped_layers, mapped_sslbls, self.reps, time)
 
     def strip_args(self) -> None:
@@ -1626,10 +1626,10 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
             + repr(self[1]) + "," + repr(self[2]) + "," + repr(self.time) + ")"
 
     def __reduce__(self) -> tuple[
-            type, 
-            tuple[str, tuple[ConcreteLabel, ...], Optional[StateSpaceLabels], int, float],
-            None
-        ]:
+        type,
+        tuple[str, tuple[ConcreteLabel, ...], Optional[StateSpaceLabels], int, float],
+        None
+    ]:
         # Need to tell serialization logic how to create a new Label since it's derived
         # from the immutable tuple type (so cannot have its state set after creation)
         return (CircuitLabel, (self[0], self[3:], self[1], self[2], self.time), None)
@@ -1697,7 +1697,7 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         if isinstance(other, CircuitLabel):
             if other.depth == self.depth:
                 # We can concate these.
-                return Label((self, other)) # make a _LabelTupTup
+                return Label((self, other))  # make a _LabelTupTup
             raise ValueError(f"Cannot concate two CircuitLabels of different depth: {self.depth} vs {other.depth}")
 
         tmp_lbl: Label = None
@@ -1751,15 +1751,15 @@ class LabelTupWithArgs(LabelTupWithTime, tuple):
         LabelTupWithArgs
         """
         #Type checking
-        assert(isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
-        assert(state_space_labels is not None), "LabelTup must be initialized with non-None state-space labels"
+        assert (isinstance(name, str)), "`name` must be a string, but it's '%s'" % str(name)
+        assert (state_space_labels is not None), "LabelTup must be initialized with non-None state-space labels"
         if not isinstance(state_space_labels, (tuple, list)):
             state_space_labels = (state_space_labels,)
         for ssl in state_space_labels:
-            assert(isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
+            assert (isinstance(ssl, str) or isinstance(ssl, _numbers.Integral)), \
                 "State space label '%s' must be a string or integer!" % str(ssl)
-        assert(isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
-        assert(len(args) > 0), "`args` must be a nonempty list/tuple of hashable arguments"
+        assert (isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        assert (len(args) > 0), "`args` must be a nonempty list/tuple of hashable arguments"
         #TODO: check that all args are hashable?
 
         #Try to convert integer-strings to ints (for parsing from files...)
@@ -1814,7 +1814,7 @@ class LabelTupWithArgs(LabelTupWithTime, tuple):
             mapped_sslbls = tuple((mapper[sslbl] for sslbl in self.sslbls))
         else:  # assume mapper is callable
             mapped_sslbls = tuple((mapper(sslbl) for sslbl in self.sslbls))
-        time : float = self.time  # type: ignore
+        time: float = self.time  # type: ignore
         return LabelTupWithArgs.init(self.name, mapped_sslbls, time, self.args)
 
     def strip_args(self) -> Union[LabelTup, LabelStr]:
@@ -1923,7 +1923,7 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
     """
 
     @classmethod
-    def init(cls, tup_of_tups: Sequence[Any], time: Optional[float]=None, args: Sequence[Any]=()):
+    def init(cls, tup_of_tups: Sequence[Any], time: Optional[float] = None, args: Sequence[Any] = ()):
         """
         Creates a new Model-item label.
 
@@ -1952,7 +1952,7 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         if not args:
             args = getattr(tup_of_tups, 'args', tuple())
 
-        assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
+        assert (time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         if isinstance(tup_of_tups, Label):
             tup_of_tups_to_iterate = tup_of_tups.components
         else:
@@ -1962,8 +1962,6 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         if time is None:
             time = max([getattr(lbl, 'time', 0.0) for lbl in tup_of_lbls], default=0.0)
         return cls.__new__(cls, tup_rep, time)
-
-
 
     @property
     def sslbls(self) -> Optional[StateSpaceLabels]:
@@ -1985,7 +1983,6 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         The sub-label components of this label, or just `(self,)` if no sub-labels exist.
         """
         return self[self[0]:]  # a tuple of "sub-label" components
-
 
     def map_state_space_labels(self, mapper):
         """
@@ -2099,9 +2096,8 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         return tuple(ret)
 
 
-
 ConcreteLabel = Union[
-    LabelTup,    LabelTupWithArgs,    LabelTupWithTime,
+    LabelTup, LabelTupWithArgs, LabelTupWithTime,
     LabelTupTup, LabelTupTupWithArgs, LabelTupTupWithTime,
     LabelStr, CircuitLabel
 ]
