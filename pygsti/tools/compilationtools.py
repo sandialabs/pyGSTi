@@ -1,5 +1,5 @@
 """
-Functions for manupilating gates in circuits
+Functions for manipulating gates in circuits
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

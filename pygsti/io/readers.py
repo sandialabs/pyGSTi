@@ -126,7 +126,7 @@ def read_dataset(filename, cache=False, collision_action="aggregate",
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
-            ds.save(cache_filename)
+            ds.write_binary(cache_filename)
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
@@ -220,7 +220,7 @@ def read_multidataset(filename, cache=False, collision_action="aggregate",
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
-            mds.save(cache_filename)
+            mds.write_binary(cache_filename)
 
         else:
             # otherwise must use standard dataset file format
@@ -640,7 +640,7 @@ def read_data_from_dir(dirname, preloaded_edesign=None, quick_load=False, comm=N
         Directory name.
 
     preloaded_edesign : ExperimentDesign, optional
-        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        The experiment design belonging to the to-be-loaded data object, in cases
         when this has been loaded already (only use this if you know what
         you're doing).
 
@@ -678,7 +678,7 @@ def read_data_from_mongodb(mongodb, doc_id, preloaded_edesign=None, quick_load=F
         The user-defined identifier of the data to load.
 
     preloaded_edesign : ExperimentDesign, optional
-        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        The experiment design belonging to the to-be-loaded data object, in cases
         when this has been loaded already (only use this if you know what
         you're doing).
 

@@ -251,6 +251,25 @@ class CompileCNOTCircuitROCAGETester(CompileCNOTCircuitBase, BaseCase):
     aargs = []
 
 
+class CompileCNOTCircuitBGETester(CompileCNOTCircuitBase, BaseCase):
+    # Regression coverage for the basic-Gaussian-elimination CNOT compiler. It previously crashed
+    # because `_compile_cnot_circuit_using_bge_algorithm` built its Circuit with the obsolete
+    # `gatesring` keyword instead of `layer_labels`, so the 'BGE' path had no working coverage.
+    algorithm = 'BGE'
+    aargs = []
+
+    def test_compile_cnot_circuit_bge_is_correct(self):
+        compiled = compilers.compile_cnot_circuit(
+            fixture_2Q.cnot_circuit_sym,
+            fixture_2Q.pspec,
+            fixture_2Q.clifford_abs,
+            algorithm='BGE',
+            check=True
+        )
+        sym_out, _ = symplectic.symplectic_rep_of_clifford_circuit(compiled, pspec=fixture_2Q.pspec)
+        self.assertArraysEqual(fixture_2Q.cnot_circuit_sym, sym_out)
+
+
 class CompileStabilizerBase(object):
     def setUp(self):
         super(CompileStabilizerBase, self).setUp()
@@ -368,3 +387,29 @@ class CompileStabilizer2QSubsetTester(CompileStabilizer1QSubsetTester):
         self.options.update(
             qubit_labels=['Q1', 'Q2']
         )
+
+
+class CompileConditionalSymplecticRingTester(BaseCase):
+    # Regression coverage for compile_conditional_symplectic(..., check=True) on a restricted
+    # (ring) geometry. The check path previously crashed with "Cannot edit a read-only circuit!"
+    # because it copied the precircuit without editable=True.
+    def setUp(self):
+        super(CompileConditionalSymplecticRingTester, self).setUp()
+        self.qubit_labels = ['Q0', 'Q1', 'Q2', 'Q3']
+        self.pspec = QubitProcessorSpec(
+            4, gate_names=['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase'],
+            qubit_labels=self.qubit_labels, geometry='ring')
+
+    def test_compile_conditional_symplectic_check_on_ring(self):
+        rand_state = np.random.RandomState(2021)
+        n = 4
+        for _ in range(20):
+            s, _p = symplectic.random_clifford(n, rand_state=rand_state)
+            # check=True exercises the editable-copy path; it must not raise.
+            circuit, precircuit = compilers.compile_conditional_symplectic(
+                s, self.pspec, qubit_labels=self.qubit_labels, check=True, rand_state=rand_state)
+            # The conditional-symplectic guarantee: prefixing precircuit reproduces the RHS of `s`.
+            checkcircuit = precircuit.copy(editable=True)
+            checkcircuit.append_circuit_inplace(circuit)
+            scheck, _pcheck = symplectic.symplectic_rep_of_clifford_circuit(checkcircuit)
+            self.assertArraysEqual(scheck[:, n:2 * n], s[:, n:2 * n])

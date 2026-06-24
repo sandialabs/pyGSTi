@@ -30,6 +30,8 @@ from pygsti.tools import listtools as _lt
 from pygsti import SpaceT
 from pygsti.circuits import CircuitList as _CircuitList
 
+from pygsti.tools.legacytools import deprecate as _deprecated
+
 _dummy_profiler = _DummyProfiler()
 
 # FUTURE: use enum
@@ -183,7 +185,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                    derivative_eps=state.get('derivative_epsilon', 1e-7),
                    hessian_eps=state.get('hessian_epsilon', 1e-5))
 
-    def copy(self):
+    def copy(self, keep_model_attached=True):
         """
         Return a shallow copy of this MapForwardSimulator
 
@@ -191,8 +193,13 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         -------
         MapForwardSimulator
         """
-        return MapForwardSimulator(self.model, self._max_cache_size, self._num_atoms,
-                                   self._processor_grid, self._pblk_sizes)
+        out = MapForwardSimulator(
+            self.model, self._max_cache_size, self._num_atoms,
+            self._processor_grid, self._pblk_sizes
+        )
+        if not keep_model_attached:
+            out.model = None  # type: ignore
+        return out
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None,
@@ -220,7 +227,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         derivative_dimensions : int or tuple[int], optional
             Optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            and second derivatives with respect to the circuit outcome probabilities.  This must be
             non-None when `array_types` contains `'ep'` or `'epp'` types.
             If a tuple, then must be length 1.
 
@@ -267,7 +274,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         if mem_limit is not None:
             if mem_limit <= 0:
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
-            printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
+            printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C), message_level=2)
 
         #Start with how we'd like to split processors up (without regard to memory limit):        
         #The current implementation of map (should) benefit more from having a matching between the number of atoms
@@ -278,12 +285,14 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=default_natoms)  
         
-        printer.log(f'Num Param Processors {npp}')
-        
-        printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
-        printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        if comm is not None:
+            printer.log(f'Num Param Processors {npp}', message_level=2)
+            printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
+                        (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)),message_level=2)
+            printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)), message_level=2)
+            assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        else:
+            printer.log('Using MapForwardSimulator without MPI', message_level=2)
 
         layout = _MapCOPALayout(circuits, self.model, dataset, self._max_cache_size, natoms, na, npp,
                                 param_dimensions, param_blk_sizes, resource_alloc,circuit_partition_cost_functions,
@@ -319,7 +328,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB)" % (
                     mem_limit * GB, mem_estimate * GB))
             else:
-                printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
+                printer.log("   Estimated memory required = %.1fGB" % (mem_estimate * GB), message_level=2)
 
         return layout
     
@@ -700,71 +709,3 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dloglpp, logl_array_to_fill, loglpp)
 
-    
-    #Utility method for generating process matrices for circuits. Should not be used for forward
-    #simulation when using the MapForwardSimulator.
-    def product(self, circuit, scale=False):
-        """
-        Compute the product of a specified sequence of operation labels.
-
-        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
-        the first element of circuit can be thought of as the first gate operation
-        performed, which is on the far right of the product of matrices.
-
-        Parameters
-        ----------
-        circuit : Circuit or tuple of operation labels
-            The sequence of operation labels.
-
-        scale : bool, optional
-            When True, return a scaling factor (see below).
-
-        Returns
-        -------
-        product : numpy array
-            The product or scaled product of the operation matrices.
-        scale : float
-            Only returned when scale == True, in which case the
-            actual product == product * scale.  The purpose of this
-            is to allow a trace or other linear operation to be done
-            prior to the scaling.
-        """
-        _warnings.warn('Generating dense process matrix representations of circuits or gates \n'
-                       'can be inefficient and should be avoided for the purposes of forward \n'
-                       'simulation/calculation of circuit outcome probability distributions \n' 
-                       'when using the MapForwardSimulator.')
-        
-        # Smallness tolerances, used internally for conditional scaling required
-        # to control bulk products, their gradients, and their Hessians.
-        _PSMALL = 1e-100
-        
-        if scale:
-            scaledGatesAndExps = {}
-            scale_exp = 0
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
-            for lOp in circuit:
-                if lOp not in scaledGatesAndExps:
-                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
-                    ng = max(_nla.norm(opmx), 1.0)
-                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
-
-                gate, ex = scaledGatesAndExps[lOp]
-                H = _np.dot(gate, G)   # product of gates, starting with identity
-                scale_exp += ex   # scale and keep track of exponent
-                if H.max() < _PSMALL and H.min() > -_PSMALL:
-                    nG = max(_nla.norm(G), _np.exp(-scale_exp))
-                    G = _np.dot(gate, G / nG); scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
-                else: G = H
-
-            old_err = _np.seterr(over='ignore')
-            scale = _np.exp(scale_exp)
-            _np.seterr(**old_err)
-
-            return G, scale
-
-        else:
-            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
-            for lOp in circuit:
-                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
-                # above line: LEXICOGRAPHICAL VS MATRIX ORDER
-            return G

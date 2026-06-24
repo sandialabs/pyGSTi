@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [0.9.14.2] - 2025-11-08
+
+This is a bugfix release patching the following issues:
+
+* Bugfixes for diamond-distance wildcard budget computation in the context of leakage-aware analysis as reported in #652. (#671)
+* Changes to default behavior of leakage-aware gauge optimization suite to address the manner in which relational leakage errors are attributed to each gate. Additional correctness checks/unit tests for leakage GST modeling. (#671)
+* Bugfix for issue reported in #644 where it was found that when gauge-optimizing models with instruments using fidelity or trace distance as cost functions the instrument parameters were being ignored. Note that it was originally reported/thought that this applied to frobenius distance as well, but that turned out not to be true and this was working correctly. (#672)
+* Fix for issue #600, which found the `Model.is_equivalent` method did not work for 'full TP' models. (#657)
+* tqdm added as proper dependency (#653, #656)
+* Shared memory bugs in objective function computation when parallelizing across parameters. (#660, #674) 
+* Fixes a bug in DataSet count retrieval and adds unit tests. (#663)
+
 ## [0.9.14.1] - 2025-08-30
 
 This is a bugfix release patching two issues: 
@@ -29,7 +41,7 @@ In addition to these changes, this release includes a number smaller changes, bu
 * **Mirror Circuit Fidelity Estimation** and scalable algorithmic benchmarks using subcircuit sampling (#628, @ndsieki): This module adds support for the construction and analysis of holistic and application-oriented benchmarks based on a family of techniques called mirror circuit benchmarking. Mirror circuits provide a method for constructing efficient proxy circuits from which one can take essentially any circuit of interest and construct reliable estimates for the fidelity of circuit. Also included with this module is:
     * Initial support for randomized compiling.
     * Support for subcircuit volumetric benchmarking (SVB), a method for constructing fidelity estimates for application circuits at scales larger than existing devices based on the analysis of smaller subcircuits sampled from the full one. This technique will be discussed in greater detail in an upcoming publication.
-    * Initial introduction of B-Sqale (name subject to change), a tool which will eventually enable end-to-end construction of scalable mirror circuit fidelity estimation experiments from an application circuit of interest.
+    * Initial introduction of scarab, a tool which will eventually enable end-to-end construction of scalable mirror circuit fidelity estimation experiments from an application circuit of interest. Please see [https://arxiv.org/abs/2511.02134](https://arxiv.org/abs/2511.02134) for more information.
    * Direct interfaces for conversion to and from qiskit circuits (w/o needing to go through OpenQASM as an intermediary).   
  * **Leakage-aware GST** (#410, #616, @rileyjmurray): pyGSTi's capabilities for modeling leakage and quantifying its impact have been significantly enhance with new capabilities for performing what we're calling leakage aware GST. For more on using these new capabilities in practice please see the new example [notebook](https://github.com/sandialabs/pyGSTi/blob/master/jupyter_notebooks/Examples/Leakage-automagic.ipynb). This includes:
     * New leakage-targeted bases for representing quantum process matrices which naturally delineate between computational space and leakage space dynamics. 
