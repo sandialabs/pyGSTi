@@ -28,6 +28,7 @@ labels = [
     L(('Gx', 0, 1)),  # a LabelTup
     L('Gx'),  # a LabelStr
     L('Gx', None),  # still a LabelStr
+    LabelStr.init('rho0', 1.5), # LabelStr objects have a `time` field
     L([('Gx', 0), ('Gy', 0)]),  # a LabelTupTup of LabelTup objs
     L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
     L([('Gx', 0)]),  # just a LabelTup b/c only one component

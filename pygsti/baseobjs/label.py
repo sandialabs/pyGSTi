@@ -821,6 +821,7 @@ class LabelTupWithTime(LabelTup, tuple):
         time : float = self.time  # type: ignore
         return LabelTupWithTime.__new__(LabelTupWithTime, new_tup, time)
 
+
 class LabelStr(Label, str):
     """
     A string-valued label.
@@ -952,7 +953,7 @@ class LabelStr(Label, str):
         str
         """
         if self.time != 0.0:
-            return (str(self), '!' + str(self.time))
+            return (self.name, '!' + str(self.time))
         return str(self)
 
     def replace_name(self, oldname: str, newname: str) -> LabelStr:
@@ -1441,6 +1442,7 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
             #assert(len(ec) > 0), "Logic error!" #this is ok (e.g. an idle subcircuit)
             ret.append(LabelTupTupWithTime.init(ec))
         return tuple(ret)
+
 
 class CircuitLabel(LabelTupTupWithTime, tuple):
     """
