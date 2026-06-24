@@ -258,14 +258,22 @@ class CircuitList(_NicelySerializable):
 
     def tensor_circuits(self, other_circuitlist: CircuitList, new_name: Optional[str]=None):
         """
-        Given two `CircuitList` objects, X, Y, combine the two of them so that every `Circuit`
-        within this `CircuitList`, X, is tensored with the corresponding `Circuit` in Y.
+        Given two `CircuitList` objects, X(=self) and Y(=other_circuitlist), of the same length,
+        combine the two of them so that every `Circuit` within X is tensored with the 
+        corresponding `Circuit` in Y.
 
         Returns:
             `CircuitList` with the subcircuits tensored together.
+
+        Notes
+        -----
+        TODO: Remove this function or change its behavior to something more useful.
         """
         if isinstance(other_circuitlist, _Circuit):
             raise TypeError("Cannot tensor a CircuitList with a Circuit. You must provide a CircuitList.")
+
+        if len(self._circuits) != len(other_circuitlist._circuits):
+            raise ValueError('Cannot tensor CircuitLists of different lengths.')
 
         circuits = []
         for c1, c2 in zip(self._circuits, other_circuitlist._circuits):
