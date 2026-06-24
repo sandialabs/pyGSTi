@@ -1312,8 +1312,8 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         -------
         LabelTupTupWithTime
         """
-        if time is None and hasattr(tup_of_tups, 'time'):
-            time = tup_of_tups.time
+        if time is None:
+            time = getattr(tup_of_tups, 'time', None)
 
         assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         if isinstance(tup_of_tups, Label):
@@ -1322,8 +1322,7 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
             tup_of_tups_to_iterate = tup_of_tups
         tupOfLabels = tuple(tup if isinstance(tup, Label) else Label(tup) for tup in tup_of_tups_to_iterate)  # Note: tup can also be a Label obj
         if time is None:
-            time = 0.0 if len(tupOfLabels) == 0 else \
-                max([lbl.time for lbl in tupOfLabels if hasattr(lbl, "time")] + [0.0])
+            time = max([getattr(lbl, 'time', 0.0) for lbl in tupOfLabels], default=0.0)
         return cls.__new__(cls, tupOfLabels, time)
 
     def __new__(cls, tup_of_labels: tuple[ConcreteLabel, ...], time: float=0.0):
@@ -1509,8 +1508,8 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         
         ret = tuple.__new__(cls, (name, state_space_labels, reps) + tupOfLabels)
         if time is None:
-            ret.time = 0.0 if len(tupOfLabels) == 0 else \
-                sum([lbl.time for lbl in tupOfLabels if hasattr(lbl, "time")] + [0.0])  # sum b/c components are *layers* of sub-circuit
+            ret.time = sum([getattr(lbl, 'time', 0.0) for lbl in tupOfLabels], start=0.0)
+            # ^ sum b/c components are *layers* of sub-circuit
         else:
             ret.time = time
         ret._is_sorted = False
@@ -1940,10 +1939,10 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         -------
         LabelTupTupWithArgs
         """
-        if time is None and hasattr(tup_of_tups, 'time'):
-            time = tup_of_tups.time
-        if not args and hasattr(tup_of_tups, 'args'):
-            args = tup_of_tups.args
+        if time is None:
+            time = getattr(tup_of_tups, 'time', None)
+        if not args:
+            args = getattr(tup_of_tups, 'args', tuple())
 
         assert(time is None or isinstance(time, float)), "`time` must be a floating point value, received: " + str(time)
         if isinstance(tup_of_tups, Label):
@@ -1953,8 +1952,7 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         tup_of_lbls = tuple(tup if isinstance(tup, Label) else Label(tup) for tup in tup_of_tups_to_iterate)
         tup_rep = (1 + len(args),) + tuple(args) + tup_of_lbls
         if time is None:
-            time = 0.0 if len(tup_of_lbls) == 0 else \
-                max([lbl.time for lbl in tup_of_lbls if hasattr(lbl, "time")] + [0.0])
+            time = max([getattr(lbl, 'time', 0.0) for lbl in tup_of_lbls], default=0.0)
         return cls.__new__(cls, tup_rep, time)
 
 
