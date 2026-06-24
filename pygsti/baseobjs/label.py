@@ -835,6 +835,8 @@ class LabelStr(Label, str):
 
     IS_SIMPLE = True  # access with self.is_simple property
 
+    time: float
+
     @classmethod
     def init(cls, name: str, time: float=0.0) -> LabelStr:
         """
