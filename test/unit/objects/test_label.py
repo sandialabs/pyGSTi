@@ -41,6 +41,7 @@ labels = [
     L([("Gx", 0), ("Gy", 1)], time=0.0459, args=("bar",)) # LabelTupTupWithArgs
 ]
 
+
 @pytest.mark.parametrize('label', labels)
 def test_to_native(label):
     native = label.to_native()
@@ -71,15 +72,13 @@ def test_hashable(label):
 
 
 class LabelTester(BaseCase):
+
     def test_circuit_init(self):
         #Check that parallel operation labels get converted to circuits properly
         opstr = Circuit(((('Gx', 0), ('Gy', 1)), ('Gcnot', 0, 1)))
         c = Circuit(layer_labels=opstr, num_lines=2)
         print(c._labels)
         self.assertEqual(c._labels, (L((('Gx', 0), ('Gy', 1))), L('Gcnot', (0, 1))))
-
-
-
 
     def test_labels_with_time_and_arguments(self):
         #Label with time and args
@@ -252,7 +251,6 @@ class LabelTester(BaseCase):
         for comp in sorted_c2.components:
             self.assertTrue(comp.is_sorted)
 
-
     def test_labeltuptup_sorting_recurses_if_necessary(self):
 
         inner_label1 = L('Gx', 1)
@@ -301,6 +299,7 @@ class LabelTester(BaseCase):
 
 
 class LabelStrTester(BaseCase):
+
     def test_labelstr_add(self):
         l1 = L('Gx')
         l2 = l1 + '_foo'
@@ -330,8 +329,6 @@ class LabelStrTester(BaseCase):
     def test_labelstr_expand_subcircuits(self):
         l = L('Gx')
         self.assertEqual(l.expand_subcircuits(), (l,))
-
-    
 
     def test_labelstr_has_prefix(self):
         l = L('Gx_foo')
@@ -380,6 +377,7 @@ class LabelStrTester(BaseCase):
 
 
 class LabelTupTester(BaseCase):
+
     def test_labeltup_replace_name(self):
         l = L(('Gx', 0))
         l2 = l.replace_name('Gx', 'Gy')
@@ -404,6 +402,13 @@ class LabelTupTester(BaseCase):
         self.assertEqual(l2, L(('Gx_foo', 0)))
         self.assertEqual(l2.name, 'Gx_foo')
         self.assertEqual(l2.sslbls, (0,))
+
+        l = L(("Gx", 0))
+        l2 = l + "foo"
+        self.assertEqual(l2, L(("Gxfoo", 0)))
+        with self.assertRaises(NotImplementedError):
+            l + l  # type: ignore
+        return
 
     def test_labeltup_expand_subcircuits(self):
         l = L(('Gx', 0))
@@ -441,16 +446,9 @@ class LabelTupTester(BaseCase):
         l = LabelTup.init("foo", ())
         self.assertEqual(l.sslbls, None)
 
-    def test_labeltup_add(self):
-        l = L(("Gx", 0))
-        l2 = l+"foo"
-        self.assertEqual(l2, L(("Gxfoo", 0)))
-
-        with self.assertRaises(NotImplementedError):
-            l + l
-
 
 class LabelTupTupTester(BaseCase):
+
     def test_labeltuptup_replace_name(self):
         l = L((('Gx', 0), ('Gy', 1)))
         l2 = l.replace_name('Gx', 'Gz')
@@ -540,6 +538,7 @@ class LabelTupTupTester(BaseCase):
 
 
 class LabelTupTupWithTimeTester(BaseCase):
+
     def test_labeltuptupwithtime(self):
         l = LabelTupTupWithTime.init((('Gx', 0), ('Gy', 1)), time=0.1)
         self.assertEqual(l.time, 0.1)
@@ -571,6 +570,7 @@ class LabelTupTupWithTimeTester(BaseCase):
         l = LabelTupTupWithTime.init((('Gx', 0), ('Gy', 1)), time=0.1)
         l2 = l.map_state_space_labels(lambda x: x + 1)
         self.assertEqual(l2, LabelTupTupWithTime.init((('Gx', 1), ('Gy', 2)), time=0.1))
+
     def test_labeltuptupwithtime_replace_name_no_match(self):
         l = LabelTupTupWithTime.init((('Gx', 0), ('Gy', 1)), time=0.1)
         l2 = l.replace_name('Gz', 'Ga')
@@ -590,6 +590,7 @@ class LabelTupTupWithTimeTester(BaseCase):
 
 
 class LabelTupTupWithArgsTester(BaseCase):
+
     def test_labeltuptupwithargs(self):
         l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=('foo',))
         self.assertEqual(l.args, ('foo',))
@@ -669,6 +670,7 @@ class LabelTupTupWithArgsTester(BaseCase):
 
 
 class LabelTupWithTimeTester(BaseCase):
+
     def test_labeltupwithtime(self):
         l = LabelTupWithTime.init('Gx', (0,), time=0.1)
         self.assertEqual(l.time, 0.1)
@@ -719,6 +721,7 @@ class LabelTupWithTimeTester(BaseCase):
 
 
 class LabelTupWithArgsTester(BaseCase):
+
     def test_labeltupwithargs(self):
         l = LabelTupWithArgs.init('Gx', (0,), args=('foo',))
         self.assertEqual(l.args, ('foo',))
@@ -758,6 +761,7 @@ class LabelTupWithArgsTester(BaseCase):
 
 
 class CircuitLabelTester(BaseCase):
+
     def test_circuitlabel_properties(self):
         l = CircuitLabel('mycirc', [L('Gx', 0)], (0,), 5, 1.2)
         self.assertEqual(l.name, 'mycirc')
@@ -802,6 +806,7 @@ class CircuitLabelTester(BaseCase):
 
 
 class LabelConcateTester(BaseCase):
+
     def test_concate_labeltup(self):
         l1 = L(('Gx', 0))
         l2 = L(('Gy', 1))
@@ -866,8 +871,16 @@ class LabelConcateTester(BaseCase):
 
         l1 = L(('Gx', 0), time=0.1)
         l2 = L(('Gy', 1), time=0.2)
-        with self.assertRaises(ValueError):
+        from pygsti.tools.exceptions import ClobberingWarning
+        with self.assertWarns(ClobberingWarning):
             l1.concate(l2)
+
+        l1 = L(('Gx', 0), time=0.1)
+        l2 = L(('Gy', 1), time=0.1)
+        concatenated = l1.concate(l2)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1))))
+        return
 
     def test_concate_circuitlabel_depth(self):
         l1 = L(('Gx', 0))
@@ -934,13 +947,6 @@ class LabelConcateTester(BaseCase):
         l_tup_with_time_different = L(('Gc', 5), time=0.2)
         with self.assertWarns(RuntimeWarning):
             l1.concate(l_tup_with_time_different)
-
-    def test_concate_labeltupwithtime(self):
-        l1 = L(('Gx', 0), time=0.1)
-        l2 = L(('Gy', 1), time=0.1)
-        concatenated = l1.concate(l2)
-        self.assertIsInstance(concatenated, LabelTupTup)
-        self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1))))
 
     def test_concate_qubit_overlap(self):
         l1 = L(('Gx', 0))

@@ -62,7 +62,11 @@ def _check_concate_compatibility(label1, label2):
     time1 = getattr(label1, 'time', 0.0)
     time2 = getattr(label2, 'time', 0.0)
     if time1 != 0.0 and time2 != 0.0 and time1 != time2:
-        warn(f"Trying to concate two Labels with distinct time values {time1}, and {time2}", RuntimeWarning)
+        # ClobberingWarning
+        from pygsti.tools.exceptions import ClobberingWarning
+        msg = f"Trying to concate two Labels with distinct, nonzero time values {time1}, and {time2}.\n"
+        msg += "We'll proceed by taking the larger of these values."
+        warn(msg, ClobberingWarning)
     new_time = max(time1, time2)
 
     # 3. CircuitLabel unwrapping
