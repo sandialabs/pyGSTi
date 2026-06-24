@@ -25,19 +25,19 @@ try:
     import qiskit as _qiskit
     from qiskit.providers import JobStatus as _JobStatus
     from qiskit.providers.fake_provider import GenericBackendV2 as _GenericBackendV2
+    from qiskit.transpiler import PassManager as _PassManager
+    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
 except:
     _qiskit = None
     _GenericBackendV2 = None
 
 # Try to load IBM Runtime
 try: 
+    from qiskit_ibm_runtime.transpiler.passes import ConvertToMidCircuitMeasure
     from qiskit_ibm_runtime import SamplerV2 as _Sampler
     from qiskit_ibm_runtime import Session as _Session
     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
     from qiskit_ibm_runtime import IBMBackend as _IBMBackend
-    from qiskit.transpiler import PassManager as _PassManager
-    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
-    from qiskit.transpiler.passes import ConvertToMidCircuitMeasure
 except:
     _Sampler = None
 

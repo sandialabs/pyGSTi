@@ -1,5 +1,6 @@
 from ...util import BaseCase
 
+import pytest
 import pygsti
 from pygsti.extras.devices.experimentaldevice import ExperimentalDevice
 from pygsti.extras import ibmq
@@ -13,26 +14,24 @@ from pygsti.protocols import StandardGSTDesign
 import numpy as np
 
 
-
 try:
     from qiskit.providers.fake_provider import GenericBackendV2
 except:
     GenericBackendV2 = None
+
 
 try:
     from qiskit_ibm_runtime import QiskitRuntimeService
 except:
     QiskitRuntimeService = None
 
-import pytest
 
 class IBMQExperimentTester(BaseCase):
+
     @classmethod
     def setup_class(cls):
         if GenericBackendV2 is None:
             pytest.skip('Qiskit is required for this operation, and does not appear to be installed.')
-        elif QiskitRuntimeService is None:
-            pytest.skip('Qiskit Runtime is required for this operation, and does not appear to be installed.')
             
         cls.backend = GenericBackendV2(num_qubits=4, noise_info=False) # noise_info=False guarantees ideal simulation, which is needed at least for test_e2e_mirror_rb
         cls.device = ExperimentalDevice.from_qiskit_backend(cls.backend)
@@ -44,7 +43,6 @@ class IBMQExperimentTester(BaseCase):
                                   clifford_compilations=compilations, sampler='edgegrab', samplerargs=[3/8,])
         cls.edesign = pygsti.protocols.CombinedExperimentDesign([mirror_design])
 
-    
     def test_init(self):
         exp1 = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
                                    disable_checkpointing=True)
@@ -59,6 +57,8 @@ class IBMQExperimentTester(BaseCase):
         assert exp3.pygsti_circuit_batches == exp1.pygsti_circuit_batches
     
     def test_transpile(self):
+        if QiskitRuntimeService is None:
+            pytest.skip('Qiskit Runtime is required for this operation, and does not appear to be installed.')
         chkpt = 'test_ibmq_transpile_checkpoint'
         exp1 = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
                                    checkpoint_path=chkpt, checkpoint_override=True)
@@ -169,7 +169,6 @@ class IBMQExperimentTester(BaseCase):
         exp.monitor()
         exp.retrieve_results()
 
-
     def test_e2e_openqasm_w_mcms(self):
         backend = GenericBackendV2(num_qubits=9, noise_info=False)
         device = ExperimentalDevice.from_qiskit_backend(backend)
@@ -186,7 +185,6 @@ class IBMQExperimentTester(BaseCase):
 
         self.assertEqual(exp.data.dataset[circ].counts, {('p0', 'p0', '10',): 1024})
 
-
     def test_e2e_openqasm_no_mcms(self):
         backend = GenericBackendV2(num_qubits=9, noise_info=False)
         device = ExperimentalDevice.from_qiskit_backend(backend)
@@ -202,7 +200,6 @@ class IBMQExperimentTester(BaseCase):
         exp.retrieve_results()
 
         self.assertEqual(exp.data.dataset[circ].counts, {('10',): 1024})
-
     
     def test_e2e_qiskit_all_w_mcms(self):
         backend = GenericBackendV2(num_qubits=9, noise_info=False)
@@ -222,7 +219,6 @@ class IBMQExperimentTester(BaseCase):
 
         self.assertEqual(exp.data.dataset[circ].counts, {('p0', 'p0', '10',): 1024})
 
-
     def test_e2e_qiskit_all_no_mcms(self):
         backend = GenericBackendV2(num_qubits=9, noise_info=False)
         device = ExperimentalDevice.from_qiskit_backend(backend)
@@ -241,7 +237,6 @@ class IBMQExperimentTester(BaseCase):
 
         self.assertEqual(exp.data.dataset[circ].counts, {('10',): 1024})
 
-
     def test_e2e_qiskit_active_w_mcms(self):
         backend = GenericBackendV2(num_qubits=9, noise_info=False)
         device = ExperimentalDevice.from_qiskit_backend(backend)
@@ -259,7 +254,6 @@ class IBMQExperimentTester(BaseCase):
         exp.retrieve_results()
 
         self.assertEqual(exp.data.dataset[circ].counts, {('p0', 'p0', '10',): 1024})
-
 
     def test_e2e_qiskit_active_no_mcms(self):
         backend = GenericBackendV2(num_qubits=9, noise_info=False)
