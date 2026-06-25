@@ -430,10 +430,6 @@ class Polynomial(object):
         -------
         None
         """
-        #new_coeffs = {mapfn(k): v for k, v in self.coeffs.items()}
-        #new_int_coeffs = {_vinds_to_int(k, self._rep.vindices_per_int, self._rep.max_num_vars): v
-        #                  for k, v in new_coeffs.items()}
-        
         vindices_per_int = self._rep.vindices_per_int
         max_num_vars = self._rep.max_num_vars
         new_int_coeffs = {}
