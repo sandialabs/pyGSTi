@@ -164,7 +164,7 @@ def ws_custom_digest(md5, v):
 
 def random_id():
     """
-    Returns a random document-objet-model (DOM) ID
+    Returns a random document-object-model (DOM) ID
 
     Returns
     -------
@@ -1625,7 +1625,7 @@ class WorkspaceOutput(object):
             self.__dict__['ws'] = None
 
     # Note: hashing not needed because these objects are not *inputs* to
-    # other WorspaceOutput objects or computation functions - these objects
+    # other WorkspaceOutput objects or computation functions - these objects
     # are cached using call_key.
 
     def render(self, typ="html"):
@@ -1689,7 +1689,7 @@ class WorkspaceOutput(object):
             An absolute index into the list of different switched "versions"
             of this object's data.  In most cases, the object being saved
             doesn't depend on any switch boards and has only a single "version",
-            in which caes this can be left as the default.
+            in which case this can be left as the default.
 
         verbosity : int, optional
             Controls the level of detail printed to stdout.
@@ -1828,7 +1828,8 @@ class WorkspaceOutput(object):
 
             #Create separate files with div contents
             for divContent, divFilenm in zip(div_contents, div_filenames):
-                with open(_os.path.join(str(link_to_files_dir), divFilenm), 'w') as f:
+                filepath = _os.path.join(str(link_to_files_dir), divFilenm)
+                with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(divContent)
         html += "\n</div>\n"  # ends pygsti-wsoutput-group div
 
@@ -2292,7 +2293,7 @@ class WorkspaceTable(WorkspaceOutput):
             An absolute index into the list of different switched "versions"
             of this object's data.  In most cases, the object being saved
             doesn't depend on any switch boards and has only a single "version",
-            in which caes this can be left as the default.
+            in which case this can be left as the default.
 
         verbosity : int, optional
             Controls the level of detail printed to stdout.
@@ -2672,7 +2673,7 @@ class WorkspacePlot(WorkspaceOutput):
             An absolute index into the list of different switched "versions"
             of this object's data.  In most cases, the object being saved
             doesn't depend on any switch boards and has only a single "version",
-            in which caes this can be left as the default.
+            in which case this can be left as the default.
 
         verbosity : int, optional
             Controls the level of detail printed to stdout.
@@ -2997,7 +2998,7 @@ class WorkspaceText(WorkspaceOutput):
             An absolute index into the list of different switched "versions"
             of this object's data.  In most cases, the object being saved
             doesn't depend on any switch boards and has only a single "version",
-            in which caes this can be left as the default.
+            in which case this can be left as the default.
 
         verbosity : int, optional
             Controls the level of detail printed to stdout.

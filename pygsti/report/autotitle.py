@@ -11,9 +11,11 @@ Automatic report title generation.
 #***************************************************************************************************
 
 import numpy as _np
+import warnings as _warnings
+from pygsti.tools.exceptions import UnnamedReportWarning
 
 
-def generate_name():
+def generate_name(log_warning=True):
     """
     Generate a random adjective + noun name
 
@@ -23,7 +25,13 @@ def generate_name():
     """
     adj = _adjectives[_np.random.randint(0, len(_adjectives))]
     noun = _nouns[_np.random.randint(0, len(_nouns))]
-    return adj + " " + noun
+    autoname = adj + " " + noun
+    if log_warning:
+        _warnings.warn(("You should really specify `title=` when generating reports,"
+                " as this makes it much easier to identify them later on.  "
+                "Since you didn't, pyGSTi has generated a random one"
+                " for you: '{}'.").format(autoname), UnnamedReportWarning)
+    return autoname
 
 
 _nouns = [

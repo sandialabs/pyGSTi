@@ -16,8 +16,6 @@ from ..testutils import BaseTestCase, compare_files, temp_files
 from pygsti.baseobjs import Label as L
 
 from pygsti.modelpacks.legacy import std1Q_XYI
-#from pygsti.io import enable_old_object_unpickling
-from pygsti.baseobjs._compatibility import patched_uuid
 
 def Ls(*args):
     """ Convert args to a tuple to Labels """
@@ -116,24 +114,8 @@ class TestGateSetMethods(GateSetTestCase):
         # (and probably should) be later on, at which point the commented code here and
         # below would test it.
 
-        #mhcols = []
-        #md12cols = []
-        #mslicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(nP) ]
-        #for s1,s2, hprobs_col, dprobs12_col in self.mgateset.bulk_hprobs_by_block(
-        #    mevt, mslicesList, True):
-        #    mhcols.append(hprobs_col)
-        #    md12cols.append(dprobs12_col)
-        #mall_hcols = np.concatenate( mhcols, axis=2 )  #axes = (spam+circuit, derivParam1, derivParam2)
-        #mall_d12cols = np.concatenate( md12cols, axis=2 )
-        #mdprobs12 = mdprobs_to_fill[:,:,None] * mdprobs_to_fill[:,None,:]
-
         self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill)
         self.assertArraysAlmostEqual(all_d12cols,dprobs12)
-        #self.assertArraysAlmostEqual(mall_hcols,mhprobs_to_fill, places=FD_HESS_PLACES)
-        #self.assertArraysAlmostEqual(mall_d12cols,mdprobs12, places=FD_HESS_PLACES)
-        #
-        #self.assertArraysAlmostEqual(mall_hcols,all_hcols, places=FD_HESS_PLACES)
-        #self.assertArraysAlmostEqual(mall_d12cols,all_d12cols, places=FD_HESS_PLACES)
 
 
         hcols = []
@@ -146,23 +128,8 @@ class TestGateSetMethods(GateSetTestCase):
         all_hcols = np.concatenate( hcols, axis=2 )  #axes = (spam+circuit, derivParam1, derivParam2)
         all_d12cols = np.concatenate( d12cols, axis=2 )
 
-        #mhcols = []
-        #md12cols = []
-        #mslicesList = [ (slice(0,nP),slice(i,i+1)) for i in range(1,10) ]
-        #for s1,s2, hprobs_col, dprobs12_col in self.mgateset.iter_hprobs_by_rectangle(
-        #    spam_label_rows, mevt, mslicesList, True):
-        #    mhcols.append(hprobs_col)
-        #    md12cols.append(dprobs12_col)
-        #mall_hcols = np.concatenate( mhcols, axis=2 )  #axes = (spam+circuit, derivParam1, derivParam2)
-        #mall_d12cols = np.concatenate( md12cols, axis=2 )
-
         self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,:,1:10])
         self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,:,1:10])
-        #self.assertArraysAlmostEqual(mall_hcols,mhprobs_to_fill[:,:,1:10], places=FD_HESS_PLACES)
-        #self.assertArraysAlmostEqual(mall_d12cols,mdprobs12[:,:,1:10], places=FD_HESS_PLACES)
-        #
-        #self.assertArraysAlmostEqual(mall_hcols,all_hcols, places=FD_HESS_PLACES)
-        #self.assertArraysAlmostEqual(mall_d12cols,all_d12cols, places=FD_HESS_PLACES)
 
 
         hcols = []
@@ -175,29 +142,12 @@ class TestGateSetMethods(GateSetTestCase):
         all_hcols = np.concatenate( hcols, axis=2 )  #axes = (spam+circuit, derivParam1, derivParam2)
         all_d12cols = np.concatenate( d12cols, axis=2 )
 
-        #mhcols = []
-        #md12cols = []
-        #mslicesList = [ (slice(2,12),slice(i,i+1)) for i in range(1,10) ]
-        #for s1,s2, hprobs_col, dprobs12_col in self.mgateset.iter_hprobs_by_rectangle(
-        #    mevt, mslicesList, True):
-        #    mhcols.append(hprobs_col)
-        #    md12cols.append(dprobs12_col)
-        #mall_hcols = np.concatenate( mhcols, axis=2 )  #axes = (spam+circuit, derivParam1, derivParam2)
-        #mall_d12cols = np.concatenate( md12cols, axis=2 )
-
         self.assertArraysAlmostEqual(all_hcols,hprobs_to_fill[:,2:12,1:10])
         self.assertArraysAlmostEqual(all_d12cols,dprobs12[:,2:12,1:10])
-        #self.assertArraysAlmostEqual(mall_hcols,mhprobs_to_fill[:,2:12,1:10], places=FD_HESS_PLACES)
-        #self.assertArraysAlmostEqual(mall_d12cols,mdprobs12[:,2:12,1:10], places=FD_HESS_PLACES)
-        #
-        #self.assertArraysAlmostEqual(mall_hcols,all_hcols, places=FD_HESS_PLACES)
-        #self.assertArraysAlmostEqual(mall_d12cols,all_d12cols, places=FD_HESS_PLACES)
 
 
         hprobs_by_block = np.zeros(hprobs_to_fill.shape,'d')
         dprobs12_by_block = np.zeros(dprobs12.shape,'d')
-        #mhprobs_by_block = np.zeros(mhprobs_to_fill.shape,'d')
-        #mdprobs12_by_block = np.zeros(mdprobs12.shape,'d')
         blocks1 = pygsti.tools.mpitools.slice_up_range(nP, 3)
         blocks2 = pygsti.tools.mpitools.slice_up_range(nP, 5)
         slicesList = list(itertools.product(blocks1,blocks2))
@@ -212,106 +162,10 @@ class TestGateSetMethods(GateSetTestCase):
                 layout, slicesList, False):
             hprobs_by_block2[:,s1,s2] = hprobs_blk
 
-        #for s1,s2, hprobs_blk, dprobs12_blk in self.mgateset.iter_hprobs_by_rectangle(
-        #    mevt, slicesList, True):
-        #    mhprobs_by_block[:,s1,s2] = hprobs_blk
-        #    mdprobs12_by_block[:,s1,s2] = dprobs12_blk
-
         self.assertArraysAlmostEqual(hprobs_by_block,hprobs_to_fill)
         self.assertArraysAlmostEqual(hprobs_by_block2,hprobs_to_fill)
         self.assertArraysAlmostEqual(dprobs12_by_block,dprobs12)
-        #self.assertArraysAlmostEqual(mhprobs_by_block,hprobs_to_fill, places=FD_HESS_PLACES)
-        #self.assertArraysAlmostEqual(mdprobs12_by_block,dprobs12, places=FD_HESS_PLACES)
 
-
-        #print("****DEBUG HESSIAN BY COL****")
-        #print("shape = ",all_hcols.shape)
-        #to_check = hprobs_to_fill[:,2:12,1:10]
-        #for si in range(all_hcols.shape[0]):
-        #    for stri in range(all_hcols.shape[1]):
-        #        diff = np.linalg.norm(all_hcols[si,stri]-to_check[si,stri])
-        #        print("[%d,%d] diff = %g" % (si,stri,diff))
-        #        if diff > 1e-6:
-        #            for i in range(all_hcols.shape[2]):
-        #                for j in range(all_hcols.shape[3]):
-        #                    x = all_hcols[si,stri,i,j]
-        #                    y = to_check[si,stri,i,j]
-        #                    if abs(x-y) > 1e-6:
-        #                        print("  el(%d,%d):  %g - %g = %g" % (i,j,x,y,x-y))
-
-
-    @unittest.skip("FakeComm is no longer sufficient - we need to run this using actual comms of different sizes")
-    def test_tree_construction_mem_limit(self):
-        circuits = pygsti.circuits.to_circuits(
-            [('Gx',),
-             ('Gy',),
-             ('Gx','Gy'),
-             ('Gy','Gy'),
-             ('Gy','Gx'),
-             ('Gx','Gx','Gx'),
-             ('Gx','Gy','Gx'),
-             ('Gx','Gy','Gy'),
-             ('Gy','Gy','Gy'),
-             ('Gy','Gx','Gx') ] )
-        ##Make a few-param model to better test mem limits
-        mdl_few = self.model.copy()
-        mdl_few.set_all_parameterizations("static")
-        mdl_few.preps['rho0'] = self.model.preps['rho0'].copy()
-        self.assertEqual(mdl_few.num_params,4)
-
-        #mdl_big = pygsti.construction.create_explicit_model(
-        #    [('Q0','Q3','Q2')],['Gi'], [ "I(Q0)"])
-        #mdl_big._calcClass = MapForwardSimulator
-
-        class FakeComm(object):
-            def __init__(self,size):
-                self.size = size
-                self.rank = 0
-            def Get_rank(self): return self.rank
-            def Get_size(self): return self.size
-            def bcast(self,obj, root=0): return obj
-            def allgather(self, obj): return [obj]
-            def allreduce(self, obj, op): return obj
-            def Split(self, color, key): return self
-
-
-        for nprocs in (1,4,10,40,100):
-            fake_comm = FakeComm(nprocs)
-            for memLimit in (-100, 1024, 10*1024, 100*1024, 1024**2, 10*1024**2):
-                print("Nprocs = %d, memLim = %g" % (nprocs, memLimit))
-                try:
-                    layout = self.model.sim.create_layout(circuits, resource_alloc={'mem_limit': memLimit, 'comm': fake_comm}, array_types=('hp',))
-                    layout = self.mgateset.sim.create_layout(circuits, resource_alloc={'mem_limit': memLimit, 'comm': fake_comm}, array_types=('hp',))
-                    layout = mdl_few.sim.create_layout(circuits, resource_alloc={'mem_limit': memLimit, 'comm': fake_comm}, array_types=('hp',))
-                    layout = mdl_few.sim.create_layout(circuits, resource_alloc={'mem_limit': memLimit, 'comm': fake_comm}, array_types=('dp',)) #where bNp2Matters == False
-                    
-                except MemoryError:
-                    pass #OK - when memlimit is too small and splitting is unproductive
-
-    @unittest.skip("TODO: add backward compatibility for old gatesets?")
-    def test_load_old_gateset(self):
-        #pygsti.baseobjs.results.enable_old_python_results_unpickling()
-        from pygsti.io import enable_old_object_unpickling
-        with enable_old_object_unpickling(), patched_uuid():
-            with open(compare_files + "/pygsti0.9.6.gateset.pkl", 'rb') as f:
-                mdl = pickle.load(f)
-        #pygsti.baseobjs.results.disable_old_python_results_unpickling()
-        #pygsti.io.disable_old_object_unpickling()
-        with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
-            pickle.dump(mdl, f)
-
-        with enable_old_object_unpickling("0.9.7"), patched_uuid():
-            with open(compare_files + "/pygsti0.9.7.gateset.pkl", 'rb') as f:
-                mdl = pickle.load(f)
-        with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
-            pickle.dump(mdl, f)
-
-        #OLD: we don't do this anymore (_calcClass has been removed)
-        #also test automatic setting of _calcClass
-        #mdl = self.model.copy()
-        #del mdl._calcClass
-        #c = mdl._fwdsim() #automatically sets _calcClass
-        #self.assertTrue(hasattr(mdl,'_calcClass'))
 
     def test_ondemand_probabilities(self):
         #First create a "sparse" dataset

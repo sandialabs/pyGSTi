@@ -219,31 +219,6 @@ G3            20  80
         f.write(datafile_test)
         f.close()
 
-        #REMOVE - frequency columns no longer supported!
-#        datafile_test = \
-#"""#Data File with bad columns
-### Columns = 0 frequency, 1 frequency
-#{}            1.0 0.0
-#G1            0.0 1.0
-#G2            0   1.0
-#G3            0.2 0.8
-#"""
-#        f = open(temp_files + "/sip_test5.data","w")
-#        f.write(datafile_test)
-#        f.close()
-#
-#        datafile_test = \
-#"""#Data File with bad frequency
-### Columns = 1 frequency, count total
-#{}            1.0 100
-#G1            0.0 100
-#G2            3.4 100
-#G3            0.2 100
-#"""
-#        f = open(temp_files + "/sip_test6.data","w")
-#        f.write(datafile_test)
-#        f.close()
-
         datafile_test = \
 """#Data File with out-of-range counts
 ## Columns = 0 count, 1 count
@@ -300,29 +275,6 @@ G2            20  100
         f = open(temp_files + "/sip_test3.multidata","w")
         f.write(multidatafile_test)
         f.close()
-
-        #REMOVE - frequency columns no longer supported!
-#        multidatafile_test = \
-#"""#Multi Data File bad columns
-### Columns = ds1 0 frequency, ds1 1 frequency, ds2 1 count, ds2 count total
-#{}            0.3  0.4  20 200
-#G1            0.1  0.5  10 200
-#G2            0.2  0.3  5  200
-#"""
-#        f = open(temp_files + "/sip_test4.multidata","w")
-#        f.write(multidatafile_test)
-#        f.close()
-#
-#        multidatafile_test = \
-#"""#Multi Data File frequency out of range and count before frequency
-### Columns = ds1 count total, ds1 0 frequency, ds2 0 count, ds2 count total
-#{}            100  0.3  20 200
-#G1            100  10   10 200
-#G2            100  0.2  5  200
-#"""
-#        f = open(temp_files + "/sip_test5.multidata","w")
-#        f.write(multidatafile_test)
-#        f.close()
 
         multidatafile_test = \
 """#Multi Data File count out of range
@@ -816,7 +768,7 @@ BASIS: pp
         for expand in [False, True]:
             print("Expand = ",expand)
             for s in ["(Gx:0)Gy:1", "(Gx:0)^4Gy:1", "[Gx:0Gy:1]","[Gx:0Gy:1]^2","[Gx:0[Gz:2Gy:1]]Gz:0",
-                      "[Gx:0(Gz:2Gy:1)]Gz:0", "[Gx:0[Gz:2Gy:1]^2]", "[Gx:0([Gz:2Gy:1]^2)]"]:
+                      "[Gx:0(Gz:2Gy:1)]Gz:0", "[Gx:0[(Gz:2Gy:1)^2]]", "[Gx:0([Gz:2Gy:1]^2)]"]:
                 print("FROM ",s,":")
                 c = pygsti.circuits.Circuit(None, stringrep=s, expand_subcircuits=expand)
                 print(c)

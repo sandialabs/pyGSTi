@@ -16,8 +16,10 @@ import warnings as _warnings
 import numpy as _np
 
 from pygsti import baseobjs as _baseobjs
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
+from pygsti.tools.optools import relaxed_scalar_tolerance as _relaxed_tol
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
 from pygsti.models import (
@@ -168,7 +170,7 @@ class GaugeoptToTargetArgs:
         distances of each "SPAM gate", weighted by the weights.
 
     gauge_group : GaugeGroup, optional
-        The gauge group which defines which gauge trasformations are optimized
+        The gauge group which defines which gauge transformations are optimized
         over.  If None, then the `model`'s default gauge group is used.
 
     method : string, optional
@@ -202,7 +204,7 @@ class GaugeoptToTargetArgs:
         across multiple processors.
 
     n_leak : int
-       Used in leakage modeling. If positive, this specifies how modify defintiions
+       Used in leakage modeling. If positive, this specifies how modify definitions
        of gate and SPAM metrics to reflect the fact that target gates do not have
        well-defined actions outside the computational subspace.
     """
@@ -222,7 +224,8 @@ class GaugeoptToTargetArgs:
             of pyGSTi will infer intended keyword arguments based on the legacy argument 
             positions. Future versions of pyGSTi will raise an error.
             """
-            _warnings.warn(msg)
+            from pygsti.tools.exceptions import DeprecatedPositionalArgumentsWarning
+            _warnings.warn(msg, DeprecatedPositionalArgumentsWarning)
             for k,v in zip(GaugeoptToTargetArgs.old_trailing_positional_args, args):
                 full_kwargs[k] = v
 
@@ -255,7 +258,7 @@ def gaugeopt_to_target(model, target_model, *args, **kwargs):
     """
     This function handles a strange situation where `target_model` can be None.
 
-    In this case, the objective function will only depend on `cptp_penality_factor`
+    In this case, the objective function will only depend on `cptp_penalty_factor`
     and `spam_penalty_factor`; it's forbidden to use method == 'ls'; and the
     returned OpModel might not have its basis set.
     """
@@ -329,7 +332,7 @@ def gaugeopt_custom(model, objective_fn: GGElObjective, gauge_group=None,
         method != 'ls' then objective_fn must return a float.
 
     gauge_group : GaugeGroup, optional
-        The gauge group which defines which gauge trasformations are optimized
+        The gauge group which defines which gauge transformations are optimized
         over.  If None, then the `model`'s default gauge group is used.
 
     method : string, optional
@@ -457,12 +460,21 @@ def gaugeopt_custom(model, objective_fn: GGElObjective, gauge_group=None,
         if bToStdout and (comm is None or comm.Get_rank() == 0):
             print_obj_func = _opt.create_objfn_printer(_call_objective_fn)  # only ever prints to stdout!
             # print_obj_func(x0) #print initial point (can be a large vector though)
-        else: print_obj_func = None
+        else:
+            print_obj_func = None
 
-        minSol = _opt.minimize(_call_objective_fn, x0,
-                               method=method, maxiter=maxiter, maxfev=maxfev,
-                               tol=tol, jac=_call_jacobian_fn,
-                               callback=print_obj_func)
+        minimize_kwargs = {'method': method, 'maxiter': maxiter, 'maxfev': maxfev, 'tol': tol}
+        minimize_kwargs['jac'] = '3-point' if _call_jacobian_fn is None else _call_jacobian_fn
+
+        minSol = _opt.minimize(_call_objective_fn, x0, callback=print_obj_func, **minimize_kwargs)
+        if not minSol.success:
+            msg = f"""\n
+            Gauge optimization failed to converge! Algorithm parameters were
+            {minimize_kwargs}.
+            
+            The optimizer returned with message "{minSol.message}".
+            """
+            _warnings.warn(msg)
         solnX = minSol.x
         solnF = minSol.fun
 
@@ -594,6 +606,15 @@ def _legacy_create_scalar_objective(model, target_model,
         tgt_ops.update(gates_with_instruments(target_model))
 
     def _objective_fn(gauge_group_el, oob_check):
+        # Inner-loop tolerance relaxation: gauge optimization over non-unitary
+        # gauge groups (TPGaugeGroup, FullGaugeGroup, etc.) routinely probes
+        # intermediate matrices that are far from physical. The fidelity-based
+        # metrics call _tools.entanglement_fidelity / _tools.fidelity, which
+        # emit NumericalDomainWarning gated by __SCALAR_TOL_EXPONENT__.
+        # Relax that exponent inside the optimizer loop. The warning still
+        # fires for callers outside this loop (e.g., direct `fidelity()`
+        # users), and still fires here if drift is large enough to clear the
+        # relaxed threshold.
         mdl : ExplicitOpModel = _transform_with_oob_check(model, gauge_group_el, oob_check)
         mdl_ops : dict[_baseobjs.Label, _LinearOperator] = gates_with_instruments(mdl)
         ret: _np.floating = _np.float64(0.0)
@@ -610,7 +631,7 @@ def _legacy_create_scalar_objective(model, target_model,
 
         if target_model is None:
             return ret
-        
+
         if "frobenius" in gates_metric:
             if spam_metric == gates_metric:
                 val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
@@ -627,13 +648,14 @@ def _legacy_create_scalar_objective(model, target_model,
 
         elif gates_metric == "fidelity":
             # Leakage-aware metrics NOT available
-            for opLbl in mdl_ops:
-                wt = item_weights.get(opLbl, opWeight)
-                mop = mdl_ops[opLbl].to_dense()
-                top, t = gate_fidelity_targets[opLbl]
-                v = _tools.entanglement_fidelity(mop, top, mxBasis)
-                z = _np.abs(t - v)
-                ret += wt * z
+            with _relaxed_tol(exponent=0.05):
+                for opLbl in mdl_ops:
+                    wt = item_weights.get(opLbl, opWeight)
+                    mop = mdl_ops[opLbl].to_dense()
+                    top, t = gate_fidelity_targets[opLbl]
+                    v = _tools.entanglement_fidelity(mop, top, mxBasis)
+                    z = _np.abs(t - v)
+                    ret += wt * z
 
         elif gates_metric == "tracedist":
             # If n_leak==0, then subspace_jtracedist is just jtracedist.
@@ -659,29 +681,30 @@ def _legacy_create_scalar_objective(model, target_model,
             val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
             if "squared" in spam_metric:
                 val = val ** 2
-            ret += val 
+            ret += val
 
         elif spam_metric == "fidelity":
             # Leakage-aware metrics NOT available
-            val_prep = 0.0
-            for preplbl in target_model.preps:
-                wt_prep = item_weights.get(preplbl, spamWeight)
-                rho_curest = _tools.vec_to_stdmx(model.preps[preplbl].to_dense(), mxBasis)
-                rho_target, t = prep_fidelity_targets[preplbl]
-                v = _tools.fidelity(rho_curest, rho_target)
-                val_prep += wt_prep * abs(t - v)
-            val_povm = 0.0
-            for povmlbl in target_model.povms:
-                wt_povm  = item_weights.get(povmlbl, spamWeight)
-                M_target = target_model.povms[povmlbl]
-                M_curest =        model.povms[povmlbl]
-                Es_target, ts = povm_fidelity_targets[povmlbl]
-                for elbl in M_target:
-                    t_e = ts[elbl]
-                    E   = _tools.vec_to_stdmx(M_curest[elbl].to_dense(), mxBasis)
-                    v_e = _tools.fidelity(E, Es_target[elbl])
-                    val_povm += wt_povm * abs(t_e - v_e)
-            ret += (val_prep + val_povm) # type: ignore
+            with _relaxed_tol(exponent=0.05):
+                val_prep = 0.0
+                for preplbl in target_model.preps:
+                    wt_prep = item_weights.get(preplbl, spamWeight)
+                    rho_curest = _tools.vec_to_stdmx(model.preps[preplbl].to_dense(), mxBasis)
+                    rho_target, t = prep_fidelity_targets[preplbl]
+                    v = _tools.fidelity(rho_curest, rho_target)
+                    val_prep += wt_prep * abs(t - v)
+                val_povm = 0.0
+                for povmlbl in target_model.povms:
+                    wt_povm  = item_weights.get(povmlbl, spamWeight)
+                    M_target = target_model.povms[povmlbl]
+                    M_curest =        model.povms[povmlbl]
+                    Es_target, ts = povm_fidelity_targets[povmlbl]
+                    for elbl in M_target:
+                        t_e = ts[elbl]
+                        E   = _tools.vec_to_stdmx(M_curest[elbl].to_dense(), mxBasis)
+                        v_e = _tools.fidelity(E, Es_target[elbl])
+                        val_povm += wt_povm * abs(t_e - v_e)
+                ret += (val_prep + val_povm) # type: ignore
 
         elif spam_metric == "tracedist":
             # Leakage-aware metrics NOT available.
@@ -820,9 +843,6 @@ def _legacy_create_least_squares_objective(model, target_model,
         allDerivColSlice = slice(0, N)
         derivSlices, myDerivColSlice, derivOwners, mySubComm = \
             _mpit.distribute_slice(allDerivColSlice, comm)
-        if mySubComm is not None:
-            _warnings.warn("Note: more CPUs(%d)" % comm.Get_size()
-                            + " than gauge-opt derivative columns(%d)!" % N)  # pragma: no cover
 
         n = _slct.length(myDerivColSlice)
         wrtIndices = _slct.indices(myDerivColSlice) if (n < N) else None
@@ -832,7 +852,7 @@ def _legacy_create_least_squares_objective(model, target_model,
         #S       = gauge_group_el.transform_matrix
         S_inv = gauge_group_el.transform_matrix_inverse
         dS = gauge_group_el.deriv_wrt_params(wrtIndices)  # shape (d*d),n
-        dS.shape = (d, d, n)  # call it (d1,d2,n)
+        dS = _compat.reshape_no_copy(dS, (d, d, n))  # call it (d1,d2,n)
         dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
         assert(dS.shape == (n, d, d))
 
@@ -891,7 +911,7 @@ def _legacy_create_least_squares_objective(model, target_model,
         # -- penalty terms  -- Note: still use original gauge transform applied to `model`
         # -------------------------
         if cptp_penalty_factor > 0 or spam_penalty_factor > 0:
-            if frobenius_transform_target:  # reset back to non-target-tranform "mode"
+            if frobenius_transform_target:  # reset back to non-target-transform "mode"
                 gauge_group_el = original_gauge_group_el
                 mdl_pre = model.copy()
                 mdl_post = mdl_pre.copy()
@@ -1009,7 +1029,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
     #S       = gauge_group_el.transform_matrix
     S_inv = gauge_group_el.transform_matrix_inverse
     dS = gauge_group_el.deriv_wrt_params(wrt_filter)  # shape (d*d),n
-    dS.shape = (d, d, n)  # call it (d1,d2,n)
+    dS = _compat.reshape_no_copy(dS, (d, d, n))  # call it (d1,d2,n)
     dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
 
     for i, (gl, gate) in enumerate(mdl_post.operations.items()):
@@ -1052,7 +1072,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
         cp_penalty_vec_grad_to_fill[i, :] = v.real
         chi = sgnchi = dchi_std = v = None  # free mem
 
-    return len(mdl_pre.operations)  # the number of leading-dim indicies we filled in
+    return len(mdl_pre.operations)  # the number of leading-dim indices we filled in
 
 
 def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
@@ -1080,7 +1100,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
     n = N if (wrt_filter is None) else len(wrt_filter)
     S_inv = gauge_group_el.transform_matrix_inverse
     dS = gauge_group_el.deriv_wrt_params(wrt_filter)  # shape (d*d),n
-    dS.shape = (d, d, n)  # call it (d1,d2,n)
+    dS = _compat.reshape_no_copy(dS, (d, d, n))  # call it (d1,d2,n)
     dS = _np.rollaxis(dS, 2)  # shape (n, d1, d2)
 
     # d( sqrt(|denMx|_Tr) ) = (0.5 / sqrt(|denMx|_Tr)) * d( |denMx|_Tr )
@@ -1165,5 +1185,5 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl_pre, mdl_post,
             denMx = sgndm = dVdp = v = None  # free mem
             i += 1
 
-    #return the number of leading-dim indicies we filled in
+    #return the number of leading-dim indices we filled in
     return len(mdl_post.preps) + sum([len(povm) for povm in mdl_post.povms.values()])

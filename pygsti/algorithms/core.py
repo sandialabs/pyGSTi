@@ -15,6 +15,7 @@ import collections as _collections
 import time as _time
 import copy as _copy
 import warnings as _warnings
+from typing import Union
 
 import numpy as _np
 import scipy.optimize as _spo
@@ -33,6 +34,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.optimize.simplerlm import Optimizer as _Optimizer, SimplerLMOptimizer as _SimplerLMOptimizer
+from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 from pygsti import forwardsims as _fwdsims
 
 _dummy_profiler = _DummyProfiler()
@@ -121,7 +123,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     # We would like to get X or it's gauge equivalent.                                                                                                          # noqa
     #  We do:       1)  (I^-1)*AXB ~= B^-1 X B := Xhat -- we solve Ii*A*B = identity for Ii                                                                     # noqa
     #               2) B * Xhat * B^-1 ==> X  (but what if B is non-invertible -- say rectangular) Want B*(something) ~ identity ??                             # noqa
-    # for lower rank target models, want a gauge tranformation that brings Xhat => X of "increased dim" model                                                   # noqa
+    # for lower rank target models, want a gauge transformation that brings Xhat => X of "increased dim" model                                                   # noqa
     # want "B^-1" such that B(gsDim,nRhoSpecs) "B^-1"(nRhoSpecs,gsDim) ~ Identity(gsDim)                                                                        # noqa
     #   Ub,sb,Vb = svd(B) so B = Ub*diag(sb)*Vb  where Ub = (gsDim,M), s = (M,M), Vb = (M,prepSpecs)                                                            # noqa
     #   if B^-1 := VbT*sb^-1*Ub^-1 then B*B^-1 = I(gsDim)                                                                                                       # noqa
@@ -232,7 +234,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 [(lbl, _np.dot(invABMat_p, X_ps[i]))
                  for i, lbl in enumerate(target_model.instruments[opLabel])])
         else:
-            #Just a normal gae
+            #Just a normal gate
             assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
             lgstModel.operations[opLabel] = _op.FullArbitraryOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
 
@@ -368,7 +370,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             #Also convey default gauge group & simulator from guess_model_for_gauge
             lgstModel.default_gauge_group = \
                 guess_model_for_gauge.default_gauge_group
-            lgstModel.sim = guess_model_for_gauge.sim.copy()
+            lgstModel.sim = guess_model_for_gauge.sim.copy(keep_model_attached=False)
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         # # lgstModel had dim trunc, so after transform is has dim gsDim
@@ -386,7 +388,7 @@ def _lgst_matrix_dims(model, prep_fiducials, effect_fiducials):
     nRhoSpecs = len(prep_fiducials)  # no instruments allowed in prep_fiducials
     povmLbls = [model.split_circuit(s, ('povm',))[2]  # povm_label
                 for s in effect_fiducials]
-    povmLens = ([len(model.povms[l]) for l in povmLbls])
+    povmLens = ([len(model.povms[povm_label]) for povm_label in povmLbls])
     nESpecs = sum(povmLens)
     return nRhoSpecs, nESpecs, povmLbls, povmLens
 
@@ -466,10 +468,10 @@ def _construct_a(effect_fiducials, model):
         #A[k,:] = st[0,:] # E_k == kth row of A
         for i in range(dim):  # propagate each basis initial state
             basis_st[i] = 1.0
-            model.preps['rho_LGST_tmp'] = basis_st
-            probs = model.probabilities(_circuits.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
+            model.preps['rho_lgst_tmp'] = basis_st
+            probs = model.probabilities(_circuits.Circuit(('rho_lgst_tmp',), line_labels=estr.line_labels) + estr)
             A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in model.povms[povmLbl]]  # CHECK will this work?
-            del model.preps['rho_LGST_tmp']
+            del model.preps['rho_lgst_tmp']
             basis_st[i] = 0.0
 
         eoff += povmLen
@@ -495,16 +497,16 @@ def _construct_b(prep_fiducials, model):
         basis_E = _np.zeros((dim, 1), 'd')
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
-    model.povms['M_LGST_tmp_povm'] = _povm.UnconstrainedPOVM(
+    model.povms['M_lgst_tmp_povm'] = _povm.UnconstrainedPOVM(
         [("E%d" % i, E) for i, E in enumerate(basis_Es)], evotype='default')
 
     for k, rhostr in enumerate(prep_fiducials):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = model.probabilities(rhostr + _circuits.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
+        probs = model.probabilities(rhostr + _circuits.Circuit(('M_lgst_tmp_povm',), line_labels=rhostr.line_labels))
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
-    del model.povms['M_LGST_tmp_povm']
+    del model.povms['M_lgst_tmp_povm']
     model.povms.default_param = old_default_param
 
     return B
@@ -725,7 +727,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
     circuit_lists : list of lists of (tuples or Circuits)
         The i-th element is a list of the circuits to be used in the i-th iteration
-        of the optimization.  Each element of these lists is a circuit, specifed as
+        of the optimization.  Each element of these lists is a circuit, specified as
         either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
@@ -784,8 +786,49 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
         
     return models, optimums, final_objfn, mdc_store_list
 
+def validate_and_extend_optimizer(optimizer: Union[_CustomLMOptimizer, _SimplerLMOptimizer, dict, list[_CustomLMOptimizer],list[_SimplerLMOptimizer], list[dict]], size:int) -> Union[list[_CustomLMOptimizer], list[_SimplerLMOptimizer]]:
+    """
+    GST allows for the user to provide a single optimizer,
+    or a list of optimizers to be used in every different
+    GST iteration. This function validates the optimizer
+    provided is an acceptable format, and if it is a single
+    optimizer, it generates a list of "size" copies of it.
+
+    Parameters
+    ----------
+    optimizer: Union[_Optimizer, dict, list[_Optimizer], list[dict]]
+        Either a single optimizer or the settings to create an optimizer to be used in all GST iterations
+        or a list of optimizers or settings to create optimizers to be used in each different
+        GST iteration
+
+    size: int
+        The number of GST iterations. This is equal to the length of circuit_lists to be considered
+        for GST.
+
+    Returns
+    -------
+    optimizers: list[_Optimizer]
+
+    """
+    if optimizer is None:
+        optimizer = _SimplerLMOptimizer.cast(None)
+    if isinstance(optimizer,list):
+        if len(optimizer) == 1:
+            optimizer = optimizer*size
+    if isinstance(optimizer, (_Optimizer, dict)):
+        optimizers = [optimizer]*size
+    
+    elif not isinstance(optimizer, list):
+        raise ValueError(f'Invalid argument for optimizers of type {type(optimizer)}, supported types are list, Optimizer, or dict.')
+    else:
+        optimizers = optimizer
+
+    assert len(optimizers) == 1 or len(optimizers) == size, f'Optimizers must be length 1 or length {size}'
+    return optimizers
+
 def iterative_gst_generator(dataset, start_model, circuit_lists,
-                      optimizer, iteration_objfn_builders, final_objfn_builders,
+                      optimizer: Union[_Optimizer, dict, list[_Optimizer], list[dict]],
+                        iteration_objfn_builders, final_objfn_builders,
                       resource_alloc, starting_index=0, verbosity=0):
     """
     Performs Iterative Gate Set Tomography on the dataset.
@@ -804,14 +847,17 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
     circuit_lists : list of lists of (tuples or Circuits)
         The i-th element is a list of the circuits to be used in the i-th iteration
-        of the optimization.  Each element of these lists is a circuit, specifed as
+        of the optimization.  Each element of these lists is a circuit, specified as
         either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
-
-    optimizer : Optimizer or dict
+    
+    optimizer : Optimizer, or dict, or list of Optimizer, or list of dict (default None)
         The optimizer to use, or a dictionary of optimizer parameters
-        from which a default optimizer can be built.
+        from which a default optimizer can be built. If a list, the length
+        of the list should either be 1 or equal to the number of iterations. 
+        If 1, then this optimizer is used for every iteration, otherwise
+        each optimizer is used for its corresponding iteration.
 
     iteration_objfn_builders : list
         List of ObjectiveFunctionBuilder objects defining which objective functions
@@ -847,7 +893,13 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
           (an "evaluated" model-dataset-circuits store).
     """
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
+    
+    optimizers = validate_and_extend_optimizer(optimizer, len(circuit_lists))
+
+    temp_optimizers = []
+    for  opt in optimizers:
+        temp_optimizers.append(opt if isinstance(opt, _Optimizer) else _SimplerLMOptimizer.cast(opt))
+    optimizers = temp_optimizers
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
     printer = VerbosityPrinter.create_printer(verbosity, comm)
@@ -872,8 +924,8 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
    
     #These lines were previously in the loop below, but we should be able to move it out from there so we can use it
     #in precomputing layouts:
-    method_names = optimizer.called_objective_methods
-    array_types = optimizer.array_types + \
+    method_names = optimizers[0].called_objective_methods
+    array_types = optimizers[0].array_types + \
                 _max_array_types([builder.compute_array_types(method_names, mdl.sim)
                                   for builder in iteration_objfn_builders + final_objfn_builders])
     
@@ -885,13 +937,24 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
     #pre-compute a dictionary caching completed circuits for layout construction performance.
     unique_circuits = list({ckt for circuit_list in circuit_lists for ckt in circuit_list})
+    # Preserve any op-label aliases (e.g. from op_label_aliases / string_manipulation_rules) so that
+    # the precomputed layout cache looks up the *aliased* circuits in the dataset (otherwise circuits
+    # containing aliased labels raise a KeyError during dataset lookup).
+    op_label_aliases = None
+    for circuit_list in circuit_lists:
+        if isinstance(circuit_list, _CircuitList) and circuit_list.op_label_aliases:
+            op_label_aliases = circuit_list.op_label_aliases
+            break
+    if op_label_aliases is not None:
+        unique_circuits = _CircuitList(unique_circuits, op_label_aliases=op_label_aliases)
     if isinstance(mdl.sim, (_fwdsims.MatrixForwardSimulator, _fwdsims.MapForwardSimulator)):
         precomp_layout_circuit_cache = mdl.sim.create_copa_layout_circuit_cache(unique_circuits, mdl, dataset=dataset)
     else:
         precomp_layout_circuit_cache = None
 
     for i, circuit_list in enumerate(circuit_lists):
-        printer.log(f'Layout for iteration {i}', 2)
+        if comm is not None:
+            printer.log(f'Layout for iteration {i}', 2)
         precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1,
                                                     layout_creation_circuit_cache = precomp_layout_circuit_cache))
         
@@ -929,11 +992,11 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
                 if i == 0 and j == 0:  # special case: in first optimization run, use "first_fditer"
-                    first_iter_optimizer = _copy.deepcopy(optimizer)  # use a separate copy of optimizer, as it
-                    first_iter_optimizer.fditer = optimizer.first_fditer  # is a persistent object (so don't modify!)
+                    first_iter_optimizer = _copy.deepcopy(optimizers[i])  # use a separate copy of optimizer, as it
+                    first_iter_optimizer.fditer = optimizers[i].first_fditer  # is a persistent object (so don't modify!)
                     opt_result, mdc_store = run_gst_fit(mdc_store, first_iter_optimizer, obj_fn_builder, printer - 1)
                 else:
-                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
+                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizers[i], obj_fn_builder, printer - 1)
                 profiler.add_time('run_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
 
             tNxt = _time.time()
@@ -946,7 +1009,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
                 for j, obj_fn_builder in enumerate(final_objfn_builders):
                     tNxt = _time.time()
                     mdl.basis = start_model.basis
-                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
+                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizers[i], obj_fn_builder, printer - 1)
                     profiler.add_time('run_iterative_gst: final %s opt' % obj_fn_builder.name, tNxt)
                 tNxt = _time.time()
                 printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
@@ -975,7 +1038,7 @@ def _do_runopt(objective, optimizer, printer):
     `objective` using `optimizer`.
 
     This is factored out as a separate function because of the differences
-    when running Taylor-term simtype calculations, which utilize this
+    when running Taylor-term simulator calculations, which utilize this
     as a subroutine (see :func:`_do_term_runopt`).
 
     Parameters

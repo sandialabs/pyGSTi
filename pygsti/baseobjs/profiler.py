@@ -224,7 +224,7 @@ class Profiler(object):
         Prints the current memory usage (but doesn't store it).
 
         Useful for debugging, this function prints the current memory
-        usage - optionally giving the mininum, maximum, and average
+        usage - optionally giving the minimum, maximum, and average
         across all the processors.
 
         Parameters

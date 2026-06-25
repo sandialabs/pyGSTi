@@ -37,7 +37,7 @@ class QubitGraph(_NicelySerializable):
         connectivity of the graph.  If an integer array, then 0 indicates
         no edge and positive integers indicate present edges in the
         "direction" given by the positive integer.  For example `1` may
-        corresond to "left" and `2` to "right".  Names must be associated
+        correspond to "left" and `2` to "right".  Names must be associated
         with these directions using `direction_names`.  If a boolean array,
         if there's an edge from qubit `i` to `j` then
         `initial_connectivity[i,j]=True` (integer indices of qubit
@@ -157,7 +157,7 @@ class QubitGraph(_NicelySerializable):
             connectivity of the graph.  If an integer array, then 0 indicates
             no edge and positive integers indicate present edges in the
             "direction" given by the positive integer.  For example `1` may
-            corresond to "left" and `2` to "right".  Names must be associated
+            correspond to "left" and `2` to "right".  Names must be associated
             with these directions using `direction_names`.  If a boolean array,
             if there's an edge from qubit `i` to `j` then
             `initial_connectivity[i,j]=True` (integer indices of qubit
@@ -333,7 +333,7 @@ class QubitGraph(_NicelySerializable):
         """
         All the node labels of this graph.
 
-        These correpond to integer indices where appropriate,
+        These correspond to integer indices where appropriate,
         e.g. for :meth:`shortest_path_distance_matrix`.
 
         Returns

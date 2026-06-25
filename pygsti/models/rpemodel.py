@@ -18,7 +18,7 @@ from pygsti.modelmembers import operations as _op
 
 def make_rpe_model(alpha_true, epsilon_true, y_rot, spam_depol, gate_depol=None, with_id=True):
     """
-    Make a model for simulating RPE, paramaterized by rotation angles.
+    Make a model for simulating RPE, parameterized by rotation angles.
 
     Note that the output model also has thetaTrue, alpha_true, and epsilon_true
     added attributes.
