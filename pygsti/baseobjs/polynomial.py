@@ -557,7 +557,7 @@ class Polynomial(object):
         if var_labels is None:
             return f"x{i}"
         try:
-            if Callable(var_labels):
+            if callable(var_labels):
                 return var_labels(i)
             elif isinstance(var_labels, dict):
                 return var_labels.get(i, f"x{i}")
