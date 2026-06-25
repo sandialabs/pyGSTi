@@ -40,7 +40,6 @@ from pygsti.tools import errgenproptools as eprop
 from pygsti.tools import errgenpolytools as epoly
 from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 ```
 
 ## Setup
@@ -54,7 +53,7 @@ pspec = pygsti.processors.QubitProcessorSpec(num_qubits, gate_names, availabilit
 target_model = pygsti.models.create_crosstalk_free_model(processor_spec=pspec)
 ```
 
-For the noisy model we will use a crosstalk-free model with local H+S error generators. To simplify discussion later on where show how to handle the aggregation of error generator rates associated with shared model parameters we'll construct a model where all instances of a given gate type share the same error generator parameters. This restriction is not a constraint, however and is the functionality described in this tutorial is compatible with more general model parameter structures.
+For the noisy model we will use a crosstalk-free model with local H+S error generators. To simplify the later discussion of how to handle the aggregation of error generator rates associated with shared model parameters, we'll construct a model where all instances of a given gate type share the same error generator parameters. This is not a fundamental restriction, however; the functionality described in this tutorial is compatible with more general model parameter structures.
 
 ```{code-cell} ipython3
 error_rates_dict_shared = {
@@ -87,14 +86,14 @@ tableau = c.convert_to_stim_tableau()
 ```
 
 ## From Propagation Maps to Polynomial Variables
-The first step in constructing symbolic polynomials is to create map from elementary error generators to corresponding polynomial variables. The relevant starting point are the error generator transform maps produced by the `ErrorGeneratorPropagator`.
+The first step in constructing symbolic polynomials is to create a map from elementary error generators to corresponding polynomial variables. The relevant starting point are the error generator transform maps produced by the `ErrorGeneratorPropagator`.
 
 ```{code-cell} ipython3
 errorgen_transform_map = errorgen_propagator.errorgen_transform_map(c)
 errorgen_transform_maps = errorgen_propagator.errorgen_transform_maps(c)
 ```
 
-These maps give the input-output relationship for an elementary error generator rate following propagation to the end of the circuit `c`. Thes method returns a dictionary(ies) with the following structure: Keys are tuples of the form (<original_errorgen_label>, <layer_index>), and values are of the form (<final_errorgen_label>, <overall_phase>), where overall_phase corresponds to the overall sign accumulated on the final error generator rate as a result of propagation. The former method gives this as a single aggregated dictionary for all circuit layers, while the latter gives a list of dictionaries, one per circuit layer.
+These maps give the input-output relationship for an elementary error generator rate following propagation to the end of the circuit `c`. These methods return a dictionary (or dictionaries) with the following structure: Keys are tuples of the form (<original_errorgen_label>, <layer_index>), and values are of the form (<final_errorgen_label>, <overall_phase>), where overall_phase corresponds to the overall sign accumulated on the final error generator rate as a result of propagation. The former method gives this as a single aggregated dictionary for all circuit layers, while the latter gives a list of dictionaries, one per circuit layer.
 
 The method `error_generator_to_polynomial_variable_maps` constructs a map from `(<input_error_generator>, <layer_index>)` pairs to integer variable indices for use in polynomials.
 
@@ -345,7 +344,7 @@ The relevant functions are:
 - `bulk_stabilizer_pauli_expectation_correction_symbolic_polynomial`
 
 ### Single-Pauli expectation correction
-Let us compute the correction polynomial for the observable `ZZZZ`.
+Let us compute the correction polynomial for the observable `IIXZ`.
 
 ```{code-cell} ipython3
 pauli = stim.PauliString('IIXZ')

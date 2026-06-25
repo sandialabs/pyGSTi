@@ -27,12 +27,13 @@ Please note: The implementation of the error generator propagation framework in 
 import pygsti
 import stim
 from pygsti.tools import errgenproptools as eprop
+from pygsti.tools import errgenpolytools as epoly
 from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 ```
 
-To begin we need an error model, and particularly one parameterized using error generators (or otherwise capable of outputing error generators for a circuit layer). For this tutorial we'll work with a 4-qubit crosstalk-free model for a gate set consisting of $\pi/2$ rotations about X and Y on each qubit, and a two-qubit CPHASE gate.
+To begin we need an error model, and particularly one parameterized using error generators (or otherwise capable of outputting error generators for a circuit layer). For this tutorial we'll work with a 4-qubit crosstalk-free model for a gate set consisting of $\pi/2$ rotations about X and Y on each qubit, and a two-qubit CPHASE gate.
 
 ```{code-cell} ipython3
 num_qubits = 4
@@ -120,10 +121,10 @@ This method returns a dictionary with the following structure: Keys are tuples o
 print(errorgen_transform_map[(_LSE('H', [stim.PauliString('XIII')]), 1)])
 ```
 
-For some purposes it can be useful to go another step further and identity which gate a particular error might be associated with in the original error model. For this purpose `ErrorGeneratorPropagator` has a helper method available called `errorgen_gate_contributors`.
+For some purposes it can be useful to go another step further and identity which gate a particular error might be associated with in the original error model. For this purpose `errgenpolytools` has a helper function available called `errorgen_gate_contributors`, which takes the error model as its first argument.
 
 ```{code-cell} ipython3
-print(errorgen_propagator.errorgen_gate_contributors(_LSE('H', [stim.PauliString('XIII')]), c, layer_idx=1))
+print(epoly.errorgen_gate_contributors(error_model, _LSE('H', [stim.PauliString('XIII')]), c, layer_idx=1, include_spam=True))
 ```
 
 Here this method returns the fact that in our particular error model the only gate at layer index 1 which could have contributed this particular error generator was the 'Gxpi2' gate acting on qubit 0. In some error models it may be possible for multiple gates to contribute to a particular rate, in which case this method should return all such gates.
@@ -137,7 +138,7 @@ The main method for performing propagation together with the iterative applicati
 propagated_errorgen_layer_first_order = errorgen_propagator.propagate_errorgens_bch(c)
 ```
 
-As before this method propagated all of a circuits error generator layers to the very end, but follows this up with an iterative application of the BCH approximation resulting in a single final error generator. Without any additional optional arguments specified this uses the first-order BCH approximation.
+As before this method propagated all of a circuit's error generator layers to the very end, but follows this up with an iterative application of the BCH approximation resulting in a single final error generator. Without any additional optional arguments specified this uses the first-order BCH approximation.
 
 ```{code-cell} ipython3
 print(propagated_errorgen_layer_first_order)
