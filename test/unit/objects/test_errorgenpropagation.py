@@ -15,6 +15,7 @@ from math import floor
 from pygsti.modelpacks import smq2Q_XYCPHASE
 import numpy as np
 import stim
+import unittest
 
 
 class ErrorgenPropTester(BaseCase):
@@ -176,6 +177,137 @@ class LocalStimErrorgenLabelTester(BaseCase):
         lse = _LSE('S', [stim.PauliString('ZI')])
         propagated_lse = lse.propagate_error_gen_tableau(self.tableau, 1)
         self.assertEqual(propagated_lse, (_LSE('S', [stim.PauliString('ZI')]), 1))
+
+class FixedLayerErrorgenPropTester(BaseCase):
+    """Coverage for ``ErrorGeneratorPropagator(fixed_errorgen_layer=...)`` construction,
+    validation, SPAM layer counts, copy/aliasing behavior, and the (currently broken)
+    matrix output path in fixed-layer mode.
+    """
+
+    def setUp(self):
+        # a 2-qubit local-label fixed error generator layer
+        self.fixed_local = {
+            LocalElementaryErrorgenLabel('H', ['XX']): 0.01,
+            LocalElementaryErrorgenLabel('S', ['ZZ']): 0.02,
+        }
+        self.empty_circuit = Circuit([], line_labels=(0, 1))
+        self.two_layer_circuit = Circuit([[('Gxpi2', 0)], [('Gxpi2', 1)]], line_labels=(0, 1))
+
+    # ------------------------------------------------------------------
+    # construction + label casting
+    # ------------------------------------------------------------------
+
+    def test_construct_with_local_labels_casts_to_lse(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        self.assertIsNone(prop.model)
+        # keys are cast to LocalStimErrorgenLabel, rates preserved.
+        self.assertTrue(all(isinstance(k, _LSE) for k in prop.fixed_errorgen_layer))
+        self.assertEqual(prop.fixed_errorgen_layer[_LSE('H', [stim.PauliString('XX')])], 0.01)
+        self.assertEqual(prop.fixed_errorgen_layer[_LSE('S', [stim.PauliString('ZZ')])], 0.02)
+
+    def test_construct_with_global_labels_int_state_space(self):
+        fixed_global = {GlobalElementaryErrorgenLabel('H', ['XX'], (0, 1)): 0.01}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_global, state_space_labels=2)
+        self.assertEqual(list(prop.fixed_errorgen_layer.keys()), [_LSE('H', [stim.PauliString('XX')])])
+
+    def test_construct_with_global_labels_list_state_space(self):
+        fixed_global = {GlobalElementaryErrorgenLabel('H', ['XX'], (0, 1)): 0.01}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_global, state_space_labels=[0, 1])
+        self.assertEqual(list(prop.fixed_errorgen_layer.keys()), [_LSE('H', [stim.PauliString('XX')])])
+
+    # ------------------------------------------------------------------
+    # constructor validation
+    # ------------------------------------------------------------------
+
+    def test_cannot_specify_both_model_and_fixed_layer(self):
+        model = smq2Q_XYCPHASE.target_model('full TP')
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator(model=model, fixed_errorgen_layer=self.fixed_local)
+
+    def test_must_specify_model_or_fixed_layer(self):
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator()
+
+    def test_global_labels_require_state_space_labels(self):
+        fixed_global = {GlobalElementaryErrorgenLabel('H', ['XX'], (0, 1)): 0.01}
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_global)
+
+    def test_mixed_width_labels_raise(self):
+        mixed = {
+            LocalElementaryErrorgenLabel('H', ['XX']): 0.01,
+            LocalElementaryErrorgenLabel('S', ['Z']): 0.02,
+        }
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator(fixed_errorgen_layer=mixed)
+
+    # ------------------------------------------------------------------
+    # construct_errorgen_layers behavior
+    # ------------------------------------------------------------------
+
+    def test_circuit_width_mismatch_raises(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)  # 2-qubit support
+        three_qubit_circuit = Circuit([], line_labels=(0, 1, 2))
+        with self.assertRaises(AssertionError):
+            prop.construct_errorgen_layers(three_qubit_circuit, 3, include_spam=True)
+
+    def test_spam_layer_counts(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        # empty circuit: 0 layers, +2 for spam.
+        self.assertEqual(len(prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True)), 2)
+        self.assertEqual(len(prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=False)), 0)
+        # depth-2 circuit: 2 layers, +2 for spam.
+        self.assertEqual(len(prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=True)), 4)
+        self.assertEqual(len(prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=False)), 2)
+
+    def test_each_layer_matches_fixed_layer(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        layers = prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=True)
+        for layer in layers:
+            self.assertEqual(layer, prop.fixed_errorgen_layer)
+
+    def test_layers_are_independent_copies(self):
+        # the per-layer .copy() must keep layers (and the stored fixed layer) from aliasing.
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        layers = prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=True)
+        key = next(iter(layers[0]))
+        layers[0][key] = 999.0
+        self.assertNotEqual(layers[1][key], 999.0)
+        self.assertNotEqual(prop.fixed_errorgen_layer[key], 999.0)
+
+    def test_empty_fixed_layer_constructs_empty_layers(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer={})
+        self.assertEqual(prop.fixed_errorgen_layer, {})
+        layers = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True)
+        self.assertEqual(layers, [{}, {}])
+
+    def test_fixed_rate_overrides_all_rates(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        # fixed_rate=None keeps the stored rates.
+        default_layers = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True, fixed_rate=None)
+        self.assertEqual(set(default_layers[0].values()), {0.01, 0.02})
+        # fixed_rate=1 sets every rate to 1.
+        ones = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True, fixed_rate=1)
+        self.assertEqual(set(ones[0].values()), {1})
+        # fixed_rate=0 sets every rate to 0 (the `is not None` behavior, not falsy fall-through).
+        zeros = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True, fixed_rate=0)
+        self.assertEqual(set(zeros[0].values()), {0})
+        self.assertEqual(len(zeros[0]), len(prop.fixed_errorgen_layer))
+
+    # ------------------------------------------------------------------
+    # C3: matrix output path is broken in fixed-layer mode (self.model is None).
+    # ------------------------------------------------------------------
+
+    @unittest.expectedFailure
+    def test_fixed_layer_matrix_path_should_work_C3(self):
+        # Captures C3: errorgen_layer_dict_to_errorgen / eoc_error_channel dereference
+        # self.model.state_space, but self.model is None in fixed-layer mode, so these raise
+        # AttributeError. This test asserts the *desired* behavior (a 4**n x 4**n channel) and
+        # is expected to fail until C3 is resolved; remove the marker when it is fixed.
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        channel = prop.eoc_error_channel(self.empty_circuit)
+        self.assertEqual(channel.shape, (4 ** 2, 4 ** 2))
+
 
 #Helper Functions:
 def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14, bch_mode='magnus'):

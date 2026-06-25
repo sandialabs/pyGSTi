@@ -459,3 +459,105 @@ class ErrgenPolyToolsTester(BaseCase):
         )
         zero_poly = Polynomial({}, max_num_vars=next(iter(self.first_order_magnus_polys.values())).max_num_vars)
         self.assertEqual(bulk[0], zero_poly)
+
+    # ------------------------------------------------------------------
+    # bulk probability/expectation polynomials vs *numeric* references
+    # (the existing bulk tests only check bulk == scalar-symbolic; these
+    #  independently anchor the bulk path to the numeric errgenproptools results)
+    # ------------------------------------------------------------------
+
+    def test_bulk_stabilizer_probability_correction_symbolic_polynomial_matches_numeric_order1(self):
+        bulk = _epoly.bulk_stabilizer_probability_correction_symbolic_polynomial(
+            self.first_order_magnus_polys, self.errgen_to_var_map, self.test_tableau,
+            self.random_bitstrings, order=1
+        )
+        for poly, bitstring in zip(bulk, self.random_bitstrings):
+            numeric = _eprop.stabilizer_probability_correction(
+                self.propagated_errorgens_bch1, self.test_tableau, bitstring, order=1
+            )
+            self.assertAlmostEqual(poly.evaluate(self.paramvec_unaggregated), numeric, places=12)
+
+    def test_bulk_stabilizer_probability_correction_symbolic_polynomial_matches_numeric_order2(self):
+        bulk = _epoly.bulk_stabilizer_probability_correction_symbolic_polynomial(
+            self.first_order_magnus_polys, self.errgen_to_var_map, self.test_tableau,
+            self.random_bitstrings, order=2
+        )
+        for poly, bitstring in zip(bulk, self.random_bitstrings):
+            numeric = _eprop.stabilizer_probability_correction(
+                self.propagated_errorgens_bch1, self.test_tableau, bitstring, order=2
+            )
+            self.assertAlmostEqual(poly.evaluate(self.paramvec_unaggregated), numeric, places=10)
+
+    def test_bulk_stabilizer_pauli_expectation_correction_symbolic_polynomial_matches_numeric_order1(self):
+        bulk = _epoly.bulk_stabilizer_pauli_expectation_correction_symbolic_polynomial(
+            self.first_order_magnus_polys, self.errgen_to_var_map, self.test_tableau,
+            self.random_paulis, order=1
+        )
+        for poly, pauli in zip(bulk, self.random_paulis):
+            numeric = _eprop.stabilizer_pauli_expectation_correction(
+                self.propagated_errorgens_bch1, self.test_tableau, pauli, order=1
+            )
+            self.assertAlmostEqual(poly.evaluate(self.paramvec_unaggregated), numeric, places=12)
+
+    # ------------------------------------------------------------------
+    # second-order aggregated Magnus (only first order was covered)
+    # ------------------------------------------------------------------
+
+    def test_magnus_symbolic_polynomial_second_order_shared_aggregated_matches_bch(self):
+        second_order_magnus_polys_shared_agg = _epoly.magnus_symbolic_polynomial(
+            self.errorgen_phases_by_layer_shared, self.errgen_to_var_map_gate_shared_agg, magnus_order=2
+        )
+        propagated_errorgens_bch2_shared = self.errorgen_propagator_shared.propagate_errorgens_bch(
+            self.test_ckt, bch_order=2
+        )
+        self._assert_poly_dict_matches_numeric_dict(
+            second_order_magnus_polys_shared_agg,
+            propagated_errorgens_bch2_shared,
+            self.paramvec_shared_aggregated,
+            places=12
+        )
+
+    # ------------------------------------------------------------------
+    # Taylor expansion from a *quadratic* polynomial input (prior tests
+    # only fed linear first-order Magnus polynomials in)
+    # ------------------------------------------------------------------
+
+    def test_taylor_expansion_symbolic_polynomial_second_order_from_quadratic_input_matches_numeric(self):
+        # Feed a *quadratic* (degree-2) polynomial errorgen dict into the order-2 Taylor
+        # expansion so the composed terms become degree-4 polynomials, exercising the
+        # higher-degree monomial encoding that the linear first-order inputs never reach.
+        # Restrict to a couple of error generators: order-2 Taylor forms product(keys, repeat=2),
+        # so the full (large) error generator set would blow up combinatorially.
+        items = list(self.first_order_magnus_polys.items())[:2]
+        quadratic_errorgen_dict = {lbl: poly * poly for lbl, poly in items}
+        numeric_errorgen_dict = {
+            lbl: poly.evaluate(self.paramvec_unaggregated) for lbl, poly in quadratic_errorgen_dict.items()
+        }
+        # sanity-check that the symbolic inputs really are quadratic.
+        self.assertTrue(any(poly.degree == 2 for poly in quadratic_errorgen_dict.values()))
+
+        taylor_polys = _epoly.error_generator_taylor_expansion_symbolic_polynomial(
+            quadratic_errorgen_dict, self.errgen_to_var_map, order=2
+        )[1]
+        taylor_numeric = _eprop.error_generator_taylor_expansion(
+            numeric_errorgen_dict, order=2, truncation_threshold=-1
+        )[1]
+        self._assert_poly_dict_matches_numeric_dict(
+            taylor_polys, taylor_numeric, self.paramvec_unaggregated, places=12
+        )
+
+    # ------------------------------------------------------------------
+    # order validation
+    # ------------------------------------------------------------------
+
+    def test_magnus_symbolic_polynomial_order_three_raises(self):
+        with self.assertRaises(AssertionError):
+            _epoly.magnus_symbolic_polynomial(
+                self.errorgen_phases_by_layer, self.errgen_to_var_map, magnus_order=3
+            )
+
+    def test_taylor_expansion_symbolic_polynomial_order_three_raises(self):
+        with self.assertRaises(AssertionError):
+            _epoly.error_generator_taylor_expansion_symbolic_polynomial(
+                self.first_order_magnus_polys, self.errgen_to_var_map, order=3
+            )
