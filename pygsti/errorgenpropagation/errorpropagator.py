@@ -35,12 +35,12 @@ from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel a
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
 from itertools import islice
 
-from typing import Union
+from typing import Union, Optional
 
 class ErrorGeneratorPropagator:
 
-    def __init__(self, model: _OpModel=None, fixed_errorgen_layer: dict[_ElementaryErrorgenLabel,float]=None,
-                 state_space_labels: Union[list,int]=None):
+    def __init__(self, model: Optional[_OpModel]=None, fixed_errorgen_layer: Optional[dict[_ElementaryErrorgenLabel,float]]=None,
+                 state_space_labels: Union[list,int,None]=None):
         """
         Initialize an instance of `ErrorGeneratorPropagator`. This class is instantiated with a noise model
         and manages operations related to propagating error generators through circuits, and constructing
@@ -51,7 +51,7 @@ class ErrorGeneratorPropagator:
         model: `OpModel`, optional (default None) 
             This model is used to construct error generators for each layer of a circuit
             through which error generators are to be propagated. Cannot be specified in conjunction
-            with fixed_errorgen_layers.
+            with `fixed_errorgen_layer`.
         
         fixed_errorgen_layer : dict, optional (default None)
             A dictionary corresponding to a fixed per-layer elementary error generator
@@ -75,7 +75,7 @@ class ErrorGeneratorPropagator:
 
         # do some input validation on fixed_errorgen_layer, and also cast all of the labels to LSE.    
         if fixed_errorgen_layer:
-            # check the first error generator label an if it is a GEEL make sure we have sslbls
+            # check the first error generator label and if it is a GEEL make sure we have sslbls
             # safe to assume it is not empty since it is truthy.
             first_errgen_label = next(iter(fixed_errorgen_layer))
             if isinstance(first_errgen_label, _GEEL):
@@ -616,7 +616,7 @@ class ErrorGeneratorPropagator:
             
             # if using a fixed rate construct a new version of the fixed error generator dictionary with said rates.
             #TODO: I probably don't need the shallow copy operation, maybe remove this?
-            if fixed_rate:
+            if fixed_rate is not None:
                 fixed_rate_errorgen = {lbl: fixed_rate for lbl in self.fixed_errorgen_layer}
                 errorgen_dicts_by_layer = [fixed_rate_errorgen.copy() for _ in range(num_layers)]
             else:
