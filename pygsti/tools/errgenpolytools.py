@@ -475,9 +475,11 @@ def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps, error
 
     Returns
     -------
-    TBD
+    second_order_comm_dict : dict
+        A dictionary whose keys are LocalStimErrorgenLabels and whose values are Polynomial
+        objects corresponding to the rates of the second-order Magnus correction term.
     """
-        
+
     errorgen_pairs = []
     for i in range(len(errorgen_transform_maps)):
         for j in range(i):
@@ -540,16 +542,11 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
         
     Returns
     -------
-    commuted_errgen_list : list of LocalStimErrorgenLabels
-        List of error generator labels corresponding to the results of the 
-        application of the pairwise commutators.
-    
-    coeff_list : list of tuples
-        A list of three element tuples. The first two elements correspond to initial
-        error generators whose rates should be multiplied to give a corresponding
-        coefficient for the commutator output. The third term gives an addititonal overall
-        phase and scale for this coefficient.
-    """    
+    commuted_errorgen_poly_dict : dict
+        A dictionary whose keys are LocalStimErrorgenLabels and whose values are Polynomial
+        objects corresponding to the rates resulting from the pairwise commutator of the two
+        error generator layers.
+    """
     commuted_errgen_list = []
     var_list = []
     coeff_list = []
