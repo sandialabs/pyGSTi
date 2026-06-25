@@ -24,6 +24,7 @@ from pygsti.modelmembers.operations.embeddederrorgen import EmbeddedErrorgen as 
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti import SpaceT
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -239,7 +240,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
             #Deriv wrt hamiltonian params
             derrgen = self.errorgen.deriv_wrt_params(None)  # apply filter below; cache *full* deriv
-            derrgen.shape = (d2, d2, -1)  # separate 1st d2**2 dim to (d2,d2)
+            derrgen = _compat.reshape_no_copy(derrgen, (d2, d2, -1))  # separate 1st d2**2 dim to (d2,d2)
             dexpL = _d_exp_x(self.errorgen.to_dense("minimal"), derrgen, self.exp_err_gen)
             derivMx = dexpL.reshape(d2**2, self.num_params)  # [iFlattenedOp,iParam]
 
@@ -312,8 +313,8 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #Deriv wrt other params
             dEdp = self.errorgen.deriv_wrt_params(None)  # filter later, cache *full*
             d2Edp2 = self.errorgen.hessian_wrt_params(None, None)  # hessian
-            dEdp.shape = (d2, d2, nP)  # separate 1st d2**2 dim to (d2,d2)
-            d2Edp2.shape = (d2, d2, nP, nP)  # ditto
+            dEdp = _compat.reshape_no_copy(dEdp, (d2, d2, nP))  # separate 1st d2**2 dim to (d2,d2)
+            d2Edp2 = _compat.reshape_no_copy(d2Edp2, (d2, d2, nP, nP))  # ditto
 
             series, series2 = _d2_exp_series(self.errorgen.to_dense("minimal"), dEdp, d2Edp2)
             term1 = series2

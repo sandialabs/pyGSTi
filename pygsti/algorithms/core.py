@@ -234,7 +234,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 [(lbl, _np.dot(invABMat_p, X_ps[i]))
                  for i, lbl in enumerate(target_model.instruments[opLabel])])
         else:
-            #Just a normal gae
+            #Just a normal gate
             assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
             lgstModel.operations[opLabel] = _op.FullArbitraryOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
 
@@ -370,7 +370,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             #Also convey default gauge group & simulator from guess_model_for_gauge
             lgstModel.default_gauge_group = \
                 guess_model_for_gauge.default_gauge_group
-            lgstModel.sim = guess_model_for_gauge.sim.copy()
+            lgstModel.sim = guess_model_for_gauge.sim.copy(keep_model_attached=False)
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         # # lgstModel had dim trunc, so after transform is has dim gsDim
@@ -937,6 +937,16 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
     #pre-compute a dictionary caching completed circuits for layout construction performance.
     unique_circuits = list({ckt for circuit_list in circuit_lists for ckt in circuit_list})
+    # Preserve any op-label aliases (e.g. from op_label_aliases / string_manipulation_rules) so that
+    # the precomputed layout cache looks up the *aliased* circuits in the dataset (otherwise circuits
+    # containing aliased labels raise a KeyError during dataset lookup).
+    op_label_aliases = None
+    for circuit_list in circuit_lists:
+        if isinstance(circuit_list, _CircuitList) and circuit_list.op_label_aliases:
+            op_label_aliases = circuit_list.op_label_aliases
+            break
+    if op_label_aliases is not None:
+        unique_circuits = _CircuitList(unique_circuits, op_label_aliases=op_label_aliases)
     if isinstance(mdl.sim, (_fwdsims.MatrixForwardSimulator, _fwdsims.MapForwardSimulator)):
         precomp_layout_circuit_cache = mdl.sim.create_copa_layout_circuit_cache(unique_circuits, mdl, dataset=dataset)
     else:

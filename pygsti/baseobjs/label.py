@@ -936,7 +936,7 @@ def _tuptup_sslbls(obj: Union[LabelTupTup, LabelTupTupWithArgs, LabelTupTupWithT
         # The getattr(...) guard is for backward compatibility in case
         # someone picked a Label. In principle, all types of `obj`
         # allowed in this function have a None-initialized _sslbls 
-        # attriubte set in their __new__ methods.
+        # attribute set in their __new__ methods.
         return obj._sslbls  # type: ignore
     s = set()
     for lbl in obj[offset:]:

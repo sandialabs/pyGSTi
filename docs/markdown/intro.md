@@ -12,7 +12,37 @@ kernelspec:
 ---
 
 # pyGSTi
-Welcome! This notebook serves as a top-level "readme" document for pyGSTi.  It and the other notebooks in this directory describe and demonstrate how you can use the `pygsti` package to accomplish various tasks related to quantum characterization.  We'll start with a brief general introduction and then move on to specifics.
+
+```{note}
+You are reading the documentation for **pyGSTi version {{ pygsti_version }}**. Use the version selector to switch between tagged releases and the latest development build.
+```
+
+Welcome! This page is a top-level introduction to pyGSTi. It and the rest of this documentation describe and demonstrate how you can use the `pygsti` package to accomplish various tasks related to quantum characterization. We'll start with a brief general introduction and then move on to specifics.
+
+## Quickstart
+
+Install from PyPI (see [Installation](Installation) for conda, optional dependencies, and building from source). You can get our latest official release with the following shell command.
+```bash
+pip install pygsti
+```
+To get the latest version of our develop branch (which is the basis of these web docs), have pip pull from the pyGSTi git repo instead.
+```bash
+pip install git+https://github.com/sandialabs/pyGSTi.git@develop
+```
+
+
+Then build a model and compute circuit outcome probabilities:
+
+```python
+import pygsti
+from pygsti.modelpacks import smq1Q_XYI
+
+model = smq1Q_XYI.target_model()                    # ideal 1-qubit model
+circuit = pygsti.circuits.Circuit([('Gxpi2', 0)])   # a single X(π/2) gate
+model.probabilities(circuit)                        # ~ {('0',): 0.5, ('1',): 0.5}
+```
+
+Ready to do more? See **[Getting Started](#getting-started)** below for guided tours of pyGSTi's protocols and objects.
 
 ```{tip}
 **Running these notebooks.** This site renders the source MyST Markdown without executing cells, so you won't see outputs (plots, tables) inline. To run a notebook yourself: use the rocket icon at the top right of any page to launch it in Binder or Colab, or use the download dropdown (cloud icon) to grab the `.ipynb` and run it in your own Jupyter environment.
@@ -43,12 +73,12 @@ For example, some things you might use pyGSTi for are:
 ## Getting Started
 This documentation facilitates **two basic approaches** to getting started with pyGSTi.  
 
-The first approach is a **top-down** approach that shows how to use pyGSTi as a stand-alone QCVV tool that runs protocols on data.  An overview of what protocols pyGSTi can run and how to invoke them is given in the [pyGSTi protocols overview](overview/00-Protocols) notebook.
+The first approach is a **top-down** approach that shows how to use pyGSTi as a stand-alone QCVV tool that runs protocols on data.  An overview of what protocols pyGSTi can run and how to invoke them is given in the [pyGSTi protocols overview](overview/00-Protocols) tutorial.
 
-The second is a **bottom-up** approach that starts by introducing the main components of pyGSTi and how they work together, and then explains what you can do with them.  If you like this approach or are ambivalent, you should read through these two notebooks to get a high-level overview of what pyGSTi can do:
+The second is a **bottom-up** approach that starts by introducing the main components of pyGSTi and how they work together, and then explains what you can do with them.  If you like this approach or are ambivalent, you should read through these two tutorials to get a high-level overview of what pyGSTi can do:
 - [Part 1: pyGSTi's essential objects](overview/01-Essential-Objects)
 - [Part 2: Using these objects](overview/02-Using-Essential-Objects)
 
-(These notebooks contain links to other notebooks covering more advanced functionality that you are free to explore as desired.)
+(These pages link to further tutorials covering more advanced functionality that you are free to explore as desired.)
 
-If you have a particular problem you need solved and you want to know what 5 lines of Python code will get it done for you, then you should visit the [FAQ](FAQ) and with links to associated example notebooks.  If your question isn't answered there, you should email us at pygsti@sandia.gov or add an issue to the pyGSTi github page.
+If you have a particular problem you need solved and you want to know what 5 lines of Python code will get it done for you, then you should visit the [FAQ](FAQ) with its links to associated example tutorials.  If your question isn't answered there, you should email us at pygsti@sandia.gov or add an issue to the pyGSTi github page.

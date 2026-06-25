@@ -374,6 +374,60 @@ class CircuitMethodTester(BaseCase):
         self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
         self.assertEqual(self.c[:, 'Q2'], c2[:, 'Q2'])
 
+    def test_tensor_product_of_every_circuit_construction_form(self):
+        from pygsti.baseobjs.label import Label
+        # Every way to construct a circuit that is equivalent to Circuit([("Gx", 0)])
+        c1_options = [
+            circuit.Circuit([('Gx', 0)]),
+            circuit.Circuit([(('Gx', 0))]),
+            circuit.Circuit('Gx:0'),
+            circuit.Circuit([Label('Gx', 0)]),
+            circuit.Circuit(layer_labels=[('Gx',0)])
+        ]
+
+        # Every way to construct a circuit that is equivalent to Circuit([("Gy", 1)])
+        c2_options = [
+            circuit.Circuit([('Gy', 1)]),
+            circuit.Circuit([(('Gy', 1))]),
+            circuit.Circuit('Gy:1'),
+            circuit.Circuit([Label('Gy', 1)]),
+            circuit.Circuit(layer_labels=[('Gy',1)])
+        ]
+
+        expected_revc = circuit.Circuit([(("Gx", 0), ("Gy",1))], line_labels=(1,0))
+        expected_c = circuit.Circuit([(('Gx', 0), ('Gy', 1))])
+        for i1, c1 in enumerate(c1_options):
+            for i2, c2 in enumerate(c2_options):
+                tensored_circuit = c1.tensor_circuit(c2)
+                self.assertEqual(tensored_circuit, expected_c, f"Testing options {i1} and {i2}")
+                
+        for i1, c1 in enumerate(c1_options):
+            for i2, c2 in enumerate(c2_options):
+                tensored_reverse_circuit = c2.tensor_circuit(c1, line_order=(1,0))
+                self.assertEqual(tensored_reverse_circuit, expected_revc, f"Testing options {i1} and {i2}")
+                
+        # The following combinations are expected to error on account of ambiguity.
+        c2_bad_options = [
+            circuit.Circuit('Gy@1')
+        ]
+        c1_bad_options = [
+            circuit.Circuit('Gx@0')
+        ]
+        for i1, c1 in enumerate(c1_options):
+            for i2, c2 in enumerate(c2_bad_options):
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
+                    c1.tensor_circuit(c2)
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
+                    c2.tensor_circuit(c1)
+
+        for i1, c1 in enumerate(c1_bad_options):
+            for i2, c2 in enumerate(c2_options):
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
+                    c1.tensor_circuit(c2)
+                with self.assertRaises(ValueError, msg=f"Testing options {i1} and {i2}"):
+                    c2.tensor_circuit(c1)
+
+
     def test_tensor_circuit_with_shorter(self):
         # Test tensoring circuits where the inserted circuit is shorter
         gatestring2 = circuit.Circuit(None, stringrep="[Gx:Q2Gy:Q3]^2[Gy:Q2Gx:Q3]Gi:Q2Gi:Q3")
@@ -919,3 +973,238 @@ class CompressedCircuitTester(BaseCase):
     def test_raise_on_construct_from_non_circuit(self):
         with self.assertRaises(ValueError):
             circuit.CompressedCircuit(('Gx',))  # can only create from Circuits
+
+
+class CircuitBugfixRegressionTester(BaseCase):
+    """Regression tests for the batch of circuit.py bug fixes (issues #756, #760, #762, #763, #764)."""
+
+    def test_map_names_inplace_with_callable(self):
+        # regression test for issue #763
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)", editable=True)
+        c.map_names_inplace(lambda name: name + '2')
+        c.done_editing()
+        self.assertEqual(c, circuit.Circuit("Gx2:0Gy2:1@(0,1)"))
+
+    def test_map_names_inplace_with_dict(self):
+        # context pin for issue #763: the dict path was never broken and must
+        # keep working; missing keys mean "keep the old name"
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)", editable=True)
+        c.map_names_inplace({'Gx': 'Gz'})
+        c.done_editing()
+        self.assertEqual(c, circuit.Circuit("Gz:0Gy:1@(0,1)"))
+
+    def test_map_state_space_labels_inplace_with_callable(self):
+        # regression test for issue #763
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)", editable=True)
+        c.map_state_space_labels_inplace(lambda ll: ll + 10)
+        c.done_editing()
+        self.assertEqual(c.line_labels, (10, 11))
+        self.assertEqual(c, circuit.Circuit("Gx:10Gy:11@(10,11)"))
+
+    def test_map_state_space_labels_with_callable_matches_inplace(self):
+        # issue #763: the non-inplace variant already handled callables; the
+        # fixed inplace variant must agree with it
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)")
+        mapped = c.map_state_space_labels(lambda ll: ll + 10)
+        c2 = c.copy(editable=True)
+        c2.map_state_space_labels_inplace(lambda ll: ll + 10)
+        c2.done_editing()
+        self.assertEqual(mapped, c2)
+
+    def test_map_names_inplace_preserves_circuit_labels(self):
+        # review follow-up for issue #763: CircuitLabel.IS_SIMPLE is True, so
+        # the simple-label rebuild used to silently flatten a CircuitLabel to a
+        # bare Label, discarding its subcircuit
+        cl = CircuitLabel('Gbox', (Label('Gx', 0), Label('Gy', 0)), (0,))
+        c = circuit.Circuit([cl], line_labels=(0,), editable=True, expand_subcircuits=False)
+        c.map_names_inplace(lambda name: name + '2' if name == 'Gbox' else name)
+        self.assertIsInstance(c[0], CircuitLabel)
+        self.assertEqual(c[0].name, 'Gbox2')
+        self.assertEqual(c[0].components, (Label('Gx', 0), Label('Gy', 0)))
+        c2 = circuit.Circuit([cl], line_labels=(0,), editable=True, expand_subcircuits=False)
+        c2.map_names_inplace({'Gbox': 'Gbox2'})
+        self.assertIsInstance(c2[0], CircuitLabel)
+        self.assertEqual(c2[0].name, 'Gbox2')
+
+    def test_map_state_space_labels_inplace_preserves_circuit_labels(self):
+        # review follow-up for issue #763: same flattening hazard as above; the
+        # CircuitLabel's own sslbls and its subcircuit's sslbls both map
+        cl = CircuitLabel('Gbox', (Label('Gx', 0), Label('Gy', 0)), (0,))
+        c = circuit.Circuit([cl], line_labels=(0,), editable=True, expand_subcircuits=False)
+        c.map_state_space_labels_inplace(lambda ll: ll + 10)
+        c.done_editing()
+        self.assertEqual(c.line_labels, (10,))
+        self.assertIsInstance(c[0], CircuitLabel)
+        self.assertEqual(c[0].sslbls, (10,))
+        self.assertEqual(c[0].components, (Label('Gx', 10), Label('Gy', 10)))
+
+    def test_sort_layer_labels_inplace_raises_on_static(self):
+        # regression test for issue #760: previously this silently rewrote
+        # _labels while leaving the cached hash/tup/str stale
+        s = circuit.Circuit("Gx:0Gy:1@(0,1)")
+        with self.assertRaises(AssertionError):
+            s.sort_layer_labels_inplace()
+
+    def test_sort_layer_labels_inplace_on_editable(self):
+        # regression test for issue #760: sorting must preserve the editable
+        # representation so that subsequent in-place edits still work
+        c = circuit.Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1), editable=True)
+        c.sort_layer_labels_inplace()
+        self.assertEqual(c[0], Label((('Gx', 0), ('Gy', 1))))
+        c.insert_labels_into_layers_inplace([Label('Gz', 0)], 1)
+        c.done_editing()
+        self.assertEqual(c, circuit.Circuit([[('Gx', 0), ('Gy', 1)], [('Gz', 0)]], line_labels=(0, 1)))
+
+    def test_done_editing_still_sorts_layers(self):
+        # pin for issue #760's done_editing change: the editable->static
+        # transition must still canonicalize within-layer label order
+        c = circuit.Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1), editable=True)
+        c.done_editing()
+        canonical = circuit.Circuit([[('Gx', 0), ('Gy', 1)]], line_labels=(0, 1))
+        self.assertEqual(c, canonical)
+        self.assertEqual(hash(c), hash(canonical))
+
+    def test_tensor_circuit_with_list_line_order(self):
+        # regression test for issue #762: a list line_order was stored
+        # un-tupled, crashing later in done_editing
+        c = circuit.Circuit("Gx:0@(0)", editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"), line_order=[1, 0])
+        c.done_editing()
+        self.assertEqual(c.line_labels, (1, 0))
+        self.assertEqual(c[0, 0], Label('Gx', 0))
+        self.assertEqual(c[0, 1], Label('Gy', 1))
+
+    def test_tensor_circuit_with_tuple_line_order(self):
+        # context pin for issue #762: tuple line_order always worked
+        c = circuit.Circuit("Gx:0@(0)", editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"), line_order=(1, 0))
+        c.done_editing()
+        self.assertEqual(c.line_labels, (1, 0))
+
+    def test_tensor_circuit_noninplace(self):
+        # context pin: first direct test of the copy-returning tensor_circuit
+        t = circuit.Circuit("Gx:0@(0)").tensor_circuit(circuit.Circuit("Gy:1@(1)"))
+        self.assertEqual(t, circuit.Circuit("[Gx:0Gy:1]@(0,1)"))
+
+    def test_tensor_circuit_implicit_sslbls_host_raises(self):
+        # regression test for issue #762: previously failed deep inside
+        # _clear_labels with "Cannot operate on a block that is straddled by Gx!"
+        c = circuit.Circuit("Gx@(0)", editable=True)
+        with self.assertRaises(ValueError) as cm:
+            c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"))
+        self.assertIn("implicit", str(cm.exception))
+
+    @pytest.mark.xfail
+    def test_tensor_circuit_implicit_sslbls_insertee_ok(self):
+        # pin for issue #762: an implicit-sslbls *insertee* is explicified
+        # onto its own lines during insertion and must keep working
+        # (SimultaneousExperimentDesign relies on this)
+        t = circuit.Circuit("Gx:0@(0)").tensor_circuit(circuit.Circuit("Gy@(1)"))
+        self.assertEqual(t, circuit.Circuit("[Gx:0Gy:1]@(0,1)"))
+
+    def test_tensor_circuit_implicit_sslbls_host_with_empty_insertee_ok(self):
+        # pin for issue #762: adding lines from a depth-0 circuit to a host
+        # with implicit-sslbls gates worked before the new guard and must
+        # continue to work.  (Note the implicit gates then cover the new line
+        # too -- that is what implicit sslbls mean -- so the new line is not
+        # idle; this matches develop's behavior.)
+        c = circuit.Circuit("Gx@(0)", editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit((), line_labels=(1,)))
+        c.done_editing()
+        self.assertEqual(c.line_labels, (0, 1))
+
+    def test_tensor_circuit_implicit_idle_beyond_insertee_depth_ok(self):
+        # review follow-up for issue #762: implicit-sslbls labels in layers the
+        # insertion never touches (here a trailing global idle) must not trip
+        # the guard -- develop tensored this successfully
+        c = circuit.Circuit([('Gx', 0), 'Gi'], line_labels=(0,), editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit("Gy:1@(1)"))
+        c.done_editing()
+        self.assertEqual(c, circuit.Circuit([[('Gx', 0), ('Gy', 1)], 'Gi'], line_labels=(0, 1)))
+
+    def test_tensor_circuit_with_empty_layers_ok(self):
+        # pin for issue #762: empty (idle) layers contain no implicit-sslbls
+        # gates and must not trip the new guard
+        c = circuit.Circuit([('Gx', 0), (), ('Gy', 0)], line_labels=(0,), editable=True)
+        c.tensor_circuit_inplace(circuit.Circuit("Gz:1@(1)"))
+        c.done_editing()
+        self.assertEqual(c.line_labels, (0, 1))
+        self.assertEqual(c.depth, 3)
+
+    def test_extract_labels_nonstrict_filters_and_line_labels(self):
+        # regression test for issue #756: the non-strict membership test was
+        # always true (so no filtering happened) and the result's line labels
+        # were tuple('auto') == ('a', 'u', 't', 'o')
+        c = circuit.Circuit("[Gx:0Gy:1][Gz:1]@(0,1)")
+        sub = c.extract_labels(layers=slice(0, 2), lines=(1,), strict=False)
+        self.assertEqual(sub.line_labels, (1,))
+        self.assertEqual(sub[0], Label('Gy', 1))
+        self.assertEqual(sub[1], Label('Gz', 1))
+
+    def test_extract_labels_nonstrict_includes_straddlers(self):
+        # issue #756: labels straddling the requested-lines boundary are kept
+        # (per the docstring) and the result's line labels grow to cover them;
+        # layers with no intersecting labels come back empty
+        c = circuit.Circuit("[Gcnot:0:1][Gz:1]@(0,1,2)")
+        sub = c.extract_labels(layers=slice(0, 2), lines=(0,), strict=False)
+        self.assertEqual(sub.line_labels, (0, 1))
+        self.assertEqual(sub[0], Label('Gcnot', (0, 1)))
+        self.assertEqual(sub[1], Label(()))
+
+    def test_extract_labels_nonstrict_editable_matches_static(self):
+        # issue #756: the editable and static code paths must agree
+        text = "[Gx:0Gy:1][Gz:1]@(0,1)"
+        sub_static = circuit.Circuit(text).extract_labels(layers=slice(0, 2), lines=(1,), strict=False)
+        sub_editable = circuit.Circuit(text, editable=True).extract_labels(layers=slice(0, 2), lines=(1,), strict=False)
+        sub_editable.done_editing()
+        self.assertEqual(sub_static, sub_editable)
+        self.assertEqual(sub_static, circuit.Circuit("Gy:1Gz:1@(1)"))
+
+    def test_extract_labels_nonstrict_implicit_sslbls_covers_all_lines(self):
+        # pin for issue #756: an implicit (None-sslbls) label acts on every
+        # line, so non-strict extraction through any line keeps it and the
+        # result covers all of the parent's lines
+        c = circuit.Circuit([('Gx', 0), 'Gi'], line_labels=(0, 1))
+        sub = c.extract_labels(layers=slice(0, 2), lines=(0,), strict=False)
+        self.assertEqual(sub.line_labels, (0, 1))
+        self.assertEqual(sub, c)
+
+    def test_extract_labels_strict_behavior_unchanged(self):
+        # context pin for issue #756: strict extraction (the default, used by
+        # __getitem__) drops straddling labels and keeps the requested lines
+        c = circuit.Circuit("[Gcnot:0:1][Gz:1]@(0,1)")
+        sub = c.extract_labels(layers=slice(0, 2), lines=(1,))
+        self.assertEqual(sub.line_labels, (1,))
+        self.assertEqual(sub[0], Label(()))
+        self.assertEqual(sub[1], Label('Gz', 1))
+
+    def test_extract_labels_zero_area(self):
+        # pin for issue #764: the zero-area path on editable circuits returns
+        # an *editable* result (the in-place edit below would raise otherwise)
+        c = circuit.Circuit("Gx:0Gy:0@(0,1)", editable=True)
+        sub = c.extract_labels(layers=(), lines=(0,))
+        sub.insert_labels_into_layers_inplace([Label('Gz', 0)], 0)
+        sub.done_editing()
+        self.assertEqual(sub, circuit.Circuit("Gz:0@(0)"))
+
+    def test_malformed_index_raises_index_error(self):
+        # regression test for issue #764: _proc_key_arg *returned* the
+        # IndexError, surfacing as an unpacking TypeError downstream
+        c = circuit.Circuit("Gx:0Gy:1@(0,1)")
+        with self.assertRaises(IndexError):
+            c[0, 1, 2]
+
+    def test_validate_line_labels_message_names_the_label(self):
+        # regression test for issue #764: the message was a non-f-string, so
+        # users saw the literal text '{line_lbl}'
+        with self.assertRaises(ValueError) as cm:
+            circuit.validate_line_labels(['01'])
+        self.assertIn("'01'", str(cm.exception))
+
+    def test_replace_gatename_inplace_warning_names_new_gatename(self):
+        # regression test for issue #764: the second cast warning blamed
+        # `old_gatename` while casting `new_gatename`
+        c = circuit.Circuit("Gx:0@(0)", editable=True)
+        with self.assertWarns(UserWarning) as cm:
+            c.replace_gatename_inplace('Gx', 123)
+        self.assertIn('new_gatename', str(cm.warning))

@@ -23,6 +23,7 @@ from pygsti.pgtypes import SpaceT
 from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
 from typing import Optional, TYPE_CHECKING, Union
 
@@ -400,7 +401,7 @@ class ModelMember(ModelChild, _NicelySerializable):
                 subm.set_gpindices(new_subm_gpindices, parent, memo)
 
         if isinstance(parent, ModelMember):
-            warnings.warn("parent should be a Model and not a ModelMember", DeprecationWarning)
+            warnings.warn("parent should be a Model and not a ModelMember", _pyGSTiDeprecationWarning)
         self._set_only_my_gpindices(gpindices, parent)
 
     def shift_gpindices(self, above: int, amount: int, parent_filter: Optional[Model]=None, memo: Optional[set]=None) -> None:
@@ -1077,7 +1078,7 @@ class ModelMember(ModelChild, _NicelySerializable):
 
         my_gpindices = _slct.list_to_slice(cls._decodemx(mm_dict['model_parameter_indices']), array_ok=True)
         obj._set_only_my_gpindices(my_gpindices, parent=parent_model)
-        obj._submember_rpindices = tuple([_slct.list_to_slice(inds)
+        obj._submember_rpindices = tuple([_slct.list_to_slice(inds, array_ok=True)
                                           for inds in mm_dict['relative_submember_parameter_indices']])
         if mm_dict['parameter_labels'] is not None:
             # 2-step init because otherwise we end up with a 2D array

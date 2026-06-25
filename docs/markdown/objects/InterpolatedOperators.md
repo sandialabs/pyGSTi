@@ -28,6 +28,12 @@ import pygsti
 import pygsti.extras.interpygate as interp
 
 try:
+    # See if MPI is available.
+    #   For robustness, force the Libfabric/OFI provider to fallback to standard `sockets`.
+    #   This prevents a hard C-level process abort on some platforms. One should remove
+    #   this environment-variable assignment unless actually needed on your machine.
+    import os
+    os.environ['FI_PROVIDER'] = 'sockets'
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
 except ImportError:
@@ -71,7 +77,10 @@ class ExampleProcess(interp.PhysicalProcess):
         L = dephasing * self.dephasing_generator + decoherence * self.decoherence_generator
 
         process = pygsti.tools.change_basis(expm((H + L) * t),'pp', 'col')
-        state = interp.unvec(np.dot(process, interp.vec(np.outer(state, state.conj()))))
+        dim = state.size
+        vec_density_in  = np.outer(state, state.conj()).ravel(order='F')
+        vec_density_out = process @ vec_density_in
+        state = vec_density_out.reshape((dim, dim), order='F')
         return state
 
     def create_process_matrix(self, v, comm=None):                                                                                                                                                                                             
@@ -136,7 +145,13 @@ class ExampleProcess_GroupTime(interp.PhysicalProcess):
         L = dephasing * self.dephasing_generator + decoherence * self.decoherence_generator
 
         processes = [pygsti.tools.change_basis(expm((H + L) * t),'pp', 'col') for t in times]
-        states = [interp.unvec(np.dot(process, interp.vec(np.outer(state, state.conj())))) for process in processes]
+        vec_density_in  = np.outer(state, state.conj()).ravel(order='F')
+        dim = state.size
+        states = []
+        for process in processes:
+            vec_density_out = process @ vec_density_in
+            state = vec_density_out.reshape((dim, dim), order='F')
+            states.append(state)
         return states
 
     def create_process_matrices(self, v, grouped_v, comm=None):                                                                                                                                                                                             

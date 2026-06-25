@@ -13,15 +13,18 @@ Functions for constructing semidefinite programming models
 from __future__ import annotations
 
 import numpy as np
+import warnings
 
-from typing import Union, List, Tuple, TYPE_CHECKING
+from typing import Union, List, Tuple, Sequence, TYPE_CHECKING
 if TYPE_CHECKING:
     import cvxpy as cp
     ExpressionLike = Union[cp.Expression, np.ndarray]
 
 from pygsti.baseobjs.basis import Basis, BasisLike
+from pygsti.tools.matrixtools import assert_hermitian
 from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.tools.jamiolkowski import jamiolkowski_iso
+from pygsti.tools.exceptions import CVXPYFailure
 
 
 try:
@@ -32,6 +35,34 @@ try:
     warnings.filterwarnings('ignore', mosek_warning_pattern)
 except:
     CVXPY_ENABLED = False
+
+
+SDP_SOLVER_PRIORITY = ['MOSEK', 'CLARABEL', 'CVXOPT']
+
+
+def solve_sdp(prob: cp.Problem, **kwargs) -> tuple[np.floating, dict[str, np.ndarray]]:
+
+    objective_val : np.floating = np.array(np.nan).item()
+    varvals : dict[str, np.ndarray] = dict()
+    for i, solver in enumerate(SDP_SOLVER_PRIORITY):
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore','.*Solution may be inaccurate.*', UserWarning)
+                prob.solve(solver=solver, **kwargs)
+            objective_val = prob.value                                       # type: ignore
+            varvals.update({k: v.value for (k, v) in prob.var_dict.items()}) # type: ignore
+            break
+        except (AssertionError, cp.SolverError) as e:
+            if solver != 'MOSEK':
+                msg = f"Received error {e} when trying to use solver={solver}."
+                if i + 1 == len(SDP_SOLVER_PRIORITY):
+                    failure_msg  = "Out of solvers. Returning NaN."
+                else:
+                    failure_msg  = f"Trying {SDP_SOLVER_PRIORITY[i+1]} next."
+                msg += f'\n{failure_msg}'
+                warnings.warn(msg, CVXPYFailure)
+
+    return objective_val, varvals
 
 
 def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List[cp.Variable]]:

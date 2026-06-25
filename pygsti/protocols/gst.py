@@ -50,6 +50,7 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti.circuits import Circuit
 from pygsti.forwardsims import ForwardSimulator
 from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
@@ -604,7 +605,7 @@ class GSTBadFitOptions(_NicelySerializable):
     actions : tuple, optional
         Actions to take when a GST fit is unsatisfactory. Allowed actions include:
         
-        * 'wildcard': Find an admissable wildcard model.
+        * 'wildcard': Find an admissible wildcard model.
         * 'wildcard1d': Fits a single parameter wildcard model in which
           the amount of wildcard error added to an operation is proportional
           to the diamond distance between that operation and the target.
@@ -1810,9 +1811,10 @@ class StandardGST(_proto.Protocol):
         if isinstance(modes, str):
             if ',' in modes:
                 self.modes = modes.split(',')
-                _warnings.warn("The use of a comma-separated string as input for 'modes' is deprecated " 
+                _warnings.warn("The use of a comma-separated string as input for 'modes' is deprecated "
                             + " and may be removed in a future release. Please pass in a list or tuple"
-                                +" (or other iterable) of strings")
+                                +" (or other iterable) of strings",
+                               _pyGSTiDeprecationWarning)
             else:
                 self.modes = [modes] #Cast to a list for uniformity
         else:
@@ -2846,7 +2848,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         printer.log("   " + str(budget))
         printer.log("")
 
-        # Test that the found wildcard budget is admissable (there is not a strictly smaller wildcard budget
+        # Test that the found wildcard budget is admissible (there is not a strictly smaller wildcard budget
         # that also satisfies the constraints), and while doing this find the active constraints.
         printer.log("VERIFYING that the final wildcard budget vector is admissable")
 

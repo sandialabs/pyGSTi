@@ -207,9 +207,9 @@ y_gate = opfactory_spline.create_op([np.pi/2,np.pi/4])
 ```{code-cell} ipython3
 x_gate.from_vector([1.03])
 y_gate.from_vector([1.0])
-print(np.round_(x_gate,4))
+print(np.round(x_gate,4))
 print()
-print(np.round_(y_gate,4))
+print(np.round(y_gate,4))
 ```
 
 ```{code-cell} ipython3
