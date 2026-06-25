@@ -28,6 +28,7 @@ from .staticstate import StaticState
 from .tensorprodstate import TensorProductState
 from .tpstate import TPState
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import basistools as _bt
 from pygsti.baseobjs import Basis
 from pygsti.tools import optools as _ot
@@ -367,7 +368,7 @@ def finite_difference_deriv_wrt_params(state, wrt_filter=None, eps=1e-7):
         state2.from_vector(p_plus_dp, close=True)
         fd_deriv[:, i:i + 1] = (state2 - state) / eps
 
-    fd_deriv.shape = [dim, state.num_params]
+    fd_deriv = _compat.reshape_no_copy(fd_deriv, [dim, state.num_params])
     if wrt_filter is None:
         return fd_deriv
     else:

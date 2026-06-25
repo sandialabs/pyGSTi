@@ -148,6 +148,7 @@ class TestCliffordRBDesign(BaseCase):
         self.assertEqual(crb_design.all_circuits_needing_data, crb_design_read.all_circuits_needing_data)
         self.assertEqual(crb_design.interleaved_circuit, crb_design_read.interleaved_circuit)
 
+
 class TestInterleavedRBDesign(BaseCase):
 
     def setUp(self):
@@ -201,6 +202,7 @@ class TestInterleavedRBDesign(BaseCase):
         self.assertEqual(self.irb_design['crb'].all_circuits_needing_data, irb_design_read['crb'].all_circuits_needing_data)
         self.assertEqual(self.irb_design['icrb'].all_circuits_needing_data, irb_design_read['icrb'].all_circuits_needing_data)
         self.assertEqual(self.irb_design.interleaved_circuit, irb_design_read.interleaved_circuit)
+
 
 class TestDirectRBDesign(BaseCase):
 
@@ -287,6 +289,33 @@ class TestDirectRBDesign(BaseCase):
         drb_design_read = _rb.DirectRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_DirectRBDesign_serialization')
 
         self.assertEqual(drb_design.all_circuits_needing_data, drb_design_read.all_circuits_needing_data)
+
+    def test_drb_ring_connectivity(self):
+        # Regression test for stabilizer-state compilation on a restricted (ring) geometry. The
+        # connectivity-adjusted CNOT compiler (COiCAGE) can silently produce incorrect circuits here, so
+        # compile_conditional_symplectic falls back to basic Gaussian elimination when that happens. Since the
+        # bug was silent *wrong output* (not an exception), we guard it by simulating every circuit on a perfect
+        # model and asserting the recorded ideal outcome occurs with probability 1.
+        n_qubits = 4
+        qubit_labels = ['Q0', 'Q1', 'Q2', 'Q3']
+        gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
+        pspec = QPS(n_qubits, gate_names, qubit_labels=qubit_labels, geometry='ring')
+        compilations = {
+            'absolute': CCR.create_standard(pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0),
+            'paulieq': CCR.create_standard(pspec, 'paulieq', ('1Qcliffords', 'allcnots'), verbosity=0)
+        }
+        depths = [0, 1, 2, 4, 8, 16]
+        circuits_per_depth = 10
+        design = _rb.DirectRBDesign(pspec, compilations, depths, circuits_per_depth, qubit_labels=qubit_labels,
+                                    sampler='edgegrab', samplerargs=[0.5], randomizeout=True,
+                                    citerations=20, seed=2021)
+
+        tmodel = pygsti.models.create_crosstalk_free_model(pspec)
+        for cl, bsl in zip(design.circuit_lists, design.idealout_lists):
+            for c, bs in zip(cl, bsl):
+                self.assertAlmostEqual(tmodel.sim.probs(c)[bs], 1.)
+        return
+
 
 class TestMirrorRBDesign(BaseCase):
 
@@ -428,6 +457,7 @@ class TestMirrorRBDesign(BaseCase):
         mrb_design_read = _rb.MirrorRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_MirrorRBDesign_serialization')
 
         self.assertEqual(mrb_design.all_circuits_needing_data, mrb_design_read.all_circuits_needing_data)
+
 
 class TestBiRBDesign(BaseCase):
 
@@ -599,6 +629,7 @@ class TestCliffordRBProtocol(BaseCase):
 
         result = proto.run(self.data_noisy)
 
+
 @pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestDirectRBProtocol(BaseCase):
     def setUp(self):
@@ -660,6 +691,7 @@ class TestDirectRBProtocol(BaseCase):
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
 
         result = proto.run(self.data_noisy)
+
 
 @pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestMirrorRBProtocol(BaseCase):

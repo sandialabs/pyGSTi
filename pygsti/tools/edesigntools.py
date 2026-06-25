@@ -255,7 +255,7 @@ def calculate_fisher_information_per_circuit(model, circuits, approx=False, regu
         #gather these back onto rank 0.
         #This should return a list of dictionaries to rank 0.
         printer.log('Gathering accumulated FIMs', 3)
-        #intialize a buffer to gather the data on rank 0.
+        #initialize a buffer to gather the data on rank 0.
         #get the sizes of the returned ndarrays on each rank for split_fisher_info_terms:
         # Collect local array sizes using the high-level mpi4py gather on rank 0
         printer.log('Scattering split fisher term sizes', 4)

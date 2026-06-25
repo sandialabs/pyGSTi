@@ -112,10 +112,11 @@ model.print_modelmembers()
 print("%d parameters" % model.num_params)
 ```
 
-Switching the parameterizatio to "CPTP" gates changes the gate type accordingly:
+Switching the parameterizatio to "CPTP" gates changes the gate type accordingly.  Converting to a CPTP-based parameterization works best when we supply an `ideal_model` of unitary gates and pure states to target (this avoids branch cuts in the conversion); here we use the default static-unitary model built from the same processor spec.
 
 ```{code-cell} ipython3
-model.set_all_parameterizations('CPTP')
+ideal_model = mc.create_explicit_model(pspec)  # static, unitary ideal gates/SPAM
+model.set_all_parameterizations('CPTP', ideal_model=ideal_model)
 model.print_modelmembers()
 print("%d parameters" % model.num_params)
 ```

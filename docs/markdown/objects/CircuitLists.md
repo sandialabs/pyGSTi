@@ -79,7 +79,7 @@ circuits3 = pc.create_circuits("f0+T(germ,N)+f1", f0=fids, f1=fids,
 print("circuits3 = \n", "\n".join(map(str,circuits3)), "\n")
 ```
 
-In addition to `create_circuits`, the **`pygsti.construction.list_`*xxx* ** functions provide ways of constructing common operation sequence lists.  The example below shows how to construct all possible operation sequences within a certain length range, as well as how to construct the set of operation sequences needed to run Linear LinearOperator Set Tomography given a set of fiducial strings.
+In addition to `create_circuits`, the **`pygsti.construction.list_`*xxx* ** functions provide ways of constructing common operation sequence lists.  The example below shows how to construct all possible operation sequences within a certain length range, as well as how to construct the set of operation sequences needed to run Linear Gate Set Tomography given a set of fiducial strings.
 
 ```{code-cell} ipython3
 myGates = [ 'Gx', 'Gy' ]  #operation labels -- often just model.operations.keys()

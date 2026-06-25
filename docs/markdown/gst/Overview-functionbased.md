@@ -52,7 +52,7 @@ pygsti.io.write_empty_dataset("../../tutorial_files/GettingStartedDataTemplate.t
 # After replacing the zeros with actual data, the data set can be 
 # loaded back into pyGSTi using the line below and used in the rest
 # of this tutorial. 
-#ds = pygsti.io.load_dataset("tutorial_files/GettingStartedDataTemplate.txt")
+#ds = pygsti.io.load_dataset("../../tutorial_files/GettingStartedDataTemplate.txt")
 ```
 
 Now that we have all of the inputs, we can run GST in a standard way using the `run_stdpractice_gst` function.  For more information about this and related functions, see the [GST methods tutorial](Driverfunctions).  This returns a `pygsti.report.Results` object (see the [Results tutorial](../objects/Results)), from which we can generate a report giving us a summary of the analysis.

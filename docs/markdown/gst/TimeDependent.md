@@ -156,6 +156,10 @@ idle_gate_label = () # the smq1Q_XYI model labels an idle circuit layer by an em
 
 mdl_datagen = smq1Q_XYI.target_model(simulator="map").depolarize(op_noise=0.01, spam_noise=0.001)
 mdl_datagen[idle_gate_label] = MyTimeDependentIdle(1.0)
+# Time-dependent objective functions re-simulate each circuit at multiple times, so they
+# require a cache-free simulator (a cached prefix state computed at one time can't be reused
+# at another time).
+mdl_datagen.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)
 mdl_datagen.num_params
 
 edesign = pygsti.protocols.StandardGSTDesign(smq1Q_XYI.target_model(), prep_fiducials,
@@ -177,7 +181,7 @@ target_model = smq1Q_XYI.target_model("full TP", simulator="map") # TP-constrain
 target_model[idle_gate_label] = MyTimeDependentIdle(0.0)
 target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)
 
-builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()],[])
+builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.TimeDependentPoissonPicLogLFunction)],[])
 custom_opt = {'tol': 1e-4, 'damping_mode': 'JTJ', 'damping_clip': (1.0, 1000.0)} # tweak optimizer parameters for better performance (expert-level)
 gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                          objfn_builders=builders, optimizer=custom_opt, verbosity=3)
@@ -194,7 +198,7 @@ print("Time-dependent idle parameters = ",final_mdl[idle_gate_label].to_vector()
 
 ```{code-cell} ipython3
 # Check that GST model fits the data *better* than the data-generating model
-builder = pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()
+builder = pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.TimeDependentPoissonPicLogLFunction)
 objfn = builder.build(mdl_datagen, data.dataset, list(data.dataset.keys()))
 print("Objective function at data-generating model = ",objfn.fn())
 

@@ -27,7 +27,7 @@ Please note: The implementation of the error generator propagation framework in 
 import pygsti
 import stim
 from pygsti.tools import errgenproptools as eprop
-from pygsti.tools.lindbladtools import random_error_generator_rates
+from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 ```
@@ -58,7 +58,7 @@ for gate, availability in pspec.availability.items():
     for qs in qubits_for_gate:
         label = pygsti.baseobjs.Label(gate, qs)
         # Sample error rates.
-        error_rates_dict[label] = random_error_generator_rates(num_qubits=n, errorgen_types=('H', 'S'), label_type='local', seed=1234)
+        error_rates_dict[label] = random_CPTP_error_generator_rates(num_qubits=n, errorgen_types=('H', 'S'), label_type='local', seed=1234)
 ```
 
 ```{code-cell} ipython3
@@ -223,7 +223,7 @@ from pygsti.baseobjs import Label
 def pauli_expectation_exact(error_propagator, target_model, circuit, pauli):
     #get the eoc error channel, and the process matrix for the ideal circuit:
     eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
-    ideal_channel = target_model.circuit_operator(circuit)
+    ideal_channel = target_model.sim.product(circuit)
     #also get the ideal state prep and povm:
     ideal_prep = target_model.circuit_layer_operator(Label('rho0'), typ='prep').copy()
     

@@ -33,7 +33,7 @@ class SlowOpCalcTester(OpCalcBase, BaseCase):
     opcalc = slowopcalc
 
 
-@unittest.skipUnless(_FASTOPCALC_LOADED, "`pygsti.objects.fastopcalc` not built")
+@unittest.skipUnless(_FASTOPCALC_LOADED, "`pygsti.baseobjs.opcalc.fastopcalc` not built")
 class FastOpCalcTester(OpCalcBase, BaseCase):
     @classmethod
     def setUpClass(cls):

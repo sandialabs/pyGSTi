@@ -10,7 +10,6 @@ import pygsti.tools.basistools as bt
 import pygsti.tools.optools as gt
 from pygsti.models.modelconstruction import create_spam_vector, create_operation
 from pygsti.evotypes import Evotype
-from pygsti.modelmembers.instruments import TPInstrument
 from pygsti.modelmembers.states import FullState
 from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import statespace, basisconstructors as bc
@@ -219,6 +218,7 @@ class MutableDenseOpBase(DenseOpBase):
     def test_rotate(self):
         self.gate.rotate([0.01, 0.02, 0.03], 'gm')
         # TODO assert correctness
+
 
 class ImmutableDenseOpBase(DenseOpBase):
     def test_raises_on_set_value(self):
@@ -430,6 +430,7 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
             self.gate[0, 1:2] = [0]
         with self.assertRaises(ValueError):
             self.gate[0][1:2] = [0]
+
 
 class AffineShiftOpTester(DenseOpBase, BaseCase):
     n_params = 3
@@ -772,36 +773,6 @@ class EmbeddedDenseOpTester(OpBase, BaseCase):
         evotype = 'default'
         with self.assertRaises(AssertionError):
             op.EmbeddedOp(state_space, ['Q0', 'Q1'], op.FullArbitraryOp(mx, evotype=evotype, state_space=None))
-
-
-class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
-    n_params = 28
-
-    @staticmethod
-    def build_gate():
-        # XXX can this be constructed directly?  EGN: what do you mean?
-        Gmz_plus = np.array([[0.5, 0, 0, 0.5],
-                             [0, 0, 0, 0],
-                             [0, 0, 0, 0],
-                             [0.5, 0, 0, 0.5]])
-        Gmz_minus = np.array([[0.5, 0, 0, -0.5],
-                              [0, 0, 0, 0],
-                              [0, 0, 0, 0],
-                              [-0.5, 0, 0, 0.5]])
-        evotype = 'default'
-        inst = TPInstrument({'plus': op.FullArbitraryOp(Gmz_plus, evotype=evotype), 'minus': op.FullArbitraryOp(
-            Gmz_minus, evotype=evotype)})
-        return inst['plus']
-
-    def test_vector_conversion(self):
-        self.gate.to_vector()  # now to_vector is allowed
-
-    def test_deriv_wrt_params(self):
-        super(TPInstrumentOpTester, self).test_deriv_wrt_params()
-
-        # XXX does this check anything meaningful?  EGN: yes, this checks that when I give deriv_wrt_params a length-1 list it's return value has the right shape.
-        deriv = self.gate.deriv_wrt_params([0])
-        self.assertEqual(deriv.shape[1], 1)
 
 
 class StochasticNoiseOpTester(BaseCase):

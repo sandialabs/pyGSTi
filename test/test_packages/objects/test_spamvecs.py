@@ -99,20 +99,6 @@ class SPAMVecTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(E0+Ec, identity)
 
         #TODO: add back if/when we can set parts of a POVM directly...
-        #print("TEST2")
-        #model.effects['E0'] = [1/np.sqrt(2), 0, 0.4, 0.6]
-        #print(model.effects['E0'])
-        #print(model.effects['E1'])
-        #print(model.effects['E0'] + model.effects['E1'])
-        #self.assertArraysAlmostEqual(model.effects['E0'] + model.effects['E1'], identity)
-        #
-        #print("TEST3")
-        #model.effects['E0'][0,0] = 1.0 #uses dirty processing
-        #model._update_paramvec(model.effects['E0'])
-        #print(model.effects['E0'])
-        #print(model.effects['E1'])
-        #print(model.effects['E0'] + model.effects['E1'])
-        #self.assertArraysAlmostEqual(model.effects['E0'] + model.effects['E1'], identity)
 
     def test_povms(self):
         model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(

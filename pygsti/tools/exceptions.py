@@ -137,10 +137,18 @@ class StolenResourceWarning(UserWarning):
 
         B = Bar()        # sets B.parent = None
         F = Foo(child=B) # sets F.child = B and updates B.parent = F
-        G = make_foo(B)  # sets G.child = B and udpates B.parent = G,
+        G = make_foo(B)  # sets G.child = B and updates B.parent = G,
 
     the `make_foo` function should raise a StolenResourceWarning if it
     changes the value of `id(F.child)`.
+    """
+    pass
+
+
+class DubiousTargetWarning(UserWarning):
+    """
+    Alert the user that a target specification is somehow unusual and may not
+    be what they intended.
     """
     pass
 

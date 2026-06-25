@@ -215,6 +215,7 @@ class _EEGVectorElements(_RealVectorElements):
                 labels.append(f"{lbl} active coefficient")
         return labels
 
+
 class _DiagCholesky(_BlockParameterization):
     """Diagonal Pauli-stochastic CPTP parameterization: block_data[i] = v[i]**2 (>= 0)."""
     name = 'cholesky'
@@ -262,7 +263,7 @@ class _Depol(_BlockParameterization):
         nonneg = [val >= ttol for val in blk.block_data]
         assert all(nonneg), f"Lindblad stochastic coefficients are not positive! (tol={ttol})"
         first = blk.block_data[0]
-        all_equal = [_np.isclose(val, first, atol=1e-6) for val in blk.block_data]
+        all_equal = _np.isclose(blk.block_data, first, atol=1e-6)
         assert all(all_equal), f"Diagonal lindblad coefficients are not equal! (tol={ttol})"
         avg = _np.mean(blk.block_data.clip(0, 1e100))
         return _np.array([_np.sqrt(_np.real(avg))], 'd')
@@ -914,7 +915,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
         Jacobian of block_data w.r.t. the real parameters v.
         Dispatches to _deriv_wrt_params_<block_type>.
         """
-        num_bels = len(self._bel_labels)
         v = self.to_vector() if (v is None) else v
         nP = len(v)
         assert(nP == self.num_params), f"Expected {self.num_params} parameters, got {nP}!"
@@ -1110,6 +1110,7 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
             block_data_indices[i] = [(1.0, _LEEL('H', (lbl,)))]
         return block_data_indices
 
+
 class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
     """Pauli-stochastic diagonal (``block_type='other_diagonal'``) Lindblad coefficient block.
 
@@ -1173,6 +1174,7 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
         for i, lbl in enumerate(self._bel_labels):
             block_data_indices[i] = [(1.0, _LEEL('S', (lbl,)))]
         return block_data_indices
+
 
 class _OtherCoeffBlock(LindbladCoefficientBlock):
     """Full non-Hamiltonian (``block_type='other'``) Lindblad coefficient block (Pauli
@@ -1275,6 +1277,7 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
                 block_data_indices[ij] = [(1.0, _LEEL('C', (lbl1, lbl2))), (-1.0j, _LEEL('A', (lbl1, lbl2)))]
                 block_data_indices[ji] = [(1.0, _LEEL('C', (lbl1, lbl2))), (+1.0j, _LEEL('A', (lbl1, lbl2)))]
         return block_data_indices
+
 
 class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
     """Flat, unconstrained non-Hamiltonian (``block_type='other_unconstrained'``) Lindblad
@@ -1431,6 +1434,7 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
 
     def _block_data_indices_impl(self):
         return {i: [(1.0, lbl)] for i, lbl in enumerate(self._eeg_labels)}
+
 
 
     # --- overrides that must account for _eeg_labels (vs. the base's _bel_labels) ---

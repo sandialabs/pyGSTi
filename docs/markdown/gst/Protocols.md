@@ -25,13 +25,17 @@ Overall, the `GateSetTomography` protocol is more flexible than the `StandardGST
 
 ```{code-cell} ipython3
 import pygsti
+import os
 ```
 
 ## Setup
 In the [DataSet tutorial](../objects/DataSet) we simulate the circuits required by a GST experiment design and save the results.  In this tutorial, we'll be analyzing that data.  This illustrates a typical workflow where at some earlier time you setup an experiment (a "GST experiment in this case) and save the experiment design to disk and at some later time (after the data has been collected) you want to analyze it.  Now *is* that later time, and we start by reading the the data we've collected.
 
 ```{code-cell} ipython3
-data = pygsti.io.read_data_from_dir("../../tutorial_files/Example_GST_Data")
+if os.path.isdir("../../tutorial_files/Example_GST_Data"):
+    data = pygsti.io.read_data_from_dir("../../tutorial_files/Example_GST_Data")
+else:
+    raise ValueError("You have to run the DataSet tutorial first!")
 ```
 
 ## `GateSetTomography`
@@ -123,7 +127,7 @@ In order to avoid this, we have also introduced a 1D wildcard solution. This tak
 ```{code-cell} ipython3
 proto = pygsti.protocols.GateSetTomography(
     target_model_TP, name="GSTwithPerGateWildcard",
-    badfit_options={'actions': ['wildcard1d'], 'wildcard1d_reference': 'diamond distance'}
+    badfit_options={'actions': ['wildcard1d']}
     )
 
 # Artifically unset threshold so that wildcard runs. YOU WOULD NOT DO THIS IN PRODUCTION RUNS
@@ -208,24 +212,13 @@ To finish up, we'll write the results for processing in other tutorials.  We do 
 Two remarks are in order:
 1. When results are from running a protocol on data that was loaded with the `load_data_from_dir` method (see the beginning of this notebook), then knowledge of this directory is remembered and you don't need to give a directory to `write` (this is the case for all except `results_reduced`, which created a new experiment design containing less experiments).
 
-2. Notice how the `name=` arguments given to protocols above are used as sub-directory names, e.g. under the "tutorial_files/Example_GST_Data/results" parent directory.
+2. Notice how the `name=` arguments given to protocols above are used as sub-directory names, e.g. under the "../../tutorial_files/Example_GST_Data/results" parent directory.
 
 ```{code-cell} ipython3
 results_TP.write()  # uses "../../tutorial_files/Example_GST_Data" (where data was loaded from)
 results_TP2.write() # ditto
 results_stdprac.write() # ditto
 results_reduced.write("../../tutorial_files/Example_Reduced_GST_Data") # choose a different dir
-```
-
-While it is also possible to **pickle** a results object, this method of serialization is **not recommended** for long-term storage since pickle files are relatively fragile to changes in pyGSTi or other python libraries.
-
-```{code-cell} ipython3
-#Not recommended:
-# import pickle
-# pickle.dump(results_TP, open('../../tutorial_files/exampleResults_TP.pkl',"wb"))
-# pickle.dump(results_TP2, open('../../tutorial_files/exampleResults_TP2.pkl',"wb"))
-# pickle.dump(results_reduced, open('../../tutorial_files/exampleResults_reduced.pkl',"wb"))
-# pickle.dump(results_stdprac, open('../../tutorial_files/exampleResults_stdprac.pkl',"wb"))
 ```
 
 ## Checkpointing/Warmstarting
