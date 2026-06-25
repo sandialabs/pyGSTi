@@ -47,7 +47,7 @@ def _integerize_sslbls(state_space_labels):
     return tuple(integerized_sslbls)
 
 
-def _check_concate_compatibility(label1, label2):
+def _check_concat_compatibility(label1, label2):
     """
     Checks for qubit overlap and time conflicts between two labels, and
     "unwraps" a depth-1 CircuitLabel.
@@ -435,7 +435,7 @@ class Label(object):
     def replace_name(self, oldname, newname):
         raise NotImplementedError()
 
-    def concate(self, other: Label):
+    def concat(self, other: Label):
         """
         Combine two labels together so that they are one label which could be a single layer.
         """
@@ -636,8 +636,8 @@ class LabelTup(Label, tuple):
         """
         return LabelTup.init(newname, self.sslbls) if (self.name == oldname) else self
 
-    def concate(self, other: Label):
-        other, new_time = _check_concate_compatibility(self, other)
+    def concat(self, other: Label):
+        other, new_time = _check_concat_compatibility(self, other)
 
         if isinstance(other, LabelTupTup):
             components = (self,) + tuple(other)
@@ -646,7 +646,7 @@ class LabelTup(Label, tuple):
         elif isinstance(other, LabelStr):
             raise ValueError("Cannot concate `LabelStr` as they do not have an associated qubit set unless it is explicitly in the string.")
         else:
-            return super().concate(other)
+            return super().concat(other)
 
         all_args = self.collect_args() + other.collect_args()
         return _create_concatenated_label(components, new_time, all_args)
@@ -980,7 +980,7 @@ class LabelStr(Label, str):
         """
         return LabelStr(newname) if (self.name == oldname) else self
 
-    def concate(self, other):
+    def concat(self, other):
         raise ValueError("Cannot concate a `LabelStr` to another `Label` as `LabelStr` "
                          "do not have a qubits associated without parsing.")
 
@@ -1269,8 +1269,8 @@ class LabelTupTup(Label, tuple):
             ret.append(LabelTupTup.init(ec))
         return tuple(ret)
 
-    def concate(self, other: Label):
-        other, new_time = _check_concate_compatibility(self, other)
+    def concat(self, other: Label):
+        other, new_time = _check_concat_compatibility(self, other)
 
         if isinstance(other, LabelTupTup):
             components = (*self, *other)
@@ -1279,7 +1279,7 @@ class LabelTupTup(Label, tuple):
         elif isinstance(other, LabelStr):
             raise ValueError("Cannot concate `LabelStr` as they do not have an associated qubit set unless it is explicitly in the string.")
         else:
-            return super().concate(other)
+            return super().concat(other)
 
         all_args = self.collect_args() + other.collect_args()
         return _create_concatenated_label(components, new_time, all_args)
@@ -1692,7 +1692,7 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         """
         return tuple(_itertools.chain(*[x.expand_subcircuits() for x in self.components])) * self.reps
 
-    def concate(self, other: Label):
+    def concat(self, other: Label):
 
         if isinstance(other, CircuitLabel):
             if other.depth == self.depth:
@@ -1706,7 +1706,7 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
             tmp_lbl = Label(self.components, self.sslbls, self.time, self.args)
         else:
             raise ValueError(f"One cannot concate a `CircuitLabel` of depth > 1 (depth = {self.depth}) except to another `CircuitLabel` of the same depth.")
-        return tmp_lbl.concate(other)
+        return tmp_lbl.concat(other)
 
 
 class LabelTupWithArgs(LabelTupWithTime, tuple):

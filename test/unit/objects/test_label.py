@@ -807,175 +807,175 @@ class CircuitLabelTester(BaseCase):
 
 class LabelConcateTester(BaseCase):
 
-    def test_concate_labeltup(self):
+    def test_concat_labeltup(self):
         l1 = L(('Gx', 0))
         l2 = L(('Gy', 1))
         l3 = L((('Gz', 2), ('Ga', 3)))
         cl = CircuitLabel('circuit', [l3], None, 1, None)
 
         # LabelTup with LabelTup
-        concatenated = l1.concate(l2)
+        concatenated = l1.concat(l2)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1))))
 
         # LabelTup with LabelTupTup
-        concatenated = l1.concate(l3)
+        concatenated = l1.concat(l3)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gz', 2), ('Ga', 3))))
 
         # LabelTup with CircuitLabel (depth 1)
-        concatenated = l1.concate(cl)
+        concatenated = l1.concat(cl)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gz', 2), ('Ga', 3))))
 
         # LabelTup with CircuitLabel (depth > 1)
         cl_depth2 = CircuitLabel('circuit', [l1, l2], None, 1, None)
         with self.assertRaises(ValueError):
-            l1.concate(cl_depth2)
+            l1.concat(cl_depth2)
 
         # LabelTup with LabelStr
         l_str = L('Idle')
         with self.assertRaises(ValueError):
-            l1.concate(l_str)
+            l1.concat(l_str)
 
-    def test_concate_labeltupwithtime(self):
+    def test_concat_labeltupwithtime(self):
         l1 = L(('Gx', 0), time=0.1)
         l2 = L(('Gy', 1))
         l3 = L((('Gz', 2), ('Ga', 3)))
         cl = CircuitLabel('circuit', [l3], None, 1, None)
 
         # LabelTupWithTime with LabelTup
-        concatenated = l1.concate(l2)
+        concatenated = l1.concat(l2)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1))))
 
         # LabelTupWithTime with LabelTupTup
-        concatenated = l1.concate(l3)
+        concatenated = l1.concat(l3)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gz', 2), ('Ga', 3))))
 
         # LabelTupWithTime with CircuitLabel (depth 1)
-        concatenated = l1.concate(cl)
+        concatenated = l1.concat(cl)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gz', 2), ('Ga', 3))))
 
         # LabelTupWithTime with CircuitLabel (depth > 1)
         cl_depth2 = CircuitLabel('circuit', [l1, l2], None, 1, None)
         with self.assertRaises(ValueError):
-            l1.concate(cl_depth2)
+            l1.concat(cl_depth2)
 
         # LabelTupWithTime with LabelStr
         l_str = L('Idle')
         with self.assertRaises(ValueError):
-            l1.concate(l_str)
+            l1.concat(l_str)
 
         l1 = L(('Gx', 0), time=0.1)
         l2 = L(('Gy', 1), time=0.2)
         from pygsti.tools.exceptions import ClobberingWarning
         with self.assertWarns(ClobberingWarning):
-            l1.concate(l2)
+            l1.concat(l2)
 
         l1 = L(('Gx', 0), time=0.1)
         l2 = L(('Gy', 1), time=0.1)
-        concatenated = l1.concate(l2)
+        concatenated = l1.concat(l2)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1))))
         return
 
-    def test_concate_circuitlabel_depth(self):
+    def test_concat_circuitlabel_depth(self):
         l1 = L(('Gx', 0))
         l2 = L(('Gy', 1))
         cl_depth2 = CircuitLabel('circuit', ["Gx", "Gy"], (2,), 1, None)
         with self.assertRaises(ValueError):
-            cl_depth2.concate(l1)
+            cl_depth2.concat(l1)
 
-    def test_concate_labeltuptup(self):
+    def test_concat_labeltuptup(self):
         l1 = L((('Gx', 0), ('Gy', 1)))
         l2 = L(('Gz', 2))
         l3 = L((('Ga', 3), ('Gb', 4)))
         cl = CircuitLabel('circuit', [l3], None, 1, None)
 
         # LabelTupTup with CircuitLabel depth 1
-        concatenated = l1.concate(cl)
+        concatenated = l1.concat(cl)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Ga', 3), ('Gb', 4))))
 
         # LabelTupTup with CircuitLabel depth > 1
         cl_depth2 = CircuitLabel('circuit', [l2, l3], None, 1, None)
         with self.assertRaises(ValueError):
-            l1.concate(cl_depth2)
+            l1.concat(cl_depth2)
 
         # LabelTupTup with LabelTup
-        concatenated = l1.concate(l2)
+        concatenated = l1.concat(l2)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Gz', 2))))
 
         # LabelTupTup with LabelTupTup
-        concatenated = l1.concate(l3)
+        concatenated = l1.concat(l3)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Ga', 3), ('Gb', 4))))
 
         # LabelTupTup with LabelStr
         l_str = L('Idle')
         with self.assertRaises(ValueError):
-            l1.concate(l_str)
+            l1.concat(l_str)
 
-    def test_concate_labeltuptupwithtime(self):
+    def test_concat_labeltuptupwithtime(self):
         l1 = L((('Gx', 0), ('Gy', 1)), time=0.1)
         l2 = L((('Gz', 2),), time=0.1)
         l3 = L((('Ga', 3),), time=0.2)
 
         # LabelTupTupWithTime with LabelTupTupWithTime (same time)
-        concatenated = l1.concate(l2)
+        concatenated = l1.concat(l2)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Gz', 2))))
 
         # LabelTupTupWithTime with LabelTupTupWithTime (different time)
         from pygsti.tools.exceptions import ClobberingWarning
         with self.assertWarns(ClobberingWarning):
-            l1.concate(l3)
+            l1.concat(l3)
         # LabelTupTupWithTime with LabelTupTupWithTime (different time)
         with self.assertWarns(ClobberingWarning):
-            l3.concate(l1)
+            l3.concat(l1)
 
         # LabelTupTupWithTime with LabelTupWithTime (same time)
         l_tup_with_time = L(('Gb', 4), time=0.1)
-        concatenated = l1.concate(l_tup_with_time)
+        concatenated = l1.concat(l_tup_with_time)
         self.assertIsInstance(concatenated, LabelTupTup)
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Gb', 4))))
 
         # LabelTupTupWithTime with LabelTupWithTime (different time)
         l_tup_with_time_different = L(('Gc', 5), time=0.2)
         with self.assertWarns(ClobberingWarning):
-            l1.concate(l_tup_with_time_different)
+            l1.concat(l_tup_with_time_different)
 
-    def test_concate_qubit_overlap(self):
+    def test_concat_qubit_overlap(self):
         l1 = L(('Gx', 0))
         l2 = L(('Gy', 0))
         with self.assertRaises(ValueError):
-            l1.concate(l2)
+            l1.concat(l2)
 
         l3 = L((('Gx', 0), ('Gy', 1)))
         l4 = L(('Gz', 1))
         with self.assertRaises(ValueError):
-            l3.concate(l4)
+            l3.concat(l4)
 
-    def test_concate_time_propagation(self):
+    def test_concat_time_propagation(self):
         l1 = L(('Gx', 0), time=0.5)
         l2 = L(('Gy', 1), time=0.5)
         self.assertTrue(isinstance(l1, LabelTupWithTime))
-        concatenated = l1.concate(l2)
+        concatenated = l1.concat(l2)
         self.assertIsInstance(concatenated, LabelTupTupWithTime)
         self.assertEqual(concatenated.time, 0.5)
         self.assertEqual(concatenated.collect_args(), l1.collect_args() + l2.collect_args())
 
         l3 = L([('Gz', 2)], time=0.5)
-        concatenated2 = concatenated.concate(l3)
+        concatenated2 = concatenated.concat(l3)
         self.assertIsInstance(concatenated2, LabelTupTupWithTime)
         self.assertEqual(concatenated2.time, 0.5)
         self.assertEqual(concatenated2.collect_args(), l1.collect_args() + l2.collect_args() + l3.collect_args())
 
-    def test_concate_labelstr_errors(self):
+    def test_concat_labelstr_errors(self):
 
         ltt_wt = L((('Gx', 0), ('Gy', 1)), time=0.1)
         ltt = L((('Gx', 0), ('Gy', 1)))
@@ -987,19 +987,19 @@ class LabelConcateTester(BaseCase):
         self.assertIsInstance(mystr, LabelStr)
 
         with self.assertRaises(ValueError):
-            mystr.concate(ltt_wt)
+            mystr.concat(ltt_wt)
         with self.assertRaises(ValueError):
-            mystr.concate(ltt)
+            mystr.concat(ltt)
         with self.assertRaises(ValueError):
-            mystr.concate(lt_wt)
+            mystr.concat(lt_wt)
         with self.assertRaises(ValueError):
-            mystr.concate(lt)
+            mystr.concat(lt)
         with self.assertRaises(ValueError):
-            mystr.concate(cl)
+            mystr.concat(cl)
 
-    def test_concate_order_matters(self):
+    def test_concat_order_matters(self):
         l1 = L(('Gx', 0))
         l2 = L(('Gy', 1))
-        concatenated1 = l1.concate(l2)
-        concatenated2 = l2.concate(l1)
+        concatenated1 = l1.concat(l2)
+        concatenated2 = l2.concat(l1)
         self.assertNotEqual(concatenated1, concatenated2)
