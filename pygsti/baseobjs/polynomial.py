@@ -16,7 +16,7 @@ import numpy as _np
 
 from pygsti.evotypes.basereps import PolynomialRep as _PolynomialRep
 
-from typing import Optional, Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union, Callable
 
 assert(_platform.architecture()[0].endswith("bit"))  # e.g. "64bit"
 PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
@@ -39,6 +39,7 @@ def _vinds_to_int(vinds, vindices_per_int, max_num_vars):
         assert(ret >= 0), "vinds = %s -> %d!!" % (str(vinds), ret)
         ret_tup.append(ret)
     return tuple(ret_tup)
+
 
 class Polynomial(object):
     """
@@ -536,7 +537,7 @@ class Polynomial(object):
         newpoly.scale(x)
         return newpoly
 
-    def _format_var_label(self, i, var_labels: Optional[Union[dict, Sequence, callable]]=None):
+    def _format_var_label(self, i, var_labels: Optional[Union[dict, Sequence, Callable]]=None):
         """
         Format the label for variable index `i`.
 
@@ -545,13 +546,13 @@ class Polynomial(object):
         i : int
             Variable index.
 
-        var_labels : None, dict, sequence, or callable
+        var_labels : None, dict, sequence, or Callable
             Controls how variable indices are converted to strings:
 
             - None: use the default label ``x{i}``
             - dict: use ``var_labels[i]`` when present, otherwise ``x{i}``
             - sequence: use ``var_labels[i]`` when possible, otherwise ``x{i}``
-            - callable: use ``var_labels(i)``
+            - Callable: use ``var_labels(i)``
 
         Returns
         -------
@@ -560,7 +561,7 @@ class Polynomial(object):
         if var_labels is None:
             return f"x{i}"
         try:
-            if callable(var_labels):
+            if Callable(var_labels):
                 return var_labels(i)
             elif isinstance(var_labels, dict):
                 return var_labels.get(i, f"x{i}")
@@ -569,19 +570,19 @@ class Polynomial(object):
         except (IndexError, KeyError, TypeError):
             return f"x{i}"
 
-    def to_string(self, var_labels: Optional[Union[dict, Sequence, callable]]=None):
+    def to_string(self, var_labels: Optional[Union[dict, Sequence, Callable]]=None):
         """
         Construct a string representation of this polynomial.
 
         Parameters
         ----------
-        var_labels : None, dict, sequence, or callable, optional
+        var_labels : None, dict, sequence, or Callable, optional
             Controls how variable indices are converted to strings:
 
             - None: use default labels like ``x0``, ``x1``, ...
             - dict: map variable index to label
             - sequence: use the i-th element as the label for variable ``i``
-            - callable: a function taking an integer index and returning a label
+            - Callable: a function taking an integer index and returning a label
 
         Returns
         -------
@@ -628,7 +629,6 @@ class Polynomial(object):
     def __str__(self):
         return self.to_string()
 
-
     def __repr__(self):
         return "Poly[ " + self.__str__() + " ]"
 
@@ -670,9 +670,14 @@ class Polynomial(object):
     def __copy__(self):
         return self.copy()
     
-    #TODO: Write a more efficient "rep-level" equality test. (will require updates in c-land).
     def __eq__(self, other):
+        #TODO: Write a more efficient "rep-level" equality test. (will require updates in c-land).
+        if not isinstance(other, Polynomial):
+            return False
         return self.coeffs == other.coeffs
+    
+    def __hash__(self) -> int:
+        raise RuntimeError('Polynomial objects are mutable. As such, they cannot be hashed.')
 
     def to_rep(self):  # , max_num_vars=None not needed anymore -- given at __init__ time
         """
