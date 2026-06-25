@@ -28,17 +28,17 @@ labels = [
     L(('Gx', 0, 1)),  # a LabelTup
     L('Gx'),  # a LabelStr
     L('Gx', None),  # still a LabelStr
-    LabelStr.init('rho0', 1.5), # LabelStr objects have a `time` field
+    LabelStr.init('rho0', 1.5),  # LabelStr objects have a `time` field
     L([('Gx', 0), ('Gy', 0)]),  # a LabelTupTup of LabelTup objs
     L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
     L([('Gx', 0)]),  # just a LabelTup b/c only one component
     L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
     L(L('Gx')),  # Init from another label
     CircuitLabel('circuit', [("Gx", 1), ("Gz", 2)], None, 1, None),
-    L(('Gx', 0), time=0.1), # LabelTupWithTime
-    L(('Gx', 0), time=0.1, args=("foo",)), # LabelTupWithArgs
-    L([("Gx", 0), ("Gy", 1)], time=3.1), # LabelTupTupWithTime
-    L([("Gx", 0), ("Gy", 1)], time=0.0459, args=("bar",)) # LabelTupTupWithArgs
+    L(('Gx', 0), time=0.1),  # LabelTupWithTime
+    L(('Gx', 0), time=0.1, args=("foo",)),  # LabelTupWithArgs
+    L([("Gx", 0), ("Gy", 1)], time=3.1),  # LabelTupTupWithTime
+    L([("Gx", 0), ("Gy", 1)], time=0.0459, args=("bar",))  # LabelTupTupWithArgs
 ]
 
 
@@ -82,7 +82,7 @@ class LabelTester(BaseCase):
 
     def test_labels_with_time_and_arguments(self):
         #Label with time and args
-        l = L('Gx', (0, 1), time=1.2, args=('1.4', '1.7')) # LabelTupWithArgs
+        l = L('Gx', (0, 1), time=1.2, args=('1.4', '1.7'))  # LabelTupWithArgs
         self.assertEqual(l.time, 1.2)
         self.assertEqual(l.args, ('1.4', '1.7'))
         self.assertEqual(tuple(l), ('Gx', 4, '1.4', '1.7', 0, 1))
@@ -115,7 +115,7 @@ class LabelTester(BaseCase):
         l2 = L('Gx')
         self.assertEqual(l1, l2)
         self.assertEqual(l1.time, 1.2)
-        self.assertNotEqual(l1.time, l2.time) # LabelStr can still have a time attribute if parsed.
+        self.assertNotEqual(l1.time, l2.time)  # LabelStr can still have a time attribute if parsed.
 
         l1 = L('Gx', (0,), time=1.2)
         l2 = L('Gx', (0,))
@@ -206,20 +206,20 @@ class LabelTester(BaseCase):
 
     def test_need_to_explicitly_say_its_sorted(self):
 
-        l = L((('Gx', 0),('Ga', 1)))
+        l = L((('Gx', 0), ('Ga', 1)))
         self.assertFalse(l.is_sorted, "We will not check for sorting unless asked. The starting assumption is that the label is not sorted.")
 
         for label in labels:
-            self.assertTrue(hasattr(label,"is_sorted"), f"label {label} which has type {type(label)} does not have an attribute to check for sorting.")
+            self.assertTrue(hasattr(label, "is_sorted"), f"label {label} which has type {type(label)} does not have an attribute to check for sorting.")
 
             if isinstance(label, (LabelTup, LabelStr)):
                 self.assertTrue(label.is_sorted, f"{type(label)} should be sorted by default since there is only one value in it.")
             elif isinstance(label, CircuitLabel):
                 self.assertFalse(label.is_sorted, f"{CircuitLabel} can have multiple objects within a single layer so must be checked for sortedness.")
-                self.assertTrue(hasattr(label,"_is_sorted"), f"label {label} which has type {type(label)} does not have the data member which holds its sorted state.")
+                self.assertTrue(hasattr(label, "_is_sorted"), f"label {label} which has type {type(label)} does not have the data member which holds its sorted state.")
             elif isinstance(label, LabelTupTup):
                 self.assertFalse(label.is_sorted, f"{LabelTupTup} can have multiple objects within a single layer so must be checked for sortedness.")
-                self.assertTrue(hasattr(label,"_is_sorted"), f"label {label} which has type {type(label)} does not have the data member which holds its sorted state.")
+                self.assertTrue(hasattr(label, "_is_sorted"), f"label {label} which has type {type(label)} does not have the data member which holds its sorted state.")
 
         l = l.with_sorted_inner_labels()
         self.assertTrue(l.is_sorted, f"We just sorted the label {l}!")
@@ -260,13 +260,13 @@ class LabelTester(BaseCase):
         in_order = L((inner_label1, inner_label2))
 
         cirLabelOOO = L((out_of_order,
-                         CircuitLabel('embedded', [out_of_order,], (1,2), 2, None).map_state_space_labels({1: 0, 2: 3}),
+                         CircuitLabel('embedded', [out_of_order,], (1, 2), 2, None).map_state_space_labels({1: 0, 2: 3}),
                          out_of_order.map_state_space_labels({1: 4, 2: 5})))
 
-        cirLabelInOrder = L((CircuitLabel('embedded', [in_order,], (1,2), 2, None).map_state_space_labels({1:0, 2:3}),
+        cirLabelInOrder = L((CircuitLabel('embedded', [in_order,], (1, 2), 2, None).map_state_space_labels({1: 0, 2: 3}),
                              in_order,
-                             in_order.map_state_space_labels({1:4, 2: 5})))
-        
+                             in_order.map_state_space_labels({1: 4, 2: 5})))
+
         self.assertEqual(cirLabelOOO.with_sorted_inner_labels().components, cirLabelInOrder.components)
 
     def test_label_rep_evalulation(self):
@@ -287,7 +287,7 @@ class LabelTester(BaseCase):
         l = Label(('Gx', 0, ';', 0.1, '!', 1.0)); labels_to_test.append(l)
         l = Label('Gx', (0,), args=(0.1,), time=1.0); labels_to_test.append(l)
 
-        c = Circuit("[Gx:0Gy:1]^2[Gi]", line_labels=(0,1))
+        c = Circuit("[Gx:0Gy:1]^2[Gi]", line_labels=(0, 1))
         l = c.to_label(); labels_to_test.append(l)
 
         for l in labels_to_test:
@@ -502,16 +502,16 @@ class LabelTupTupTester(BaseCase):
     def test_labeltuptup_init_preserves_component_metadata(self):
         l1 = L('Gx', (0,), time=0.1)
         l2 = L('Gy', (1,), args=('foo',))
-        
+
         # Create a LabelTupTup from components with metadata
         # Note: Label() factory should upgrade this to a LabelTupTupWithArgs
         l_tup_tup = L((l1, l2))
-        
+
         # Check that the components within the new label still have their metadata
         self.assertEqual(l_tup_tup.components[0].time, 0.1)
         self.assertEqual(l_tup_tup.components[1].args, ('foo',))
 
-        ltt = LabelTupTup.init((l1,l2))        
+        ltt = LabelTupTup.init((l1, l2))
         # Also check with the init methods directly
         self.assertEqual(ltt.components[0].time, 0.1)
         self.assertEqual(ltt.components[1].args, ('foo',))
@@ -619,7 +619,7 @@ class LabelTupTupWithArgsTester(BaseCase):
         l2 = l.map_state_space_labels(lambda x: x + 1)
         self.assertEqual(l2, LabelTupTupWithArgs.init((('Gx', 1), ('Gy', 2)), args=(1,)))
         l = LabelTupTupWithArgs.init((('Gx', 0), ('Gy', 1)), args=(1,))
-        l2 = l.map_state_space_labels({0:1, 1:2})
+        l2 = l.map_state_space_labels({0: 1, 1: 2})
         self.assertEqual(l2, LabelTupTupWithArgs.init((('Gx', 1), ('Gy', 2)), args=(1,)))
 
     def test_labeltuptupwithargs_replace_name_no_match(self):
@@ -649,18 +649,18 @@ class LabelTupTupWithArgsTester(BaseCase):
         self.assertEqual(ltt_wa.components[1].args, ('foo',))
         self.assertEqual(ltt_wa.collect_args(), ('bar', 'foo'))
 
-        ltt_wa_time = LabelTupTupWithArgs.init((l1,l2), time=5.0, args=("bar",))
+        ltt_wa_time = LabelTupTupWithArgs.init((l1, l2), time=5.0, args=("bar",))
         self.assertEqual(ltt_wa_time.components[0].time, 0.1)
         self.assertEqual(ltt_wa_time.components[1].args, ('foo',))
         self.assertEqual(ltt_wa_time.collect_args(), ('bar', 'foo'))
         self.assertEqual(ltt_wa_time.time, 5.0)
 
-        ltt_just_time = LabelTupTupWithArgs.init((l1,l2), time=5.0)
+        ltt_just_time = LabelTupTupWithArgs.init((l1, l2), time=5.0)
         self.assertEqual(ltt_just_time.components[0].time, 0.1)
         self.assertEqual(ltt_just_time.components[1].args, ('foo',))
         self.assertEqual(ltt_just_time.collect_args(), ('foo',))
         self.assertEqual(ltt_just_time.time, 5.0)
-        self.assertIsInstance(ltt_just_time, LabelTupTupWithArgs) #only because we directly call it.
+        self.assertIsInstance(ltt_just_time, LabelTupTupWithArgs)  # only because we directly call it.
 
     def test_labeltuptupwithargs_add(self):
         l1 = LabelTupTupWithArgs.init((('A', 0), ('B', 1)), args=('foo',))
@@ -885,7 +885,7 @@ class LabelConcateTester(BaseCase):
     def test_concate_circuitlabel_depth(self):
         l1 = L(('Gx', 0))
         l2 = L(('Gy', 1))
-        cl_depth2 = CircuitLabel('circuit', ["Gx","Gy"], (2,), 1, None)
+        cl_depth2 = CircuitLabel('circuit', ["Gx", "Gy"], (2,), 1, None)
         with self.assertRaises(ValueError):
             cl_depth2.concate(l1)
 
@@ -931,10 +931,11 @@ class LabelConcateTester(BaseCase):
         self.assertEqual(concatenated, L((('Gx', 0), ('Gy', 1), ('Gz', 2))))
 
         # LabelTupTupWithTime with LabelTupTupWithTime (different time)
-        with self.assertWarns(RuntimeWarning):
+        from pygsti.tools.exceptions import ClobberingWarning
+        with self.assertWarns(ClobberingWarning):
             l1.concate(l3)
         # LabelTupTupWithTime with LabelTupTupWithTime (different time)
-        with self.assertWarns(RuntimeWarning):
+        with self.assertWarns(ClobberingWarning):
             l3.concate(l1)
 
         # LabelTupTupWithTime with LabelTupWithTime (same time)
@@ -945,7 +946,7 @@ class LabelConcateTester(BaseCase):
 
         # LabelTupTupWithTime with LabelTupWithTime (different time)
         l_tup_with_time_different = L(('Gc', 5), time=0.2)
-        with self.assertWarns(RuntimeWarning):
+        with self.assertWarns(ClobberingWarning):
             l1.concate(l_tup_with_time_different)
 
     def test_concate_qubit_overlap(self):
@@ -977,7 +978,7 @@ class LabelConcateTester(BaseCase):
     def test_concate_labelstr_errors(self):
 
         ltt_wt = L((('Gx', 0), ('Gy', 1)), time=0.1)
-        ltt = L((('Gx', 0), ('Gy', 1))) 
+        ltt = L((('Gx', 0), ('Gy', 1)))
         lt_wt = L(('Gy', 1), time=0.1)
         lt = L(('Gy', 1))
         cl = CircuitLabel('circuit', [lt], (1,), 1, None)
@@ -1002,4 +1003,3 @@ class LabelConcateTester(BaseCase):
         concatenated1 = l1.concate(l2)
         concatenated2 = l2.concate(l1)
         self.assertNotEqual(concatenated1, concatenated2)
-
