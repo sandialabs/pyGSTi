@@ -172,7 +172,7 @@ cdef get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool 
         if len(lbls_list) == 0:
             to_exponentiate = _lbl.LabelTupTup( () )
         elif len(lbls_list) > 1:
-            time = max([getattr(lbl, 'time', 0.0) for lbl in lbls_list], default=0.0)
+            time = max([lbl.time if hasattr(lbl, 'time') else 0.0 for lbl in lbls_list], default=0.0)
             to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list)) if (time == 0.0) \
                 else _lbl.LabelTupTupWithTime(tuple(lbls_list), time)  # create a layer label - a label of the labels within square brackets
         else:
