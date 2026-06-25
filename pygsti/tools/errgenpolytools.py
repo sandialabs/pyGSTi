@@ -450,7 +450,7 @@ def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, mag
     return combined_magnus_order_dict    
 
 def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, identity=None):
-    """
+    r"""
     Helper function for computing the second-order correction term in the
     magnus expansion.
 
