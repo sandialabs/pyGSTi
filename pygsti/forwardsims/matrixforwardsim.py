@@ -62,9 +62,21 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
     def _rho_es_from_spam_tuples(self, rholabel, elabels):
         # This calculator uses the convention that rho has shape (N,1)
         rho = self.model.circuit_layer_operator(rholabel, 'prep').to_dense("minimal")[:, None]
-        Es = [_np.conjugate(_np.transpose(self.model.circuit_layer_operator(
-              elabel, 'povm').to_dense("minimal")[:, None]))
-              for elabel in elabels]  # [:, None] becuse of convention: E has shape (1,N)
+        # For the density-matrix evotype the effect is a *real* superbra, so the
+        # complex conjugation below is a no-op for ordinary (real) simulation.
+        # However, complex conjugation is non-holomorphic and would flip the sign
+        # of the imaginary part of a complex-step perturbation, corrupting
+        # derivatives w.r.t. POVM parameters.  Since P = Tr(E rho) needs only the
+        # transpose (no conjugation) for density matrices, skip the conjugate
+        # there to preserve holomorphicity / complex-step correctness.
+        if self.model.evotype == "statevec":
+            Es = [_np.conjugate(_np.transpose(self.model.circuit_layer_operator(
+                  elabel, 'povm').to_dense("minimal")[:, None]))
+                  for elabel in elabels]  # [:, None] because of convention: E has shape (1,N)
+        else:  # density-matrix-like evotypes (densitymx, densitymx_slow, ...)
+            Es = [_np.transpose(self.model.circuit_layer_operator(
+                  elabel, 'povm').to_dense("minimal")[:, None])
+                  for elabel in elabels]  # [:, None] because of convention: E has shape (1,N)
         return rho, Es
 
     def _process_wrt_filter(self, wrt_filter, obj):
@@ -563,7 +575,13 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
                 else:  # evotype == "densitymx"
                     # probability, with scaling applied (may generate overflow, but OK)
-                    ps = _np.real(_np.dot(Es, _np.dot(G, rho)) * scale)
+                    # P = Tr(E rho) is a real bilinear form and therefore holomorphic,
+                    # so for a complex-step perturbation we must keep the (small)
+                    # imaginary part, which encodes the derivative.  For ordinary
+                    # real inputs the result is already real and we strip any
+                    # numerical-noise imaginary component as before.
+                    _ps = _np.dot(Es, _np.dot(G, rho)) * scale
+                    ps = _ps if _np.iscomplexobj(_ps) else _np.real(_ps)
                 _np.seterr(**old_err)
 
             else:  # no scaling -- faster but susceptible to overflow
@@ -571,7 +589,10 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                 if self.model.evotype == "statevec":
                     ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
                 else:  # evotype == "densitymx"
-                    ps = _np.real(_np.dot(Es, _np.dot(G, rho)))
+                    # See note above: keep the imaginary part for complex-step
+                    # derivatives; strip noise-only imaginary part for real inputs.
+                    _ps = _np.dot(Es, _np.dot(G, rho))
+                    ps = _ps if _np.iscomplexobj(_ps) else _np.real(_ps)
             array_to_fill[indices] = ps.flat
 
 

@@ -113,6 +113,13 @@ class FullState(_DenseState):
         -------
         None
         """
+        # Complex-step support: upcast/downcast the dense buffer to match the
+        # dtype of the incoming parameters so a complex perturbation is not
+        # silently truncated (and real inputs keep the usual real buffer).
+        if _np.iscomplexobj(v) and not _np.iscomplexobj(self._ptr):
+            self._rep.data = self._rep.data.astype(complex)
+        elif not _np.iscomplexobj(v) and _np.iscomplexobj(self._ptr):
+            self._rep.data = self._rep.data.real.copy()
         self._ptr[:] = v
         self._ptr_has_changed()
         self.dirty = dirty_value

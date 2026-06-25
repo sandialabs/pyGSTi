@@ -29,7 +29,10 @@ class StateRep:
 
     def __init__(self, data, state_space):
         #vec = _np.asarray(vec, dtype='d')
-        assert(data.dtype == _np.dtype('d'))
+        # Allow complex superkets in addition to the usual real ones so that
+        # complex-step finite-difference derivatives (theta -> theta + i*h) can
+        # propagate complex states through the density-matrix simulator.
+        assert(data.dtype in (_np.dtype('d'), _np.dtype(complex)))
         self.data = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.state_space = _StateSpace.cast(state_space)
         ds0 = self.data.shape[0]

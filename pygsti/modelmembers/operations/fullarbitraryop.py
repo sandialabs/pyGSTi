@@ -132,7 +132,18 @@ class FullArbitraryOp(_DenseOperator):
         None
         """
         assert(self._ptr.shape == (self.dim, self.dim))
-        self._ptr[:, :] = v.reshape((self.dim, self.dim))
+        mx = v.reshape((self.dim, self.dim))
+        # Complex-step support: if the incoming parameters are complex (e.g. a
+        # complex-step finite-difference perturbation theta -> theta + i*h), the
+        # underlying dense representation buffer must be upcast to complex so the
+        # imaginary part is not silently discarded by the in-place assignment.
+        # Conversely, revert to a real buffer when given purely real parameters
+        # so that ordinary (real) simulation is unaffected.
+        if _np.iscomplexobj(mx) and not _np.iscomplexobj(self._ptr):
+            self._rep.base = self._rep.base.astype(complex)
+        elif not _np.iscomplexobj(mx) and _np.iscomplexobj(self._ptr):
+            self._rep.base = self._rep.base.real.copy()
+        self._ptr[:, :] = mx
         self._ptr_has_changed()
         self.dirty = dirty_value
 
