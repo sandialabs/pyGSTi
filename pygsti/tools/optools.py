@@ -312,7 +312,9 @@ def frobeniusdist(a, b) -> _np.floating[Any]:
     float
         The resulting frobenius distance.
     """
-    return _np.linalg.norm(a - b)
+    a_arr = a.to_dense('minimal') if hasattr(a, 'to_dense') else a
+    b_arr = b.to_dense('minimal') if hasattr(b, 'to_dense') else b
+    return _np.linalg.norm(a_arr - b_arr)
 
 
 def frobeniusdist_squared(a, b):

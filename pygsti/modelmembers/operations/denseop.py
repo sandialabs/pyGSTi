@@ -310,6 +310,24 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         """
         return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
 
+    def to_sparse(self, on_space: SpaceT='minimal'):
+        """
+        Return the operation as a sparse matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+        """
+        return _sps.csr_matrix(self.to_dense(on_space))
+
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
 

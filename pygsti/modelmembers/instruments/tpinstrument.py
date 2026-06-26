@@ -94,18 +94,22 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
 
             assert(len(matrix_list) > 0 or state_space is not None), \
                 "Must specify `state_space` when there are no instrument members!"
-            state_space = _statespace.default_space_for_dim(matrix_list[0][1].shape[0]) if (state_space is None) \
+            first_v = matrix_list[0][1]
+            first_arr = first_v.to_dense('minimal') if hasattr(first_v, 'to_dense') else first_v
+            state_space = _statespace.default_space_for_dim(first_arr.shape[0]) if (state_space is None) \
                 else _statespace.StateSpace.cast(state_space)
             evotype = _Evotype.cast(evotype, state_space=state_space)
 
             # Create gate objects that are used to parameterize this instrument
-            MT_mx = sum([v for k, v in matrix_list])  # sum-of-instrument-members matrix
+            # Convert any modelmember values to dense arrays first
+            dense_list = [(k, (v.to_dense('minimal') if hasattr(v, 'to_dense') else v)) for k, v in matrix_list]
+            MT_mx = sum(arr for _, arr in dense_list)  # sum-of-instrument-members matrix
             MT = _op.FullTPOp(MT_mx, None, evotype, state_space)
             self.param_ops.append(MT)
 
             dim = MT.dim
-            for k, v in matrix_list[:-1]:
-                Di = _op.FullArbitraryOp(v - MT_mx, None, evotype, state_space)
+            for k, arr in dense_list[:-1]:
+                Di = _op.FullArbitraryOp(arr - MT_mx, None, evotype, state_space)
                 assert(Di.dim == dim)
                 self.param_ops.append(Di)
 
@@ -200,7 +204,8 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         # param_ops and I don't this will unpickle correctly.  Instead, just
         # strip the numpy array from each element and call __init__ again when
         # unpickling:
-        op_matrices = [(lbl, _np.asarray(val)) for lbl, val in self.items()]
+        op_matrices = [(lbl, val.to_dense('minimal') if hasattr(val, 'to_dense') else _np.asarray(val))
+                       for lbl, val in self.items()]
         return (TPInstrument, (op_matrices, self.evotype, self.state_space, []),
                 {'init_gpindices': self._gpindices, '_submember_rpindices': self._submember_rpindices})
 
