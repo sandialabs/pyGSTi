@@ -47,6 +47,31 @@ def _integerize_sslbls(state_space_labels):
     return tuple(integerized_sslbls)
 
 
+def _is_homogeneous_sslbls(tup):
+    """
+    Checks if elements of tup are homogeneous (strictly all integers or all strings).
+    Empty tuple is considered homogeneous.
+    """
+    if not tup:
+        return True
+    first_type = type(tup[0])
+    if first_type not in (int, str):
+        if isinstance(tup[0], _numbers.Integral):
+            first_type = int
+        else:
+            return False
+    for x in tup[1:]:
+        t_x = type(x)
+        if t_x not in (int, str):
+            if isinstance(x, _numbers.Integral):
+                t_x = int
+            else:
+                return False
+        if t_x is not first_type:
+            return False
+    return True
+
+
 def _check_concat_compatibility(label1, label2):
     """
     Checks for qubit overlap and time conflicts between two labels, and
@@ -72,7 +97,10 @@ def _check_concat_compatibility(label1, label2):
     # 3. CircuitLabel unwrapping
     if isinstance(label2, CircuitLabel):
         if label2.depth == 1:
-            label2 = Label(label2.components, label2.sslbls, label2.time, label2.args)
+            if len(label2.components) == 1:
+                label2 = label2.components[0]
+            else:
+                label2 = Label(label2.components, time=label2.time)
         else:
             raise ValueError(f"Trying to concate a CircuitLabel with depth: {label2.depth} to a lbl with depth {label1.depth}")
 
@@ -180,6 +208,11 @@ class Label(object):
                     return LabelTupTup.init(())
                 else:
                     return LabelTupTupWithTime.init((), time)
+            elif isinstance(name[0], _numbers.Integral):
+                K = name[0]
+                legacy_args = name[1:K]
+                legacy_comps = name[K:]
+                return LabelTupTupWithArgs.init(legacy_comps, time=time, args=legacy_args)
             elif isinstance(name[0], (tuple, list, Label)):
                 if len(name) > 1:
                     if args: return LabelTupTupWithArgs.init(name, time=time, args=args)
@@ -188,13 +221,18 @@ class Label(object):
                 else:
                     return Label(name[0], time=time, args=args)
             elif len(name) >= 3 and isinstance(name[0], str) and \
-                    (isinstance(name[1], tuple) or name[1] is None) and isinstance(name[2], int):
+                    (isinstance(name[1], (tuple, list)) or name[1] is None) and isinstance(name[2], int):
                 # We are building a CircuitLabel.
                 loc_name = name[0]
-                sslbls = name[1]
+                sslbls = tuple(name[1]) if name[1] is not None else None
                 reps = name[2]
                 tup = ()
-                for x in name[3:]:
+                components_start = 3
+                if len(name) > 3 and isinstance(name[3], str) and name[3].startswith('!'):
+                    time_is_present = True
+                    time = float(name[3][1:])
+                    components_start = 4
+                for x in name[components_start:]:
                     tup = (*tup, Label(x, time=time))
                 return CircuitLabel(loc_name, tup, sslbls, reps, time)
             else:
@@ -204,31 +242,44 @@ class Label(object):
                 tup_args = []; state_space_labels = []
                 next_is_arg = False
                 next_is_time = False
-                for x in tup[1:]:
-                    if next_is_arg:
-                        next_is_arg = False
-                        tup_args.append(x); continue
-                    if next_is_time:
-                        next_is_time = False
-                        time = x; time_is_present = True; continue
 
-                    if isinstance(x, str):
-                        if x.startswith(';'):
-                            assert (args is None), "Cannot supply args in tuple when `args` is given!"
-                            if x == ';':
-                                next_is_arg = True
-                            else:
-                                tup_args.append(x[1:])
-                            continue
-                        if x.startswith('!'):
-                            assert (time is None), "Cannot supply time in tuple when `time` is given!"
-                            time_is_present = True
-                            if x == '!':
-                                next_is_time = True
-                            else:
-                                time = float(x[1:])
-                            continue
-                    state_space_labels.append(x)
+                # Disambiguate legacy LabelTupWithArgs
+                is_legacy_tup_with_args = False
+                if len(tup) >= 3 and isinstance(tup[1], int) and not _is_homogeneous_sslbls(tup[1:]):
+                    K = tup[1]
+                    if 2 < K <= len(tup):
+                        is_legacy_tup_with_args = True
+
+                if is_legacy_tup_with_args:
+                    K = tup[1]
+                    tup_args = tup[2:K]
+                    state_space_labels = tup[K:]
+                else:
+                    for x in tup[1:]:
+                        if next_is_arg:
+                            next_is_arg = False
+                            tup_args.append(x); continue
+                        if next_is_time:
+                            next_is_time = False
+                            time = x; time_is_present = True; continue
+
+                        if isinstance(x, str):
+                            if x.startswith(';'):
+                                assert (args is None), "Cannot supply args in tuple when `args` is given!"
+                                if x == ';':
+                                    next_is_arg = True
+                                else:
+                                    tup_args.append(x[1:])
+                                continue
+                            if x.startswith('!'):
+                                assert (time is None), "Cannot supply time in tuple when `time` is given!"
+                                time_is_present = True
+                                if x == '!':
+                                    next_is_time = True
+                                else:
+                                    time = float(x[1:])
+                                continue
+                        state_space_labels.append(x)
 
                 # Take the args that were passed to the function.
                 #Note that we will error out if tup args were to be set earlier and args was set.
@@ -385,10 +436,6 @@ class Label(object):
         # ^ make static analysis tools happy
         assert hasattr(self, 'components')
 
-        if len(self) <= 1:
-            # The inner labels are trivially sorted.
-            return self  # type: ignore
-
         if self.is_sorted:
             return self
 
@@ -403,6 +450,10 @@ class Label(object):
                                self.sslbls, self.reps, self.time)
             ret._is_sorted = True
             return ret
+
+        if len(self.components) <= 1:
+            # The inner labels are trivially sorted.
+            return self  # type: ignore
 
         tmp1 = dict()
         for inner in self.components:
@@ -423,6 +474,7 @@ class Label(object):
                     time=getattr(self, 'time', None),
                     args=args
                     )
+        assert isinstance(out, LabelTupTup)
         out.is_sorted = True
         # ^ We don't pass state_space_labels=self.sslbls in order to make sure
         #   we hit the right codepath in Label.__new__; all codepaths that
@@ -493,6 +545,8 @@ class LabelTup(Label, tuple):
         # Regardless of whether the input is a list, tuple, or int, the state space labels
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = _integerize_sslbls(state_space_labels)
+        assert (_is_homogeneous_sslbls(sslbls)), \
+            "State space labels '%s' must be homogeneous (all strings or all integers)!" % str(state_space_labels)
         tup = (_sys.intern(name),) + sslbls
         obj = tuple.__new__(cls, tup)
         obj._is_sorted = True
@@ -581,7 +635,7 @@ class LabelTup(Label, tuple):
 
     def __add__(self, s: str) -> LabelTup:
         if isinstance(s, str):
-            return LabelTup.init(self.name + s, self.sslbls)
+            return LabelTup.init(self.name + s, self.sslbls if self.sslbls is not None else ())
         else:
             raise NotImplementedError("Cannot add %s to a Label" % str(type(s)))
 
@@ -648,8 +702,7 @@ class LabelTup(Label, tuple):
         else:
             return super().concat(other)
 
-        all_args = self.collect_args() + other.collect_args()
-        return _create_concatenated_label(components, new_time, all_args)
+        return _create_concatenated_label(components, new_time, ())
 
     __hash__ = tuple.__hash__
     # ^ this is why we derive from tuple - using the
@@ -709,6 +762,8 @@ class LabelTupWithTime(LabelTup, tuple):
         # Regardless of whether the input is a list, tuple, or int, the state space labels
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = _integerize_sslbls(state_space_labels)
+        assert (_is_homogeneous_sslbls(sslbls)), \
+            "State space labels '%s' must be homogeneous (all strings or all integers)!" % str(state_space_labels)
         tup = (_sys.intern(name),) + sslbls
         return cls.__new__(cls, tup, time)
 
@@ -948,7 +1003,7 @@ class LabelStr(Label, str):
         #need to get a string rep of the tested label.
         return str(x) in str(self)
 
-    def to_native(self) -> str:
+    def to_native(self) -> Union[str, tuple]:
         """
         Returns this label as native python types.
 
@@ -1067,9 +1122,6 @@ class LabelTupTup(Label, tuple):
             elif not atleast_one_missing_time and len(ctimes) == 1 and 0.0 not in ctimes:
                 warn("You may want to consider a LabelTupTupWithTime as all of the entries have the same time"
                      " and it had to be user specified.", RuntimeWarning)
-            elif not atleast_one_missing_time and len(ctimes) == 1:
-                warn("You may want to consider a LabelTupTupWithTime as all of the entries have the same time "
-                     "which was previously the default time.", RuntimeWarning)
 
         ret = cls.__new__(cls, tupOfLabels)
         return ret
@@ -1281,8 +1333,7 @@ class LabelTupTup(Label, tuple):
         else:
             return super().concat(other)
 
-        all_args = self.collect_args() + other.collect_args()
-        return _create_concatenated_label(components, new_time, all_args)
+        return _create_concatenated_label(components, new_time, ())
 
     __hash__ = tuple.__hash__
     # ^ this is why we derive from tuple - using the
@@ -1703,7 +1754,10 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         tmp_lbl: Label = None
         if self.depth == 1:
             # Convert into not a CircuitLabel.
-            tmp_lbl = Label(self.components, self.sslbls, self.time, self.args)
+            if len(self.components) == 1:
+                tmp_lbl = self.components[0]
+            else:
+                tmp_lbl = Label(self.components, time=self.time)
         else:
             raise ValueError(f"One cannot concate a `CircuitLabel` of depth > 1 (depth = {self.depth}) except to another `CircuitLabel` of the same depth.")
         return tmp_lbl.concat(other)
@@ -1766,6 +1820,8 @@ class LabelTupWithArgs(LabelTupWithTime, tuple):
         # Regardless of whether the input is a list, tuple, or int, the state space labels
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = _integerize_sslbls(state_space_labels)
+        assert (_is_homogeneous_sslbls(sslbls)), \
+            "State space labels '%s' must be homogeneous (all strings or all integers)!" % str(state_space_labels)
         args = tuple(args)
         tup = (_sys.intern(name), 2 + len(args)) + args + sslbls  # stores: (name, K, args, sslbls)
         # where K is the index of the start of the sslbls (or 1 more than the last arg index)
@@ -2028,7 +2084,7 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         else:
             timestr = ""
 
-        return "[" + "".join([str(lbl) for lbl in self]) + argstr + timestr + "]"
+        return "[" + "".join([str(lbl) for lbl in self.components]) + argstr + timestr + "]"
 
     def __repr__(self) -> str:
         timearg = ",time=" + repr(self.time) if (self.time != 0.0) else ""

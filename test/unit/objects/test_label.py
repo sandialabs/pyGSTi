@@ -8,19 +8,6 @@ from pygsti.serialization import jsoncodec
 from pygsti.circuits import Circuit
 from ..util import BaseCase
 
-# labels = [
-#     L('Gx', 0),  # a LabelTup
-#     L('Gx', (0, 1)),  # a LabelTup
-#     L(('Gx', 0, 1)),  # a LabelTup
-#     L('Gx'),  # a LabelStr
-#     L('Gx', None),  # still a LabelStr
-#     L([('Gx', 0), ('Gy', 0)]),  # a LabelTupTup of LabelTup objs
-#     L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
-#     L([('Gx', 0)]),  # just a LabelTup b/c only one component
-#     L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
-#     L(L('Gx')),  # Init from another label
-#     CircuitLabel('circuit', [("Gx", 1), ("Gz", 2)], None, 1, None)
-# ]
 
 labels = [
     L('Gx', 0),  # a LabelTup
@@ -38,7 +25,9 @@ labels = [
     L(('Gx', 0), time=0.1),  # LabelTupWithTime
     L(('Gx', 0), time=0.1, args=("foo",)),  # LabelTupWithArgs
     L([("Gx", 0), ("Gy", 1)], time=3.1),  # LabelTupTupWithTime
-    L([("Gx", 0), ("Gy", 1)], time=0.0459, args=("bar",))  # LabelTupTupWithArgs
+    L([("Gx", 0), ("Gy", 1)], time=0.0459, args=("bar",)),  # LabelTupTupWithArgs
+    CircuitLabel('', (L('Gx', (0,)),), (0,), 1, time=3.0), # CircuitLabel with nonzero time
+    CircuitLabel('', (L('Gx', (0,)),), (0,), 1, time=0.0) # CircuitLabel with time
 ]
 
 
@@ -47,21 +36,24 @@ def test_to_native(label):
     native = label.to_native()
     from_native = L(native)
     assert label == from_native
-    assert type(label) == type(from_native)
+    assert isinstance(label, type(from_native))
+    assert isinstance(from_native, type(label))
 
 
 @pytest.mark.parametrize('label', labels)
 def test_pickle(label):
     s = pickle.dumps(label)
     l2 = pickle.loads(s)
-    assert type(label) == type(l2)
+    assert isinstance(label, type(l2))
+    assert isinstance(l2, type(label))
 
 
 @pytest.mark.parametrize('label', labels)
 def test_json_encode(label):
     j = jsoncodec.encode_obj(label, False)
     l2 = jsoncodec.decode_obj(j, False)
-    assert type(label) == type(l2)
+    assert isinstance(label, type(l2))
+    assert isinstance(l2, type(label))
 
 
 @pytest.mark.parametrize('label', labels)
@@ -69,6 +61,35 @@ def test_hashable(label):
     # __hash__ is needed for insertion into a set
     s = {label}
     assert label in s
+
+
+def test_legacy_to_native_deserialization():
+    # 1. LabelTup
+    assert L(('Gx', 0)) == L('Gx', 0)
+    assert isinstance(L(('Gx', 0)), LabelTup)
+
+    # 2. LabelStr
+    assert L('Gx') == L('Gx')
+    assert isinstance(L('Gx'), LabelStr)
+
+    # 3. LabelTupTup
+    assert L((('Gx', 0), ('Gy', 1))) == L([('Gx', 0), ('Gy', 1)])
+    assert isinstance(L((('Gx', 0), ('Gy', 1))), LabelTupTup)
+
+    # 4. CircuitLabel
+    cl = L(('c', None, 1, ('Gx', 1), ('Gz', 2)))
+    assert cl == CircuitLabel('c', [('Gx', 1), ('Gz', 2)], None, 1, None)
+    assert isinstance(cl, CircuitLabel)
+
+    # 5. LabelTupWithArgs (Legacy raw: K=3) - non-homogeneous -> args detected
+    lwa = L(('Gx', 3, '1.4', 0))
+    assert lwa == L('Gx', 0, args=('1.4',))
+    assert isinstance(lwa, LabelTupWithArgs)
+
+    # 6. LabelTupTupWithArgs (Legacy raw: K=2)
+    lttwa = L((2, 'foo', ('Gx', 0), ('Gy', 1)))
+    assert lttwa == L([('Gx', 0), ('Gy', 1)], args=('foo',))
+    assert isinstance(lttwa, LabelTupTupWithArgs)
 
 
 class LabelTester(BaseCase):
@@ -309,6 +330,11 @@ class LabelStrTester(BaseCase):
         with self.assertRaises(NotImplementedError):
             l1 + L(("Gx", 0))
 
+        lbl = L('foo', ())
+        lbl = lbl + "_bar"
+        # there should not be an error when adding to a null statespace LabelStr.
+        self.assertEqual(lbl.name, "foo_bar")
+
     def test_labelstr_add_labelstr(self):
         l1 = L('Gx')
         l2 = L('Gy')
@@ -408,7 +434,20 @@ class LabelTupTester(BaseCase):
         self.assertEqual(l2, L(("Gxfoo", 0)))
         with self.assertRaises(NotImplementedError):
             l + l  # type: ignore
+
+        # Test addition with null state space labels
+        lbl = LabelTup.init("foo", ())
+        lbl = lbl + "_bar"
+        self.assertEqual(lbl.name, "foo_bar")
         return
+
+    def test_labeltup_homogeneity_assert(self):
+        # homogeneous is allowed
+        LabelTup.init('Gx', (0, 1))
+        LabelTup.init('Gx', ('Q0', 'Q1'))
+        # heterogeneous raises AssertionError
+        with self.assertRaises(AssertionError):
+            LabelTup.init('Gx', (0, 'Q1'))
 
     def test_labeltup_expand_subcircuits(self):
         l = L(('Gx', 0))
@@ -531,10 +570,15 @@ class LabelTupTupTester(BaseCase):
             L((l1, l2))
 
     def test_labeltuptup_warns_on_same_time_zero(self):
+        import warnings
         l1 = LabelTupWithTime.init('Gx', (0,), time=0.0)
         l2 = LabelTupWithTime.init('Gy', (1,), time=0.0)
-        with self.assertWarns(RuntimeWarning):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
             L((l1, l2))
+            for warning in w:
+                if issubclass(warning.category, RuntimeWarning):
+                    self.assertNotIn("You may want to consider a LabelTupTupWithTime", str(warning.message))
 
 
 class LabelTupTupWithTimeTester(BaseCase):
@@ -778,6 +822,18 @@ class CircuitLabelTester(BaseCase):
         l = CircuitLabel('mycirc', [L('Gx', 0)], None, 2, 1.2)
         self.assertEqual(l.expand_subcircuits(), (L('Gx', 0), L('Gx', 0)))
 
+        # a 2-layer sub-circuit, wrapped in a CircuitLabel, inside an args-bearing tuple-of-tuples
+        sub = CircuitLabel('', [L('Gx', (0,)), L('Gy', (0,))], (0,), 1)
+        top = LabelTupTupWithArgs.init((sub,), args=(0.5,))
+
+        self.assertEqual(top.args, (0.5,))                                       # (0.5,)
+        expanded = top.expand_subcircuits()
+        self.assertIsInstance(expanded, tuple)
+        self.assertFalse(isinstance(expanded, L))
+        # This is no longer a label as labels are one layer unless they are CircuitLabels.
+        for i in range(len(expanded)):
+            self.assertEqual(expanded[i].args, (0.5,))
+
     def test_circuitlabel_add(self):
         l = CircuitLabel('mycirc', [L('Gx', 0)], None, 5, 1.2)
         with self.assertRaises(NotImplementedError):
@@ -803,6 +859,16 @@ class CircuitLabelTester(BaseCase):
         l = CircuitLabel('mycirc', [L('Gx', 0)], None, 5, 1.2)
         self.assertTrue(l.has_prefix('my'))
         self.assertFalse(l.has_prefix('your'))
+
+    def test_circuitlabel_json_roundtrip_sslbls(self):
+        # F10(c): json round-trip converts tuple state space labels into lists,
+        # which needs to be parsed/coerced correctly on deserialization.
+        import json
+        cl = CircuitLabel('', (L('Gx', (0,)),), (0,), 1)
+        native = cl.to_native()
+        from_disk = json.loads(json.dumps(native))
+        cl_rt = L(from_disk)
+        self.assertEqual(cl_rt, cl)
 
 
 class LabelConcateTester(BaseCase):
@@ -837,6 +903,14 @@ class LabelConcateTester(BaseCase):
         l_str = L('Idle')
         with self.assertRaises(ValueError):
             l1.concat(l_str)
+
+    def test_concat_args_do_not_duplicate(self):
+        a = LabelTupWithArgs.init('Gx', (0,), args=(0.5,))
+        b = LabelTupWithArgs.init('Gy', (1,), args=(0.7,))
+        r = a.concat(b)
+
+        self.assertNotEqual(r.args, r.collect_args())
+        self.assertEqual(len(r.args), 0)
 
     def test_concat_labeltupwithtime(self):
         l1 = L(('Gx', 0), time=0.1)
@@ -884,10 +958,20 @@ class LabelConcateTester(BaseCase):
 
     def test_concat_circuitlabel_depth(self):
         l1 = L(('Gx', 0))
-        l2 = L(('Gy', 1))
         cl_depth2 = CircuitLabel('circuit', ["Gx", "Gy"], (2,), 1, None)
         with self.assertRaises(ValueError):
             cl_depth2.concat(l1)
+
+    def test_concat_circuit_label(self):
+        lbl = CircuitLabel("foo", [(L("Gx",0), L("Gy",1))], state_space_labels=(0,1))
+        lbl2 = L("Gz", 2)
+        concatenated = lbl.concat(lbl2)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((("Gx",0),("Gy",1), ("Gz",2))))
+
+        concatenated = lbl2.concat(lbl)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((("Gz",2), ("Gx",0),("Gy",1))))
 
     def test_concat_labeltuptup(self):
         l1 = L((('Gx', 0), ('Gy', 1)))
