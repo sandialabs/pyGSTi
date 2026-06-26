@@ -1325,6 +1325,8 @@ def decompose_gate_matrix(operation_mx):
               angle of rotation in units of pi radians
     """
 
+    if hasattr(operation_mx, 'to_dense'):
+        operation_mx = operation_mx.to_dense('minimal')
     op_evals, op_evecs = _np.linalg.eig(_np.asarray(operation_mx))
     # ^ NOTE: the use of eig is intentional; we don't expect that
     #   operation_mx is Hermitian, or even normal. 
@@ -1742,6 +1744,10 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT", logG_weight=None
         The error generator.
     """
     TOL = 1e-8
+    if hasattr(gate, 'to_dense'):
+        gate = gate.to_dense('minimal')
+    if hasattr(target_op, 'to_dense'):
+        target_op = target_op.to_dense('minimal')
 
     if typ == "logG-logT":
         try:
@@ -1842,6 +1848,8 @@ def operation_from_error_generator(error_gen, target_op, mx_basis, typ="logG-log
         The operation matrix.
     """
     TOL = 1e-8
+    if hasattr(target_op, 'to_dense'):
+        target_op = target_op.to_dense('minimal')
 
     if typ == "logG-logT":
         try:
