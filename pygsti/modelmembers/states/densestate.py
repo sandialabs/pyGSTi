@@ -27,60 +27,35 @@ from pygsti import SpaceT
 
 class DenseStateInterface(object):
     """
-    Adds a numpy-array-mimicing interface onto a state object.
+    REMOVED: This class formerly added a numpy-array-mimicking interface onto
+    state objects. It has been deleted as part of expiring the deprecated dense
+    interface (pyGSTi issue #447). Use .to_dense() to read the array
+    representation and .set_dense() / .from_vector() to write it.
+
+    This stub exists temporarily to produce descriptive errors at sites that
+    still rely on the old interface; it will be fully deleted once all call
+    sites are corrected.
     """
 
     def __init__(self):
         pass
 
-    @property
-    def _ptr(self):
-        raise NotImplementedError("Derived classes must implement the _ptr property!")
-
-    def _ptr_has_changed(self):
-        """ Derived classes should override this function to handle rep updates
-            when the `_ptr` property is changed. """
-        pass
-
-    def to_array(self):
-        """
-        Return the array used to identify this state within its range of possible values.
-
-        For instance, if the state is a pure state, this returns a complex pure-state
-        vector regardless of the evolution type.  The related :meth:`to_dense`
-        method, in contrast, returns the dense representation of the state, which
-        varies by evolution type.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
-        return self._ptr  # *must* be a numpy array for Cython arg conversion
-
-    @property
-    def columnvec(self):
-        """
-        Direct access the the underlying data as column vector, i.e, a (dim,1)-shaped array.
-        """
-        bv = self._ptr.view()
-        bv = _compat.reshape_no_copy(bv, (bv.size, 1))  # 'base' is by convention a (N,1)-shaped array
-        return bv
+    @staticmethod
+    def _removed(what):
+        raise TypeError(
+            "The dense array interface has been removed. "
+            "Attempted operation: '%s'. "
+            "Use .to_dense() to obtain a numpy array for reading, "
+            "and .set_dense() or .from_vector() to update the state." % what
+        )
 
     def __copy__(self):
-        # We need to implement __copy__ because we defer all non-existing
-        # attributes to self.columnvec (a numpy array) which *has* a __copy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
         cls = self.__class__
         cpy = cls.__new__(cls)
         cpy.__dict__.update(self.__dict__)
         return cpy
 
     def __deepcopy__(self, memo):
-        # We need to implement __deepcopy__ because we defer all non-existing
-        # attributes to self.columnvec (a numpy array) which *has* a __deepcopy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
         cls = self.__class__
         cpy = cls.__new__(cls)
         memo[id(self)] = cpy
@@ -88,56 +63,31 @@ class DenseStateInterface(object):
             setattr(cpy, k, _copy.deepcopy(v, memo))
         return cpy
 
-    #Access to underlying array
-    def __getitem__(self, key):
-        self.dirty = True
-        return self.columnvec.__getitem__(key)
-
-    def __getslice__(self, i, j):
-        self.dirty = True
-        return self.__getitem__(slice(i, j))  # Called for A[:]
-
-    def __setitem__(self, key, val):
-        self.dirty = True
-        ret = self.columnvec.__setitem__(key, val)
-        self._ptr_has_changed()
-        return ret
-
+    def __getitem__(self, key): self._removed('__getitem__[%s]' % str(key))
+    def __setitem__(self, key, val): self._removed('__setitem__[%s]' % str(key))
     def __getattr__(self, attr):
-        #use __dict__ so no chance for recursive __getattr__
-        if '_rep' in self.__dict__:  # sometimes in loading __getattr__ gets called before the instance is loaded
-            ret = getattr(self.columnvec, attr)
-        else:
-            raise AttributeError("No attribute:", attr)
-        self.dirty = True
-        return ret
-
-    #Mimic array
-    def __pos__(self): return self.columnvec
-    def __neg__(self): return -self.columnvec
-    def __abs__(self): return abs(self.columnvec)
-    def __add__(self, x): return self.columnvec + x
-    def __radd__(self, x): return x + self.columnvec
-    def __sub__(self, x): return self.columnvec - x
-    def __rsub__(self, x): return x - self.columnvec
-    def __mul__(self, x): return self.columnvec * x
-    def __rmul__(self, x): return x * self.columnvec
-    def __truediv__(self, x): return self.columnvec / x
-    def __rtruediv__(self, x): return x / self.columnvec
-    def __floordiv__(self, x): return self.columnvec // x
-    def __rfloordiv__(self, x): return x // self.columnvec
-    def __pow__(self, x): return self.columnvec ** x
-    def __eq__(self, x): return self.columnvec == x
-    def __len__(self): return len(self.columnvec)
-    def __int__(self): return int(self.columnvec)
-    def __long__(self): return int(self.columnvec)
-    def __float__(self): return float(self.columnvec)
-    def __complex__(self): return complex(self.columnvec)
-
-    def __str__(self):
-        s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
-        s += _mt.mx_to_string(self.to_dense("minimal"), width=4, prec=2)
-        return s
+        if attr.startswith('__') and attr.endswith('__'):
+            raise AttributeError(attr)
+        self._removed('attribute access .%s' % attr)
+    def __pos__(self): self._removed('unary +')
+    def __neg__(self): self._removed('unary -')
+    def __abs__(self): self._removed('abs()')
+    def __add__(self, x): self._removed('__add__')
+    def __radd__(self, x): self._removed('__radd__')
+    def __sub__(self, x): self._removed('__sub__')
+    def __rsub__(self, x): self._removed('__rsub__')
+    def __mul__(self, x): self._removed('__mul__')
+    def __rmul__(self, x): self._removed('__rmul__')
+    def __truediv__(self, x): self._removed('__truediv__')
+    def __rtruediv__(self, x): self._removed('__rtruediv__')
+    def __floordiv__(self, x): self._removed('__floordiv__')
+    def __rfloordiv__(self, x): self._removed('__rfloordiv__')
+    def __pow__(self, x): self._removed('__pow__')
+    def __eq__(self, x): self._removed('__eq__')
+    def __len__(self): self._removed('__len__')
+    def __int__(self): self._removed('__int__')
+    def __float__(self): self._removed('__float__')
+    def __complex__(self): self._removed('__complex__')
 
 
 class DenseState(DenseStateInterface, _State):

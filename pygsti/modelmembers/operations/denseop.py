@@ -130,73 +130,35 @@ def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=
 
 class DenseOperatorInterface(object):
     """
-    Adds a numpy-array-mimicing interface onto an operation object.
+    REMOVED: This class formerly added a numpy-array-mimicking interface onto
+    operation objects. It has been deleted as part of expiring the deprecated
+    dense interface (pyGSTi issue #447). Use .to_dense() to read the array
+    representation and .set_dense() / .from_vector() to write it.
+
+    This stub exists temporarily to produce descriptive errors at sites that
+    still rely on the old interface; it will be fully deleted once all call
+    sites are corrected.
     """
 
     def __init__(self):
         pass
 
-    @property
-    def _ptr(self):
-        raise NotImplementedError("Derived classes must implement the _ptr property!")
-
-    def _ptr_has_changed(self):
-        """ Derived classes should override this function to handle rep updates
-            when the `_ptr` property is changed. """
-        pass
-
-    def to_array(self):
-        """
-        Return the array used to identify this operation within its range of possible values.
-
-        For instance, if the operation is a unitary operation, this returns a
-        unitary matrix regardless of the evolution type.  The related :meth:`to_dense`
-        method, in contrast, returns the dense representation of the operation, which
-        varies by evolution type.
-
-        Note: for efficiency, this doesn't copy the underlying data, so
-        the caller should copy this data before modifying it.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
-        return _np.asarray(self._ptr)
-        # *must* be a numpy array for Cython arg conversion
-
-    def to_sparse(self, on_space: SpaceT='minimal'):
-        """
-        Return the operation as a sparse matrix.
-
-        Parameters
-        ----------
-        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
-            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
-            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
-            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
-            otherwise `'HilbertSchmidt'` is used.
-
-        Returns
-        -------
-        scipy.sparse.csr_matrix
-        """
-        return _sps.csr_matrix(self.to_dense(on_space))
+    @staticmethod
+    def _removed(what):
+        raise TypeError(
+            "The dense array interface has been removed. "
+            "Attempted operation: '%s'. "
+            "Use .to_dense() to obtain a numpy array for reading, "
+            "and .set_dense() or .from_vector() to update the operator." % what
+        )
 
     def __copy__(self):
-        # We need to implement __copy__ because we defer all non-existing
-        # attributes to self.base (a numpy array) which *has* a __copy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
         cls = self.__class__
         cpy = cls.__new__(cls)
         cpy.__dict__.update(self.__dict__)
         return cpy
 
     def __deepcopy__(self, memo):
-        # We need to implement __deepcopy__ because we defer all non-existing
-        # attributes to self.base (a numpy array) which *has* a __deepcopy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
         cls = self.__class__
         cpy = cls.__new__(cls)
         memo[id(self)] = cpy
@@ -204,54 +166,34 @@ class DenseOperatorInterface(object):
             setattr(cpy, k, _copy.deepcopy(v, memo))
         return cpy
 
-    #Access to underlying ndarray
-    def __getitem__(self, key):
-        self.dirty = True
-        return self._ptr.__getitem__(key)
-
-    def __getslice__(self, i, j):
-        self.dirty = True
-        return self.__getitem__(slice(i, j))  # Called for A[:]
-
-    def __setitem__(self, key, val):
-        self.dirty = True
-        ret = self._ptr.__setitem__(key, val)
-        self._ptr_has_changed()
-        return ret
-
+    def __getitem__(self, key): self._removed('__getitem__[%s]' % str(key))
+    def __setitem__(self, key, val): self._removed('__setitem__[%s]' % str(key))
     def __getattr__(self, attr):
-        #use __dict__ so no chance for recursive __getattr__
-        #ret = getattr(self.__dict__['_rep'].base, attr)
-        ret = getattr(self._ptr, attr)
-        self.dirty = True
-        return ret
-
-    def __str__(self):
-        s = "%s with shape %s\n" % (self.__class__.__name__, str(self._ptr.shape))
-        s += _mt.mx_to_string(self._ptr, width=4, prec=2)
-        return s
-
-    #Mimic array behavior
-    def __pos__(self): return self._ptr
-    def __neg__(self): return -self._ptr
-    def __abs__(self): return abs(self._ptr)
-    def __add__(self, x): return self._ptr + x
-    def __radd__(self, x): return x + self._ptr
-    def __sub__(self, x): return self._ptr - x
-    def __rsub__(self, x): return x - self._ptr
-    def __mul__(self, x): return self._ptr * x
-    def __rmul__(self, x): return x * self._ptr
-    def __truediv__(self, x): return self._ptr / x
-    def __rtruediv__(self, x): return x / self._ptr
-    def __floordiv__(self, x): return self._ptr // x
-    def __rfloordiv__(self, x): return x // self._ptr
-    def __pow__(self, x): return self._ptr ** x
-    def __eq__(self, x): return _np.array_equal(self._ptr, x)
-    def __len__(self): return len(self._ptr)
-    def __int__(self): return int(self._ptr)
-    def __long__(self): return int(self._ptr)
-    def __float__(self): return float(self._ptr)
-    def __complex__(self): return complex(self._ptr)
+        # Allow normal AttributeError for dunder names so pickle/copy/inspect
+        # machinery works correctly; only raise TypeError for real numpy-style
+        # attribute accesses on a modelmember (the pattern we are removing).
+        if attr.startswith('__') and attr.endswith('__'):
+            raise AttributeError(attr)
+        self._removed('attribute access .%s' % attr)
+    def __pos__(self): self._removed('unary +')
+    def __neg__(self): self._removed('unary -')
+    def __abs__(self): self._removed('abs()')
+    def __add__(self, x): self._removed('__add__')
+    def __radd__(self, x): self._removed('__radd__')
+    def __sub__(self, x): self._removed('__sub__')
+    def __rsub__(self, x): self._removed('__rsub__')
+    def __mul__(self, x): self._removed('__mul__')
+    def __rmul__(self, x): self._removed('__rmul__')
+    def __truediv__(self, x): self._removed('__truediv__')
+    def __rtruediv__(self, x): self._removed('__rtruediv__')
+    def __floordiv__(self, x): self._removed('__floordiv__')
+    def __rfloordiv__(self, x): self._removed('__rfloordiv__')
+    def __pow__(self, x): self._removed('__pow__')
+    def __eq__(self, x): self._removed('__eq__')
+    def __len__(self): self._removed('__len__')
+    def __int__(self): self._removed('__int__')
+    def __float__(self): self._removed('__float__')
+    def __complex__(self): self._removed('__complex__')
 
 
 class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
