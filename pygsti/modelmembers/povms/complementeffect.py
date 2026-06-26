@@ -108,7 +108,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
             the same local structure, i.e., not considering parameter values or submembers """
-        return (self.identity.shape == other.identity.shape
+        return (self.identity.to_dense().shape == other.identity.to_dense().shape
                 and _np.allclose(self.identity.to_dense(), other.identity.to_dense(), rtol=rtol, atol=atol))
 
     def submembers(self):
