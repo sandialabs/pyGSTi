@@ -67,8 +67,8 @@ class ExplicitOpModelToolTester(BaseCase):
         gateset_rot = self.model.rotate((np.pi / 2, 0, 0))  # rotate all gates by pi/2 about X axis
         self.assertArraysAlmostEqual(gateset_rot['Gi'], rotXPiOv2)
         self.assertArraysAlmostEqual(gateset_rot['Gx'], rotXPi)
-        self.assertArraysAlmostEqual(gateset_rot['Gx'], np.dot(rotXPiOv2, rotXPiOv2))
-        self.assertArraysAlmostEqual(gateset_rot['Gy'], np.dot(rotXPiOv2, rotYPiOv2))
+        self.assertArraysAlmostEqual(gateset_rot['Gx'], np.dot(rotXPiOv2.to_dense(), rotXPiOv2.to_dense()))
+        self.assertArraysAlmostEqual(gateset_rot['Gy'], np.dot(rotXPiOv2.to_dense(), rotYPiOv2.to_dense()))
 
     def test_rotate_2q(self):
         gateset_2q_rot = self.gateset_2q.rotate(rotate=list(np.zeros(15, 'd')))

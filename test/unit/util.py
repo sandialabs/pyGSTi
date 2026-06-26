@@ -71,7 +71,9 @@ class BaseCase(unittest.TestCase):
         **kwargs:
             Additional arguments to pass to ``unittest.assertAlmostEqual``
         """
-        self.assertAlmostEqual(np.linalg.norm(a - b), 0, **kwargs)
+        a_arr = a.to_dense('minimal') if hasattr(a, 'to_dense') else a
+        b_arr = b.to_dense('minimal') if hasattr(b, 'to_dense') else b
+        self.assertAlmostEqual(np.linalg.norm(a_arr - b_arr), 0, **kwargs)
 
     def assertArraysEqual(self, a, b, **kwargs):
         """Assert that two arrays are exactly equal.

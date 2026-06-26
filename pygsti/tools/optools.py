@@ -383,7 +383,9 @@ def tracedist(a, b):
     -------
     float
     """
-    return 0.5 * tracenorm(a - b)
+    a_arr = a.to_dense('minimal') if hasattr(a, 'to_dense') else a
+    b_arr = b.to_dense('minimal') if hasattr(b, 'to_dense') else b
+    return 0.5 * tracenorm(a_arr - b_arr)
 
 
 def diamonddist(a, b, mx_basis='pp', return_x=False):
