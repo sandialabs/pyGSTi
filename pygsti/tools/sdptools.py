@@ -12,7 +12,9 @@ Functions for constructing semidefinite programming models
 
 from __future__ import annotations
 
+import importlib.util
 import numpy as np
+import warnings
 
 from typing import Union, List, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
@@ -25,17 +27,22 @@ from pygsti.tools.jamiolkowski import jamiolkowski_iso
 
 BasisLike = Union[str, Basis]
 
-try:
-    import cvxpy as cp
-    CVXPY_ENABLED = True
-    mosek_warning_pattern = ".*Incorrect array format causing data to be copied*"
-    import warnings
-    warnings.filterwarnings('ignore', mosek_warning_pattern)
-except:
-    CVXPY_ENABLED = False
+CVXPY_ENABLED = importlib.util.find_spec("cvxpy") is not None
+_MOSEK_WARNING_PATTERN = ".*Incorrect array format causing data to be copied*"
+_CVXPY = None
+
+
+def _get_cvxpy():
+    global _CVXPY
+    if _CVXPY is None:
+        import cvxpy as cp
+        warnings.filterwarnings('ignore', _MOSEK_WARNING_PATTERN)
+        _CVXPY = cp
+    return _CVXPY
 
 
 def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List[cp.Variable]]:
+    cp = _get_cvxpy()
     # return a model for computing the diamond norm.
     #
     # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
@@ -104,6 +111,7 @@ def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List
 
 
 def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[cp.Constraint]]:
+    cp = _get_cvxpy()
     """
     This more or less implements canonicalization of the nonlinear expression
     \\|arg\\|_{\\diamond} into CVXPY Constraints and a representation of its epigraph.
@@ -133,6 +141,7 @@ def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[
 
 
 def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expression, List[cp.Constraint]]:
+    cp = _get_cvxpy()
     d = purestate_dim ** 2
     basis = Basis.cast(basis, d)
     constraints = []
@@ -161,6 +170,7 @@ def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expr
 
 def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree: bool=False, seepfree: bool=False, n_leak: int=0, cptp: bool=True, subspace_diamond: bool=False):
     assert CVXPY_ENABLED
+    cp = _get_cvxpy()
     dim_mixed = superop.shape[0]
     dim_pure = int(np.sqrt(dim_mixed))
     assert dim_pure**2 == dim_mixed
@@ -195,6 +205,7 @@ def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfre
 
 
 def root_fidelity_canon(sigma: cp.Expression, rho: cp.Expression) -> Tuple[cp.Expression, List[cp.Constraint]]:
+    cp = _get_cvxpy()
     """
     pyGSTi defines fidelity as
 
