@@ -312,9 +312,7 @@ def frobeniusdist(a, b) -> _np.floating[Any]:
     float
         The resulting frobenius distance.
     """
-    a_arr = a.to_dense('minimal') if hasattr(a, 'to_dense') else a
-    b_arr = b.to_dense('minimal') if hasattr(b, 'to_dense') else b
-    return _np.linalg.norm(a_arr - b_arr)
+    return _np.linalg.norm(a - b)
 
 
 def frobeniusdist_squared(a, b):
@@ -383,9 +381,7 @@ def tracedist(a, b):
     -------
     float
     """
-    a_arr = a.to_dense('minimal') if hasattr(a, 'to_dense') else a
-    b_arr = b.to_dense('minimal') if hasattr(b, 'to_dense') else b
-    return 0.5 * tracenorm(a_arr - b_arr)
+    return 0.5 * tracenorm(a - b)
 
 
 def diamonddist(a, b, mx_basis='pp', return_x=False):
@@ -1325,8 +1321,6 @@ def decompose_gate_matrix(operation_mx):
               angle of rotation in units of pi radians
     """
 
-    if hasattr(operation_mx, 'to_dense'):
-        operation_mx = operation_mx.to_dense('minimal')
     op_evals, op_evecs = _np.linalg.eig(_np.asarray(operation_mx))
     # ^ NOTE: the use of eig is intentional; we don't expect that
     #   operation_mx is Hermitian, or even normal. 
@@ -1744,10 +1738,6 @@ def error_generator(gate, target_op, mx_basis, typ="logG-logT", logG_weight=None
         The error generator.
     """
     TOL = 1e-8
-    if hasattr(gate, 'to_dense'):
-        gate = gate.to_dense('minimal')
-    if hasattr(target_op, 'to_dense'):
-        target_op = target_op.to_dense('minimal')
 
     if typ == "logG-logT":
         try:
@@ -1848,8 +1838,6 @@ def operation_from_error_generator(error_gen, target_op, mx_basis, typ="logG-log
         The operation matrix.
     """
     TOL = 1e-8
-    if hasattr(target_op, 'to_dense'):
-        target_op = target_op.to_dense('minimal')
 
     if typ == "logG-logT":
         try:
