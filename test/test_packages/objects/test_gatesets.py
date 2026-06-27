@@ -61,8 +61,8 @@ class TestGateSetMethods(GateSetTestCase):
         gatestring2 = ('Gx','Gy','Gy')
         layout = self.model.sim.create_layout( [gatestring1,gatestring2] )
 
-        p1 = np.dot( self.model['Gy'], self.model['Gx'] )
-        p2 = np.dot( self.model['Gy'], np.dot( self.model['Gy'], self.model['Gx'] ))
+        p1 = np.dot( self.model['Gy'].to_dense(), self.model['Gx'].to_dense() )
+        p2 = np.dot( self.model['Gy'].to_dense(), np.dot( self.model['Gy'].to_dense(), self.model['Gx'].to_dense() ))
 
         bulk_prods = self.model.sim.bulk_product([gatestring1,gatestring2])
         bulk_prods_scaled, scaleVals = self.model.sim.bulk_product([gatestring1,gatestring2], scale=True)

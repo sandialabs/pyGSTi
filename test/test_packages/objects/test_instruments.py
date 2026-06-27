@@ -17,12 +17,13 @@ class InstrumentTestCase(BaseTestCase):
         #Add an instrument to the standard target model
         self.target_model = std.target_model()
         self.target_model.sim = 'matrix'
-        E = self.target_model.povms['Mdefault']['0']
-        Erem = self.target_model.povms['Mdefault']['1']
-        Gmz_plus = np.dot(E,E.T)
-        Gmz_minus = np.dot(Erem,Erem.T)
+        E = self.target_model.povms['Mdefault']['0'].to_dense().reshape(-1, 1)
+        Erem = self.target_model.povms['Mdefault']['1'].to_dense().reshape(-1, 1)
+        Gmz_plus = np.dot(E, E.T)
+        Gmz_minus = np.dot(Erem, Erem.T)
         self.target_model.instruments['Iz'] = pygsti.modelmembers.instruments.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
-        self.povm_ident = self.target_model.povms['Mdefault']['0'] + self.target_model.povms['Mdefault']['1']
+        self.povm_ident = (self.target_model.povms['Mdefault']['0'].to_dense()
+                           + self.target_model.povms['Mdefault']['1'].to_dense())
 
         self.mdl_target_wTP = self.target_model.copy()
         self.mdl_target_wTP.instruments['Iztp'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
@@ -33,7 +34,7 @@ class InstrumentTestCase(BaseTestCase):
     def testFutureFunctionality(self):
         #Test instrument construction with elements whose gpindices are already initialized.
         # Since this isn't allowed currently (a future functionality), we need to do some hacking
-        E = self.target_model.povms['Mdefault']['0']
+        E = self.target_model.povms['Mdefault']['0'].to_dense().reshape(-1, 1)
         InstEl = pygsti.modelmembers.operations.FullArbitraryOp(np.dot(E, E.T))
         InstEl2 = InstEl.copy()
         nParams = InstEl.num_params # should be 16
@@ -103,13 +104,14 @@ class InstrumentTestCase(BaseTestCase):
 
         # Introducing a rotation error to the measurement
         Uerr = pygsti.rotation_gate_mx([0, 0.02, 0]) # input angles are halved by the method
-        E = np.dot(mdl.povms['Mdefault']['0'].T,Uerr).T # effect is stored as column vector
-        Erem = self.povm_ident - E
+        E0_col = mdl.povms['Mdefault']['0'].to_dense().reshape(-1, 1)
+        E = np.dot(E0_col.T, Uerr).T  # effect is stored as column vector
+        Erem = self.povm_ident.reshape(-1, 1) - E
         mdl.povms['Mdefault'] = pygsti.modelmembers.povms.UnconstrainedPOVM({'0': E, '1': Erem}, evotype='default')
 
         # Now add the post-measurement gates from the vector E0 and remainder = id-E0
-        Gmz_plus = np.dot(E,E.T) #since E0 is stored internally as column spamvec
-        Gmz_minus = np.dot(Erem,Erem.T)
+        Gmz_plus = np.dot(E, E.T)  #since E0 is stored internally as column spamvec
+        Gmz_minus = np.dot(Erem, Erem.T)
         mdl.instruments['Iz'] = pygsti.modelmembers.instruments.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.assertEqual(mdl.num_params,92) # 4*3 + 16*5 = 92
         #print(mdl)
@@ -366,8 +368,8 @@ class InstrumentTestCase(BaseTestCase):
         from pygsti.modelmembers.operations import ComposedOp, RootConjOperator
 
         mdl = self.target_model.copy()
-        E = mdl.povms['Mdefault']['0']
-        Erem = mdl.povms['Mdefault']['1']
+        E = mdl.povms['Mdefault']['0'].to_dense().reshape(-1, 1)
+        Erem = mdl.povms['Mdefault']['1'].to_dense().reshape(-1, 1)
         Gmz_plus = np.dot(E, E.T)
         Gmz_minus = np.dot(Erem, Erem.T)
         cptr_inst = pygsti.modelmembers.instruments.Instrument.from_cptr_superops(

@@ -357,7 +357,9 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                             padded_identityVec = _np.concatenate((identity_dense, _np.zeros(trunc - Idim, 'd')))
                         else:
                             padded_identityVec = identity_dense
-                        comp_effect = padded_identityVec - sum([v for k, v in new_effects])
+                        comp_effect = padded_identityVec - sum([
+                            v.to_dense('minimal') if hasattr(v, 'to_dense') else v
+                            for k, v in new_effects])
                         new_effects.append((povm.complement_label, comp_effect))  # add complement
                         lgstModel.povms[povmLabel] = _povm.TPPOVM(new_effects)
 

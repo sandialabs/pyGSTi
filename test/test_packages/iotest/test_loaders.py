@@ -99,10 +99,10 @@ class LoadersTester(IOBase):
         self.assertArraysAlmostEqual(mdl_formats.operations['Gx2'], rotXPi)
         self.assertArraysAlmostEqual(mdl_formats.operations['Gy2'], rotYPi)
 
-        self.assertArraysAlmostEqual(mdl_formats.preps['rho0'], 1 / np.sqrt(2) * np.array([[1], [0], [0], [1]], 'd'))
-        self.assertArraysAlmostEqual(mdl_formats.preps['rho1'], 1 / np.sqrt(2) * np.array([[1], [0], [0], [-1]], 'd'))
+        self.assertArraysAlmostEqual(mdl_formats.preps['rho0'], 1 / np.sqrt(2) * np.array([1, 0, 0, 1], 'd'))
+        self.assertArraysAlmostEqual(mdl_formats.preps['rho1'], 1 / np.sqrt(2) * np.array([1, 0, 0, -1], 'd'))
         self.assertArraysAlmostEqual(mdl_formats.povms['Mdefault']['00'],
-                                     1 / np.sqrt(2) * np.array([[1], [0], [0], [1]], 'd'))
+                                     1 / np.sqrt(2) * np.array([1, 0, 0, 1], 'd'))
 
     def test_load_circuit_dict(self):
         # Legacy .txt circuit-dict format; no replacement provided by the
