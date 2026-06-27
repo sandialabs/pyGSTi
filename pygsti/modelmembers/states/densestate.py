@@ -25,29 +25,22 @@ from pygsti.tools import optools as _ot
 from pygsti import SpaceT
 
 
-class DenseStateInterface(object):
+class DenseState(_State):
     """
-    REMOVED: This class formerly added a numpy-array-mimicking interface onto
-    state objects. It has been deleted as part of expiring the deprecated dense
-    interface (pyGSTi issue #447). Use .to_dense() to read the array
-    representation and .set_dense() / .from_vector() to write it.
+    A state preparation vector with a dense internal representation.
 
-    This stub exists temporarily to produce descriptive errors at sites that
-    still rely on the old interface; it will be fully deleted once all call
-    sites are corrected.
+    This class is the common base class for parameterizations of a state vector
+    that have a dense representation.  Use `.to_dense()` to access the
+    underlying array and `.set_dense()` / `.from_vector()` to modify it.
+
+    Parameters
+    ----------
+    vec : numpy.ndarray
+        The SPAM vector as a dense numpy array.
+
+    evotype : {"statevec", "densitymx"}
+        The evolution type.
     """
-
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def _removed(what):
-        raise TypeError(
-            "The dense array interface has been removed. "
-            "Attempted operation: '%s'. "
-            "Use .to_dense() to obtain a numpy array for reading, "
-            "and .set_dense() or .from_vector() to update the state." % what
-        )
 
     def __copy__(self):
         cls = self.__class__
@@ -63,59 +56,6 @@ class DenseStateInterface(object):
             setattr(cpy, k, _copy.deepcopy(v, memo))
         return cpy
 
-    def __getitem__(self, key): self._removed('__getitem__[%s]' % str(key))
-    def __setitem__(self, key, val): self._removed('__setitem__[%s]' % str(key))
-    def __getattr__(self, attr):
-        if attr.startswith('__') and attr.endswith('__'):
-            raise AttributeError(attr)
-        self._removed('attribute access .%s' % attr)
-    def __pos__(self): self._removed('unary +')
-    def __neg__(self): self._removed('unary -')
-    def __abs__(self): self._removed('abs()')
-    def __add__(self, x): self._removed('__add__')
-    def __radd__(self, x): self._removed('__radd__')
-    def __sub__(self, x): self._removed('__sub__')
-    def __rsub__(self, x): self._removed('__rsub__')
-    def __mul__(self, x): self._removed('__mul__')
-    def __rmul__(self, x): self._removed('__rmul__')
-    def __truediv__(self, x): self._removed('__truediv__')
-    def __rtruediv__(self, x): self._removed('__rtruediv__')
-    def __floordiv__(self, x): self._removed('__floordiv__')
-    def __rfloordiv__(self, x): self._removed('__rfloordiv__')
-    def __pow__(self, x): self._removed('__pow__')
-    def __eq__(self, x): self._removed('__eq__')
-    def __len__(self): self._removed('__len__')
-    def __int__(self): self._removed('__int__')
-    def __float__(self): self._removed('__float__')
-    def __complex__(self): self._removed('__complex__')
-
-
-class DenseState(DenseStateInterface, _State):
-    """
-    TODO: update docstring
-    A state preparation vector that is interfaced/behaves as a dense super-ket (a numpy array).
-
-    This class is the common base class for parameterizations of a state vector
-    that have a dense representation and can be accessed like a numpy array.
-
-    Parameters
-    ----------
-    vec : numpy.ndarray
-        The SPAM vector as a dense numpy array.
-
-    evotype : {"statevec", "densitymx"}
-        The evolution type.
-
-    Attributes
-    ----------
-    _base_1d : numpy.ndarray
-        Direct access to the underlying 1D array.
-
-    base : numpy.ndarray
-        Direct access the the underlying data as column vector,
-        i.e, a (dim,1)-shaped array.
-    """
-
     def __init__(self, vec, basis, evotype, state_space):
         vec = _State._to_vector(vec)
         if state_space is None:
@@ -127,7 +67,6 @@ class DenseState(DenseStateInterface, _State):
         rep = evotype.create_dense_state_rep(vec, self._basis, state_space)
 
         _State.__init__(self, rep, evotype)
-        DenseStateInterface.__init__(self)
         #assert(self._ptr.flags['C_CONTIGUOUS'] and self._ptr.flags['OWNDATA'])  # not true for TPState
 
     @property
@@ -231,10 +170,25 @@ class DenseState(DenseStateInterface, _State):
         return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
 
 
-class DensePureState(DenseStateInterface, _State):
+class DensePureState(_State):
     """
-    TODO: docstring - a state that is interfaced as a dense ket
+    A state with a dense pure-state (ket) internal representation.
+    Use `.to_dense()` to access the underlying array.
     """
+
+    def __copy__(self):
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        cpy.__dict__.update(self.__dict__)
+        return cpy
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        memo[id(self)] = cpy
+        for k, v in self.__dict__.items():
+            setattr(cpy, k, _copy.deepcopy(v, memo))
+        return cpy
 
     def __init__(self, purevec, basis, evotype, state_space):
         purevec = _State._to_vector(purevec)
@@ -262,7 +216,6 @@ class DensePureState(DenseStateInterface, _State):
             self._purevec = purevec; self._basis = basis
 
         _State.__init__(self, rep, evotype)
-        DenseStateInterface.__init__(self)
 
     @property
     def _ptr(self):

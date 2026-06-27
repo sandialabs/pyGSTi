@@ -128,75 +128,7 @@ def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=
                          _np.linalg.norm(fd_deriv - deriv_to_check))  # pragma: no cover
 
 
-class DenseOperatorInterface(object):
-    """
-    REMOVED: This class formerly added a numpy-array-mimicking interface onto
-    operation objects. It has been deleted as part of expiring the deprecated
-    dense interface (pyGSTi issue #447). Use .to_dense() to read the array
-    representation and .set_dense() / .from_vector() to write it.
-
-    This stub exists temporarily to produce descriptive errors at sites that
-    still rely on the old interface; it will be fully deleted once all call
-    sites are corrected.
-    """
-
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def _removed(what):
-        raise TypeError(
-            "The dense array interface has been removed. "
-            "Attempted operation: '%s'. "
-            "Use .to_dense() to obtain a numpy array for reading, "
-            "and .set_dense() or .from_vector() to update the operator." % what
-        )
-
-    def __copy__(self):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        cpy.__dict__.update(self.__dict__)
-        return cpy
-
-    def __deepcopy__(self, memo):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        memo[id(self)] = cpy
-        for k, v in self.__dict__.items():
-            setattr(cpy, k, _copy.deepcopy(v, memo))
-        return cpy
-
-    def __getitem__(self, key): self._removed('__getitem__[%s]' % str(key))
-    def __setitem__(self, key, val): self._removed('__setitem__[%s]' % str(key))
-    def __getattr__(self, attr):
-        # Allow normal AttributeError for dunder names so pickle/copy/inspect
-        # machinery works correctly; only raise TypeError for real numpy-style
-        # attribute accesses on a modelmember (the pattern we are removing).
-        if attr.startswith('__') and attr.endswith('__'):
-            raise AttributeError(attr)
-        self._removed('attribute access .%s' % attr)
-    def __pos__(self): self._removed('unary +')
-    def __neg__(self): self._removed('unary -')
-    def __abs__(self): self._removed('abs()')
-    def __add__(self, x): self._removed('__add__')
-    def __radd__(self, x): self._removed('__radd__')
-    def __sub__(self, x): self._removed('__sub__')
-    def __rsub__(self, x): self._removed('__rsub__')
-    def __mul__(self, x): self._removed('__mul__')
-    def __rmul__(self, x): self._removed('__rmul__')
-    def __truediv__(self, x): self._removed('__truediv__')
-    def __rtruediv__(self, x): self._removed('__rtruediv__')
-    def __floordiv__(self, x): self._removed('__floordiv__')
-    def __rfloordiv__(self, x): self._removed('__rfloordiv__')
-    def __pow__(self, x): self._removed('__pow__')
-    def __eq__(self, x): self._removed('__eq__')
-    def __len__(self): self._removed('__len__')
-    def __int__(self): self._removed('__int__')
-    def __float__(self): self._removed('__float__')
-    def __complex__(self): self._removed('__complex__')
-
-
-class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
+class DenseOperator(_KrausOperatorInterface, _LinearOperator):
     """
     An operator that behaves like a dense super-operator matrix.
 
@@ -220,20 +152,12 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         The state space for this operation.  If `None` a default state space
         with the appropriate number of qubits is used.
 
-    Properties
-    ----------
-    DenseOperatorInterface is deprecated and this class' dependence on it
-    will be removed in the immediate future. For the time being, the
-    implementation of __getattr__ in DenseOperatorInterface means that
-    DenseOperator has every property of its attached OpRepDenseSuperop,
-    which is stored in DenseOperator._rep.
-
     Private attributes
     ------------------
     _evotype        (required by ModelMember; positional arg in DenseOperator.__init__)
     _rep            (required by LinearOperator; either Cython or Python "OpRepDenseSuperop")
     _basis          (indirect requirement of _rep)
-    _ptr            (required by DenseOperatorInterface, implemented as self._rep.base)
+    _ptr            (returns self._rep.base; the underlying dense matrix)
     _state_space    (required by ModelMember; inferrable from None as __init__ kwarg)
 
     Other private attributes
@@ -270,6 +194,20 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         superop = _bt.change_basis(std_superop, 'std', basis)
         return cls(superop, basis, evotype, state_space)
 
+    def __copy__(self):
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        cpy.__dict__.update(self.__dict__)
+        return cpy
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        memo[id(self)] = cpy
+        for k, v in self.__dict__.items():
+            setattr(cpy, k, _copy.deepcopy(v, memo))
+        return cpy
+
     def __init__(self, mx, basis, evotype, state_space=None):
         mx = _LinearOperator.convert_to_matrix(mx)
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
@@ -278,7 +216,6 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
         rep = evotype.create_dense_superop_rep(mx, self._basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
-        DenseOperatorInterface.__init__(self)
 
     @property
     def _ptr(self):
@@ -395,7 +332,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         self.set_dense(superop)  # this may fail if derived class doesn't allow it
 
 
-class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
+class DenseUnitaryOperator(_KrausOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
     An operator that behaves like a dense (unitary) operator matrix.
@@ -424,6 +361,20 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
     base : numpy.ndarray
         Direct access to the underlying process matrix data.
     """
+
+    def __copy__(self):
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        cpy.__dict__.update(self.__dict__)
+        return cpy
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        memo[id(self)] = cpy
+        for k, v in self.__dict__.items():
+            setattr(cpy, k, _copy.deepcopy(v, memo))
+        return cpy
 
     @classmethod
     def from_kraus_operators(cls, kraus_operators, basis='pp', evotype="default", state_space=None):
@@ -468,7 +419,6 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
 
         self._basis = basis
         _LinearOperator.__init__(self, rep, evotype)
-        DenseOperatorInterface.__init__(self)
         return self
 
     def __init__(self, mx, basis, evotype, state_space):
@@ -498,7 +448,6 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         self._basis = basis
 
         _LinearOperator.__init__(self, rep, evotype)
-        DenseOperatorInterface.__init__(self)
 
     @property
     def _ptr(self):

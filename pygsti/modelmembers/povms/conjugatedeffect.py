@@ -20,26 +20,19 @@ from pygsti.baseobjs import _compatibility as _compat
 from pygsti import SpaceT
 
 
-class DenseEffectInterface(object):
+class ConjugatedStatePOVMEffect(_POVMEffect):
     """
-    REMOVED: This class formerly added a numpy-array-mimicking interface onto
-    POVM effect objects. It has been deleted as part of expiring the deprecated
-    dense interface (pyGSTi issue #447). Use .to_dense() to read the array
-    representation and .set_dense() / .from_vector() to write it.
+    A POVM effect vector wrapping a conjugated state.
 
-    This stub exists temporarily to produce descriptive errors at sites that
-    still rely on the old interface; it will be fully deleted once all call
-    sites are corrected.
+    This class is the common base class for parameterizations of an effect vector
+    that have a dense representation.  Use `.to_dense()` to access the
+    underlying array and `.set_dense()` / `.from_vector()` to modify it.
+
+    Parameters
+    ----------
+    state : State
+        The underlying state whose conjugate defines this effect vector.
     """
-
-    @staticmethod
-    def _removed(what):
-        raise TypeError(
-            "The dense array interface has been removed. "
-            "Attempted operation: '%s'. "
-            "Use .to_dense() to obtain a numpy array for reading, "
-            "and .set_dense() or .from_vector() to update the effect." % what
-        )
 
     def __copy__(self):
         cls = self.__class__
@@ -54,59 +47,6 @@ class DenseEffectInterface(object):
         for k, v in self.__dict__.items():
             setattr(cpy, k, _copy.deepcopy(v, memo))
         return cpy
-
-    def __getitem__(self, key): self._removed('__getitem__[%s]' % str(key))
-    def __setitem__(self, key, val): self._removed('__setitem__[%s]' % str(key))
-    def __getattr__(self, attr):
-        if attr.startswith('__') and attr.endswith('__'):
-            raise AttributeError(attr)
-        self._removed('attribute access .%s' % attr)
-    def __pos__(self): self._removed('unary +')
-    def __neg__(self): self._removed('unary -')
-    def __abs__(self): self._removed('abs()')
-    def __add__(self, x): self._removed('__add__')
-    def __radd__(self, x): self._removed('__radd__')
-    def __sub__(self, x): self._removed('__sub__')
-    def __rsub__(self, x): self._removed('__rsub__')
-    def __mul__(self, x): self._removed('__mul__')
-    def __rmul__(self, x): self._removed('__rmul__')
-    def __truediv__(self, x): self._removed('__truediv__')
-    def __rtruediv__(self, x): self._removed('__rtruediv__')
-    def __floordiv__(self, x): self._removed('__floordiv__')
-    def __rfloordiv__(self, x): self._removed('__rfloordiv__')
-    def __pow__(self, x): self._removed('__pow__')
-    def __eq__(self, x): self._removed('__eq__')
-    def __len__(self): self._removed('__len__')
-    def __int__(self): self._removed('__int__')
-    def __float__(self): self._removed('__float__')
-    def __complex__(self): self._removed('__complex__')
-
-
-class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
-    """
-    TODO: update docstring
-    A POVM effect vector that behaves like a numpy array.
-
-    This class is the common base class for parameterizations of an effect vector
-    that have a dense representation and can be accessed like a numpy array.
-
-    Parameters
-    ----------
-    vec : numpy.ndarray
-        The POVM effect vector as a dense numpy array.
-
-    evotype : {"statevec", "densitymx"}
-        The evolution type.
-
-    Attributes
-    ----------
-    _base_1d : numpy.ndarray
-        Direct access to the underlying 1D array.
-
-    base : numpy.ndarray
-        Direct access the the underlying data as column vector,
-        i.e, a (dim,1)-shaped array.
-    """
 
     def __init__(self, state, called_from_reduce=False):
         self.state = state
