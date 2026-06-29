@@ -93,7 +93,7 @@ class FullArbitraryOp(_DenseOperator):
         int
             the number of independent parameters.
         """
-        return self.size
+        return self._ptr.size
 
     def to_vector(self):
         """

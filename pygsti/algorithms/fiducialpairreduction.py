@@ -139,7 +139,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
         A memory limit in bytes.
 
     minimum_pairs : int, optional
-        The minimium number of fiducial pairs to try (default == 1).  Set this
+        The minimum number of fiducial pairs to try (default == 1).  Set this
         to integers larger than 1 to avoid trying pair sets that are known to
         be too small.
 
@@ -488,7 +488,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 #set the value of goodPairList to be this value.
                 goodPairList= updated_solns[min_length_idx]
                     
-                #print some output about the minimum eigenvalue acheived.
+                #print some output about the minimum eigenvalue achieved.
                 printer.log('Minimum Eigenvalue Achieved: %f' %(bestFirstEval[0]), 3)
 
             else:
@@ -496,7 +496,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 goodPairList= list(candidate_solution_list.values())[0]
                 bestFirstEval=bestFirstEval[0]
             
-                #print some output about the minimum eigenvalue acheived.
+                #print some output about the minimum eigenvalue achieved.
                 printer.log('Minimum Eigenvalue Achieved: %f' %(bestFirstEval), 3)
             
             try:
@@ -568,7 +568,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
     inv_trace_tol : float, optional (default 10)
         Tolerance used to identify whether a candidate fiducial set has a feasible
         cost function value and for comparing among both complete and incomplete candidate
-        sets. The cost function corresonds to trace(pinv(sum_i(dot(J_i,J_i^T)))), where
+        sets. The cost function corresponds to trace(pinv(sum_i(dot(J_i,J_i^T)))), where
         the J_i's are described above, which is related to a condition in optimal 
         design theory called a-optimality. The tolerance is a relative tolerance 
         compared to the complete fiducial set. This essentially measures the relative
@@ -592,7 +592,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
         of this tolerance.
 
     sensitivity_threshold : float, optional (default 1e-10)
-        Threshold used for determing is a fiducial pair is useless 
+        Threshold used for determining is a fiducial pair is useless 
         for measuring a given germ's amplified parameters due to 
         trivial sensitivity to the germ kite parameters 
         (norm of jacobian w.r.t. the kite parameters is <sensitivity_threshold).
@@ -651,7 +651,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
                                                                     sensitivity_threshold=sensitivity_threshold,
                                                                     germ_circuit= germ)
             
-            #print some output about the minimum eigenvalue acheived.
+            #print some output about the minimum eigenvalue achieved.
             printer.log('Score Achieved: ' + str(best_score), 2)
             
             try:
@@ -1700,7 +1700,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
                                                                     initial_seed_mode=initial_seed_mode, evd_tol=evd_tol,
                                                                     float_type= float_type, dprobs_dict = precomputed_jacobians[germ])
             
-            #print some output about the minimum eigenvalue acheived.
+            #print some output about the minimum eigenvalue achieved.
             if best_score is not None:
                 printer.log('Score Achieved: ' + str(best_score), 2)
             printer.log('Number of fid pairs in found solution: %d'%(len(candidate_solution_list)), 2)
@@ -2077,7 +2077,7 @@ def _copy_to_static_explicitop_model(mdl):
     """Create and return an "effective" a copy of `mdl` that is an ExplicitOpModel with static elements.
     
     If `mdl` is already an ExplicitOpModel it is copied and returned
-     after setting all paramterizations to 'static'.
+     after setting all parameterizations to 'static'.
     Otherwise an ExplicitOpModel is constructed from quantities within
      `mdl` (for instance, if `mdl` is an ImplicitOpModel), namely:
       mdl.state_space, mdl.basis, mdl.sim, and mdl.evotype.  Then elements
@@ -2109,7 +2109,7 @@ def _copy_to_static_explicitop_model(mdl):
                            default_prep_type='static',
                            default_povm_type='static',
                            default_instrument_type='static',
-                           simulator=mdl.sim.copy(), evotype=mdl.evotype)
+                           simulator=mdl.sim.copy(keep_model_attached=False), evotype=mdl.evotype)
         for k, v in mdl.prep_blks['layers'].items():
             ret.preps[k] = v.to_dense()
         for k, v in mdl.povm_blks['layers'].items():

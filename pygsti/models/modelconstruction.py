@@ -50,6 +50,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
@@ -66,7 +67,7 @@ def create_spam_vector(vec_expr, state_space, basis):
     Parameters
     ----------
     vec_expr : string
-        the expression which determines which vector to build.  Currenlty, only
+        the expression which determines which vector to build.  Currently, only
         integers are allowed, which specify a the vector for the pure state of
         that index.  For example, "1" means return vectorize(``|1><1|``).  The
         index labels the absolute index of the state within the entire state
@@ -572,7 +573,10 @@ def _create_explicit_model_from_expressions(state_space, basis,
 
     from pygsti.circuits.circuitparser import parse_label
 
-    parsed_op_labels = [parse_label(str(opLabel)) for opLabel in op_labels]
+    # Canonicalize non-string labels through Label first, since e.g. str(('Gxpi2', 0)) and
+    # str(()) (the idle layer) are not directly parseable, whereas str(Label(...)) is.
+    parsed_op_labels = [parse_label(opLabel if isinstance(opLabel, str) else str(_label.Label(opLabel)))
+                        for opLabel in op_labels]
     if len(set(parsed_op_labels)) != len(op_labels):
         msg = f"""
         There are fewer unique Label objects after parsing op_labels than
@@ -666,7 +670,7 @@ def create_explicit_model_from_expressions(state_space,
 
         - "std" = operation matrix operates on density mx expressed as sum of matrix
           units
-        - "gm"  = operation matrix operates on dentity mx expressed as sum of
+        - "gm"  = operation matrix operates on density mx expressed as sum of
           normalized Gell-Mann matrices
         - "pp"  = operation matrix operates on density mx expresses as sum of
           tensor-product of Pauli matrices
@@ -805,7 +809,8 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     elif (global_idle_name is not None) and global_idle_name.startswith('(') and global_idle_name.endswith(')'):
         # For backward compatibility
         _warnings.warn(("Use of parenthesized gate names (e.g. '%s') is deprecated!  Processor spec gate names"
-                        " should be updated to use curly braces.") % str(global_idle_name))
+                        " should be updated to use curly braces.") % str(global_idle_name),
+                       _pyGSTiDeprecationWarning)
         gn_to_make_emptytup = global_idle_name
     else:
         gn_to_make_emptytup = None
@@ -1644,8 +1649,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qubits or less, and otherwise selects `"map"`.
+        resulting :class:`Model`.  Using `"auto"` currently selects `"map"`.
 
     on_construction_error : {'raise','warn',ignore'}
         What to do when the creation of a gate with the given
@@ -1852,8 +1856,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator used to compute predicted probabilities for the
-        resulting :class:`Model`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qubits or less, and otherwise selects `"map"`.
+        resulting :class:`Model`.  Using `"auto"` currently selects `"map"`.
 
     independent_gates : bool, optional
         Whether gates are allowed independent noise or not.  If False,
@@ -1866,7 +1869,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         available gate placement.
 
     independent_spam : bool, optional
-        Similar to `indepenent_gates` but for SPAM operations.
+        Similar to `independent_gates` but for SPAM operations.
 
     errcomp_type : {'gates', 'errorgens'}
         Whether errors should be combined by composing error maps (`gates`) or by
@@ -2074,7 +2077,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qudits (taken as a "base
+        Additional weight, beyond the number of target qudits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qudit gates can have up to weight-2
         errors and 2-qudit gates can have up to weight-3 errors.
@@ -2082,8 +2085,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
         requested probabilities, e.g. from :meth:`probs` or
-        :meth:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qudits or less, and otherwise selects `"map"`.
+        :meth:`bulk_probs`.  Using `"auto"` currently selects `"map"`.
 
     evotype : Evotype or str, optional
         The evolution type of this model, describing how states are
@@ -2320,8 +2322,14 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
     if lindblad_error_coeffs is not None:
 
         if not allow_nonlocal:  # the easy case
-            modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, lindblad_parameterization)
-                                                   for lbl, val in lindblad_error_coeffs.items()}))
+            # Normalize any string error-generator keys (e.g. "HX") to the tuple form
+            # (e.g. ("H", "X")) understood by LindbladErrorgen.from_elementary_errorgens.
+            def _normalize_local_key(k):
+                return (k[0], k[1:]) if isinstance(k, str) else k
+            modelnoises.append(_OpModelPerOpNoise(
+                {lbl: _LindbladNoise({_normalize_local_key(k): v for k, v in val.items()},
+                                     lindblad_parameterization)
+                 for lbl, val in lindblad_error_coeffs.items()}))
         else:  # then need to process labels like ('H', 'XX:0,1') or 'HXX:0,1'
             def process_stencil_labels(flat_lindblad_errs):
                 nonlocal_errors = _collections.OrderedDict()
@@ -2428,7 +2436,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
+        Additional weight, beyond the number of target qubits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
@@ -2447,7 +2455,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
 
     bidirectional_cnots : bool
         Whether CNOT gates can be performed in either direction (and each direction should
-        be treated as an indepedent gate)
+        be treated as an independent gate)
 
     verbosity : int, optional
         An integer >= 0 dictating how much output to send to stdout.

@@ -22,8 +22,8 @@ import pytest
 def gate_metrics_dict(model, target):
     metrics = {'infids': OrderedDict(), 'frodists': OrderedDict(), 'tracedists': OrderedDict()}
     for lbl in model.operations.keys():
-        model_gate = model.operations[lbl]
-        target_gate = target.operations[lbl]
+        model_gate = model.operations[lbl].to_dense('minimal')
+        target_gate = target.operations[lbl].to_dense('minimal')
         metrics['infids'][lbl] = pgo.entanglement_infidelity(model_gate, target_gate, model.basis)
         metrics['frodists'][lbl] = pgo.frobeniusdist(model_gate, target_gate)
         metrics['tracedists'][lbl] = pgo.tracedist(model_gate, target_gate)

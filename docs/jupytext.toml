@@ -1,0 +1,19 @@
+# jupytext pairing: every notebook *.md under markdown/ is paired with an
+# *.ipynb sitting NEXT TO IT in the same directory.
+#
+# CONTRIBUTOR NOTE: The *.md files under markdown/ are the canonical source.
+# The paired *.ipynb files are gitignored build artifacts (see .gitignore:
+# docs/markdown/**/*.ipynb). Materialize / refresh them locally with:
+#   jupytext --sync markdown/**/*.md
+# (Plain markdown pages without a jupytext header -- e.g. index/landing pages --
+# are skipped automatically.) Edits made directly to a generated .ipynb will be
+# overwritten on the next sync unless you sync them BACK first:
+#   jupytext --sync markdown/path/to/foo.ipynb
+# When in doubt, edit the .md.
+#
+# Why same-directory pairing matters: sphinx-book-theme only rewrites the
+# Colab/Binder launch link from foo.md to foo.ipynb when an .ipynb of the same
+# basename exists alongside the .md at build time. The hosted docs are built from
+# the auto-generated `develop-with-notebooks` branch, where these .ipynb files are
+# committed by CI (see .github/workflows/develop.yml).
+formats = "ipynb,md:myst"

@@ -1095,7 +1095,6 @@ class OpModel(Model):
         #rebuild the model index to model member map if needed.
         self._build_index_mm_map()
 
-
     def _init_virtual_obj(self, obj):
         """
         Initializes a "virtual object" - an object (e.g. LinearOperator) that *could* be a
@@ -1220,8 +1219,6 @@ class OpModel(Model):
         """
         
         self.set_parameter_values([index], [val], close)
-        
-        
 
     def set_parameter_values(self, indices, values, close=False):
         """
@@ -1498,14 +1495,14 @@ class OpModel(Model):
                     circuit = ckt[1:]
                 elif len(primitive_prep_labels_tup)==1:
                     prep_lbl = primitive_prep_labels_tup[0]
-                    circuit = None
+                    circuit = ckt  # no explicit prep label to strip; ops circuit is the whole circuit
                 else:
                     if 'prep' in erroron and self._has_primitive_preps():
                         msg = f"Cannot resolve state prep in {ckt}. There are likely multiple preps in this model."
                         raise ValueError(msg)
                     else: 
                         prep_lbl = None
-                        circuit = None
+                        circuit = ckt  # no prep stripped; ops circuit is the whole circuit
 
                 if len(ckt) > 0 and ckt[-1] in primitive_povm_labels_set:
                     povm_lbl = ckt[-1]
@@ -2193,7 +2190,7 @@ class OpModel(Model):
             raise ValueError("Cannot create operator for non-primitive circuit layer: %s" % str(layerlbl))
         else:
             return fns[typ](self, layerlbl, self._opcaches)
-
+        
     def circuit_operator(self, circuit):
         """
         Construct or retrieve the operation associated with a circuit.
@@ -2510,7 +2507,7 @@ class OpModel(Model):
         F = _np.dot(invDeriv, fogi_vecs)
         F = _np.concatenate((prefix_mx, F), axis=1)
 
-        #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shoudn't?
+        #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shouldn't?
         #fogi_param_names = ["P%d" % i for i in range(len(unused_param_indices))] \
         #    + ham_fogi_vec_names + other_fogi_vec_names
 

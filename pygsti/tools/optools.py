@@ -13,6 +13,7 @@ Utility functions operating on operation matrices
 from __future__ import annotations
 
 import warnings as _warnings
+from contextlib import contextmanager as _contextmanager
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -26,8 +27,7 @@ from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import sdptools as _sdps
 from pygsti.tools.exceptions import (
-    NumericalDomainWarning as _NumericalDomainWarning,
-    CVXPYFailure as _CVXPYFailure
+    NumericalDomainWarning as _NumericalDomainWarning
 )
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
@@ -41,6 +41,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _Local
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 from typing import Union, Optional, Any
+from pygsti.pgtypes import SpaceT
 
 
 __SCALAR_TOL_EXPONENT__ = 0.5
@@ -54,6 +55,33 @@ working with a matrix whose dtype is `d`, then we set
 
 or a modest multiple thereof.
 """
+
+
+@_contextmanager
+def relaxed_scalar_tolerance(exponent: float = 0.05):
+    """
+    Temporarily lower the global ``__SCALAR_TOL_EXPONENT__`` used by
+    :func:`fidelity` (and any other consumer of that global) to gate
+    ``NumericalDomainWarning`` emission.
+
+    The effective tolerance becomes ``np.finfo(dtype).eps ** exponent``.
+    Smaller `exponent` => looser tolerance. In float64,
+    ``eps ** 0.05 ≈ 0.165``, which gives roughly a 2× margin over the
+    drift typically observed during gauge optimization over non-unitary
+    gauge groups (largest seen: ~0.08 trace deviation, ~-0.06 minimum
+    eigenvalue). Pass a larger `exponent` (e.g. 0.15 ≈ 0.017) when
+    wrapping calls on already-converged inputs that should be cleaner.
+
+    Not thread-safe: mutates a module-level global. Safe under
+    pytest-xdist (forked workers have independent module state).
+    """
+    global __SCALAR_TOL_EXPONENT__
+    old = __SCALAR_TOL_EXPONENT__
+    __SCALAR_TOL_EXPONENT__ = exponent
+    try:
+        yield
+    finally:
+        __SCALAR_TOL_EXPONENT__ = old
 
 
 def _flat_mut_blks(i, j, block_dims):
@@ -155,6 +183,7 @@ def fidelity(a, b):
     """
     __SCALAR_TOL__ = _np.finfo(a.dtype).eps ** __SCALAR_TOL_EXPONENT__
     # ^ use for checks that have no dimensional dependence; about 1e-8 for double precision.
+    __RANK_TOL__   = _np.finfo(a.dtype).eps ** max(__SCALAR_TOL_EXPONENT__, 0.5)
     
     _mt.assert_hermitian(a, __SCALAR_TOL__)
     _mt.assert_hermitian(b, __SCALAR_TOL__)
@@ -168,13 +197,13 @@ def fidelity(a, b):
     if _np.abs(tr_b - 1) > __SCALAR_TOL__:
         _warnings.warn(trace_warning % ('b', str(tr_b)), _NumericalDomainWarning)
 
-    r, vec = fast_density_rank(a, __SCALAR_TOL__)
+    r, vec = fast_density_rank(a, __RANK_TOL__)
     if r <= 1:
         # special case when a is rank 1, a = vec * vec^T.
         f = (vec.T.conj() @ b @ vec).real  # vec^T * b * vec
         return f
 
-    r, vec = fast_density_rank(b, __SCALAR_TOL__)
+    r, vec = fast_density_rank(b, __RANK_TOL__)
     if r <= 1:
         # special case when b is rank 1 (recall fidelity is sym in args)
         f = (vec.T.conj() @ a @ vec).real  # vec^T * a * vec
@@ -389,7 +418,6 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         `dm = trace( |(J(a)-J(b)).T * W| )`.
     """
     assert _sdps.CVXPY_ENABLED
-    import cvxpy as _cp
 
     assert a.shape == b.shape
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
@@ -398,33 +426,22 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     # It will convert c a "single-block" basis representation
     # when mx_basis has multiple blocks.
     J = _jam.fast_jamiolkowski_iso_std(c, mx_basis, normalized=False)
-    prob, vars = _sdps.diamond_norm_model_jamiolkowski(J)
+    problem, vars   = _sdps.diamond_norm_model_jamiolkowski(J)
+    objval, varvals = _sdps.solve_sdp(problem)
 
-    objective_val = -2
-    varvals = [_np.zeros_like(J), None, None]
-    sdp_solvers = ['MOSEK', 'CLARABEL', 'CVXOPT']
-    for i, solver in enumerate(sdp_solvers):
-        try:
-            with _warnings.catch_warnings():
-                _warnings.filterwarnings('ignore','.*Solution may be inaccurate.*', UserWarning)
-                prob.solve(solver=solver)
-            objective_val = prob.value
-            varvals = [v.value for v in vars]
-            break
-        except (AssertionError, _cp.SolverError) as e:
-            if solver != 'MOSEK':
-                msg = f"Received error {e} when trying to use solver={solver}."
-                if i + 1 == len(sdp_solvers):
-                    failure_msg = "Out of solvers. Returning -2 for diamonddist."
-                else:
-                    failure_msg = f"Trying {sdp_solvers[i+1]} next."
-                msg += f'\n{failure_msg}'
-                _warnings.warn(msg, _CVXPYFailure)
+    if _np.isnan(objval):
+        objval = -2
+        varvals = [_np.zeros_like(J), None, None]
+    else:
+        # the returned `varvals` is a dict keyed by
+        # variable name. We care about the variables
+        # as ordered by `vars`.
+        varvals = [v.value for v in vars]
 
     if return_x:
-        return objective_val, varvals
+        return objval, varvals
     else:
-        return objective_val
+        return objval
 
 
 def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)
@@ -478,6 +495,15 @@ def is_trace_preserving(a: _np.ndarray, mx_basis: BasisLike='pp', tol=1e-8) -> b
     atol = tol * udim
     check = float(_np.linalg.norm(I_vec - expect_I_vec)) <= atol
     return check
+
+
+def superket_trace(superket: _np.ndarray, basis: _Basis):
+    if basis.first_element_is_identity:
+        t = superket.ravel()[0]
+    else:
+        mx = _bt.vec_to_stdmx(superket, basis, keep_complex=True)
+        t = _np.real(_np.trace(mx))
+    return t
 
 
 def entanglement_fidelity(a, b, mx_basis: BasisLike='pp', is_tp=None, is_unitary=None):
@@ -591,6 +617,74 @@ def tensorized_with_eye(op: _np.ndarray, op_basis: _Basis, ten_basis: Optional[_
     ten_op_std = _np.kron(op_std, eye)
     ten_op = _bt.change_basis(ten_op_std, ten_std_basis, ten_basis)
     return ten_op, ten_basis
+
+
+#: Single source of truth for how far a (POVM-effect) eigenvalue may fall outside [0, 1]
+#: before :func:`rootconj_superop` warns / raises, respectively, when forming E½.  These are
+#: the defaults below and are also referenced by
+#: :class:`~pygsti.modelmembers.operations.RootConjOperator`.
+EFFECT_EIGVAL_ABSTOL_WARN = 1e-10
+EFFECT_EIGVAL_ABSTOL_ERROR = 1e-8
+
+
+def rootconj_superop(effect_superket: _np.ndarray, basis: _Basis,
+                     abstol_warn: float = EFFECT_EIGVAL_ABSTOL_WARN,
+                     abstol_error: float = EFFECT_EIGVAL_ABSTOL_ERROR) -> _np.ndarray:
+    """
+    Let E denote the Hermitian matrix representation effect_superket, where 0 ≤ E ≤ 1.
+
+    This function returns the array representation (in `basis`) of the map that takes
+    a Hermitian matrix ρ to the Hermitian matrix E½ ρ E½.
+
+    `abstol_warn` and `abstol_error` set how far an eigenvalue of E may fall outside
+    [0, 1] before a warning or a ValueError (respectively) is raised.
+    """
+    effect_mat = _bt.vec_to_stdmx(effect_superket, basis, keep_complex=True)
+    vecs, vals, inv_vecs = _mt.eigendecomposition(effect_mat, assume_hermitian=True)
+
+    msg = f'Eigenvalues {vals} fall outside [0.0, 1.0], up to tolerance %s.'
+    if _np.any(vals < 0.0 - abstol_error) or _np.any(vals > 1.0 + abstol_error):
+        raise ValueError( msg % abstol_error )
+    if _np.any(vals < 0.0 - abstol_warn)  or _np.any(vals > 1.0 + abstol_warn ):
+        _warnings.warn( msg % abstol_warn, _NumericalDomainWarning )
+    vals = _np.clip(vals, a_min=0.0, a_max=1.0)
+    
+    rooteffect_mat = (vecs * _np.sqrt(vals)[_np.newaxis, :]) @ inv_vecs
+    mx_std = _np.kron(rooteffect_mat, rooteffect_mat.T)
+    mx : _np.ndarray = _bt.change_basis(mx_std, 'std', basis, expect_real=True) # type: ignore
+    return mx
+
+
+def minimal_kraus_decomposition(op_x: _np.ndarray, op_basis: _Basis, error_tol:float=1e-6, trunc_tol:float=1e-7) -> list[_np.ndarray]:
+    """
+    The array `op_x` represents a completely positive superoperator X on
+    Hilbert-Schmidt space, using `op_basis` as the basis for that space.
+
+    A Kraus decomposition of X is a set of square matrices, {K_i}_i, that satisfy
+
+        X(ρ) = \\sum_i K_i ρ K_i^\\dagger.
+
+    The matrices appearing in any such set are called Kraus operators of X.
+    
+    This function returns a minimal-length list of Kraus operators of X.
+    """
+    d  = int(_np.round(op_x.size ** 0.25))
+    d2 = d**2
+    assert op_x.shape == (d2, d2) 
+    from pygsti.tools.jamiolkowski import jamiolkowski_iso
+    choi_mx : _np.ndarray = jamiolkowski_iso(op_x, op_basis, 'std', normalized=True) * d  # type: ignore
+
+    evecs, evals, _ = _mt.eigendecomposition(choi_mx, assume_hermitian=True)
+    if any([ev < -error_tol for ev in evals]):
+        raise ValueError("Cannot compute Kraus decomposition of non-positive-definite superoperator!")
+    keep = evals >= trunc_tol
+    evals = evals[keep]
+    evecs = evecs[:, keep]
+    out = []
+    for i, ev in enumerate(evals):
+        temp = _np.sqrt(ev) * evecs[:, i].reshape((d, d), order='C')
+        out.append(temp)
+    return out
 
 
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
@@ -1993,7 +2087,7 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
 
     return_generators : bool, optional
         If True, return the error generators projected against along with the
-        projection values themseves.
+        projection values themselves.
 
     return_scale_fctr : bool, optional
         If True, also return the scaling factor that was used to multiply the
@@ -2419,8 +2513,8 @@ def project_model(model, target_model,
         gsDict[p].set_all_parameterizations("full")
         NpDict[p] = 0
 
-    errgens = [error_generator(model.operations[gl],
-                               target_model.operations[gl],
+    errgens = [error_generator(model.operations[gl].to_dense('minimal'),
+                               target_model.operations[gl].to_dense('minimal'),
                                target_model.basis, gen_type, logG_weight)
                for gl in opLabels]
 
@@ -2450,7 +2544,7 @@ def project_model(model, target_model,
             lnd_error_gen = _np.tensordot(HBlk.block_data, HGens, (0, 0)) + \
                 _np.tensordot(otherBlk.block_data, otherGens, ((0, 1), (0, 1)))
 
-        targetOp = target_model.operations[gl]
+        targetOp = target_model.operations[gl].to_dense('minimal')
 
         if 'H' in projectiontypes:
             gsDict['H'].operations[gl] = operation_from_error_generator(

@@ -15,6 +15,8 @@ from pygsti.tools import two_delta_logl
 from ..util import BaseCase
 import pytest
 import numpy as _np
+import os
+import tempfile
 
 
 class GSTUtilTester(BaseCase):
@@ -307,9 +309,11 @@ class GateSetTomographyTester(BaseProtocolData):
         #integration test to at least confirm we are writing and reading
         #to and from the directory serializations.
         proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST")
-        proto.write('../../test_packages/temp_test_files/test_GateSetTomography_serialization')
-        #then read this back in
-        proto_read = gst.GateSetTomography.from_dir('../../test_packages/temp_test_files/test_GateSetTomography_serialization')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            serialization_path = os.path.join(tmpdir, 'test_GateSetTomography_serialization')
+            proto.write(serialization_path)
+            #then read this back in
+            proto_read = gst.GateSetTomography.from_dir(serialization_path)
 
         #spot check some of the values of the protocol objects
         assert all([elem1==elem2 for elem1, elem2 in 
@@ -343,9 +347,11 @@ class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
         #integration test to at least confirm we are writing and reading
         #to and from the directory serializations.
         proto = gst.LinearGateSetTomography(self.mdl_target.copy(), 'stdgaugeopt', name="testGST")
-        proto.write('../../test_packages/temp_test_files/test_LinearGateSetTomography_serialization')
-        #then read this back in
-        proto_read = gst.LinearGateSetTomography.from_dir('../../test_packages/temp_test_files/test_LinearGateSetTomography_serialization')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            serialization_path = os.path.join(tmpdir, 'test_LinearGateSetTomography_serialization')
+            proto.write(serialization_path)
+            #then read this back in
+            proto_read = gst.LinearGateSetTomography.from_dir(serialization_path)
 
         #spot check some of the values of the protocol objects
         assert all([elem1==elem2 for elem1, elem2 in 
@@ -424,9 +430,11 @@ class StandardGSTTester(BaseProtocolData):
         #integration test to at least confirm we are writing and reading
         #to and from the directory serializations.
         proto = gst.StandardGST(modes=["full TP","CPTPLND","Target"])
-        proto.write('../../test_packages/temp_test_files/test_StandardGateSetTomography_serialization')
-        #then read this back in
-        proto_read = gst.StandardGST.from_dir('../../test_packages/temp_test_files/test_StandardGateSetTomography_serialization')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            serialization_path = os.path.join(tmpdir, 'test_StandardGateSetTomography_serialization')
+            proto.write(serialization_path)
+            #then read this back in
+            proto_read = gst.StandardGST.from_dir(serialization_path)
 
         #spot check some of the values of the protocol objects
         assert proto_read.gaugeopt_suite.gaugeopt_suite_names == proto.gaugeopt_suite.gaugeopt_suite_names
