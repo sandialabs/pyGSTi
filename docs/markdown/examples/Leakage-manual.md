@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -77,15 +77,15 @@ leakageOp = unitary_to_gmgate(Uleakage)
 
 #Guess of a model w/just unitary leakage
 mdl_3level_guess = mdl_3level_ideal.copy()
-mdl_3level_guess[tuple()] = np.dot(leakageOp, mdl_3level_guess[tuple()])
-#mdl_3level_guess['Gxpi2', 'Qubit_leakage'] = np.dot(leakageOp, mdl_3level_guess['Gxpi2', 'Qubit_leakage'])
-#mdl_3level_guess['Gypi2', 'Qubit_leakage'] = np.dot(leakageOp, mdl_3level_guess['Gypi2', 'Qubit_leakage'])
+mdl_3level_guess[tuple()] = np.dot(leakageOp, mdl_3level_guess[tuple()].to_dense())
+#mdl_3level_guess['Gxpi2', 'Qubit_leakage'] = np.dot(leakageOp, mdl_3level_guess['Gxpi2', 'Qubit_leakage'].to_dense())
+#mdl_3level_guess['Gypi2', 'Qubit_leakage'] = np.dot(leakageOp, mdl_3level_guess['Gypi2', 'Qubit_leakage'].to_dense())
 
 #Actual model used for data generation (some depolarization too)
 mdl_3level_noisy = mdl_3level_ideal.depolarize(op_noise=0.005, spam_noise=0.01)
-mdl_3level_noisy[tuple()] = np.dot(leakageOp, mdl_3level_noisy[tuple()])
-#mdl_3level_noisy['Gxpi2', 'Qubit_leakage'] = np.dot(leakageOp, mdl_3level_noisy['Gxpi2', 'Qubit_leakage'])
-#mdl_3level_noisy['Gypi2', 'Qubit_leakage'] = np.dot(leakageOp, mdl_3level_noisy['Gypi2', 'Qubit_leakage'])
+mdl_3level_noisy[tuple()] = np.dot(leakageOp, mdl_3level_noisy[tuple()].to_dense())
+#mdl_3level_noisy['Gxpi2', 'Qubit_leakage'] = np.dot(leakageOp, mdl_3level_noisy['Gxpi2', 'Qubit_leakage'].to_dense())
+#mdl_3level_noisy['Gypi2', 'Qubit_leakage'] = np.dot(leakageOp, mdl_3level_noisy['Gypi2', 'Qubit_leakage'].to_dense())
 ```
 
 ```{code-cell} ipython3

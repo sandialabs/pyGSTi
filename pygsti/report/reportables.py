@@ -1137,7 +1137,7 @@ def angles_btwn_rotn_axes(model):
         axisOfRotn = decomp.get('axis of rotation', None)
 
         for j, gl_other in enumerate(opLabels[i + 1:], start=i + 1):
-            decomp_other = _tools.decompose_gate_matrix(model.operations[gl_other])
+            decomp_other = _tools.decompose_gate_matrix(model.operations[gl_other].to_dense("HilbertSchmidt"))
             rotnAngle_other = decomp_other.get('pi rotations', 'X')
 
             if str(rotnAngle) == 'X' or abs(rotnAngle) < 1e-4 or \
@@ -2150,7 +2150,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
     ret = {}
     mxBasis = model_b.basis  # target model is more likely to have a valid basis
     Id = _np.identity(model_a.dim, 'd')
-    opLabels = [gl for gl, gate in model_b.operations.items() if not _np.allclose(gate, Id)]
+    opLabels = [gl for gl, gate in model_b.operations.items() if not _np.allclose(gate.to_dense('minimal'), Id)]
     nOperations = len(opLabels)
     elementary_errgen_basis = _Basis.cast('PP' if model_a.state_space.is_entirely_qubits else mxBasis, model_a.dim)
     nonI_lbls = elementary_errgen_basis.labels[1:]  # skip [0] == Identity

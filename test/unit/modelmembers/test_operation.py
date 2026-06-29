@@ -138,46 +138,9 @@ class DenseOpBase(OpBase):
         with self.assertRaises((ValueError, AssertionError)):
             self.gate.set_dense(np.zeros((1, 1), 'd'))  # bad size
 
-    @pytest.mark.filterwarnings("ignore:divide by zero encountered in divide:RuntimeWarning")
-    def test_arithmetic(self):
-        result = self.gate + self.gate
-        self.assertEqual(type(result), np.ndarray)
-        result = self.gate + (-self.gate)
-        self.assertEqual(type(result), np.ndarray)
-        result = self.gate - self.gate
-        self.assertEqual(type(result), np.ndarray)
-        result = self.gate - abs(self.gate)
-        self.assertEqual(type(result), np.ndarray)
-        result = 2 * self.gate
-        self.assertEqual(type(result), np.ndarray)
-        result = self.gate * 2
-        self.assertEqual(type(result), np.ndarray)
-        result = 2 / self.gate
-        self.assertEqual(type(result), np.ndarray)
-        result = self.gate / 2
-        self.assertEqual(type(result), np.ndarray)
-        result = self.gate // 2
-        self.assertEqual(type(result), np.ndarray)
-        result = self.gate**2
-        self.assertEqual(type(result), np.ndarray)
-        result = self.gate.transpose()
-        self.assertEqual(type(result), np.ndarray)
-
-        M = np.identity(4, 'd')
-
-        result = self.gate + M
-        self.assertEqual(type(result), np.ndarray)
-        result = self.gate - M
-        self.assertEqual(type(result), np.ndarray)
-        result = M + self.gate
-        self.assertEqual(type(result), np.ndarray)
-        result = M - self.gate
-        self.assertEqual(type(result), np.ndarray)
-
-
 class MutableDenseOpBase(DenseOpBase):
     def test_set_value(self):
-        M = np.asarray(self.gate)  # gate as a matrix
+        M = self.gate.to_dense()  # gate as a matrix
         self.gate.set_dense(M)
         # TODO assert correctness
 
@@ -185,30 +148,8 @@ class MutableDenseOpBase(DenseOpBase):
         gate_copy = self.gate.copy()
         T = FullGaugeGroupElement(np.identity(4, 'd'))
         gate_copy.transform_inplace(T)
-        self.assertArraysAlmostEqual(gate_copy, self.gate)
+        self.assertArraysAlmostEqual(gate_copy.to_dense(), self.gate.to_dense())
         # TODO test a non-trivial case
-
-    def test_element_accessors(self):
-        e1 = self.gate[1, 1]
-        e2 = self.gate[1][1]
-        self.assertAlmostEqual(e1, e2)
-
-        s1 = self.gate[1, :]
-        s2 = self.gate[1]
-        s3 = self.gate[1][:]
-        a1 = self.gate[:]
-        self.assertArraysAlmostEqual(s1, s2)
-        self.assertArraysAlmostEqual(s1, s3)
-
-        s4 = self.gate[2:4, 1]
-
-        self.gate[1, 1] = e1
-        self.gate[1, :] = s1
-        self.gate[1] = s1
-        self.gate[2:4, 1] = s4
-
-        result = len(self.gate)
-        # TODO assert correctness
 
     def test_depolarize(self):
         dp = self.gate.depolarize(0.05)
@@ -222,7 +163,7 @@ class MutableDenseOpBase(DenseOpBase):
 
 class ImmutableDenseOpBase(DenseOpBase):
     def test_raises_on_set_value(self):
-        M = np.asarray(self.gate)  # gate as a matrix
+        M = self.gate.to_dense()  # gate as a matrix
         with self.assertRaises(ValueError):
             self.gate.set_dense(M)
 
@@ -230,23 +171,6 @@ class ImmutableDenseOpBase(DenseOpBase):
         T = FullGaugeGroupElement(np.identity(4, 'd'))
         with self.assertRaises((ValueError, NotImplementedError)):
             self.gate.transform_inplace(T)
-
-    def test_element_accessors(self):
-        e1 = self.gate[1, 1]
-        e2 = self.gate[1][1]
-        self.assertAlmostEqual(e1, e2)
-
-        s1 = self.gate[1, :]
-        s2 = self.gate[1]
-        s3 = self.gate[1][:]
-        a1 = self.gate[:]
-        self.assertArraysAlmostEqual(s1, s2)
-        self.assertArraysAlmostEqual(s1, s3)
-
-        s4 = self.gate[2:4, 1]
-
-        result = len(self.gate)
-        # TODO assert correctness
 
 
 class DenseOpTester(ImmutableDenseOpBase, BaseCase):
@@ -416,20 +340,14 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
         return
 
     def test_first_row_read_only(self):
-        # check that first row is read-only
-        e1 = self.gate[0, 0]
+        # check that first row is read-only via _ptr (ProtectedArray)
+        gate_dense = self.gate.to_dense()
+        e1 = gate_dense[0, 0]
+        # Writes via set_dense should enforce the TP constraint
+        bad_gate = gate_dense.copy()
+        bad_gate[0, 0] = e1 + 1.0
         with self.assertRaises(ValueError):
-            self.gate[0, 0] = e1
-        with self.assertRaises(ValueError):
-            self.gate[0][0] = e1
-        with self.assertRaises(ValueError):
-            self.gate[0, :] = [e1, 0, 0, 0]
-        with self.assertRaises(ValueError):
-            self.gate[0][:] = [e1, 0, 0, 0]
-        with self.assertRaises(ValueError):
-            self.gate[0, 1:2] = [0]
-        with self.assertRaises(ValueError):
-            self.gate[0][1:2] = [0]
+            self.gate.set_dense(bad_gate)
 
 
 class AffineShiftOpTester(DenseOpBase, BaseCase):
@@ -441,39 +359,29 @@ class AffineShiftOpTester(DenseOpBase, BaseCase):
         return op.AffineShiftOp(mat)
 
     def test_set_dense(self):
-        M = np.asarray(self.gate)  # gate as a matrix
+        M = self.gate.to_dense()  # gate as a matrix
         self.gate.set_dense(M)
 
     def test_transform(self):
         gate_copy = self.gate.copy()
         T = FullGaugeGroupElement(np.identity(4, 'd'))
         gate_copy.transform_inplace(T)
-        self.assertArraysAlmostEqual(gate_copy, self.gate)
-
-    def test_element_accessors(self):
-        e1 = self.gate[1, 1]
-        e2 = self.gate[1][1]
-        self.assertAlmostEqual(e1, e2)
-
-        s1 = self.gate[1, :]
-        s2 = self.gate[1]
-        s3 = self.gate[1][:]
-        a1 = self.gate[:]
-        self.assertArraysAlmostEqual(s1, s2)
-        self.assertArraysAlmostEqual(s1, s3)
-
-        s4 = self.gate[2:4, 1]
+        self.assertArraysAlmostEqual(gate_copy.to_dense(), self.gate.to_dense())
 
     def test_set_elements(self):
         gate_copy = self.gate.copy()
+        gate_arr = gate_copy.to_dense().copy()
 
-        #allowed sets:
-        gate_copy[1,0] = 2
-        gate_copy[2,0] = 2
+        #allowed sets (columns 0 only for AffineShiftOp):
+        gate_arr[1, 0] = 2
+        gate_arr[2, 0] = 2
+        gate_copy.set_dense(gate_arr)
 
-        #unallowed sets:
+        #unallowed sets (non-shift elements):
+        gate_arr2 = gate_copy.to_dense().copy()
+        gate_arr2[1, 1] = 2
         with self.assertRaises(ValueError):
-            gate_copy[1,1] = 2 
+            gate_copy.set_dense(gate_arr2)
 
 
 class StaticOpTester(ImmutableDenseOpBase, BaseCase):
