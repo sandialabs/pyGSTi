@@ -917,12 +917,14 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         float
         """
+        if not self.basis.first_element_is_identity:
+            raise NotImplementedError()
+
         penalty = 0.0
         for operationMx in list(self.operations.values()):
             op_dense = operationMx.to_dense('minimal')
             penalty += abs(op_dense[0, 0] - 1.0)**2
-            for k in range(1, op_dense.shape[1]):
-                penalty += abs(op_dense[0, k])**2
+            penalty += _np.linalg.norm(op_dense[0, 1:])**2
 
         op_dim = self.state_space.dim
         firstEl = 1.0 / op_dim**0.25
