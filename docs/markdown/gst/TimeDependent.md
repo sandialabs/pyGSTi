@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -92,7 +92,7 @@ The zero probability is equal to `0.5 * (1 + 0.9**2) = 0.905`, where the `0.9` c
 ```{code-cell} ipython3
 E = mdl['Mdefault']['0']
 rho = mdl['rho0']
-print(np.dot(E.T, np.dot(Gi_matrix_at_t, np.dot(Gi_matrix_at_t, rho))))
+print(np.dot(E.to_dense().T, np.dot(Gi_matrix_at_t, np.dot(Gi_matrix_at_t, rho.to_dense()))))
 ```
 
 ## Time-dependent (or "time aware") circuits
@@ -110,7 +110,7 @@ Gi_at_t.set_time(0.1)
 Gi_matrix_at_t1 = Gi_at_t.to_dense().copy()  # .copy() is needed because copies of the internal dense rep are not made by default (for performance)
 Gi_at_t.set_time(0.2)
 Gi_matrix_at_t2 = Gi_at_t.to_dense().copy()
-print(np.dot(E.T, np.dot(Gi_matrix_at_t2, np.dot(Gi_matrix_at_t1, rho))))
+print(np.dot(E.to_dense().T, np.dot(Gi_matrix_at_t2, np.dot(Gi_matrix_at_t1, rho.to_dense()))))
 ```
 
 You can also use the following "!"-shorthand (exclamation point followed by time) notation to specify label durations:
@@ -205,5 +205,3 @@ print("Objective function at data-generating model = ",objfn.fn())
 objfn2 = builder.build(final_mdl, data.dataset, list(data.dataset.keys()))
 print("Objective function at best-fit (GST) model (should be lower) = ",objfn2.fn())
 ```
-
-
