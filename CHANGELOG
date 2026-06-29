@@ -1,25 +1,5 @@
 # CHANGELOG
 
-## [0.9.15] - Unreleased
-
-### Removed
-
-* **Deprecated dense modelmember interfaces expired** (#447, #397): The
-  `DenseOperatorInterface`, `DenseStateInterface`, and `DenseEffectInterface`
-  mixin classes have been removed. These classes previously allowed dense
-  modelmembers (such as `FullArbitraryOp`, `FullTPOp`, `FullState`,
-  `TPState`, `FullPOVMEffect`, etc.) to be used as if they were numpy arrays,
-  supporting item access, arithmetic operators, and attribute delegation to
-  the underlying array. This interface was deprecated in 0.9.13.
-
-  **Migration:** Replace array-style access with explicit method calls:
-  - *Read:* `op.to_dense(on_space='minimal')` (returns a numpy array copy)
-  - *Write:* `op.set_dense(arr)` or `op.from_vector(v)`
-  - *Internal mutation:* `op._ptr[...] = x; op._ptr_has_changed()`
-
-  As a side effect, issue #397 (a bug caused by the array interface
-  introducing silent parameter inconsistencies) is also resolved.
-
 ## [0.9.14.2] - 2025-11-08
 
 This is a bugfix release patching the following issues:
