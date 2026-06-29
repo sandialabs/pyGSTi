@@ -156,7 +156,7 @@ Additionally, the path-3 behaviour is arguably surprising to callers: `copy.deep
 
 **Do not change `_DenseCopyMixin.__deepcopy__` without first resolving the tracking issue.**
 
-**Tracker.** See `issue-modelmember-copy-semantics.md` at the repo root for the draft issue text (file is git-untracked; open an issue on `sandialabs/pyGSTi` from that draft and record the issue number here). No GitHub tracker yet — please open one.
+**Tracker.** [sandialabs/pyGSTi#804](https://github.com/sandialabs/pyGSTi/issues/804)
 
 ## 17. POVM inheritance structure refactor
 
