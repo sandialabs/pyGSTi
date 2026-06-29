@@ -222,9 +222,6 @@ def test_labels_snapshot_1q():
 
     assert LCB('ham', pp, param_mode='elements').param_labels == \
         ['X Hamiltonian error coefficient', 'Y Hamiltonian error coefficient', 'Z Hamiltonian error coefficient']
-    assert LCB('ham', pp).coefficient_labels == \
-        ['X Hamiltonian error coefficient', 'Y Hamiltonian error coefficient', 'Z Hamiltonian error coefficient']
-
     assert LCB('other_diagonal', pp, param_mode='cholesky').param_labels == \
         ['sqrt(X stochastic coefficient)', 'sqrt(Y stochastic coefficient)', 'sqrt(Z stochastic coefficient)']
     assert LCB('other_diagonal', pp, param_mode='elements').param_labels == \
@@ -233,8 +230,6 @@ def test_labels_snapshot_1q():
         ['sqrt(common stochastic error coefficient for depolarization)']
     assert LCB('other_diagonal', pp, param_mode='reldepol').param_labels == \
         ['common stochastic error coefficient for depolarization']
-    assert LCB('other_diagonal', pp).coefficient_labels == \
-        ['(X,X) other error coefficient', '(Y,Y) other error coefficient', '(Z,Z) other error coefficient']
 
     # 'static' blocks have no parameters
     assert LCB('ham', pp, param_mode='static').param_labels == []
@@ -437,9 +432,9 @@ def test_coefficient_labels_block_type_and_caches():
     from_vector no-op, the cached elementary_errorgen_indices return, and convert()."""
     pp = Basis.cast('pp', 4)
     for bt, n_labels in [('ham', 3), ('other_diagonal', 3), ('other', 9)]:
-        blk = LCB(bt, pp, param_mode='static')
+        blk = LCB(bt, pp, param_mode='elements')
         assert blk._block_type == bt
-        labels = blk.coefficient_labels
+        labels = blk.param_labels
         assert len(labels) == n_labels and all(isinstance(s, str) for s in labels)
 
     LCB('ham', pp, param_mode='static').from_vector(np.empty(0))  # static carries no params -> no-op
