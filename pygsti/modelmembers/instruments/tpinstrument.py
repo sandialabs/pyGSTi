@@ -96,8 +96,10 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
                 "Must specify `state_space` when there are no instrument members!"
             first_v = matrix_list[0][1]
             first_arr = first_v.to_dense('minimal') if hasattr(first_v, 'to_dense') else first_v
-            state_space = _statespace.default_space_for_dim(first_arr.shape[0]) if (state_space is None) \
-                else _statespace.StateSpace.cast(state_space)
+            if state_space is None:
+                state_space = _statespace.default_space_for_dim(first_arr.shape[0])
+            else:
+                state_space = _statespace.StateSpace.cast(state_space)
             evotype = _Evotype.cast(evotype, state_space=state_space)
 
             # Create gate objects that are used to parameterize this instrument
