@@ -107,19 +107,6 @@ def _check_concat_compatibility(label1, label2):
     return label2, new_time
 
 
-def _create_concatenated_label(components, time, args):
-    """
-    Creates a LabelTupTup, LabelTupTupWithTime, or LabelTupTupWithArgs based on
-    the presence of time and args.
-    """
-    if args:
-        return LabelTupTupWithArgs.init(components, time=time, args=args)
-    elif time != 0.0:
-        return LabelTupTupWithTime.init(components, time=time)
-    else:
-        return LabelTupTup.init(components)
-
-
 class Label(object):
     """
     A label used to identify a gate, circuit layer, or (sub-)circuit.
@@ -459,6 +446,7 @@ class Label(object):
         for inner in self.components:
             sslbls = inner.sslbls
             if sslbls is None:
+                # Cannot sort the inner labels since we do not have all the data.
                 return self  # type: ignore
             tmp1[sslbls] = inner.with_sorted_inner_labels()  # Recurse so that all parallel sections are in sorted order locally.
         tmp2 = tuple((tmp1[k] for k in sorted(tmp1.keys())))
@@ -691,7 +679,10 @@ class LabelTup(Label, tuple):
         return LabelTup.init(newname, self.sslbls) if (self.name == oldname) else self
 
     def concat(self, other: Label):
-        other, new_time = _check_concat_compatibility(self, other)
+        # _check_concat_compatibility validates qubit/time compatibility (and may
+        # warn) and unwraps a depth-1 CircuitLabel; the resulting time is
+        # intentionally not propagated onto the concatenated LabelTupTup.
+        other, _ = _check_concat_compatibility(self, other)
 
         if isinstance(other, LabelTupTup):
             components = (self,) + tuple(other)
@@ -702,7 +693,7 @@ class LabelTup(Label, tuple):
         else:
             return super().concat(other)
 
-        return _create_concatenated_label(components, new_time, ())
+        return LabelTupTup.init(components, warn_on_component_metadata=False)
 
     __hash__ = tuple.__hash__
     # ^ this is why we derive from tuple - using the
@@ -1079,7 +1070,7 @@ class LabelTupTup(Label, tuple):
     IS_SIMPLE = False  # access with self.is_simple property
 
     @classmethod
-    def init(cls, tup_of_tups: Sequence[Any]) -> LabelTupTup:
+    def init(cls, tup_of_tups: Sequence[Any], warn_on_component_metadata: bool = True) -> LabelTupTup:
         """
         Creates a new Model-item tuple-of-tuples label.
 
@@ -1093,6 +1084,13 @@ class LabelTupTup(Label, tuple):
             The item data - a tuple of (string, state-space-labels) tuples
             which labels a parallel layer/level of a circuit.
 
+        warn_on_component_metadata : bool, optional
+            Whether to emit heuristic warnings nudging the caller toward a
+            :class:`LabelTupTupWithTime` or :class:`LabelTupTupWithArgs` when the
+            component labels carry consistent time/args metadata.  This is a hint
+            for direct user construction; internal callers that deliberately
+            discard such metadata (e.g. :meth:`concat`) should pass `False`.
+
         Returns
         -------
         LabelTupTup
@@ -1103,7 +1101,7 @@ class LabelTupTup(Label, tuple):
             tup_of_tups_to_iterate = tup_of_tups
         tupOfLabels: tuple[ConcreteLabel, ...] = tuple([tup if isinstance(tup, Label) else Label(tup) for tup in tup_of_tups_to_iterate])
         # ^ Note: constituent `tup`s in the list comprehension can also be a Label obj
-        if __debug__ and tupOfLabels:  # Debug flag is so that the check gets optimized out later in production runs.
+        if __debug__ and warn_on_component_metadata and tupOfLabels:  # Debug flag is so that the check gets optimized out later in production runs.
             atleast_one_missing_time = False
             somewith_nonemptyargs = False
             ctimes = set()
@@ -1322,7 +1320,10 @@ class LabelTupTup(Label, tuple):
         return tuple(ret)
 
     def concat(self, other: Label):
-        other, new_time = _check_concat_compatibility(self, other)
+        # _check_concat_compatibility validates qubit/time compatibility (and may
+        # warn) and unwraps a depth-1 CircuitLabel; the resulting time is
+        # intentionally not propagated onto the concatenated LabelTupTup.
+        other, _ = _check_concat_compatibility(self, other)
 
         if isinstance(other, LabelTupTup):
             components = (*self, *other)
@@ -1333,7 +1334,7 @@ class LabelTupTup(Label, tuple):
         else:
             return super().concat(other)
 
-        return _create_concatenated_label(components, new_time, ())
+        return LabelTupTup.init(components, warn_on_component_metadata=False)
 
     __hash__ = tuple.__hash__
     # ^ this is why we derive from tuple - using the
@@ -1754,10 +1755,7 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         tmp_lbl: Label = None
         if self.depth == 1:
             # Convert into not a CircuitLabel.
-            if len(self.components) == 1:
-                tmp_lbl = self.components[0]
-            else:
-                tmp_lbl = Label(self.components, time=self.time)
+            tmp_lbl = Label(self.components, time=self.time)
         else:
             raise ValueError(f"One cannot concate a `CircuitLabel` of depth > 1 (depth = {self.depth}) except to another `CircuitLabel` of the same depth.")
         return tmp_lbl.concat(other)

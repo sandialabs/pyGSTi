@@ -195,6 +195,39 @@ class LabelTester(BaseCase):
         self.assertEqual(sorted_l.qubits, (0, 1))
         self.assertEqual(sorted_l.num_qubits, 2)
 
+    def test_with_sorted_inner_labels_idempotent(self):
+        # Once a label is sorted, calling with_sorted_inner_labels again should
+        # short-circuit on the `is_sorted` check and return the same object.
+        l = L((('Gy', 0), ('Gx', 1)))
+        sorted_l = l.with_sorted_inner_labels()
+        self.assertTrue(sorted_l.is_sorted)
+        self.assertIs(sorted_l.with_sorted_inner_labels(), sorted_l)
+
+    def test_with_sorted_inner_labels_none_sslbls_returns_self(self):
+        # If any inner label has sslbls == None we cannot sort, so `self` is
+        # returned unchanged.
+        l = L((('Gx', None), ('Gy', None)))
+        self.assertIsInstance(l, LabelTupTup)
+        self.assertFalse(l.is_sorted)
+        self.assertIs(l.with_sorted_inner_labels(), l)
+
+        l = L((('Gx', None), ('Gy', 2)))
+        self.assertIsInstance(l, LabelTupTup)
+        self.assertFalse(l.is_sorted)
+        self.assertIs(l.with_sorted_inner_labels(), l)
+
+        l = L((('Gx', 1), ('Gy', None)))
+        self.assertIsInstance(l, LabelTupTup)
+        self.assertFalse(l.is_sorted)
+        self.assertIs(l.with_sorted_inner_labels(), l)
+
+    def test_unparsable_string_falls_back_to_labelstr(self):
+        # A string containing parse-significant characters (':', '!', ';') that
+        # fails to parse should fall back to being treated as a plain LabelStr.
+        l = L('not a real::label!!')
+        self.assertIsInstance(l, LabelStr)
+        self.assertEqual(str(l), 'not a real::label!!')
+
     def test_labeltuptup_args_not_propagated(self):
         l1 = L('Gzr', ('Q0',), args=('1.025087886927528',))
         l2 = L('Gzr', ('Q1',), args=('1.3957662527842025',))
@@ -1044,20 +1077,39 @@ class LabelConcateTester(BaseCase):
         with self.assertRaises(ValueError):
             l3.concat(l4)
 
-    def test_concat_time_propagation(self):
+    def test_concat_always_returns_labeltuptup(self):
+        # A successful concat always produces a (plain) LabelTupTup, even when
+        # the operands carry a time value.  Time metadata is not propagated.
         l1 = L(('Gx', 0), time=0.5)
         l2 = L(('Gy', 1), time=0.5)
         self.assertTrue(isinstance(l1, LabelTupWithTime))
         concatenated = l1.concat(l2)
-        self.assertIsInstance(concatenated, LabelTupTupWithTime)
-        self.assertEqual(concatenated.time, 0.5)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertNotIsInstance(concatenated, LabelTupTupWithTime)
+        self.assertFalse(hasattr(concatenated, 'time'))
         self.assertEqual(concatenated.collect_args(), l1.collect_args() + l2.collect_args())
 
         l3 = L([('Gz', 2)], time=0.5)
         concatenated2 = concatenated.concat(l3)
-        self.assertIsInstance(concatenated2, LabelTupTupWithTime)
-        self.assertEqual(concatenated2.time, 0.5)
+        self.assertIsInstance(concatenated2, LabelTupTup)
+        self.assertNotIsInstance(concatenated2, LabelTupTupWithTime)
+        self.assertFalse(hasattr(concatenated2, 'time'))
         self.assertEqual(concatenated2.collect_args(), l1.collect_args() + l2.collect_args() + l3.collect_args())
+
+    def test_concat_does_not_warn_on_consistent_component_time(self):
+        # concat deliberately produces a timeless LabelTupTup, so it must not
+        # emit the "consider a LabelTupTupWithTime" hint that direct
+        # construction does when all components share a non-zero time.
+        import warnings
+        l1 = L(('Gx', 0), time=0.1)
+        l2 = L(('Gy', 1), time=0.1)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            l1.concat(l2)
+            for warning in w:
+                if issubclass(warning.category, RuntimeWarning):
+                    self.assertNotIn("You may want to consider a LabelTupTupWithTime",
+                                     str(warning.message))
 
     def test_concat_labelstr_errors(self):
 
@@ -1080,6 +1132,20 @@ class LabelConcateTester(BaseCase):
             mystr.concat(lt)
         with self.assertRaises(ValueError):
             mystr.concat(cl)
+
+    def test_concat_two_circuitlabels(self):
+        c1 = CircuitLabel('a', [L('Gx', 0)], (0,), 1, None)
+        c2 = CircuitLabel('b', [L('Gy', 1)], (1,), 1, None)
+
+        # Equal depth: concatenation yields a LabelTupTup of the two CircuitLabels.
+        concatenated = c1.concat(c2)
+        self.assertIsInstance(concatenated, LabelTupTup)
+        self.assertEqual(concatenated, L((c1, c2)))
+
+        # Different depth: raises ValueError.
+        c_depth2 = CircuitLabel('d', [L('Gx', 2)], (2,), 2, None)
+        with self.assertRaises(ValueError):
+            c1.concat(c_depth2)
 
     def test_concat_order_matters(self):
         l1 = L(('Gx', 0))
