@@ -94,10 +94,10 @@ def create_parameterized_rpe_model(alpha_true, epsilon_true, aux_rot, spam_depol
             prep_labels=["rho0"], prep_expressions=rhoExpressions,
             effect_labels=ELabels, effect_expressions=EExpressions)
 
-        outputModel.operations[loose_axis_gate_label] = \
-            _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations[auxiliary_axis_gate_label].to_dense('minimal')),
-                            outputModel.operations[loose_axis_gate_label].to_dense('minimal')),
-                    modelAux1.operations[auxiliary_axis_gate_label].to_dense('minimal'))
+        similarity_transform = modelAux1.operations[auxiliary_axis_gate_label].to_dense('minimal')
+        before = outputModel.operations[loose_axis_gate_label].to_dense('minimal')
+        after  = _np.linalg.inv(similarity_transform) @ before @ similarity_transform
+        outputModel.operations[loose_axis_gate_label] = after
 
     outputModel = outputModel.depolarize(op_noise=gate_depol,
                                          spam_noise=spam_depol)
