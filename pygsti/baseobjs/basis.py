@@ -190,6 +190,12 @@ class Basis(_NicelySerializable):
         The "vectors" of this basis, always 1D (sparse or dense) arrays.
     """
 
+    # Declared for static analysis; concrete storage is provided by subclasses
+    # (LazyBasis via @property, ExplicitBasis via instance attributes).
+    labels: tuple
+    elements: _np.ndarray
+    ellookup: dict
+
     # Implementation note: casting functions are classmethods, but current implementations
     # could be static methods.
 
@@ -349,10 +355,6 @@ class Basis(_NicelySerializable):
         if self.elshape is None: return 0
         return int(_np.prod(self.elshape))
 
-    # TODO: convert labels, ellookup, and elements to properties.
-    #       Type annotations for Basis objects are of limited use
-    #       without the Basis class declaring that these members exist.
-
     @property
     def implies_leakage_modeling(self) -> bool:
         if (not hasattr(self, '_implies_leakage')) or (not isinstance(self._implies_leakage, bool)):
@@ -360,7 +362,7 @@ class Basis(_NicelySerializable):
             if len(label) == 0:
                 self._implies_leakage = False
                 return False
-            I_before = self.ellookup[label]  # type: ignore
+            I_before = self.ellookup[label]
             from pygsti.tools.matrixtools import induced_projector
             I_after  = induced_projector(I_before, require_real=True)
             if I_after.size == 0:
