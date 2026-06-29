@@ -749,16 +749,16 @@ BASIS: pp
         rotXPiOv2   = pygsti.models.modelconstruction.create_operation("X(pi/2,Q0)", sslbls, "pp")
         rotYPiOv2   = pygsti.models.modelconstruction.create_operation("Y(pi/2,Q0)", sslbls, "pp")
 
-        self.assertArraysAlmostEqual(gs1.operations['G1'],rotXPiOv2)
-        self.assertArraysAlmostEqual(gs1.operations['G2'],rotYPiOv2)
-        self.assertArraysAlmostEqual(gs1.preps['rho'], 1/np.sqrt(2)*np.array([1,0,0,1]) )
-        self.assertArraysAlmostEqual(gs1.povms['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,-1]) )
+        self.assertArraysAlmostEqual(gs1.operations['G1'].to_dense(), rotXPiOv2.to_dense())
+        self.assertArraysAlmostEqual(gs1.operations['G2'].to_dense(), rotYPiOv2.to_dense())
+        self.assertArraysAlmostEqual(gs1.preps['rho'].to_dense(), 1/np.sqrt(2)*np.array([1,0,0,1]) )
+        self.assertArraysAlmostEqual(gs1.povms['Mdefault']['0'].to_dense(), 1/np.sqrt(2)*np.array([1,0,0,-1]) )
 
-        self.assertArraysAlmostEqual(gs2.operations['G1'],rotXPiOv2)
-        self.assertArraysAlmostEqual(gs2.operations['G2'],rotYPiOv2)
-        self.assertArraysAlmostEqual(gs2.operations['G3'],rotXPi)
-        self.assertArraysAlmostEqual(gs2.preps['rho_up'], 1/np.sqrt(2)*np.array([1,0,0,1]) )
-        self.assertArraysAlmostEqual(gs2.povms['Mdefault']['0'], 1/np.sqrt(2)*np.array([1,0,0,1]) )
+        self.assertArraysAlmostEqual(gs2.operations['G1'].to_dense(), rotXPiOv2.to_dense())
+        self.assertArraysAlmostEqual(gs2.operations['G2'].to_dense(), rotYPiOv2.to_dense())
+        self.assertArraysAlmostEqual(gs2.operations['G3'].to_dense(), rotXPi.to_dense())
+        self.assertArraysAlmostEqual(gs2.preps['rho_up'].to_dense(), 1/np.sqrt(2)*np.array([1,0,0,1]) )
+        self.assertArraysAlmostEqual(gs2.povms['Mdefault']['0'].to_dense(), 1/np.sqrt(2)*np.array([1,0,0,1]) )
 
     def test_parse_complicated_circuits(self):
         #Test that a bunch of weird nested single layers can be parsed in,

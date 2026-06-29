@@ -59,9 +59,7 @@ class BaseTestCase(unittest.TestCase):
         os.chdir(self.old)
 
     def assertArraysAlmostEqual(self,a,b,places=7):
-        a_arr = a.to_dense('minimal') if hasattr(a, 'to_dense') else a
-        b_arr = b.to_dense('minimal') if hasattr(b, 'to_dense') else b
-        self.assertAlmostEqual( np.linalg.norm(a_arr - b_arr), 0, places=places )
+        self.assertAlmostEqual( np.linalg.norm(a-b), 0, places=places )
 
     def assertArraysEqual(self,a,b,places=7):
         self.assertTrue(np.array_equal(a,b))
