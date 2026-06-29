@@ -12,8 +12,7 @@ The DenseState and DensePureState classes and supporting functionality.
 
 
 import numpy as _np
-import copy as _copy
-
+from pygsti.modelmembers.modelmember import _DenseCopyMixin as _DenseCopyMixin
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
@@ -25,7 +24,7 @@ from pygsti.tools import optools as _ot
 from pygsti import SpaceT
 
 
-class DenseState(_State):
+class DenseState(_DenseCopyMixin, _State):
     """
     A state preparation vector with a dense internal representation.
 
@@ -41,20 +40,6 @@ class DenseState(_State):
     evotype : {"statevec", "densitymx"}
         The evolution type.
     """
-
-    def __copy__(self):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        cpy.__dict__.update(self.__dict__)
-        return cpy
-
-    def __deepcopy__(self, memo):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        memo[id(self)] = cpy
-        for k, v in self.__dict__.items():
-            setattr(cpy, k, _copy.deepcopy(v, memo))
-        return cpy
 
     def __init__(self, vec, basis, evotype, state_space):
         vec = _State._to_vector(vec)
@@ -170,25 +155,11 @@ class DenseState(_State):
         return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
 
 
-class DensePureState(_State):
+class DensePureState(_DenseCopyMixin, _State):
     """
     A state with a dense pure-state (ket) internal representation.
     Use `.to_dense()` to access the underlying array.
     """
-
-    def __copy__(self):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        cpy.__dict__.update(self.__dict__)
-        return cpy
-
-    def __deepcopy__(self, memo):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        memo[id(self)] = cpy
-        for k, v in self.__dict__.items():
-            setattr(cpy, k, _copy.deepcopy(v, memo))
-        return cpy
 
     def __init__(self, purevec, basis, evotype, state_space):
         purevec = _State._to_vector(purevec)

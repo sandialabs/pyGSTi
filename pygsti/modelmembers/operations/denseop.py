@@ -11,11 +11,10 @@ The DenseOperator class and supporting functionality.
 #***************************************************************************************************
 
 from collections import OrderedDict
-import copy as _copy
-
 import numpy as _np
 import scipy.sparse as _sps
 
+from pygsti.modelmembers.modelmember import _DenseCopyMixin as _DenseCopyMixin
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers.operations.krausop import KrausOperatorInterface as _KrausOperatorInterface
 from pygsti.evotypes import Evotype as _Evotype
@@ -128,7 +127,7 @@ def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=
                          _np.linalg.norm(fd_deriv - deriv_to_check))  # pragma: no cover
 
 
-class DenseOperator(_KrausOperatorInterface, _LinearOperator):
+class DenseOperator(_DenseCopyMixin, _KrausOperatorInterface, _LinearOperator):
     """
     An operator that behaves like a dense super-operator matrix.
 
@@ -193,20 +192,6 @@ class DenseOperator(_KrausOperatorInterface, _LinearOperator):
         std_superop = sum([_ot.unitary_to_std_process_mx(kop) for kop in kraus_operators])
         superop = _bt.change_basis(std_superop, 'std', basis)
         return cls(superop, basis, evotype, state_space)
-
-    def __copy__(self):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        cpy.__dict__.update(self.__dict__)
-        return cpy
-
-    def __deepcopy__(self, memo):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        memo[id(self)] = cpy
-        for k, v in self.__dict__.items():
-            setattr(cpy, k, _copy.deepcopy(v, memo))
-        return cpy
 
     def __init__(self, mx, basis, evotype, state_space=None):
         mx = _LinearOperator.convert_to_matrix(mx)
@@ -332,7 +317,7 @@ class DenseOperator(_KrausOperatorInterface, _LinearOperator):
         self.set_dense(superop)  # this may fail if derived class doesn't allow it
 
 
-class DenseUnitaryOperator(_KrausOperatorInterface, _LinearOperator):
+class DenseUnitaryOperator(_DenseCopyMixin, _KrausOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
     An operator that behaves like a dense (unitary) operator matrix.
@@ -361,20 +346,6 @@ class DenseUnitaryOperator(_KrausOperatorInterface, _LinearOperator):
     base : numpy.ndarray
         Direct access to the underlying process matrix data.
     """
-
-    def __copy__(self):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        cpy.__dict__.update(self.__dict__)
-        return cpy
-
-    def __deepcopy__(self, memo):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        memo[id(self)] = cpy
-        for k, v in self.__dict__.items():
-            setattr(cpy, k, _copy.deepcopy(v, memo))
-        return cpy
 
     @classmethod
     def from_kraus_operators(cls, kraus_operators, basis='pp', evotype="default", state_space=None):

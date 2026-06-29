@@ -11,8 +11,7 @@ The ConjugatedStatePOVMEffect class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
-import copy as _copy
-
+from pygsti.modelmembers.modelmember import _DenseCopyMixin as _DenseCopyMixin
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 from pygsti.modelmembers import term as _term
 from pygsti.tools import matrixtools as _mt
@@ -20,7 +19,7 @@ from pygsti.baseobjs import _compatibility as _compat
 from pygsti import SpaceT
 
 
-class ConjugatedStatePOVMEffect(_POVMEffect):
+class ConjugatedStatePOVMEffect(_DenseCopyMixin, _POVMEffect):
     """
     A POVM effect vector wrapping a conjugated state.
 
@@ -33,20 +32,6 @@ class ConjugatedStatePOVMEffect(_POVMEffect):
     state : State
         The underlying state whose conjugate defines this effect vector.
     """
-
-    def __copy__(self):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        cpy.__dict__.update(self.__dict__)
-        return cpy
-
-    def __deepcopy__(self, memo):
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        memo[id(self)] = cpy
-        for k, v in self.__dict__.items():
-            setattr(cpy, k, _copy.deepcopy(v, memo))
-        return cpy
 
     def __init__(self, state, called_from_reduce=False):
         self.state = state
