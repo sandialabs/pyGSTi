@@ -293,9 +293,11 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
             printer.warning("Max iterations exceeded in contract_to_cp_direct")
         #else: print "contract_to_cp_direct success in %d iterations" % it  #DEBUG
 
+        op0 = mdl.operations[opLabel].to_dense('minimal')
+        op1 = gate.to_dense('minimal')
+        dist = _tools.frobeniusdist(op0, op1)
         printer.log("Direct CP contraction of %s gate gives frobenius diff of %g" %
-                    (opLabel, _tools.frobeniusdist(mdl.operations[opLabel].to_dense('minimal'),
-                                                   gate.to_dense('minimal'))), 2)
+                    (opLabel, dist), 2)
 
     #mdl.log("Choi-Truncate to %s" % ("CPTP" if tp_also else "CP"), { 'maxiter': maxiter } )
     distance = mdl.frobeniusdist(model)
@@ -318,10 +320,10 @@ def _contract_to_tp(model, verbosity):
     #printer.log('', 2)
     printer.log("--- Contract to TP ---", 1)
     mdl = model.copy()
-    for (opLabel, gate) in list(mdl.operations.items()):
+    for (_, gate) in list(mdl.operations.items()):
         gate_arr = gate.to_dense('minimal').copy()
-        gate_arr[0, 0] = 1.0
-        for k in range(1, gate_arr.shape[1]): gate_arr[0, k] = 0.0
+        gate_arr[0, 0 ] = 1.0
+        gate_arr[0, 1:] = 0.0
         gate.set_dense(gate_arr)
 
     op_dim = mdl.dim
@@ -415,9 +417,7 @@ def _contract_to_valid_spam(model, verbosity=0):
                     evals[evals.argmin()] = 0.0  # at least one eigenvalue must be != 1.0
                 if all([ev < 0.0 for ev in evals]):
                     evals[evals.argmax()] = 1.0  # at least one eigenvalue must be != 0.0
-                for (k, ev) in enumerate(evals):
-                    if ev < 0.0: evals[k] = 0.0
-                    if ev > 1.0: evals[k] = 1.0
+                evals = _np.clip(evals, 0.0, 1.0)
                 mx = (evecs * evals[_np.newaxis, :]) @ inv_evecs
                 vec = _tools.stdmx_to_ppvec(mx)
                 diff += _np.linalg.norm(model.povms[povmLbl][ELabel].to_dense('minimal') - vec)
@@ -427,18 +427,20 @@ def _contract_to_valid_spam(model, verbosity=0):
 
         mdl.povms[povmLbl] = _povm.UnconstrainedPOVM(scaled_effects, mdl.evotype, mdl.state_space)
         # Note: always creates an unconstrained POVM
-
-    #mdl.log("Contract to valid SPAM")
-    #printer.log('', 2)
+    
     printer.log("--- Contract to valid SPAM ---", 1)
     printer.log(("Sum of norm(deltaE) and norm(deltaRho) = %g" % diff), 1)
+
     for (prepLabel, rhoVec) in model.preps.items():
-        printer.log("  %s: %s ==> %s " % (prepLabel, str(_np.transpose(rhoVec.to_dense('minimal'))),
-                                          str(_np.transpose(mdl.preps[prepLabel].to_dense('minimal')))), 2)
+        rho0 = rhoVec.to_dense('minimal')
+        rho1 = mdl.preps[prepLabel].to_dense('minimal')
+        printer.log("  %s: %s ==> %s " % (prepLabel, str(rho0), str(rho1)), 2)
+
     for povmLbl, povm in model.povms.items():
         printer.log(("  %s (POVM)" % povmLbl), 2)
         for ELabel, EVec in povm.items():
-            printer.log("  %s: %s ==> %s " % (ELabel, str(_np.transpose(EVec.to_dense('minimal'))),
-                                              str(_np.transpose(mdl.povms[povmLbl][ELabel].to_dense('minimal')))), 2)
+            E0 = EVec.to_dense('minimal')
+            E1 = mdl.povms[povmLbl][ELabel].to_dense('minimal')
+            printer.log("  %s: %s ==> %s " % (ELabel, str(E0), str(E1)), 2)
 
     return mdl  # return contracted model
