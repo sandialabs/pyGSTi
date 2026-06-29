@@ -106,8 +106,8 @@ class ModelConstructionTester(BaseCase):
         gateset2b = mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                                               ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"],
                                                               effect_labels=['1', '0'])
-        self.assertArraysAlmostEqual(model.effects['0'], gateset2b.effects['1'])
-        self.assertArraysAlmostEqual(model.effects['1'], gateset2b.effects['0'])
+        self.assertArraysAlmostEqual(model.effects['0'].to_dense(), gateset2b.effects['1'].to_dense())
+        self.assertArraysAlmostEqual(model.effects['1'].to_dense(), gateset2b.effects['0'].to_dense())
 
         # This is slightly confusing. Single qubit rotations are always stored in "pp" basis internally
         # UPDATE: now this isn't even allowed, as the 'densitymx' type represents states as *real* vectors.
@@ -674,14 +674,14 @@ class GateConstructionBase(object):
                               [0., 1., 0., 0.],
                               [0., 0., 0, -1.],
                               [0., 0., 1., 0]], 'd')
-        self.assertArraysAlmostEqual(self.rotXa, rotXa_ans)
+        self.assertArraysAlmostEqual(self.rotXa.to_dense(), rotXa_ans)
 
     def _test_rotX2(self):
         rotX2_ans = np.array([[1., 0., 0., 0.],
                               [0., 1., 0., 0.],
                               [0., 0., -1., 0.],
                               [0., 0., 0., -1.]], 'd')
-        self.assertArraysAlmostEqual(self.rotX2, rotX2_ans)
+        self.assertArraysAlmostEqual(self.rotX2.to_dense(), rotX2_ans)
 
     def _test_rotLeak(self):
         rotLeak_ans = np.array([[0.5, 0., 0., -0.5, 0.70710678],
@@ -725,7 +725,7 @@ class GateConstructionBase(object):
                               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0, 0, 0],
                               [0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                               [0, 0, 0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
-        self.assertArraysAlmostEqual(self.CnotA, CnotA_ans)
+        self.assertArraysAlmostEqual(self.CnotA.to_dense(), CnotA_ans)
 
     def _test_CnotB(self):
         CnotB_ans = np.array([[1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],

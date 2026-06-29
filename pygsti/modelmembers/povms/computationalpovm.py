@@ -62,7 +62,7 @@ class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface):
                 raise ValueError("`pure_vectors` doesn't look like a Z-basis computational POVM")
         return cls(nqubits, evotype, None, state_space)
 
-    def __init__(self, nqubits, evotype="default", qubit_filter=None, state_space=None):
+    def __init__(self, nqubits, evotype: _Evotype.Castable="default", qubit_filter=None, state_space=None):
         if qubit_filter is not None:
             raise NotImplementedError("Still need to implement qubit_filter functionality")
 

@@ -18,6 +18,7 @@ from hashlib import blake2b as _blake2b
 
 import numpy as _np
 
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 
 _dummy_profiler = _DummyProfiler()
@@ -343,7 +344,7 @@ class ResourceAllocation(object):
                 offset = 0
                 for slc_or_indx_array, shape, size in zip(slices, shapes, sizes):
                     if slc_or_indx_array is None: continue  # signals a non-unit-leader proc that shouldn't do anything
-                    data = gathered_data[offset:offset + size]; offset += size; data.shape = shape
+                    data = gathered_data[offset:offset + size]; offset += size; data = _compat.reshape_no_copy(data, shape)
                     result[slc_or_indx_array] = data
 
         self.comm.barrier()  # make sure result is completely filled before returniing
@@ -492,7 +493,7 @@ class ResourceAllocation(object):
             # Round robin additions of contributions to result (to load balance all the host procs)
             for slc in _itertools.chain(slices[intrahost_rank:], slices[0:intrahost_rank]):
                 result[slc] += participating_local[slc]  # adds *in place* (relies on numpy implementation)
-                self.host_comm.barrier()  # synchonize adding to shared mem
+                self.host_comm.barrier()  # synchronize adding to shared mem
 
             # Sum contributions across hosts
             my_size = my_slice.stop - my_slice.start
@@ -589,7 +590,7 @@ class ResourceAllocation(object):
             for i in range(self.host_comm.size):
                 if i == self.host_comm.rank and participating:
                     _np.minimum(result, local, out=result)
-                self.host_comm.barrier()  # synchonize adding to shared mem
+                self.host_comm.barrier()  # synchronize adding to shared mem
             if self.host_comm.rank == 0:
                 mind_across_hosts = self.interhost_comm.allreduce(result, op=MPI.MIN)
                 result[(slice(None, None),) * result.ndim] = mind_across_hosts
@@ -647,7 +648,7 @@ class ResourceAllocation(object):
             for i in range(self.host_comm.size):
                 if i == self.host_comm.rank and participating:
                     _np.maximum(result, local, out=result)
-                self.host_comm.barrier()  # synchonize adding to shared mem
+                self.host_comm.barrier()  # synchronize adding to shared mem
             if self.host_comm.rank == 0:
                 maxed_across_hosts = self.interhost_comm.allreduce(result, op=MPI.MAX)
                 result[(slice(None, None),) * result.ndim] = maxed_across_hosts

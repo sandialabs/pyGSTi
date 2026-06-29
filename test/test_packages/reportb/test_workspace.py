@@ -1,12 +1,14 @@
 import os
 import pickle
 import unittest
+import warnings
 
 import numpy as np
 
 import pygsti.protocols.estimate
 from pygsti.extras import drift
-from pygsti.modelpacks.legacy import stdQT_XYIMS
+from pygsti.modelpacks import smq1Q_XY
+from pygsti.tools.exceptions import OverparameterizationWarning
 from ..report.reportBaseCase import ReportBaseCase
 from ..testutils import compare_files, temp_files
 from pygsti.baseobjs import Label
@@ -98,6 +100,8 @@ class TestWorkspace(ReportBaseCase):
 
 
     def test_table_creation(self):
+      with warnings.catch_warnings():
+        warnings.simplefilter('ignore', OverparameterizationWarning)
         w = pygsti.report.Workspace()
         tbls = []; cr = None
 
@@ -107,7 +111,7 @@ class TestWorkspace(ReportBaseCase):
         gsCPTP = self.tgt.depolarize(0.01,0.01); gsCPTP.set_all_parameterizations("CPTPLND")
         gsGM = self.mdl.depolarize(0.01,0.01); gsGM.basis = pygsti.baseobjs.Basis.cast("gm", 4)
         gsSTD = self.mdl.depolarize(0.01,0.01); gsSTD.basis = pygsti.baseobjs.Basis.cast("std", 4)
-        gsQT = stdQT_XYIMS.target_model().depolarize(0.01,0.01)
+        gsQT = smq1Q_XY.target_model().depolarize(0.01,0.01)
 
         #Construct confidence regions
         def make_cr(mdl):
@@ -158,7 +162,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", gen_type="logG-logT") )
         tbls.append( w.ErrgenTable(gsGM, self.tgt, cr, display_as="numbers", gen_type="logGTi") )
         #tbls.append( w.ErrgenTable(gsSTD, self.tgt, cr, display_as="numbers", gen_type="logGTi") )  # first el of basis must be I!!!
-        tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.target_model(), cr, display_as="numbers", gen_type="logGTi") )
+        tbls.append( w.ErrgenTable(gsQT, smq1Q_XY.target_model(), cr, display_as="numbers", gen_type="logGTi") )
         with self.assertRaises(ValueError):
             w.ErrgenTable(self.mdl, self.tgt, cr, display=('foobar',))
         with self.assertRaises(AssertionError):
@@ -271,6 +275,8 @@ class TestWorkspace(ReportBaseCase):
 
 
     def test_plot_creation(self):
+      with warnings.catch_warnings():
+        warnings.simplefilter('ignore', OverparameterizationWarning)
         w = pygsti.report.Workspace()
         prepStrs = self.results.circuit_lists['prep fiducials']
         effectStrs = self.results.circuit_lists['meas fiducials']

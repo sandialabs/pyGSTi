@@ -379,7 +379,7 @@ class CliffordCompilationRules(CompilationRules):
     `compute_clifford_symplectic_reps` method gives representations for all of its gates.
 
     Compilations can be either "local" or "non-local". A local compilation
-    ony uses gates that act on its target qubits.  All 1-qubit gates can be
+    only uses gates that act on its target qubits.  All 1-qubit gates can be
     local.  A non-local compilation uses qubits outside the set of target
     qubits (e.g. a CNOT between two qubits between which there is no native
     CNOT).  Currently, non-local compilations can only be constructed for
@@ -540,7 +540,7 @@ class CliffordCompilationRules(CompilationRules):
                 if H_name is not None:
                     if cphase_name is not None:
                         if I_name is not None:
-                            # we explicitly put identity gates into template (so noise on them is simluated correctly?)
+                            # we explicitly put identity gates into template (so noise on them is simulated correctly?)
 
                             # Add it with CPHASE in both directions, in case the CPHASES have been specified as being
                             # available in only one direction
@@ -852,7 +852,7 @@ class CliffordCompilationRules(CompilationRules):
             A tuple of the operation labels (essentially a circuit) specifying
             the template compilation that was generated.
         """
-        # The unitary is specifed, this takes priority and we use it to construct the
+        # The unitary is specified, this takes priority and we use it to construct the
         # symplectic rep of the gate.
         if unitary is not None:
             srep = _symp.unitary_to_symplectic(unitary, flagnonclifford=True)
@@ -884,7 +884,7 @@ class CliffordCompilationRules(CompilationRules):
             available_glabels_by_qubit[tuple(sorted(gl.qubits))].append(gl)
             #sort qubit labels b/c order doesn't matter and can't hash sets
 
-        # Construst all possible circuit layers acting on the qubits.
+        # Constructs all possible circuit layers acting on the qubits.
         all_layers = []
 
         #Loop over all partitions of the nqubits
@@ -1038,7 +1038,7 @@ class CliffordCompilationRules(CompilationRules):
             A tuple of the operation labels (essentially a circuit) specifying
             the template compilation that was generated.
         """
-        # The unitary is specifed, this takes priority and we use it to construct the
+        # The unitary is specified, this takes priority and we use it to construct the
         # symplectic rep of the gate.
         if unitary is not None:
             srep = _symp.unitary_to_symplectic(unitary, flagnonclifford=True)
@@ -1456,7 +1456,7 @@ class CliffordCompilationRules(CompilationRules):
         Circuit
         """
         # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes
-        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence
+        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistency
         # should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function
@@ -1513,7 +1513,7 @@ class CliffordCompilationRules(CompilationRules):
         None
         """
         # first try and compile the gate locally. Future: this will not work properly if the allowed_filter removes
-        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistence
+        # gates that the get_local_compilation_of uses, because it knows nothing of the filter. This inconsistency
         # should be removed somehow.
         try:
             # We don't have to account for `force` manually here, because it is dealt with inside this function

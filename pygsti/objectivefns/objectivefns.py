@@ -10,26 +10,28 @@ Defines objective-function objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Optional
-
 import itertools as _itertools
 import sys as _sys
 import time as _time
 import pathlib as _pathlib
+from typing import Callable, Literal, Union, Tuple, Hashable, Optional
 import warnings as _warnings
 
 import numpy as _np
 
 from pygsti import tools as _tools
+from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _COPALayout
 from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from pygsti.layouts.matrixlayout import MatrixCOPALayout as _MatrixCOPALayout
 from pygsti.tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
+from pygsti.tools.metaprogramming import set_docstring
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from pygsti.models.model import OpModel as _OpModel
-from pygsti import SpaceT
+from pygsti.baseobjs import _compatibility as _compat
+from pygsti.models.model import OpModel as _OpModel, Model as _Model
+
 
 
 DEFAULT_MIN_PROB_CLIP = 1e-4
@@ -82,7 +84,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
 
     array_types : tuple
         A tuple of array types that will be allocated, in addition to those contained in
-        the returned objective functon itself and within the methods given by `method_names`.
+        the returned objective function itself and within the methods given by `method_names`.
 
     mdc_store : ModelDatasetCircuitsStore, optional
         An object that bundles cached quantities along with a given model, dataset, and circuit
@@ -121,6 +123,9 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
     return ofn
 
 
+CallablePenalty = Callable[[_Model], float]
+
+
 class ObjectiveFunctionBuilder(_NicelySerializable):
     """
     A factory class for building objective functions.
@@ -150,8 +155,15 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         Penalty values (allowed keys depend on `cls_to_build`).
     """
 
-    @classmethod
-    def cast(cls, obj):
+    ObjectiveType = Union[
+        Literal['logl'], Literal['chi2'],
+        Literal['tvd'],  Literal['normalized-tvd'],
+        Tuple[Literal['Lp^p'], float]
+        # ^ The second entry in that tuple is the power "p"
+    ]
+
+    @staticmethod
+    def cast(obj):
         """
         Cast `obj` to an `ObjectiveFunctionBuilder` instance.
 
@@ -167,22 +179,34 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         -------
         ObjectiveFunctionBuilder
         """
-        if isinstance(obj, cls): return obj
-        elif obj is None: return cls.create_from()
-        elif isinstance(obj, str): return cls.create_from(objective=obj)
-        elif isinstance(obj, dict): return cls.create_from(**obj)
-        elif isinstance(obj, (list, tuple)): return cls(*obj)
-        else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
+        cls = ObjectiveFunctionBuilder
+        if isinstance(obj, cls):
+            return obj
+        if isinstance(obj, dict):
+            return cls.create_from(**obj)
+        if isinstance(obj, str) or (len(obj) == 2 and obj[0] == 'Lp^p'):
+            return cls.create_from(obj)  # type: ignore
+        
+        assert isinstance(obj, (list, tuple))
+        return cls(*obj)
 
-    @classmethod
-    def create_from(cls, objective='logl', freq_weighted_chi2=False):
+    # This was a classmethod, but I made it static because this class has no derived classes.
+    @staticmethod
+    def create_from(
+            objective: Union[ObjectiveType, Tuple[ObjectiveType, CallablePenalty]]='logl', freq_weighted_chi2=False
+        ):
         """
         Creates common :class:`ObjectiveFunctionBuilder` from a few arguments.
 
         Parameters
         ----------
-        objective : {'logl', 'chi2'}, optional
-            The objective function type: log-likelihood or chi-squared.
+        objective : ObjectiveType, optional
+            Specifies a negative-log-likelihood loss ('logl'), a chi-squared loss ('chi2'),
+            a total variation distance loss ('tvd' or 'normalized tvd'), or an Lp-norm loss.
+
+            We have experimental support to accommodate when objective is a tuple whose
+            second entry is callable. In this case, the callable is assumed to be a function
+            that maps a model to a nonnegative float.
 
         freq_weighted_chi2 : bool, optional
             Whether to use 1/frequency values as the weights in the `"chi2"` case.
@@ -191,36 +215,64 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         -------
         ObjectiveFunctionBuilder
         """
+        if isinstance(objective, tuple) and isinstance(objective[1], Callable):
+            callable_penalty = objective[1]
+            objective        = objective[0]  # type: ignore
+        else:
+            callable_penalty = None
+ 
+
         if objective == "chi2":
             if freq_weighted_chi2:
                 mpc = RawFreqWeightedChi2Function.DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING
-                builder = FreqWeightedChi2Function.builder(
+                builder = ObjectiveFunctionBuilder(FreqWeightedChi2Function,
                     name='fwchi2',
                     description="Freq-weighted sum of Chi^2",
-                    regularization={'min_freq_clip_for_weighting': mpc})
-
+                    regularization={'min_freq_clip_for_weighting': mpc},
+                    callable_penalty=callable_penalty
+                )
             else:
                 mpc = RawChi2Function.DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING
-                builder = Chi2Function.builder(
+                builder = ObjectiveFunctionBuilder(Chi2Function,
                     name='chi2',
                     description="Sum of Chi^2",
-                    regularization={'min_prob_clip_for_weighting': mpc})
+                    regularization={'min_prob_clip_for_weighting': mpc},
+                    callable_penalty=callable_penalty
+                )
 
         elif objective == "logl":
-            builder = PoissonPicDeltaLogLFunction.builder(
+            builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction,
                 name='dlogl',
                 description="2*Delta(log(L))",
                 regularization={'min_prob_clip': DEFAULT_MIN_PROB_CLIP, 'radius': DEFAULT_RADIUS},
-                penalties={'cptp_penalty_factor': 0, 'spam_penalty_factor': 0})
+                penalties={'cptp_penalty_factor': 0, 'spam_penalty_factor': 0},
+                callable_penalty=callable_penalty
+            )
 
-        elif objective == "tvd":
-            builder = TVDFunction.builder(
-                name='tvd',
-                description="Total Variational Distance (TVD)")
+        elif 'tvd' in objective:
+            descr = "Total Variation Distance (TVD)"
+            if 'normalized' in objective:
+                descr = descr + ', normalized by circuit depth'
+                assert objective == 'normalized tvd'
+            else:
+                assert objective == 'tvd'
+            builder = ObjectiveFunctionBuilder(
+                TVDFunction, name=objective, description=descr,
+                callable_penalty=callable_penalty
+            )
+    
+        elif isinstance(objective, tuple) and objective[0] == 'Lp^p':
+            power = objective[1]
+            builder = ObjectiveFunctionBuilder(LpNormToPowerP,
+                name='Lp^p',
+                description=f"L_{power} norm to the power {power}.",
+                power=objective[1],
+                callable_penalty=callable_penalty
+            )
 
         else:
             raise ValueError("Invalid objective: %s" % objective)
-        assert(isinstance(builder, cls)), "This function should always return an ObjectiveFunctionBuilder!"
+
         return builder
 
     def __init__(self, cls_to_build, name=None, description=None, regularization=None, penalties=None, **kwargs):
@@ -243,11 +295,16 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
                       })
         return state
 
-    @classmethod
-    def _from_nice_serialization(cls, state):
+    @staticmethod
+    def _from_nice_serialization(state):
         from pygsti.io.metadir import _class_for_name
-        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
-                   state['regularization'], state['penalties'], *state['additional_arguments'])
+        classhandle = _class_for_name(state['class_to_build'])
+        pos_args    = (classhandle, state['name'], state['description'], state['regularization'], state['penalties'])
+        try:
+            return ObjectiveFunctionBuilder(*pos_args, **state['additional_arguments'])
+        except ValueError:
+            # Old behavior. Wrong, but here in case someone's pickled file relies on it. Will remove in the future.
+            return ObjectiveFunctionBuilder(*pos_args,  *state['additional_arguments'])
 
     def compute_array_types(self, method_names, forwardsim):
         return self.cls_to_build.compute_array_types(method_names, forwardsim)
@@ -495,6 +552,10 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         return self.hterms(probs, counts, total_counts, freqs)  # same as dterms b/c only i-th term depends on p_i
 
+    # NOTE: the implementations of "terms" and "lsvec" call one another;
+    # a child class must override one of these functions in order to 
+    # be usable.
+
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
         Compute the terms of the objective function.
@@ -563,6 +624,10 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         return _np.sqrt(self.terms(probs, counts, total_counts, freqs, intermediates))
 
+    # NOTE: the implementations of "dterms" and "dlsvec" call one another;
+    # a child class must override one of these functions in order to 
+    # be usable.
+
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
         Compute the derivatives of the terms of this objective function.
@@ -597,10 +662,11 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
-        lsvec = self.lsvec(probs, counts, total_counts, freqs, intermediates)
+        u = self.lsvec(probs, counts, total_counts, freqs, intermediates)
+        v = self.dlsvec(probs, counts, total_counts, freqs, intermediates)
         # NOTE: this function is correct under the assumption that terms == lsvec**2,
         #       independent of whether or not lsvec is nonnegative.
-        return 2 * lsvec * self.dlsvec(probs, counts, total_counts, freqs, intermediates)
+        return 2 * u * v
 
     def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -635,7 +701,8 @@ class RawObjectiveFunction(ObjectiveFunction):
             A 1D array of length equal to that of each array argument.
         """
         # lsvec = sqrt(terms)
-        #   NOTE: ^ That's only correct if lsvec is >= 0, and some classes don't satisfy that.
+        #   NOTE: ^ That's only correct if lsvec is >= 0.
+        #           Any class that doesn't ensure lsvec >= 0 must override this function.
         # dlsvec = 0.5/lsvec * dterms
         #
         if intermediates is None:
@@ -947,7 +1014,7 @@ class ModelDatasetCircuitsStore(object):
 
     def add_omitted_freqs(self, printer=None, force=False):
         """
-        Detect omitted frequences (assumed to be 0) so we can compute objective fn correctly
+        Detect omitted frequencies (assumed to be 0) so we can compute objective fn correctly
         """
         if self.firsts is None or force:
             # FUTURE: add any tracked memory? self.resource_alloc.add_tracked_memory(...)
@@ -1103,9 +1170,9 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     """
 
     @classmethod
-    def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, verbosity=0, array_types=()):
+    def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, verbosity=0, array_types=(), **kwargs):
         mdc_store = ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
-        return cls(raw_objfn, mdc_store, verbosity)
+        return cls(raw_objfn, mdc_store, verbosity, **kwargs)
 
     @classmethod
     def _array_types_for_method(cls, method_name, fsim):
@@ -1117,7 +1184,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         if method_name == 'dpercircuit': return cls._array_types_for_method('dterms', fsim) + ('cp',)
         return ()
 
-    def __init__(self, raw_objfn, mdc_store, verbosity=0):
+    def __init__(self, raw_objfn, mdc_store, verbosity=0, **kwargs):
         """
         Create a new MDCObjectiveFunction.
 
@@ -1126,6 +1193,8 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         EvaluatedModelDatasetCircuitsStore.__init__(self, mdc_store, verbosity)
         self.raw_objfn = raw_objfn
+        self.callable_penalty        = kwargs.get('callable_penalty', None)
+        self.callable_penalty_factor = 0.0 if self.callable_penalty is None else 1.0
 
     @property
     def name(self):
@@ -1364,7 +1433,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # Note: don't need paramvec here since above call sets it
         return (0.5 / denom)[:, None] * self.dpercircuit()
 
-    def fn_local(self, paramvec=None):
+    def fn_local(self, paramvec=None, stateless=False) -> float:
         """
         Evaluate the *local* value of this objective function.
 
@@ -1379,13 +1448,29 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             The vector of (model) parameters to evaluate the objective function at.
             If `None`, then the model's current parameter vector is used (held internally).
 
+        stateless: bool
+            The callsequence triggered by this function can modify self.model.
+            If stateless=True, then we restore self.model's state before returning.
+
         Returns
         -------
         float
         """
-        return _np.sum(self.terms(paramvec))
+        if (paramvec is not None) and stateless:
+            old_paramvec = self.model.to_vector()
+            self.model.from_vector(paramvec)
+            val = _np.sum(self.terms())
+            self.model.from_vector(old_paramvec)
+            return val
+        else:
+            # Based on TimeIndependentMDCObjectiveFunction.terms(...),
+            # the function call below will trigger a call to
+            # self.model.from_vector(paramvec) if and only if paramvec
+            # is not None. If paramvec is None, then we proceed by
+            # redefining paramvec = self.model.to_vector().
+            return _np.sum(self.terms(paramvec))
 
-    def fn(self, paramvec=None):
+    def fn(self, paramvec=None, stateless=False) -> float:
         """
         Evaluate the value of this objective function.
 
@@ -1395,17 +1480,34 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             The vector of (model) parameters to evaluate the objective function at.
             If `None`, then the model's current parameter vector is used (held internally).
 
+        stateless: bool
+            The callsequence triggered by this function can modify self.model.
+            If stateless=True, then we restore self.model's state before returning.
+
         Returns
         -------
         float
         """
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        local = _np.array([self.fn_local(paramvec)], 'd')
+        local = _np.array([self.fn_local(paramvec, stateless)], 'd')
         unit_ralloc = self.layout.resource_alloc('atom-processing')  # proc group that computes same els
         self.resource_alloc.allreduce_sum(result, local, unit_ralloc)
         global_fnval = result[0]
         _smt.cleanup_shared_ndarray(result_shm)
         return global_fnval
+
+    def fn_from_model(self, model) -> float:
+        """
+        Evaluate this objective function when `self.model` is replaced by
+        `model`, and then restore `self.model` before returning.
+        """
+        m = self.model
+        self.model = model
+        val = self.fn(paramvec=None)
+        # ^ That function call gets paramvec from self.model (via
+        #   self.model.to_vector()) if and when paramvec is needed.
+        self.model = m
+        return val
 
     def jacobian(self, paramvec=None):
         """
@@ -2692,36 +2794,37 @@ class RawCustomWeightedChi2Function(RawChi2Function):
             return 2 * _np.ones(len(probs))
 
 
-# The log(Likelihood) within the Poisson picture is:                                                                                                    # noqa
-#                                                                                                                                                       # noqa
-# L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!                                                                                 # noqa
-#                                                                                                                                                       # noqa
-# Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,                                                                      # noqa
-#  and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and                                                                   # noqa
-#  so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:                                                                 # noqa
-#                                                                                                                                                       # noqa
-# log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}                                                                                        # noqa
-#       = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)                                       # noqa
-#                                                                                                                                                       # noqa
-# The objective function computes the negative log(Likelihood) as a vector of leastsq                                                                   # noqa
-#  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )                                                                        # noqa
-#                                                                                                                                                       # noqa
-# See LikelihoodFunctions.py for details on patching                                                                                                    # noqa
-# The log(Likelihood) within the standard picture is:
-#
-# L = prod_{i,sl} p_{i,sl}^N_{i,sl}
-#
-# Where i indexes the operation sequence, and sl indexes the spam label.
-#  N[i] is the total counts for the i-th circuit, and
-#  so sum_{sl} N_{i,sl} == N[i]. We take the log:
-#
-# log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
-#
-# The objective function computes the negative log(Likelihood) as a vector of leastsq
-#  terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
-#
-# See LikelihoodFunction.py for details on patching
+"""
+The log(Likelihood) within the Poisson picture is:                                                                                                    # noqa
+                                                                                                                                                      # noqa
+L = prod_{i,sl} lambda_{i,sl}^N_{i,sl} e^{-lambda_{i,sl}} / N_{i,sl}!                                                                                 # noqa
+                                                                                                                                                      # noqa
+Where lamba_{i,sl} := p_{i,sl}*N[i] is a rate, i indexes the operation sequence,                                                                      # noqa
+ and sl indexes the spam label.  N[i] is the total counts for the i-th circuit, and                                                                   # noqa
+ so sum_{sl} N_{i,sl} == N[i]. We can ignore the p-independent N_j! and take the log:                                                                 # noqa
+                                                                                                                                                      # noqa
+log L = sum_{i,sl} N_{i,sl} log(N[i]*p_{i,sl}) - N[i]*p_{i,sl}                                                                                        # noqa
+      = sum_{i,sl} N_{i,sl} log(p_{i,sl}) - N[i]*p_{i,sl}   (where we ignore the p-independent log(N[i]) terms)                                       # noqa
+                                                                                                                                                      # noqa
+The objective function computes the negative log(Likelihood) as a vector of leastsq                                                                   # noqa
+ terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} )                                                                        # noqa
+                                                                                                                                                      # noqa
+See LikelihoodFunctions.py for details on patching                                                                                                    # noqa
+The log(Likelihood) within the standard picture is:
 
+L = prod_{i,sl} p_{i,sl}^N_{i,sl}
+
+Where i indexes the operation sequence, and sl indexes the spam label.
+ N[i] is the total counts for the i-th circuit, and
+ so sum_{sl} N_{i,sl} == N[i]. We take the log:
+
+log L = sum_{i,sl} N_{i,sl} log(p_{i,sl})
+
+The objective function computes the negative log(Likelihood) as a vector of leastsq
+ terms, where each term == sqrt( N_{i,sl} * -log(p_{i,sl}) )
+
+See LikelihoodFunction.py for details on patching
+"""
 
 class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
     """
@@ -3957,9 +4060,16 @@ class RawTVDFunction(RawObjectiveFunction):
     verbosity : int, optional
         Level of detail to print to stdout.
     """
-    def __init__(self, regularization=None,
-                 resource_alloc=None, name='tvd', description="Total Variational Distance (TVD)", verbosity=0):
+    def __init__(self, regularization=None, resource_alloc=None, name: Optional[str]='tvd',
+            description: Optional[str]="Total Variational Distance (TVD)", verbosity=0):
+        if name is None:
+            name = 'tvd'
+        if description is None:
+            description = "Total Variational Distance (TVD)"
         super().__init__(regularization, resource_alloc, name, description, verbosity)
+
+    def chi2k_distributed_qty(self, objective_function_value):
+        return -1
 
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -4026,7 +4136,10 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+        t = probs - freqs
+        d = 0.5*_np.ones_like(t)
+        d[t < 0] *= -1
+        return d
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
         """
@@ -4060,7 +4173,7 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of length equal to that of each array argument.
         """
-        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+        return _np.zeros_like(probs)
 
     #Required zero-term methods for omitted probs support in model-based objective functions
     def zero_freq_terms(self, total_counts, probs):
@@ -4108,7 +4221,9 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of the same length as `total_counts` and `probs`.
         """
-        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+        d = 0.5*_np.ones_like(probs)
+        d[probs < 0] = -0.5  # it's technically possible to predict negative probs.
+        return d
 
     def zero_freq_hterms(self, total_counts, probs):
         """
@@ -4133,8 +4248,46 @@ class RawTVDFunction(RawObjectiveFunction):
         numpy.ndarray
             A 1D array of the same length as `total_counts` and `probs`.
         """
-        raise NotImplementedError("Derivatives not implemented for TVD yet!")
+        return _np.zeros_like(probs)
 
+
+class RawAbsPower(RawObjectiveFunction):
+    """
+    The function `|p-f|^power`.
+    """
+
+    def __init__(self, power: float,  regularization=None, resource_alloc=None, name: Optional[str]='Lp^p',
+            description: Optional[str]="Elementwise absolute value and raising to a power.", verbosity=0):
+        if name is None:
+            name = 'Lp^p'
+        if description is None:
+            description = "Elementwise absolute value and raising to a power."
+
+        super().__init__(regularization, resource_alloc, name, description, verbosity)
+        assert power >= 1
+        self.power = power
+
+    def chi2k_distributed_qty(self, objective_function_value):
+        return -1
+    
+    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+        return _np.abs(probs - freqs) ** self.power
+    
+    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+        t = probs - freqs
+        d = _np.abs(t) ** (self.power - 1)
+        d[t < 0] *= -1
+        d *= self.power
+        return d
+    
+    def zero_freq_terms(self, total_counts, probs):
+        return _np.abs(probs) ** self.power
+
+    def zero_freq_dterms(self, total_counts, probs):
+        d = _np.abs(probs) ** (self.power - 1)
+        d[probs < 0] *= -1
+        d *= self.power
+        return d
 
 ######################################################
 #
@@ -4144,15 +4297,23 @@ class RawTVDFunction(RawObjectiveFunction):
 
 
 class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     A time-independent model-based (:class:`MDCObjectiveFunction`-derived) objective function.
-
-    Parameters
-    ----------
+    """,
+    """ 
     raw_objfn : RawObjectiveFunction
         The raw objective function - specifies how probability and count values
         are turned into objective function values.
+    """, ""
+    )
 
+    DOCSTR_TEMPLATE = \
+    """
+    %s
+    Parameters
+    ----------%s
     mdl : Model
         The model - specifies how parameter values are turned into probabilities
         for each circuit outcome.
@@ -4188,32 +4349,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         Whether hessian calculations are allowed.  If `True` then more resources are
         needed.  If `False`, calls to hessian-requiring function will result in an
         error.
+    %s
     """
-
-    @classmethod
-    def builder(cls, name=None, description=None, regularization=None, penalties=None, **kwargs):
-        """
-        Create an :class:`ObjectiveFunctionBuilder` that builds an objective function of this type.
-
-        Parameters
-        ----------
-        name : str, optional
-            A name for the built objective function (can be anything).
-
-        description : str, optional
-            A description for the built objective function (can be anything)
-
-        regularization : dict, optional
-            Regularization values.
-
-        penalties : dict, optional
-            Penalty values.
-
-        Returns
-        -------
-        ObjectiveFunctionBuilder
-        """
-        return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
 
     @classmethod
     def _create_mdc_store(cls, model, dataset, circuits, resource_alloc,
@@ -4231,11 +4368,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         return ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types, None, verbosity)
 
     @classmethod
-    def create_from(cls, raw_objfn, model, dataset, circuits, resource_alloc=None, penalties=None,
-                    verbosity=0, method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(raw_objfn, mdc_store, penalties, verbosity)
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None, resource_alloc=None,
+                    name=None, description=None, verbosity=0, method_names=('fn',), array_types=(), **kwargs):
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, **kwargs)
 
     @classmethod
     def _array_types_for_method(cls, method_name, fsim):
@@ -4266,9 +4402,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         return array_types
 
-    def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0):
+    @set_docstring(DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
+    def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0, **kwargs):
 
-        super().__init__(raw_objfn, mdc_store, verbosity)
+        super().__init__(raw_objfn, mdc_store, verbosity, **kwargs)
 
         if penalties is None: penalties = {}
         self.ex = self.set_penalties(**penalties)
@@ -4276,7 +4413,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # "extra" (i.e. beyond the (circuit,spamlabel)) rows of jacobian
 
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
-        #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
+        #  Allocate persistent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
         self.initial_allocated_memory = self.resource_alloc.allocated_memory
 
         #Note: allocate probs as a local array in case we want to gather it (though objfn routines don't need this)
@@ -4349,7 +4486,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             default value.
 
         prob_clip_interval : tuple, optional
-            A `(min, max)` tuple that specifies the minium (possibly negative) and maximum values
+            A `(min, max)` tuple that specifies the minimum (possibly negative) and maximum values
             allowed for probabilities generated by the model.  If the model gives probabilities
             outside this range they are clipped to `min` or `max`.  These values can be quite
             generous, as the optimizers are quite tolerant of badly behaved probabilities.
@@ -4386,7 +4523,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.cptp_penalty_factor != 0: ex += _cptp_penalty_size(self.model)
         if self.spam_penalty_factor != 0: ex += _spam_penalty_size(self.model)
         if self.errorgen_penalty_factor != 0: ex += _errorgen_penalty_size(self.model)
-
+        if self.callable_penalty is not None: ex += 1
+        # ^ We want to be able to change the penalty factor without having to rebuild
+        #   this objective function. So we allocate space for the callable penalty
+        #   if it exists at all, rather than requiring self.callable_penalty_factor > 0.
+        #
         return ex
 
     def terms(self, paramvec=None, oob_check=False, profiler_str="TERMS OBJECTIVE"):
@@ -4422,6 +4563,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             omitted_probs_firsts_terms = self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
             terms[self.firsts] += omitted_probs_firsts_terms
         
+        self._reweight_terms(terms)
         unit_ralloc.host_comm_barrier()
 
         self.raw_objfn.resource_alloc.profiler.add_time(profiler_str, tm)
@@ -4461,7 +4603,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             self.model.from_vector(paramvec)
     
         dprobs = self.jac[0:self.nelements, :]
-        dprobs.shape = (self.nelements, self.nparams)
+        dprobs = _compat.reshape_no_copy(dprobs, (self.nelements, self.nparams))
 
         with self.resource_alloc.temporarily_track_memory(2 * self.nelements):
             self.model.sim.bulk_fill_dprobs(dprobs, self.layout, self.probs)
@@ -4479,6 +4621,8 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             omitted_dprobs_firsts_dterms = self.raw_objfn.zero_freq_dterms(total_counts_firsts, omitted_probs)
             dprobs[self.firsts] -= omitted_dprobs_firsts_dterms[:, None] * self.dprobs_omitted_rowsum
         
+        self._reweight_jac(dprobs)
+
         if shared_mem_leader and self._process_penalties:
             self._dterms_fill_penalty(paramvec, self.jac[self.nelements:, :])
 
@@ -4499,8 +4643,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         jac = self.dterms(paramvec)
         if shared_mem_leader:
             lsvec = self.lsvec(paramvec)
-            p5over_lsvec = 0.5/lsvec
-            p5over_lsvec[_np.abs(lsvec) < 1e-100] = 0.0
+            with _np.errstate(divide='ignore', invalid='ignore'):
+                p5over_lsvec = 0.5/lsvec                 # can create infinities
+            p5over_lsvec[_np.abs(lsvec) < 1e-100] = 0.0  # zeros-out any infinities
             jac *= p5over_lsvec[:, None]
 
         unit_ralloc.host_comm_barrier()
@@ -4509,6 +4654,14 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
     
     # Helpers, supporting main public instance functions
     
+    def _reweight_terms(self, terms) -> None:
+        # Optional: multiply terms elementwise by some constants.
+        return
+
+    def _reweight_jac(self, terms_jac) -> None:
+        # Optional: multiply terms_jac rowwise by some constants.
+        return
+
     def _dterms_fill_penalty(self, paramvec, terms_jac):
         wrtslice = self.layout.global_param_slice if isinstance(self.layout, _DistributableCOPALayout) else slice(0, len(paramvec))  # all params
         off = 0
@@ -4546,6 +4699,31 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             terms_jac[off:off+n, :] *= 2*errorgen_penalty[:, None]
             off += n
 
+        if self.callable_penalty is not None:
+            #
+            #   Ideally we'd have put in the effort to do this earlier when doing finite-difference to get
+            #   the Jacobian of terms. But we start with a simple implementation.
+            #
+            #       --> TODO: change so that if callable_penalty has a grad method then we'll call it instead
+            #                 of relying on finite-differences over all model parameters. This would help when
+            #                 the penalty is constant w.r.t. some params (like those that only appear in SPAM).
+            #
+            terms_jac[off:off+1, :] = 0.0
+            if self.callable_penalty_factor:
+                vec0 = self.model.to_vector()
+                val0 = self.callable_penalty(self.model)
+                eps = 1e-7
+                for i in range(vec0.size):
+                    vec0[i] += eps
+                    self.model.from_vector(vec0)
+                    val = self.callable_penalty(self.model)
+                    dval = (val - val0) / eps
+                    terms_jac[off, i] = dval
+                    vec0[i] -= eps
+                self.model.from_vector(vec0)
+            off += 1
+            pass
+
         assert(off == self.local_ex)
         return
 
@@ -4573,6 +4751,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.errorgen_penalty_factor > 0:
             errorgen_penalty = _errorgen_penalty(self.model, self.errorgen_penalty_factor) ** 2
             blocks.append(errorgen_penalty)
+
+        if self.callable_penalty is not None:
+            f = self.callable_penalty_factor
+            val = f * self.callable_penalty(self.model) if f > 0 else 0.0
+            blocks.append(_np.array([val]))
 
         return _np.concatenate(blocks)
 
@@ -4729,7 +4912,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         # Note: hprobs, dprobs12, probs are sometimes shared memory, but the caller (e.g. _construct_hessian)
         # ensures that only the "shared memory leader" processor executes this call.  Thus, we may update
-        # hprobs, dprobs12, and probs as we see fit without the need to import additional checks withing this fn.
+        # hprobs, dprobs12, and probs as we see fit without the need to import additional checks within this fn.
 
         #General idea of what we're doing:
         # Let f(pv) = g(probs(pv)), and let there be KM elements (i.e. probabilities) & len(pv) == N
@@ -4783,231 +4966,82 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
 
 class Chi2Function(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based chi-squared function: `N(p-f)^2 / p`
+    """, "", ""
+    )
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None, resource_alloc=None,
-                    name=None, description=None, verbosity=0, method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
-
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based chi-alpha function: `N[x + 1/(alpha * x^alpha) - (1 + 1/alpha)]` where `x := p/f`.
-
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-
+    """,
+    "", # no custom leading arguments.
+    """
     alpha : float, optional
         The alpha parameter, which lies in the interval (0,1].
-    """
+    """  # one custom trailing argument.
+    )
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=(), alpha=1):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity, alpha)
+                    method_names=('fn',), array_types=(), alpha=1, **kwargs):
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, alpha, **kwargs)
 
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
-                 alpha=1):
+                 alpha=1, **kwargs):
         raw_objfn = RawChiAlphaFunction(regularization, mdc_store.resource_alloc, name, description, verbosity, alpha)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based frequency-weighted chi-squared function: `N(p-f)^2 / f`
+    """, "", ""
+    )
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
-
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
-
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawFreqWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based custom-weighted chi-squared function: `cw^2 (p-f)^2`
-
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-
+    """, "",
+    """
     custom_weights : numpy.ndarray, optional
         One-dimensional array of the custom weights, which linearly multiply the
         *least-squares* terms, i.e. `(p - f)`.  If `None`, then unit weights are
         used and the objective function computes the sum of unweighted squares.
     """
+    )
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=(), custom_weights=None):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity, custom_weights)
+                    method_names=('fn',), array_types=(), custom_weights=None, **kwargs):
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, custom_weights, **kwargs)
 
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
                  custom_weights=None):
         raw_objfn = RawCustomWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description,
@@ -5016,230 +5050,164 @@ class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
 
 
 class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based poisson-picture delta log-likelihood function: `N*f*log(f/p) - N*(f-p)`.
+    """, "", ""
+    )
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
-
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
-
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawPoissonPicDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description,
                                                    verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based delta log-likelihood function: `N*f*log(f/p)`.
+    """, "", ""
+    )
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
-
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
-
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
+
+    TEMPLATE_FIELDS = (
     """
     Model-based maximum-model log-likelihood function: `N*f*log(f)`
-
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    """
+    """, "", ""
+    )
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=(), poisson_picture=True):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity, poisson_picture)
+                    method_names=('fn',), array_types=(), poisson_picture=True, **kwargs):
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, poisson_picture, **kwargs)
 
+    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
-                 poisson_picture=True):
+                 poisson_picture=True, **kwargs):
         raw_objfn = RawMaxLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity,
                                        poisson_picture)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
-class TVDFunction(TimeIndependentMDCObjectiveFunction):
+class TermWeighted(TimeIndependentMDCObjectiveFunction):
     """
-    Model-based TVD function: `0.5 * |p-f|`.
+    Represents an objective whose term function takes the form
+      f(params) = w * g(params),
+    where w is constant and g(params) is a black-box term function.
 
-    Parameters
-    ----------
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
+    This class' implementation of terms() and dterms() has a substantial amount of code
+    duplication with the implementations in TimeIndependentMDCObjectiveFunction
     """
 
-    @classmethod
-    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
-                    resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
-        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
-                                          array_types, verbosity)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
+    def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0, **kwargs):
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
+        self._terms_weights = _np.ones(self.layout.num_elements)
+        self._terms_layout_info = TermWeighted._cheap_layout_spec(self.layout)
+        return
 
-    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0):
+    @staticmethod
+    def _cheap_layout_spec(layout: _COPALayout) -> tuple[int, int, int]:
+        return (id(layout), layout.num_circuits, layout.num_elements)
+
+    def _must_update_terms_weights(self) -> bool:
+        # separate from _update_terms_weights since _update_terms_weights
+        # includes logic specific to the weighting method.
+        temp = TermWeighted._cheap_layout_spec(self.layout)
+        if temp == self._terms_layout_info:
+            return False
+        else:
+            self._terms_layout_info = temp
+            return True
+
+    def _update_terms_weights(self):
+        self._terms_weights = _np.ones(self.layout.num_elements)
+        return
+    
+    def _reweight_terms(self, terms):
+        if self._must_update_terms_weights():
+            self._update_terms_weights()
+        terms[:self.nelements] *= self._terms_weights
+        return
+
+    def _reweight_jac(self, terms_jac):
+        if self._must_update_terms_weights:
+            self._update_terms_weights()
+        terms_jac[:self.nelements] *= self._terms_weights[:, None]
+        return
+
+
+class TVDFunction(TermWeighted):
+
+    TEMPLATE_FIELDS = (
+    """
+    Model-based TVD function: `0.5 * w * |p-f|`, where w is a vector of weights.
+
+    If `name == 'normalized tvd'`, then `w[i]` will be 1/(length of circuit associated with i).
+    Otherwise, w[i] will equal 1.
+    """, "", ""
+    )
+
+    @set_docstring(TermWeighted.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
-        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
+        # ^ initializes self._terms_weights to an array of all ones
+        self.normalized = name == 'normalized tvd'
+        self._update_terms_weights()
+        return
+
+    def _update_terms_weights(self):
+        if self.normalized:
+            num_elements = self.layout.num_elements
+            circuit_sizes = _np.zeros((num_elements,))
+            for elind, circuit, _ in self.layout:
+                circuit_sizes[elind] = 1 + circuit.num_gates
+            assert _np.all(circuit_sizes > 0)
+            self._terms_weights = 1 / circuit_sizes
+            self._terms_weights /= _np.mean(self._terms_weights)
+            # ^ Make the weights mean-1 to avoid unintended changes to Levenberg-Marquardt
+            #   stopping criteria. This has an undesirable side effect of affecting how
+            #   one would interpret individual circuits' contributions to the terms vector.
+            #   However, this function is first and foremost a sum of terms, and the sum
+            #   never has an interesting interpretation. 
+            #
+        else:
+            self._terms_weights = _np.ones(self.layout.num_elements)
+        return
+
+
+class LpNormToPowerP(TermWeighted):
+
+    TEMPLATE_FIELDS = (
+    """
+    Model-based loss function: `|p-f|^power`.
+    """, "",
+    """
+    power : float, optonal
+        Must be >= 1.
+    """
+    )
+
+    @set_docstring(TermWeighted.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None,
+                 verbosity=0, power=2, **kwargs):
+        raw_objfn = RawAbsPower(power, regularization, mdc_store.resource_alloc, name, description, verbosity)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
+        self.power = raw_objfn.power
+        self._update_terms_weights()
+        return
 
 
 class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
@@ -5277,31 +5245,6 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         Level of detail to print to stdout.
     """
 
-    @classmethod
-    def builder(cls, name=None, description=None, regularization=None, penalties=None, **kwargs):
-        """
-        Create an :class:`ObjectiveFunctionBuilder` that builds an objective function of this type.
-
-        Parameters
-        ----------
-        name : str, optional
-            A name for the built objective function (can be anything).
-
-        description : str, optional
-            A description for the built objective function (can be anything)
-
-        regularization : dict, optional
-            Regularization values.
-
-        penalties : dict, optional
-            Penalty values.
-
-        Returns
-        -------
-        ObjectiveFunctionBuilder
-        """
-        return ObjectiveFunctionBuilder(cls, name, description, regularization, penalties, **kwargs)
-
     #This objective function can handle time-dependent circuits - that is, circuits are treated as
     # potentially time-dependent and mdl as well.  For now, we don't allow any regularization or penalization
     # in this case.
@@ -5309,7 +5252,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
                     resource_alloc=None, name=None, description=None, verbosity=0,
-                    method_names=('fn',), array_types=()):
+                    method_names=('fn',), array_types=(), **kwargs):
         #Array types are used to construct memory estimates (as a function of element number, etc) for layout creation.
         # They account for memory used in:
         #  1) an optimization method (if present),
@@ -5317,7 +5260,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         #  2b) intermediate memory allocated by methods of the created object (possibly an objective function)
         array_types += cls.compute_array_types(method_names, model.sim)
         mdc_store = ModelDatasetCircuitsStore(model, dataset, circuits, resource_alloc, array_types)
-        return cls(mdc_store, regularization, penalties, name, description, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, **kwargs)
 
     @classmethod
     def compute_array_types(cls, method_names, fsim):
@@ -5350,7 +5293,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.ex = self.set_penalties(**penalties)  # "extra" (i.e. beyond the (circuit,spamlabel)) rows of jacobian
 
         #Setup underlying EvaluatedModelDatasetCircuitsStore object
-        #  Allocate peristent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
+        #  Allocate persistent memory - (these are members of EvaluatedModelDatasetCircuitsStore)
         self.initial_allocated_memory = self.resource_alloc.allocated_memory
         self.v = self.layout.allocate_local_array('e', 'd', memory_tracker=self.resource_alloc)
         self.jac = None
@@ -5495,7 +5438,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
             over all the error generator coefficients of each model operation.
 
         prob_clip_interval : tuple, optional
-            A `(min, max)` tuple that specifies the minium (possibly negative) and maximum values
+            A `(min, max)` tuple that specifies the minimum (possibly negative) and maximum values
             allowed for probabilities generated by the model.  If the model gives probabilities
             outside this range they are clipped to `min` or `max`.  These values can be quite
             generous, as the optimizers are quite tolerant of badly behaved probabilities.
@@ -5579,7 +5522,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         """
         tm = _time.time()
         dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
-        dprobs.shape = (self.nelements, self.nparams)
+        dprobs = _compat.reshape_no_copy(dprobs, (self.nelements, self.nparams))
         if paramvec is not None: self.model.from_vector(paramvec)
 
         fsim = self.model.sim
@@ -5663,7 +5606,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
             default value.
 
         prob_clip_interval : tuple, optional
-            A `(min, max)` tuple that specifies the minium (possibly negative) and maximum values
+            A `(min, max)` tuple that specifies the minimum (possibly negative) and maximum values
             allowed for probabilities generated by the model.  If the model gives probabilities
             outside this range they are clipped to `min` or `max`.  These values can be quite
             generous, as the optimizers are quite tolerant of badly behaved probabilities.
@@ -5724,7 +5667,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
                                       self.dataset, self.min_prob_clip, self.radius, self.prob_clip_interval,
                                       self._ds_cache)
         v = _np.sqrt(v)
-        v.shape = [self.nelements]  # reshape ensuring no copy is needed
+        v = _compat.reshape_no_copy(v, [self.nelements])  # reshape ensuring no copy is needed
 
         self.raw_objfn.resource_alloc.profiler.add_time("Time-dep dlogl: OBJECTIVE", tm)
         return v  # Note: no test for whether probs is in [0,1] so no guarantee that
@@ -5732,7 +5675,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
 
     #  derivative of  sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) terms:
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp
-    #  with ommitted correction: sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i] * Y(1-other_ps)) terms (Y is a fn of other ps == omitted_probs)  # noqa
+    #  with omitted correction: sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i] * Y(1-other_ps)) terms (Y is a fn of other ps == omitted_probs)  # noqa
     #   == 0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( -N_{i,sl} / p_{i,sl} + N[i] ) * dp_{i,sl} +                   # noqa
     #      0.5 / sqrt( N_{i,sl} * -log(p_{i,sl}) + N[i] * p_{i,sl} + N[i]*(1-other_ps) ) * ( N[i]*dY/dp_j(1-other_ps) ) * -dp_j (for p_j in other_ps)      # noqa
 
@@ -5758,7 +5701,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         """
         tm = _time.time()
         dlogl = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dlogl
-        dlogl.shape = (self.nelements, self.nparams)
+        dlogl = _compat.reshape_no_copy(dlogl, (self.nelements, self.nparams))
         if paramvec is not None: self.model.from_vector(paramvec)
         unit_ralloc = self.layout.resource_alloc('param-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
@@ -5806,7 +5749,7 @@ def _cptp_penalty(mdl, prefactor, op_basis):
         a (real) 1D array of length len(mdl.operations).
     """
     return prefactor * _np.sqrt(_np.array([_tools.tracenorm(
-        _tools.fast_jamiolkowski_iso_std(gate, op_basis)
+        _tools.fast_jamiolkowski_iso_std(gate.to_dense('minimal'), op_basis)
     ) for gate in mdl.operations.values()], 'd'))
 
 
@@ -5875,7 +5818,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
 
         #get sgn(chi-matrix) == d(|chi|_Tr)/dchi in std basis
         # so sgnchi == d(|chi_std|_Tr)/dchi_std
-        chi = _tools.fast_jamiolkowski_iso_std(gate, op_basis)
+        chi = _tools.fast_jamiolkowski_iso_std(gate.to_dense('minimal'), op_basis)
         assert(_np.linalg.norm(chi - chi.T.conjugate()) < error_tol), \
             "chi should be Hermitian!"
 
@@ -5896,7 +5839,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
         #OLD: dGdp = mdl.dproduct((gl,)) but wasteful
         dgate_dp = gate.deriv_wrt_params()  # shape (dim**2, nP)
         dgate_dp = _np.swapaxes(dgate_dp, 0, 1)  # shape (nP, dim**2, )
-        dgate_dp.shape = (nparams, mdl.dim, mdl.dim)
+        dgate_dp = _compat.reshape_no_copy(dgate_dp, (nparams, mdl.dim, mdl.dim))
 
         # Let M be the "shuffle" operation performed by fast_jamiolkowski_iso_std
         # which maps a gate onto the choi-jamiolkowsky "basis" (i.e. performs that C-J
@@ -5926,7 +5869,7 @@ def _cptp_penalty_jac_fill(cp_penalty_vec_grad_to_fill, mdl, prefactor, op_basis
         #slice works as expected in this case
         chi = sgnchi = dgate_dp = m_dgate_dp_std = v = None  # free mem
 
-    return len(mdl.operations)  # the number of leading-dim indicies we filled in
+    return len(mdl.operations)  # the number of leading-dim indices we filled in
 
 
 def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_basis, wrt_slice, error_tol=1e-4):
@@ -5951,7 +5894,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
 
         #get sgn(denMx) == d(|denMx|_Tr)/d(denMx) in std basis
         # dmDim = denMx.shape[0]
-        denmx = _tools.vec_to_stdmx(prepvec, op_basis)
+        denmx = _tools.vec_to_stdmx(prepvec.to_dense("minimal"), op_basis)
         assert(_np.linalg.norm(denmx - denmx.T.conjugate()) < error_tol), \
             "denMx should be Hermitian!"
 
@@ -5986,7 +5929,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
             nparams = effectvec.num_params
 
             #get sgn(EMx) == d(|EMx|_Tr)/d(EMx) in std basis
-            emx = _tools.vec_to_stdmx(effectvec, op_basis)
+            emx = _tools.vec_to_stdmx(effectvec.to_dense("minimal"), op_basis)
             # dmDim = EMx.shape[0]
             assert(_np.linalg.norm(emx - emx.T.conjugate()) < error_tol), \
                 "EMx should be Hermitian!"
@@ -6016,7 +5959,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
 
             sgn_e = dv_dp = v = None  # free mem
 
-    #return the number of leading-dim indicies we filled in
+    #return the number of leading-dim indices we filled in
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
 
 
@@ -6055,7 +5998,7 @@ def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor
     #Above fills derivative of val**2 = sum(terms), but we want deriv of val = sqrt(sum(terms)):
     errorgen_penalty_vec_grad_to_fill[0, :] *= 0.5 / val  # final == 1/sqrt(sum(terms)) * dsumterms
 
-    #return the number of leading-dim indicies we filled in
+    #return the number of leading-dim indices we filled in
     return 1
 
 
@@ -6075,7 +6018,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         The bare log-likelihood function.
 
     base_pt : numpy.ndarray
-        Unused.  The model-paramter vector where this objective function is based.
+        Unused.  The model-parameter vector where this objective function is based.
 
     wildcard : WildcardBudget
         The wildcard budget that adjusts the "bare" probabilities of
@@ -6202,7 +6145,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         raise NotImplementedError("No jacobian yet")
 
 
-class CachedObjectiveFunction(_NicelySerializable):
+class CachedObjectiveFunction:
     """
     Holds various values of an objective function at a particular point.
 
@@ -6212,7 +6155,15 @@ class CachedObjectiveFunction(_NicelySerializable):
     the elements of various probability vectors, etc., but we demand that this
     layout not depend on comm objects.
 
-    The cache may only have values on the rank-0 proc (??)
+    Notes
+    -----
+     * The serialization mechanism is the ``.write`` and ``.from_dir`` API pattern
+       that's used throughout the codebase for serializing objects to disk. 
+     * We don't necessarily exploit this class for improved efficiency anywhere.
+       This is largely an artifact from an incomplete feature. It's fair game in
+       the future to either (1) try and extend the use case of this class in a
+       material way, or (2) remove this class altogether.
+    
     """
     collection_name = "pygsti_cached_objective_fns"
 
@@ -6240,16 +6191,8 @@ class CachedObjectiveFunction(_NicelySerializable):
         """
         import pygsti.io as _io
         ret = cls.__new__(cls)
-        _NicelySerializable.__init__(ret)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
-        return ret
-
-    @classmethod
-    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
-        import pygsti.io as _io
-        ret = cls.__new__(cls)
-        _NicelySerializable.__init__(ret, doc.get('_id', None))
-        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
+        temp = _io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load)
+        ret.__dict__.update(temp)
         return ret
 
     def __init__(self, objective_function):
@@ -6266,8 +6209,6 @@ class CachedObjectiveFunction(_NicelySerializable):
         self.chi2k_distributed_terms = objective_function.chi2k_distributed_qty(self.terms)
         self.num_elements = len(self.terms)
 
-        #local_percircuit = objective_function.percircuit()
-        #self.percircuit = objfn_layout.allgather_local_array('c', local_percircuit)
         self.num_circuits = len(self.layout.circuits)
         self.percircuit = _np.empty(self.num_circuits, 'd')
         for i in range(self.num_circuits):
@@ -6318,26 +6259,3 @@ class CachedObjectiveFunction(_NicelySerializable):
         import pygsti.io as _io
         _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
                                                      'auxfile_types', overwrite_existing=overwrite_existing)
-
-    @classmethod
-    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
-        import pygsti.io as _io
-        _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
-                                        recursive=recursive)
-
-    def _to_nice_serialization(self):
-        state = super()._to_nice_serialization()
-        state.update({'name': self.name,
-                      'description': self.description,
-                      'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
-                      'regularization': self.regularization,
-                      'penalties': self.penalties,
-                      'additional_arguments': self.additional_args,
-                      })
-        return state
-
-    @classmethod
-    def _from_nice_serialization(cls, state):
-        from pygsti.io.metadir import _class_for_name
-        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
-                   state['regularization'], state['penalties'], *state['additional_arguments'])

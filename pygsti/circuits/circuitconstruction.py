@@ -219,7 +219,7 @@ def _repeat_remainder_for_truncation(x, n, assert_at_least_one_rep=False):
     Repeat the operation sequence x the fewest number of times such that the repeated
     sequence has length greater than or equal to n.  Return the portion of this
     repeated string from the n-th position to the end. Note that this corresponds
-    to what is truncated in a call to `repeate_and_truncate(x,n,assert_at_least_one_rep)`.
+    to what is truncated in a call to `repeat_and_truncate(x,n,assert_at_least_one_rep)`.
 
     Parameters
     ----------
@@ -403,7 +403,7 @@ def list_all_circuits_without_powers_and_cycles(op_labels, max_length):
         outputDict[length] = []
         for pys in permCheckedStrs:
             # Now check to see if any elements of tempList2 are powers of elements already in output
-            if not _pow_check(pys, outputDict):  # Seqeunce is not a power of anything in output
+            if not _pow_check(pys, outputDict):  # Sequence is not a power of anything in output
                 outputDict[length].append(pys)
 
     output = []
@@ -448,7 +448,7 @@ def list_partial_circuits(circuit):
     """
     List the partial sub-circuits of `circuit`.
 
-    The "parital circuits" are defined as
+    The "partial circuits" are defined as
     the slices `circuit[0:n]` for `0 <= n <= len(circuit)`.
 
     Parameters
@@ -459,7 +459,7 @@ def list_partial_circuits(circuit):
     Returns
     -------
     list of Circuit objects.
-        The parial circuits.
+        The partial circuits.
     """
     ret = []
     for l in range(len(circuit) + 1):

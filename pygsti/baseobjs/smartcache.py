@@ -514,7 +514,7 @@ class CustomDigestError(Exception):
 
 def digest(obj, custom_digests=None):
     """
-    Returns an MD5 digest of an arbitary Python object, `obj`.
+    Returns an MD5 digest of an arbitrary Python object, `obj`.
 
     Parameters
     ----------

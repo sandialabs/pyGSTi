@@ -21,7 +21,11 @@ from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import slicetools as _slct
-from typing import Union, Callable, Literal
+from typing import Union, Callable, Literal, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pygsti.models.model import Model
+    # Note that this is Model and not OpModel because an SuccessFailSimulator is derived from a ForwardSimulator.
 
 
 class ForwardSimulator(_NicelySerializable):
@@ -96,7 +100,7 @@ class ForwardSimulator(_NicelySerializable):
             return ('ep', 'ep') + cls._array_types_for_method('_bulk_fill_dprobs_block')
         return ()
 
-    def __init__(self, model=None):
+    def __init__(self, model: Optional[Model] = None):
         super().__init__()
         #self.dim = model.dim
         self.model = model
@@ -127,12 +131,19 @@ class ForwardSimulator(_NicelySerializable):
         state_dict['_model'] = None  # don't serialize parent model (will cause recursion)
         return state_dict
 
+    def copy(self, keep_model_attached=True):
+        s = self._to_nice_serialization()
+        f = type(self)._from_nice_serialization(s)
+        if not keep_model_attached:
+            f.model = None  # type: ignore
+        return f
+
     @property
-    def model(self):
+    def model(self) -> Union[Model, None]:
         return self._model
 
     @model.setter
-    def model(self, val):
+    def model(self, val: Model):
         self._model = val
         try:
             evotype = None if val is None else self._model.evotype
@@ -149,7 +160,7 @@ class ForwardSimulator(_NicelySerializable):
         raise NotImplementedError("Derived classes should implement this!")
 
     def _compute_sparse_circuit_outcome_probabilities(self, circuit, resource_alloc, time=None):
-        raise NotImplementedError("Derived classes should implement this to provide sparse (non-zero) probabilites!")
+        raise NotImplementedError("Derived classes should implement this to provide sparse (non-zero) probabilities!")
 
     def _compute_circuit_outcome_probability_derivatives(self, array_to_fill, circuit, outcomes, param_slice,
                                                          resource_alloc):
@@ -265,6 +276,69 @@ class ForwardSimulator(_NicelySerializable):
             hprobs[outcome] = hprobs_array[element_index]
         return hprobs
 
+    def product(self, circuit, scale=False):
+        """
+        Compute the product of a specified sequence of operation labels.
+
+        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
+        the first element of circuit can be thought of as the first gate operation
+        performed, which is on the far right of the product of matrices.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+            The sequence of operation labels.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        Returns
+        -------
+        product : numpy array
+            The product or scaled product of the operation matrices.
+        scale : float
+            Only returned when scale == True, in which case the
+            actual product == product * scale.  The purpose of this
+            is to allow a trace or other linear operation to be done
+            prior to the scaling.
+        """
+        superop_dim = self.model.evotype.minimal_dim(self.model.state_space)
+
+        # Smallness tolerances, used internally for conditional scaling required
+        # to control bulk products, their gradients, and their Hessians.
+        _PSMALL = 1e-100
+        G = _np.identity(superop_dim)
+        if scale:
+            scaledGatesAndExps = {}
+            scale_exp = 0
+            for lOp in circuit:
+                if lOp not in scaledGatesAndExps:
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal")
+                    ng = max(_np.linalg.norm(opmx), 1.0)
+                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
+
+                gate, ex = scaledGatesAndExps[lOp]
+                H = gate @ G  # product of gates, starting with identity
+                scale_exp += ex   # scale and keep track of exponent
+                if H.max() < _PSMALL and H.min() > -_PSMALL:
+                    nG = max(_np.linalg.norm(G), _np.exp(-scale_exp))
+                    G = gate @ G
+                    G /= nG
+                    scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
+                else: G = H
+
+            old_err = _np.seterr(over='ignore')
+            scale = _np.exp(scale_exp)
+            _np.seterr(**old_err)
+
+            return G, scale
+
+        else:
+            for lOp in circuit:
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense("minimal"), G)
+                # above line: LEXICOGRAPHICAL VS MATRIX ORDER
+            return G
+
     # ---------------------------------------------------------------------------
     # BULK operations -----------------------------------------------------------
     # ---------------------------------------------------------------------------
@@ -304,7 +378,7 @@ class ForwardSimulator(_NicelySerializable):
 
         derivative_dimensions : tuple, optional
             A tuple containing, optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This should
+            and second derivatives with respect to the circuit outcome probabilities.  This should
             have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
             respectively. If `array_types` contains either of these strings and derivative_dimensions
             is None on input then we automatically set derivative_dimensions based on self.model.
@@ -422,6 +496,17 @@ class ForwardSimulator(_NicelySerializable):
         global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        if self.model.num_params == 0:
+            # No free parameters => empty derivative arrays (avoids an opaque IndexError, see #604).
+            vdp = _np.empty((global_layout.num_elements, 0), 'd')
+            if resource_alloc.comm_rank == 0:
+                ret = _collections.OrderedDict()
+                for elInds, c, outcomes in global_layout.iter_unique_circuits():
+                    if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+                    ret[c] = _ld.OutcomeLabelDict([(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes)])
+                return ret
+            else:
+                return None
         with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params):  # 'EP' (vdp)
             #Note: don't use smartc for now.
             local_vdp = copa_layout.allocate_local_array('ep', 'd')
@@ -470,6 +555,16 @@ class ForwardSimulator(_NicelySerializable):
         global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        if self.model.num_params == 0:
+            # No free parameters => empty Hessian arrays (avoids an opaque IndexError, see #604).
+            zero_hessian = _np.empty((0, 0), 'd')
+            if resource_alloc.comm_rank == 0:
+                ret = _collections.OrderedDict()
+                for elInds, c, outcomes in global_layout.iter_unique_circuits():
+                    ret[c] = _ld.OutcomeLabelDict([(outLbl, zero_hessian) for outLbl in outcomes])
+                return ret
+            else:
+                return None
         with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params**2):  # 'EPP'
             #Note: don't use smartc for now.
             local_vhp = copa_layout.allocate_local_array('epp', 'd')
@@ -696,7 +791,7 @@ class ForwardSimulator(_NicelySerializable):
 
         This routine can be useful when memory constraints make constructing
         the entire Hessian at once impractical, and as it only computes a subset of
-        the Hessian's rows and colums (a "rectangle") at once.  For example, the
+        the Hessian's rows and columns (a "rectangle") at once.  For example, the
         Hessian of a function of many circuit probabilities can often be computed
         rectangle-by-rectangle and without the need to ever store the entire Hessian at once.
 
@@ -818,7 +913,7 @@ class CacheForwardSimulator(ForwardSimulator):
 
         derivative_dimensions : tuple, optional
             A tuple containing, optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            and second derivatives with respect to the circuit outcome probabilities.  This must be
             have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
             respectively.
 
