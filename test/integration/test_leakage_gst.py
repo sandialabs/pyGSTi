@@ -8,6 +8,7 @@ from pygsti.protocols import StandardGST, ProtocolData
 import unittest
 import numpy as np
 import scipy.linalg as la
+import pytest
 
 
 def with_leaky_gate(m, gate_label, strength):
@@ -30,6 +31,7 @@ class TestLeakageGSTPipeline(unittest.TestCase):
     it takes just under 1 minute to run on an Apple M2 Max machine.
     """
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_pipeline_1Q_XYI(self):
         # This is adapted from the Leakage-automagic ipython notebook.
         mp = smq1Q_XYI

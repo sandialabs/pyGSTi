@@ -161,7 +161,7 @@ def spamfn_factory(fn):
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp
 
-#Note: the 'basis' argument is unnecesary here, as it could be passed as an additional arg
+#Note: the 'basis' argument is unnecessary here, as it could be passed as an additional arg
 
 
 def opfn_factory(fn):
@@ -202,7 +202,7 @@ def opfn_factory(fn):
     return GSFTemp
 
 
-#Note: the 'op2' and 'basis' arguments are unnecesary here, as they could be
+#Note: the 'op2' and 'basis' arguments are unnecessary here, as they could be
 # passed as additional args
 def opsfn_factory(fn):
     """
@@ -475,7 +475,7 @@ def modelfn_factory(fn):
         def __init__(self, model, *args, **kwargs):
             """
             Creates a new ModelFunction dependent on all of its Model
-            argument's paramters
+            argument's parameters
             """
             self.args = args
             self.kwargs = kwargs

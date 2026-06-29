@@ -869,7 +869,7 @@ def compile_latex_report(report_filename, latex_call, printer, auto_open):
     Raises
     ------
     subprocess.CalledProcessException
-        If the call to the process comiling the PDF returns non-zero exit
+        If the call to the process compiling the PDF returns non-zero exit
         status.
     """
     report_dir = _os.path.dirname(report_filename)

@@ -93,7 +93,7 @@ class CircuitList(_NicelySerializable):
         self.circuit_rules = circuit_rules
         self.circuit_weights = circuit_weights
         self.name = name  # an optional name for this circuit list
-        self.uuid = _uuid.uuid4()  # like a persistent id(), useful for peristent (file) caches
+        self.uuid = _uuid.uuid4()  # like a persistent id(), useful for persistent (file) caches
 
     def _to_nice_serialization(self):  # memo holds already serialized objects
         from pygsti.io.writers import convert_circuits_to_strings as _convert_circuits_to_strings
@@ -212,7 +212,7 @@ class CircuitList(_NicelySerializable):
         Parameters
         ----------
         elementvec : numpy array
-            An array containting the values to use when constructing a
+            An array containing the values to use when constructing a
             matrix of values for this CircuitList. This array may contain more
             values than are needed by this CircuitList.  Indices into this array
             are given by `elindices_lookup`.

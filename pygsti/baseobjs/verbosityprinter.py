@@ -503,7 +503,7 @@ class VerbosityPrinter(object):
         Parameters
         ----------
         iteration : int
-            the 0-based current iteration -- the interation number this message is for.
+            the 0-based current iteration -- the iteration number this message is for.
 
         total : int
             the total number of iterations expected.

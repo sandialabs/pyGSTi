@@ -21,6 +21,7 @@ from pygsti.modelmembers.operations.experrorgenop import ExpErrorgenOp as _ExpEr
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
@@ -405,7 +406,7 @@ class ComposedOp(_LinearOperator):
         for i, (op, factorgate_local_inds) in enumerate(zip(self.factorops, self._submember_rpindices)):
             if op.num_params == 0: continue  # no contribution
             deriv = op.deriv_wrt_params(None)  # TODO: use filter?? / make relative to this operation...
-            deriv.shape = (self.dim, self.dim, op.num_params)
+            deriv = _compat.reshape_no_copy(deriv, (self.dim, self.dim, op.num_params))
 
             if i > 0:  # factors before ith
                 pre = self.factorops[0].to_dense("minimal")
@@ -425,7 +426,7 @@ class ComposedOp(_LinearOperator):
             #    self.gpindices, op.gpindices)
             derivMx[:, :, factorgate_local_inds] += deriv
 
-        derivMx.shape = (self.dim**2, self.num_params)
+        derivMx = _compat.reshape_no_copy(derivMx, (self.dim**2, self.num_params))
         if wrt_filter is None:
             return derivMx
         else:

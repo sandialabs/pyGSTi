@@ -15,7 +15,7 @@ import warnings as _warnings
 
 from .composederrorgen import ComposedErrorgen
 from .composedop import ComposedOp
-from .denseop import DenseOperator, DenseOperatorInterface
+from .denseop import DenseOperator
 from .depolarizeop import DepolarizeOp
 from .eigpdenseop import EigenvalueParamDenseOp
 from .embeddederrorgen import EmbeddedErrorgen
@@ -39,10 +39,12 @@ from .staticunitaryop import StaticUnitaryOp
 from .stochasticop import StochasticNoiseOp
 from .lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from .affineshiftop import AffineShiftOp
+from .cptrop import RootConjOperator, SummedOperator
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 from pygsti import SpaceT
+
 
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """
@@ -339,7 +341,7 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
                 # Above: consider "isinstance(operation, StaticUnitaryOp)" instead of num_params == 0?
                 #Convert a non-exp(errorgen) op to  exp(errorgen) * ideal
                 proj_basis = 'PP' if operation.state_space.is_entirely_qubits else basis
-                if ideal_operation == "identity":  # special value
+                if isinstance(ideal_operation, str) and ideal_operation == "identity":  # special value
                     postfactor_op = None
                     error_map_mx = operation.to_dense("HilbertSchmidt")  # error generators are only in HS space
                 else:

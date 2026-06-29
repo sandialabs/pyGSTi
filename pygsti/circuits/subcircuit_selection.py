@@ -11,7 +11,7 @@ Utility functions for subcircuit selection
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Dict, List, Tuple, Callable, Union, Optional, Any, Protocol, Literal, Set, TYPE_CHECKING
+from typing import Dict, List, Tuple, Callable, Union, Optional, Any, Protocol, Literal, Set, TYPE_CHECKING, runtime_checkable
 
 if TYPE_CHECKING:
     try:
@@ -31,7 +31,7 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.tools import internalgates as _itgs
-from pygsti.tools.exceptions import MissingDependencyWarning
+from pygsti.tools.exceptions import MissingDependencyWarning, QiskitInteropWarning
 
 
 QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE = \
@@ -49,10 +49,11 @@ for subcircuit selection, and does not appear to be installed.
 
 MAX_STARTING_LAYER_ATTEMPTS = 1000
 
-
+@runtime_checkable
 class HasGetMethod(Protocol):
-    def get(gate_name: str, qubits: List[int]) -> float:
-        pass
+    def get(self, gate_name: str, qubits: List[int]) -> float:
+        ...
+
 
 def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
                        width_depths: Dict[int, List[int]],
@@ -129,7 +130,7 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
     try:
         import qiskit
         if qiskit.__version__ != '2.1.1':
-            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, MissingDependencyWarning)
+            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, QiskitInteropWarning)
     except:
         _warnings.warn(QISKIT_MISSING_MESSAGE, MissingDependencyWarning)
     
@@ -262,7 +263,7 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
     try:
         import qiskit
         if qiskit.__version__ != '2.1.1':
-            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, MissingDependencyWarning)
+            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, QiskitInteropWarning)
     except:
         _warnings.warn(QISKIT_MISSING_MESSAGE, MissingDependencyWarning)
 
@@ -523,7 +524,7 @@ def greedy_growth_subcirc_selection(full_circ: _Circuit,
         the compiled depth of each subcircuit and the start and end layers of each subcircuit.
     """
 
-    # TODO: sample until success wuth some upper bound on the number of samples that can be taken?
+    # TODO: sample until success with some upper bound on the number of samples that can be taken?
 
     full_width = len(full_circ.line_labels)
     full_depth = len(full_circ)

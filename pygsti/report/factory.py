@@ -669,7 +669,7 @@ def create_standard_report(results, filename, title="auto",
         files, respectively.  "tex" creates latex source files for
         tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
         Python versions of plots (pickled python data) and tables (pickled
-        pandas DataFrams).
+        pandas DataFrames).
 
     brevity : int, optional
         Amount of detail to include in the report.  Larger values mean smaller
@@ -862,7 +862,7 @@ def create_nqnoise_report(results, filename, title="auto",
         files, respectively.  "tex" creates latex source files for
         tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
         Python versions of plots (pickled python data) and tables (pickled
-        pandas DataFrams).
+        pandas DataFrames).
 
     brevity : int, optional
         Amount of detail to include in the report.  Larger values mean smaller
@@ -1148,7 +1148,7 @@ def _validated_confidence_level(cl: Union[float, int, None]):
 # TODO these factories should really be Report subclasses
 def construct_standard_report(results, title="auto",
                               confidence_level=None, comm=None, ws=None,
-                              advanced_options=None, verbosity=1):
+                              advanced_options=None, verbosity=1) -> _Report:
     """
     Create a "standard" GST report, containing details about each estimate in `results` individually.
 
