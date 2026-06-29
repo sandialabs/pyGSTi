@@ -4233,7 +4233,14 @@ class Circuit(object):
                     elif isinstance(global_idle_replacement_label, _Label):
                         circuit_layers.append(global_idle_replacement_label)
                 else:
-                    circuit_layers.append(_Label(name, state_space_labels = sslbls))
+                    if name[:3] == 'Gu3':
+                        split_string = name.split(';')
+                        theta = float(split_string[1])
+                        phi = float(split_string[2])
+                        lamb = float(split_string[3])
+                        circuit_layers.append(_Label('Gu3', state_space_labels = sslbls, args=[theta, phi, lamb]))
+                    else:
+                        circuit_layers.append(_Label(name, state_space_labels = sslbls))
 
             else:
                 #initialize sublist for layer label elements
@@ -4249,7 +4256,15 @@ class Circuit(object):
                         name = _itgs.unitary_to_standard_gatename(op.gate._unitary_(), up_to_phase=True)
                         assert name is not None, 'Could not find a matching standard gate name for conversion.'
                     sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
-                    layer_label_elems.append(_Label(name, state_space_labels = sslbls))
+                    
+                    if name[:3] == 'Gu3':
+                        split_string = name.split(';')
+                        theta = float(split_string[1])
+                        phi = float(split_string[2])
+                        lamb = float(split_string[3])
+                        layer_label_elems.append(_Label('Gu3', state_space_labels = sslbls, args=[theta, phi, lamb]))
+                    else:
+                        layer_label_elems.append(_Label(name, state_space_labels = sslbls))
 
                 #add special handling for global idle circuits and implied idels based on flags.
                 layer_label_elem_names = [elem.name for elem in layer_label_elems]

@@ -88,7 +88,7 @@ def qiskit_circuits_to_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCi
     if isinstance(qk_circs, list):
         qk_circs = {i: qk_circ for i, qk_circ in enumerate(qk_circs)}
 
-    for k, qk_test_circ in qk_circs.items():
+    for k, (ps_target_circ, qk_test_circ) in qk_circs.items():
 
         qk_ref_circ = transpile(qk_test_circ,
                                 basis_gates=['u3', 'cz'],
@@ -106,8 +106,8 @@ def qiskit_circuits_to_mirror_edesign(qk_circs: Union[Dict[Any, qiskit.QuantumCi
 
         test_circ_metadata = {
             'id': k,
-            'width': ps_test_circ.width,
-            'depth': ps_test_circ.depth,
+            'width': ps_target_circ.width,
+            'depth': ps_target_circ.depth,
             # other information as it becomes necessary
         }
 
@@ -321,7 +321,6 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
                 init_register = qk_test_circ.layout.initial_layout[idx]._register
                 if init_register.name == 'ancilla':
                     uses_ancilla = True
-                    print(qubit)
                     break
 
             if not uses_ancilla:
@@ -329,8 +328,8 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
         else:
             raise RuntimeError('Could not generate transpilation that does not use ancilla qubits. Maybe try increasing `num_transpilation_attempts?`')
 
-        qk_init_opt_layout = qk_test_circ.layout.initial_index_layout(filter_ancillas=False)[:num_virtual_qubits]
-        qk_final_opt_layout = qk_test_circ.layout.final_index_layout(filter_ancillas=False)[:num_virtual_qubits]
+        qk_init_opt_layout = qk_test_circ.layout.initial_index_layout(filter_ancillas=True)[:num_virtual_qubits]
+        qk_final_opt_layout = qk_test_circ.layout.final_index_layout(filter_ancillas=True)[:num_virtual_qubits]
 
         assert set(qk_init_opt_layout) == set(qk_final_opt_layout)
 
@@ -356,10 +355,27 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
         
         test_circ_dict[ps_test_circ] += [test_metadata]
 
+
+
         if qk_backend is not None:
-            reduced_coupling_map = qk_backend.coupling_map.reduce(qk_final_opt_layout)
+            reduced_coupling_map = qk_backend.coupling_map.reduce(qk_final_opt_layout, check_if_connected=True)
         else: # there must be a coupling map that was separately provided
-            reduced_coupling_map = coupling_map.reduce(qk_final_opt_layout)
+            reduced_coupling_map = coupling_map.reduce(qk_final_opt_layout, check_if_connected=True)
+        # print('active_qubits', active_qubits)
+        # active_phys_qubits = sorted({
+        #     qk_final_opt_layout[i] for i, q in enumerate(active_qubits)
+        # })
+
+        # if qk_backend is not None:
+        #     reduced_coupling_map = qk_backend.coupling_map.reduce(
+        #         active_phys_qubits, check_if_connected=True
+        #     )
+        # else:
+        #     reduced_coupling_map = coupling_map.reduce(
+        #         active_phys_qubits, check_if_connected=True
+        #     )
+
+
 
         # generate exact reference circuit, ensuring that the line labels will align with the test circuit when inverted.
         ref_seed = 0
@@ -383,7 +399,6 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
                 init_register = qk_ref_inv_circ.layout.initial_layout[idx]._register
                 if init_register.name == 'ancilla':
                     uses_ancilla = True
-                    print(qubit)
                     break
 
             if not uses_ancilla:
@@ -863,7 +878,9 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
             for j in _tqdm.tqdm(range(num_ref_per_qubit_subset), ascii=True, desc=f'Sampling reference circuits for subset {unique_subset}'):
                 L = init_layer(qubits=unique_subset, gate_set=gate_set, state_initialization=state_initialization, rand_state=rand_state, state_init_kwargs=state_init_kwargs)
                 spam_ref = L + compute_inverse(circ=L, gate_set=gate_set, inverse=inverse, inv_kwargs=inv_kwargs)
-                spam_refs[spam_ref].append({'idealout': '0'*w, 'id': j, 'qs_to_measure': spam_ref.line_labels, 'width': w})
+                #spam_refs[spam_ref].append({'idealout': '0'*w, 'id': j, 'qs_to_measure': spam_ref.line_labels, 'width': w})
+                spam_refs[spam_ref].append({'idealout': '0'*len(spam_ref.line_labels), 'id': j, 'qs_to_measure': spam_ref.line_labels, 'width': w})
+                
 
 
     edesigns = {}

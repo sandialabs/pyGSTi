@@ -631,7 +631,15 @@ def gate_inverse(label: _Label) -> _Label:
         return label
     elif label.name == 'Gu3':
         return _Label('Gu3', label.qubits, args=inverse_u3(label.args))
-    elif label.name in ['Gi', 'Gdelay']:
+    elif label.name[:3] == 'Gu3':
+        gate_string = label.name.split(':')[0]
+        split_string = gate_string.split(';')
+        theta = float(split_string[1])
+        phi = float(split_string[2])
+        lamb = float(split_string[3])
+        return _Label('Gu3', label.qubits, args=inverse_u3([theta, phi, lamb]))
+    
+    elif label.name in ['Gi', 'Gdelay', 'Gxpi', 'Gypi', 'Gzpi']:
         return label
     else:
         raise RuntimeError(f'cannot compute gate inverse for {label}')
