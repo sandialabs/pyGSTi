@@ -1103,21 +1103,13 @@ class LabelTupTup(Label, tuple):
         # ^ Note: constituent `tup`s in the list comprehension can also be a Label obj
         if __debug__ and warn_on_component_metadata and tupOfLabels:  # Debug flag is so that the check gets optimized out later in production runs.
             atleast_one_missing_time = False
-            somewith_nonemptyargs = False
             ctimes = set()
             for lbl in tupOfLabels:
                 if hasattr(lbl, "time"):
                     ctimes.add(lbl.time)
                 else:
                     atleast_one_missing_time = True
-                if hasattr(lbl, "args"):
-                    if len(lbl.args) > 0:
-                        somewith_nonemptyargs = True
-            if not atleast_one_missing_time and ctimes == set([0.0]) and somewith_nonemptyargs:
-                # This is likely a LabelTupTup containing LabelsWithArgs. We do not know if they just got defaulted to time = 0.
-                warn("The interior labels have args which sets the default time to 0.0."
-                     "If you want to also label this collection LabelTupTup with time = 0.0 you must include the time in the constructor.", RuntimeWarning)
-            elif not atleast_one_missing_time and len(ctimes) == 1 and 0.0 not in ctimes:
+            if not atleast_one_missing_time and len(ctimes) == 1 and 0.0 not in ctimes:
                 warn("You may want to consider a LabelTupTupWithTime as all of the entries have the same time"
                      " and it had to be user specified.", RuntimeWarning)
 

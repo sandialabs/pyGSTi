@@ -229,12 +229,20 @@ class LabelTester(BaseCase):
         self.assertEqual(str(l), 'not a real::label!!')
 
     def test_labeltuptup_args_not_propagated(self):
+        import warnings
         l1 = L('Gzr', ('Q0',), args=('1.025087886927528',))
         l2 = L('Gzr', ('Q1',), args=('1.3957662527842025',))
 
-        # Create a compound label from components with arguments
-        with self.assertWarns(RuntimeWarning):
+        # Create a compound label from components with arguments. Building a
+        # plain (timeless) LabelTupTup out of args-bearing components whose
+        # times defaulted to 0.0 is a routine, unambiguous operation and must
+        # not emit a metadata hint.
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
             compound = L((l1, l2))
+            for warning in w:
+                if issubclass(warning.category, RuntimeWarning):
+                    self.assertNotIn("default time to 0.0", str(warning.message))
 
         # Check that the compound label itself has no arguments
         self.assertEqual(compound.args, ())
