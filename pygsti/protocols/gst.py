@@ -3296,6 +3296,39 @@ class ModelEstimateResults(_proto.ProtocolResults):
         test_result = mdltest.run(self.data, simulator=simulator)
         self.add_estimates(test_result, silent_steal=True)
 
+    def add_hessians(
+            self, estimate_names:   Optional[list[str]]=None,
+            compute_hessian_kwargs: Optional[dict[str, Any]]=None,
+            project_hessian_kwargs: Optional[dict[str, Any]]=None,
+        ):
+        if project_hessian_kwargs is None:
+            project_hessian_kwargs = dict()
+        project_hessian_kwargs.setdefault('projection_type', 'intrinsic error')
+
+        if compute_hessian_kwargs is None:
+            compute_hessian_kwargs = dict()
+
+        if estimate_names is None:
+            estimate_names = [en for en in self.estimates]
+
+        from pygsti.forwardsims import MatrixForwardSimulator, MapForwardSimulator
+
+        for estname in estimate_names:
+            est = self.estimates[estname]
+            if estname == 'Target':
+                continue
+            for gop_name in est.goparameters:
+                mdl = est.models[gop_name]
+                if isinstance(mdl.sim, MatrixForwardSimulator):
+                    # Replace with MapForwardSimulator, since that's the only
+                    # ForwardSimulator that can compute objective function
+                    # Hessians with a reasonable amount of memory.
+                    mdl.sim = MapForwardSimulator
+                crf = est.add_confidence_region_factory(gop_name, 'final')
+                crf.compute_hessian(**compute_hessian_kwargs)
+                crf.project_hessian(**project_hessian_kwargs)
+        return
+
     def view(self, estimate_keys, gaugeopt_keys=None):
         """
         Creates a shallow copy of this Results object containing only the given estimate.

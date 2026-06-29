@@ -9,12 +9,10 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 import scipy.linalg as la
 
-from pygsti.baseobjs.basis import Basis, ExplicitBasis
+from pygsti.baseobjs.basis import Basis, ExplicitBasis, _eye_label
 from pygsti.tools import basistools as pgbt
 from pygsti.tools import matrixtools as pgmt
 from pygsti.tools.metaprogramming import set_docstring
@@ -51,15 +49,14 @@ and demure extension for unitary operators.
 
 Basic definitions for leakage modeling
 --------------------------------------
-Let B denote a Hermitian basis for the Hilbert--Schmidt space M[H]. We say that
-B supports leakage modeling if
+Let B denote a Hermitian basis for the Hilbert--Schmidt space M[H].
 
-    (1) it has a unique element whose label consists of (and only of) one
-        or more copies of the character 'I', and
-    (2) that element is proportional to a real orthogonal projector on H.
+We say that B *supports* leakage modeling if there's at least one element whose
+label is a string of the form 'I'*k for some integer k, and the element with
+the longest such label is proportional to a real orthogonal projector on H.
 
-Assuming B is such a basis, its element that satisfies (1) and (2) is called
-its computational basis matrix. (Not be confused with "the computational
+Assuming B is such a basis, its element satisfying the conditions above is
+called the *computational basis matrix*. (Not be confused with "the computational
 basis" of a Hilbert space, which is synonymous with the standard basis.)
 
 The computational basis matrix defines a few related objects.
@@ -72,18 +69,16 @@ The computational basis matrix defines a few related objects.
   * The computational projector is the Hermicity-preserving superoperator in
     S[H] that orthogonally projects from M[H] to M[C].
 
+We say that B *implies* leakage modeling if C is a proper subspace of H.
 """
 
 
 def computational_effect(basis: Basis) -> np.ndarray:
-    assert hasattr(basis, 'labels')
-    candidates = [ell for ell in basis.labels if len(ell.strip('I')) == 0]  # type: ignore
-    candidates = sorted(candidates, key=lambda ell: -len(ell))
-    assert len(candidates) > 0
-    label = candidates[0]
+    label = _eye_label(basis)
     E = basis.ellookup[label].copy()  # type: ignore
-    k = np.linalg.matrix_rank(E)
-    E *= (k/np.trace(E))
+    E = pgmt.induced_projector(E, tol=1e-10, require_real=True)
+    if E.size == 0:
+        raise ValueError(f'basis {basis} does not support leakage modeling.')
     return E
 
 
@@ -124,20 +119,6 @@ def computational_projector(basis: Basis) -> np.ndarray:
     U = computational_superkets(basis)
     P = U @ U.T
     return P
-
-
-# TODO: figure out where this helper should go. We use its basic functionality
-# a couple of times in this file and we use it once in basis.py.
-def _eye_label(basis: Basis) -> str:
-    try:
-        assert hasattr(basis, 'labels')
-        candidates = [len(ell) for ell in basis.labels if len(ell.strip('I')) == 0]
-        num_I = max(candidates)
-        lbl = 'I' * num_I
-        return lbl
-    except ValueError as e:
-        msg = "basis does not have an element labeled by (and only by) 'I's"
-        raise ValueError(msg) from e
 
 
 def augment_for_leakage_modeling(basis: Basis, E: np.ndarray) -> Basis:
@@ -220,11 +201,3 @@ def augment_for_leakage_modeling(basis: Basis, E: np.ndarray) -> Basis:
     assert new_basis.implies_leakage_modeling
 
     return new_basis
-
-
-
-if __name__ == "__main__":
-    l2p1 = Basis.cast('l2p1', 9)
-    gm   = Basis.cast('gm', 9)
-    b = augment_for_leakage_modeling(gm, computational_effect(l2p1))
-    print()

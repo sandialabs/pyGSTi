@@ -78,6 +78,14 @@ def default_basis_for_udims(udims: Sequence[int]):
     return TensorProdBasis([(udim_to_name[u], u * u) for u in udims])
 
 
+def _eye_label(basis) -> str:
+    assert hasattr(basis, 'labels')
+    candidates = [len(ell) for ell in basis.labels if len(ell.strip('I')) == 0]
+    num_I = max(candidates, default=0)
+    lbl = 'I' * num_I
+    return lbl
+
+
 class Basis(_NicelySerializable):
     """
     An ordered set of labeled matrices/vectors.
@@ -348,14 +356,17 @@ class Basis(_NicelySerializable):
     @property
     def implies_leakage_modeling(self) -> bool:
         if (not hasattr(self, '_implies_leakage')) or (not isinstance(self._implies_leakage, bool)):
-            candidates = [ell for ell in self.labels if len(ell.strip('I')) == 0]  # type: ignore
-            candidates = sorted(candidates, key=lambda ell: -len(ell))
-            if len(candidates) == 0:
+            label = _eye_label(self)
+            if len(label) == 0:
+                self._implies_leakage = False
+                return False
+            I_before = self.ellookup[label]  # type: ignore
+            from pygsti.tools.matrixtools import induced_projector
+            I_after  = induced_projector(I_before, require_real=True)
+            if I_after.size == 0:
                 self._implies_leakage = False
             else:
-                label = candidates[0]
-                I = self.ellookup[label]  # type: ignore
-                self._implies_leakage = _np.linalg.matrix_rank(I) < I.shape[0]
+                self._implies_leakage = round(_np.trace(I_after).real)**2 < I_after.size
         return self._implies_leakage  # type: ignore
 
     @property

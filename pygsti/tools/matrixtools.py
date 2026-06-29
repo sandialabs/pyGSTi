@@ -101,7 +101,7 @@ def assert_hermitian(mat : _np.ndarray, tol: Union[float,_np.floating]) -> None:
         raise ValueError(message)
 
 
-def is_projector(mx, tol=1e-14):
+def is_projector(mx, tol=1e-12):
     # We use a stringent default tolerance since projectors tend to be
     # computed to high accuracy.
     if tol == _np.inf:
@@ -113,13 +113,36 @@ def is_projector(mx, tol=1e-14):
     return _np.allclose(mx, mx2, atol=tol, rtol=tol)
 
 
-def assert_projector(mx, tol=1e-14):
+def assert_projector(mx, tol=1e-12):
     if not is_projector(mx, tol):
         message = f"""
             Input matrix 'mx' is not a projector, up to tolerance {tol}.
             The absolute values of entries in (mx^2 - mx) are \n{_np.abs(mx @ mx - mx)}. 
         """
         raise ValueError(message)
+
+
+def induced_projector(mx: _np.ndarray, tol=1e-12, *, require_real=False) -> _np.ndarray:
+
+    if require_real and not _np.allclose(mx, mx.conj(), atol=tol, rtol=tol):
+        return _np.empty((0,))
+
+    if not is_hermitian(mx, tol):
+        return _np.empty((0,))
+    
+    evecs, evals, inv_evecs = eigendecomposition(mx, assume_hermitian=True)
+    scale = _np.linalg.norm(evals, ord=_np.inf)
+    if scale > 0:
+        evals = evals / scale
+    evals_round = _np.round(evals)
+
+    if not _np.allclose(evals, evals_round, atol=tol, rtol=tol):
+        return _np.empty((0,))
+    
+    if set(evals_round).issubset({0.0, 1.0}):
+        return (evecs * evals_round[None, :]) @ inv_evecs
+    else:
+        return _np.empty((0,))
 
 
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):

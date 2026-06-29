@@ -19,28 +19,6 @@ if TYPE_CHECKING:
     from pygsti.protocols.gst import ModelEstimateResults
 
 
-def _add_all_hessians(mer: ModelEstimateResults, kwargs_for_projhess=None):
-    # NOTE: this function is not leakage-specific.
-    if kwargs_for_projhess is None:
-        kwargs_for_projhess = {'projection_type': 'intrinsic error'}
-
-    from pygsti.forwardsims import MatrixForwardSimulator, MapForwardSimulator
-    for estname, est in mer.estimates.items():
-        if estname == 'Target':
-            continue
-        for gop_name in est.goparameters:
-            mdl = est.models[gop_name]
-            if isinstance(mdl.sim, MatrixForwardSimulator):
-                # Replace with MapForwardSimulator, since that's the only
-                # ForwardSimulator that can compute objective function 
-                # Hessians with a reasonable amount of memory.
-                mdl.sim = MapForwardSimulator
-            crf = est.add_confidence_region_factory(gop_name, 'final')
-            crf.compute_hessian()
-            crf.project_hessian(**kwargs_for_projhess)
-    return
-
-
 def _add_lago_estimates(mer: ModelEstimateResults, gaugeopt_verbosity: int = 0):
     # This is broken out into its own function in case someone wants to use
     # it in a report-generation function other than construct_leakage_report.
@@ -97,7 +75,7 @@ def construct_leakage_report(
     for r in res_list:
         _add_lago_estimates(r, gaugeopt_verbosity)
         if kwargs_stdreport['confidence_level'] is not None:
-            _add_all_hessians(r, kwargs_projhess)
+            r.add_hessians(project_hessian_kwargs=kwargs_projhess)
 
     # Wrap it up in a bow.
     from pygsti.report import construct_standard_report
