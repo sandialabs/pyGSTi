@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -132,13 +132,13 @@ w.ChoiTable(mdl3, display=('matrix','barplot'))
 ```
 
 ```{code-cell} ipython3
-w.GateMatrixPlot(mdl1[('Gxpi2',0)],scale=1.0, box_labels=True,ylabel="hello")
-w.GateMatrixPlot(pygsti.tools.error_generator(mdl1[('Gxpi2',0)], tgt[('Gxpi2',0)], 'pp'), scale=1.5)
+w.GateMatrixPlot(mdl1[('Gxpi2',0)].to_dense(),scale=1.0, box_labels=True,ylabel="hello")
+w.GateMatrixPlot(pygsti.tools.error_generator(mdl1[('Gxpi2',0)].to_dense(), tgt[('Gxpi2',0)].to_dense(), 'pp'), scale=1.5)
 ```
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq2Q_XYCNOT
-w.GateMatrixPlot(smq2Q_XYCNOT.target_model()[('Gxpi2',0)],scale=1.0, box_labels=False,ylabel="hello",mx_basis_x="pp")
+w.GateMatrixPlot(smq2Q_XYCNOT.target_model()[('Gxpi2',0)].to_dense(),scale=1.0, box_labels=False,ylabel="hello",mx_basis_x="pp")
 ```
 
 ```{code-cell} ipython3
@@ -173,7 +173,7 @@ w.ErrgenTable(mdl3,tgt)
 ```
 
 ```{code-cell} ipython3
-w.PolarEigenvaluePlot([np.linalg.eigvals(mdl2[('Gxpi2',0)])],["purple"],scale=1.5)
+w.PolarEigenvaluePlot([np.linalg.eigvals(mdl2[('Gxpi2',0)].to_dense())],["purple"],scale=1.5)
 ```
 
 ```{code-cell} ipython3

@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -207,9 +207,9 @@ y_gate = opfactory_spline.create_op([np.pi/2,np.pi/4])
 ```{code-cell} ipython3
 x_gate.from_vector([1.03])
 y_gate.from_vector([1.0])
-print(np.round(x_gate,4))
+print(np.round(x_gate.to_dense(),4))
 print()
-print(np.round(y_gate,4))
+print(np.round(y_gate.to_dense(),4))
 ```
 
 ```{code-cell} ipython3
@@ -355,4 +355,3 @@ pprint(np.sqrt(2)*final_model.to_vector()[0:4])
 pprint(np.sqrt(2)*final_model.to_vector()[4:8])
 pprint(np.sqrt(2)*final_model.to_vector()[8:12])
 ```
-

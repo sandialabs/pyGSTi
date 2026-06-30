@@ -11,11 +11,10 @@ The DenseOperator class and supporting functionality.
 #***************************************************************************************************
 
 from collections import OrderedDict
-import copy as _copy
-
 import numpy as _np
 import scipy.sparse as _sps
 
+from pygsti.modelmembers.modelmember import _DenseCopyMixin as _DenseCopyMixin
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers.operations.krausop import KrausOperatorInterface as _KrausOperatorInterface
 from pygsti.evotypes import Evotype as _Evotype
@@ -128,133 +127,7 @@ def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=
                          _np.linalg.norm(fd_deriv - deriv_to_check))  # pragma: no cover
 
 
-class DenseOperatorInterface(object):
-    """
-    Adds a numpy-array-mimicing interface onto an operation object.
-    """
-
-    def __init__(self):
-        pass
-
-    @property
-    def _ptr(self):
-        raise NotImplementedError("Derived classes must implement the _ptr property!")
-
-    def _ptr_has_changed(self):
-        """ Derived classes should override this function to handle rep updates
-            when the `_ptr` property is changed. """
-        pass
-
-    def to_array(self):
-        """
-        Return the array used to identify this operation within its range of possible values.
-
-        For instance, if the operation is a unitary operation, this returns a
-        unitary matrix regardless of the evolution type.  The related :meth:`to_dense`
-        method, in contrast, returns the dense representation of the operation, which
-        varies by evolution type.
-
-        Note: for efficiency, this doesn't copy the underlying data, so
-        the caller should copy this data before modifying it.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
-        return _np.asarray(self._ptr)
-        # *must* be a numpy array for Cython arg conversion
-
-    def to_sparse(self, on_space: SpaceT='minimal'):
-        """
-        Return the operation as a sparse matrix.
-
-        Parameters
-        ----------
-        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
-            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
-            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
-            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
-            otherwise `'HilbertSchmidt'` is used.
-
-        Returns
-        -------
-        scipy.sparse.csr_matrix
-        """
-        return _sps.csr_matrix(self.to_dense(on_space))
-
-    def __copy__(self):
-        # We need to implement __copy__ because we defer all non-existing
-        # attributes to self.base (a numpy array) which *has* a __copy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        cpy.__dict__.update(self.__dict__)
-        return cpy
-
-    def __deepcopy__(self, memo):
-        # We need to implement __deepcopy__ because we defer all non-existing
-        # attributes to self.base (a numpy array) which *has* a __deepcopy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        memo[id(self)] = cpy
-        for k, v in self.__dict__.items():
-            setattr(cpy, k, _copy.deepcopy(v, memo))
-        return cpy
-
-    #Access to underlying ndarray
-    def __getitem__(self, key):
-        self.dirty = True
-        return self._ptr.__getitem__(key)
-
-    def __getslice__(self, i, j):
-        self.dirty = True
-        return self.__getitem__(slice(i, j))  # Called for A[:]
-
-    def __setitem__(self, key, val):
-        self.dirty = True
-        ret = self._ptr.__setitem__(key, val)
-        self._ptr_has_changed()
-        return ret
-
-    def __getattr__(self, attr):
-        #use __dict__ so no chance for recursive __getattr__
-        #ret = getattr(self.__dict__['_rep'].base, attr)
-        ret = getattr(self._ptr, attr)
-        self.dirty = True
-        return ret
-
-    def __str__(self):
-        s = "%s with shape %s\n" % (self.__class__.__name__, str(self._ptr.shape))
-        s += _mt.mx_to_string(self._ptr, width=4, prec=2)
-        return s
-
-    #Mimic array behavior
-    def __pos__(self): return self._ptr
-    def __neg__(self): return -self._ptr
-    def __abs__(self): return abs(self._ptr)
-    def __add__(self, x): return self._ptr + x
-    def __radd__(self, x): return x + self._ptr
-    def __sub__(self, x): return self._ptr - x
-    def __rsub__(self, x): return x - self._ptr
-    def __mul__(self, x): return self._ptr * x
-    def __rmul__(self, x): return x * self._ptr
-    def __truediv__(self, x): return self._ptr / x
-    def __rtruediv__(self, x): return x / self._ptr
-    def __floordiv__(self, x): return self._ptr // x
-    def __rfloordiv__(self, x): return x // self._ptr
-    def __pow__(self, x): return self._ptr ** x
-    def __eq__(self, x): return _np.array_equal(self._ptr, x)
-    def __len__(self): return len(self._ptr)
-    def __int__(self): return int(self._ptr)
-    def __long__(self): return int(self._ptr)
-    def __float__(self): return float(self._ptr)
-    def __complex__(self): return complex(self._ptr)
-
-
-class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
+class DenseOperator(_DenseCopyMixin, _KrausOperatorInterface, _LinearOperator):
     """
     An operator that behaves like a dense super-operator matrix.
 
@@ -278,20 +151,12 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         The state space for this operation.  If `None` a default state space
         with the appropriate number of qubits is used.
 
-    Properties
-    ----------
-    DenseOperatorInterface is deprecated and this class' dependence on it
-    will be removed in the immediate future. For the time being, the
-    implementation of __getattr__ in DenseOperatorInterface means that
-    DenseOperator has every property of its attached OpRepDenseSuperop,
-    which is stored in DenseOperator._rep.
-
     Private attributes
     ------------------
     _evotype        (required by ModelMember; positional arg in DenseOperator.__init__)
     _rep            (required by LinearOperator; either Cython or Python "OpRepDenseSuperop")
     _basis          (indirect requirement of _rep)
-    _ptr            (required by DenseOperatorInterface, implemented as self._rep.base)
+    _ptr            (returns self._rep.base; the underlying dense matrix)
     _state_space    (required by ModelMember; inferrable from None as __init__ kwarg)
 
     Other private attributes
@@ -336,7 +201,6 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
         rep = evotype.create_dense_superop_rep(mx, self._basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
-        DenseOperatorInterface.__init__(self)
 
     @property
     def _ptr(self):
@@ -367,6 +231,24 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         numpy.ndarray
         """
         return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
+
+    def to_sparse(self, on_space: SpaceT='minimal'):
+        """
+        Return the operation as a sparse matrix.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+        """
+        return _sps.csr_matrix(self.to_dense(on_space))
 
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
@@ -435,7 +317,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         self.set_dense(superop)  # this may fail if derived class doesn't allow it
 
 
-class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
+class DenseUnitaryOperator(_DenseCopyMixin, _KrausOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
     An operator that behaves like a dense (unitary) operator matrix.
@@ -508,7 +390,6 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
 
         self._basis = basis
         _LinearOperator.__init__(self, rep, evotype)
-        DenseOperatorInterface.__init__(self)
         return self
 
     def __init__(self, mx, basis, evotype, state_space):
@@ -538,7 +419,6 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         self._basis = basis
 
         _LinearOperator.__init__(self, rep, evotype)
-        DenseOperatorInterface.__init__(self)
 
     @property
     def _ptr(self):

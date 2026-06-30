@@ -15,7 +15,7 @@ import warnings as _warnings
 
 from .composederrorgen import ComposedErrorgen
 from .composedop import ComposedOp
-from .denseop import DenseOperator, DenseOperatorInterface
+from .denseop import DenseOperator
 from .depolarizeop import DepolarizeOp
 from .eigpdenseop import EigenvalueParamDenseOp
 from .embeddederrorgen import EmbeddedErrorgen
@@ -341,7 +341,7 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
                 # Above: consider "isinstance(operation, StaticUnitaryOp)" instead of num_params == 0?
                 #Convert a non-exp(errorgen) op to  exp(errorgen) * ideal
                 proj_basis = 'PP' if operation.state_space.is_entirely_qubits else basis
-                if ideal_operation == "identity":  # special value
+                if isinstance(ideal_operation, str) and ideal_operation == "identity":  # special value
                     postfactor_op = None
                     error_map_mx = operation.to_dense("HilbertSchmidt")  # error generators are only in HS space
                 else:
