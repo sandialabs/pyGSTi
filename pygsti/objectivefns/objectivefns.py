@@ -4677,8 +4677,10 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         if self.regularize_factor > 0:
             n = len(paramvec)
             terms_jac[off:off + n, :] = _np.diag([(self.regularize_factor * _np.sign(x) if abs(x) > 1.0 else 0.0) for x in paramvec[wrtslice]])  # (N,N)
-            paramvec_norm = _paramvec_norm_penalty(self.regularize_factor, paramvec)
-            terms_jac[off:off + n, :] *= 2*paramvec_norm[:, None]
+            gutter_loss = self.regularize_factor * _np.maximum(_np.abs(paramvec) - 1, 0)
+            # ^ Call this "gutter loss" because its graph looks like `\__/`.
+            #   This is not a standard term!
+            terms_jac[off:off + n, :] *= 2*gutter_loss[:, None]
             off += n
 
         if self.cptp_penalty_factor > 0:
@@ -4736,9 +4738,11 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             blocks.append(forcefn_penalty)
 
         if self.regularize_factor != 0:
-            paramvec_norm = _paramvec_norm_penalty(self.regularize_factor, paramvec)
-            paramvec_norm **= 2
-            blocks.append(paramvec_norm)
+            gutter_loss = self.regularize_factor * _np.maximum(_np.abs(paramvec) - 1, 0)
+            # ^ Call this "gutter loss" because its graph looks like `\__/`.
+            #   This is not a standard term!
+            gutter_loss **= 2
+            blocks.append(gutter_loss)
 
         if self.cptp_penalty_factor > 0:
             cp_penalty = _cptp_penalty(self.model, self.cptp_penalty_factor, self.opBasis) ** 2
@@ -5725,26 +5729,57 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         return self.jac
 
 
+"""Penalties for violation of (complete) positivity
+---------------------------------------------------
+
+Let F denote the function that returns the negated sum of negative eigenvalues
+of a Hermitian matrix. This function satisfies F(mx) >= 0 for all Hermitian
+matrices mx, with equality if and only if mx is positive semidefinite (PSD).
+
+We use this function, or a variant of it, to penalize violations of (complete)
+positivity for gates and SPAM as part of a TimeIndependentMDCObjectiveFunction.
+
+   * For gates this type of penalty is turned on when `cptp_penalty_factor > 0`,
+     and computing this penalty involves the gate's Choi state.
+
+   * For SPAM this type of penalty is turned on when `spam_penalty_factor > 0`,
+     and computing this penalty involves the state density and POVM effects.
+
+The precise penality function that we use is controlled by two constants:
+ * `NEG_EIG_PENALTY_USE_SQRT`
+ * `NEG_EIG_PENALTY_SQRT_SHIFT`
+
+If NEG_EIG_PENALTY_USE_SQRT is False, then a "hallucinated" F(mx) term is appended
+to the nonlinear least squares model prediction. In this scenario the contribution
+of the penality to the overall objective is proportional to F(mx)**2.
+
+If NEG_EIG_PENALITY_USE_SQRT is True, then we add a different "hallucinated" term
+to the nonlinear least squares model prediction so the contribution to the overall
+objective is proportional to F(mx) + NEG_EIG_PENALTY_SQRT_SHIFT.
+
+    (This is really in the weeds, but the hallucinated term in this case is
+     simply sqrt(F(mx) + NEG_EIG_PENALTY_SQRT_SHIFT). The shift is used to
+     ensure differentiability near the boundary of the set of PSD matrices.)
+"""
+
+NEG_EIG_PENALTY_USE_SQRT   = True
+NEG_EIG_PENALTY_SQRT_SHIFT = 1e-6
+
+
 def _cptp_penalty_size(mdl):
+    """
+    The number of hallucinated terms in the nonlinear least squares objective
+    used for gate violation of complete positivity.
+    """
     return len(mdl.operations)
 
 
 def _spam_penalty_size(mdl):
+    """
+    The number of hallucinated terms in the nonlinear least squares objective
+    used for SPAM violation of positivity.
+    """
     return len(mdl.preps) + sum([len(povm) for povm in mdl.povms.values()])
-
-
-def _errorgen_penalty_size(mdl):
-    return 1
-
-
-
-NEG_EIG_PENALTY_USE_SQRT   = True
-# ^ If we omit the sqrt (i.e., set this to False), then the regularization is
-#   twice-differentiable. The regularization strength needed to acheive similar
-#   effects encouraging PSD-ness will be different depending on if this is True.
-NEG_EIG_PENALTY_SQRT_SHIFT = 1e-6
-# ^ Only relevant if NEG_EIG_PENALTY_USE_SQRT is True. This keeps the derivative
-#   of the penality bounded when we're close to the PSD cone.
 
 
 def _cptp_penalty(mdl, prefactor, op_basis):
@@ -5805,46 +5840,13 @@ def _spam_penalty(mdl, prefactor, op_basis):
     return penalties
 
 
-def _errorgen_penalty(mdl, prefactor):
-    """
-    Helper function - errorgen penalty: sum_i |errorgen_coeff_i|
-    which in least squares optimization means returning an array
-    of the sqrt(sum_i |errorgen_coeff_i|) of each gate.
-
-    Note: error generator coefficients *can* be complex.
-    """
-    val = 0.0
-    #for lbl in mdl.primitive_prep_labels:
-    #    op = mdl.circuit_layer_operator(lbl, 'prep')
-    #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
-
-    for lbl in mdl.primitive_op_labels:
-        op = mdl.circuit_layer_operator(lbl, 'op')
-        val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
-
-    #for lbl in mdl.primitive_povm_labels:
-    #    op = mdl.circuit_layer_operator(lbl, 'povm')
-    #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
-
-    return prefactor * _np.array([_np.sqrt(val)], 'd')
-
-
-def _paramvec_norm_penalty(reg_factor, paramvec):
-    out = reg_factor * _np.array([max(0, absx - 1.0) for absx in map(abs, paramvec)], 'd')
-    return out
-
-
 def _grad_of_neg_sum_neg_eigvals(herm_mx: _np.ndarray) -> _np.ndarray:
     """
-    Computes the gradient of the function F that maps a Hermitian matrix to its
-    projection onto the negative semidefinite cone, then takes the trace and negates.
+    This function returns a subgradient of the penalty function described
+    in the docstring `Penalties for violation of (complete) positivity`,
+    evaluated at herm_mx.
 
-    If the parent-scope variable NEG_EIG_PENALTY_USE_SQRT is True, then the returned
-    gradient is for sqrt(NEG_EIG_PENALTY_SQRT_SHIFT + F(herm_mx)), rather than
-    for F(herm_mx).
-
-    Strictly speaking, this only returns a subgradient of F. If all eigenvalues
-    of herm_mx are distinct then the subgradient is unique.
+    If all eigenvalues of herm_mx are distinct then the subgradient is unique.
 
     If the computed subgradient is zero, then we return an empty array of size
     zero.
@@ -5932,6 +5934,45 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
             count += 1
 
     return count
+
+
+"""Error generator magnitude penalties
+--------------------------------------
+
+Our error generator magnitude penalties are ad-hoc, currently set as a
+single hallucinated term in the nonlinear least squares objective.
+
+Only gates are considered; error generator magnitude penalties for SPAM
+(even ComposedState and ComposedPOVM SPAM) are not yet implemented.
+"""
+
+
+def _errorgen_penalty_size(mdl):
+    return 1
+
+
+def _errorgen_penalty(mdl, prefactor):
+    """
+    Helper function - errorgen penalty: sum_i |errorgen_coeff_i|
+    which in least squares optimization means returning an array
+    of the sqrt(sum_i |errorgen_coeff_i|) of each gate.
+
+    Note: error generator coefficients *can* be complex.
+    """
+    val = 0.0
+    #for lbl in mdl.primitive_prep_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'prep')
+    #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
+
+    for lbl in mdl.primitive_op_labels:
+        op = mdl.circuit_layer_operator(lbl, 'op')
+        val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
+
+    #for lbl in mdl.primitive_povm_labels:
+    #    op = mdl.circuit_layer_operator(lbl, 'povm')
+    #    val += _np.sum(_np.abs(op.errorgen_coefficients_array()))
+
+    return prefactor * _np.array([_np.sqrt(val)], 'd')
 
 
 def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor, wrt_slice):
