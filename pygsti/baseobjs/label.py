@@ -33,6 +33,26 @@ StateSpaceLabelsCastable: TypeAlias = Union[StateSpaceLabel, StateSpaceLabels]
 # label and returning the new one.
 SSLabelMapper: TypeAlias = Union[dict[StateSpaceLabel, StateSpaceLabel], Callable[[StateSpaceLabel], StateSpaceLabel]]
 
+LabelStrNative: TypeAlias = Union[str, tuple[str, str]]
+HomogeneousSeq: TypeAlias = Union[tuple[int, ...], tuple[str, ...]]
+LabelTupNative: TypeAlias = tuple[str, HomogeneousSeq]
+LabelTupWithTimeNative: TypeAlias = Union[
+    LabelTupNative,
+    tuple[Unpack[LabelTupNative], str]]
+
+LabelTupWithArgsNative: TypeAlias = tuple[str, Unpack[tuple[Any, ...]]]
+CircuitLabelNative: TypeAlias = tuple[str, Optional[HomogeneousSeq], int, Unpack[tuple[Any, ...]]]
+FlatLabelNative: TypeAlias = Union[
+    LabelStrNative, LabelTupNative, LabelTupWithTimeNative, LabelTupWithArgsNative, CircuitLabelNative
+]
+_TupTupComponentsNative: TypeAlias = tuple[FlatLabelNative, ...]
+LabelTupTupNative: TypeAlias = tuple[None, None, _TupTupComponentsNative]
+LabelTupTupWithTimeNative: TypeAlias = tuple[float, None, _TupTupComponentsNative]
+LabelTupTupWithArgsNative: TypeAlias = tuple[float, tuple[Any, ...], _TupTupComponentsNative]
+NativeLabel: TypeAlias = Union[
+    FlatLabelNative, LabelTupTupNative, LabelTupTupWithTimeNative, LabelTupTupWithArgsNative,
+]
+
 
 
 # TODO: define a ConcreteLabel protocol! (See type alias at EOF.)
@@ -98,7 +118,7 @@ def _check_concat_compatibility(label1, label2):
     if time1 != 0.0 and time2 != 0.0 and time1 != time2:
         # ClobberingWarning
         from pygsti.tools.exceptions import ClobberingWarning
-        msg = f"Trying to concate two Labels with distinct, nonzero time values {time1}, and {time2}.\n"
+        msg = f"Trying to concatenate two Labels with distinct, nonzero time values {time1}, and {time2}.\n"
         msg += "We'll proceed by taking the larger of these values."
         warn(msg, ClobberingWarning)
     new_time = max(time1, time2)
@@ -545,7 +565,7 @@ class Label(object):
     def replace_name(self, oldname, newname):
         raise NotImplementedError()
 
-    def to_native(self):
+    def to_native(self) -> NativeLabel:
         """
         Returns this label as native python types.
 
@@ -689,7 +709,7 @@ class LabelTup(Label, tuple):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTup, (self[:],), None)
 
-    def to_native(self):
+    def to_native(self) -> LabelTupNative:
         return tuple(self)
 
     def replace_name(self, oldname: str, newname: str) -> LabelTup:
@@ -829,7 +849,7 @@ class LabelTupWithTime(LabelTup, tuple):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTupWithTime, (self[:], self.time), None)
 
-    def to_native(self):
+    def to_native(self) -> LabelTupWithTimeNative:
         if self.time != 0.0:
             return tuple(self) + ('!' + str(self.time),)
         return tuple(self)
@@ -973,7 +993,7 @@ class LabelStr(Label, str):
         #need to get a string rep of the tested label.
         return str(x) in str(self)
 
-    def to_native(self):
+    def to_native(self) -> LabelStrNative:
         if self.time != 0.0:
             return (self.name, '!' + str(self.time))
         return str(self)
@@ -1191,7 +1211,7 @@ class LabelTupTup(Label, tuple):
         # "recursive" contains checks component containers
         return any([(x == layer or x in layer) for layer in self.components])
 
-    def to_native(self):
+    def to_native(self) -> LabelTupTupNative:
         return (None, None, tuple(x.to_native() for x in self),)
 
     def replace_name(self, oldname: str, newname: str) -> LabelTupTup:
@@ -1346,7 +1366,7 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
         time: float = self.time  # type: ignore
         return (LabelTupTupWithTime, (self[:], time), None)
 
-    def to_native(self):
+    def to_native(self) -> LabelTupWithTimeNative:
         return (self.time, None, tuple(c.to_native() for c in self),)
 
     def replace_name(self, oldname: str, newname: str) -> LabelTupTupWithTime:
@@ -1554,7 +1574,7 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (CircuitLabel, (self[0], self[3:], self[1], self[2], self.time), None)
 
-    def to_native(self):
+    def to_native(self) -> CircuitLabelNative:
         tup = self[0:3]
         if self.time is not None and self.time != 0.0:
             tup += ('!' + str(self.time),)
@@ -1740,7 +1760,7 @@ class LabelTupWithArgs(LabelTupWithTime, tuple):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTupWithArgs, (self[:], self.time), None)
 
-    def to_native(self):
+    def to_native(self) -> LabelTupWithArgsNative:
         ret = (self.name,)
         if self.sslbls is not None:
             ret += self.sslbls
@@ -1876,7 +1896,7 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
         # from the immutable tuple type (so cannot have its state set after creation)
         return (LabelTupTupWithArgs, (self[:], self.time), None)
 
-    def to_native(self):
+    def to_native(self) -> LabelTupTupWithArgsNative:
         return (self.time, self.args, tuple(c.to_native() for c in self.components),)
 
     def replace_name(self, oldname: str, newname: str) -> LabelTupTupWithArgs:
