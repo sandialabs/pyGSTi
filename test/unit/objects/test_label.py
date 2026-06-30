@@ -46,6 +46,7 @@ def test_pickle(label):
     l2 = pickle.loads(s)
     assert isinstance(label, type(l2))
     assert isinstance(l2, type(label))
+    assert label == l2
 
 
 @pytest.mark.parametrize('label', labels)
@@ -54,6 +55,7 @@ def test_json_encode(label):
     l2 = jsoncodec.decode_obj(j, False)
     assert isinstance(label, type(l2))
     assert isinstance(l2, type(label))
+    assert label == l2
 
 
 @pytest.mark.parametrize('label', labels)
@@ -417,6 +419,27 @@ class LabelStrTester(BaseCase):
     def test_labelstr_to_native(self):
         l = L('Gx')
         self.assertEqual(l.to_native(), 'Gx')
+
+    def test_labelstr_with_time_serialization_roundtrip(self):
+        # Regression: a timed LabelStr must round-trip with its name AND time
+        # intact through pickle and the JSON codec.  The parametrized round-trip
+        # tests only assert ==, which ignores time, so we check metadata explicitly.
+        import pickle
+        l = LabelStr.init('rho0', 1.5)
+        self.assertEqual(l.name, 'rho0')
+        self.assertEqual(l.time, 1.5)
+
+        # pickle
+        pl = pickle.loads(pickle.dumps(l))
+        self.assertIsInstance(pl, LabelStr)
+        self.assertEqual(pl.name, 'rho0')
+        self.assertEqual(pl.time, 1.5)
+
+        # JSON codec
+        jl = jsoncodec.decode_obj(jsoncodec.encode_obj(l, False), False)
+        self.assertIsInstance(jl, LabelStr)
+        self.assertEqual(jl.name, 'rho0')
+        self.assertEqual(jl.time, 1.5)
 
     def test_labelstr_contains(self):
         l = L('Gx_foo')
@@ -875,6 +898,30 @@ class CircuitLabelTester(BaseCase):
         for i in range(len(expanded)):
             self.assertEqual(expanded[i].args, (0.5,))
 
+    def test_circuitlabel_expand_subcircuits_per_layer_args_with_reps(self):
+        # A CircuitLabel whose two layers each carry their *own* args, with reps > 1.
+        # Expanding must keep each layer's args with that layer (no cross-contamination)
+        # and repeat the layer sequence `reps` times.
+        layer0 = LabelTupTupWithArgs.init((('Gx', 0),), args=('a',))
+        layer1 = LabelTupTupWithArgs.init((('Gy', 0),), args=('b',))
+        cl = CircuitLabel('', [layer0, layer1], (0,), 2)
+
+        self.assertEqual(cl.depth, 4)  # 2 layers * 2 reps
+        expanded = cl.expand_subcircuits()
+        self.assertEqual(len(expanded), 4)
+
+        # Args follow their originating layer and repeat with reps; they do NOT
+        # leak from one layer into the other.
+        expected_args = [('a',), ('b',), ('a',), ('b',)]
+        for lbl, exp_args in zip(expanded, expected_args):
+            self.assertIsInstance(lbl, LabelTupTupWithArgs)
+            self.assertEqual(lbl.args, exp_args)
+
+        self.assertEqual(expanded[0].components[0].name, 'Gx')
+        self.assertEqual(expanded[1].components[0].name, 'Gy')
+        self.assertEqual(expanded[2].components[0].name, 'Gx')
+        self.assertEqual(expanded[3].components[0].name, 'Gy')
+
     def test_circuitlabel_add(self):
         l = CircuitLabel('mycirc', [L('Gx', 0)], None, 5, 1.2)
         with self.assertRaises(NotImplementedError):
@@ -1161,3 +1208,30 @@ class LabelConcateTester(BaseCase):
         concatenated1 = l1.concat(l2)
         concatenated2 = l2.concat(l1)
         self.assertNotEqual(concatenated1, concatenated2)
+
+    def test_concat_circuitlabel_preserved_iff_both_circuitlabels(self):
+        # For a depth-1 CircuitLabel, lbl1.concat(lbl2) retains a CircuitLabel in
+        # the result *if and only if* BOTH operands are depth-1 CircuitLabels.
+        # If either operand is not a CircuitLabel, the depth-1 CircuitLabel is
+        # unwrapped and the result is a flat LabelTupTup with no CircuitLabel.
+        def has_circuitlabel(lbl):
+            return any(isinstance(c, CircuitLabel) for c in lbl.components)
+
+        cl1 = CircuitLabel('a', [L('Gx', 0)], (0,), 1, None)
+        cl2 = CircuitLabel('b', [L('Gy', 1)], (1,), 1, None)
+        lt = L(('Gz', 2))
+        ltt = L((('Ga', 3), ('Gb', 4)))
+
+        # Both operands depth-1 CircuitLabels -> CircuitLabels are preserved.
+        both = cl1.concat(cl2)
+        self.assertIsInstance(both, LabelTupTup)
+        self.assertTrue(has_circuitlabel(both))
+        self.assertEqual(both.components, (cl1, cl2))
+
+        # Exactly one operand is a (depth-1) CircuitLabel -> no CircuitLabel remains,
+        # regardless of which operand it is or what non-CircuitLabel it's combined with.
+        non_circuitlabels = [lt, ltt]
+        for other in non_circuitlabels:
+            for result in (cl1.concat(other), other.concat(cl1)):
+                self.assertIsInstance(result, LabelTupTup)
+                self.assertFalse(has_circuitlabel(result))
