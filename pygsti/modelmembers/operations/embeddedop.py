@@ -608,7 +608,7 @@ class EmbeddedOp(_LinearOperator):
         if return_basis:
             coeffs_to_embed, basis = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
         else:
-            coeffs_to_embed, basis = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
+            coeffs_to_embed = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
 
         if coeffs_to_embed:
             embedded_labels = self.errorgen_coefficient_labels(label_type=label_type, identity_label=identity_label)
