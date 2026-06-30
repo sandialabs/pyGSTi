@@ -48,7 +48,7 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
                comm: Optional[mpi4py.MPI.Comm]=None,
                profiler: Optional[Profiler]=None, verbosity: int=1, num_nongauge_params: Optional[int]=None,
                assume_real: bool=False, float_type: _np.dtype=_np.cdouble,
-               mode: str="all-Jac", toss_random_frac: Optional[float]=None,
+               mode: str="compactEVD", toss_random_frac: Optional[float]=None,
                force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None,
                load_cevd_cache_filename: Optional[str]=None, file_compression: bool=False) -> list[_circuits.Circuit]:
     """
@@ -1738,7 +1738,7 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
                             check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons", 
                             pretest: bool=True, mem_limit: Optional[int]=None, comm: Optional[mpi4py.MPI.Comm]=None, 
                             profiler: Optional[Profiler]=None, verbosity: int=0, num_nongauge_params: Optional[int]=None, 
-                            float_type: _np.dtype= _np.cdouble, mode: str="all-Jac", gate_penalty: Optional[dict[str,float]]=None)-> list[_circuits.Circuit]:
+                            float_type: _np.dtype= _np.cdouble, mode: str="compactEVD", gate_penalty: Optional[dict[str,float]]=None)-> list[_circuits.Circuit]:
     """
     Greedy algorithm starting with 0 germs.
 
@@ -1987,9 +1987,9 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
             #reconstruct the needed J^T J matrices
             for j, idx in enumerate(nonzero_weight_indices):
                 if j==0:
-                    temp_DDD = derivDaggerDeriv[0][idx] @ derivDaggerDeriv[2][idx]
+                    temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].conj().T
                 else:
-                    temp_DDD += derivDaggerDeriv[0][idx] @ derivDaggerDeriv[2][idx]
+                    temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].conj().T
 
             currentDDDList.append(temp_DDD)
 
@@ -3285,7 +3285,7 @@ def compact_EVD_via_SVD(mat, threshold= 1e-10):
     #extract the corresponding columns and values form U and s:
     #For EVD/eigh We want the columns of U and the rows of Uh:
     nonzero_e_values = s[nonzero_eigenvalue_indices]**2
-    nonzero_U_columns = Vh.T[:, nonzero_eigenvalue_indices[0]]
+    nonzero_U_columns = Vh.conj().T[:, nonzero_eigenvalue_indices[0]]
     
     return nonzero_e_values, nonzero_U_columns    
 
@@ -3687,7 +3687,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
                             check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons", pretest: bool=True, 
                             mem_limit: Optional[int]=None, comm: Optional[mpi4py.MPI.Comm]=None, profiler: Optional[Profiler]=None, 
                             verbosity: int=0, num_nongauge_params: Optional[int]=None, float_type: _np.dtype= _np.cdouble, 
-                            mode: str="all-Jac", force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None, 
+                            mode: str="compactEVD", force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None, 
                             load_cevd_cache_filename: Optional[str]=None, file_compression: bool=False, evd_tol: float=1e-10, 
                             initial_germ_set_test: bool=True, gate_penalty: Optional[dict[str,float]]=None) -> list[_circuits.Circuit]:
     """
@@ -4008,7 +4008,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
                                 **nonAC_kwargs)
                 elif mode=='compactEVD':
                     initial_scores[i][j] = compute_composite_germ_set_score(
-                            partial_deriv_dagger_deriv=(twirledDerivDaggerDerivList[j][i] @ twirledDerivDaggerDerivList[j][i].T)[None,:,:], 
+                            partial_deriv_dagger_deriv=(twirledDerivDaggerDerivList[j][i] @ twirledDerivDaggerDerivList[j][i].conj().T)[None,:,:], 
                             init_n=1, germ_lengths= [germLengths[i]],
                             **nonAC_kwargs)
         #We should now have the composite scores for every germ and for every model. Now, for every germ we'll assign it's "best score"
@@ -4065,9 +4065,9 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
             #reconstruct the needed J^T J matrices
             for j, idx in enumerate(nonzero_weight_indices):
                 if j==0:
-                    temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
+                    temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].conj().T
                 else:
-                    temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
+                    temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].conj().T
             currentDDDList.append(temp_DDD)
 
     else:  # should be unreachable since we set 'mode' internally above
