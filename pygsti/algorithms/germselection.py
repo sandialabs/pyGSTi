@@ -26,6 +26,7 @@ from pygsti import circuits as _circuits
 from pygsti import baseobjs as _baseobjs
 from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import mpitools as _mpit
+from pygsti.tools.matrixtools import eigendecomposition as _eigendecomposition
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models import ImplicitOpModel as _ImplicitOpModel
 from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
@@ -3152,7 +3153,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                 twirledDerivDerivDagger = twirledDeriv@(twirledDeriv.conj().T) 
                                                         
                 #now take twirledDerivDerivDagger and construct its compact EVD.
-                e, U= compact_EVD(twirledDerivDerivDagger, evd_tol)
+                e, U= compact_EVD(twirledDerivDerivDagger, evd_tol, assume_hermitian=True)
                 
                 #now connect this to the compact EVD of twirledDerivDaggerDeriv
                 #using the definition of the left and right singular
@@ -3183,7 +3184,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
             twirledDerivDerivDagger = twirledDeriv@(twirledDeriv.conj().T) 
                                                     
             #now take twirledDerivDerivDagger and construct its compact EVD.
-            e, U= compact_EVD(twirledDerivDerivDagger, evd_tol)
+            e, U= compact_EVD(twirledDerivDerivDagger, evd_tol, assume_hermitian=True)
             
             #now connect this to the compact EVD of twirledDerivDaggerDeriv
             #using the definition of the left and right singular
@@ -3212,7 +3213,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
 #New function for computing the compact eigenvalue decomposition of a matrix.
 #Assumes that we are working with a diagonalizable matrix, no safety checks made.
 
-def compact_EVD(mat, threshold= 1e-10):
+def compact_EVD(mat, threshold= 1e-10, assume_hermitian=False):
     """
     Generate the compact eigenvalue decomposition of the input matrix.
     Assumes of course that the user has specified a diagonalizable matrix,
@@ -3226,6 +3227,10 @@ def compact_EVD(mat, threshold= 1e-10):
     threshold : float, optional
         threshold value for deciding if an eigenvalue is zero.
         
+    assume_hermitian : bool, optional
+        If True, forcefully symmetrizes the matrix to guarantee it is evaluated as
+        Hermitian, improving numerical stability against complex floating-point noise.
+        
     output:
     
     e : ndarray
@@ -3235,7 +3240,7 @@ def compact_EVD(mat, threshold= 1e-10):
     """
     
     #take the EVD of mat.
-    e, U= _np.linalg.eigh(mat)
+    U, e, _ = _eigendecomposition(mat, assume_hermitian=assume_hermitian)
 
     #How many non-zero eigenvalues are there and what are their indices
     nonzero_eigenvalue_indices= _np.nonzero(_np.abs(e)>threshold)
@@ -3319,7 +3324,7 @@ def construct_update_cache(mat, evd_tol=1e-10):
     """
     
     #Start by constructing a compact EVD of the input matrix. 
-    e, U = compact_EVD(mat, evd_tol)
+    e, U = compact_EVD(mat, evd_tol, assume_hermitian=True)
     
     #construct the projector
     #I think the conjugation is superfluous when we have real
