@@ -72,7 +72,6 @@ def solve_sdp(prob: cp.Problem, **kwargs) -> tuple[np.floating, dict[str, np.nda
 
 
 def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List[cp.Variable]]:
-    cp = _get_cvxpy()
     # return a model for computing the diamond norm.
     #
     # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
@@ -86,7 +85,7 @@ def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List
     #              rho0, rho1 are density matrices
     #              X is linear operator
     #
-    # ".dag" returns the adjoint.
+    cp = _get_cvxpy()
     dim = J.shape[0]
     smallDim = int(np.sqrt(dim))
     assert dim == smallDim**2
@@ -141,7 +140,6 @@ def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List
 
 
 def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[cp.Constraint]]:
-    cp = _get_cvxpy()
     """
     This more or less implements canonicalization of the nonlinear expression
     \\|arg\\|_{\\diamond} into CVXPY Constraints and a representation of its epigraph.
@@ -149,6 +147,7 @@ def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[
     require that the epigraph is affine and that no structured variables (like
     Hermitian matrices) are used.
     """
+    cp = _get_cvxpy()
     constraints = []
     d = arg.shape[0]
     small_d = int(np.sqrt(d))
@@ -234,7 +233,6 @@ def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfre
 
 
 def root_fidelity_canon(sigma: cp.Expression, rho: cp.Expression) -> Tuple[cp.Expression, List[cp.Constraint]]:
-    cp = _get_cvxpy()
     """
     pyGSTi defines fidelity as
 
@@ -259,6 +257,7 @@ def root_fidelity_canon(sigma: cp.Expression, rho: cp.Expression) -> Tuple[cp.Ex
     variable for \\sqrt{F}(sigma, rho) and constraints is a list of CVXPY Constraint
     objects used in the semidefinite representation of the hypograph.
     """
+    cp = _get_cvxpy()
     t = cp.Variable()
     d = sigma.shape[0]
     X = cp.Variable(shape=(d, d), complex=True)
