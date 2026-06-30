@@ -349,6 +349,23 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
                                    randomize=False, algorithm='greedy', mode='compactEVD',
                                    assume_real=True, float_type=np.double,  verbosity=1)
                                    
+    def test_greedy_low_rank_update_complex_dtype(self):
+        # A test to cover the patched bug where complex arrays caused 
+        # linear algebra failures in the compactEVD mode.
+        germs = germsel.find_germs(
+            self.target_model, 
+            seed=2017, 
+            candidate_germ_counts={3: 'all upto', 4: 10, 5: 10, 6: 10},
+            randomize=False, 
+            algorithm='greedy', 
+            mode='compactEVD',
+            assume_real=False, 
+            float_type=np.complex128,  
+            verbosity=0
+        )
+        self.assertIsNotNone(germs)
+        self.assertTrue(len(germs) > 0)
+                                   
     def test_forced_germs_none(self):
         # TODO assert correctness
         #make sure that the germ selection doesn't die with force is None
