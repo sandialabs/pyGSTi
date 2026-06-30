@@ -40,6 +40,22 @@ if TYPE_CHECKING:
 
 FLOATSIZE = 8  # in bytes: TODO: a better way
 
+
+def _resolve_float_type(float_type, model):
+    if float_type is None:
+        float_type = _np.double if model.basis.real else _np.cdouble
+    elif model.basis.real:
+        if float_type not in (_np.double, _np.single):
+            raise ValueError(f"Model basis '{model.basis.name}' is real-valued, but a complex "
+                             f"float_type ({float_type}) was provided. Please use a real dtype (like np.double) "
+                             f"or leave float_type=None to infer automatically.")
+    else:
+        if float_type not in (_np.cdouble, _np.csingle):
+            raise ValueError(f"Model basis '{model.basis.name}' is complex-valued, but a real "
+                             f"float_type ({float_type}) was provided. Please use a complex dtype (like np.cdouble) "
+                             f"or leave float_type=None to infer automatically.")
+    return float_type
+
 def find_germs(target_model: Model, randomize: bool=True, randomization_strength: float=1e-2,
                num_gs_copies: int=5, seed: Optional[int]=None, 
                candidate_germ_counts: Optional[dict[int, Union[str,int]]]=None,
@@ -48,7 +64,7 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
                algorithm: str='greedy', algorithm_kwargs: Optional[dict]=None, mem_limit: Optional[int]=None, 
                comm: Optional[mpi4py.MPI.Comm]=None,
                profiler: Optional[Profiler]=None, verbosity: int=1, num_nongauge_params: Optional[int]=None,
-               assume_real: bool=False, float_type: _np.dtype=_np.cdouble,
+               float_type: Optional[_np.dtype]=None,
                mode: str="compactEVD", toss_random_frac: Optional[float]=None,
                force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None,
                load_cevd_cache_filename: Optional[str]=None, file_compression: bool=False) -> list[_circuits.Circuit]:
@@ -256,15 +272,7 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
                     availableGermsList.append(forced_germ)
         printer.log('Length Available Germ List After Adding Back In Forced Germs: '+ str(len(availableGermsList)), 1)
     
-    #Add some checks related to the new option to switch up data types:
-    if not assume_real:
-        if not (float_type is _np.cdouble or float_type is _np.csingle):
-            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
-            raise ValueError('Unless working with (known) real-valued quantities only, please select an appropriate complex numpy dtype (either cdouble or csingle).')
-    else:
-        if not (float_type is _np.double or float_type is _np.single):
-            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
-            raise ValueError('When assuming real-valued quantities, please select a real-values numpy dtype (either double or single).')
+    float_type = _resolve_float_type(float_type, target_model)
         
     #How many bytes per float?
     FLOATSIZE= float_type(0).itemsize
@@ -457,7 +465,7 @@ def compute_germ_set_score(germs: list[_circuits.Circuit], target_model: Optiona
                            neighborhood_size: Optional[int]=5,
                            randomization_strength: float=1e-2, score_func: str='all',
                            op_penalty: float=0.0, l1_penalty: float=0.0, num_nongauge_params: Optional[int]=None,
-                           float_type: _np.dtype=_np.cdouble, gate_penalty: Optional[dict[str,float]]=None) -> _scoring.CompositeScore:
+                           float_type: Optional[_np.dtype]=None, gate_penalty: Optional[dict[str,float]]=None) -> _scoring.CompositeScore:
     """
     Calculate the score of a germ set with respect to a model.
 
@@ -615,7 +623,7 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
                                      model: Optional[Model]=None, partial_germs_list: Optional[list[_circuits.Circuit]]=None, 
                                      eps: Optional[float]=None, germ_lengths: _np.ndarray=None,
                                      op_penalty: float=0.0, l1_penalty: float=0.0, num_nongauge_params: Optional[int]=None,
-                                     float_type: _np.dtype=_np.cdouble, gate_penalty: Optional[dict[str,float]]=None, 
+                                     float_type: Optional[_np.dtype]=None, gate_penalty: Optional[dict[str,float]]=None, 
                                      germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
@@ -776,7 +784,7 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
 
 
 def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
-                              germ_lengths=None, comm=None, float_type=_np.cdouble):
+                              germ_lengths=None, comm=None, float_type=None):
     """
     Calculate the positive squares of the germ Jacobians.
 
@@ -836,7 +844,7 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     return twirledDerivDaggerDeriv
 
 
-def _compute_twirled_ddd(model, germ, eps=1e-6, float_type=_np.cdouble):
+def _compute_twirled_ddd(model, germ, eps=1e-6, float_type=None):
     """
     Calculate the positive squares of the germ Jacobian.
 
@@ -1002,7 +1010,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     return newmodelList
 
 
-def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=_np.cdouble, comm=None, num_gauge_params = None):
+def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=None, comm=None, num_gauge_params = None):
     """
     Check to see if the germs_list is amplificationally complete (AC).
 
@@ -1117,7 +1125,7 @@ def _num_non_spam_gauge_params(model):
 # so SOP is op_dim^2 x op_dim^2 and acts on vectorized *gates*
 # Recall vectorizing identity (when vec(.) concats rows as flatten does):
 #     vec( A * X * B ) = A tensor B^T * vec( X )
-def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble, tol=1e-12):
+def _super_op_for_perfect_twirl(wrt, eps, float_type=None, tol=1e-12):
     """
     Return super operator for doing a perfect twirl with respect to wrt.
         
@@ -1284,7 +1292,7 @@ def _sq_sing_vals_from_deriv(deriv, weights=None):
     return sortedEigenvals
 
 
-def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
+def _twirled_deriv(model, circuit, eps=1e-6, float_type=None):
     """
     Compute the "Twirled Derivative" of a circuit.
 
@@ -1323,7 +1331,7 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
     return _np.dot(twirler, dProd)
 
 
-def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float_type=_np.cdouble):
+def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float_type=None):
     """
     Compute the "Twirled Derivative" of a set of circuits.
 
@@ -1470,7 +1478,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
 def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
                        return_spectrum=False, threshold=1e6, check=False,
-                       float_type=_np.cdouble, comm=None, nGaugeParams = None):
+                       float_type=None, comm=None, nGaugeParams = None):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 
@@ -1577,7 +1585,7 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
 def find_germs_depthfirst(model_list, germs_list, randomize=True,
                           randomization_strength=1e-3, num_copies=None, seed=0, op_penalty=0,
                           score_func='all', tol=1e-6, threshold=1e6, check=False,
-                          force="singletons", verbosity=0, float_type=_np.cdouble):
+                          force="singletons", verbosity=0, float_type=None):
     """
     Greedy germ selection algorithm starting with 0 germs.
 
@@ -1652,6 +1660,8 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
+
 
     (reducedModelList,
      numGaugeParams, numNonGaugeParams, _) = _get_model_params(model_list)
@@ -1739,7 +1749,7 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
                             check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons", 
                             pretest: bool=True, mem_limit: Optional[int]=None, comm: Optional[mpi4py.MPI.Comm]=None, 
                             profiler: Optional[Profiler]=None, verbosity: int=0, num_nongauge_params: Optional[int]=None, 
-                            float_type: _np.dtype= _np.cdouble, mode: str="compactEVD", gate_penalty: Optional[dict[str,float]]=None)-> list[_circuits.Circuit]:
+                            float_type: Optional[_np.dtype]=None, mode: str="compactEVD", gate_penalty: Optional[dict[str,float]]=None)-> list[_circuits.Circuit]:
     """
     Greedy algorithm starting with 0 germs.
 
@@ -1848,6 +1858,7 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
 
     dim = model_list[0].dim
     Np = model_list[0].num_params
@@ -2126,7 +2137,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
                              slack_frac=False, return_all=False, tol=1e-6,
                              check=False, force="singletons",
                              force_score=1e100, threshold=1e6,
-                             verbosity=1, float_type=_np.cdouble):
+                             verbosity=1, float_type=None):
     """
     Find a locally optimal subset of the germs in germs_list.
 
@@ -2249,6 +2260,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
 
     if (fixed_slack and slack_frac) or (not fixed_slack and not slack_frac):
         raise ValueError("Either fixed_slack *or* slack_frac should be specified")
@@ -2478,7 +2490,7 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
                      l1_penalty: float=1e-2, op_penalty: float=0.0, score_func: str='all', tol: float=1e-6, 
                      threshold: float=1e6, check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons",
                      iterations: int=5, return_all: bool=False, shuffle: bool=False, verbosity: int=0, 
-                     num_nongauge_params: Optional[int]=None, float_type: _np.dtype=_np.cdouble,
+                     num_nongauge_params: Optional[int]=None, float_type: Optional[_np.dtype]=None,
                      gate_penalty: Optional[dict[str,float]]=None) -> list[_circuits.Circuit]:
     """
     Use GRASP to find a high-performing germ set.
@@ -2602,6 +2614,7 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
 
     (_, numGaugeParams,
      numNonGaugeParams, _) = _get_model_params(model_list)
@@ -3065,7 +3078,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #new function that computes the J^T J matrices but then returns the result in the form of the 
 #compact EVD in order to save on memory.    
 def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
-                                       comm=None, evd_tol=1e-10,  float_type=_np.cdouble,
+                                       comm=None, evd_tol=1e-10,  float_type=None,
                                        printer=None, return_eigs=False):
 
     """
@@ -3691,7 +3704,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
                             op_penalty: float=0, score_func: str='all', tol: float=1e-6, threshold: float=1e6,
                             check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons", pretest: bool=True, 
                             mem_limit: Optional[int]=None, comm: Optional[mpi4py.MPI.Comm]=None, profiler: Optional[Profiler]=None, 
-                            verbosity: int=0, num_nongauge_params: Optional[int]=None, float_type: _np.dtype= _np.cdouble, 
+                            verbosity: int=0, num_nongauge_params: Optional[int]=None, float_type: Optional[_np.dtype]=None, 
                             mode: str="compactEVD", force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None, 
                             load_cevd_cache_filename: Optional[str]=None, file_compression: bool=False, evd_tol: float=1e-10, 
                             initial_germ_set_test: bool=True, gate_penalty: Optional[dict[str,float]]=None) -> list[_circuits.Circuit]:
@@ -3822,6 +3835,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
 
     dim = model_list[0].dim
     Np = model_list[0].num_params
@@ -4265,7 +4279,7 @@ def compute_composite_germ_set_score_compactevd(current_update_cache: tuple[_np.
                                                 partial_germs_list: Optional[list[_circuits.Circuit]]=None, eps: Optional[float]=None, 
                                                 num_germs: Optional[int]=None, op_penalty: float=0.0, l1_penalty: float=0.0, 
                                                 num_nongauge_params: Optional[int]=None, num_params: Optional[int]=None, 
-                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type: _np.dtype=_np.cdouble,
+                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type: Optional[_np.dtype]=None,
                                                 gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
@@ -4429,7 +4443,7 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache: tuple[
                                                 partial_germs_list: Optional[list[_circuits.Circuit]]=None, eps: Optional[float]=None, 
                                                 num_germs: Optional[int]=None, op_penalty: float=0.0, l1_penalty: float=0.0, 
                                                 num_nongauge_params: Optional[int]=None, num_params: Optional[int]=None, 
-                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type: _np.dtype=_np.cdouble,
+                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type: Optional[_np.dtype]=None,
                                                 gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
@@ -4607,7 +4621,7 @@ def stable_pinv(mat):
 #globally aware of the overlap in amplified directions
 #of parameter space.
 
-def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_type=_np.cdouble, 
+def germ_set_spanning_vectors(target_model, germ_list, float_type=None, 
                               num_nongauge_params=None, tol = 1e-6, pretest=False, evd_tol = 1e-10,
                               verbosity=1, threshold = 1e6, mode = 'greedy', update_cache_low_rank = False,
                               final_test = True, comm=None): 
@@ -4691,15 +4705,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         target_model = target_model.copy()
         target_model.sim = 'matrix'
     
-    #Add some checks related to the option to switch up data types:
-    if not assume_real:
-        if not (float_type is _np.cdouble or float_type is _np.csingle):
-            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
-            raise ValueError('Unless working with (known) real-valued quantities only, please select an appropriate complex numpy dtype (either cdouble or csingle).')
-    else:
-        if not (float_type is _np.double or float_type is _np.single):
-            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
-            raise ValueError('When assuming real-valued quantities, please select a real-values numpy dtype (either double or single).')
+    float_type = _resolve_float_type(float_type, target_model)
     
     Np = target_model.num_params
     
@@ -4911,7 +4917,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
 def compute_composite_vector_set_score(current_update_cache, vector_update, 
                                        model=None, num_nongauge_params=None, 
                                        force_rank_increase=False, 
-                                       float_type=_np.cdouble):
+                                       float_type=None):
     """
     Compute the score for a germ set when it is not AC against a model.
 
