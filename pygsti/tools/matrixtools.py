@@ -14,6 +14,8 @@ import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
 
+from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union, Literal
+
 import numpy as _np
 import scipy.linalg as _spl
 import scipy.optimize as _spo
@@ -21,6 +23,7 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
 from pygsti.tools.basistools import change_basis
+from pygsti.baseobjs import _compatibility as _compat
 
 try:
     from . import fastcalc as _fastcalc
@@ -64,7 +67,7 @@ def gram_matrix(m, adjoint=False):
     return out
 
 
-def is_hermitian(mx, tol=1e-9):
+def is_hermitian(mx: _np.ndarray, tol: float=1e-9) -> bool:
     """
     Test whether mx is a hermitian matrix.
 
@@ -85,7 +88,17 @@ def is_hermitian(mx, tol=1e-9):
     if m != n:
         return False
     else:
-        return _np.all(_np.abs(mx - mx.T.conj()) <= tol)
+        return bool(_np.all(_np.abs(mx - mx.T.conj()) <= tol))
+
+
+def assert_hermitian(mat : _np.ndarray, tol: Union[float,_np.floating]) -> None:
+    hermiticity_error = _np.abs(mat - mat.T.conj())
+    if _np.any(hermiticity_error > tol):
+        message = f"""
+            Input matrix 'mat' is not Hermitian, up to tolerance {tol}.
+            The absolute values of entries in (mat - mat^H) are \n{hermiticity_error}. 
+        """
+        raise ValueError(message)
 
 
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
@@ -420,7 +433,7 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
             # We assume initial_independent_cols is full column-rank.
             # This lets us use unpivoted QR instead of pivoted QR or SVD.
             assert initial_independent_cols.shape[0] == m.shape[0]
-            q = _spl.qr(initial_independent_cols, mode='econ')[0]
+            q = _spl.qr(initial_independent_cols, mode='economic')[0]
             # proj_m = (I - qq')m
             temp1 = q.T.conj() @ m
             temp2 = q @ temp1
@@ -545,7 +558,7 @@ def print_mx(mx, width=9, prec=4, withbrackets=False):
     mx : numpy array
         the matrix (2-D array) to print.
 
-    width : int, opitonal
+    width : int, optional
         the width (in characters) of each printed element
 
     prec : int optional
@@ -574,7 +587,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     m : numpy.ndarray
         array to print.
 
-    width : int, opitonal
+    width : int, optional
         the width (in characters) of each converted element
 
     prec : int optional
@@ -587,7 +600,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     Returns
     -------
     string
-        matrix m as a pretty formated string.
+        matrix m as a pretty formatted string.
     """
     if m.size == 0: return ""
     s = ""; tol = 10**(-prec)
@@ -616,10 +629,10 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     m : numpy array
         array to format.
 
-    real_width : int, opitonal
+    real_width : int, optional
         the width (in characters) of the real part of each element.
 
-    im_width : int, opitonal
+    im_width : int, optional
         the width (in characters) of the imaginary part of each element.
 
     prec : int optional
@@ -628,7 +641,7 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     Returns
     -------
     string
-        matrix m as a pretty formated string.
+        matrix m as a pretty formatted string.
     """
     if len(m.shape) == 1: m = m[None, :]  # so it works w/vectors too
     s = ""; tol = 10**(-prec)
@@ -737,12 +750,12 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
         The target logarithm
 
     target_weight : float
-        A weighting factor used to blance the exactness-of-log term
+        A weighting factor used to balance the exactness-of-log term
         with the closeness-to-target term in the optimized objective
         function.  This value multiplies the latter term.
 
     tol : float, optional
-        Optimzer tolerance.
+        Optimizer tolerance.
 
     Returns
     -------
@@ -793,6 +806,44 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
         #      _np.linalg.norm(logM-target_logm)**2)
 
     return logM
+
+
+def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assume_normal: bool = False):
+    if assume_hermitian is None:
+        assume_hermitian = is_hermitian(m)
+    if assume_hermitian:
+        # Make sure it's Hermtian in exact arithmetic. This helps with
+        # reproducibility across different implementations of LAPACK.
+        if not m.flags.writeable:
+            m = m.copy()
+        m += m.T.conj()
+        m /= 2
+        return _np.linalg.eigvalsh(m)
+    elif assume_normal:
+        temp = _spl.schur(m, output='complex')
+        evals = _np.diag(temp[1])
+        return evals
+    else:
+        return _np.linalg.eigvals(m)
+
+
+def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None):
+    if assume_hermitian is None:
+        assume_hermitian = is_hermitian(m)
+    if assume_hermitian:
+        # Make sure it's Hermtian in exact arithmetic. This helps with
+        # reproducibility across different implementations of LAPACK.
+        if not m.flags.writeable:
+            m = m.copy()
+        m += m.T.conj()
+        m /= 2
+        evals, evecs = _np.linalg.eigh(m)
+        inv_evecs = evecs.T.conj()
+    else:
+        evals, evecs = _np.linalg.eigh(m)
+        inv_evecs = _np.linalg.inv(evecs)
+    return evecs, evals, inv_evecs
+
 
 
 def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
@@ -1241,7 +1292,7 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
             raise ValueError(("Vectors `a` and `b` don't have the same conjugate-pair structure, "
                               " and so they cannot be matched in a way the preserves this structure."))
     #Note: problem with this approach is that we might convert a
-    # real-pair -> conj-pair sub-optimally (i.e. there might be muliple
+    # real-pair -> conj-pair sub-optimally (i.e. there might be multiple
     # such conversions and we just choose one at random).
 
     _, pairs1 = minweight_match(a[a_real], b[b_real], metricfn, True,
@@ -1267,7 +1318,7 @@ def _fas(a, inds, rhs, add=False):
     """
     Fancy Assignment, equivalent to `a[*inds] = rhs` but with
     the elements of inds (allowed to be integers, slices, or
-    integer arrays) always specifing a generalize-slice along
+    integer arrays) always specifying a generalize-slice along
     the given dimension.  This avoids some weird numpy indexing
     rules that make using square brackets a pain.
     """
@@ -1386,7 +1437,7 @@ def _findx(a, inds, always_copy=False):
     """
     Fancy Indexing, equivalent to `a[*inds].copy()` but with
     the elements of inds (allowed to be integers, slices, or
-    integer arrays) always specifing a generalize-slice along
+    integer arrays) always specifying a generalize-slice along
     the given dimension.  This avoids some weird numpy indexing
     rules that make using square brackets a pain.
     """
@@ -1415,7 +1466,7 @@ def _findx(a, inds, always_copy=False):
         if len(indx_tups) > 0:  # b/c a[()] just returns the entire array!
             inds = tuple(zip(*indx_tups))  # un-zips to one list per dim
             a_inds = a[inds].copy()  # a 1D array of flattened "fancy" a[inds]
-            a_inds.shape = a_inds_shape  # reshape
+            a_inds = _compat.reshape_no_copy(a_inds, a_inds_shape)  # reshape
         else:
             a_inds = _np.zeros(a_inds_shape, a.dtype)  # has zero elements
             assert(a_inds.size == 0)
@@ -2367,7 +2418,7 @@ def sign_fix_qr(q, r, tol=1e-6):
 
     Flips the signs of Q-columns and R-rows from a QR decomposition so that the
     largest absolute element in each Q-column is positive.  This is an arbitrary
-    but consisten convention that resolves sign-ambiguity in the output of a QR
+    but consistent convention that resolves sign-ambiguity in the output of a QR
     decomposition.
 
     Parameters
@@ -2394,3 +2445,68 @@ def sign_fix_qr(q, r, tol=1e-6):
             qq[:, i] = -q[:, i]
             rr[i, :] = -r[i, :]
     return qq, rr
+
+
+# a TypeVar to allow methods to return "self"
+_T = TypeVar("_T", bound="OperatorLike")
+
+
+@runtime_checkable
+class OperatorLike(Protocol[_T]): # type: ignore
+
+    @property
+    def T(self) -> _T:
+        ...
+
+    def __matmul__(self, other: Any) -> Any:
+        ...
+
+    def __rmatmul__(self, other: Any) -> Any:
+        ...
+
+    def conj(self) -> _T:
+        ...
+
+
+class IdentityOperator:
+    """
+    A representation of the identity operator on any and all vector spaces.
+    """
+
+    __array_priority__ = 101
+    # ^ The __array_priority__ static class variable determines how infix
+    #   operators (most notably, @) are dispatched.
+    #
+    #   If Python initially dispatches the ndarray implementation of an infix
+    #   operator, then the ndarray implementation will first check if the other
+    #   operand has __array_priority__ greater than zero. If it does, then a
+    #   function call like ndarray.__matmul__(array, other) will return the
+    #   result of other.__rmatmul__(array).
+    #   
+    #   For our purposes, it should suffice to set __array_priority__ to 1.
+    #   We set it to 101 in case someone does something weird and passes in 
+    #   a numpy matrix (which behaves like an ndarray in many respects, and
+    #   has __array_priority__ of 10). 
+    #
+
+    def __matmul__(self, other: Any) -> Any:
+        return other
+    
+    def __rmatmul__(self, other: Any) -> Any:
+        return other
+    
+    @property
+    def T(self):
+        return self
+    
+    def conj(self):
+        return self
+
+
+def to_operatorlike(obj):
+    if obj is None:
+        return IdentityOperator()
+    elif isinstance(obj, OperatorLike):
+        return obj
+    else:
+        raise ValueError()

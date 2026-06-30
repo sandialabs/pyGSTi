@@ -28,6 +28,7 @@ from .staticstate import StaticState
 from .tensorprodstate import TensorProductState
 from .tpstate import TPState
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import basistools as _bt
 from pygsti.baseobjs import Basis
 from pygsti.tools import optools as _ot
@@ -260,13 +261,12 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                 proj_basis = 'PP' if state.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=state.evotype)
+                
                 if st is not state and not _np.allclose(st.to_dense(), state.to_dense()):
                     
-                    dense_st = st.to_dense()
-                    dense_state = state.to_dense()
+                    dense_st = st.to_dense(on_space='HilbertSchmidt')
+                    dense_state = state.to_dense(on_space='HilbertSchmidt')
                     num_qubits = st.state_space.num_qubits
-                    
-                    
 
                     #GLND for states suffers from "trivial gauge" freedom. This function identifies
                     #the physical directions to avoid this gauge.
@@ -361,14 +361,14 @@ def finite_difference_deriv_wrt_params(state, wrt_filter=None, eps=1e-7):
     state2 = state.copy()
     p = state.to_vector()
     fd_deriv = _np.empty((dim, state.num_params), 'd')  # assume real (?)
-
+    state_array = state.to_dense('minimal')
     for i in range(state.num_params):
         p_plus_dp = p.copy()
         p_plus_dp[i] += eps
         state2.from_vector(p_plus_dp, close=True)
-        fd_deriv[:, i:i + 1] = (state2 - state) / eps
+        fd_deriv[:, i:i + 1] = (state2.to_dense('minimal') - state_array).reshape(-1, 1) / eps
 
-    fd_deriv.shape = [dim, state.num_params]
+    fd_deriv = _compat.reshape_no_copy(fd_deriv, [dim, state.num_params])
     if wrt_filter is None:
         return fd_deriv
     else:

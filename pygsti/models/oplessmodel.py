@@ -200,7 +200,7 @@ class SuccessFailModel(OplessModel):
         raise NotImplementedError("Derived classes should implement this!")
 
     def _success_dprob(self, circuit, param_slice, cache):
-        """ Derived classes can override this.  Default implemntation is to use finite difference. """
+        """ Derived classes can override this.  Default implementation is to use finite difference. """
         eps = 1e-7
         orig_pvec = self.to_vector()
         wrtIndices = _slct.indices(param_slice) if (param_slice is not None) else list(range(self.num_params))

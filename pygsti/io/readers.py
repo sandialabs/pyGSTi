@@ -126,7 +126,7 @@ def read_dataset(filename, cache=False, collision_action="aggregate",
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
-            ds.save(cache_filename)
+            ds.write_binary(cache_filename)
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()
@@ -220,7 +220,7 @@ def read_multidataset(filename, cache=False, collision_action="aggregate",
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
-            mds.save(cache_filename)
+            mds.write_binary(cache_filename)
 
         else:
             # otherwise must use standard dataset file format
@@ -374,7 +374,11 @@ def convert_strings_to_circuits(obj):
         if isinstance(x, dict):  # this case isn't written anymore - just to read old-format files (TODO REMOVE LATER)
             return {_replace_strs_with_circuits(k): _replace_strs_with_circuits(v) for k, v in x.items()}
         if isinstance(x, str):
-            return std.parse_circuit(x, create_subcircuits=not _Circuit.default_expand_subcircuits)
+            try:
+                return std.parse_circuit(x, create_subcircuits=not _Circuit.default_expand_subcircuits)
+            except ValueError:
+                # Failed to parse, possible this string is not a circuit
+                pass
         return x
 
     return _replace_strs_with_circuits(obj)
@@ -636,7 +640,7 @@ def read_data_from_dir(dirname, preloaded_edesign=None, quick_load=False, comm=N
         Directory name.
 
     preloaded_edesign : ExperimentDesign, optional
-        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        The experiment design belonging to the to-be-loaded data object, in cases
         when this has been loaded already (only use this if you know what
         you're doing).
 
@@ -674,7 +678,7 @@ def read_data_from_mongodb(mongodb, doc_id, preloaded_edesign=None, quick_load=F
         The user-defined identifier of the data to load.
 
     preloaded_edesign : ExperimentDesign, optional
-        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        The experiment design belonging to the to-be-loaded data object, in cases
         when this has been loaded already (only use this if you know what
         you're doing).
 

@@ -25,7 +25,7 @@ class TestReportables(BaseTestCase):
         self.assertTrue( np.isnan(nan_qty.value) )
 
         #deprecated:
-        rptbl.decomposition( std.target_model().operations['Gx'] )
+        rptbl.decomposition( std.target_model().operations['Gx'].to_dense('HilbertSchmidt') )
         rptbl.decomposition( np.zeros( (4,4), 'd') )
 
     def test_functions(self):
@@ -117,6 +117,7 @@ class TestReportables(BaseTestCase):
             rptbl.Eigenvalue_diamondnorm,
             rptbl.Eigenvalue_nonunitary_diamondnorm,
             rptbl.Avg_gate_infidelity,
+            rptbl.Generator_infidelity,
             rptbl.Model_model_angles_btwn_axes,
             rptbl.Rel_eigvals,
             rptbl.Rel_logTiG_eigvals,
@@ -194,8 +195,8 @@ class TestReportables(BaseTestCase):
     def test_closest_unitary(self):
         gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
         gs2 = std.target_model()
-        rptbl.closest_unitary_fidelity(gs1.operations['Gx'], gs2.operations['Gx'], "pp") # op2 is unitary
-        rptbl.closest_unitary_fidelity(gs2.operations['Gx'], gs1.operations['Gx'], "pp") # op1 is unitary
+        rptbl.closest_unitary_fidelity(gs1.operations['Gx'].to_dense('minimal'), gs2.operations['Gx'].to_dense('minimal'), "pp") # op2 is unitary
+        rptbl.closest_unitary_fidelity(gs2.operations['Gx'].to_dense('minimal'), gs1.operations['Gx'].to_dense('minimal'), "pp") # op1 is unitary
 
     def test_general_decomp(self):
         gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)

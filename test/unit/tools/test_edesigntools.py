@@ -125,10 +125,10 @@ class FisherInformationTester(BaseCase):
         #E0 = target_model.effects['0']
         #E1 = target_model.effects['1']
         # Alternate indexing that uses POVM label explicitly
-        E0 = self.target_model['Mdefault']['0']  # 'Mdefault' = POVM label, '0' = effect label
-        E1 = self.target_model['Mdefault']['1']
-        Gmz_plus = _np.dot(E0,E0.T) #note effect vectors are stored as column vectors
-        Gmz_minus = _np.dot(E1,E1.T)
+        E0 = self.target_model['Mdefault']['0'].to_dense()  # 'Mdefault' = POVM label, '0' = effect label
+        E1 = self.target_model['Mdefault']['1'].to_dense()
+        Gmz_plus = _np.dot(E0.reshape(-1, 1), E0.reshape(1, -1)) #note effect vectors are stored as column vectors
+        Gmz_minus = _np.dot(E1.reshape(-1, 1), E1.reshape(1, -1))
         self.target_model_inst[('Iz',0)] = TPInstrument({'p0': Gmz_plus, 'p1': Gmz_minus})
 
         #create experiment design for instruments
@@ -138,7 +138,7 @@ class FisherInformationTester(BaseCase):
         prep_fiducials = smq1Q_XYI.prep_fiducials()
         meas_fiducials = smq1Q_XYI.meas_fiducials()
         self.lsgst_list_instruments = create_lsgst_circuit_lists(
-            self.target_model_inst,prep_fiducials,meas_fiducials,germs,self.Ls)
+            self.target_model_inst,prep_fiducials,meas_fiducials,germs, self.Ls[:-1])
 
     def test_calculate_fisher_information_matrix(self):
         
@@ -194,7 +194,7 @@ class FisherInformationTester(BaseCase):
         #Test by L:
         fim_approx_by_L = et.calculate_fisher_information_matrices_by_L(self.target_model_inst, self.lsgst_list_instruments, self.Ls,
                                                                         approx=True)
-        self.assertTrue(_np.linalg.norm(fim_approx-fim_approx_by_L[8])<1e-3)
+        self.assertTrue(_np.linalg.norm(fim_approx-fim_approx_by_L[4])<1e-3)
 
 
 class EdesignPaddingTester(BaseCase):

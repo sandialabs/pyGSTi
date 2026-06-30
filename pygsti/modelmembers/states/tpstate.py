@@ -23,6 +23,7 @@ except ImportError:
 import numpy as _np
 from pygsti.baseobjs import Basis as _Basis
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.modelmembers.states.densestate import DenseState as _DenseState
 from pygsti.modelmembers.states.state import State as _State
@@ -83,7 +84,7 @@ class TPState(_DenseState, _Torchable):
         Direct access the the underlying data as column vector, i.e, a (dim,1)-shaped array.
         """
         bv = self._ptr.view()
-        bv.shape = (bv.size, 1)
+        bv = _compat.reshape_no_copy(bv, (bv.size, 1))
         return _ProtectedArray(bv, indices_to_protect=(0, 0))
 
     def set_dense(self, vec):

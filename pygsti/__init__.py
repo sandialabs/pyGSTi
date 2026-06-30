@@ -6,7 +6,10 @@
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-""" A Python implementation of LinearOperator Set Tomography """
+""" A Python implementation of Gate Set Tomography """
+from .pgtypes import (
+    SpaceT
+)
 
 from . import baseobjs
 from . import algorithms as alg
@@ -30,6 +33,7 @@ from .algorithms.grammatrix import *
 from pygsti.tools.gatetools import *  # *_qubit_gate fns
 from .drivers import *
 from .tools import *
+
 # NUMPY BUG FIX (imported from tools)
 from pygsti.baseobjs._compatibility import _numpy14einsumfix
 

@@ -11,9 +11,7 @@ Extends Plolty python library for additional needed functionality.
 #***************************************************************************************************
 
 import os as _os
-#from plotly.offline.offline import get_plotlyjs
-#from plotly.offline.offline import __PLOTLY_OFFLINE_INITIALIZED
-#from pkg_resources import resource_string
+
 DEFAULT_PLOTLY_TEMPLATE = 'none'
 
 # Try to set the default plotly template.  This isn't essential, but makes the
@@ -78,7 +76,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         The base name (without extension) of the ".pdf" or ".pkl" files that are
         to be linked to by menu items.  For example, if `link_to` equals
         `("pdf",)` and `link_to_id` equals "plot1234", then a menu item linking
-        to the file "plot1234.pdf" will be added to the renderd plot.
+        to the file "plot1234.pdf" will be added to the rendered plot.
 
     rel_figure_dir : str, optional
         A relative path from the "current" path (the path of the generated
@@ -103,11 +101,6 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
         aspect_ratio = orig_width / orig_height
     else: aspect_ratio = None
 
-    #Remove original dimensions of plot so default of 100% is used below
-    # (and triggers resize-script creation)
-    if orig_width: del fig['layout']['width']
-    if orig_height: del fig['layout']['height']
-
     #Special polar plot case - see below - add dummy width & height so
     # we can find/replace them with variables in generated javascript.
     if 'angularaxis' in fig['layout']:
@@ -118,33 +111,26 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     config['showLink'] = show_link
     config['linkText'] = link_text
 
-    #Add version-dependent kwargs to _plot_html call below
-    plotly_version = tuple(map(int, _plotly_version.split('.')))
-    if plotly_version < (3, 8, 0):  # "old" plotly with _plot_html function
-        from plotly.offline.offline import _plot_html
-
-        kwargs = {}
-        if plotly_version >= (3, 7, 0):  # then auto_play arg exists
-            kwargs['auto_play'] = False
-
-        #Note: removing width and height from layout above causes default values to
-        # be used (the '100%'s hardcoded below) which subsequently trigger adding a resize script.
-        plot_html, plotdivid, _, _ = _plot_html(
-            fig, config, validate, '100%', '100%',
-            global_requirejs=False,  # no need for global_requirejs here
-            **kwargs)  # since we now extract js and remake full script.
-    else:
+    try:
         from plotly.io import to_html as _to_html
-        import uuid as _uuid
-        plot_html = _to_html(fig, config, auto_play=False, include_plotlyjs=False,
-                             include_mathjax=False, post_script=None, full_html=False,
-                             animation_opts=None, validate=validate)
-        assert(plot_html.startswith("<div>") and plot_html.endswith("</div>"))
-        plot_html = plot_html[len("<div>"):-len("</div>")].strip()
-        assert(plot_html.endswith("</script>"))
-        id_index = plot_html.find('id="')
-        id_index_end = plot_html.find('"', id_index + len('id="'))
-        plotdivid = _uuid.UUID(plot_html[id_index + len('id="'):id_index_end])
+    except ImportError:
+        print('Unable to import plotly.io.to_html. This likely means your version of plotly is incompatible (<3.8.0), please upgrade and try again.')
+    import uuid as _uuid
+    plot_html = _to_html(fig, config, auto_play=False, include_plotlyjs=False,
+                            include_mathjax=False, post_script=None, full_html=False,
+                            animation_opts=None, validate=validate)
+    
+    # strip off the outer div
+    assert plot_html.endswith("</div>")
+    plot_html = plot_html[:-len("</div>")].strip()
+    assert plot_html.startswith("<div")
+    loc_opening_div_end = plot_html.find('>')
+    plot_html = plot_html[loc_opening_div_end+1:].strip()
+
+    assert(plot_html.endswith("</script>")) # < sanity check
+    id_index = plot_html.find('id="')
+    id_index_end = plot_html.find('"', id_index + len('id="'))
+    plotdivid = _uuid.UUID(plot_html[id_index + len('id="'):id_index_end])
 
     if orig_width: fig['layout']['width'] = orig_width
     if orig_height: fig['layout']['height'] = orig_height
@@ -152,28 +138,34 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     # Separate the HTML and JS in plot_html so we can insert
     # initial-sizing JS between them.  NOTE: this is FRAGILE and depends
     # on Plotly output (_plot_html) being HTML followed by JS
-    tag = '<script type="text/javascript">'; end_tag = '</script>'
-    iTag = plot_html.index(tag)
+    tag = '<script type="text/javascript">'
+    try:
+        iTag = plot_html.index(tag)
+    except ValueError:
+        # plotly.js >= 3.3.1 changed the script tag to not include the type attribute, so try again with the new tag
+        tag = '<script>'
+        iTag = plot_html.index(tag)
+    end_tag = '</script>'
     plot_js = plot_html[iTag + len(tag):-len(end_tag)].strip()
     plot_html = plot_html[0:iTag].strip()
 
     full_script = ''
 
-    #Note: in this case, upper logic (usually in an on-ready hander of the table/plot
+    #Note: in this case, upper logic (usually in an on-ready handler of the table/plot
     # group creation) is responsible for triggering a "create" event on the plot div
     # when appropriate (see workspace.py).
 
     #Get javascript for create and (possibly) resize handlers
-    plotly_create_js = plot_js  # the ususal plotly creation javascript
+    plotly_create_js = plot_js  # the usual plotly creation javascript
     plotly_resize_js = None
 
     if resizable:
-        #the ususal plotly resize javascript
+        #the usual plotly resize javascript
         plotly_resize_js = '  Plotly.Plots.resize(document.getElementById("{id}"));'.format(id=plotdivid)
 
         if 'angularaxis' in fig['layout']:
             #Special case of polar plots: Plotly does *not* allow resizing of polar plots.
-            # (I don't know why, and it's not documented, but in plotly.js there are explict conditions
+            # (I don't know why, and it's not documented, but in plotly.js there are explicit conditions
             #  in Plotly.relayout that short-circuit when "gd.frameworks.isPolar" is true).  So,
             #  we just re-create the plot with a different size to mimic resizing.
             plot_js = plot_js.replace('"width": 123', '"width": pw').replace('"height": 123', '"height": ph')
@@ -292,7 +284,7 @@ def init_notebook_mode_ex(connected=False):
             'requirejs.config({'
             'paths: { '
             # Note we omit the extension .js because require will include it.
-            '\'plotly\': [\'https://cdn.plot.ly/plotly-latest.min\']},'
+            '\'plotly\': [\'https://cdn.plot.ly/plotly-3.0.1.min.js\']},'
             '});'
             'if(!window.Plotly) {{'
             'require([\'plotly\'],'
@@ -330,12 +322,12 @@ def format_plotlylib_inclusion_js():
     str
     """
     path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
-                         "templates", "offline", "plotly-latest.min.js")  # "plotly-polarfixed.js"
+                         "templates", "offline", "plotly-3.0.1.min.js")
 
     #EGN this block mocks-up resource_string to also work when using a
-    # local package... could look into whether this is unecessary if we
+    # local package... could look into whether this is unnecessary if we
     # just do a "pip -e pygsti" install instead of install_locally.py...
-    with open(path) as f:
+    with open(path, 'r', encoding='utf-8') as f:
         plotlyjs = f.read()
         try:  # to convert to unicode since we use unicode literals
             plotlyjs = plotlyjs.decode('utf-8')

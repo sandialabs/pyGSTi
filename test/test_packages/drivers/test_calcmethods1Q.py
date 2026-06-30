@@ -3,49 +3,24 @@
 import logging
 mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
+import pytest
 
 import unittest
+from functools import partial
 import numpy as np
 import scipy.linalg as spl
 import pygsti
-import pygsti.models.modelconstruction as mc
-from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.modelpacks import smq1Q_XY as std
 from pygsti.baseobjs import Label as L
 from pygsti.circuits import Circuit
-from pygsti.serialization import json
 from pygsti.models import ExplicitOpModel, CloudNoiseModel
 
 import os
 
 from ..testutils import BaseTestCase, compare_files, regenerate_references
+from ..testutils import build_XYCNOT_cloudnoise_model as _build_XYCNOT_cloudnoise_model
 
-#Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
-def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
-                                  maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                  extraWeight1Hops=0, extraGateWeight=0,
-                                  roughNoise=None, simulator="matrix", parameterization="H+S",
-                                  spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                  errcomp_type="gates", evotype="default", return_clouds=False, verbosity=0):
-
-    availability = {}; nonstd_gate_unitaries = {}
-    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    pspec = _ProcessorSpec(nQubits, ['Gidle', 'Gxpi2','Gypi2','Gcnot'], nonstd_gate_unitaries, availability, geometry)
-    assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
-    mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
-        pspec, None,
-        maxIdleWeight, maxSpamWeight, maxhops,
-        extraWeight1Hops, extraGateWeight,
-        simulator, evotype, parameterization, parameterization,
-        "add_global" if addIdleNoiseToAllGates else "none",
-        errcomp_type, True, True, True, 'pp', verbosity)
-
-    if return_clouds:
-        #FUTURE - just return cloud *keys*? (operation label values are never used
-        # downstream, but may still be useful for debugging, so keep for now)
-        return mdl, mdl.clouds
-    else:
-        return mdl
+build_XYCNOT_cloudnoise_model = partial(_build_XYCNOT_cloudnoise_model, xy_gate_names=('Gxpi2', 'Gypi2'))
 
 
 class CalcMethods1QTestCase(BaseTestCase):
@@ -77,20 +52,13 @@ class CalcMethods1QTestCase(BaseTestCase):
         if regenerate_references():
             ds = pygsti.data.simulate_data(cls.mdl_datagen, cls.listOfExperiments,
                                                    num_samples=10000, sample_error="multinomial", seed=1234)
-            ds.save(compare_files + "/calcMethods1Q.dataset")
-
-        #DEBUG TEST- was to make sure data files have same info -- seemed ultimately unnecessary
-        #ds_swp = pygsti.objects.DataSet(file_to_load_from=compare_files + "/calcMethods1Q.datasetv3") # run in Python3
-        #pygsti.io.write_dataset(temp_files + "/dataset.3to2.txt", ds_swp) # run in Python3
-        #ds_swp = pygsti.io.read_dataset(temp_files + "/dataset.3to2.txt") # run in Python2
-        #ds_swp.save(compare_files + "/calcMethods1Q.dataset") # run in Python2
-        #assert(False),"STOP"
+            ds.write_binary(compare_files + "/calcMethods1Q.dataset")
 
         cls.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/calcMethods1Q.dataset")
 
         #Reduced model GST dataset
         cls.nQubits=1 # can't just change this now - see op_labels below
-        cls.mdl_redmod_datagen = build_XYCNOT_cloudnoise_model(cls.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
+        cls.mdl_redmod_datagen = build_XYCNOT_cloudnoise_model(cls.nQubits, geometry="line", cnot_edges=None, maxIdleWeight=1, maxhops=1,
                                                                extraWeight1Hops=0, extraGateWeight=1,
                                                                simulator="matrix", verbosity=1, roughNoise=(1234,0.01))
 
@@ -112,7 +80,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #RUN BELOW FOR DATAGEN (SAVE)
         if regenerate_references():
             redmod_ds = pygsti.data.simulate_data(cls.mdl_redmod_datagen, expList, 1000, "round", seed=1234)
-            redmod_ds.save(compare_files + "/calcMethods1Q_redmod.dataset")
+            redmod_ds.write_binary(compare_files + "/calcMethods1Q_redmod.dataset")
 
         cls.redmod_ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/calcMethods1Q_redmod.dataset")
 
@@ -132,7 +100,6 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         os.chdir(origDir) # return to original directory
 
-
     def assert_outcomes(self, probs, expected):
         for k,v in probs.items():
             self.assertAlmostEqual(v, expected[k])
@@ -151,26 +118,25 @@ class CalcMethods1QTestCase(BaseTestCase):
         #CHECK that copy gives identical models - this is checked by other
         # unit tests but here we're using a true "GST model" - so do it again:
         print("CHECK COPY")
-        mdl = results.estimates[results.name].models['go0']
+        mdl = results.estimates[results.name].models['stdgaugeopt']
         mdl_copy = mdl.copy()
         print(mdl.strdiff(mdl_copy))
         self.assertAlmostEqual( mdl.frobeniusdist(mdl_copy), 0, places=2)
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_std_exact.json")
+            results.estimates[results.name].models['stdgaugeopt'].write(compare_files + "/test1Qcalc_std_exact.json")
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1.0, delta=2.0)
         mdl_compare = ExplicitOpModel.read(compare_files + "/test1Qcalc_std_exact.json")
 
         #gauge opt before compare
-        gsEstimate = results.estimates[results.name].models['go0'].copy()
+        gsEstimate = results.estimates[results.name].models['stdgaugeopt'].copy()
         gsEstimate.set_all_parameterizations("full")
         gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, mdl_compare)
         print(gsEstimate.strdiff(mdl_compare))
         self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=1)
-
 
     def test_stdgst_map(self):
         # Using map-based calculation
@@ -184,13 +150,12 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1.0, delta=2.0)
         mdl_compare = ExplicitOpModel.read(compare_files + "/test1Qcalc_std_exact.json")
 
-        gsEstimate = results.estimates[results.name].models['go0'].copy()
+        gsEstimate = results.estimates[results.name].models['stdgaugeopt'].copy()
         gsEstimate.set_all_parameterizations("full")
         gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, mdl_compare)
         self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=0)
          # with low tolerance (1e-6), "map" tends to go for more iterations than "matrix",
          # resulting in a model that isn't exactly the same as the "matrix" one
-
 
     def test_stdgst_terms(self):
         # Using term-based (path integral) calculation
@@ -202,11 +167,11 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(1e-10 * np.ones(target_model.num_params))  # to seed term calc (starting with perfect zeros causes trouble)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prep_fiducials(), std.meas_fiducials(),
                                                std.germs(lite=False), self.maxLengths, verbosity=0,
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True, gauge_opt_suite_name='none')
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_std_terms.json")
+            results.estimates[results.name].models['trivial_gauge_opt'].write(compare_files + "/test1Qcalc_std_terms.json")
             
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=12)
@@ -215,16 +180,16 @@ class CalcMethods1QTestCase(BaseTestCase):
         # can't easily gauge opt b/c term-based models can't be converted to "full"
         #mdl_compare.set_all_parameterizations("full")
         #
-        #gsEstimate = results.estimates[results.name].models['go0'].copy()
+        #gsEstimate = results.estimates[results.name].models['stdgaugeopt'].copy()
         #gsEstimate.set_all_parameterizations("full")
         #gsEstimate = pygsti.algorithms.gaugeopt_to_target(gsEstimate, mdl_compare)
         #self.assertAlmostEqual( gsEstimate.frobeniusdist(mdl_compare), 0, places=0)
 
         #A direct vector comparison works if python (&numpy?) versions are identical, but
         # gauge freedoms make this incorrectly fail in other cases - so just check sigmas
-        print("VEC DIFF = ",(results.estimates[results.name].models['go0'].to_vector()
+        print("VEC DIFF = ",(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()))
-        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)
         # Note: used to be places=3 above when comparing with cython-built files, but to match cython with
         # non-cython builds we loosen to places=1
@@ -240,11 +205,11 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.from_vector(1e-10 * np.ones(target_model.num_params))  # to seed term calc (starting with perfect zeros causes trouble)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prep_fiducials(), std.meas_fiducials(),
                                                std.germs(lite=False), self.maxLengths, verbosity=3,
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True, gauge_opt_suite_name='none')
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_std_prunedpath.json")
+            results.estimates[results.name].models['trivial_gauge_opt'].write(compare_files + "/test1Qcalc_std_prunedpath.json")
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=2)
@@ -254,9 +219,9 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #A direct vector comparison works if python (&numpy?) versions are identical, but
         # gauge freedoms make this incorrectly fail in other cases - so just check sigmas
-        #print("VEC DIFF = ",(results.estimates[results.name].models['go0'].to_vector()
+        #print("VEC DIFF = ",(results.estimates[results.name].models['stdgaugeopt'].to_vector()
         #                                       - mdl_compare.to_vector()))
-        #self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        #self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['stdgaugeopt'].to_vector()
         #                                       - mdl_compare.to_vector()), 0, places=3)
 
 
@@ -264,7 +229,13 @@ class CalcMethods1QTestCase(BaseTestCase):
     # Reduced, meaning that we use composed and embedded gates to form a more complex error model with
     # shared parameters and qubit connectivity graphs.  Calculations *can* use dense matrices and matrix calcs,
     # but usually will use sparse mxs and map-based calcs.
+    #
+    # All of these functions call misfit_sigma() on an Estimate object, which raises an OverparameterizationWarning
+    # since the underlying dataset has a tiny number of circuits (e.g., 3). The OverparameterizationWarning in this
+    # context is expected and suppressed.
+    #
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_matrix(self):
         # Using dense matrices and matrix-based calcs
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -275,18 +246,19 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True, gauge_opt_suite_name='none')
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_redmod_exact.json")
+            results.estimates[results.name].models['trivial_gauge_opt'].write(compare_files + "/test1Qcalc_redmod_exact.json")
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #mdl_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_exact.json"))
-        #self.assertAlmostEqual( results.estimates[results.name].models['go0'].frobeniusdist(mdl_compare), 0, places=3)
+        #self.assertAlmostEqual( results.estimates[results.name].models['stdgaugeopt'].frobeniusdist(mdl_compare), 0, places=3)
         #NO frobeniusdist for implicit models (yet)
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_map1(self):
         # Using dense embedded matrices and map-based calcs (maybe not really necessary to include?)
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -297,17 +269,18 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #mdl_compare = pygsti.io.json.load( open(compare_files + "/test1Qcalc_redmod_exact.json"))
-        #self.assertAlmostEqual( results.estimates[results.name].models['go0'].frobeniusdist(mdl_compare), 0, places=1)
+        #self.assertAlmostEqual( results.estimates[results.name].models['stdgaugeopt'].frobeniusdist(mdl_compare), 0, places=1)
         #NO frobeniusdist for implicit models (yet)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
           # how to optimizize over exactly - so this is a very loose test...
 
-
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_map1_errorgens(self):
         # Using dense embedded matrices and map-based calcs (same as above)
         # but w/*errcomp_type=errogens* Model (maybe not really necessary to include?)
@@ -319,12 +292,14 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_map2(self):
         # Using sparse embedded matrices and map-based calcs
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -335,17 +310,18 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         mdl_compare = CloudNoiseModel.read(compare_files + "/test1Qcalc_redmod_exact.json")
-        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)
           #Note: models aren't necessarily exactly equal given gauge freedoms that we don't know
           # how to optimizize over exactly - so this is a very loose test...
 
-
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_map2_errorgens(self):
         # Using sparse embedded matrices and map-based calcs (same as above)
         # but w/*errcomp_type=errogens* Model (maybe not really necessary to include?)
@@ -357,13 +333,14 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
-
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_svterm(self):
         # Using term-based calcs using map-based state-vector propagation
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)
@@ -376,18 +353,20 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3}, 
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
-            results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_redmod_terms.json")
+            results.estimates[results.name].models['trivial_gauge_opt'].write(compare_files + "/test1Qcalc_redmod_terms.json")
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         mdl_compare = CloudNoiseModel.read(compare_files + "/test1Qcalc_redmod_terms.json")
-        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=3)
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_svterm_errorgens(self):
         # Using term-based calcs using map-based state-vector propagation (same as above)
         # but w/errcomp_type=errogens Model
@@ -401,12 +380,14 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_prunedpath_svterm_errorgens(self):
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='pruned')
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -424,14 +405,14 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         #Note: we don't compare errorgens models to a reference model yet...
 
-
-
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)
@@ -444,14 +425,16 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
         mdl_compare = CloudNoiseModel.read(compare_files + "/test1Qcalc_redmod_terms.json")
-        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['go0'].to_vector()
+        self.assertAlmostEqual( np.linalg.norm(results.estimates[results.name].models['trivial_gauge_opt'].to_vector()
                                                - mdl_compare.to_vector()), 0, places=1)  #TODO: why this isn't more similar to svterm case??
 
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
     def test_reducedmod_cterm_errorgens(self):
         # Using term-based calcs using map-based stabilizer-state propagation (same as above)
         # but w/errcomp_type=errogens Model
@@ -465,7 +448,8 @@ class CalcMethods1QTestCase(BaseTestCase):
         results = pygsti.run_long_sequence_gst(self.redmod_ds, target_model, self.redmod_fiducials,
                                                self.redmod_fiducials, self.redmod_germs, self.redmod_maxLs,
                                                verbosity=4, advanced_options={'tolerance': 1e-3},
-                                               disable_checkpointing=True)
+                                               disable_checkpointing=True,
+                                               gauge_opt_suite_name='none')
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
         self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 0.0, delta=1.0)
@@ -591,7 +575,12 @@ class CalcMethods1QTestCase(BaseTestCase):
             evotype='statevec', ensure_composed_gates=False)
 
         probs1 = mdl.probabilities(self.circuit3)
-        probs2 = self.circuit3.simulate(mdl) # calls probs - same as above line
+        # Was: `probs2 = self.circuit3.simulate(mdl)`. Circuit.simulate is
+        # deprecated (replacement: Model.probabilities) — its only
+        # difference vs Model.probabilities was that it filtered out
+        # zero-probability outcomes by default. Inline that filter so the
+        # downstream "only-nonzero" assertion below stays meaningful.
+        probs2 = {o: p for o, p in probs1.items() if abs(p) > 1e-12}
         print(probs1)
         print(probs2)
         self.assert_outcomes(probs1, { ('000',): 0.0,
@@ -602,9 +591,7 @@ class CalcMethods1QTestCase(BaseTestCase):
                                        ('101',): 0.0,
                                        ('110',): 0.0,
                                        ('111',): 1.0 } )
-        self.assert_outcomes(probs2, { ('111',): 1.0 } ) # only returns nonzero outcomes by default
-
-
+        self.assert_outcomes(probs2, { ('111',): 1.0 } ) # nonzero-only filter mirrors the deprecated Circuit.simulate default
 
     def test_circuitsim_stabilizer(self):
         # Stabilizer-state simulation (of Clifford gates) using map-based calc
@@ -627,7 +614,6 @@ class CalcMethods1QTestCase(BaseTestCase):
         self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
         self.assert_outcomes(probs2, {('0',): 0.0,  ('1',): 1.0} )
         self.assert_outcomes(probs3, {('0',): 1.0,  ('1',): 0.0} )
-
 
     def test_circuitsim_stabilizer_1Qcheck(self):
         from pygsti.modelpacks import smq1Q_XYI as stdChk

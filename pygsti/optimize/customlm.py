@@ -11,7 +11,6 @@ Custom implementation of the Levenberg-Marquardt Algorithm
 #***************************************************************************************************
 
 import os as _os
-import signal as _signal
 import time as _time
 
 import numpy as _np
@@ -24,11 +23,8 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
-# Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
-# This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
-# so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
-if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
-    _signal.signal(_signal.SIGINT, _signal.default_int_handler)
+from pygsti.optimize._sigint import install_sigint_handler as _install_sigint_handler
+_install_sigint_handler()
 
 #constants
 _MACH_PRECISION = 1e-12
@@ -41,7 +37,7 @@ class CustomLMOptimizer(Optimizer):
     Parameters
     ----------
     maxiter : int, optional
-        The maximum number of (outer) interations.
+        The maximum number of (outer) iterations.
 
     maxfev : int, optional
         The maximum function evaluations.
@@ -343,7 +339,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         `d(|x|)/|x| < rel_xtol` then mark converged.
 
     max_iter : int, optional
-        The maximum number of (outer) interations.
+        The maximum number of (outer) iterations.
 
     num_fd_iters : int optional
         Internally compute the Jacobian using a finite-difference method
@@ -691,7 +687,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     rawJTJ_scratch[idiag] = undamped_JTJ_diag  # no damping; the "raw" JTJ
                     best_x_state = best_x_state[0:5] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
 
-            #determing increment using adaptive damping
+            #determining increment using adaptive damping
             while True:  # inner loop
 
                 if profiler: profiler.memory_check("custom_leastsq: begin inner iter")
@@ -1301,7 +1297,7 @@ def custom_leastsq_wikip(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
             mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
         #mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
 
-        #determing increment using adaptive damping
+        #determining increment using adaptive damping
         while True:  #inner loop
 
             ### Evaluate with mu' = mu / nu

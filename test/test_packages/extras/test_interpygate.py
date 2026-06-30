@@ -1,11 +1,19 @@
+import warnings
+
 import numpy as _np
 from scipy.linalg import expm as _expm
 
 import pygsti
-from pygsti.extras import interpygate as interp
-from pygsti.extras.interpygate.process_tomography import run_process_tomography, unvec_square
+# Importing interpygate fires MissingDependencyWarning at module-load time
+# if csaps is not installed; suppress the noise here.
+from pygsti.tools.exceptions import MissingDependencyWarning as _MissingDependencyWarning
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", _MissingDependencyWarning)
+    from pygsti.extras import interpygate as interp
+    from pygsti.extras.interpygate.process_tomography import run_process_tomography
 from pygsti.tools import change_basis
 from ..testutils import BaseTestCase
+from ...unit.util import needs_csaps
 
 try:
     from mpi4py import MPI
@@ -20,7 +28,13 @@ except ImportError: # Reverted RuntimeError to cause Windows runners to break
 mpi_workers_per_process = 1
 
 
+def unvec_square(vec: _np.ndarray, order):
+    n = round(vec.size ** 0.5)
+    mat = vec.reshape((n, n), order=order)
+    return mat
+
 class ExampleProcess(interp.PhysicalProcess):
+
     def __init__(self):
         self.Hx = _np.array([[0, 0, 0, 0],
                             [0, 0, 0, 0],
@@ -72,6 +86,7 @@ class ExampleProcess(interp.PhysicalProcess):
 
 
 class ExampleProcess_timedep(interp.PhysicalProcess):
+
     def __init__(self):
         self.Hx = _np.array([[0, 0, 0, 0],
                             [0, 0, 0, 0],
@@ -124,6 +139,7 @@ class ExampleProcess_timedep(interp.PhysicalProcess):
 
 class InterpygateTestCase(BaseTestCase):
 
+    @needs_csaps
     def test_timedep_op(self):
         example_process = ExampleProcess_timedep()
         target_mxs = example_process.create_process_matrices(_np.array([1.0, 0.0, 0.0, 0.0, 0.0]), [[_np.pi / 2]], comm=_comm)
@@ -136,11 +152,11 @@ class InterpygateTestCase(BaseTestCase):
             target_op = _comm.bcast(None, root=0)
 
         param_ranges = ([(0.9, 1.1, 2),  # omega
-                         (-.1, 0, 2),   # phase
-                         (-.2, -.1, 2),   # detuning
+                         (-0.1, 0, 2),   # phase
+                         (-0.2, -0.1, 2),   # detuning
                          (0, 0.1, 2),    # dephasing
                          (0.1, 0.2, 2),    # decoherence
-                         _np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10)  # time
+                         _np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10)  # time
                         ])
         interp_op = interp.InterpolatedDenseOp.create_by_interpolating_physical_process(
             target_op, example_process, param_ranges, comm=_comm,
@@ -163,6 +179,7 @@ class InterpygateTestCase(BaseTestCase):
         #print(interp_op.to_dense())
         self.assertArraysAlmostEqual(expected, interp_op.to_dense())
 
+    @needs_csaps
     def test_timedep_factory(self):
         class TargetOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):
@@ -177,12 +194,12 @@ class InterpygateTestCase(BaseTestCase):
                 mx = self.process.create_process_matrices(_np.array([omega, 0.0, 0.0, 0.0, 0.0]), [[t]], comm=None)[0]
                 return pygsti.modelmembers.operations.StaticArbitraryOp(mx)
 
-        arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10),  # time
+        arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10),  # time
                       (0.9, 1.1, 2)  # omega
                       ]
 
-        param_ranges = [(-.1, .1, 2),  # phase
-                        (-.1, .1, 2),  # detuning
+        param_ranges = [(-0.1, 0.1, 2),  # phase
+                        (-0.1, 0.1, 2),  # detuning
                         (0, 0.1, 2),   # dephasing
                         (0, 0.1, 2)    # decoherence
                         ]
@@ -216,6 +233,7 @@ class InterpygateTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(expected, op.to_dense())
         self.assertAlmostEqual(op.aux_info, 1.749)
 
+    @needs_csaps
     def test_timeindep_op(self):
         example_process = ExampleProcess()
         target_mx = example_process.create_process_matrix(_np.array([1.0, 0.0, 0.0, 0.0, 0.0, _np.pi / 2]), comm=_comm)
@@ -227,11 +245,11 @@ class InterpygateTestCase(BaseTestCase):
             target_op = _comm.bcast(None, root=0)
 
         param_ranges = ([(0.9, 1.1, 2),  # omega
-                         (-.1, 0, 2),   # phase
-                         (-.2, -.1, 2),   # detuning
+                         (-0.1, 0, 2),   # phase
+                         (-0.2, -0.1, 2),   # detuning
                          (0, 0.1, 2),    # dephasing
                          (0.1, 0.2, 2),    # decoherence
-                         _np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10)  # time
+                         _np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10)  # time
                          ])
         interp_op = interp.InterpolatedDenseOp.create_by_interpolating_physical_process(
             target_op, example_process, param_ranges, comm=_comm,
@@ -254,6 +272,7 @@ class InterpygateTestCase(BaseTestCase):
         #print(interp_op.to_dense())
         self.assertArraysAlmostEqual(expected, interp_op.to_dense())
 
+    @needs_csaps
     def test_timeindep_factory(self):
         class TargetOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):
@@ -268,12 +287,12 @@ class InterpygateTestCase(BaseTestCase):
                 mx = self.process.create_process_matrix(_np.array([omega, 0.0, 0.0, 0.0, 0.0, t]), comm=None)
                 return pygsti.modelmembers.operations.StaticArbitraryOp(mx)
 
-        arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + .5, 10),  # time
+        arg_ranges = [_np.linspace(_np.pi / 2, _np.pi / 2 + 0.5, 10),  # time
                       (0.9, 1.1, 2)  # omega
                       ]
 
-        param_ranges = [(-.1, .1, 2),  # phase
-                        (-.1, .1, 2),  # detuning
+        param_ranges = [(-0.1, 0.1, 2),  # phase
+                        (-0.1, 0.1, 2),  # detuning
                         (0, 0.1, 2),   # dephasing
                         (0, 0.1, 2)    # decoherence
                         ]
@@ -310,7 +329,7 @@ class InterpygateTestCase(BaseTestCase):
         sigX = _np.array([[0, 1], [1, 0]], dtype='complex')
         sigY = _np.array([[0, -1.j], [1.j, 0]], dtype='complex')
         sigZ = _np.array([[1, 0], [0, -1]], dtype='complex')
-        theta = .32723
+        theta = 0.32723
         u = _np.cos(theta) * sigI + 1.j * _np.sin(theta) * sigX
         v = _np.sin(theta) * sigI - 1.j * _np.cos(theta) * sigX
 

@@ -3,18 +3,21 @@ from unittest import mock
 
 import sys
 import numpy as np
+import pytest
 import scipy
+import scipy.linalg as la
 from pygsti.baseobjs.basis import Basis
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 
 import pygsti.tools.basistools as bt
 import pygsti.tools.lindbladtools as lt
 import pygsti.tools.optools as ot
+import pygsti.tools.sdptools as sdps
+import pygsti.tools.leakage as pgleak
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock
 from pygsti.modelpacks.legacy import std2Q_XXYYII
+from pygsti.tools.exceptions import NumericalDomainWarning
 from ..util import BaseCase, needs_cvxpy
-
-SKIP_DIAMONDIST_ON_WIN = True
 
 
 def fake_minimize(fn):
@@ -50,7 +53,7 @@ class OpToolsTester(BaseCase):
         # U_2Q is 4x4 unitary matrix operating on isolated two-qubit space (CX(pi) rotation)
 
         op_2Q = ot.unitary_to_pauligate(U_2Q)
-        op_2Q_inv = ot.process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
+        op_2Q_inv = ot.std_process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
         self.assertArraysAlmostEqual(U_2Q, op_2Q_inv)
 
     def test_decompose_gate_matrix(self):
@@ -131,7 +134,7 @@ class ProjectModelTester(BaseCase):
             proj2, _ = ot.project_model(pm1, self.target_model, [ptype], gen_type, logG_weight=0)
             pm2 = proj2[0]
             for pm1_op, pm2_op in zip(pm1.operations.values(), pm2.operations.values()):
-                self.assertArraysAlmostEqual(pm1_op, pm2_op)
+                self.assertArraysAlmostEqual(pm1_op.to_dense(), pm2_op.to_dense())
 
     def test_logTiG_model_projection(self):
         gen_type = 'logTiG'
@@ -141,7 +144,7 @@ class ProjectModelTester(BaseCase):
             proj2, _ = ot.project_model(pm1, self.target_model, [ptype], gen_type, logG_weight=0)
             pm2 = proj2[0]
             for pm1_op, pm2_op in zip(pm1.operations.values(), pm2.operations.values()):
-                self.assertArraysAlmostEqual(pm1_op, pm2_op)
+                self.assertArraysAlmostEqual(pm1_op.to_dense(), pm2_op.to_dense())
 
     def test_logGTi_model_projection(self):
         gen_type = 'logGTi'
@@ -151,7 +154,7 @@ class ProjectModelTester(BaseCase):
             proj2, _ = ot.project_model(pm1, self.target_model, [ptype], gen_type, logG_weight=0)
             pm2 = proj2[0]
             for pm1_op, pm2_op in zip(pm1.operations.values(), pm2.operations.values()):
-                self.assertArraysAlmostEqual(pm1_op, pm2_op)
+                self.assertArraysAlmostEqual(pm1_op.to_dense(), pm2_op.to_dense())
 
     def test_raises_on_basis_mismatch(self):
         with self.assertRaises(ValueError):
@@ -291,47 +294,51 @@ class ErrorGenTester(BaseCase):
         basisNames = ['std', 'gm', 'pp']  # , 'qt'] #dim must == 3 for qt
 
         for (lbl, gateTarget), gate in zip(self.target_model.operations.items(), self.mdl_datagen.operations.values()):
-            errgen = ot.error_generator(gate, gateTarget, self.target_model.basis, 'logG-logT')
-            altErrgen = ot.error_generator(gate, gateTarget, self.target_model.basis, 'logTiG')
-            altErrgen2 = ot.error_generator(gate, gateTarget, self.target_model.basis, 'logGTi')
+            gate_dense = gate.to_dense('minimal')
+            gateTarget_dense = gateTarget.to_dense('minimal')
+            errgen = ot.error_generator(gate_dense, gateTarget_dense, self.target_model.basis, 'logG-logT')
+            altErrgen = ot.error_generator(gate_dense, gateTarget_dense, self.target_model.basis, 'logTiG')
+            altErrgen2 = ot.error_generator(gate_dense, gateTarget_dense, self.target_model.basis, 'logGTi')
             with self.assertRaises(ValueError):
-                ot.error_generator(gate, gateTarget, self.target_model.basis, 'adsf')
+                ot.error_generator(gate_dense, gateTarget_dense, self.target_model.basis, 'adsf')
 
             #OLD: tested above
             #for projectionType in projectionTypes:
             #    for basisName in basisNames:
             #        ot.std_errorgen_projections(errgen, projectionType, basisName)
 
-            originalGate = ot.operation_from_error_generator(errgen, gateTarget, self.target_model.basis, 'logG-logT')
-            altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget, self.target_model.basis, 'logTiG')
-            altOriginalGate2 = ot.operation_from_error_generator(altErrgen, gateTarget, self.target_model.basis, 'logGTi')
+            originalGate = ot.operation_from_error_generator(errgen, gateTarget_dense, self.target_model.basis, 'logG-logT')
+            altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget_dense, self.target_model.basis, 'logTiG')
+            altOriginalGate2 = ot.operation_from_error_generator(altErrgen, gateTarget_dense, self.target_model.basis, 'logGTi')
             with self.assertRaises(ValueError):
-                ot.operation_from_error_generator(errgen, gateTarget, self.target_model.basis, 'adsf')
-            self.assertArraysAlmostEqual(originalGate, gate) # sometimes need to approximate the log for this one
-            self.assertArraysAlmostEqual(altOriginalGate, gate)
-            self.assertArraysAlmostEqual(altOriginalGate2, gate)
+                ot.operation_from_error_generator(errgen, gateTarget_dense, self.target_model.basis, 'adsf')
+            self.assertArraysAlmostEqual(originalGate, gate_dense) # sometimes need to approximate the log for this one
+            self.assertArraysAlmostEqual(altOriginalGate, gate_dense)
+            self.assertArraysAlmostEqual(altOriginalGate2, gate_dense)
 
     @fake_minimize
     def test_err_gen_nonunitary(self):
-        errgen_nonunitary = ot.error_generator(self.mdl_datagen.operations['Gxi'],
-                                               self.mdl_datagen.operations['Gxi'],
-                                               self.mdl_datagen.basis)
+        Gxi_dense = self.mdl_datagen.operations['Gxi'].to_dense('minimal')
+        errgen_nonunitary = ot.error_generator(Gxi_dense, Gxi_dense, self.mdl_datagen.basis)
         # Perfect match, should get all 0s
-        self.assertArraysAlmostEqual(np.zeros_like(self.mdl_datagen.operations['Gxi']), errgen_nonunitary)
+        self.assertArraysAlmostEqual(np.zeros_like(Gxi_dense), errgen_nonunitary)
 
     def test_err_gen_not_near_gate(self):
         # Both should warn
         with self.assertWarns(UserWarning):
-            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
+            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'].to_dense('minimal'),
+                                                 self.target_model.operations['Gix'].to_dense('minimal'),
                                                  self.target_model.basis, 'logTiG')
 
         with self.assertWarns(UserWarning):
-            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
+            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'].to_dense('minimal'),
+                                                 self.target_model.operations['Gix'].to_dense('minimal'),
                                                  self.target_model.basis, 'logGTi')
 
     def test_err_gen_raises_on_bad_type(self):
         with self.assertRaises(ValueError):
-            ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gxi'],
+            ot.error_generator(self.mdl_datagen.operations['Gxi'].to_dense('minimal'),
+                               self.target_model.operations['Gxi'].to_dense('minimal'),
                                self.target_model.basis, 'foobar')
 
     def test_err_gen_assert_shape_raises_on_ndims_too_high(self):
@@ -379,19 +386,62 @@ class GateOpsTester(BaseCase):
             [-0.35432747-0.27939404j, -0.02266757+0.71502652j, -0.27452307+0.07511567j,  0.35432747+0.27939404j],
             [ 0.71538573+0.j,  0.2680266 +0.36300238j, 0.2680266 -0.36300238j,  0.28461427+0.j]])
 
+    def test_frobenius_distance(self):
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.A), 0.0)
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), 0.6204836823)
+
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.A), 0.0)
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.B), 0.385)
+
     def test_jtrace_distance(self):
         val = ot.jtracedist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
         val = ot.jtracedist(self.A_TP, self.B_unitary, mx_basis="pp")
         self.assertGreaterEqual(val, 0.5)
 
+    def validate_primal_diamondnorm(self, objective_val, operator, rho0, rho1, places=4):
+        d = rho0.shape[0]
+        assert rho0.shape == (d, d)
+        assert rho1.shape == (d, d)
+        assert operator.shape == (d**2, d**2)
+        left  = np.kron(np.eye(d), la.sqrtm(rho0))
+        right = np.kron(np.eye(d), la.sqrtm(rho1))
+        Jop   = ot._jam.jamiolkowski_iso(operator, 'pp', 'std', normalized=False)
+        arg = left @ Jop @ right
+        s = la.svdvals(arg)
+        expected_val = np.sum(s)
+        self.assertAlmostEqual(objective_val, expected_val, places=places)
+        return
+
     @needs_cvxpy
     def test_diamond_distance(self):
-        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
+        mosek_warning_pattern = ".*Incorrect array format causing data to be copied*"
+        import warnings
+        warnings.filterwarnings('ignore', mosek_warning_pattern)
         val = ot.diamonddist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
-        val = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
-        self.assertGreaterEqual(val, 0.7)
+        objective_val, modelvars = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp", return_x=True)
+        rho0, rho1 = modelvars[1:]
+        self.validate_primal_diamondnorm(objective_val, self.A_TP - self.B_unitary, rho0, rho1)
+        self.assertGreaterEqual(objective_val, 0.7)
+        return
+
+    @needs_cvxpy
+    def test_diamond_norm_epigraph(self):
+        mosek_warning_pattern = ".*Incorrect array format causing data to be copied*"
+        import warnings
+        warnings.filterwarnings('ignore', mosek_warning_pattern)
+        val0 = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
+        delta0 = self.A_TP - self.B_unitary
+        delta1 = bt.change_basis(delta0, 'pp', 'std')
+        import cvxpy as cp
+        obj_expr, constraints = sdps.diamond_norm_canon(delta1, 'std')
+        objective = cp.Minimize(obj_expr)
+        problem = cp.Problem(objective, constraints)
+        val1 = problem.solve(verbose=True, solver='CLARABEL')
+        self.assertGreaterEqual(val0, 0.7)
+        self.assertAlmostEqual(val0, val1, places=4)
+        return
 
     def test_entanglement_fidelity(self):
         fidelity_TP_unitary= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=True, is_unitary=True)
@@ -405,10 +455,69 @@ class GateOpsTester(BaseCase):
         self.assertAlmostEqual(fidelity_TP_unitary_jam, expect)
         self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
 
+    def test_subspace_entanglement_fidelity(self):
+        fidelity_TP_unitary= pgleak.subspace_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_no_flag= pgleak.subspace_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_jam= pgleak.subspace_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_std= pgleak.subspace_entanglement_fidelity(self.A_TP_std, self.B_unitary_std, op_basis='std')
+
+        expect = 0.4804724656092404
+        self.assertAlmostEqual(fidelity_TP_unitary, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_no_flag, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_jam, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
+        pass
+
     def test_fidelity_upper_bound(self):
         np.random.seed(0)
         Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
-        Q[:, 0] = 0.0  # zero out the first column
+        Q[:, 0] = 0.0  # zero out the first column — deliberate rank deficiency
         bad_superoperator = ot.unitary_to_superop(Q)
-        upperBound, _ = ot.fidelity_upper_bound(bad_superoperator)
+        # The rank-deficient input is exactly what makes this test interesting,
+        # so fidelity()'s NumericalDomainWarning is part of the contract.
+        with pytest.warns(NumericalDomainWarning):
+            upperBound, _ = ot.fidelity_upper_bound(bad_superoperator)
         self.assertAlmostEqual(upperBound, 0.75)
+
+
+class MinimalKrausDecompositionTester(BaseCase):
+    """Regression tests for ``minimal_kraus_decomposition``.
+
+    These exercise a *non-unital* channel (amplitude damping).  A transpose
+    in the Choi-eigenvector reshape (e.g. order='F' vs. 'C') is silently
+    invisible for transpose-symmetric channels such as unitaries and rank-1
+    projectors, but corrupts the Kraus operators of a non-unital channel:
+    the returned operators implement the wrong map and fail to satisfy the
+    completeness relation sum_i K_i^dagger K_i = I.  This routine underpins the
+    complete-positivity check in ``Instrument.from_cptr_superops``.
+    """
+
+    def setUp(self):
+        self.basis = Basis.cast('pp', 4)
+        gamma = 0.3  # amplitude-damping probability (non-unital channel)
+        self.kraus = [np.array([[1, 0], [0, np.sqrt(1 - gamma)]], dtype=complex),
+                      np.array([[0, np.sqrt(gamma)], [0, 0]], dtype=complex)]
+        # Dense superoperator (pp basis) in pyGSTi's standard operations convention.
+        std_superop = sum(np.kron(K, K.conj()) for K in self.kraus)
+        self.superop = bt.change_basis(std_superop, 'std', self.basis).real
+
+    def _channel_action(self, kraus_ops, rho):
+        return sum(K @ rho @ K.conj().T for K in kraus_ops)
+
+    def test_kraus_action_matches_channel(self):
+        # The decomposed Kraus operators must reproduce the channel's action,
+        # including on a coherent (off-diagonal) state that distinguishes a
+        # channel from its transpose.
+        kops = ot.minimal_kraus_decomposition(self.superop, self.basis)
+        plus = np.array([1, 1], dtype=complex) / np.sqrt(2)
+        for rho in (np.array([[0, 0], [0, 1]], dtype=complex),  # |1><1|
+                    np.outer(plus, plus.conj())):               # |+><+|
+            expected = self._channel_action(self.kraus, rho)
+            actual = self._channel_action(kops, rho)
+            self.assertArraysAlmostEqual(actual, expected)
+
+    def test_kraus_completeness_relation(self):
+        # sum_i K_i^dagger K_i = I for a trace-preserving channel.
+        kops = ot.minimal_kraus_decomposition(self.superop, self.basis)
+        completeness = sum(K.conj().T @ K for K in kops)
+        self.assertArraysAlmostEqual(completeness, np.eye(2))

@@ -19,18 +19,42 @@ on:
       run-unit-tests:
         required: true
         type: string
+      run-integration-tests:
+         required: true
+         type: string
       run-extra-tests:
         required: true
         type: string
       run-notebook-tests:
         required: true
         type: string
+      # Whether THIS matrix entry measures coverage. Callers set it true for exactly
+      # one job (ubuntu + highest Python, where coverage.py's sysmon core keeps the
+      # tracer cheap on 3.12+). CI never uploads the report, so measuring it on every
+      # job is pure overhead; one job preserves a human-readable number in the logs.
+      run-coverage:
+        required: false
+        type: string
+        default: 'false'
 
 env:
   SKIP_DEAP: 1
+  PYGSTI_NO_CUSTOMLM_SIGINT: 1
+  # Resolve PyTorch (an explicit CI-build test dependency) from the CPU-only wheel index
+  # instead of pip's default CUDA build. The latter drags in ~2.5 GB of nvidia-* wheels
+  # that CI never uses. uv honors this for every resolution in the job.
+  UV_TORCH_BACKEND: cpu
+  # Use coverage.py's sys.monitoring core (PEP 669) for --cov runs. Python 3.12's
+  # specializing adaptive interpreter de-optimizes the legacy C trace function,
+  # which made coverage of call-heavy tests (e.g. the errgenproptools error-generator
+  # composition tests) ~40x slower on 3.12 than on 3.9 -- a Python-version effect
+  # previously misread as a numpy-2 regression. sysmon restores near-native speed;
+  # it falls back gracefully (with a CoverageWarning) on Python < 3.12.
+  COVERAGE_CORE: sysmon
 
 jobs:
   build-and-test:
+    if: ${{ inputs.use-cython == 'true' || inputs.os == 'ubuntu-latest' }}
     runs-on: ${{ inputs.os }}
     steps:
     - uses: actions/checkout@v4
@@ -51,25 +75,39 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
-    - name: Cache pip packages
+    # uv gives fast, parallel installs and CPU-only torch resolution (see env above).
+    # The astral-sh/setup-uv action is blocked by the org Actions allowlist, so we
+    # bootstrap uv from PyPI with the stock pip (a `run:` step is not an action) and
+    # cache its downloads with the GitHub-owned actions/cache.
+    - name: Set up uv
+      run: python -m pip install --upgrade pip uv
+    - name: Cache uv downloads
       uses: actions/cache@v4
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}-${{ hashFiles('**/*requirements.txt') }}
-    - name: Install pip packages
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install wheel
-        python -m pip install flake8
+        # Default uv cache dir, listed for each OS; non-matching paths are skipped.
+        path: |
+          ~/.cache/uv
+          ~/Library/Caches/uv
+          ~\AppData\Local\uv\cache
+        # Key on the real dependency manifests (deps live in pyproject.toml).
+        key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-uv-
+    - name: Install build and lint tools
+      # flake8 for the lint step; setuptools/wheel kept on hand for any dependency that
+      # still imports pkg_resources at runtime.
+      run: uv pip install --system setuptools wheel flake8
     - name: Install package (Cython)
       if: ${{ inputs.use-cython == 'true' }}
+      # The PEP 660 editable install compiles the Cython extensions in-place via build
+      # isolation, so a separate `setup.py build_ext --inplace` is redundant (verified:
+      # the editable install alone yields importable .so for all 19 extensions).
       run: |
-        python -m pip install -e .[testing]
-        python setup.py build_ext --inplace
-    - name: Install package (No Cython)
-      if: ${{ inputs.use-cython != 'true' }}
+        uv pip install --system -e .[testing,pytorch]
+    - name: Install package (No Cython, Linux only)
+      if: ${{ inputs.use-cython != 'true' && inputs.os == 'ubuntu-latest' }}
       run: |
-        python -m pip install -e .[testing_no_cython]
+        PYGSTI_CYTHON_SKIP=1 uv pip install --system -e .[testing_no_cython,pytorch]
     - name: Lint with flake8 (Linux only)
       if: ${{ inputs.os == 'ubuntu-latest'}}
       run: |
@@ -79,20 +117,42 @@ jobs:
         flake8 . --exit-zero --statistics
     - name: Run unit tests
       if: ${{ inputs.run-unit-tests == 'true' }}
+      # bash on every runner (Git Bash on Windows) so $COV_FLAG expands portably.
+      shell: bash
+      env:
+        COV_FLAG: ${{ inputs.run-coverage == 'true' && '--cov=pygsti' || '' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
+        python -m pytest -n auto --dist loadscope $COV_FLAG --durations=25 test/unit
+    - name: Run workflow tests
+      if: ${{ inputs.run-integration-tests == 'true' }}
+      shell: bash
+      env:
+        COV_FLAG: ${{ inputs.run-coverage == 'true' && '--cov=pygsti' || '' }}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -n auto --dist loadscope $COV_FLAG test/integration
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
+        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/notebooks --durations=25 test/test_packages
     - name: Run notebook regression
-      if: ${{ inputs.run-notebook-tests == 'true' }}
+      # Linux-only: this step compiles CHP with gcc and writes it to /usr/local/bin,
+      # so it cannot run on the Windows/macOS runners even if a caller requests it.
+      if: ${{ inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
       run: |
-        # If we are running notebooks, we also need to download and compile CHP
-        curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
-        gcc -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
+        # Tutorials live as MyST Markdown under docs/markdown/; jupytext pairs each
+        # .md with an .ipynb sitting NEXT TO IT in the same directory (see
+        # docs/jupytext.toml), so the materialized notebooks land back under
+        # docs/markdown/ for nbval to consume.
+        uv pip install --system -e .[docs]
+        (cd docs && jupytext --sync 'markdown/**/*.md')
+
+        # Download and compile CHP for the Clifford-simulation notebook;
+        # put the binary on PATH so pygsti.evotypes.chp.chpexe = 'chp' resolves.
+        curl -o /tmp/chp.c https://www.scottaaronson.com/chp/chp.c
+        gcc -o /usr/local/bin/chp /tmp/chp.c
 
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks
+        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 docs/markdown

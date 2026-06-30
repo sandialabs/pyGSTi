@@ -12,139 +12,25 @@ The DenseState and DensePureState classes and supporting functionality.
 
 
 import numpy as _np
-import copy as _copy
-
+from pygsti.modelmembers.modelmember import _DenseCopyMixin as _DenseCopyMixin
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti import SpaceT
 
 
-class DenseStateInterface(object):
+class DenseState(_DenseCopyMixin, _State):
     """
-    Adds a numpy-array-mimicing interface onto a state object.
-    """
-
-    def __init__(self):
-        pass
-
-    @property
-    def _ptr(self):
-        raise NotImplementedError("Derived classes must implement the _ptr property!")
-
-    def _ptr_has_changed(self):
-        """ Derived classes should override this function to handle rep updates
-            when the `_ptr` property is changed. """
-        pass
-
-    def to_array(self):
-        """
-        Return the array used to identify this state within its range of possible values.
-
-        For instance, if the state is a pure state, this returns a complex pure-state
-        vector regardless of the evolution type.  The related :meth:`to_dense`
-        method, in contrast, returns the dense representation of the state, which
-        varies by evolution type.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
-        return self._ptr  # *must* be a numpy array for Cython arg conversion
-
-    @property
-    def columnvec(self):
-        """
-        Direct access the the underlying data as column vector, i.e, a (dim,1)-shaped array.
-        """
-        bv = self._ptr.view()
-        bv.shape = (bv.size, 1)  # 'base' is by convention a (N,1)-shaped array
-        return bv
-
-    def __copy__(self):
-        # We need to implement __copy__ because we defer all non-existing
-        # attributes to self.columnvec (a numpy array) which *has* a __copy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        cpy.__dict__.update(self.__dict__)
-        return cpy
-
-    def __deepcopy__(self, memo):
-        # We need to implement __deepcopy__ because we defer all non-existing
-        # attributes to self.columnvec (a numpy array) which *has* a __deepcopy__
-        # implementation that we don't want to use, as it results in just a
-        # copy of the numpy array.
-        cls = self.__class__
-        cpy = cls.__new__(cls)
-        memo[id(self)] = cpy
-        for k, v in self.__dict__.items():
-            setattr(cpy, k, _copy.deepcopy(v, memo))
-        return cpy
-
-    #Access to underlying array
-    def __getitem__(self, key):
-        self.dirty = True
-        return self.columnvec.__getitem__(key)
-
-    def __getslice__(self, i, j):
-        self.dirty = True
-        return self.__getitem__(slice(i, j))  # Called for A[:]
-
-    def __setitem__(self, key, val):
-        self.dirty = True
-        ret = self.columnvec.__setitem__(key, val)
-        self._ptr_has_changed()
-        return ret
-
-    def __getattr__(self, attr):
-        #use __dict__ so no chance for recursive __getattr__
-        if '_rep' in self.__dict__:  # sometimes in loading __getattr__ gets called before the instance is loaded
-            ret = getattr(self.columnvec, attr)
-        else:
-            raise AttributeError("No attribute:", attr)
-        self.dirty = True
-        return ret
-
-    #Mimic array
-    def __pos__(self): return self.columnvec
-    def __neg__(self): return -self.columnvec
-    def __abs__(self): return abs(self.columnvec)
-    def __add__(self, x): return self.columnvec + x
-    def __radd__(self, x): return x + self.columnvec
-    def __sub__(self, x): return self.columnvec - x
-    def __rsub__(self, x): return x - self.columnvec
-    def __mul__(self, x): return self.columnvec * x
-    def __rmul__(self, x): return x * self.columnvec
-    def __truediv__(self, x): return self.columnvec / x
-    def __rtruediv__(self, x): return x / self.columnvec
-    def __floordiv__(self, x): return self.columnvec // x
-    def __rfloordiv__(self, x): return x // self.columnvec
-    def __pow__(self, x): return self.columnvec ** x
-    def __eq__(self, x): return self.columnvec == x
-    def __len__(self): return len(self.columnvec)
-    def __int__(self): return int(self.columnvec)
-    def __long__(self): return int(self.columnvec)
-    def __float__(self): return float(self.columnvec)
-    def __complex__(self): return complex(self.columnvec)
-
-    def __str__(self):
-        s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
-        s += _mt.mx_to_string(self.to_dense(on_space='minimal'), width=4, prec=2)
-        return s
-
-
-class DenseState(DenseStateInterface, _State):
-    """
-    TODO: update docstring
-    A state preparation vector that is interfaced/behaves as a dense super-ket (a numpy array).
+    A state preparation vector with a dense internal representation.
 
     This class is the common base class for parameterizations of a state vector
-    that have a dense representation and can be accessed like a numpy array.
+    that have a dense representation.  Use `.to_dense()` to access the
+    underlying array and `.set_dense()` / `.from_vector()` to modify it.
 
     Parameters
     ----------
@@ -153,15 +39,6 @@ class DenseState(DenseStateInterface, _State):
 
     evotype : {"statevec", "densitymx"}
         The evolution type.
-
-    Attributes
-    ----------
-    _base_1d : numpy.ndarray
-        Direct access to the underlying 1D array.
-
-    base : numpy.ndarray
-        Direct access the the underlying data as column vector,
-        i.e, a (dim,1)-shaped array.
     """
 
     def __init__(self, vec, basis, evotype, state_space):
@@ -175,7 +52,6 @@ class DenseState(DenseStateInterface, _State):
         rep = evotype.create_dense_state_rep(vec, self._basis, state_space)
 
         _State.__init__(self, rep, evotype)
-        DenseStateInterface.__init__(self)
         #assert(self._ptr.flags['C_CONTIGUOUS'] and self._ptr.flags['OWNDATA'])  # not true for TPState
 
     @property
@@ -189,7 +65,7 @@ class DenseState(DenseStateInterface, _State):
         """
         self._rep.base_has_changed()
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return the dense array used to represent this state within its evolution type.
 
@@ -242,9 +118,33 @@ class DenseState(DenseStateInterface, _State):
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         vec = cls._decodemx(mm_dict['dense_superket_vector'])
-        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
-        basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
-        return cls(vec, basis, mm_dict['evotype'], state_space)
+        try:
+            state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+            basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
+            return cls(vec, basis, mm_dict['evotype'], state_space)
+        except AssertionError as e:
+            """
+            This codepath can get hit when deserializing TPPOVM or UnconstrainedPOVM objects.
+            
+            More specifically, it can get hit when objects other than POVMEffect vectors were
+            passed to the constructors of these classes. When that happens, their base class
+            constructor (for BasePOVM) constructs the effects as FullPOVMEffect objects (which in
+            turn rely on FullState and then DenseState) with None passed for the basis argument.
+            Somewhere downstream that None gets cast to a Basis object where `.dim == 0`, which
+            is inconsistent with the array representation of the effect having length > 0.
+            
+            In an ideal world we'd have POVMs enforce not only non-None bases but also *consistent*
+            bases for all constituent effects. For now, our fix is to just try and recover the basis
+            from serial_memo. (Perhaps not-coincidentally, this function wasn't using the serial_memo
+            argument before this code path was added.)
+            """
+            se = str(e)
+            if 'Basis object has unexpected dimension' in se and len(serial_memo) > 0:
+                member = list(serial_memo.values())[0]
+                basis = member.parent.basis
+                state_space = basis.state_space
+                return cls(vec, basis, mm_dict['evotype'], state_space)
+            raise e
 
     def _is_similar(self, other, rtol, atol):
         """ 
@@ -255,9 +155,10 @@ class DenseState(DenseStateInterface, _State):
         return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
 
 
-class DensePureState(DenseStateInterface, _State):
+class DensePureState(_DenseCopyMixin, _State):
     """
-    TODO: docstring - a state that is interfaced as a dense ket
+    A state with a dense pure-state (ket) internal representation.
+    Use `.to_dense()` to access the underlying array.
     """
 
     def __init__(self, purevec, basis, evotype, state_space):
@@ -286,7 +187,6 @@ class DensePureState(DenseStateInterface, _State):
             self._purevec = purevec; self._basis = basis
 
         _State.__init__(self, rep, evotype)
-        DenseStateInterface.__init__(self)
 
     @property
     def _ptr(self):
@@ -304,7 +204,7 @@ class DensePureState(DenseStateInterface, _State):
             self._rep.base[:] = _bt.change_basis(_ot.state_to_dmvec(self._purevec), 'std', self._basis)
         self._rep.base_has_changed()
 
-    def to_dense(self, on_space='minimal', scratch=None):
+    def to_dense(self, on_space: SpaceT='minimal', scratch=None):
         """
         Return the dense array used to represent this state within its evolution type.
 
@@ -351,7 +251,7 @@ class DensePureState(DenseStateInterface, _State):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_state_vector'] = self._encodemx(self.to_dense('Hilbert'))
+        mm_dict['dense_state_vector'] = self._encodemx(self.to_dense("Hilbert"))
         mm_dict['basis'] = self._basis.to_nice_serialization() if (self._basis is not None) else None
         return mm_dict
 

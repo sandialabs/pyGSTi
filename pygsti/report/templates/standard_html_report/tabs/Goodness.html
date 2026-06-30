@@ -16,3 +16,8 @@
 	<figcaption><span class="captiontitle">Per-circuit model violation vs. circuit length</span> <span class="captiondetail">The fit's total <span class="math">2\Delta\log(\mathcal{L})</span> is a sum over all <span class="math">N_s</span> circuits used for GST.  This plot shows <span class="math">2\Delta\log(\mathcal{L})</span> for each individual circuit, plotted against that circuit's length (on the X axis).  Certain forms of non-Markovian noise, like slow drift, produce a characteristic linear relationship.  Note that the length plotted here is the <em>actual</em> length of the circuit, not its nominal <span class="math">L</span>.</span> </figcaption>
 	{{ final_model_fit_colorscatter_plot|render }}
 </figure>
+
+<figure id="final_tvd_histogram">
+	<figcaption><span class="captiontitle">Histogram of per-circuit TVD.</span> <span class="captiondetail">This figure quantifies goodness-of-fit by measuring how a given estimate fails to predict each individual circuit in the dataset using the total variation distance (TVD) as the metric (<span class="math">\frac{1}{2}\sum_i|p_i-f_i|</span>). This plot shows a histogram of the those values for all the circuits in the dataset.</span> </figcaption>
+    {{ final_tvd_histogram|render }}
+</figure>

@@ -15,8 +15,10 @@ from pygsti.modelmembers.operations import LinearOperator, FullArbitraryOp
 from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit
 from pygsti.models.gaugegroup import FullGaugeGroupElement
+from pygsti.modelpacks import smq1Q_XYI
+from pygsti.processors import QubitProcessorSpec
+from pygsti.models import create_crosstalk_free_model, create_cloud_crosstalk_model
 from ..util import BaseCase, needs_cvxpy
-
 SKIP_DIAMONDIST_ON_WIN = True
 
 
@@ -191,7 +193,9 @@ class GeneralMethodBase(object):
 
     def test_copy(self):
         gs2 = self.model.copy()
-        # TODO assert correctness
+        #TODO: Uncomment when issue #600 is resolved
+        #self.assertTrue(gs2.is_equivalent(self.model))
+        
 
     def test_deriv_wrt_params(self):
         deriv = self.model.deriv_wrt_params()
@@ -220,6 +224,18 @@ class GeneralMethodBase(object):
         v = cp.to_vector()
         cp.from_vector(v)
         self.assertAlmostEqual(self.model.frobeniusdist(cp), 0)
+
+    def test_set_parameter_values(self):
+        if self.model.num_params > 0:
+            cp = self.model.copy()
+            cp2 = self.model.copy()
+            test_vec = np.arange(self.model.num_params) * 1e-3
+            cp.set_parameter_values(np.arange(self.model.num_params), test_vec)
+            cp2.from_vector(test_vec)
+            self.assertAlmostEqual(np.linalg.norm(cp2.to_vector() - cp.to_vector()), 0)
+            #TODO: Uncomment when issue #600 is resolved, remove line above
+            #self.assertTrue(cp.is_equivalent(cp2))
+
 
     def test_pickle(self):
         # XXX what exactly does this cover and is it needed?  EGN: this tests that the individual pieces (~dicts) within a model can be pickled; it's useful for debuggin b/c often just one of these will break.
@@ -250,7 +266,7 @@ class GeneralMethodBase(object):
             self.model['Non-existent-key'] = np.zeros((4, 4), 'd')  # can't set things not in the model
 
     def test_raise_on_set_bad_prep_key(self):
-        with self.assertRaises(KeyError):
+        with self.assertRaises(ValueError):
             self.model.preps['foobar'] = [1.0 / np.sqrt(2), 0, 0, 0]  # bad key prefix
 
     def test_raise_on_get_bad_povm_key(self):
@@ -611,12 +627,13 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
 
         # TODO is this needed?
         for opLabel in cp.operations:
-            self.assertArraysAlmostEqual(cp[opLabel], Tinv @ self.model[opLabel] @ T)
+            self.assertArraysAlmostEqual(cp[opLabel].to_dense(), Tinv @ self.model[opLabel].to_dense() @ T)
         for prepLabel in cp.preps:
-            self.assertArraysAlmostEqual(cp[prepLabel], Tinv @ self.model[prepLabel])
+            self.assertArraysAlmostEqual(cp[prepLabel].to_dense(), Tinv @ self.model[prepLabel].to_dense())
         for povmLabel in cp.povms:
             for effectLabel, eVec in cp.povms[povmLabel].items():
-                self.assertArraysAlmostEqual(eVec, np.transpose(T) @ self.model.povms[povmLabel][effectLabel])
+                self.assertArraysAlmostEqual(eVec.to_dense(),
+                                             np.transpose(T) @ self.model.povms[povmLabel][effectLabel].to_dense())
 
     def test_gpindices(self):
         # Test instrument construction with elements whose gpindices
@@ -629,7 +646,9 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
         v = mdl.to_vector()
         Np = mdl.num_params
         gate_with_gpindices = FullArbitraryOp(np.identity(4, 'd'))
-        gate_with_gpindices[0, :] = v[0:4]
+        gate_arr = gate_with_gpindices.to_dense().copy()
+        gate_arr[0, :] = v[0:4]
+        gate_with_gpindices.set_dense(gate_arr)
         gate_with_gpindices.set_gpindices(np.concatenate(
             (np.arange(0, 4), np.arange(Np, Np + 12))), mdl)  # manually set gpindices
         mdl.operations['Gnew2'] = gate_with_gpindices
@@ -645,7 +664,8 @@ class FullModelTester(FullModelBase, StandardMethodBase, BaseCase):
             self.model._check_paramvec(debug=True)  # param vec is now out of sync!
 
     def test_probs_warns_on_nan_in_input(self):
-        self.model['rho0'][:] = np.nan
+        nan_vec = np.full(self.model['rho0'].to_dense().shape, np.nan)
+        self.model['rho0'].set_dense(nan_vec)
         with self.assertWarns(Warning):
             self.model.probabilities(self.gatestring1)
 
@@ -658,11 +678,11 @@ class TPModelTester(TPModelBase, StandardMethodBase, BaseCase):
         Gi_test_matrix = np.random.random((4, 4))
         Gi_test_matrix[0, :] = [1, 0, 0, 0]  # so TP mode works
         self.model["Gi"] = Gi_test_matrix  # set operation matrix
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+        self.assertArraysAlmostEqual(self.model['Gi'].to_dense(), Gi_test_matrix)
 
         Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+        self.assertArraysAlmostEqual(self.model['Gi'].to_dense(), Gi_test_matrix)
 
 
 class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
@@ -671,7 +691,7 @@ class StaticModelTester(StaticModelBase, StandardMethodBase, BaseCase):
         Gi_test_matrix = np.random.random((4, 4))
         Gi_test_dense_op = FullArbitraryOp(Gi_test_matrix)
         self.model["Gi"] = Gi_test_dense_op  # set gate object
-        self.assertArraysAlmostEqual(self.model['Gi'], Gi_test_matrix)
+        self.assertArraysAlmostEqual(self.model['Gi'].to_dense(), Gi_test_matrix)
 
     def test_bulk_fill_dprobs_with_high_smallness_threshold(self):
         self.skipTest("TODO should probably warn user?")
@@ -730,3 +750,55 @@ class FullHighThresholdMethodTester(FullModelBase, ThresholdMethodBase, BaseCase
 #    def test_randomize_with_unitary_raises(self):
 #        with self.assertRaises(AssertionError):
 #            self.model.randomize_with_unitary(1, rand_state=np.random.RandomState())  # scale shouldn't matter
+
+class ModelEquivalenceTester(BaseCase):
+
+    def setUp(self):
+        nQubits = 2
+        self.pspec_2Q = QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot'), geometry="line",
+                                           qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
+
+    def check_model(self, mdl):
+        mcopy = mdl.copy()
+        self.assertFalse(mdl is mcopy)
+        self.assertTrue(mcopy.is_similar(mdl))
+        self.assertTrue(mcopy.is_equivalent(mdl))
+
+        if mdl.num_params > 0:
+            r = np.random.random(mdl.num_params)
+            if np.linalg.norm(r) < 1e6:  # just in case we randomly get all zeros!
+                r = 0.1 * np.ones(mcopy.num_params)
+            v_prime = mdl.to_vector() + r
+            mcopy.from_vector(v_prime)
+            self.assertTrue(mcopy.is_similar(mdl))
+            self.assertFalse(mcopy.is_equivalent(mdl))
+
+    def test_explicit_model_equal(self):
+        mdl_explicit = smq1Q_XYI.target_model()
+        self.check_model(mdl_explicit)
+
+    def test_local_model_equal(self):
+        mdl_local = create_crosstalk_free_model(self.pspec_2Q,
+                                                ideal_gate_type='H+S', ideal_spam_type='tensor product H+S',
+                                                independent_gates=False,
+                                                ensure_composed_gates=False)
+        self.check_model(mdl_local)
+
+        mdl_local = create_crosstalk_free_model(self.pspec_2Q,
+                                                ideal_gate_type='H+S', ideal_spam_type='computational',
+                                                independent_gates=True,
+                                                ensure_composed_gates=True)
+        self.check_model(mdl_local)
+
+    def test_cloud_model_equal(self):
+        mdl_cloud = create_cloud_crosstalk_model(self.pspec_2Q, depolarization_strengths={'Gx': 0.05},
+                                                 stochastic_error_probs={'Gy': (0.01, 0.02, 0.03)},
+                                                 lindblad_error_coeffs={'Gcnot': {('H','ZZ'): 0.07, ('S','XX'): 0.10}},
+                                                 independent_gates=False, independent_spam=True, verbosity=2)
+        self.check_model(mdl_cloud)
+
+        mdl_cloud = create_cloud_crosstalk_model(self.pspec_2Q, depolarization_strengths={'Gx': 0.05},
+                                                 stochastic_error_probs={'Gy': (0.01, 0.02, 0.03)},
+                                                 lindblad_error_coeffs={'Gcnot': {('H','ZZ'): 0.07, ('S','XX'): 0.10}},
+                                                 independent_gates=True, independent_spam=True, verbosity=2)
+        self.check_model(mdl_cloud)

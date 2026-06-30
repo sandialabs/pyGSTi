@@ -67,7 +67,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         useful for, e.g., detecting leakage/loss/measurement-bias etc.
 
     interleaved_circuit : Circuit, optional (default None)
-        Circuit to use in the constuction of an interleaved CRB experiment. When specified each
+        Circuit to use in the construction of an interleaved CRB experiment. When specified each
         random clifford operation is interleaved with the specified circuit.
 
     citerations : int, optional
@@ -395,7 +395,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
     An n-qubit DRB circuit consists of (1) a circuit the prepares a uniformly random stabilizer state;
     (2) a length-l circuit (specified by `length`) consisting of circuit layers sampled according to
     some user-specified distribution (specified by `sampler`), (3) a circuit that maps the output of
-    the preceeding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
+    the preceding circuit to a computational basis state. See arXiv:1807.07975 (2018) for further
     details.
 
     Parameters
@@ -461,7 +461,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
 
     cliffordtwirl : bool, optional
-        Wether to begin the circuits with a sequence that generates a random stabilizer state. For
+        Whether to begin the circuits with a sequence that generates a random stabilizer state. For
         standard DRB this should be set to True. There are a variety of reasons why it is better
         to have this set to True.
 
@@ -570,7 +570,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
             This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
 
         cliffordtwirl : bool, optional
-            Wether to begin the circuits with a sequence that generates a random stabilizer state. For
+            Whether to begin the circuits with a sequence that generates a random stabilizer state. For
             standard DRB this should be set to True. There are a variety of reasons why it is better
             to have this set to True.
 
@@ -739,7 +739,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
     the option of Pauli randomization and local Clifford twirling. To implement mirror RB it is necessary
     for U^(-1) to in the gate set for every gate U in the gate set.
 
-    **THIS METHOD IS IN DEVELOPEMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES OF PYGSTI!**
+    **THIS METHOD IS IN DEVELOPMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES OF PYGSTI!**
 
     Parameters
     ----------
@@ -876,7 +876,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
             # future: port the starmap functionality to the non-clifford case and merge the two methods
-            # by just callling `create_mirror_rb_circuit` but with a different argument.
+            # by just calling `create_mirror_rb_circuit` but with a different argument.
             if circuit_type == 'clifford':
                 args_list = [(pspec, clifford_compilations['absolute'], l)] * circuits_per_depth
                 kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
@@ -942,6 +942,59 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
 
+    def merge_with(self, other_edesign, sort_depths=False):
+        """
+        Merge this MRB experiment design with another one and return the result.
+
+        The returned design will contain the union of the circuits in the two
+        experiment designs being merged, and will contain depth, ideal-output,
+        etc. metadata that is updated appropriately.
+
+        Parameters
+        ----------
+        other_edesign: MirrorRBDesign
+            The other experiment design to merge
+
+        Returns
+        -------
+        MirrorRBDesign
+        """
+        # "Merge" easy attributes that are not per-circuit
+        assert self.qubit_labels == other_edesign.qubit_labels, "To merge, qubit_labels must be equal"
+        assert self.circuit_type == other_edesign.circuit_type, "To merge, MRB designs must have the same `circuit_type`"
+        assert self.localclifford == other_edesign.localclifford, "To merge, MRB designs must have the same `localclifford`"
+        assert self.paulirandomize == other_edesign.paulirandomize, "To merge, MRB designs must have the same `paulirandomize`"
+
+        if self.sampler == other_edesign.sampler:
+            sampler = self.sampler
+            if self.samplerargs == other_edesign.samplerargs:
+                samplerargs = self.samplerargs
+            else:
+                samplerargs = "mixed"
+        else:
+            sampler = "mixed"
+            samplerargs = "mixed"
+
+        if self.descriptor == other_edesign.descriptor:
+            descriptor = self.descriptor
+        else:
+            descriptor = f"MERGED({self.descriptor}, {other_edesign.descriptor}"
+
+        # Merge the underlying BenchmarkingDesign data
+        depths, circuits_by_depth, paired_attrs_by_depth = self._merge_data(other_edesign, sort_depths)
+
+        circuit_lists = [circuits_by_depth[d] for d in depths]
+        idealouts_per_depth = paired_attrs_by_depth.pop('idealout_lists')
+        ideal_outs = [idealouts_per_depth[d] for d in depths]
+        circuits_per_depth = [len(cl) for cl in circuit_lists]
+
+        cls = self.__class__
+        ret = cls.__new__(cls)
+        ret._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, self.qubit_labels,
+                             self.circuit_type, sampler, samplerargs, self.localclifford, self.paulirandomize,
+                             descriptor, add_default_protocol=False)
+        return ret
+
     def map_qubit_labels(self, mapper):
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
@@ -959,7 +1012,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         """
         mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
-        return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+        return MirrorRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
                                                      mapped_qubit_labels,
                                                      self.circuit_type, self.sampler,
                                                      self.samplerargs, self.localclifford,
@@ -1132,7 +1185,7 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
         The number of (possibly) different CRB circuits sampled at each length.
 
     interleaved_circuit : Circuit
-        Circuit to use in the constuction of the interleaved CRB experiment. This is the circuit
+        Circuit to use in the construction of the interleaved CRB experiment. This is the circuit
         whose error rate is to be estimated by the IRB experiment.
 
     qubit_labels : list, optional

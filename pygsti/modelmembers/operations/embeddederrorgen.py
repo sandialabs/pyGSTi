@@ -14,6 +14,7 @@ from pygsti.baseobjs.basis import Basis as _Basis
 import warnings as _warnings
 
 from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
+from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LinbladErrorGen
 
 
 # Idea:
@@ -50,7 +51,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         of the EmbeddedErrorgen.
     """
 
-    def __init__(self, state_space, target_labels, errgen_to_embed):
+    def __init__(self, state_space, target_labels, errgen_to_embed: _LinbladErrorGen):
         _EmbeddedOp.__init__(self, state_space, target_labels, errgen_to_embed)
 
         # set "API" error-generator members (to interface properly w/other objects)

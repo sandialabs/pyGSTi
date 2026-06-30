@@ -20,7 +20,7 @@ class NamedDict(dict, _NicelySerializable):
     """
     A dictionary that also holds category names and types.
 
-    This `dict`-derived class holds a catgory name applicable to
+    This `dict`-derived class holds a category name applicable to
     its keys, and key and value type names indicating the types
     of its keys and values.
 
@@ -90,6 +90,8 @@ class NamedDict(dict, _NicelySerializable):
                 return x
             elif isinstance(x, (_np.int64, _np.int32)):
                 return int(x)
+            elif isinstance(x, (_np.float64, _np.float32)):
+                return float(x)
             elif isinstance(x, _NicelySerializable):
                 return x.to_nice_serialization()
             elif isinstance(x, _np.ndarray):

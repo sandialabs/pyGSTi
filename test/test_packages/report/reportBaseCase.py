@@ -24,9 +24,6 @@ class ReportBaseCase(BaseTestCase):
         datagen_gateset = target_model.depolarize(op_noise=0.05, spam_noise=0.1)
         datagen_gateset2 = target_model.depolarize(op_noise=0.1, spam_noise=0.05).rotate((0.15,-0.03,0.03))
 
-        #cls.specs = pygsti.construction.build_spam_specs(std.fiducials, effect_labels=['E0'])
-        #  #only use the first EVec
-
         op_labels = list(target_model.operations.keys())
         #use minimally informationally complete prep and measurement fids
         cls.min_prep_fids = std.prep_fiducials()[0:4]
@@ -43,17 +40,17 @@ class ReportBaseCase(BaseTestCase):
         if regenerate_references():
             ds = pygsti.data.simulate_data(datagen_gateset, cls.lsgstStrings[-1], num_samples=1000,
                                                    sample_error='binomial', seed=100)
-            ds.save(compare_files + "/reportgen.dataset")
+            ds.write_binary(compare_files + "/reportgen.dataset")
             ds2 = pygsti.data.simulate_data(datagen_gateset2, cls.lsgstStrings[-1], num_samples=1000,
                                                     sample_error='binomial', seed=100)
-            ds2.save(compare_files + "/reportgen2.dataset")
+            ds2.write_binary(compare_files + "/reportgen2.dataset")
 
 
         cls.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen.dataset")
         cls.ds2 = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen2.dataset")
 
         mdl_lgst = pygsti.run_lgst(cls.ds, cls.min_prep_fids, cls.min_meas_fids, target_model, svd_truncate_to=4, verbosity=0)
-        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, {'gates': 1.0, 'spam': 0.0})
+        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, item_weights={'gates': 1.0, 'spam': 0.0})
         cls.mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         cls.mdl_clgst_tp = pygsti.contract(cls.mdl_clgst, "vSPAM")
         cls.mdl_clgst_tp.set_all_parameterizations("full TP")
@@ -112,32 +109,6 @@ class ReportBaseCase(BaseTestCase):
                                                                         'on_bad_fit': ["robust","Robust","robust+","Robust+"],
                                                                         'bad_fit_threshold': -1.0},
                                                                         disable_checkpointing= True)
-
-        #OLD
-        #lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.mdl_clgst_tp, cls.lsgstStrings, verbosity=0,
-        #                                           min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),
-        #                                           returnAll=True) #TP initial model => TP output models
-        #cls.results_logL = pygsti.objects.Results()
-        #cls.results_logL.init_dataset(cls.ds)
-        #cls.results_logL.init_circuits(cls.lsgstStructs)
-        #cls.results_logL.add_estimate(target_model, cls.mdl_clgst_tp,
-        #                         lsgst_gatesets_TP,
-        #                         {'objective': "logl",
-        #                          'min_prob_clip': 1e-4,
-        #                          'prob_clip_interval': (-1e6,1e6), 'radius': 1e-4,
-        #                          'weights': None, 'defaultDirectory': temp_files + "",
-        #                          'defaultBasename': "MyDefaultReportName"})
-        #
-        #tp_target = target_model.copy(); tp_target.set_all_parameterizations("full TP")
-        #gaugeOptParams = gaugeOptParams.copy() #just to be safe
-        #gaugeOptParams['model'] = lsgst_gatesets_TP[-1]  #so can gauge-propagate CIs
-        #gaugeOptParams['target_model'] = tp_target  #so can gauge-propagate CIs
-        #_, gaugeEl, go_final_gateset = pygsti.gaugeopt_to_target(**gaugeOptParams)
-        #gaugeOptParams['_gaugeGroupEl'] = gaugeEl #so can gauge-propagate CIs
-        #cls.results_logL.estimates['default'].add_gaugeoptimized(gaugeOptParams, go_final_gateset)
-        #
-        ##self.results_logL.options.precision = 3
-        ##self.results_logL.options.polar_precision = 2
 
         os.chdir(orig_cwd)
 

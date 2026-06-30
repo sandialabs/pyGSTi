@@ -242,7 +242,7 @@ def partitions(n):
     Iterate over all partitions of integer `n`.
 
     A partition of `n` here is defined as a list of one or more non-zero
-    integers which sum to `n`.  Every partition is iterated over exacty
+    integers which sum to `n`.  Every partition is iterated over exactly
     once - there are no duplicates/repetitions.
 
     Parameters
@@ -254,7 +254,7 @@ def partitions(n):
         previous = tuple()
         for pp in _itertools.permutations(p[::-1]):  # flip p so it's in *ascending* order
             if pp > previous:  # only *unique* permutations
-                previous = pp  # (relies in itertools implementatin detail that
+                previous = pp  # (relies in itertools implementation detail that
                 yield pp      # any permutations of a sorted iterable are in
                 # sorted order unless they are duplicates of prior permutations
 
@@ -321,7 +321,7 @@ def _partition_into_slow(n, nbins):
         p = _np.concatenate((p, _np.zeros(nbins - len(p), _np.int64)))  # pad with zeros
         for pp in _itertools.permutations(p[::-1]):
             if pp > previous:  # only *unique* permutations
-                previous = pp  # (relies in itertools implementatin detail that
+                previous = pp  # (relies in itertools implementation detail that
                 yield pp      # any permutations of a sorted iterable are in
                 # sorted order unless they are duplicates of prior permutations
 
@@ -350,7 +350,7 @@ def incd_product(*args):
     while incr >= 0:
         try:  # to increment index incr
             t[incr] = next(iters[incr])
-        except StopIteration:  # if exhaused, increment iterator to left
+        except StopIteration:  # if exhausted, increment iterator to left
             incr -= 1
         else:  # reset all iterators to right of incremented one and yield
             for i in range(incr + 1, N):

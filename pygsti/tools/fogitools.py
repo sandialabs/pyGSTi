@@ -13,7 +13,7 @@ Utility functions for computing and working with first-order-gauge-invariant (FO
 import numpy as _np
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
-
+import scipy as _scp
 from . import matrixtools as _mt
 from . import optools as _ot
 
@@ -70,7 +70,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         # - a full basis for gauge_action_deriv
         #global_row_space.add_labels(row_space.labels)  # labels would need to contain sslbls too
         action_row_labels = action_row_basis.labels
-        global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True)
+        global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True) 
 
         #DEBUG REMOVE
         #db_num_skipped = db_num_nonzero = 0
@@ -339,7 +339,14 @@ def _create_op_errgen_indices_dict(primitive_op_labels, errorgen_coefficient_lab
 def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                               errorgen_coefficient_labels, op_errgen_indices, gauge_space,
                               op_label_abbrevs=None, dependent_fogi_action='drop', norm_order=None):
-    """ TODO: docstring """
+    """ TODO: docstring 
+    Parameters
+    ----------
+    dependent_fogi_action : 'drop' or 'mark'
+        'drop' ensures the set of FOGI quantities returned is linearly independent. 'mark' ensures 
+
+
+    """
     assert(dependent_fogi_action in ('drop', 'mark'))
     orthogonalize_relationals = True
 
@@ -397,7 +404,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         """Turn user-supplied norm-order into an array of norm orders based, sometimes, on the vecs being normalized """
         if isinstance(given_norm_order, int):
             norm_order_array = _np.ones(local_fogi_dirs.shape[1], dtype=_np.int64) * given_norm_order
-        elif given_norm_order == "auto":  # automaticaly choose norm order based on fogi direction composition
+        elif given_norm_order == "auto":  # automatically choose norm order based on fogi direction composition
             lbl_lookup = {}; off = 0
             for label_list in label_lists:
                 lbl_lookup.update({i + off: lbl for i, lbl in enumerate(label_list)})
@@ -553,9 +560,35 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # (A,B are faithful reps of gauge on intersection space, so pinv(ga_A) * ga_A
                         # restricted to intersection space is I:   int_spc.T * pinv(ga_A) * ga_A * int_spc == I
                         # (when int_spc vecs are orthonormal) and so the above redues to I - I = 0
+                        def scipy_pinv(A, rcond):
+                            # Step 1: Compute SVD
+                            U, S, VT = _scp.linalg.svd(A, lapack_driver='gesvd')
 
-                        inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7),
-                                                                 -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)),
+                            # Step 2: Compute Sigma+
+                            S_plus = _np.zeros((VT.shape[0],U.shape[0]))
+                            for i in range(len(S)):
+                                if _np.abs(S[i]) > rcond:
+                                    S_plus[i, i] = 1 / S[i]
+
+                            # Step 3: Compute the pseudoinverse
+                            return VT.T @ S_plus @ U.T
+
+                        try:
+                            inverse1 = _np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7)
+                        except Exception as e:
+                            print('Pinverse failed with message: ', e, '\n Attempting gesvd algorithm for SVD')
+                            inverse1 = scipy_pinv(gauge_action[0:n, :], rcond=1e-7)
+                            print('success')
+                        
+                        try:
+                            inverse2 = -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)
+                        except Exception as e:
+                            print('Pinverse failed with message: ', e, '\n Attempting gesvd algorithm for SVD')
+                            inverse2 = -scipy_pinv(gauge_action[n:, :], rcond=1e-7)
+                            print('success')
+
+                        inv_diff_gauge_action = _np.concatenate((inverse1,
+                                                                 inverse2),
                                                                 axis=1).T
 
                         #Equivalent:
@@ -675,7 +708,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         new_fogi_dirs = new_fogi_dirs.tocsc()
 
                         # figure out which directions are independent
-                        indep_cols = _mt.independent_columns(new_fogi_dirs, fogi_dirs)
+                        indep_cols = _mt.independent_columns(new_fogi_dirs.toarray(), fogi_dirs.toarray())
                         #FOGI DEBUG print(" ==> %d independent columns" % len(indep_cols))
 
                         if dependent_fogi_action == "drop":

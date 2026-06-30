@@ -26,9 +26,12 @@ import numpy as _np
 from pygsti.circuits import circuit as _cir
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning as _ImplicitlyDoneEditingCircuitWarning
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
 # import scipy.special as _sps
 # import scipy.fftpack as _fft
@@ -574,18 +577,18 @@ class _DataSetRow(object):
                         cntDict.setitem_unsafe(ol, cnt)
             else:
                 for ol, i in self.dataset.olIndex.items():
-                    inds = oli_tslc[oli_tslc == i]
+                    inds = _np.where(oli_tslc == i)[0]
                     if len(inds) > 0 or all_outcomes:
                         cntDict.setitem_unsafe(ol, float(sum(self.reps[tslc][inds])))
         else:
             if self.reps is None:
                 for ol_index in oli_tslc:
                     ol = self.dataset.ol[ol_index]
-                    cntDict.setitem_unsafe(ol, 1.0 + cntDict.getitem_unsafe(ol, 0.0))
+                    cntDict.setitem_unsafe(ol, float(1.0 + cntDict.getitem_unsafe(ol, 0.0)))
             else:
                 for ol_index, reps in zip(oli_tslc, self.reps[tslc]):
                     ol = self.dataset.ol[ol_index]
-                    cntDict.setitem_unsafe(ol, reps + cntDict.getitem_unsafe(ol, 0.0))
+                    cntDict.setitem_unsafe(ol, float(reps + cntDict.getitem_unsafe(ol, 0.0)))
 
         return cntDict
 
@@ -1146,7 +1149,7 @@ class DataSet(_MongoSerializable):
 
     def __setitem__(self, circuit, outcome_dict_or_series):
         ca = self.collisionAction
-        self.collisionAction = 'overwrite'  # overwrite data when assigning (this seems mose natural)
+        self.collisionAction = 'overwrite'  # overwrite data when assigning (this seems more natural)
         try:
             ret = self._set_row(circuit, outcome_dict_or_series)
         finally:
@@ -1176,7 +1179,6 @@ class DataSet(_MongoSerializable):
         # needed because name-only Labels don't hash the same as strings
         # so key lookups need to be done at least with tuples of Labels.
         circuit = _cir.Circuit.cast(circuit)
-
         #Note: cirIndex value is either an int (non-static) or a slice (static)
         cirIndex = self.cirIndex[circuit]
         repData = self.repData[cirIndex] if (self.repData is not None) else None
@@ -1292,11 +1294,28 @@ class DataSet(_MongoSerializable):
         list of strings
             A list where each element is a operation label.
         """
-        opLabels = []
-        for opLabelString in self:
-            for opLabel in opLabelString:
-                if not prefix or opLabel.name.startswith(prefix):
-                    if opLabel not in opLabels: opLabels.append(opLabel)
+        opLabels = set()
+        empty_label = _Label(())
+        for circuit in self:
+            for layer in circuit.layertup:
+                if isinstance(layer, list):
+                    for lbl in layer:
+                        if lbl.name.startswith(prefix):
+                            opLabels.add(lbl.name)
+                        elif lbl == empty_label:
+                            opLabels.add('[]')
+                elif isinstance(layer, _Label):
+                    if layer.name.startswith(prefix):
+                        opLabels.add(layer.name)
+                else:
+                    raise ValueError()
+
+        bracket_idle = '[]' in opLabels
+        opLabels = [op for op in opLabels if op != '[]']
+        opLabels.sort()
+        if bracket_idle:
+            opLabels = ['[]'] + opLabels
+
         return opLabels
 
     def degrees_of_freedom(self, circuits=None, method="present_outcomes-1",
@@ -1318,12 +1337,12 @@ class DataSet(_MongoSerializable):
             present (usually = non-zero) outcomes recorded minus one. 'tuned' should
             be the most accurate, as it accounts for low-N "Poisson bump" behavior,
             but it is not the default because it is still under development. For
-            timestamped data, see `aggreate_times` below.
+            timestamped data, see `aggregate_times` below.
 
         aggregate_times : bool, optional
             Whether counts that occur at different times should be tallied separately.
             If True, then even when counts occur at different times degrees of freedom
-            are tallied on a per-circuit basis.  If False, then counts occuring at
+            are tallied on a per-circuit basis.  If False, then counts occurring at
             distinct times are treated as independent of those an any other time, and
             are tallied separately.  So, for example, if `aggregate_times` is False and
             a data row has 0- and 1-counts of 45 & 55 at time=0 and 42 and 58 at time=1
@@ -1395,9 +1414,13 @@ class DataSet(_MongoSerializable):
         if self.collisionAction == "keepseparate":
             if circuit in self.cirIndex:
                 tagged_circuit = circuit.copy(editable=True)
-                i = 1; tagged_circuit.occurrence = i
-                while tagged_circuit in self.cirIndex:
-                    i += 1; tagged_circuit.occurrence = i
+                with _warnings.catch_warnings():
+                    i = 1; tagged_circuit.occurrence = i
+                    _warnings.simplefilter('ignore', _ImplicitlyDoneEditingCircuitWarning)
+                    # ^ We need that to suppress the warning in triggered from
+                    #   evaluation of `tagged_circuit in self.cirIndex`.
+                    while tagged_circuit in self.cirIndex:
+                        i += 1; tagged_circuit.occurrence = i
                 tagged_circuit.done_editing()
                 #add data for a new (duplicate) circuit
                 circuit = tagged_circuit
@@ -1582,7 +1605,7 @@ class DataSet(_MongoSerializable):
         key : str
             The string key of the measurement. Set by cirq.measure.
 
-        convert_int_to_binary : bool, optional (defaut True)
+        convert_int_to_binary : bool, optional (default True)
             By default the keys in the cirq Results object are the integers representing
             the bitstrings of the measurements on a set of qubits, in big-endian convention.
             If True this converts back to a binary string before adding the counts as a 
@@ -1709,7 +1732,7 @@ class DataSet(_MongoSerializable):
         else:
             if self.repData is None:
                 #rep count data was given, but we're not currently holding repdata,
-                # so we need to build this up for all existings sequences:
+                # so we need to build this up for all existing sequences:
                 self._add_explicit_repetition_counts()
 
         if rep_array is not None:
@@ -2311,7 +2334,7 @@ class DataSet(_MongoSerializable):
                     raise ValueError("Invalid `missing_action`: %s" % str(missing_action))
 
         if len(missingStrs) > 0:
-            missingStrs.append("...")  # so elipses are shown when there's more strings
+            missingStrs.append("...")  # so ellipses are shown when there's more strings
             _warnings.warn(("DataSet.truncate(...) was given %s strings to keep"
                             " that weren't in the original dataset:\n%s") %
                            (len(missingStrs) - 1, "\n".join(map(str, missingStrs[0:10]))))
@@ -2463,7 +2486,7 @@ class DataSet(_MongoSerializable):
         """
         Manipulate this DataSet's timestamps according to `processor_fn`.
 
-        For example, using, the folloing `process_times_array_fn` would change
+        For example, using, the following `process_times_array_fn` would change
         the timestamps for each circuit to sequential integers. ::
         
             def process_times_array_fn(times):
@@ -2507,7 +2530,7 @@ class DataSet(_MongoSerializable):
             `None`, in which case the data for that string is deleted.
 
         aggregate : bool, optional
-            When `True`, aggregate the data for ciruits that `processor_fn`
+            When `True`, aggregate the data for circuits that `processor_fn`
             assigns to the same "new" circuit.  When `False`, use the data
             from the *last* original circuit that maps to a given "new" circuit.
 
@@ -2536,7 +2559,7 @@ class DataSet(_MongoSerializable):
             `None`, in which case the data for that string is deleted.
 
         aggregate : bool, optional
-            When `True`, aggregate the data for ciruits that `processor_fn`
+            When `True`, aggregate the data for circuits that `processor_fn`
             assigns to the same "new" circuit.  When `False`, use the data
             from the *last* original circuit that maps to a given "new" circuit.
 
@@ -2633,7 +2656,7 @@ class DataSet(_MongoSerializable):
             del self.auxInfo[ky]
 
         if len(missingStrs) > 0:  # Print a warning with missing strings
-            missingStrs.append("...")  # so elipses are shown when there's more strings
+            missingStrs.append("...")  # so ellipses are shown when there's more strings
             _warnings.warn(("DataSet.remove(...) cannot remove %s strings because"
                             " they don't exist in the original dataset:\n%s") %
                            (len(missingStrs) - 1, "\n".join(map(str, missingStrs[0:10]))))
@@ -2804,7 +2827,8 @@ class DataSet(_MongoSerializable):
         bStatic = state_dict['bStatic']
 
         if "gsIndexKeys" in state_dict:
-            _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling a deprecated-format DataSet.  Please re-save/pickle asap.",
+                           _pyGSTiDeprecationWarning)
             cirIndexKeys = [cgstr.expand() for cgstr in state_dict['gsIndexKeys']]
             cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['gsIndexVals'])))
         else:
@@ -2813,7 +2837,8 @@ class DataSet(_MongoSerializable):
 
         if "slIndex" in state_dict:
             #print("DB: UNPICKLING AN OLD DATASET"); print("Keys = ",state_dict.keys())
-            _warnings.warn("Unpickling a *very* deprecated-format DataSet.  Please re-save/pickle asap.")
+            _warnings.warn("Unpickling a *very* deprecated-format DataSet.  Please re-save/pickle asap.",
+                           _pyGSTiDeprecationWarning)
 
             #Turn spam labels into outcome labels
             self.cirIndex = _OrderedDict()
@@ -2908,18 +2933,20 @@ class DataSet(_MongoSerializable):
         else:
             f = file_or_filename
 
-        _pickle.dump(toPickle, f)
-        if self.bStatic:
-            _np.save(f, self.oliData)
-            _np.save(f, self.timeData)
-            if self.repData is not None:
-                _np.save(f, self.repData)
-        else:
-            for row in self.oliData: _np.save(f, row)
-            for row in self.timeData: _np.save(f, row)
-            if self.repData is not None:
-                for row in self.repData: _np.save(f, row)
-        if bOpen: f.close()
+        try:
+            _pickle.dump(toPickle, f)
+            if self.bStatic:
+                _np.save(f, self.oliData)
+                _np.save(f, self.timeData)
+                if self.repData is not None:
+                    _np.save(f, self.repData)
+            else:
+                for row in self.oliData: _np.save(f, row)
+                for row in self.timeData: _np.save(f, row)
+                if self.repData is not None:
+                    for row in self.repData: _np.save(f, row)
+        finally:
+            if bOpen: f.close()
 
     @_deprecated_fn('read_binary')
     def load(self, file_or_filename):
@@ -2950,70 +2977,72 @@ class DataSet(_MongoSerializable):
         else:
             f = file_or_filename
 
-        with _compat.patched_uuid():
+        try:
             state_dict = _pickle.load(f)
 
-        if "gsIndexKeys" in state_dict:
-            _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.")
-            state_dict['cirIndexKeys'] = state_dict['gsIndexKeys']
-            state_dict['cirIndexVals'] = state_dict['gsIndexVals']
-            del state_dict['gsIndexKeys']
-            del state_dict['gsIndexVals']
+            if "gsIndexKeys" in state_dict:
+                _warnings.warn("Loading a deprecated-format DataSet.  Please re-save asap.",
+                               _pyGSTiDeprecationWarning)
+                state_dict['cirIndexKeys'] = state_dict['gsIndexKeys']
+                state_dict['cirIndexVals'] = state_dict['gsIndexVals']
+                del state_dict['gsIndexKeys']
+                del state_dict['gsIndexVals']
 
-        def expand(x):  # to be backward compatible
-            """ Expand a compressed circuit """
-            if isinstance(x, _cir.CompressedCircuit): return x.expand()
-            elif hasattr(x, '__class__') and x.__class__.__name__ == "dummy_CompressedGateString":
-                return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x._tup), stringrep=x.str)
-                #for backward compatibility, needed for Python2 only, which doesn't call __new__ when
-                # unpickling protocol=0 (the default) info.
+            def expand(x):  # to be backward compatible
+                """ Expand a compressed circuit """
+                if isinstance(x, _cir.CompressedCircuit): return x.expand()
+                elif hasattr(x, '__class__') and x.__class__.__name__ == "dummy_CompressedGateString":
+                    return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x._tup), stringrep=x.str)
+                    #for backward compatibility, needed for Python2 only, which doesn't call __new__ when
+                    # unpickling protocol=0 (the default) info.
+                else:
+                    _warnings.warn("Deprecated dataset format.  Please re-save "
+                                   "this dataset soon to avoid future incompatibility.",
+                                   _pyGSTiDeprecationWarning)
+                    return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
+            cirIndexKeys = [expand(cgstr) for cgstr in state_dict['cirIndexKeys']]
+
+            #cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
+            self.cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
+            self.olIndex = state_dict['olIndex']
+            self.olIndex_max = state_dict.get('olIndex_max',
+                                              max(self.olIndex.values()) if len(self.olIndex) > 0 else -1)
+            self.ol = state_dict['ol']
+            self.bStatic = state_dict['bStatic']
+            self.oliType = state_dict['oliType']
+            self.timeType = state_dict['timeType']
+            self.repType = state_dict['repType']
+            self.collisionAction = state_dict['collisionAction']
+            self.uuid = state_dict['uuid']
+            self.auxInfo = state_dict.get('auxInfo', _defaultdict(dict))  # backward compat
+            self.comment = state_dict.get('comment', '')  # backward compat
+
+            useReps = state_dict['useReps']
+
+            if self.bStatic:
+                self.oliData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
+                self.timeData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
+                if useReps:
+                    self.repData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
+                self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}  # init cnt_cache afresh
             else:
-                _warnings.warn("Deprecated dataset format.  Please re-save "
-                               "this dataset soon to avoid future incompatibility.")
-                return _cir.Circuit(_cir.CompressedCircuit.expand_op_label_tuple(x))
-        cirIndexKeys = [expand(cgstr) for cgstr in state_dict['cirIndexKeys']]
-
-        #cirIndexKeys = [ cgs.expand() for cgs in state_dict['cirIndexKeys'] ]
-        self.cirIndex = _OrderedDict(list(zip(cirIndexKeys, state_dict['cirIndexVals'])))
-        self.olIndex = state_dict['olIndex']
-        self.olIndex_max = state_dict.get('olIndex_max',
-                                          max(self.olIndex.values()) if len(self.olIndex) > 0 else -1)
-        self.ol = state_dict['ol']
-        self.bStatic = state_dict['bStatic']
-        self.oliType = state_dict['oliType']
-        self.timeType = state_dict['timeType']
-        self.repType = state_dict['repType']
-        self.collisionAction = state_dict['collisionAction']
-        self.uuid = state_dict['uuid']
-        self.auxInfo = state_dict.get('auxInfo', _defaultdict(dict))  # backward compat
-        self.comment = state_dict.get('comment', '')  # backward compat
-
-        useReps = state_dict['useReps']
-
-        if self.bStatic:
-            self.oliData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
-            self.timeData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
-            if useReps:
-                self.repData = _np.lib.format.read_array(f)  # _np.load(f) doesn't play nice with gzip
-            self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}  # init cnt_cache afresh
-        else:
-            self.oliData = []
-            for _ in range(state_dict['nRows']):
-                self.oliData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
-
-            self.timeData = []
-            for _ in range(state_dict['nRows']):
-                self.timeData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
-
-            if useReps:
-                self.repData = []
+                self.oliData = []
                 for _ in range(state_dict['nRows']):
-                    self.repData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
-            else:
-                self.repData = None
-            self.cnt_cache = None
+                    self.oliData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
 
-        if bOpen: f.close()
+                self.timeData = []
+                for _ in range(state_dict['nRows']):
+                    self.timeData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
+
+                if useReps:
+                    self.repData = []
+                    for _ in range(state_dict['nRows']):
+                        self.repData.append(_np.lib.format.read_array(f))  # _np.load(f) doesn't play nice with gzip
+                else:
+                    self.repData = None
+                self.cnt_cache = None
+        finally:
+            if bOpen: f.close()
 
     def rename_outcome_labels(self, old_to_new_dict):
         """

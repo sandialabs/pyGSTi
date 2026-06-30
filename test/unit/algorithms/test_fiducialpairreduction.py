@@ -1,8 +1,11 @@
+import pytest
+
 import pygsti.algorithms.fiducialpairreduction as fpr
 from pygsti.algorithms.germselection import germ_set_spanning_vectors
 import pygsti.circuits as pc
 from pygsti.circuits import Circuit
 from pygsti.baseobjs import Label
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import numpy as _np
 from . import fixtures
 from ..util import BaseCase
@@ -54,22 +57,29 @@ class FiducialPairReductionStdData(object):
         #self.fiducial_pairs_global = [(0, 0), (0, 1), (0, 2), (1, 3)]
         self.fiducial_pairs_global =  [(0, 0), (0, 1), (0, 2), (1, 0)]
 
+# Tests for the deprecated global-FPR algorithm. The decorator suggests
+# `find_sufficient_fiducial_pairs_per_germ`, but that's a different algorithm
+# returning a different shape (dict, not flat list), so these aren't migrable
+# without losing the global-FPR coverage. See
+# issues/706/c2-find-sufficient-fiducial-pairs-not-mechanical.md.
 class FindSufficientFiducialPairsBase(object):
     def test_find_sufficient_fiducial_pairs_sequential(self):
-        fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
-            self.model, self.preps, self.effects, self.germs,
-            search_mode='sequential', minimum_pairs=4,
-            test_lengths = (64, 512), tol = .5
-        )
+        with pytest.warns(pyGSTiDeprecationWarning):
+            fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
+                self.model, self.preps, self.effects, self.germs,
+                search_mode='sequential', minimum_pairs=4,
+                test_lengths = (64, 512), tol = 0.5
+            )
 
         self.assertTrue(fiducial_pairs == self.fiducial_pairs_global)
 
     def test_find_sufficient_fiducial_pairs_random(self):
-        fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
-            self.model, self.preps, self.effects, self.germs,
-            search_mode='random', n_random=5, seed=_SEED, minimum_pairs=4,
-            test_lengths = (64, 512), tol = .5
-        )
+        with pytest.warns(pyGSTiDeprecationWarning):
+            fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
+                self.model, self.preps, self.effects, self.germs,
+                search_mode='random', n_random=5, seed=_SEED, minimum_pairs=4,
+                test_lengths = (64, 512), tol = 0.5
+            )
         # TODO assert correctness
 
 
@@ -140,11 +150,12 @@ class StdDataFindSufficientFiducialPairsTester(FindSufficientFiducialPairsBase,
                                                BaseCase):
     def test_find_sufficient_fiducial_pairs_with_test_pair_list(self):
         test_pair_list = [(0, 0), (0, 1), (1, 0)]
-        fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
-            self.model, self.preps, self.effects, self.germs,
-            test_pair_list=test_pair_list, test_lengths = (64, 512), 
-            tol = .5
-        )
+        with pytest.warns(pyGSTiDeprecationWarning):
+            fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
+                self.model, self.preps, self.effects, self.germs,
+                test_pair_list=test_pair_list, test_lengths = (64, 512),
+                tol = 0.5
+            )
         # TODO assert correctness
 
 
@@ -162,14 +173,14 @@ class _TestFiducialPairsBase(object):
     def test_test_fiducial_pairs_from_list(self):
         n_amplified = fpr.test_fiducial_pairs(
             self.fiducial_pairs_global, self.model, self.preps, self.effects,
-            self.germs, test_lengths=(64, 512), tol = .5
+            self.germs, test_lengths=(64, 512), tol = 0.5
         )
         self.assertEqual(n_amplified, self.expected_amplified_global)
 
     def test_test_fiducial_pairs_from_dict(self):
         n_amplified = fpr.test_fiducial_pairs(
             self.fiducial_pairs_per_germ, self.model, self.preps, self.effects,
-            self.germs, test_lengths=(64, 512), tol = .5
+            self.germs, test_lengths=(64, 512), tol = 0.5
         )
         self.assertEqual(n_amplified, self.expected_amplified_per_germ)
 
