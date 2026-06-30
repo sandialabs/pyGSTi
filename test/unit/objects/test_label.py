@@ -27,7 +27,9 @@ labels = [
     L([("Gx", 0), ("Gy", 1)], time=3.1),  # LabelTupTupWithTime
     L([("Gx", 0), ("Gy", 1)], time=0.0459, args=("bar",)),  # LabelTupTupWithArgs
     CircuitLabel('', (L('Gx', (0,)),), (0,), 1, time=3.0), # CircuitLabel with nonzero time
-    CircuitLabel('', (L('Gx', (0,)),), (0,), 1, time=0.0) # CircuitLabel with time
+    CircuitLabel('', (L('Gx', (0,)),), (0,), 1, time=0.0), # CircuitLabel with time
+    CircuitLabel('', (L('Gx', (0,)),), (0,), 3, time=0.0), # CircuitLabel with time and reps
+    CircuitLabel('hello', (L('Gx', (0,)),), (0,), 5, time=3.0), # CircuitLabel with nonzero time, name and reps.
 ]
 
 
