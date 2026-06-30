@@ -181,3 +181,11 @@ class ForwardSimDiagnosticWarning(UserWarning):
     to surface them.
     """
     enabled = False
+
+
+class ClobberingWarning(UserWarning):
+    """
+    Inform the user that contradictory values have been encountered
+    in some operation, and that we'll adopt some heuristic for 
+    choosing one of the values.
+    """
