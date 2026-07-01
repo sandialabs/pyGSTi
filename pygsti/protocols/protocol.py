@@ -11,7 +11,7 @@ Protocol object
 # ***************************************************************************************************
 from __future__ import annotations
 
-from typing import Optional, Literal, Union
+from typing import Optional, Literal, Union, Type
 import collections as _collections
 import copy as _copy
 import dataclasses as _dataclasses
@@ -30,6 +30,9 @@ from pygsti.tools import mpitools as _mpitools
 from pygsti.tools.dataframetools import _process_dataframe
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.baseobjs.label import HomogeneousSeq, SSLabelMapper
+from pygsti.circuits.circuit import Circuit as _Circuit
+
 
 QUDIT_LABELS_T = tuple[Union[int, str], ...]
 
@@ -97,12 +100,12 @@ class SlurmSettings:
     and uncomment the ones you need before submitting.
     """
     script_path: str
-    partition: str | None = None
-    time: str | None = None
+    partition: Optional[str] = None
+    time: Optional[str] = None
     nodes: int = 1
-    job_name: str | None = None
-    output: str | None = None
-    error: str | None = None
+    job_name: Optional[str] = None
+    output: Optional[str] = None
+    error: Optional[str] = None
 
 
 class Protocol(_MongoSerializable):
@@ -124,7 +127,7 @@ class Protocol(_MongoSerializable):
     collection_name = "pygsti_protocols"
 
     @classmethod
-    def from_dir(cls, dirname, quick_load=False):
+    def from_dir(cls, dirname: str, quick_load: bool=False):
         """
         Initialize a new Protocol object from `dirname`.
 
@@ -159,7 +162,7 @@ class Protocol(_MongoSerializable):
         ret._init_unserialized_attributes()
         return ret
 
-    def __init__(self, name=None):
+    def __init__(self, name: Optional[str]=None):
         """
         Create a new Protocol object.
 
@@ -180,7 +183,7 @@ class Protocol(_MongoSerializable):
         self.auxfile_types = {}
         self._nameddict_attributes = ()  # (('name', 'ProtocolName', 'category'),) implied in setup_nameddict
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data: ProtocolData, memlimit: Optional[int] = None, comm=None) -> ProtocolResults:
         """
         Run this protocol on `data`.
 
@@ -202,15 +205,15 @@ class Protocol(_MongoSerializable):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def run_mpi(self, data: 'ProtocolData', num_ranks: int, *,
+    def run_mpi(self, data: ProtocolData, num_ranks: int, *,
                 mpiexec: str = 'auto',
-                extra_mpi_args: list[str] | None = None,
-                ranks_per_host: int | None = None,
-                env: dict | None = None,
-                persistent_dir: str | _pathlib.Path | None = None,
+                extra_mpi_args: Optional[list[str]] = None,
+                ranks_per_host: Optional[int] = None,
+                env: Optional[dict] = None,
+                persistent_dir: Optional[Union[str, _pathlib.Path]] = None,
                 dry_run: bool = False,
                 blas_threads_per_rank: int = 0,
-                **run_kwargs):
+                **run_kwargs) -> Optional[Union[ProtocolResults, ProtocolResultsDir]]:
         """
         Run this protocol in parallel using MPI workers launched as a subprocess.
         The subprocess environment variables will be set as
@@ -395,12 +398,12 @@ class Protocol(_MongoSerializable):
             out = _io.read_results_from_dir(tmpdir, name=self.name)
             return out
 
-    def stage_slurm(self, data: 'ProtocolData',
+    def stage_slurm(self, data: ProtocolData,
                     num_ranks: int,
                     slurm: SlurmSettings,
-                    work_dir: str | _pathlib.Path,
+                    work_dir: Union[str, _pathlib.Path],
                     *,
-                    ranks_per_host: int | None = None,
+                    ranks_per_host: Optional[int] = None,
                     blas_threads_per_rank: int = 0,
                     **run_kwargs) -> str:
         """
@@ -539,7 +542,7 @@ class Protocol(_MongoSerializable):
             _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
                                             recursive=recursive)
 
-    def setup_nameddict(self, final_dict):
+    def setup_nameddict(self, final_dict: _NamedDict) -> _NamedDict:
         """
         Initializes a set of nested :class:`NamedDict` dictionaries describing this protocol.
 
@@ -594,7 +597,7 @@ class MultiPassProtocol(Protocol):
     """
 
     # expects a MultiDataSet of passes and maybe adds data comparison (?) - probably not RB specific
-    def __init__(self, protocol, name=None):
+    def __init__(self, protocol: Protocol, name: Optional[str]=None):
         """
         Create a new MultiPassProtocol object.
 
@@ -617,7 +620,7 @@ class MultiPassProtocol(Protocol):
         self.protocol = protocol
         self.auxfile_types['protocol'] = 'dir-serialized-object'
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data: ProtocolData, memlimit: Optional[int] = None, comm=None) -> MultiPassResults:
         """
         Run this protocol on `data`.
 
@@ -659,7 +662,7 @@ class ProtocolRunner(object):
     contain multiple :class:`ProtocolResults` objects within it.
     """
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data: ProtocolData, memlimit: Optional[int] = None, comm=None) -> ProtocolResultsDir:
         """
         Run all the protocols specified by this protocol-runner on `data`.
 
@@ -712,7 +715,7 @@ class TreeRunner(ProtocolRunner):
         """
         self.protocols = protocol_dict
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data: ProtocolData, memlimit: Optional[int] = None, comm=None) -> ProtocolResultsDir:
         """
         Run all the protocols specified by this protocol-runner on `data`.
 
@@ -762,7 +765,7 @@ class SimpleRunner(ProtocolRunner):
         no filtering is performed.)
     """
 
-    def __init__(self, protocol, protocol_can_handle_multipass_data=False, edesign_type='all'):
+    def __init__(self, protocol: Protocol, protocol_can_handle_multipass_data: bool=False, edesign_type: Union[Literal['all'], Type[ExperimentDesign]]='all'):
         """
         Create a new SimpleRunner object, which runs a single protocol on every
         'leaf' of the data-tree.
@@ -789,7 +792,7 @@ class SimpleRunner(ProtocolRunner):
         self.edesign_type = edesign_type
         self.do_passes_separately = not protocol_can_handle_multipass_data
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data: ProtocolData, memlimit: Optional[int] = None, comm=None) -> ProtocolResultsDir:
         """
         Run all the protocols specified by this protocol-runner on `data`.
 
@@ -841,7 +844,7 @@ class DefaultRunner(ProtocolRunner):
         protocols being run expect single-pass data.
     """
 
-    def __init__(self, run_passes_separately=False):
+    def __init__(self, run_passes_separately: bool=False):
         """
         Create a new DefaultRunner object, which runs the default protocol at
         each data-tree node.  (Default protocols are given within
@@ -860,7 +863,7 @@ class DefaultRunner(ProtocolRunner):
         """
         self.run_passes_separately = run_passes_separately
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data: ProtocolData, memlimit: Optional[int] = None, comm=None) -> ProtocolResultsDir:
         """
         Run all the protocols specified by this protocol-runner on `data`.
 
@@ -951,7 +954,8 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
     collection_name = "pygsti_experiment_designs"
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+    def from_dir(cls, dirname: str, parent: Optional[ExperimentDesign]=None,
+                 name: Optional[str]=None, quick_load: bool=False) -> ExperimentDesign:
         """
         Initialize a new ExperimentDesign object from `dirname`.
 
@@ -1007,7 +1011,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         return ret
 
     @classmethod
-    def from_edesign(cls, edesign):
+    def from_edesign(cls, edesign: ExperimentDesign) -> ExperimentDesign:
         """
         Create an ExperimentDesign out of an existing experiment design.
 
@@ -1024,8 +1028,8 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
             raise NotImplementedError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
         return cls(edesign.all_circuits_needing_data, edesign.qubit_labels)
 
-    def __init__(self, circuits=None, qubit_labels: Optional[Union[QUDIT_LABELS_T, Literal['multiple']]]=None,
-                 children=None, children_dirs=None):
+    def __init__(self, circuits: list[_Circuit]=None, qubit_labels: Optional[Union[HomogeneousSeq, Literal['multiple']]]=None,
+                 children: Optional[dict[str, ExperimentDesign]]=None, children_dirs: Optional[dict[str,str]]=None):
         """
         Create a new ExperimentDesign object, which holds a set of circuits (needing data).
 
@@ -1113,7 +1117,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
             child_key = '_'.join(map(str, child_key))
         return child_key.replace(' ', '_')
 
-    def set_actual_circuits_executed(self, actual_circuits):
+    def set_actual_circuits_executed(self, actual_circuits: list[_Circuit]):
         """
         Sets a list of circuits that will actually be executed.
 
@@ -1135,7 +1139,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         assert(len(actual_circuits) == len(self.all_circuits_needing_data))
         self.alt_actual_circuits_executed = actual_circuits
 
-    def add_default_protocol(self, default_protocol_instance):
+    def add_default_protocol(self, default_protocol_instance: Protocol):
         """
         Add a "default" protocol to this experiment design.
 
@@ -1161,7 +1165,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         instance_name = default_protocol_instance.name
         self.default_protocols[instance_name] = default_protocol_instance
 
-    def truncate_to_circuits(self, circuits_to_keep):
+    def truncate_to_circuits(self, circuits_to_keep: list[_Circuit]) -> ExperimentDesign:
         """
         Builds a new experiment design containing only the specified circuits.
 
@@ -1178,7 +1182,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         base._truncate_to_circuits_inplace(circuits_to_keep)
         return base
 
-    def truncate_to_available_data(self, dataset):
+    def truncate_to_available_data(self, dataset: _data.DataSet):
         """
         Builds a new experiment design containing only those circuits present in `dataset`.
 
@@ -1195,7 +1199,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         base._truncate_to_available_data_inplace(dataset)
         return base
 
-    def truncate_to_design(self, other_design):
+    def truncate_to_design(self, other_design: ExperimentDesign) -> ExperimentDesign:
         """
         Truncates this experiment design by only keeping the circuits also in `other_design`
 
@@ -1213,7 +1217,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         base._truncate_to_design_inplace(other_design)
         return base
 
-    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+    def _truncate_to_circuits_inplace(self, circuits_to_keep: list[_Circuit]) -> None:
         self.all_circuits_needing_data = _circuits.CircuitList.cast(self.all_circuits_needing_data)
         if self.alt_actual_circuits_executed is not None:
             self.alt_actual_circuits_executed = _circuits.CircuitList.cast(self.alt_actual_circuits_executed)
@@ -1234,12 +1238,12 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         else:
             self.all_circuits_needing_data = self.all_circuits_needing_data.truncate(circuits_to_keep)
 
-    def _truncate_to_design_inplace(self, other_design):
+    def _truncate_to_design_inplace(self, other_design: ExperimentDesign) -> None:
         self._truncate_to_circuits_inplace(other_design.all_circuits_needing_data)
         for _, sub_design in self._vals.items():
             sub_design._truncate_to_design_inplace(other_design)
 
-    def _truncate_to_available_data_inplace(self, dataset):
+    def _truncate_to_available_data_inplace(self, dataset: _data.DataSet) -> None:
         self.all_circuits_needing_data = _circuits.CircuitList.cast(self.all_circuits_needing_data)
         ds_circuits = self.all_circuits_needing_data.apply_aliases()
         circuits_to_keep = [c for c, ds_c in zip(self.all_circuits_needing_data, ds_circuits) if ds_c in dataset]
@@ -1248,7 +1252,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         for _, sub_design in self._vals.items():
             sub_design._truncate_to_available_data_inplace(dataset)
 
-    def write(self, dirname=None, parent=None):
+    def write(self, dirname: Optional[str]=None, parent: Optional[ExperimentDesign]=None) -> None:
         """
         Write this experiment design to a directory.
 
@@ -1292,7 +1296,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
             _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
                                             recursive=recursive)
 
-    def setup_nameddict(self, final_dict):
+    def setup_nameddict(self, final_dict: _NamedDict):
         """
         Initializes a set of nested :class:`NamedDict` dictionaries describing this design.
 
@@ -1379,7 +1383,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
                 else tuple(map(mapper, self.qubit_labels))
         return mapped_qubit_labels
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> ExperimentDesign:
         """
         Creates a new ExperimentDesign whose circuits' qubit labels are updated according to a given mapping.
 
@@ -1418,7 +1422,8 @@ class CanCreateAllCircuitsDesign(ExperimentDesign):
         raise NotImplementedError("Derived classes should implement this")
     
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+    def from_dir(cls, dirname: str, parent: Optional[ExperimentDesign]=None,
+                 name: Optional[str]=None, quick_load: bool=False):
         """
         Initialize a new ExperimentDesign object from `dirname`.
 
@@ -1460,7 +1465,7 @@ class CanCreateAllCircuitsDesign(ExperimentDesign):
         
         return ret
 
-    def write(self, dirname=None, parent=None):
+    def write(self, dirname: Optional[str]=None, parent: Optional[ExperimentDesign]=None):
         """
         Write this experiment design to a directory.
 
@@ -1532,7 +1537,7 @@ class CircuitListsDesign(ExperimentDesign):
     """
 
     @classmethod
-    def from_edesign(cls, edesign):
+    def from_edesign(cls, edesign: ExperimentDesign):
         """
         Create a CircuitListsDesign out of an existing experiment design.
 
@@ -1562,7 +1567,7 @@ class CircuitListsDesign(ExperimentDesign):
         else:
             raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
-    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels=None,
+    def __init__(self, circuit_lists, all_circuits_needing_data=None, qubit_labels: Optional[HomogeneousSeq]=None,
                  nested=False, remove_duplicates=True):
         """
         Create a new CircuitListsDesign object.
@@ -1642,26 +1647,26 @@ class CircuitListsDesign(ExperimentDesign):
         return CircuitListsDesign([self.circuit_lists[i] for i in list_indices_to_keep],
                                   qubit_labels=self.qubit_labels, nested=self.nested)
 
-    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+    def _truncate_to_circuits_inplace(self, circuits_to_keep: list[_Circuit]):
         truncated_circuit_lists = [_circuits.CircuitList.cast(lst).truncate(circuits_to_keep)
                                    for lst in self.circuit_lists]
         self.circuit_lists = truncated_circuit_lists
         self.nested = False  # we're not sure whether the truncated lists are nested
         super()._truncate_to_circuits_inplace(circuits_to_keep)
 
-    def _truncate_to_design_inplace(self, other_design):
+    def _truncate_to_design_inplace(self, other_design: ExperimentDesign):
         self.circuit_lists = [my_circuit_list.truncate(other_circuit_list) for my_circuit_list, other_circuit_list
                               in zip(self.circuit_lists, other_design.circuit_lists)]
         super()._truncate_to_design_inplace(other_design)
 
-    def _truncate_to_available_data_inplace(self, dataset):
+    def _truncate_to_available_data_inplace(self, dataset: _data.DataSet):
         truncated_lists = [_circuits.CircuitList.cast(clist).truncate_to_dataset(dataset)
                            for clist in self.circuit_lists]
         self.circuit_lists = truncated_lists
         #self.nested = False
         super()._truncate_to_available_data_inplace(dataset)
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> CircuitListsDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -1683,7 +1688,7 @@ class CircuitListsDesign(ExperimentDesign):
         return CircuitListsDesign(mapped_circuit_lists, mapped_circuits, mapped_qubit_labels,
                                   self.nested, remove_duplicates=False)  # no need to remove duplicates
 
-    def merge_with(self, other_edesign, remove_duplicates=True):
+    def merge_with(self, other_edesign: CircuitListsDesign, remove_duplicates: bool=True) -> CircuitListsDesign:
         """
         Merge this experiment design with another one and return the result.
 
@@ -1776,7 +1781,7 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         return all_circuits
 
     @classmethod
-    def from_edesign(cls, edesign, name):
+    def from_edesign(cls, edesign: ExperimentDesign, name: str) -> CombinedExperimentDesign:
         """
         Create a combined experiment design out of an existing experiment design.
 
@@ -1803,7 +1808,7 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         else:
             raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
-    def __init__(self, sub_designs, all_circuits=None, qubit_labels=None, sub_design_dirs=None,
+    def __init__(self, sub_designs, all_circuits=None, qubit_labels: Optional[Union[HomogeneousSeq, Literal['multiple']]]=None, sub_design_dirs=None,
                  interleave=False):
         """
         Create a new CombinedExperimentDesign object.
@@ -1857,7 +1862,7 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
 
         super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
-    def _create_subdata(self, sub_name, dataset):
+    def _create_subdata(self, sub_name, dataset: _data.DataSet):
         """
         Creates a :class:`ProtocolData` object for a sub-experiment-design.
 
@@ -1913,7 +1918,7 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         self._dirs[key] = self._auto_dirname(key)
         self._vals[key] = val
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> CombinedExperimentDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -1964,7 +1969,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
     """
 
     @classmethod
-    def from_edesign(cls, edesign):
+    def from_edesign(cls, edesign: ExperimentDesign) -> SimultaneousExperimentDesign:
         """
         Create a simultaneous experiment design out of an existing experiment design.
 
@@ -1988,7 +1993,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         else:
             raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
-    def __init__(self, edesigns, tensored_circuits=None, qubit_labels=None):
+    def __init__(self, edesigns: list[ExperimentDesign], tensored_circuits=None, qubit_labels: Optional[Union[HomogeneousSeq, Literal['multiple']]]=None):
         """
         Create a new SimultaneousExperimentDesign object.
 
@@ -2065,7 +2070,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         sub_design_dirs = {qlbls: '_'.join(map(str, qlbls)) for qlbls in sub_designs}
         super().__init__(tensored_circuits, qubit_labels, sub_designs, sub_design_dirs)
 
-    def _create_subdata(self, qubit_labels, dataset):
+    def _create_subdata(self, qubit_labels: HomogeneousSeq, dataset: _data.DataSet):
         """
         Creates a :class:`ProtocolData` object for a sub-experiment-design.
 
@@ -2114,7 +2119,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                 filtered_ds = filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
         return ProtocolData(sub_design, filtered_ds)
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> SimultaneousExperimentDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -2163,7 +2168,7 @@ class FreeformDesign(CanCreateAllCircuitsDesign):
         return list(self.aux_info.keys())
 
     @classmethod
-    def from_dataframe(cls, df, qubit_labels=None):
+    def from_dataframe(cls, df, qubit_labels: Optional[HomogeneousSeq]=None):
         """
         Create a FreeformDesign from a pandas dataframe.
 
@@ -2187,7 +2192,7 @@ class FreeformDesign(CanCreateAllCircuitsDesign):
         return cls(circuits, qubit_labels)
 
     @classmethod
-    def from_edesign(cls, edesign):
+    def from_edesign(cls, edesign: ExperimentDesign) -> FreeformDesign:
         """
         Create a FreeformDesign out of an existing experiment design.
 
@@ -2213,14 +2218,14 @@ class FreeformDesign(CanCreateAllCircuitsDesign):
         else:
             raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
-    def __init__(self, circuits, qubit_labels=None):
+    def __init__(self, circuits, qubit_labels: Optional[Union[HomogeneousSeq, Literal['multiple']]]=None):
         self.aux_info = circuits.copy() if isinstance(circuits, dict) else {c: None for c in circuits}
         
         super().__init__(self._create_all_circuits_needing_data(), qubit_labels)
         
         self.auxfile_types['aux_info'] = 'circuit-str-json'
 
-    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+    def _truncate_to_circuits_inplace(self, circuits_to_keep: list[_Circuit]):
         truncated_aux_info = {k: v for k, v in self.aux_info.items() if k in circuits_to_keep}
         self.aux_info = truncated_aux_info
         super()._truncate_to_circuits_inplace(circuits_to_keep)
@@ -2235,7 +2240,7 @@ class FreeformDesign(CanCreateAllCircuitsDesign):
         df = cdict.to_dataframe()
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> FreeformDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -2287,8 +2292,10 @@ class ProtocolData(_TreeNode, _MongoSerializable):
     CACHE_COLLECTION_NAME = "pygsti_protocol_data_caches"
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, preloaded_edesign=None, quick_load=False,
-                 record_zero_counts=True):
+    def from_dir(cls, dirname: str, parent: Optional[ProtocolData]=None,
+                 name: Optional[str]=None, preloaded_edesign: Optional[ExperimentDesign]=None,
+                 quick_load: bool=False,
+                 record_zero_counts: bool=True):
         """
         Initialize a new ProtocolData object from `dirname`.
 
@@ -2391,7 +2398,7 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         ret._init_children_from_mongodb_doc(doc, mongodb, preloaded_edesign=edesign, quick_load=quick_load)
         return ret
 
-    def __init__(self, edesign, dataset=None, cache=None):
+    def __init__(self, edesign: ExperimentDesign, dataset: Optional[Union[_data.DataSet, _data.MultiDataSet]]=None, cache: Optional[dict]=None):
         """
         Create a new ProtocolData object.
 
@@ -2491,7 +2498,7 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         """
         return isinstance(self.dataset, (_data.MultiDataSet, dict))
 
-    def prune_tree(self, paths, paths_are_sorted=False):
+    def prune_tree(self, paths, paths_are_sorted: bool=False) -> ProtocolData:
         """
         Prune the tree rooted here to include only the given paths, discarding all else.
 
@@ -2522,7 +2529,7 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         filtered_edesign = self.edesign.prune_tree(paths, paths_are_sorted)
         return build_data(filtered_edesign, self)
 
-    def write(self, dirname=None, parent=None, edesign_already_written=False):
+    def write(self, dirname: Optional[str]=None, parent: Optional[ProtocolData]=None, edesign_already_written: bool=False):
         """
         Write this protocol data to a directory.
 
@@ -2648,7 +2655,7 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         # Perhaps parent has already done this, but try to remove edesign anyway
         _io.remove_edesign_from_mongodb(mongodb, doc['edesign_id'], session, recursive)
 
-    def setup_nameddict(self, final_dict):
+    def setup_nameddict(self, final_dict: _NamedDict) -> _NamedDict:
         """
         Initializes a set of nested :class:`NamedDict` dictionaries describing this data.
 
@@ -2729,7 +2736,7 @@ class ProtocolResults(_MongoSerializable):
     collection_name = "pygsti_results"
 
     @classmethod
-    def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
+    def from_dir(cls, dirname: str, name: str, preloaded_data: Optional[ProtocolData]=None, quick_load: bool=False) -> ProtocolResults:
         """
         Initialize a new ProtocolResults object from `dirname` / results / `name`.
 
@@ -2766,7 +2773,7 @@ class ProtocolResults(_MongoSerializable):
         return ret
 
     @classmethod
-    def _from_dir_partial(cls, dirname, quick_load=False, load_protocol=False):
+    def _from_dir_partial(cls, dirname: str, quick_load: bool=False, load_protocol: bool=False) -> ProtocolResults:
         """
         Internal method for loading only the results-specific data, and not the `data` member.
         This method may be used independently by derived ProtocolResults objects which contain
@@ -2817,7 +2824,7 @@ class ProtocolResults(_MongoSerializable):
         self.data = data
         self.auxfile_types = {'data': 'none', 'protocol': 'dir-serialized-object'}
 
-    def write(self, dirname=None, data_already_written=False):
+    def write(self, dirname: Optional[str]=None, data_already_written: bool=False):
         """
         Write these protocol results to a directory.
 
@@ -2883,7 +2890,7 @@ class ProtocolResults(_MongoSerializable):
                                             recursive=recursive)
         _io.remove_data_from_mongodb(mongodb, doc['protocoldata_id'], session, recursive)
 
-    def to_nameddict(self):
+    def to_nameddict(self) -> _NamedDict:
         """
         Convert these results into nested :class:`NamedDict` objects.
 
@@ -2968,7 +2975,7 @@ class MultiPassResults(ProtocolResults):
     """
 
     @classmethod
-    def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
+    def from_dir(cls, dirname: str, name: str, preloaded_data: Optional[ProtocolData]=None, quick_load: bool=False):
         """
         Initialize a new MultiPassResults object from `dirname` / results / `name`.
 
@@ -3031,7 +3038,7 @@ class MultiPassResults(ProtocolResults):
         self.passes = _collections.OrderedDict()  # _NamedDict('Pass', 'category') - to_nameddict takes care of this
         self.auxfile_types['passes'] = 'dict:partialdir-serialized-object'
 
-    def to_nameddict(self):
+    def to_nameddict(self) -> _NamedDict:
         """
         Create a :class:`NamedDict` of the results within this object.
 
@@ -3084,7 +3091,9 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
     collection_name = "pygsti_results_directories"
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, preloaded_data=None, quick_load=False):
+    def from_dir(cls, dirname: str, parent: Optional[ProtocolResultsDir]=None,
+                 name: Optional[str]=None, preloaded_data: Optional[ProtocolData]=None,
+                 quick_load: bool=False) -> ProtocolResultsDir:
         """
         Initialize a new ProtocolResultsDir object from `dirname`.
 
@@ -3195,7 +3204,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
                                             read_all_results_for_data=read_all_results_for_data)
         return ret
 
-    def __init__(self, data, protocol_results=None, children=None):
+    def __init__(self, data: ProtocolData, protocol_results: Optional[Union[dict, ProtocolResults]]=None, children: Optional[dict]=None):
         """
         Create a new ProtocolResultsDir object.
 
@@ -3243,7 +3252,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         _MongoSerializable.__init__(self)
         _TreeNode.__init__(self, self.data.edesign._dirs, children)
 
-    def add_results(self, for_protocol_name, results):
+    def add_results(self, for_protocol_name: str, results: ProtocolResults):
         """
         Add a new results object to this results directory node.
 
@@ -3289,7 +3298,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         else:
             raise KeyError("Invalid key: %s" % str(key))
 
-    def write(self, dirname=None, parent=None, data_already_written=False):
+    def write(self, dirname: Optional[str]=None, parent: Optional[ProtocolResultsDir]=None, data_already_written: bool=False):
         """
         Write this "protocol results directory" to a directory.
 
@@ -3446,7 +3455,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         return P.pformat(self.to_nameddict())
 
 
-def run_default_protocols(data, memlimit=None, comm=None):
+def run_default_protocols(data: ProtocolData, memlimit: Optional[int]=None, comm=None) -> ProtocolResultsDir:
     """
     Run the default protocols for the data-tree rooted at `data`.
 
@@ -3486,7 +3495,7 @@ class ProtocolPostProcessor(object):
     # but it's conceptually a different thing...  Should we derive it from Protocol?
 
     @classmethod
-    def from_dir(cls, dirname, quick_load=False):  # same I/O pattern as Protocol
+    def from_dir(cls, dirname: str, quick_load: bool=False):  # same I/O pattern as Protocol
         """
         Initialize a new ProtocolPostProcessor object from `dirname`.
 
@@ -3508,7 +3517,7 @@ class ProtocolPostProcessor(object):
         ret._init_unserialized_attributes()
         return ret
 
-    def __init__(self, name):
+    def __init__(self, name: str):
         """
         Create a new ProtocolPostProcessor object.
 
@@ -3528,7 +3537,7 @@ class ProtocolPostProcessor(object):
     def _init_unserialized_attributes(self):
         pass
 
-    def run(self, results, memlimit=None, comm=None):
+    def run(self, results: ProtocolResults, memlimit: Optional[int]=None, comm=None) -> ProtocolResults:
         """
         Run this post-processor on `results`.
 
@@ -3552,7 +3561,7 @@ class ProtocolPostProcessor(object):
         #Returned Results object should be rooted at place of given results/resultsdir
         raise NotImplementedError("Derived classes should implement this!")
 
-    def write(self, dirname):
+    def write(self, dirname: str):
         """
         Write this protocol post-processor to a directory.
 
@@ -3694,7 +3703,7 @@ class DataCountsSimulator(DataSimulator):
         self.record_zero_counts = record_zero_counts
         self.times = times
 
-    def run(self, edesign, memlimit=None, comm=None):
+    def run(self, edesign: ExperimentDesign, memlimit: Optional[int]=None, comm=None):
         """
         Run this data simulator on an experiment design.
 
