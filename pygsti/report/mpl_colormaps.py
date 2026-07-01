@@ -43,7 +43,7 @@ class MplLinLogNorm(_matplotlib.colors.Normalize):
         Whether clipping should be performed. See :class:`matplotlib.colors.Normalize`.
     """
 
-    def __init__(self, linlog_colormap: _LinlogColormap, clip=False):
+    def __init__(self, linlog_colormap: _LinlogColormap, clip: bool=False):
         cm = linlog_colormap
         super(MplLinLogNorm, self).__init__(vmin=cm.vmin, vmax=cm.vmax, clip=clip)
         self.trans = cm.trans
@@ -76,7 +76,7 @@ class MplLinLogNorm(_matplotlib.colors.Normalize):
         return self.cm.normalize(value)
 
 
-def mpl_make_linear_norm(vmin: float, vmax: float, clip=False):
+def mpl_make_linear_norm(vmin: float, vmax: float, clip: bool=False):
     """
     Create a linear matplotlib normalization
 
