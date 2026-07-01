@@ -11,6 +11,7 @@ Functions for generating report tables in different formats
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Mapping, Any
 
 from pygsti.report.convert import converter
 html = converter('html')  # Retrieve low-level formatters
@@ -139,7 +140,7 @@ pre_convert_latex = _Formatter(stringreplacers=[
     ('<STAR>', '\\bigstar')])
 
 
-def special_convert_latex(x, specs):
+def special_convert_latex(x, specs: Mapping[str, Any]):
     """
     Special conversion rules for latex
 
@@ -201,7 +202,7 @@ Notice that they still have the function signature (item, specs -> string)
 '''
 
 
-def html_figure(fig: _ReportableQty, specs: dict) -> str:
+def html_figure(fig: _ReportableQty, specs: Mapping[str, Any]) -> str:
     """
     Render a html-format figure
 
@@ -228,7 +229,7 @@ def html_figure(fig: _ReportableQty, specs: dict) -> str:
     return render_out  # a dictionary with 'html' and 'js' keys
 
 
-def latex_figure(fig: _ReportableQty, specs: dict) -> str:
+def latex_figure(fig: _ReportableQty, specs: Mapping[str, Any]) -> str:
     """
     Render a latex-format figure
 
@@ -253,7 +254,7 @@ def latex_figure(fig: _ReportableQty, specs: dict) -> str:
     return render_out
 
 
-def python_figure(fig: _ReportableQty, specs: dict) -> _ReportableQty:
+def python_figure(fig: _ReportableQty, specs: Mapping[str, Any]) -> _ReportableQty:
     """
     Render a python-format figure
 
