@@ -174,42 +174,27 @@ class TransportProfileTester(BaseCase):
 
 class NonLeakageBasisTester(BaseCase):
     """
-    Tests for metric functions called with a non-leakage basis (pp).
-
-    When implies_leakage_modeling is False several functions degrade gracefully:
-    - tensorized_teststate_density: uses the full identity as the computational
-      effect (lines 40-41).
-    - subspace_superop_fro_dist: uses IdentityOperator instead of the projector
-      (line 187).
-    - gate_leakage_profile / gate_seepage_profile: warn and return empty arrays
-      when the computational subspace equals the whole Hilbert space (lines
-      339-345, 361-367).
+    Tests for metric functions called with a non-leakage basis e.g., (pp or gm).
     """
 
     def setUp(self):
         self.pp_basis = Basis.cast('pp', 4)
         self.op_id    = np.eye(4)
 
-    # Lines 40-41: non-leakage path in tensorized_teststate_density, reached
-    # through subspace_jtracedist (which calls apply_tensorized_to_teststate
-    # which calls tensorized_teststate_density).
     def test_jtracedist_nonleakage_basis_self_is_zero(self):
         d = subspace_jtracedist(self.op_id, self.op_id, self.pp_basis)
         self.assertAlmostEqual(d, 0.0, places=10)
 
-    # Line 187: non-leakage path in subspace_superop_fro_dist.
     def test_fro_dist_nonleakage_basis_self_is_zero(self):
         d = subspace_superop_fro_dist(self.op_id, self.op_id, self.pp_basis)
         self.assertAlmostEqual(d, 0.0, places=10)
 
-    # Line 240: non-leakage path in subspace_diamonddist.
     @needs_cvxpy
     def test_diamonddist_nonleakage_basis_self_is_zero(self):
         from pygsti.leakage.metrics import subspace_diamonddist
         d = subspace_diamonddist(self.op_id, self.op_id, self.pp_basis)
         self.assertAlmostEqual(d, 0.0, places=6)
 
-    # Lines 339-345: warn + return empty in gate_leakage_profile.
     def test_leakage_profile_fullspace_warns_and_empty(self):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
@@ -218,7 +203,6 @@ class NonLeakageBasisTester(BaseCase):
         self.assertEqual(rates.shape, (0,))
         self.assertEqual(states, [])
 
-    # Lines 361-367: warn + return empty in gate_seepage_profile.
     def test_seepage_profile_fullspace_warns_and_empty(self):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')

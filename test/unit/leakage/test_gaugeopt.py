@@ -29,9 +29,6 @@ class DirectSumUnitaryGroupBuilderTester(BaseCase):
         gg = _direct_sum_unitary_group(self.subspace_bases, self.full_basis)
         self.assertIsInstance(gg, DirectSumUnitaryGroup)
 
-    # Lines 29 (assert) and 38 (U1Group branch):
-    # Passing triviality_flags explicitly hits the assert on line 29.
-    # Setting tf=False for the dim-1 basis triggers line 38 (U1Group()).
     def test_explicit_false_flag_on_dim1_uses_u1group(self):
         gg_default = _direct_sum_unitary_group(self.subspace_bases, self.full_basis)
         gg_u1      = _direct_sum_unitary_group(
