@@ -3620,9 +3620,9 @@ class Circuit(object):
     def duration(self):
         # similar to depth()
         if self._static:
-            return sum([lbl.time for lbl in self._labels])
+            return sum([getattr(lbl, "time", 0) for lbl in self._labels])
         else:
-            return sum([_Label(layer_lbl).time for layer_lbl in self._labels])
+            return sum([getattr(_Label(layer_lbl), "time", 0.0) for layer_lbl in self._labels])
 
     def two_q_gate_count(self):
         """
