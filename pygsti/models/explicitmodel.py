@@ -917,16 +917,19 @@ class ExplicitOpModel(_mdl.OpModel):
         -------
         float
         """
+        if not self.basis.first_element_is_identity:
+            raise NotImplementedError()
+
         penalty = 0.0
         for operationMx in list(self.operations.values()):
-            penalty += abs(operationMx[0, 0] - 1.0)**2
-            for k in range(1, operationMx.shape[1]):
-                penalty += abs(operationMx[0, k])**2
+            op_dense = operationMx.to_dense('minimal')
+            penalty += abs(op_dense[0, 0] - 1.0)**2
+            penalty += _np.linalg.norm(op_dense[0, 1:])**2
 
         op_dim = self.state_space.dim
         firstEl = 1.0 / op_dim**0.25
         for rhoVec in list(self.preps.values()):
-            penalty += abs(rhoVec[0, 0] - firstEl)**2
+            penalty += abs(rhoVec.to_dense('minimal')[0] - firstEl)**2
 
         return _np.sqrt(penalty)
 
@@ -1292,7 +1295,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 return _op.FullArbitraryOp(rand_op @ gate.to_dense())
             def transformed_stateprep(rand_op, rho):
                 rand_op = rand_op.to_dense()
-                return FullState(rand_op @ rho)
+                return FullState(rand_op @ rho.to_dense('minimal'))
             def transformed_povm(rand_op, M):
                 rand_op = rand_op.to_dense()
                 dmvecs = {elbl: rand_op @ e.to_dense() for elbl, e in M.items()}
@@ -1365,13 +1368,14 @@ class ExplicitOpModel(_mdl.OpModel):
 
         #Increase dimension of rhoVecs and EVecs by zero-padding
         for lbl, rhoVec in self.preps.items():
-            assert(len(rhoVec) == curDim)
+            rho_dense = rhoVec.to_dense('minimal')
+            assert(len(rho_dense) == curDim)
             new_model.preps[lbl] = \
-                _state.FullState(_np.concatenate((rhoVec, vec_zeroPad)), dumb_basis, evotype, state_space)
+                _state.FullState(_np.concatenate((rho_dense, vec_zeroPad.ravel())), dumb_basis, evotype, state_space)
 
         for lbl, povm in self.povms.items():
             assert(povm.state_space.dim == curDim)
-            effects = [(elbl, _np.concatenate((EVec, vec_zeroPad)))
+            effects = [(elbl, _np.concatenate((EVec.to_dense('minimal'), vec_zeroPad.ravel())))
                        for elbl, EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
@@ -1381,17 +1385,19 @@ class ExplicitOpModel(_mdl.OpModel):
 
         #Increase dimension of gates by assuming they act as identity on additional (unknown) space
         for opLabel, gate in self.operations.items():
-            assert(gate.shape == (curDim, curDim))
+            gate_dense = gate.to_dense('minimal')
+            assert(gate_dense.shape == (curDim, curDim))
             newOp = _np.zeros((new_dimension, new_dimension))
-            newOp[0:curDim, 0:curDim] = gate[:, :]
+            newOp[0:curDim, 0:curDim] = gate_dense[:, :]
             for i in range(curDim, new_dimension): newOp[i, i] = 1.0
             new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, dumb_basis, evotype, state_space)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
             for outcomeLbl, gate in inst.items():
+                gate_dense = gate.to_dense('minimal')
                 newOp = _np.zeros((new_dimension, new_dimension))
-                newOp[0:curDim, 0:curDim] = gate[:, :]
+                newOp[0:curDim, 0:curDim] = gate_dense[:, :]
                 for i in range(curDim, new_dimension): newOp[i, i] = 1.0
                 inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, dumb_basis, evotype, state_space)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops, evotype, state_space)
@@ -1443,13 +1449,14 @@ class ExplicitOpModel(_mdl.OpModel):
 
         #Decrease dimension of rhoVecs and EVecs by truncation
         for lbl, rhoVec in self.preps.items():
-            assert(len(rhoVec) == curDim)
+            rho_dense = rhoVec.to_dense('minimal')
+            assert(len(rho_dense) == curDim)
             new_model.preps[lbl] = \
-                _state.FullState(rhoVec[0:new_dimension, :], dumb_basis, self.evotype, state_space)
+                _state.FullState(rho_dense[0:new_dimension], dumb_basis, self.evotype, state_space)
 
         for lbl, povm in self.povms.items():
             assert(povm.state_space.dim == curDim)
-            effects = [(elbl, EVec[0:new_dimension, :]) for elbl, EVec in povm.items()]
+            effects = [(elbl, EVec.to_dense('minimal')[0:new_dimension]) for elbl, EVec in povm.items()]
 
             if isinstance(povm, _povm.TPPOVM):
                 new_model.povms[lbl] = _povm.TPPOVM(effects, self.evotype, state_space)
@@ -1458,16 +1465,18 @@ class ExplicitOpModel(_mdl.OpModel):
 
         #Decrease dimension of gates by truncation
         for opLabel, gate in self.operations.items():
-            assert(gate.shape == (curDim, curDim))
+            gate_dense = gate.to_dense('minimal')
+            assert(gate_dense.shape == (curDim, curDim))
             newOp = _np.zeros((new_dimension, new_dimension))
-            newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
+            newOp[:, :] = gate_dense[0:new_dimension, 0:new_dimension]
             new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, evotype=self.evotype, state_space=state_space)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
             for outcomeLbl, gate in inst.items():
+                gate_dense = gate.to_dense('minimal')
                 newOp = _np.zeros((new_dimension, new_dimension))
-                newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
+                newOp[:, :] = gate_dense[0:new_dimension, 0:new_dimension]
                 inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, evotype=self.evotype, state_space=state_space)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops, self.evotype, state_space)
 
@@ -1504,8 +1513,9 @@ class ExplicitOpModel(_mdl.OpModel):
         kicked_gs = self.copy()
         rndm = _np.random.RandomState(seed)
         for opLabel, gate in self.operations.items():
-            delta = absmag * 2.0 * (rndm.random_sample(gate.shape) - 0.5) + bias
-            kicked_gs.operations[opLabel] = _op.FullArbitraryOp(kicked_gs.operations[opLabel] + delta)
+            gate_dense = gate.to_dense('minimal')
+            delta = absmag * 2.0 * (rndm.random_sample(gate_dense.shape) - 0.5) + bias
+            kicked_gs.operations[opLabel] = _op.FullArbitraryOp(gate_dense + delta)
 
         #Note: does not alter instruments!
         return kicked_gs
