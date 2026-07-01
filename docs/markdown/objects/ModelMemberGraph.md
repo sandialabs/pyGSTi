@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -51,14 +51,16 @@ print(ex_mmg1.is_equivalent(ex_mmg2))
 ```
 
 ```{code-cell} ipython3
-ex_mdl2.operations['Gxpi2', 0][0, 0] = 0.0
+_arr = ex_mdl2.operations['Gxpi2', 0].to_dense().copy()
+_arr[0, 0] = 0.0
+ex_mdl2.operations['Gxpi2', 0].set_dense(_arr)
 ex_mmg2 = ex_mdl2.create_modelmember_graph()
 print(ex_mmg1.is_similar(ex_mmg2))
 print(ex_mmg1.is_equivalent(ex_mmg2))
 ```
 
 ```{code-cell} ipython3
-ex_mdl2.operations['Gxpi2', 0] = pygsti.modelmembers.operations.StaticArbitraryOp(ex_mdl2.operations['Gxpi2', 0])
+ex_mdl2.operations['Gxpi2', 0] = pygsti.modelmembers.operations.StaticArbitraryOp(ex_mdl2.operations['Gxpi2', 0].to_dense())
 ex_mmg2 = ex_mdl2.create_modelmember_graph()
 print(ex_mmg1.is_similar(ex_mmg2))
 print(ex_mmg1.is_equivalent(ex_mmg2))
@@ -117,5 +119,3 @@ ex_mdl1.write('../../example_files/ex_mdl1.json')
 ```{code-cell} ipython3
 ln_mdl1.write('../../example_files/ln_mdl1.json')
 ```
-
-

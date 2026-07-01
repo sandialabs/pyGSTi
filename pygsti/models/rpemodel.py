@@ -77,9 +77,10 @@ def make_rpe_model(alpha_true, epsilon_true, y_rot, spam_depol, gate_depol=None,
             effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
-        outputModel.operations['Gx'] = _op.FullArbitraryOp(_np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']),
-                                                                           outputModel.operations['Gx']),
-                                                                   modelAux1.operations['Gy']))
+        similarity_transform = modelAux1.operations['Gy'].to_dense('minimal')
+        before = outputModel.operations['Gx'].to_dense('minimal')
+        after = _np.linalg.inv(similarity_transform) @ before @ similarity_transform
+        outputModel.operations['Gx'] = _op.FullArbitraryOp(after)
 
     outputModel = outputModel.depolarize(op_noise=gate_depol,
                                          spam_noise=spam_depol)
@@ -127,9 +128,10 @@ def rpe_ensemble_test(alpha_true, epsilon_true, y_rot, spam_depol, log2k_max, n,
                                                              effect_expressions=["0", "complement"],
                                                              spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
-    simModel.operations['Gx'] = _op.FullArbitraryOp(
-        _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']), simModel.operations['Gx']),
-                modelAux1.operations['Gy']))
+    similarity_transform = modelAux1.operations['Gy'].to_dense('minimal')
+    before = simModel.operations['Gx'].to_dense('minimal')
+    after = _np.linalg.inv(similarity_transform) @ before @ similarity_transform
+    simModel.operations['Gx'] = _op.FullArbitraryOp(after)
 
     simModel = simModel.depolarize(spam_noise=spam_depol)
 

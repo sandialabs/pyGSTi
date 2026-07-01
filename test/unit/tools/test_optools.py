@@ -134,7 +134,7 @@ class ProjectModelTester(BaseCase):
             proj2, _ = ot.project_model(pm1, self.target_model, [ptype], gen_type, logG_weight=0)
             pm2 = proj2[0]
             for pm1_op, pm2_op in zip(pm1.operations.values(), pm2.operations.values()):
-                self.assertArraysAlmostEqual(pm1_op, pm2_op)
+                self.assertArraysAlmostEqual(pm1_op.to_dense(), pm2_op.to_dense())
 
     def test_logTiG_model_projection(self):
         gen_type = 'logTiG'
@@ -144,7 +144,7 @@ class ProjectModelTester(BaseCase):
             proj2, _ = ot.project_model(pm1, self.target_model, [ptype], gen_type, logG_weight=0)
             pm2 = proj2[0]
             for pm1_op, pm2_op in zip(pm1.operations.values(), pm2.operations.values()):
-                self.assertArraysAlmostEqual(pm1_op, pm2_op)
+                self.assertArraysAlmostEqual(pm1_op.to_dense(), pm2_op.to_dense())
 
     def test_logGTi_model_projection(self):
         gen_type = 'logGTi'
@@ -154,7 +154,7 @@ class ProjectModelTester(BaseCase):
             proj2, _ = ot.project_model(pm1, self.target_model, [ptype], gen_type, logG_weight=0)
             pm2 = proj2[0]
             for pm1_op, pm2_op in zip(pm1.operations.values(), pm2.operations.values()):
-                self.assertArraysAlmostEqual(pm1_op, pm2_op)
+                self.assertArraysAlmostEqual(pm1_op.to_dense(), pm2_op.to_dense())
 
     def test_raises_on_basis_mismatch(self):
         with self.assertRaises(ValueError):
@@ -294,47 +294,51 @@ class ErrorGenTester(BaseCase):
         basisNames = ['std', 'gm', 'pp']  # , 'qt'] #dim must == 3 for qt
 
         for (lbl, gateTarget), gate in zip(self.target_model.operations.items(), self.mdl_datagen.operations.values()):
-            errgen = ot.error_generator(gate, gateTarget, self.target_model.basis, 'logG-logT')
-            altErrgen = ot.error_generator(gate, gateTarget, self.target_model.basis, 'logTiG')
-            altErrgen2 = ot.error_generator(gate, gateTarget, self.target_model.basis, 'logGTi')
+            gate_dense = gate.to_dense('minimal')
+            gateTarget_dense = gateTarget.to_dense('minimal')
+            errgen = ot.error_generator(gate_dense, gateTarget_dense, self.target_model.basis, 'logG-logT')
+            altErrgen = ot.error_generator(gate_dense, gateTarget_dense, self.target_model.basis, 'logTiG')
+            altErrgen2 = ot.error_generator(gate_dense, gateTarget_dense, self.target_model.basis, 'logGTi')
             with self.assertRaises(ValueError):
-                ot.error_generator(gate, gateTarget, self.target_model.basis, 'adsf')
+                ot.error_generator(gate_dense, gateTarget_dense, self.target_model.basis, 'adsf')
 
             #OLD: tested above
             #for projectionType in projectionTypes:
             #    for basisName in basisNames:
             #        ot.std_errorgen_projections(errgen, projectionType, basisName)
 
-            originalGate = ot.operation_from_error_generator(errgen, gateTarget, self.target_model.basis, 'logG-logT')
-            altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget, self.target_model.basis, 'logTiG')
-            altOriginalGate2 = ot.operation_from_error_generator(altErrgen, gateTarget, self.target_model.basis, 'logGTi')
+            originalGate = ot.operation_from_error_generator(errgen, gateTarget_dense, self.target_model.basis, 'logG-logT')
+            altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget_dense, self.target_model.basis, 'logTiG')
+            altOriginalGate2 = ot.operation_from_error_generator(altErrgen, gateTarget_dense, self.target_model.basis, 'logGTi')
             with self.assertRaises(ValueError):
-                ot.operation_from_error_generator(errgen, gateTarget, self.target_model.basis, 'adsf')
-            self.assertArraysAlmostEqual(originalGate, gate) # sometimes need to approximate the log for this one
-            self.assertArraysAlmostEqual(altOriginalGate, gate)
-            self.assertArraysAlmostEqual(altOriginalGate2, gate)
+                ot.operation_from_error_generator(errgen, gateTarget_dense, self.target_model.basis, 'adsf')
+            self.assertArraysAlmostEqual(originalGate, gate_dense) # sometimes need to approximate the log for this one
+            self.assertArraysAlmostEqual(altOriginalGate, gate_dense)
+            self.assertArraysAlmostEqual(altOriginalGate2, gate_dense)
 
     @fake_minimize
     def test_err_gen_nonunitary(self):
-        errgen_nonunitary = ot.error_generator(self.mdl_datagen.operations['Gxi'],
-                                               self.mdl_datagen.operations['Gxi'],
-                                               self.mdl_datagen.basis)
+        Gxi_dense = self.mdl_datagen.operations['Gxi'].to_dense('minimal')
+        errgen_nonunitary = ot.error_generator(Gxi_dense, Gxi_dense, self.mdl_datagen.basis)
         # Perfect match, should get all 0s
-        self.assertArraysAlmostEqual(np.zeros_like(self.mdl_datagen.operations['Gxi']), errgen_nonunitary)
+        self.assertArraysAlmostEqual(np.zeros_like(Gxi_dense), errgen_nonunitary)
 
     def test_err_gen_not_near_gate(self):
         # Both should warn
         with self.assertWarns(UserWarning):
-            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
+            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'].to_dense('minimal'),
+                                                 self.target_model.operations['Gix'].to_dense('minimal'),
                                                  self.target_model.basis, 'logTiG')
 
         with self.assertWarns(UserWarning):
-            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gix'],
+            errgen_notsmall = ot.error_generator(self.mdl_datagen.operations['Gxi'].to_dense('minimal'),
+                                                 self.target_model.operations['Gix'].to_dense('minimal'),
                                                  self.target_model.basis, 'logGTi')
 
     def test_err_gen_raises_on_bad_type(self):
         with self.assertRaises(ValueError):
-            ot.error_generator(self.mdl_datagen.operations['Gxi'], self.target_model.operations['Gxi'],
+            ot.error_generator(self.mdl_datagen.operations['Gxi'].to_dense('minimal'),
+                               self.target_model.operations['Gxi'].to_dense('minimal'),
                                self.target_model.basis, 'foobar')
 
     def test_err_gen_assert_shape_raises_on_ndims_too_high(self):

@@ -420,7 +420,7 @@ def magnitudes_of_negative_choi_eigenvalues(model):
     ret = []
     choi_basis = model.basis.create_simple_equivalent('std')
     for (_, gate) in model.operations.items():
-        J : _np.ndarray = jamiolkowski_iso(gate, model.basis, choi_mx_basis=choi_basis) # type: ignore
+        J : _np.ndarray = jamiolkowski_iso(gate.to_dense('minimal'), model.basis, choi_mx_basis=choi_basis) # type: ignore
         evals = _mt.eigenvalues(J, assume_hermitian=True)
         for ev in evals:
             ret.append(-ev if ev < 0 else 0.0)

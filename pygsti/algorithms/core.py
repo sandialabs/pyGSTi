@@ -347,16 +347,17 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                             _povm.optimize_effect(new_vec, lgstModel.povms[povmLabel][effectLabel])
                             new_effects.append((effectLabel, new_vec))
 
-                        # Construct identity vector for complement effect vector
+                        # Compute complement effect by substracting from the identity effect.
                         #  Pad with zeros if needed (ROBIN - is this correct?)
-                        identity = povm[povm.complement_label].identity
+                        identity = povm[povm.complement_label].identity.to_dense('minimal')
                         Idim = identity.shape[0]
                         assert(Idim <= trunc)
-                        if Idim < trunc:
-                            padded_identityVec = _np.concatenate((identity, _np.zeros((trunc - Idim, 1), 'd')))
-                        else:
-                            padded_identityVec = identity
-                        comp_effect = padded_identityVec - sum([v for k, v in new_effects])
+                        comp_effect = _np.zeros(trunc)
+                        comp_effect[:Idim] = identity
+                        for _, v in new_effects:
+                            v_array = v.to_dense('minimal') if hasattr(v, 'to_dense') else v
+                            comp_effect -= v_array
+
                         new_effects.append((povm.complement_label, comp_effect))  # add complement
                         lgstModel.povms[povmLabel] = _povm.TPPOVM(new_effects)
 
