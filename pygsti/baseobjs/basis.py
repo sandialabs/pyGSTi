@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Sequence
 import copy as _copy
 import itertools as _itertools
+import re as _re
 import warnings as _warnings
 from functools import lru_cache
 from typing import (
@@ -78,11 +79,24 @@ def default_basis_for_udims(udims: Sequence[int]):
     return TensorProdBasis([(udim_to_name[u], u * u) for u in udims])
 
 
+_EYE_LABEL_REGEX = _re.compile(r'^(?:I|C\[I+\])+$')
+# ^ Matches labels that can denote (a projection of) the identity: any concatenation of
+#   'I' characters and 'C[I...I]' groups. The 'C[I...I]' form is the convention used by
+#   leakage-implying bases (see pygsti.leakage); bare 'I' runs cover ordinary bases like
+#   'pp' and 'gm', legacy leakage bases labeled before the 'C[...]' convention existed,
+#   and the per-factor segments that TensorProdBasis concatenates into its labels
+#   (e.g. 'IC[I]' for pp ⊗ l2p1).
+
+
 def _eye_label(basis) -> str:
     assert hasattr(basis, 'labels')
-    candidates = [len(ell) for ell in basis.labels if len(ell.strip('I')) == 0]
-    num_I = max(candidates, default=0)
-    lbl = 'I' * num_I
+    candidates = [ell for ell in basis.labels if _EYE_LABEL_REGEX.match(ell)]
+    if len(candidates) == 0:
+        return ''
+    # Prefer the candidate with the most 'I' characters (ties broken by string length).
+    # On legacy bases, whose candidates are all-'I' strings, this reduces to the old
+    # rule of taking the longest such label.
+    lbl = max(candidates, key=lambda ell: (ell.count('I'), len(ell)))
     return lbl
 
 

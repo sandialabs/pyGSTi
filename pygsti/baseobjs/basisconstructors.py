@@ -703,19 +703,24 @@ def lf_labels(matrix_dim: int) -> tuple[str,...]:
         raise NotImplementedError()
     # Divides the underlying Hilbert space into levels (0, 1, L), where (0, 1)
     # is the computational subspace and (L,) is leakage space.
+    #
+    # Labels follow the convention for leakage-implying bases: elements supported on the
+    # computational subspace are labeled 'C[...]', elements with support outside it are
+    # labeled 'L[...]', and the element proportional to the identity on leakage space is
+    # labeled just 'L[I]'.
     lbls = (
         # The first element is proportional to the identity on the computational subspace.
-        "I",
+        "C[I]",
         # The next seven elements also appear in the Gell-Mann basis when matrix_dim == 3.
-        "X",   # --> X_{0,1}
-        "Y",   # --> Y_{0,1}
-        "Z",   # --> Z_{1}
-        "LX0", # --> X_{0,2}
-        "LX1", # --> X_{1,2}
-        "LY0", # --> Y_{0,2}
-        "LY1", # --> Y_{1,2}
+        "C[X]",  # --> X_{0,1}
+        "C[Y]",  # --> Y_{0,1}
+        "C[Z]",  # --> Z_{1}
+        "L[X_02]",  # -> X_{0,2}
+        "L[X_12]",  # -> X_{1,2}
+        "L[Y_02]",  # -> Y_{0,2}
+        "L[Y_12]",  # -> Y_{1,2}
         # The ninth and final element is proportional to the identity on leakage space.
-        "L"
+        "L[I]"
     )
     return lbls
 

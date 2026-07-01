@@ -1,6 +1,7 @@
 import numpy as np
 
-from pygsti.baseobjs.basis import BuiltinBasis, Basis
+from pygsti.baseobjs.basis import BuiltinBasis, Basis, ExplicitBasis, TensorProdBasis
+from pygsti.baseobjs.basisconstructors import lf_matrices
 from pygsti.tools.matrixtools import is_projector
 from pygsti.tools import basistools as pgbt
 from pygsti.tools.basistools import stdmx_to_vec
@@ -40,6 +41,53 @@ class BasisLeakagePropertiesTester(BaseCase):
 
     def test_is_hermitian_std(self):
         self.assertFalse(self.std.is_hermitian())
+
+    def test_l2p1_labels(self):
+        self.assertEqual(tuple(self.l2p1.labels),
+                         ('C[I]', 'C[X]', 'C[Y]', 'C[Z]', 'L[X_02]', 'L[X_12]', 'L[Y_02]', 'L[Y_12]', 'L[I]'))
+
+    def test_tensor_product_implies_leakage(self):
+        # TensorProdBasis concatenates factor labels, so the identity-candidate label of
+        # pp ⨂ l2p1 is 'IC[I]'.  Detection must handle this mixed form.
+        tp = TensorProdBasis((BuiltinBasis('pp', 4), BuiltinBasis('l2p1', 9)))
+        self.assertTrue(tp.implies_leakage_modeling)
+        E = computational_effect(tp)
+        self.assertArraysAlmostEqual(E, np.diag([1., 1., 0., 1., 1., 0.]))
+
+
+class LegacyLabelBackCompatTester(BaseCase):
+    """
+    Bases labeled under the pre-'C[...]' convention (computational identity labeled by a
+    string of 'I' characters) must still be recognized.  The label set below is committed
+    to git in docs/markdown/examples/Leakage-manual.md.
+    """
+
+    def setUp(self):
+        self.legacy = ExplicitBasis(lf_matrices(3),
+                                    labels=['I', 'X', 'Y', 'Z', 'LX0', 'LX1', 'LY0', 'LY1', 'L'],
+                                    name='LegacyLeakageBasis')
+
+    def test_implies_leakage_modeling(self):
+        self.assertTrue(self.legacy.implies_leakage_modeling)
+
+    def test_computational_effect(self):
+        E = computational_effect(self.legacy)
+        self.assertArraysAlmostEqual(E, np.diag([1., 1., 0.]))
+
+    def test_matches_builtin_l2p1(self):
+        # Same elements as the (relabeled) builtin, so all derived leakage objects agree.
+        l2p1 = BuiltinBasis('l2p1', 9)
+        U_legacy = computational_superkets(self.legacy)
+        U_new    = computational_superkets(l2p1)
+        P_legacy = U_legacy @ U_legacy.T
+        P_new    = U_new @ U_new.T
+        self.assertArraysAlmostEqual(P_legacy, P_new)
+
+    def test_legacy_tensor_product(self):
+        tp = TensorProdBasis((BuiltinBasis('pp', 4), self.legacy))
+        self.assertTrue(tp.implies_leakage_modeling)
+        E = computational_effect(tp)
+        self.assertArraysAlmostEqual(E, np.diag([1., 1., 0., 1., 1., 0.]))
 
 
 
@@ -166,10 +214,22 @@ class AugmentForLeakageModelingTester(BaseCase):
         E_norm = self.E / la.norm(self.E)
         self.assertArraysAlmostEqual(self.b_aug.elements[0], E_norm)
 
-    def test_first_label_is_all_I(self):
+    def test_first_label_is_bracketed_all_I(self):
+        # The computational identity is labeled 'C[I...I]'; for a gm source basis
+        # (identity label 'I') that's exactly 'C[I]'.
         lbl = self.b_aug.labels[0]
-        self.assertEqual(lbl.strip('I'), '')
-        self.assertGreater(len(lbl), 0)
+        self.assertTrue(lbl.startswith('C[') and lbl.endswith(']'))
+        inner = lbl[2:-1]
+        self.assertEqual(inner.strip('I'), '')
+        self.assertGreater(len(inner), 0)
+        self.assertEqual(lbl, 'C[I]')
+
+    def test_cs_labels_format(self):
+        # Elements 1 ... k²−1 are labeled 'C[lbl]' with lbl a label of the source basis.
+        for lbl in self.b_aug.labels[1:self.k**2]:
+            self.assertTrue(lbl.startswith('C[') and lbl.endswith(']'),
+                            msg=f"expected 'C[...]' label, got {lbl!r}")
+            self.assertIn(lbl[2:-1], self.gm9.labels)
 
     def test_elements_are_normalized(self):
         for elem in self.b_aug.elements:
@@ -185,7 +245,7 @@ class AugmentForLeakageModelingTester(BaseCase):
         self.assertArraysAlmostEqual(proj, a_vec)
 
     def test_oc_elements_span_mc_perp(self):
-        # The complement projector I - E lives entirely in M[C]⊥.
+        # The complement projector I - E lives entirely in M[C]^⊥.
         k = self.k
         W = np.column_stack([e.ravel() for e in self.b_aug.elements[k**2:]])
         E_comp = np.eye(self.E.shape[0]) - self.E
@@ -198,8 +258,8 @@ class AugmentForLeakageModelingTester(BaseCase):
         for lbl in self.b_aug.labels[self.k**2:]:
             self.assertTrue(lbl.startswith('L'), msg=f"expected 'L...' label, got {lbl!r}")
 
-    def test_final_label_is_L(self):
-        self.assertEqual(self.b_aug.labels[-1], 'L')
+    def test_final_label_is_LI(self):
+        self.assertEqual(self.b_aug.labels[-1], 'L[I]')
 
     def test_output_name(self):
         self.assertIn('Leakage augmented', self.b_aug.name)

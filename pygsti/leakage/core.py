@@ -51,9 +51,17 @@ Basic definitions for leakage modeling
 --------------------------------------
 Let B denote a Hermitian basis for the Hilbert--Schmidt space M[H].
 
-We say that B *supports* leakage modeling if there's at least one element whose
-label is a string of the form 'I'*k for some integer k, and the element with
-the longest such label is proportional to a real orthogonal projector on H.
+Call a basis element label an *identity-candidate* if it is a concatenation of
+'I' characters and groups of the form 'C[I...I]' — i.e., if it matches the
+regular expression ^(?:I|C\\[I+\\])+$. The 'C[I...I]' form is the preferred
+convention for leakage modeling (e.g. 'C[I]' in the built-in 'l2p1' basis).
+We allow bare 'I' runs to cover bases like 'pp' and 'gm', as well as leagacy
+leakage bases. Mixed concatenations arise from tensor-product bases, like 
+'IC[I]' for pp ⨂ l2p1.
+
+We say that B *supports* leakage modeling if it has at least one element with
+an identity-candidate label, and the element whose label contains the most 'I'
+characters is proportional to a real orthogonal projector on H.
 
 Assuming B is such a basis, its element satisfying the conditions above is
 called the *computational basis matrix*. (Not be confused with "the computational
@@ -78,13 +86,11 @@ We say that B *implies* leakage modeling if C is a proper subspace of H.
 Return the computational effect of `basis`: the Hermitian operator E ∈ M[H] that
 orthogonally projects H onto the computational subspace C.
 
-E is obtained from the computational basis matrix of `basis` (the element whose label is
-the longest string of the form 'I'*k) by cleaning it into a genuine real orthogonal
+E is obtained from the computational basis matrix of `basis` (the element with the
+"most identity-like" label — see the notes) by cleaning it into a real orthogonal
 projector. Its range is C and its rank is dim(C).
 
-Raises a ValueError if `basis` does not support leakage modeling, i.e. if it has no
-element whose label is a string of the form 'I'*k that is proportional to a real
-orthogonal projector on H.
+Raises a ValueError if `basis` does not support leakage modeling.
 """ + NOTATION)
 def computational_effect(basis: Basis) -> np.ndarray:
     label = _eye_label(basis)
@@ -153,24 +159,24 @@ def computational_projector(basis: Basis) -> np.ndarray:
     return P
 
 
-def augment_for_leakage_modeling(basis: Basis, E: np.ndarray) -> Basis:
+def augment_for_leakage_modeling(b_in: Basis, E: np.ndarray) -> Basis:
     """
-    Returns a Basis `b_out` that's spiritially similar to `basis`, while
+    Returns a Basis `b_out` that's spiritially similar to `b_in`, while
     implying leakage modeling with C = range(E) as the computational subspace.
 
-    The elements of `b_out` have the following properties.
+    The elements of b_out have the following properties.
 
-      * The first element is proportional to E. Its label consists only of 'I's,
-        and is the longest such label in the basis.
+      * Element 0 is proportional to E. Its label has the form 'C[I...I]', where
+        the bracket holds as many 'I' characters as the identity label of b_in.
 
-      * The first rank(E)^2 elements span M[C]. Labels of these elements (other
-        than the very first) match those of their corresponding elements in `basis`. 
+      * The first k = rank(E)^2 elements span M[C]. Elements 1, ..., k^2-1 are labeled
+        'C[ell]', where 'ell' is the label of their corresponding element in b_in.
 
       * All subsequent elements span M[H] \\ M[C]. Their labels are of the form
-        'L[ell]', where 'ell' is the label of their corresponding element in `basis`.
+        'L[ell]', where 'ell' is the label of their corresponding element in b_in.
 
-      * The final element is proportional to the projector onto C^⟂
-        and is labeled 'L'.
+      * The final element is proportional to the projector onto C^⟂ and is labeled
+        'L[I...I]', where the bracket holds as many 'I' characters as element 0.
 
     Notes
     -----
@@ -196,40 +202,39 @@ def augment_for_leakage_modeling(basis: Basis, E: np.ndarray) -> Basis:
     E *= (k/np.trace(E))
     if not pgmt.is_projector(E):
         raise ValueError("E must be (proportional to) a projector")
-    try:
-        I_lbl = _eye_label(basis)
-    except ValueError:
-        I_lbl = 'I'
+    num_I = max(_eye_label(b_in).count('I'), 1)
+    I_lbl = 'C[' + 'I' * num_I + ']'
+    L_lbl = 'L[' + 'I' * num_I + ']' 
 
     # Step 1: build computational subspace (cs) basis elements and labels.
-    cs_elements = [ E @ B @ E            for B in basis.elements ]      # type: ignore
-    cs_elements = [ (B + B.T.conj()) / 2 for B in cs_elements ]
+    cs_elements = [ E @ B @ E            for B in b_in.elements ]      # type: ignore
+    cs_elements = [ (B + B.T.conj()) / 2 for B in cs_elements   ]
     mat1 = E.ravel().reshape(-1, 1)
     mat2 = np.column_stack([ B.ravel() for B in cs_elements ])
     p = pgmt.pivot_indices_after_deflation(mat1, mat2)
     p = p[:k**2-1]
-    cs_elements = [ E     ] + [ cs_elements[i]  for i in p ]
-    cs_labels   = [ I_lbl ] + [ basis.labels[i] for i in p ]            # type: ignore
+    cs_elements = [ E     ] + [ cs_elements[i]          for i in p ]
+    cs_labels   = [ I_lbl ] + [ f'C[{b_in.labels[i]}]'  for i in p ]   # type: ignore
 
     # Step 2: build orthogonal complement (oc) basis elements and labels.
     E_comp = np.eye(E.shape[0]) - E
-    oc_elements = [ B - E @ B @ E        for B in basis.elements ]      # type: ignore
-    oc_elements = [ (B + B.T.conj()) / 2 for B in oc_elements ]
+    oc_elements = [ B - E @ B @ E        for B in b_in.elements ]      # type: ignore
+    oc_elements = [ (B + B.T.conj()) / 2 for B in oc_elements   ]
     mat1 = E_comp.ravel().reshape(-1, 1)
     mat2 = np.column_stack([ B.ravel() for B in oc_elements ])
     p    = pgmt.pivot_indices_after_deflation(mat1, mat2)
-    p    = p[:basis.dim - k**2 - 1]
-    oc_elements = [ oc_elements[i]           for i in p ] + [ E_comp ]
-    oc_labels   = [ f'L[{basis.labels[i]}]'  for i in p ] + [ 'L'    ]  # type: ignore
+    p    = p[:b_in.dim - k**2 - 1]
+    oc_elements = [ oc_elements[i]          for i in p ] + [ E_comp ]
+    oc_labels   = [ f'L[{b_in.labels[i]}]'  for i in p ] + [ L_lbl  ]  # type: ignore
 
     # Step 3: stitch together and normalize.
-    labels   = cs_labels   + oc_labels
+    labels   = cs_labels + oc_labels
     elements = np.array(cs_elements + oc_elements)
     for element in elements:
         element /= la.norm(element)
         element[:] = element.round(decimals=16)
-    new_name  = 'Leakage augmented ' + basis.name
-    new_basis = ExplicitBasis(elements, labels, name=new_name)
-    assert new_basis.implies_leakage_modeling
+    out_name  = 'Leakage augmented ' + b_in.name
+    out_basis = ExplicitBasis(elements, labels, name=out_name)
+    assert out_basis.implies_leakage_modeling
 
-    return new_basis
+    return out_basis
