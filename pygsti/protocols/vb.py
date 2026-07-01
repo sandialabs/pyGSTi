@@ -10,7 +10,7 @@ Volumetric Benchmarking Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Union, Optional
+from typing import Union, Optional, Literal, Iterable
 import numpy as _np
 import copy as _copy
 
@@ -19,6 +19,15 @@ from pygsti.algorithms import randomcircuit as _rc
 from pygsti.protocols import protocol as _proto
 from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
 from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.baseobjs.label import HomogeneousSeq, SSLabelMapper
+
+# Type aliases for the arguments shared across the by-depth experiment designs.
+DepthList = Union[list[int], tuple[int, ...]]
+CircuitLists = Union[list[list[_Circuit]], tuple[list[_Circuit]]]
+QubitLabels = Optional[Union[HomogeneousSeq, Literal['multiple']]]
+# The by-depth summary-statistics protocols accept either an explicit list of
+# depths or the special string 'all'.
+Depths = Union[Literal['all'], list[int]]
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):
@@ -44,13 +53,16 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         all the circuits that need data.
     """
 
-    def __init__(self, depths: Union[list[int], tuple[int, ...]], circuit_lists: Union[list[list[_Circuit]], tuple[list[_Circuit]]], qubit_labels=None, remove_duplicates=True):
+    def __init__(self, depths: DepthList,
+                 circuit_lists: CircuitLists,
+                 qubit_labels: QubitLabels=None,
+                 remove_duplicates: bool=True):
         assert(len(depths) == len(circuit_lists)), \
             "Number of depths must equal the number of circuit lists!"
         super().__init__(circuit_lists, qubit_labels=qubit_labels, remove_duplicates=remove_duplicates)
         self.depths = depths
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> "ByDepthDesign":
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -70,7 +82,7 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return ByDepthDesign(self.depths, mapped_circuit_lists, mapped_qubit_labels, remove_duplicates=False)
 
-    def truncate_to_lists(self, list_indices_to_keep):
+    def truncate_to_lists(self, list_indices_to_keep: Iterable[int]) -> "ByDepthDesign":
         """
         Truncates this experiment design by only keeping a subset of its circuit lists.
 
@@ -89,7 +101,8 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         ret.circuit_lists = [self.circuit_lists[i] for i in list_indices_to_keep]
         return ret
 
-    def merge_with(self, other_edesign, remove_duplicates=True, sort_depths=False):
+    def merge_with(self, other_edesign: _proto.ExperimentDesign, remove_duplicates: bool=True,
+                   sort_depths: bool=False) -> "ByDepthDesign":
         """
         Merge this experiment design with another one and return the result.
 
@@ -159,7 +172,9 @@ class BenchmarkingDesign(ByDepthDesign):
     and are truncated when circuit lists are truncated.
     """
 
-    def __init__(self, depths, circuit_lists, ideal_outs, qubit_labels=None, remove_duplicates=False):
+    def __init__(self, depths: DepthList, circuit_lists: CircuitLists,
+                 ideal_outs: Union[list, tuple], qubit_labels: QubitLabels=None,
+                 remove_duplicates: bool=False):
         assert(len(depths) == len(ideal_outs))
         super().__init__(depths, circuit_lists, qubit_labels, remove_duplicates)
         
@@ -173,7 +188,7 @@ class BenchmarkingDesign(ByDepthDesign):
         for paired_attr in self.paired_with_circuit_attrs:
             self.auxfile_types[paired_attr] = 'json'
 
-    def _mapped_circuits_and_idealouts_by_depth(self, mapper):
+    def _mapped_circuits_and_idealouts_by_depth(self, mapper: SSLabelMapper) -> dict:
         """ Used in derived classes """
         mapped_circuits_and_idealouts_by_depth = {}
         for depth, circuit_list, idealout_list in zip(self.depths, self.circuit_lists, self.idealout_lists):
@@ -181,7 +196,7 @@ class BenchmarkingDesign(ByDepthDesign):
                 [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)]
         return mapped_circuits_and_idealouts_by_depth
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> "BenchmarkingDesign":
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -202,7 +217,7 @@ class BenchmarkingDesign(ByDepthDesign):
         return BenchmarkingDesign(self.depths, mapped_circuit_lists, list(self.idealout_lists),
                                   mapped_qubit_labels, remove_duplicates=False)
     
-    def truncate_to_lists(self, list_indices_to_keep):
+    def truncate_to_lists(self, list_indices_to_keep: Iterable[int]) -> "BenchmarkingDesign":
         """
         Truncates this experiment design by only keeping a subset of its circuit lists.
 
@@ -299,7 +314,8 @@ class BenchmarkingDesign(ByDepthDesign):
             depths = sorted(depths)
         return depths, circuits_by_depth, paired_attrs_by_depth
 
-    def merge_with(self, other_edesign, remove_duplicates=True, sort_depths=False):
+    def merge_with(self, other_edesign: _proto.ExperimentDesign, remove_duplicates: bool=True,
+                   sort_depths: bool=False) -> "BenchmarkingDesign":
         """
         Merge this experiment design with another one and return the result.
 
@@ -567,10 +583,10 @@ class SummaryStatistics(_proto.Protocol):
     circuit_statistics = ('two_q_gate_count', 'depth', 'idealout', 'circuit_index', 'width')
     # dscmp_statistics = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
-    def __init__(self, name):
+    def __init__(self, name: Optional[str]):
         super().__init__(name)
 
-    def _compute_summary_statistics(self, data, energy = False):
+    def _compute_summary_statistics(self, data, energy: bool=False):
         """
         Computes all summary statistics for the given data.
 
@@ -986,8 +1002,11 @@ class ByDepthSummaryStatistics(SummaryStatistics):
         results produced by this protocol.  If None, the class name will
         be used.
     """
-    def __init__(self, depths='all', statistics_to_compute=('polarization',), names_to_compute=None,
-                 custom_data_src=None, name=None):
+    def __init__(self, depths: Depths='all',
+                 statistics_to_compute: tuple=('polarization',),
+                 names_to_compute: Optional[tuple]=None,
+                 custom_data_src: Optional[_SuccessFailModel]=None,
+                 name: Optional[str]=None):
         super().__init__(name)
         self.depths = depths
         self.statistics_to_compute = statistics_to_compute
