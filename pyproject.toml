@@ -106,7 +106,7 @@ testing_no_cython_mpi = [
 testing_no_cython = ['pygsti[multiprocessor,testing_no_cython_mpi]']
 testing = ['pygsti[extensions,testing_no_cython]']
 no_mpi = ['pygsti[evolutionary_optimization,extensions,linting,mongodb,testing_no_cython_mpi]']
-complete = ['pygsti[multiprocessor,no_mpi]']
+complete = ['pygsti[multiprocessor,no_mpi,docs]']
 
 [project.urls]
 Homepage = 'https://www.pygsti.info'
