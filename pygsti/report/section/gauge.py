@@ -167,7 +167,7 @@ class GaugeVariantSection(_Section):
     @_Section.figure_factory(4)
     def final_gates_vs_target_table_gauge_var(workspace, switchboard=None, confidence_level=None,
                                               ci_brevity=1, **kwargs):
-        if kwargs.get('n_leak', 0) == 0:
+        if not kwargs.get('leakage_modeling', False):
             display = ('inf', 'agi', 'geni', 'trace', 'diamond', 'nuinf', 'nuagi')
         else:
             display = ('sub-inf', 'sub-trace', 'sub-diamond', 'plf-sub-diamond', 'leak-rate-max', 'leak-rate-min', 'seep-rate' )

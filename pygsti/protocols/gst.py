@@ -2476,17 +2476,17 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
     for lbl, gaugeopt_model in gopped_models.items():
 
         argdicts = gaugeopt_suite.gaugeopt_argument_dicts.get(lbl, dict())
-        n_leak: int = 0
+        leakage_modeling: bool = False
         if isinstance(argdicts, list) and len(argdicts) > 0:
-            n_leak = argdicts[0].get('n_leak', n_leak)
+            leakage_modeling = argdicts[0].get('leakage_modeling', leakage_modeling)
 
         basis = gaugeopt_model.basis
-        if n_leak == 0:
+        if not leakage_modeling:
             P = _tools.matrixtools.IdentityOperator()
             def diamonddist_fn(*args, **kwargs):
                 return 0.5 * _tools.diamonddist(*args, **kwargs)  # type: ignore
             jtracedist_fn = _tools.jtracedist
-        elif n_leak > 0:
+        else:
             from pygsti.leakage.core import computational_projector
             from pygsti.leakage.metrics import subspace_diamonddist, subspace_jtracedist
             P = computational_projector(basis) 

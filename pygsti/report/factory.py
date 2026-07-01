@@ -1252,9 +1252,18 @@ def construct_standard_report(results, title="auto",
     confidence_level = _validated_confidence_level(confidence_level)
 
     advanced_options = advanced_options or {}
-    n_leak = advanced_options.get('n_leak', 0)
-    # ^ It would be preferable to store n_leak in a Basis object, or something similar.
+    leakage_modeling = advanced_options.get('leakage_modeling', False)
+    # ^ It would be preferable to store this on a Basis object, or something similar.
     #   We're using this for now since it's simple and gets the job done.
+    if 'n_leak' in advanced_options:
+        # backward-compat: the integer 'n_leak' flag is deprecated in favor of the
+        # boolean 'leakage_modeling'. An explicit 'leakage_modeling' takes precedence.
+        if advanced_options['n_leak'] > 0 and 'leakage_modeling' not in advanced_options:
+            leakage_modeling = True
+        _warnings.warn(
+            "'n_leak' in advanced_options is deprecated; use the boolean "
+            "'leakage_modeling' instead. Mapping n_leak > 0 to leakage_modeling=True.",
+            DeprecationWarning)
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
@@ -1398,7 +1407,7 @@ def construct_standard_report(results, title="auto",
         'max_lengths': tuple(Ls),
         'switchbd_maxlengths': tuple(swLs),
         'show_unmodeled_error': bool('ShowUnmodeledError' in flags),
-        'n_leak' : n_leak
+        'leakage_modeling': leakage_modeling
     }
 
     templates = dict(

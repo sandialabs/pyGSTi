@@ -94,14 +94,13 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         inner_dict['method'] = 'L-BFGS-B'
         # ^ We need this optimizer because it doesn't require a gradient oracle.
         #
-        inner_dict['n_leak'] = 1
-        # ^ This function could accept n_leak as an argument instead. However,
-        #   downstream functions for gauge optimization only support n_leak=0 or 1.
-        # 
-        #   When n_leak=1 we use subspace-restricted loss functions that only care
-        #   about mismatches between an estimate and a target when restricted to the
-        #   computational subspace. We have code for evaluating the loss functions
-        #   themselves, but not their gradients.
+        inner_dict['leakage_modeling'] = True
+        # ^ This function could accept leakage_modeling as an argument instead.
+        #
+        #   When leakage_modeling is True we use subspace-restricted loss functions
+        #   that only care about mismatches between an estimate and a target when
+        #   restricted to the computational subspace. We have code for evaluating the
+        #   loss functions themselves, but not their gradients.
         #
         gg = UnitaryGaugeGroup(tm.basis.state_space, tm.basis)
         inner_dict['gauge_group'] = gg

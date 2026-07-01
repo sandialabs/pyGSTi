@@ -258,9 +258,13 @@ def gaugeopt_to_target(model, target_model, *args, **kwargs):
     """
 
     full_kwargs = GaugeoptToTargetArgs.create_full_kwargs(args, kwargs)
-    if full_kwargs.get('n_leak', 0) > 0:
+    if full_kwargs.get('leakage_modeling', False):
         if not model.basis.implies_leakage_modeling:
-            raise ValueError()
+            raise ValueError(
+                "leakage_modeling=True requires a model whose basis implies leakage "
+                f"modeling, but basis {model.basis!r} does not. Use a leakage basis "
+                "(e.g., 'l2p1') so that Basis.implies_leakage_modeling is True."
+            )
 
     # arg parsing: validating `method`
     gates_metric = full_kwargs['gates_metric']
