@@ -208,13 +208,37 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     multiGO = bool(len(gauge_opt_labels) > 1)
     #multiL = bool(len(swLs) > 1)
 
+    # Does any model in any estimate carry a basis that implies leakage modeling? If so,
+    # we expose an interactive "Metrics" switch letting the reader flip the gates-vs-target
+    # tables between subspace-restricted (leakage-aware) and standard full-space columns.
+    # The per-cell column choice is made in `pygsti.report.section.basis_aware_display`.
+    any_leakage = False
+    for results in results_dict.values():
+        for est in results.estimates.values():
+            for mdl in est.models.values():
+                basis = getattr(mdl, 'basis', None)
+                if basis is not None and getattr(basis, 'implies_leakage_modeling', False):
+                    any_leakage = True
+                    break
+            if any_leakage:
+                break
+        if any_leakage:
+            break
+
     switchBd = ws.Switchboard(
-        ["Dataset", "Estimate", "Gauge-Opt", "max(L)"],
-        [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs))],
-        ["dropdown", "dropdown", "buttons", "slider"], [0, 0, 0, len(swLs) - 1],
-        show=[multidataset, multiest, multiGO, False],  # "global" switches only + gauge-opt (OK if doesn't apply)
+        ["Dataset", "Estimate", "Gauge-Opt", "max(L)", "Metrics"],
+        [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs)),
+         ["Subspace", "Full-space"]],
+        ["dropdown", "dropdown", "buttons", "slider", "buttons"],
+        [0, 0, 0, len(swLs) - 1, 0],
+        # "global" switches only + gauge-opt (OK if doesn't apply); the "Metrics" switch is
+        # shown only when some basis implies leakage (otherwise both positions coincide).
+        show=[multidataset, multiest, multiGO, False, any_leakage],
         use_loadable_items=embed_figures
     )
+    # Switch index of the "Metrics" (Subspace | Full-space) toggle, read by the
+    # gates-vs-target figure factories via `basis_aware_display`.
+    switchBd.metric_space_switch_index = 4
 
     switchBd.add("ds", (0,))
     switchBd.add("prep_fiducials", (0,))
@@ -1252,17 +1276,11 @@ def construct_standard_report(results, title="auto",
     confidence_level = _validated_confidence_level(confidence_level)
 
     advanced_options = advanced_options or {}
-    leakage_modeling = advanced_options.get('leakage_modeling', False)
-    # ^ It would be preferable to store this on a Basis object, or something similar.
-    #   We're using this for now since it's simple and gets the job done.
-    if 'n_leak' in advanced_options:
-        # backward-compat: the integer 'n_leak' flag is deprecated in favor of the
-        # boolean 'leakage_modeling'. An explicit 'leakage_modeling' takes precedence.
-        if advanced_options['n_leak'] > 0 and 'leakage_modeling' not in advanced_options:
-            leakage_modeling = True
+    if 'leakage_modeling' in advanced_options or 'n_leak' in advanced_options:
         _warnings.warn(
-            "'n_leak' in advanced_options is deprecated; use the boolean "
-            "'leakage_modeling' instead. Mapping n_leak > 0 to leakage_modeling=True.",
+            "'leakage_modeling'/'n_leak' in advanced_options are deprecated and ignored: "
+            "leakage metrics are now shown automatically wherever a model's basis permits, "
+            "with an interactive Subspace/Full-space 'Metrics' switch in the report.",
             DeprecationWarning)
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
@@ -1406,8 +1424,7 @@ def construct_standard_report(results, title="auto",
         'gauge_opt_labels': tuple(gauge_opt_labels),
         'max_lengths': tuple(Ls),
         'switchbd_maxlengths': tuple(swLs),
-        'show_unmodeled_error': bool('ShowUnmodeledError' in flags),
-        'leakage_modeling': leakage_modeling
+        'show_unmodeled_error': bool('ShowUnmodeledError' in flags)
     }
 
     templates = dict(

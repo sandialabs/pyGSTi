@@ -1073,6 +1073,10 @@ SubspaceDiamonddist = _modf.opsfn_factory(_lm.subspace_diamonddist)
 
 def pergate_leakrate_reduction(op, ignore, mx_basis, reduction):
     leakage_rates = _lm.gate_leakage_profile(op, mx_basis)[0]
+    if len(leakage_rates) == 0:
+        # No leakage profile (e.g. a basis that doesn't imply leakage modeling); the
+        # reduction (max/min) would raise on an empty sequence, so report NaN instead.
+        return _np.nan
     return reduction(leakage_rates)
 
 def pergate_leakrate_max(op, ignore, mx_basis):
@@ -1086,6 +1090,10 @@ PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
 
 def pergate_seeprate(op, ignore, mx_basis):
     seepage_rates = _lm.gate_seepage_profile(op, mx_basis)[0]
+    if len(seepage_rates) == 0:
+        # No seepage profile (e.g. a basis that doesn't imply leakage modeling); avoid
+        # max() on an empty sequence and report NaN instead.
+        return _np.nan
     seeprate = max(seepage_rates)
     return seeprate
 

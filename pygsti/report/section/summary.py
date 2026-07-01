@@ -9,6 +9,7 @@
 #***************************************************************************************************
 
 from pygsti.report.section import Section as _Section
+from pygsti.report.section import basis_aware_display as _basis_aware_display
 
 from pygsti.report import workspace as _ws
 
@@ -39,14 +40,21 @@ class SummarySection(_Section):
     @_Section.figure_factory()
     def final_gates_vs_target_table_insummary(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                               show_unmodeled_error=False, **kwargs):
-        if not kwargs.get('leakage_modeling', False):
-            summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
-        else:
-            summary_display = ('sub-inf', 'sub-trace', 'sub-diamond', 'plf-sub-diamond', 'leak-rate-max')
+        # Columns are chosen per-cell from each model's basis and the interactive "Metrics"
+        # switch (see basis_aware_display).  NOTE: the ordinary tuple's 'evinf'/'evdiamond'
+        # remain basis-aware internally (reportables.eigenvalue_entanglement_infidelity),
+        # so under the "Full-space" selection those two columns still use the subspace
+        # computation for a leakage basis; 'inf'/'trace'/'diamond' are genuinely full-space.
+        ordinary = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
+        leakage = ('sub-inf', 'sub-trace', 'sub-diamond', 'plf-sub-diamond', 'leak-rate-max')
+        name = 'gv_summary_display'
         wildcardBudget = None
         if show_unmodeled_error:
-            summary_display += ('unmodeled',)
+            ordinary += ('unmodeled',)
+            leakage += ('unmodeled',)
             wildcardBudget = switchboard.wildcard_budget_optional
+            name += '_wc'
+        summary_display = _basis_aware_display(switchboard, name, ordinary, leakage)
 
         if confidence_level is not None and ci_brevity <= 1:
             cri = switchboard.cri

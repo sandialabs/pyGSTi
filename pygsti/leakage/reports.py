@@ -80,7 +80,9 @@ def construct_leakage_report(
     # Wrap it up in a bow.
     from pygsti.report import construct_standard_report
     advanced_options = kwargs_stdreport.pop('advanced_options', dict())
-    advanced_options['leakage_modeling'] = True
+    # No leakage display flag needed: construct_standard_report auto-detects leakage bases
+    # and shows subspace metrics by default, with an interactive "Metrics" switch to view
+    # full-space metrics. The LAGO/target models here carry the l2p1 (leakage) basis.
     report = construct_standard_report(
         res_out, advanced_options=advanced_options, **kwargs_stdreport
     )
