@@ -10,9 +10,13 @@ Helper Functions for generating plots
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import warnings as _warnings
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence, tuple, Union
 
 import numpy as _np
+import numpy.typing as _npt
 
 from pygsti import tools as _tools
 from pygsti.objectivefns import objectivefns as _objfns
@@ -20,8 +24,26 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.smartcache import smart_cached
 from pygsti.baseobjs import Label
 
+if TYPE_CHECKING:
+    from pygsti.circuits.circuit import Circuit as _Circuit
+    from pygsti.circuits.circuitstructure import (
+        CircuitPlaquette as _CircuitPlaquette,
+        PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure,
+    )
+    from pygsti.models.model import Model as _Model
+    from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+    from pygsti.data.dataset import DataSet as _DataSet
+    from pygsti.data.datacomparator import DataComparator as _DataComparator
+    from pygsti.objectivefns.objectivefns import (
+        ObjectiveFunctionBuilder as _ObjectiveFunctionBuilder,
+        ModelDatasetCircuitsStore as _ModelDatasetCircuitsStore,
+    )
+    from pygsti.objectivefns.wildcardbudget import WildcardBudget as _WildcardBudget
+    from pygsti.extras.drift.stabilityanalyzer import StabilityAnalyzer as _StabilityAnalyzer
 
-def small_eigenvalue_err_rate(sigma, direct_gst_models):
+
+def small_eigenvalue_err_rate(sigma: Optional[_Circuit],
+                              direct_gst_models: dict[_Circuit, _ExplicitOpModel]) -> float:
     """
     Compute per-gate error rate.
 
@@ -44,13 +66,16 @@ def small_eigenvalue_err_rate(sigma, direct_gst_models):
     """
     if sigma is None: return _np.nan  # in plot processing, "None" circuits = no plot output = nan values
     mdl_direct = direct_gst_models[sigma]
-    key = Label('GsigmaLbl') if sigma.line_labels == ('*',) else Label('GsigmaLbl', sigma.line_labels)
+    # Label.__new__ types `state_space_labels` more narrowly than the (str/int/Label) tuples that
+    # Circuit.line_labels actually returns; accepted fine at runtime, so ignore the arg-type error.
+    key = Label('GsigmaLbl') if sigma.line_labels == ('*',) \
+        else Label('GsigmaLbl', sigma.line_labels)  # pyright: ignore[reportArgumentType]
     minEigval = min(abs(_np.linalg.eigvals(mdl_direct.operations[key])))
     # (approximate) per-gate error rate; max averts divide by zero error
     return 1.0 - minEigval**(1.0 / max(len(sigma), 1))
 
 
-def _eformat(f, prec):
+def _eformat(f: float, prec: Union[int, str]) -> str:
     """
     Formatting routine for writing compact representations of
     numbers in plot boxes
@@ -102,16 +127,17 @@ def _eformat(f, prec):
         return "%g" % f  # fallback to general format
 
 
-def _num_non_nan(array):
+def _num_non_nan(array: _npt.ArrayLike) -> int:
     ixs = _np.where(_np.isnan(_np.array(array).ravel()) == False)[0]  # noqa: E712
     return int(len(ixs))
 
 
-def _all_same(items):
+def _all_same(items: Sequence[Any]) -> bool:
     return all(x == items[0] for x in items)
 
 
-def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
+def _compute_num_boxes_dof(sub_mxs: _np.ndarray, sum_up: bool,
+                           element_dof: int) -> tuple[int, Optional[float]]:
     """
     A helper function to compute the number of boxes, and corresponding
     number of degrees of freedom, for the GST chi2/logl boxplots.
@@ -153,7 +179,9 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
 
 
 #@smart_cached
-def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creation_fn_extra_arg=None):
+def _compute_sub_mxs(gss: _PlaquetteGridCircuitStructure, model: _Model, sub_mx_creation_fn: Callable[..., Any],
+                     dataset: Optional[_DataSet] = None,
+                     sub_mx_creation_fn_extra_arg: Any = None) -> list[list[Any]]:
     subMxs = [[sub_mx_creation_fn(gss.plaquette(x, y, True), x, y, sub_mx_creation_fn_extra_arg)
                for x in gss.used_xs] for y in gss.used_ys]
     #Note: subMxs[y-index][x-index] is proper usage
@@ -161,13 +189,15 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
     
 #define a modified version that is meant for working with CircuitList objects of lists of them.
 #@smart_cached
-def _compute_sub_mxs_circuit_list(circuit_lists, model, sub_mx_creation_fn, dataset=None, sub_mx_creation_fn_extra_arg=None):
+def _compute_sub_mxs_circuit_list(circuit_lists: Sequence[_CircuitList], model: _Model,
+                                  sub_mx_creation_fn: Callable[..., Any], dataset: Optional[_DataSet] = None,
+                                  sub_mx_creation_fn_extra_arg: Any = None) -> list[Any]:
     subMxs = [sub_mx_creation_fn(circuit_list, sub_mx_creation_fn_extra_arg) for circuit_list in circuit_lists]
 
     return subMxs
 
 @smart_cached
-def dscompare_llr_matrices(gsplaq, dscomparator):
+def dscompare_llr_matrices(gsplaq: _CircuitPlaquette, dscomparator: _DataComparator) -> _np.ndarray:
     """
     Computes matrix of 2*log-likelihood-ratios comparing the data of `dscomparator`.
 
@@ -195,7 +225,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
 
 
 @smart_cached
-def genericdict_matrices(gsplaq, genericdict):
+def genericdict_matrices(gsplaq: _CircuitPlaquette, genericdict: Mapping[_Circuit, float]) -> _np.ndarray:
     ret = _np.nan * _np.ones((gsplaq.num_rows, gsplaq.num_cols), 'd')
     for i, j, opstr in gsplaq:
         ret[i, j] = genericdict[opstr]
@@ -203,7 +233,8 @@ def genericdict_matrices(gsplaq, genericdict):
 
 
 @smart_cached
-def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
+def drift_neglog10pvalue_matrices(gsplaq: _CircuitPlaquette,
+                                  drifttuple: tuple[_StabilityAnalyzer, Any]) -> _np.ndarray:
     """
     Computes matrix of -log10(pvalues) for testing the stable-circuit ("no drift") null hypothesis in each circuit.
 
@@ -235,7 +266,8 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     assert(dictlabel == ('circuit',)), "Currently can only create these matrices for this single type of test!"
     for i, j, opstr in gsplaq:
         try:
-            pval = stabilityanalyzer.maximum_power_pvalue(dictlabel={'circuit': opstr}, cutoff=1e-16)
+            # cutoff's default of 0 makes it infer as `int`, but a float threshold is valid at runtime.
+            pval = stabilityanalyzer.maximum_power_pvalue(dictlabel={'circuit': opstr}, cutoff=1e-16)  # pyright: ignore[reportArgumentType]
             ret[i, j] = -1 * _np.log10(pval)
         except:
             pass
@@ -243,7 +275,8 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
 
 
 @smart_cached
-def drift_maxtvd_matrices(gsplaq, drifttuple):
+def drift_maxtvd_matrices(gsplaq: _CircuitPlaquette,
+                          drifttuple: tuple[_StabilityAnalyzer, Any, Any]) -> _np.ndarray:
     """
     Computes matrix of max-tvds for quantifying the size of any detected drift.
 
@@ -280,8 +313,10 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     return ret
 
 
-def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=None, return_all=False, comm=None,
-                  mdc_store=None):
+def rated_n_sigma(dataset: _DataSet, model: _Model, circuits: Union[_CircuitList, Sequence[_Circuit]],
+                  objfn_builder: Union[_ObjectiveFunctionBuilder, str], np: Optional[int] = None,
+                  wildcard: Optional[_WildcardBudget] = None, return_all: bool = False, comm=None,
+                  mdc_store: Optional[_ModelDatasetCircuitsStore] = None) -> tuple[Any, ...]:
     """
     Computes the number of standard deviations of model violation between `model` and `data`.
 
