@@ -1,6 +1,7 @@
 """
 Functions for creating data
 """
+from __future__ import annotations
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -10,7 +11,7 @@ Functions for creating data
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Literal, Hashable, Union
+from typing import TYPE_CHECKING, Any, Literal, Hashable, Optional, Sequence, Union
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
@@ -19,23 +20,31 @@ import numpy as _np
 import numpy.random as _rndm
 
 from pygsti.circuits import circuitconstruction as _gstrc
-from pygsti.baseobjs.label import Label as _Label
 from pygsti.data import dataset as _ds
 from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
 from pygsti.tools.exceptions import ProbabilityClippingWarning as _ProbabilityClippingWarning
 
+if TYPE_CHECKING:
+    from pygsti.models.model import OpModel as _OpModel
+    from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+    from pygsti.protocols import ExperimentDesign as _ExperimentDesign
 
-def simulate_data(model_or_dataset, circuit_list, num_samples,
+
+def simulate_data(model_or_dataset: Union[_OpModel, _ds.DataSet],
+                  circuit_list: Union[Sequence[Any], _CircuitList, _ExperimentDesign],
+                  num_samples: Union[int, Sequence[int], None],
                   sample_error: Literal['binomial', 'multinomial', 'clip', 'round', 'none']="multinomial",
-                  seed=None, rand_state=None,
-                  alias_dict=None, collision_action: Literal['aggregate', 'keepseperate']="aggregate",
-                  record_zero_counts=True, comm=None, mem_limit=None, times=None):
+                  seed: Optional[int]=None, rand_state: Optional[_rndm.RandomState]=None,
+                  alias_dict: Optional[dict[Any, Any]]=None,
+                  collision_action: Literal['aggregate', 'keepseperate']="aggregate",
+                  record_zero_counts: bool=True, comm=None, mem_limit: Optional[int]=None,
+                  times: Optional[Sequence[Any]]=None) -> _ds.DataSet:
     """
     Creates a DataSet using the probabilities obtained from a model.
 
     Parameters
     ----------
-    model_or_dataset : Model or DataSet object
+    model_or_dataset : OpModel or DataSet object
         The source of the underlying probabilities used to generate the data.
         If a Model, the model whose probabilities generate the data.
         If a DataSet, the data set whose frequencies generate the data.
@@ -188,7 +197,7 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
                     #Note: total() accounts for other intermediate-measurement branches automatically
                 else:
                     try:
-                        N = num_samples[k]  # try to treat num_samples as a list
+                        N = num_samples[k]  # pyright: ignore[reportIndexIssue]  # treat num_samples as a list (guarded by except)
                     except:
                         N = num_samples  # if not indexable, num_samples should be a single number
 
@@ -248,7 +257,9 @@ def _adjust_unit_sum(ps: dict[Hashable, float], tol: float):
         _warnings.warn('Adjustment finished', _ProbabilityClippingWarning)
 
 
-def _sample_distribution(ps: dict[Hashable, float], sample_error, nSamples, rndm_state):
+def _sample_distribution(ps: dict[Hashable, float],
+                         sample_error: Literal['binomial', 'multinomial', 'clip', 'round', 'none'],
+                         nSamples, rndm_state):
     counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
     labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
     # "outcome labels" - sort by prob for consistent generation
@@ -432,7 +443,7 @@ def _create_merge_dict(indices_to_keep, outcome_labels):
 
 
 def filter_dataset(dataset: _ds.DataSet, sectors_to_keep, sindices_to_keep=None,
-                   new_sectors=None, idle: Union[str, _Label]=((),), record_zero_counts: bool=True,
+                   new_sectors=None, idle: Union[str, _lbl.Label, tuple[Any, ...]]=((),), record_zero_counts: bool=True,
                    filtercircuits: bool=True):
     """
     Creates a DataSet that is the restriction of `dataset` to `sectors_to_keep`.
