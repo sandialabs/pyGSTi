@@ -19,8 +19,11 @@ from ..util import BaseCase
 
 class ExplicitOpModelStrictAccessTester(BaseCase):
     def setUp(self):
-        mdl.ExplicitOpModel._strict = True
         self.model = std.target_model().randomize_with_unitary(0.001, seed=1234)
+        # Enable strict mode on this model instance only, so the test doesn't
+        # mutate shared ExplicitOpModel class state (which would race with /
+        # leak into other tests under parallel execution).
+        self.model._strict = True
 
     def test_strict_access(self):
         #test strict mode, which forbids all these accesses
