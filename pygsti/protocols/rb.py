@@ -9,8 +9,8 @@ RB Protocol objects
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
-from typing import Optional, Literal, Union
+from __future__ import annotations
+from typing import Optional, Literal, Union, Hashable
 from collections import defaultdict
 import numpy as _np
 
@@ -20,6 +20,14 @@ from pygsti import tools as _tools
 from pygsti.algorithms import randomcircuit as _rc
 from pygsti.algorithms import rbfit as _rbfit
 from pygsti.algorithms import mirroring as _mirroring
+from pygsti.baseobjs.label import SSLabelMapper
+
+# Type aliases for the constrained string arguments shared across the RB protocols.
+DataType = Literal['success_probabilities', 'adjusted_success_probabilities', 'energies']
+DefaultFit = Literal['full', 'A-fixed']
+RType = Literal['EI', 'AGI']
+Asymptote = Union[Literal['std'], float]
+Depths = Union[Literal['all'], list[int]]
 
 
 class CliffordRBDesign(_vb.BenchmarkingDesign):
@@ -335,7 +343,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         
         return avg_gate_counts
 
-    def average_native_gates_per_clifford(self):
+    def average_native_gates_per_clifford(self) -> float:
         """The average number of native gates per Clifford for all circuits
 
         Returns
@@ -360,7 +368,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
 
         return avg_gate_counts
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> CliffordRBDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -1342,8 +1350,9 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
     `datatype` = `adjusted_success_probabilities`.
     """
 
-    def __init__(self, datatype='success_probabilities', defaultfit='full', asymptote='std', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None):
+    def __init__(self, datatype: DataType='success_probabilities', defaultfit: DefaultFit='full',
+                 asymptote: Asymptote='std', rtype: RType='EI', seed=(0.8, 0.95),
+                 bootstrap_samples=200, depths: Depths='all', name: Optional[str]=None):
         """
         Initialize an RB protocol for analyzing RB data.
 
@@ -1400,18 +1409,18 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             "Data type '%s' must be 'success_probabilities', 'adjusted_success_probabilities', or 'energies'!" % str(datatype)
 
         self.seed = seed
-        self.depths = depths
+        self.depths: Depths = depths
         self.bootstrap_samples = bootstrap_samples
-        self.asymptote = asymptote
-        self.rtype = rtype
-        self.datatype = datatype
-        self.defaultfit = defaultfit
+        self.asymptote: Asymptote = asymptote
+        self.rtype: RType = rtype
+        self.datatype: DataType = datatype
+        self.defaultfit: DefaultFit = defaultfit
         if self.datatype == 'energies':
             self.energies = True
         else:
             self.energies = False
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None):
         """
         Run this protocol on `data`.
 
@@ -1557,7 +1566,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         The default key within `fits` to plot when calling :meth:`plot`.
     """
 
-    def __init__(self, data: _proto.ProtocolData, protocol_instance: _proto.Protocol, fits, depths, defaultfit: str):
+    def __init__(self, data: _proto.ProtocolData, protocol_instance: _proto.Protocol, fits: dict, depths: list[int], defaultfit: DefaultFit):
         """
         Initialize an empty RandomizedBenchmarkingResults object.
         """
@@ -1566,7 +1575,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         self.depths = depths  # Note: can be different from protocol_instance.depths (which can be 'all')
         self.rtype = protocol_instance.rtype  # replicated for convenience?
         self.fits = fits
-        self.defaultfit = defaultfit
+        self.defaultfit: DefaultFit = defaultfit
         self.auxfile_types['fits'] = 'dict:serialized-object'  # b/c NamedDict don't json
 
     def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8, 5), ylim=None, xlim=None,
@@ -1693,9 +1702,9 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
     the subset of RandomizedBenchmarking's arguments relevant for CRB.
     """
 
-    def __init__(self, defaultfit: Literal['full', 'A-fixed']='full', asymptote='std',
-                 rtype: Literal['EI', 'AGI']='EI', seed=(0.8, 0.95), 
-                 bootstrap_samples=200, depths: Union[Literal['all'], list]='all', name: Optional[str]=None):
+    def __init__(self, defaultfit: DefaultFit='full', asymptote: Asymptote='std',
+                 rtype: RType='EI', seed: Optional[list[float]]=(0.8, 0.95),
+                 bootstrap_samples=200, depths: Depths='all', name: Optional[str]=None):
         """
         Initialize an RB protocol for analyzing RB data.
 
@@ -1735,12 +1744,12 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
         """
         super().__init__(name)
         self.seed = seed
-        self.depths = depths
+        self.depths: Depths = depths
         self.bootstrap_samples = bootstrap_samples
-        self.asymptote = asymptote
-        self.rtype = rtype
-        self.datatype = 'success_probabilities'
-        self.defaultfit = defaultfit
+        self.asymptote: Asymptote = asymptote
+        self.rtype: RType = rtype
+        self.datatype: DataType = 'success_probabilities'
+        self.defaultfit: DefaultFit = defaultfit
 
     def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None):
         """
@@ -1814,7 +1823,7 @@ class InterleavedRandomizedBenchmarkingResults(_proto.ProtocolResults):
     information regarding the IRB number estimates.
     """
 
-    def __init__(self, data: _proto.ProtocolData, protocol: _proto.Protocol, irb_numbers, irb_bounds):
+    def __init__(self, data: _proto.ProtocolData, protocol: _proto.Protocol, irb_numbers: dict[Hashable, float], irb_bounds: dict[Hashable, float]):
         #msg = 'rb_subexperiment_results should be a dictionary with values corresponding to the'\
         #      +' standard CRB and interleaved CRB subexperiments used in performing IRB.'
         #assert(isinstance(rb_subexperiment_results, dict)), msg
