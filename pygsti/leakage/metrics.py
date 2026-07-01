@@ -109,8 +109,7 @@ of X seen only through inputs supported on C. Otherwise ρ is the maximally enta
 of all of H and the result is the ordinary Choi state of X.
 """ + NOTATION)
 def choi_state(op_x: np.ndarray, op_basis: BasisLike) -> np.ndarray:
-    udim = int(op_x.size ** 0.25)
-    dim = udim**2
+    dim = round(op_x.size ** 0.5)
     assert op_x.shape == (dim, dim)
 
     op_basis  = Basis.cast(op_basis, dim=dim)

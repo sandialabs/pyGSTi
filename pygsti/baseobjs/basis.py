@@ -356,7 +356,7 @@ class Basis(_NicelySerializable):
         return int(_np.prod(self.elshape))
 
     @property
-    def implies_leakage_modeling(self) -> bool:
+    def implies_leakage_modeling(self) -> Optional[bool]:
         if (not hasattr(self, '_implies_leakage')) or (not isinstance(self._implies_leakage, bool)):
             label = _eye_label(self)
             if len(label) == 0:
@@ -369,7 +369,7 @@ class Basis(_NicelySerializable):
                 self._implies_leakage = False
             else:
                 self._implies_leakage = round(_np.trace(I_after).real)**2 < I_after.size
-        return self._implies_leakage  # type: ignore
+        return self._implies_leakage
 
     @property
     def first_element_is_identity(self):

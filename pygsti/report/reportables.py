@@ -1602,7 +1602,7 @@ def eigenvalue_entanglement_infidelity(
     else:
         from pygsti.tools.optools import eigenvalue_fidelity
         if mx_basis.implies_leakage_modeling:
-            vec_basis, Ja_vec, Jb_vec = _tools.apply_tensorized_to_teststate(a, b, mx_basis)
+            vec_basis, Ja_vec, Jb_vec = _lm.apply_tensorized_to_teststate(a, b, mx_basis)
             Ja = _tools.vec_to_stdmx(Ja_vec, vec_basis, keep_complex=True)
             Jb = _tools.vec_to_stdmx(Jb_vec, vec_basis, keep_complex=True)
         else:

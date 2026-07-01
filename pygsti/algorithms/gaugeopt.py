@@ -20,6 +20,7 @@ from pygsti.baseobjs import _compatibility as _compat
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.leakage import metrics as _lm
+from pygsti.leakage import core as _lc
 from pygsti.tools.optools import relaxed_scalar_tolerance as _relaxed_tol
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
@@ -576,7 +577,7 @@ def _legacy_create_scalar_objective(model, target_model,
 
     I = _tools.matrixtools.IdentityOperator()
     if mxBasis.implies_leakage_modeling:
-        P = _tools.computational_projector(mxBasis)
+        P = _lc.computational_projector(mxBasis)
     else:
         P = I
     transform_mx_arg = (P, I)
