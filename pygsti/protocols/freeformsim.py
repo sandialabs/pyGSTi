@@ -10,11 +10,11 @@ ModelTest Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
 from typing import Optional, Union, Tuple, Any, Dict, TYPE_CHECKING
 import numpy as _np
 import pandas as pd
 if TYPE_CHECKING:
-    from mpi4py import MPI as _MPI
     from pygsti.models.model import Model as _Model
 
 from pygsti.protocols import protocol as _proto
@@ -46,7 +46,7 @@ class FreeformDataSimulator(_proto.DataSimulator):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def run(self, edesign: _proto.ExperimentDesign, memlimit: Optional[int] = None, comm: Optional[_MPI.Comm] = None) -> _proto.ProtocolData:
+    def run(self, edesign: _proto.ExperimentDesign, memlimit: Optional[int] = None, comm=None) -> _proto.ProtocolData:
         """
         Run this data simulator on an experiment design.
 
