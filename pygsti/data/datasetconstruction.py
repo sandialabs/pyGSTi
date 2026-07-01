@@ -10,7 +10,7 @@ Functions for creating data
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Literal
+from typing import Literal, Hashable, Union
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
@@ -19,6 +19,7 @@ import numpy as _np
 import numpy.random as _rndm
 
 from pygsti.circuits import circuitconstruction as _gstrc
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.data import dataset as _ds
 from pygsti.baseobjs import label as _lbl, outcomelabeldict as _ld
 from pygsti.tools.exceptions import ProbabilityClippingWarning as _ProbabilityClippingWarning
@@ -212,7 +213,7 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
     return dataset
 
 
-def _adjust_probabilities_inbounds(ps, tol):
+def _adjust_probabilities_inbounds(ps: dict[Hashable, float], tol: float):
     #Adjust to probabilities if needed (and warn if not close to in-bounds)
     # ps is a dict w/keys = outcome labels and values = probabilities
     for ol in ps:
@@ -224,7 +225,7 @@ def _adjust_probabilities_inbounds(ps, tol):
             ps[ol] = 1.0
 
 
-def _adjust_unit_sum(ps, tol):
+def _adjust_unit_sum(ps: dict[Hashable, float], tol: float):
     #Check that sum ~= 1 (and nudge if needed) since binomial and
     #  multinomial random calls assume this.
     OVERTOL = 1.0 + tol
@@ -247,7 +248,7 @@ def _adjust_unit_sum(ps, tol):
         _warnings.warn('Adjustment finished', _ProbabilityClippingWarning)
 
 
-def _sample_distribution(ps, sample_error, nSamples, rndm_state):
+def _sample_distribution(ps: dict[Hashable, float], sample_error, nSamples, rndm_state):
     counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
     labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
     # "outcome labels" - sort by prob for consistent generation
@@ -282,7 +283,7 @@ def _sample_distribution(ps, sample_error, nSamples, rndm_state):
     return counts
 
 
-def aggregate_dataset_outcomes(dataset, label_merge_dict, record_zero_counts=True):
+def aggregate_dataset_outcomes(dataset: _ds.DataSet, label_merge_dict, record_zero_counts: bool=True):
     """
     Creates a DataSet which merges certain outcomes in input DataSet.
 
@@ -430,9 +431,9 @@ def _create_merge_dict(indices_to_keep, outcome_labels):
     return dict(merge_dict)  # return a *normal* dict
 
 
-def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
-                   new_sectors=None, idle=((),), record_zero_counts=True,
-                   filtercircuits=True):
+def filter_dataset(dataset: _ds.DataSet, sectors_to_keep, sindices_to_keep=None,
+                   new_sectors=None, idle: Union[str, _Label]=((),), record_zero_counts: bool=True,
+                   filtercircuits: bool=True):
     """
     Creates a DataSet that is the restriction of `dataset` to `sectors_to_keep`.
 
@@ -519,7 +520,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     return ds_merged
 
 
-def trim_to_constant_numtimesteps(ds):
+def trim_to_constant_numtimesteps(ds: _ds.DataSet) -> _ds.DataSet:
     """
     Trims a :class:`DataSet` so that each circuit's data comprises the same number of timesteps.
 
@@ -555,7 +556,7 @@ def trim_to_constant_numtimesteps(ds):
     return trimmedds
 
 
-def _subsample_timeseries_data(ds, step):
+def _subsample_timeseries_data(ds: _ds.DataSet, step: int) -> _ds.DataSet:
     """
     Creates a :class:`DataSet` where each circuit's data is sub-sampled.
 
