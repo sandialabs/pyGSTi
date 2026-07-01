@@ -95,6 +95,19 @@ def apply_tensorized_to_teststate(op_x: np.ndarray, op_y: np.ndarray, op_basis: 
     return ten_std_basis, temp1, temp2
 
 
+@set_docstring(
+"""
+Return the (subspace) Choi state of the superoperator X represented by `op_x` in `op_basis`.
+
+Let ρ be the rank-1 density in M[H⨂H] induced by op_basis' computational effect, and let
+I ∈ S[H] act as the identity on M[H]. This function returns the density matrix X⨂I(ρ),
+expressed in the standard (matrix-unit) basis of H⨂H.
+
+When `op_basis` implies leakage modeling, ρ is the maximally entangled state of the
+computational subspace C (against a reference copy of H), so the result is the Choi matrix
+of X seen only through inputs supported on C. Otherwise ρ is the maximally entangled state
+of all of H and the result is the ordinary Choi state of X.
+""" + NOTATION)
 def choi_state(op_x: np.ndarray, op_basis: BasisLike) -> np.ndarray:
     udim = int(op_x.size ** 0.25)
     dim = udim**2

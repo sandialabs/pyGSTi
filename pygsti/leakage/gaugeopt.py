@@ -20,6 +20,24 @@ if TYPE_CHECKING:
 
 
 def _direct_sum_unitary_group(subspace_bases, full_basis, triviality_flags=None):
+    """
+    Build a gauge group that acts as an independent unitary on each summand of a
+    direct-sum decomposition H = H₀ ⨁ H₁ ⨁ ... of Hilbert space.
+
+    `full_basis` is a Hilbert--Schmidt basis for M[H], and `subspace_bases[i]` is a basis
+    for M[Hᵢ]. Each summand contributes its own gauge subgroup, chosen by its
+    Hilbert--Schmidt dimension ``sb.dim``:
+
+      * TrivialGaugeGroup, if the summand is flagged trivial -- by default whenever
+        ``sb.dim == 1``, i.e. Hᵢ is a single level with no unitary freedom to fix;
+      * UnitaryGaugeGroup, if ``sb.dim > 1``; and
+      * U1Group otherwise (reachable only when `triviality_flags` explicitly marks a
+        one-dimensional summand as non-trivial).
+
+    The subgroups are combined into a DirectSumUnitaryGroup on `full_basis`.
+    `triviality_flags`, if given, overrides the default per-summand choice and must have
+    the same length as `subspace_bases`.
+    """
     from pygsti.models.gaugegroup import (UnitaryGaugeGroup,
         DirectSumUnitaryGroup, U1Group, TrivialGaugeGroup)
 

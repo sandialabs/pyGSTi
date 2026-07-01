@@ -73,6 +73,19 @@ We say that B *implies* leakage modeling if C is a proper subspace of H.
 """
 
 
+@set_docstring(
+"""
+Return the computational effect of `basis`: the Hermitian operator E ∈ M[H] that
+orthogonally projects H onto the computational subspace C.
+
+E is obtained from the computational basis matrix of `basis` (the element whose label is
+the longest string of the form 'I'*k) by cleaning it into a genuine real orthogonal
+projector. Its range is C and its rank is dim(C).
+
+Raises a ValueError if `basis` does not support leakage modeling, i.e. if it has no
+element whose label is a string of the form 'I'*k that is proportional to a real
+orthogonal projector on H.
+""" + NOTATION)
 def computational_effect(basis: Basis) -> np.ndarray:
     label = _eye_label(basis)
     E = basis.ellookup[label].copy()  # type: ignore
@@ -82,15 +95,24 @@ def computational_effect(basis: Basis) -> np.ndarray:
     return E
 
 
-@set_docstring(NOTATION)
-# TODO: document me
+@set_docstring(
+"""
+Return a matrix U whose columns form an orthonormal basis (in the superket sense of
+`basis`) for M[C], the space of operators supported on the computational subspace C.
+
+M[C] is the set of ρ ∈ M[H] whose kernel contains that of the computational effect E.
+Since E is (proportional to) a projector, this is the same as
+
+    { ρ ∈ M[H] : E ρ E = ρ } .
+
+We build U by projecting every element of `basis` onto this set (ρ ↦ E ρ E), vectorizing
+the results in `basis`, and orthonormalizing the resulting (overcomplete) frame with a
+pivoted QR factorization. If C has dimension k, then U has k² columns.
+
+If `basis` does not imply leakage modeling then C = H, M[C] = M[H], and this function
+returns the identity of order basis.dim.
+""" + NOTATION)
 def computational_superkets(basis: Basis) -> np.ndarray:
-    """
-    Our desired subspace is
-        { rho : ker(rho) contains ker(E) } .
-    Since E is (proportional to) a projector, this is equivalent to
-        { rho : E rho E = rho }.
-    """
     if not basis.implies_leakage_modeling:
         return np.eye(basis.dim)
     if not basis.is_hermitian():
@@ -111,7 +133,17 @@ def computational_superkets(basis: Basis) -> np.ndarray:
     return U
 
 
-@set_docstring(NOTATION)
+@set_docstring(
+"""
+Return the computational projector of `basis`: the Hermiticity-preserving superoperator
+P ∈ S[H] that orthogonally projects M[H] onto M[C].
+
+P is assembled from the computational superkets U as P = U Uᵀ. Applied to a superket, P
+annihilates every component outside M[C] while leaving components within M[C] untouched.
+
+If `basis` does not imply leakage modeling then M[C] = M[H] and P is the identity of
+S[H] (an order-basis.dim identity matrix).
+""" + NOTATION)
 def computational_projector(basis: Basis) -> np.ndarray:
     dim = basis.dim
     if basis.first_element_is_identity:
