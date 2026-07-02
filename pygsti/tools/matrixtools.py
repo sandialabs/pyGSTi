@@ -101,9 +101,27 @@ def assert_hermitian(mat : _np.ndarray, tol: Union[float,_np.floating]) -> None:
         raise ValueError(message)
 
 
-def is_projector(mx, tol=1e-12):
-    # We use a stringent default tolerance since projectors tend to be
-    # computed to high accuracy.
+def is_projector(mx: _np.ndarray, tol: float = 1e-12) -> bool:
+    """
+    Test whether mx is an orthogonal projector, i.e. Hermitian and idempotent.
+
+    Parameters
+    ----------
+    mx : numpy array
+        Matrix to test.
+
+    tol : float, optional
+        Tolerance for the Hermiticity and idempotency checks. The idempotency
+        check compares mx @ mx to mx with absolute and relative tolerances of
+        ``sqrt(mx.size) * tol``. We use a stringent default tolerance since
+        projectors tend to be computed to high accuracy. Passing ``tol=np.inf``
+        skips all checks and returns True.
+
+    Returns
+    -------
+    bool
+        True if mx is (numerically) an orthogonal projector, otherwise False.
+    """
     if tol == _np.inf:
         return True
     if not is_hermitian(mx, tol):
@@ -113,23 +131,73 @@ def is_projector(mx, tol=1e-12):
     return _np.allclose(mx, mx2, atol=tol, rtol=tol)
 
 
-def assert_projector(mx, tol=1e-12):
+def assert_projector(mx: _np.ndarray, tol: float = 1e-12) -> None:
+    """
+    Raise a ValueError if mx is not an orthogonal projector, per :func:`is_projector`.
+
+    Parameters
+    ----------
+    mx : numpy array
+        Matrix to test.
+
+    tol : float, optional
+        Tolerance, forwarded to :func:`is_projector`.
+
+    Returns
+    -------
+    None
+    """
     if not is_projector(mx, tol):
         message = f"""
             Input matrix 'mx' is not a projector, up to tolerance {tol}.
-            The absolute values of entries in (mx^2 - mx) are \n{_np.abs(mx @ mx - mx)}. 
+            The absolute values of entries in (mx^2 - mx) are \n{_np.abs(mx @ mx - mx)}.
         """
         raise ValueError(message)
 
 
-def induced_projector(mx: _np.ndarray, tol=1e-12, *, require_real=False) -> _np.ndarray:
+def induced_projector(mx: _np.ndarray, tol: float = 1e-12, *, require_real: bool = False) -> _np.ndarray:
+    """
+    Return the orthogonal projector onto range(mx), for mx proportional to a projector.
 
+    The input must be Hermitian with exactly two distinct eigenvalue magnitudes, zero
+    and some c > 0 (i.e., mx = c*P for an orthogonal projector P). We eigendecompose
+    mx, rescale so its largest-magnitude eigenvalue is 1, verify that the rescaled
+    spectrum consists of zeros and ones, and rebuild P from the eigenvectors. The
+    result is an exact orthogonal projector up to rounding error, even when mx itself
+    is only approximately proportional to one.
+
+    Parameters
+    ----------
+    mx : numpy array
+        The matrix to convert. Must be Hermitian and proportional to an orthogonal
+        projector, up to `tol`.
+
+    tol : float, optional
+        Tolerance for the Hermiticity, realness, and spectrum checks.
+
+    require_real : bool, optional
+        If True, additionally require that mx is real up to `tol`.
+
+    Returns
+    -------
+    numpy array
+        The orthogonal projector onto range(mx).
+
+    Raises
+    ------
+    ValueError
+        If mx is not real (when `require_real` is True), not Hermitian, or not
+        proportional to an orthogonal projector.
+    """
     if require_real and not _np.allclose(mx, mx.conj(), atol=tol, rtol=tol):
-        return _np.empty((0,))
+        raise ValueError(
+            f"Input matrix has a nonzero imaginary part (up to tolerance {tol}) "
+            f"but require_real=True was passed."
+        )
 
     if not is_hermitian(mx, tol):
-        return _np.empty((0,))
-    
+        raise ValueError(f"Input matrix is not Hermitian, up to tolerance {tol}.")
+
     evecs, evals, inv_evecs = eigendecomposition(mx, assume_hermitian=True)
     scale = _np.linalg.norm(evals, ord=_np.inf)
     if scale > 0:
@@ -137,12 +205,20 @@ def induced_projector(mx: _np.ndarray, tol=1e-12, *, require_real=False) -> _np.
     evals_round = _np.round(evals)
 
     if not _np.allclose(evals, evals_round, atol=tol, rtol=tol):
-        return _np.empty((0,))
-    
+        raise ValueError(
+            f"Input matrix is not proportional to an orthogonal projector: after "
+            f"rescaling by the largest eigenvalue magnitude, its spectrum is not "
+            f"within tolerance {tol} of integers."
+        )
+
     if set(evals_round).issubset({0.0, 1.0}):
         return (evecs * evals_round[None, :]) @ inv_evecs
     else:
-        return _np.empty((0,))
+        raise ValueError(
+            f"Input matrix is not proportional to an orthogonal projector: after "
+            f"rescaling by the largest eigenvalue magnitude, its spectrum contains "
+            f"values other than 0 and 1 (got {sorted(set(evals_round))})."
+        )
 
 
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):

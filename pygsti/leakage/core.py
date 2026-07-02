@@ -100,9 +100,10 @@ Raises a ValueError if `basis` does not support leakage modeling.
 def computational_effect(basis: Basis) -> np.ndarray:
     label = _eye_label(basis)
     E = basis.ellookup[label].copy()  # type: ignore
-    E = pgmt.induced_projector(E, tol=1e-10, require_real=True)
-    if E.size == 0:
-        raise ValueError(f'basis {basis} does not support leakage modeling.')
+    try:
+        E = pgmt.induced_projector(E, tol=1e-10, require_real=True)
+    except ValueError as e:
+        raise ValueError(f'basis {basis} does not support leakage modeling.') from e
     return E
 
 

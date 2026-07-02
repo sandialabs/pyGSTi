@@ -419,11 +419,13 @@ class Basis(_NicelySerializable):
                 return False
             I_before = self.ellookup[label]
             from pygsti.tools.matrixtools import induced_projector
-            I_after  = induced_projector(I_before, require_real=True)
-            if I_after.size == 0:
-                self._implies_leakage = False
-            else:
+            try:
+                I_after = induced_projector(I_before, require_real=True)
                 self._implies_leakage = round(_np.trace(I_after).real)**2 < I_after.size
+            except ValueError:
+                # The identity-candidate element is not proportional to a real
+                # orthogonal projector, so it doesn't designate a computational subspace.
+                self._implies_leakage = False
         return self._implies_leakage
 
     @property
