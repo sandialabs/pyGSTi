@@ -430,7 +430,7 @@ class RandomUnitaryExcitationTester(BaseCase):
             (self.QB_QT, 'B', 'gm', 1, 3),
         ]
         for ss, sub, basis, glevel, udim in cases:
-            with self.subTest(state_space=str(ss), ground_level=glevel):
+            with self.subTest(state_space=str(ss), lower_level=glevel):
                 _, p = random_unitary_excitation(ss, sub, basis, glevel, 0.5, rng_seed=2)
                 self.assertEqual(p.shape, (udim,))
                 self.assertAlmostEqual(np.linalg.norm(p), 1.0, places=12)
@@ -468,7 +468,7 @@ class RandomUnitaryExcitationTester(BaseCase):
         _, p2 = random_unitary_excitation(self.QUTRIT, 'Q0', 'gm', 0, 0.6, rng_seed=2)
         self.assertGreater(np.linalg.norm(p1 - p2), 1e-6)
 
-    def test_ground_level_out_of_range_raises(self):
-        # ground_level+1 must be a valid level of the subsystem.
+    def test_lower_level_out_of_range_raises(self):
+        # lower_level+1 must be a valid level of the subsystem.
         with self.assertRaises(AssertionError):
             random_unitary_excitation(self.QUTRIT, 'Q0', 'gm', 2, 0.5, rng_seed=0)

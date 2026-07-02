@@ -335,7 +335,7 @@ def random_unitary_excitation(
     state_space: Union[ExplicitStateSpace, QuditSpace],
     target_subsys: Any,
     subsys_basis: BasisLike,
-    ground_level: int,
+    lower_level: int,
     strength: float,
     rng_seed: Any=0
 ) -> tuple[EmbeddedOp, np.ndarray]:
@@ -344,7 +344,7 @@ def random_unitary_excitation(
     as the identity on the rest of `state_space`.
 
     The coupling acts on the 2-dimensional subspace of the target subsystem spanned by
-    levels `ground_level` and `ground_level + 1`. We draw a random complex unit vector
+    levels `lower_level` and `lower_level + 1`. We draw a random complex unit vector
     `p` supported on those two levels and form the rank-one Hermitian generator
     ``H = strength * |p><p|``. The returned operation embeds ``U = expm(1j * H)`` into
     the full state space, acting trivially on all other subsystems and levels.
@@ -363,10 +363,10 @@ def random_unitary_excitation(
         as a superoperator. Its dimension must be the square of the subsystem's Hilbert
         space dimension (e.g. `'gm'` or `'l2p1'` of dimension 9 for a qutrit).
 
-    ground_level : int
-        Index of the lower of the two coupled levels. Both `ground_level` and
-        `ground_level + 1` must be valid levels of the target subsystem, i.e. the
-        subsystem's Hilbert space dimension must exceed `ground_level + 1`.
+    lower_level : int
+        Index of the lower of the two coupled levels. Both `lower_level` and
+        `lower_level + 1` must be valid levels of the target subsystem, i.e. the
+        subsystem's Hilbert space dimension must exceed `lower_level + 1`.
 
     strength : float
         Scale of the Hermitian generator; larger values produce stronger excitations.
@@ -383,18 +383,18 @@ def random_unitary_excitation(
 
     p : numpy.ndarray
         The complex unit vector (of length equal to the subsystem's Hilbert space
-        dimension) that defines the generator; only entries `ground_level` and
-        `ground_level + 1` are nonzero.
+        dimension) that defines the generator; only entries `lower_level` and
+        `lower_level + 1` are nonzero.
     """
     from pygsti.modelmembers.operations import StaticUnitaryOp, EmbeddedOp
 
     subsys_udim = state_space.label_udimension(target_subsys)
-    assert subsys_udim > ground_level + 1
+    assert subsys_udim > lower_level + 1
 
     rng = np.random.default_rng(rng_seed)
     temp = rng.standard_normal((2,)) + 1j*rng.standard_normal((2,))
     p = np.zeros(subsys_udim, dtype=complex)
-    p[ground_level:ground_level+2] = temp
+    p[lower_level:lower_level+2] = temp
     p /= la.norm(p)
     H = np.outer(p, p.conj())
     H *= strength
