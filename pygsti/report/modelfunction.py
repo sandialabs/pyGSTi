@@ -10,12 +10,17 @@ Defines the ModelFunction class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Literal, Union
+from __future__ import annotations
+from typing import Literal, Union, TYPE_CHECKING, Callable, Concatenate, Any
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.label import Label as _Label
+
+if TYPE_CHECKING:
+    from pygsti.models.model import Model as _Model
+    from pygsti.modelmembers.instruments import Instrument as _Instrument
 
 class ModelFunction(object):
     """
@@ -48,7 +53,7 @@ class ModelFunction(object):
         derivative needed to find the error bars.
     """
 
-    def __init__(self, model, dependencies: Union[list[Literal['all','spam']], list[tuple[Literal['gate','prep','povm','instrument'], _Label]]]):
+    def __init__(self, model: _Model, dependencies: Union[list[Literal['all','spam']], list[tuple[Literal['gate','prep','povm','instrument'], _Label]]]):
         """
         Creates a new ModelFunction object.
 
@@ -71,7 +76,7 @@ class ModelFunction(object):
         self.base_model = model
         self.dependencies = dependencies
 
-    def evaluate(self, model):
+    def evaluate(self, model: _Model):
         """
         Evaluate this gate-set-function at `model`.
 
@@ -86,7 +91,7 @@ class ModelFunction(object):
         """
         return None
 
-    def evaluate_nearby(self, nearby_model):
+    def evaluate_nearby(self, nearby_model: _Model):
         """
         Evaluate this model-function at `nearby_model`.
 
@@ -122,7 +127,7 @@ class ModelFunction(object):
         #determines which variations in model are used when computing confidence regions
 
 
-def spamfn_factory(fn):
+def spamfn_factory(fn: Callable[Concatenate[list[Any], list[Any], ...], Any]):
     """
     Creates a class that evaluates `fn(preps,povms,...)`.
 
@@ -165,7 +170,7 @@ def spamfn_factory(fn):
 #Note: the 'basis' argument is unnecessary here, as it could be passed as an additional arg
 
 
-def opfn_factory(fn):
+def opfn_factory(fn: Callable[Concatenate[Any, _Basis, ...], Any]):
     """
     Creates a class that evaluates `fn(gate,basis,...)`.
 
@@ -194,7 +199,7 @@ def opfn_factory(fn):
             self.kwargs = kwargs
             ModelFunction.__init__(self, model, [("gate", gl)])
 
-        def evaluate(self, model):
+        def evaluate(self, model: _ExplicitOpModel):
             """ Evaluate this gate-set-function at `model`."""
             return fn(model.operations[self.gl].to_dense("HilbertSchmidt"), model.basis,
                       *self.args, **self.kwargs)
@@ -205,7 +210,7 @@ def opfn_factory(fn):
 
 #Note: the 'op2' and 'basis' arguments are unnecessary here, as they could be
 # passed as additional args
-def opsfn_factory(fn):
+def opsfn_factory(fn: Callable[Concatenate[Any, Any, _Basis, ...], Any]):
     """
     Creates a class that evaluates `fn(op1,op2,basis,...)`.
 
@@ -264,7 +269,7 @@ def opsfn_factory(fn):
     return GSFTemp
 
 
-def instrumentfn_factory(fn):
+def instrumentfn_factory(fn: Callable[Concatenate[_Instrument, _Instrument, _Basis, ...], Any]):
     """
     Creates a class that evaluates `fn(instrument1,instrument2,basis,...)`.
 
@@ -274,7 +279,7 @@ def instrumentfn_factory(fn):
     Parameters
     ----------
     fn : function
-        A function of at least the two parameters as discussed above.
+        A function of at least the three parameters as discussed above.
 
     Returns
     -------
@@ -305,7 +310,7 @@ def instrumentfn_factory(fn):
     return GSFTemp
 
 
-def vecfn_factory(fn):
+def vecfn_factory(fn: Callable[Concatenate[Any, _Basis, ...], Any]):
     """
     Creates a class that evaluates `fn(vec,basis,...)`.
 
@@ -356,7 +361,7 @@ def vecfn_factory(fn):
     return GSFTemp
 
 
-def vecsfn_factory(fn):
+def vecsfn_factory(fn: Callable[Concatenate[Any, Any, _Basis, ...], Any]):
     """
     Creates a class that evaluates `fn(vec1, vec2, basis,...)`.
 
@@ -413,7 +418,7 @@ def vecsfn_factory(fn):
     return GSFTemp
 
 
-def povmfn_factory(fn):
+def povmfn_factory(fn: Callable[Concatenate[_Model, ...], Any]):
     """
     Creates a class that evaluates `fn(model,...)` where `fn` *only* depends on the POVM effect elements `model`.
 
@@ -452,7 +457,7 @@ def povmfn_factory(fn):
     return GSFTemp
 
 
-def modelfn_factory(fn):
+def modelfn_factory(fn: Callable[Concatenate[_Model, ...], Any]):
     """
     Creates a class that evaluates `fn(model,...)`.
 

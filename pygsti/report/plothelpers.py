@@ -13,7 +13,7 @@ Helper Functions for generating plots
 from __future__ import annotations
 
 import warnings as _warnings
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence, tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence, Union
 
 import numpy as _np
 import numpy.typing as _npt
