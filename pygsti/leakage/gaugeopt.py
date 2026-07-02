@@ -152,8 +152,10 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     """
     from pygsti.models.gaugegroup import UnitaryGaugeGroup
     tm = gopparams_dicts[0]['target_model']
-    gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp['_gaugeGroupEl']))]
-    # ^ That list will __usually__ be length-1.
+    gopparams_dicts = [gp for gp in gopparams_dicts if 'TPSpam' not in str(type(gp.get('_gaugeGroupEl')))]
+    # ^ That list will __usually__ be length-1. We use .get since dicts fresh from
+    #   GSTGaugeOptSuite.to_dictionary lack the _gaugeGroupEl key (it's filled in at
+    #   gauge-optimization time); such dicts are never TPSpam steps, so they're kept.
 
     gopparams_dicts = copy.deepcopy(gopparams_dicts)
     # ^ Probably a list of length 1.
@@ -209,6 +211,11 @@ def std_lago_gopsuite(model: ExplicitOpModel) -> dict[str, list[dict]]:
     from pygsti.protocols.gst import GSTGaugeOptSuite
     std_gop_suite = GSTGaugeOptSuite(gaugeopt_suite_names=('stdgaugeopt',))
     std_gos_lods  = std_gop_suite.to_dictionary(model)['stdgaugeopt']  # list of dictionaries
+    for d in std_gos_lods:
+        d.setdefault('target_model', model)
+        # ^ to_dictionary omits target_model (it is normally filled in at gauge-
+        #   optimization time), but lagoified_gopparams_dicts needs it to derive
+        #   the leakage-aware gauge group from the model's basis.
     lago_gos_lods = lagoified_gopparams_dicts(std_gos_lods)
     gop_params = {'LAGO': lago_gos_lods}
     return gop_params
