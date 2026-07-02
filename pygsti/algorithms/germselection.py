@@ -166,6 +166,11 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
     
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
+        
     toss_random_frac : float, optional
         If specified this is a number between 0 and 1 that indicates the random fraction of candidate
         germs to drop randomly following the deduping procedure.
@@ -464,7 +469,6 @@ def compute_germ_set_score(germs: list[_circuits.Circuit], target_model: Optiona
                            op_penalty: float=0.0, l1_penalty: float=0.0, num_nongauge_params: Optional[int]=None,
                            float_type: Optional[_np.dtype]=None, gate_penalty: Optional[dict[str,float]]=None) -> _scoring.CompositeScore:
     """
-    float_type = _resolve_float_type(float_type, model)
     Calculate the score of a germ set with respect to a model.
 
     More precisely, this function computes the maximum score (roughly equal
@@ -785,7 +789,6 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
 def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
                               germ_lengths=None, comm=None, float_type=None):
     """
-    float_type = _resolve_float_type(float_type, model)
     Calculate the positive squares of the germ Jacobians.
 
     twirledDerivDaggerDeriv == array J.H*J contributions from each germ
@@ -846,7 +849,6 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
 
 def _compute_twirled_ddd(model, germ, eps=1e-6, float_type=None):
     """
-    float_type = _resolve_float_type(float_type, model)
     Calculate the positive squares of the germ Jacobian.
 
     twirledDerivDaggerDeriv == array J.H*J contributions from `germ`
@@ -1016,7 +1018,6 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
 
 def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=None, comm=None, num_gauge_params = None):
     """
-    float_type = _resolve_float_type(float_type, model_list[0])
     Check to see if the germs_list is amplificationally complete (AC).
 
     Checks for AC with respect to all the Models in `model_list`, returning
@@ -1042,7 +1043,9 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
         Also used for eigenvector degeneracy testing in twirling operation.
     
     float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -1300,7 +1303,6 @@ def _sq_sing_vals_from_deriv(deriv, weights=None):
 
 def _twirled_deriv(model, circuit, eps=1e-6, float_type=None):
     """
-    float_type = _resolve_float_type(float_type, model)
     Compute the "Twirled Derivative" of a circuit.
 
     The twirled derivative is obtained by acting on the standard derivative of
@@ -1319,13 +1321,17 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=None):
         (i.e. `abs(eval1 - eval2) < eps` ? )
         
     float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     Returns
     -------
     numpy array
         An array of shape (op_dim^2, num_model_params)
     """
+    float_type = _resolve_float_type(model)
+
     prod = model.sim.product(circuit)
 
     # flattened_op_dim x vec_model_dim
@@ -1340,7 +1346,6 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=None):
 
 def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float_type=None):
     """
-    float_type = _resolve_float_type(float_type, model)
     Compute the "Twirled Derivative" of a set of circuits.
 
     The twirled derivative is obtained by acting on the standard derivative of
@@ -1374,6 +1379,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
     numpy array
         An array of shape (num_simplified_circuits, op_dim^2, num_model_params)
     """
+    float_type = _resolve_float_type(model)
 
     # This function assumes model has no spam elements so `lookup` below
     #  gives indexes into products computed by evalTree.
@@ -1529,7 +1535,9 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
         across multiple processors.
         
     float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     nGaugeParams : int, optional (default None)
         A optional kwarg for specifying the number of gauge
@@ -1661,6 +1669,11 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
 
     verbosity : int, optional
         Level of detail printed to stdout.
+
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     Returns
     -------
@@ -1848,7 +1861,9 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
 
     float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
@@ -2260,7 +2275,9 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
         Integer >= 0 indicating the amount of detail to print.
 
     float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     See Also
     --------
@@ -2606,8 +2623,10 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
         
-    float_type : Numpy dtype object, optional
-        Numpy data type to use for floating point arrays
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
@@ -3093,7 +3112,6 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                                        printer=None, return_eigs=False):
 
     """
-    float_type = _resolve_float_type(float_type, model)
     Calculate the positive squares of the germ Jacobians.
 
     twirledDerivDaggerDeriv == array J.H*J contributions from each germ
@@ -3808,7 +3826,9 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
         
     float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     force_rank_increase : bool, optional
         Whether to force the greedy iteration to select a new germ that increases the rank
@@ -4291,7 +4311,7 @@ def compute_composite_germ_set_score_compactevd(current_update_cache: tuple[_np.
                                                 partial_germs_list: Optional[list[_circuits.Circuit]]=None, eps: Optional[float]=None, 
                                                 num_germs: Optional[int]=None, op_penalty: float=0.0, l1_penalty: float=0.0, 
                                                 num_nongauge_params: Optional[int]=None, num_params: Optional[int]=None, 
-                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type=None,
+                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None,
                                                 gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
@@ -4452,7 +4472,7 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache: tuple[
                                                 partial_germs_list: Optional[list[_circuits.Circuit]]=None, eps: Optional[float]=None, 
                                                 num_germs: Optional[int]=None, op_penalty: float=0.0, l1_penalty: float=0.0, 
                                                 num_nongauge_params: Optional[int]=None, num_params: Optional[int]=None, 
-                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type=None,
+                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None,
                                                 gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
@@ -4643,7 +4663,9 @@ def germ_set_spanning_vectors(target_model, germ_list, float_type=None,
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
     
     float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
@@ -4922,8 +4944,7 @@ def germ_set_spanning_vectors(target_model, germ_list, float_type=None,
 #model vectors rather than full germs.
 def compute_composite_vector_set_score(current_update_cache, vector_update, 
                                        model=None, num_nongauge_params=None, 
-                                       force_rank_increase=False,
-                                       float_type=None):
+                                       force_rank_increase=False):
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -4962,7 +4983,6 @@ def compute_composite_vector_set_score(current_update_cache, vector_update,
         of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
         with respect to the chosen score function). Also results in pruning in subsequent
         optimization iterations. Defaults to False.
-    
     
     Returns
     -------
