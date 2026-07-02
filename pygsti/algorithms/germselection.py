@@ -4631,7 +4631,7 @@ def stable_pinv(mat):
             pinv_s[i]= 1/sval
     
     #new form the pseudoinverse:
-    pinv= Vh.T@(pinv_s*U.T)
+    pinv= Vh.conj().T@(pinv_s*U.conj().T)
     return pinv
 
 
@@ -4813,7 +4813,7 @@ def germ_set_spanning_vectors(target_model, germ_list, float_type=None,
         #have a factor of sqrt(e) folded into them, so I am dividing that back out here.
         
         #initial value of the current twirled derivative gramian.
-        currentDDD = composite_twirled_deriv_array[:, [best_initial_vec_index]]@ composite_twirled_deriv_array[:, [best_initial_vec_index]].T
+        currentDDD = composite_twirled_deriv_array[:, [best_initial_vec_index]]@ composite_twirled_deriv_array[:, [best_initial_vec_index]].conj().T
         
         #Now start the greedy search. The initial number of amplified parameters is 1.
         initN=1
@@ -4869,7 +4869,7 @@ def germ_set_spanning_vectors(target_model, germ_list, float_type=None,
             printer.log('Best score this iteration: ' + str(best_vec_score), 2)
             
             #update currentDDD
-            currentDDD= composite_twirled_deriv_array[:, _np.where(weights == 1)[0]]@ composite_twirled_deriv_array[:, _np.where(weights == 1)[0]].T
+            currentDDD= composite_twirled_deriv_array[:, _np.where(weights == 1)[0]]@ composite_twirled_deriv_array[:, _np.where(weights == 1)[0]].conj().T
         
             #Add this vector to the germ vector dictionary
             germ_vec_dict[idx_to_germ_idx[idx_best_candidate_vec][0]].append(composite_twirled_deriv_array[:, [idx_best_candidate_vec]]/_np.sqrt(composite_eigenvalue_array[idx_best_candidate_vec]))
@@ -4926,7 +4926,7 @@ def germ_set_spanning_vectors(target_model, germ_list, float_type=None,
             germ_vec_dict[idx_to_germ_idx[vec_idx][0]].append(composite_twirled_deriv_array[:, [vec_idx]]/_np.sqrt(composite_eigenvalue_array[vec_idx]))
         
         #temporarily copy, fix the return behavior later to avoid this.
-        currentDDD= selected_vector_subset @ selected_vector_subset.T
+        currentDDD= selected_vector_subset @ selected_vector_subset.conj().T
         #Need to map back the selected vectors indices (which we should be able to pull
         #directly by taking the first numNonGaugeParams of P) and use them to map back into
         #the germ set for germ_vec_dict construction purposes.
@@ -5167,7 +5167,7 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
     """
     
     #calculate some quantities we need. Following notation from matrix cookbook.
-    beta = 1 + vector_update.T@pinv_A@vector_update
+    beta = 1 + vector_update.conj().T@pinv_A@vector_update
     v= pinv_A@vector_update
     w = proj_A@vector_update
     
@@ -5179,9 +5179,9 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
         #print('Case 1')
         #the diagonal of an outer-product of 2 vectors is just a vector of the element-wise
         #products of corresponding elements.
-        vw = v@w.T
+        vw = v@w.conj().T
         vw_term = (-1/norm_w**2)*(vw + vw.T)
-        ww_term = (beta/norm_w**4)*(w@w.T)
+        ww_term = (beta/norm_w**4)*(w@w.conj().T)
         
         G = vw_term + ww_term
         
@@ -5192,7 +5192,7 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
     
     elif (norm_w<1e-10) and (beta>1e-10):
         #print('Case 3/5')
-        G = (-beta/_np.abs(beta)**2)*(v@v.T)
+        G = (-beta/_np.abs(beta)**2)*(v@v.conj().T)
         
         rank_increase_flag = False
         
@@ -5205,9 +5205,9 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
         gamma = pinv_A@v
         norm_v= _np.linalg.norm(v)
         
-        gamma_v= gamma@v.T
+        gamma_v= gamma@v.conj().T
         gamma_v_term = (-1/norm_v**2)*(gamma_v+gamma_v.T)
-        vv_term = (_np.sum(v*gamma)/norm_v**4)*(v@v.T)
+        vv_term = (_np.sum(v*gamma)/norm_v**4)*(v@v.conj().T)
         
         G = gamma_v_term + vv_term
         
