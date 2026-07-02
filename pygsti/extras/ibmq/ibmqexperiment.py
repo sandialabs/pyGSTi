@@ -463,6 +463,10 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         sampler = _Sampler(mode=ibmq_session)
         
+        sampler.options.dynamical_decoupling.enable = True
+        sampler.options.dynamical_decoupling.sequence_type = "XpXm"
+        sampler.options.dynamical_decoupling.extra_slack_distribution = "middle"
+
         for batch_idx, batch in enumerate(self.qiskit_isa_circuit_batches):
             if batch_idx < start or batch_idx >= stop:
                 continue
