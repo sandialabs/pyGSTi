@@ -503,6 +503,9 @@ def compute_germ_set_score(germs: list[_circuits.Circuit], target_model: Optiona
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
 
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
         of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
@@ -686,6 +689,9 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
     
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
         of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
@@ -809,6 +815,9 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
 
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+
     Returns
     -------
     twirledDerivDaggerDeriv : numpy.ndarray
@@ -856,6 +865,9 @@ def _compute_twirled_ddd(model, germ, eps=1e-6, float_type=None):
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
         (i.e. abs(eval1 - eval2) < eps ? )
+
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
 
     Returns
     -------
@@ -1029,6 +1041,9 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
         parameter un-amplified when its reciprocal is greater than threshold.
         Also used for eigenvector degeneracy testing in twirling operation.
     
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -1303,6 +1318,9 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=None):
         Tolerance used for testing whether two eigenvectors are degenerate
         (i.e. `abs(eval1 - eval2) < eps` ? )
         
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+
     Returns
     -------
     numpy array
@@ -1347,6 +1365,9 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
+
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
 
     Returns
     -------
@@ -1507,6 +1528,9 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
         
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+
     nGaugeParams : int, optional (default None)
         A optional kwarg for specifying the number of gauge
         parameters. Specifying this if already precomputed can
@@ -1822,6 +1846,9 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
 
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
+
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
 
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
@@ -2231,6 +2258,9 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
 
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
+
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
 
     See Also
     --------
@@ -3097,6 +3127,9 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
         
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+
     return_eigs : bool, optional, default False
         If True then additionally return a list of the arrays of eigenvalues for each
         germ's twirled derivative gramian.
@@ -3774,6 +3807,9 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
         
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+
     force_rank_increase : bool, optional
         Whether to force the greedy iteration to select a new germ that increases the rank
         of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
@@ -4606,6 +4642,9 @@ def germ_set_spanning_vectors(target_model, germ_list, float_type=None,
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
     
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
         the difference between eigenvalues below which they're treated as
