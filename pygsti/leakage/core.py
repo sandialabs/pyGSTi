@@ -32,16 +32,13 @@ and the set of linear transformations (or superoperators) from M[U] to M[U]
 is denoted S[U].
 
 The orthogonal complement of U in H is denoted U^⟂. There are multiple ways
-to extend a linear operator Φ ∈ M[U] to an operator Ψ ∈ M[H], where
-H = U ⨁ U^⟂. When U and U^⟂ are invariant subspaces of Ψ, we write
-Ψ = Φ ⨁ A, where A ∈ M[U^⟂] is the restriction of Ψ to U^⟂.
+to extend a linear operator Φ ∈ M[U] to all of H = U ⨁ U^⟂.
 
-    We call an extension Ψ ...
+    We call an extension ...
 
-      * direct if U and U^⟂ are invariant subspaces for both Ψ and Ψ^†
-        (so that Ψ = Φ ⨁ A for some A),
-      * annhilating if ker(Ψ) and ker(Ψ^†) contain U^⟂, and
-      * unitary if it is direct and A is unitary on U^⟂.
+      * direct if U and U^⟂ are invariant subspaces for both Φ and Φ^†,
+      * annhilating if ker(Φ) and ker(Φ^†) contain U^⟂, and
+      * unitary if it is direct and Φ is unitary on U^⟂.
 
     We further call a unitary extension ...
 
