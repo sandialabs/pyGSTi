@@ -3353,9 +3353,6 @@ class ModelEstimateResults(_proto.ProtocolResults):
             for gop_name in est.goparameters:
                 mdl = est.models[gop_name]
                 if isinstance(mdl.sim, MatrixForwardSimulator):
-                    # Replace with MapForwardSimulator, since that's the only
-                    # ForwardSimulator that can compute objective function
-                    # Hessians with a reasonable amount of memory.
                     mdl.sim = MapForwardSimulator
                 crf = est.add_confidence_region_factory(gop_name, 'final')
                 crf.compute_hessian(**compute_hessian_kwargs)

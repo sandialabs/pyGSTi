@@ -404,11 +404,10 @@ class Basis(_NicelySerializable):
         'gm' of the same dimension has identity-candidate 'I' with element
         proportional to diag(1, 1, 1) — a full-rank projector — so it does not.
 
-        Conditions 2 and 3 are checked by calling
-        :func:`pygsti.tools.matrixtools.induced_projector` as a probe: it returns the
-        projector onto range(E) if the labeled element is proportional to a real
-        orthogonal projector, and we treat a probe failure as "no leakage modeling"
-        rather than an error. The result is cached in ``self._implies_leakage``.
+        Conditions 2 and 3 are checked by calling :func:`matrixtools.induced_projector`
+        as a probe: it returns the projector onto range(E) if the labeled element is
+        proportional to a real orthogonal projector, and we treat a probe failure as
+        "no leakage modeling" rather than an error.
 
         See :mod:`pygsti.leakage.core` for the functions this property drives
         (`computational_effect`, `computational_superkets`, `computational_projector`).
