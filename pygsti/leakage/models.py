@@ -250,7 +250,12 @@ def promote_bb_to_bt(
     -------
     ExplicitOpModel
         A 6-dimensional model with a `UnitaryGaugeGroup` default gauge group and the
-        `'map'` forward simulator.
+        `'map'` forward simulator. The returned model is a fully parameterized
+        process-matrix model regardless of `qubit_model`'s parameterization: only the
+        *ideal* gate unitaries (via the processor spec) are promoted, so any noise
+        parameters or constrained parameterizations (e.g. CPTPLND) of `qubit_model`
+        are not inherited. A DubiousTargetWarning is raised if `qubit_model` is not
+        static, since its non-ideal content would be silently ignored.
     """
 
     from pygsti.models import ExplicitOpModel
@@ -259,6 +264,16 @@ def promote_bb_to_bt(
     from pygsti.modelmembers.states import FullState
 
     assert qubit_model.state_space.num_qubits == 2
+    if qubit_model.num_params > 0:
+        from pygsti.tools.exceptions import DubiousTargetWarning
+        warnings.warn(
+            f"qubit_model is not static: it has {qubit_model.num_params} free "
+            f"parameters. This function promotes only the model's ideal gate "
+            f"unitaries (via its processor spec), and the returned model is fully "
+            f"parameterized; qubit_model's parameterization and any deviation from "
+            f"the ideal gates are silently ignored.",
+            DubiousTargetWarning
+        )
     if len(qubit_model.instruments) > 0:
         raise NotImplementedError(
             f"qubit_model contains instruments {list(qubit_model.instruments.keys())}, "

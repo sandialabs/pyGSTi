@@ -374,6 +374,27 @@ class PromoteBBToBTTester(BaseCase):
         with self.assertRaises(ValueError):
             promote_bb_to_bt(self.model_2q, sys1_basis='std')
 
+    def test_nonstatic_model_warns(self):
+        # promote_bb_to_bt only promotes ideal gate unitaries; a parameterized input
+        # model's noise/parameterization would be silently ignored, so it warns.
+        import warnings as _warnings
+        from pygsti.processors import QubitProcessorSpec
+        from pygsti.models import create_explicit_model
+        from pygsti.tools.exceptions import DubiousTargetWarning
+        ps = QubitProcessorSpec(2, ['Gxpi2', 'Gcnot'], qubit_labels=['Q0', 'Q1'],
+                                geometry='line')
+        full_model = create_explicit_model(ps, ideal_gate_type='full',
+                                           ideal_spam_type='full TP')
+        self.assertGreater(full_model.num_params, 0)
+        with self.assertWarns(DubiousTargetWarning):
+            promote_bb_to_bt(full_model)
+
+    def test_static_model_does_not_warn(self):
+        import warnings as _warnings
+        with _warnings.catch_warnings():
+            _warnings.simplefilter('error')
+            promote_bb_to_bt(self.model_2q)
+
     def test_model_with_instruments_rejected(self):
         # Instruments are not lifted to the 6-level space (there is no canonical
         # choice for how an instrument should act on the leakage level).
