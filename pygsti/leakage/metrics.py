@@ -42,7 +42,11 @@ def tensorized_teststate_density(op_basis: Basis) -> np.ndarray:
     else:
         E = computational_effect(op_basis)
         if la.norm(E.imag) > 0:
-            raise ValueError()
+            raise ValueError(
+                f"The computational effect of op_basis {op_basis} has a nonzero imaginary "
+                f"part (norm {la.norm(E.imag):.2e}). The test state construction requires "
+                f"a real orthogonal projector onto the computational subspace."
+            )
     psi = pgbt.stdmx_to_stdvec(E).ravel()
     psi /= la.norm(psi)
     # In a standard leakage basis we have

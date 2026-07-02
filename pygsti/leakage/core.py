@@ -32,12 +32,15 @@ and the set of linear transformations (or superoperators) from M[U] to M[U]
 is denoted S[U].
 
 The orthogonal complement of U in H is denoted U^⟂. There are multiple ways
-to extend a linear operator Φ ∈ M[U] to all of H = U ⨁ U^⟂.
+to extend a linear operator Φ ∈ M[U] to an operator Ψ ∈ M[H], where
+H = U ⨁ U^⟂. When U and U^⟂ are invariant subspaces of Ψ, we write
+Ψ = Φ ⨁ A, where A ∈ M[U^⟂] is the restriction of Ψ to U^⟂.
 
-    We call an extension ...
+    We call an extension Ψ ...
 
-      * direct if U and U^⟂ are invariant subspaces for both Φ and Φ^†,
-      * annhilating if ker(Φ) and ker(Φ^†) contain U^⟂, and
+      * direct if U and U^⟂ are invariant subspaces for both Ψ and Ψ^†
+        (so that Ψ = Φ ⨁ A for some A),
+      * annhilating if ker(Ψ) and ker(Ψ^†) contain U^⟂, and
       * unitary if it is direct and A is unitary on U^⟂.
 
     We further call a unitary extension ...
@@ -124,11 +127,17 @@ def computational_superkets(basis: Basis) -> np.ndarray:
     if not basis.implies_leakage_modeling:
         return np.eye(basis.dim)
     if not basis.is_hermitian():
-        raise ValueError()
+        raise ValueError(
+            f"basis {basis} is not Hermitian. Computational superkets are only defined "
+            f"for Hermitian bases, whose superkets of Hermitian operators are real."
+        )
     E = computational_effect(basis)
     k = np.linalg.matrix_rank(E)
     if not pgmt.is_projector(E):
-        raise ValueError()
+        raise ValueError(
+            f"The computational effect of basis {basis} is not an orthogonal projector; "
+            f"cannot construct an orthonormal basis for the computational subspace."
+        )
     proj_elements  = [ E @ B @ E for B in basis.elements ]
     subspace_frame = np.column_stack([ pgbt.stdmx_to_vec(pB, basis) for pB in proj_elements ])
     # ^ a "frame" is an overcomplete basis.

@@ -1479,7 +1479,13 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
         if all(b0.name == bi.name for bi in basis.component_bases[1:]):
             basis = b0.name
         else:
-            raise NotImplementedError()
+            raise NotImplementedError(
+                "Cannot construct local gate operations for a TensorProdBasis whose "
+                "component bases have different names "
+                f"({[bi.name for bi in basis.component_bases]}). Local gates are built "
+                "in a per-qudit basis, which is only well-defined when every component "
+                "basis has the same name."
+            )
 
     std_gate_unitaries = _itgs.standard_gatename_unitaries()
     if custom_gates is None: custom_gates = {}

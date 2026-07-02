@@ -198,5 +198,8 @@ def add_lago_models(results: ModelEstimateResults, est_key: Optional[str] = None
         for est_key in results.estimates.keys():
             add_lago_models(results, est_key, gos, verbosity)
     else:
-        raise ValueError()
+        raise ValueError(
+            f"est_key must be a string (a key of results.estimates) or None "
+            f"(to update every estimate); got {est_key!r} of type {type(est_key).__name__}."
+        )
     return

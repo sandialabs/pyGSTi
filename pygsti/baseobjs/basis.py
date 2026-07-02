@@ -371,6 +371,47 @@ class Basis(_NicelySerializable):
 
     @property
     def implies_leakage_modeling(self) -> Optional[bool]:
+        """
+        True if this basis designates a proper subspace of Hilbert space as "computational."
+
+        A basis implies leakage modeling when all three of the following hold:
+
+        1. It has an *identity-candidate* label: a label matching ``^(?:I|C\\[I+\\])+$``,
+           i.e. any concatenation of 'I' characters and 'C[I...I]' groups (see
+           `_EYE_LABEL_REGEX`). When several labels qualify, the one containing the most
+           'I' characters is used. This is how the basis *names* the element that plays
+           the role of "identity on the computational subspace": ordinary bases like
+           'pp' and 'gm' have exactly one such label ('I', 'II', ...), leakage bases use
+           the 'C[I...I]' convention, and tensor products concatenate per-factor
+           segments (e.g. 'IC[I]' for pp ⊗ l2p1).
+
+        2. The element carrying that label is proportional to a *real orthogonal
+           projector* E. This is what makes "the computational subspace" well defined:
+           we take C = range(E). An element that is not (proportional to) a projector
+           doesn't single out a subspace, so no leakage interpretation is possible; the
+           probe below fails and we return False.
+
+        3. rank(E) is strictly less than the Hilbert-space dimension, i.e. C is a
+           *proper* subspace of H. When E is proportional to the full identity (as in
+           'pp' or 'gm'), there is no leakage level to model, and this property is
+           False even though condition 2 holds.
+
+        Example: the built-in 'l2p1' basis (a qutrit basis, "leakage-2-plus-1") has an
+        element labeled 'C[I]' proportional to diag(1, 1, 0). That element is a rank-2
+        projector on a 3-dimensional Hilbert space, so ``Basis.cast('l2p1', 9)``
+        implies leakage modeling with C spanned by the first two levels. By contrast,
+        'gm' of the same dimension has identity-candidate 'I' with element
+        proportional to diag(1, 1, 1) — a full-rank projector — so it does not.
+
+        Conditions 2 and 3 are checked by calling
+        :func:`pygsti.tools.matrixtools.induced_projector` as a probe: it returns the
+        projector onto range(E) if the labeled element is proportional to a real
+        orthogonal projector, and we treat a probe failure as "no leakage modeling"
+        rather than an error. The result is cached in ``self._implies_leakage``.
+
+        See :mod:`pygsti.leakage.core` for the functions this property drives
+        (`computational_effect`, `computational_superkets`, `computational_projector`).
+        """
         if (not hasattr(self, '_implies_leakage')) or (not isinstance(self._implies_leakage, bool)):
             label = _eye_label(self)
             if len(label) == 0:

@@ -567,13 +567,8 @@ def _legacy_create_scalar_objective(model, target_model,
     mxBasis = model.basis
 
     #Use the target model's basis if model's is unknown
-    # (as it can often be if it's just come from an logl opt,
-    #  since from_vector will clear any basis info)
     if mxBasis.name == "unknown" and target_model is not None:
         mxBasis = target_model.basis
-    # ^ TODO: look into if this comment about from_vector is still valid.
-    #   my instinct tells me that we should be raising an error if model.basis
-    #   doesn't match target_model.basis.
 
     I = _tools.matrixtools.IdentityOperator()
     if mxBasis.implies_leakage_modeling:

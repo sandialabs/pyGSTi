@@ -201,7 +201,8 @@ def promote_bb_to_bt(
         ``kron(Ea_b, Eb_t)``, where `Ea_b` is the qubit projector onto computational level
         `a` and `Eb_t` is the qutrit readout projector for outcome `b`. The qutrit's "0"
         outcome projects onto the levels in `levels_readout_zero`; its "1" outcome projects
-        onto the complementary levels (including the leakage level).
+        onto the complementary levels (including the leakage level if not in
+        `levels_readout_zero`).
 
         Each non-idle gate of `qubit_model` is lifted to act on the 6-dimensional Hilbert
         space. Single-register gates are tensored with the identity on the other register;
@@ -222,8 +223,8 @@ def promote_bb_to_bt(
         modeling (e.g. `'l2p1'`).
 
     levels_readout_zero : tuple of int, optional
-        Qutrit levels that map to the "0" readout outcome. Levels not listed (including the
-        leakage level) map to the "1" outcome.
+        Qutrit levels that map to the "0" readout outcome. Levels not listed (including
+        the leakage level if not in `levels_readout_zero`) map to the "1" outcome.
 
     default_idle_gatename : Label, optional
         Label used for the idle operation. If `qubit_model`'s processor spec exposes an

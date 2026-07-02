@@ -3301,6 +3301,39 @@ class ModelEstimateResults(_proto.ProtocolResults):
             compute_hessian_kwargs: Optional[dict[str, Any]]=None,
             project_hessian_kwargs: Optional[dict[str, Any]]=None,
         ):
+        """
+        Compute and store objective-function Hessians for estimates in this results object.
+
+        For each named estimate (except 'Target') and each of its gauge-optimized models,
+        this method creates a confidence region factory for the 'final' circuit list,
+        computes the Hessian of the final objective function at that model, and projects
+        it onto the model's non-gauge parameter space. Once this has run, report
+        generation with a not-None `confidence_level` can render error bars for the
+        affected estimates.
+
+        Models simulated with a MatrixForwardSimulator are switched to a
+        MapForwardSimulator first, since that is the only forward simulator that can
+        compute objective-function Hessians with a reasonable amount of memory.
+
+        Parameters
+        ----------
+        estimate_names : list of str, optional
+            Names of the estimates (keys of `self.estimates`) to process. If None, all
+            estimates are processed. The 'Target' estimate is always skipped.
+
+        compute_hessian_kwargs : dict, optional
+            Keyword arguments forwarded to
+            :meth:`ConfidenceRegionFactory.compute_hessian` (e.g. `comm`, `mem_limit`).
+
+        project_hessian_kwargs : dict, optional
+            Keyword arguments forwarded to
+            :meth:`ConfidenceRegionFactory.project_hessian`. If no 'projection_type'
+            is given, 'intrinsic error' is used.
+
+        Returns
+        -------
+        None
+        """
         if project_hessian_kwargs is None:
             project_hessian_kwargs = dict()
         project_hessian_kwargs.setdefault('projection_type', 'intrinsic error')
