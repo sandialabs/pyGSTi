@@ -108,6 +108,59 @@ def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
     return None
 
 
+def basis_aware_display(switchboard, name, ordinary, leakage):
+    """
+    Register (once, keyed by `name`) and return a per-cell display ``SwitchValue`` for a
+    gates-vs-target table.
+
+    Each cell's column tuple is chosen from that cell's model basis together with the
+    interactive "Metrics" switch: the leakage (subspace-restricted) columns are used only
+    when the cell's model basis implies leakage modeling *and* the reader has the "Metrics"
+    switch in its 0-th ("Subspace") position; otherwise the ordinary full-space columns are
+    used.  Because ``display`` is thereby a per-cell switched value, the metric *headers* a
+    reader sees always match the metric *computation* used to fill them, and a report whose
+    cells have different bases simply renders different columns per switch position.
+
+    Parameters
+    ----------
+    switchboard : Switchboard
+        The report's master switchboard.  Must have ``mdl_final`` populated and a
+        ``metric_space_switch_index`` attribute (both set in ``_create_master_switchboard``).
+
+    name : str
+        Key under which the display ``SwitchValue`` is registered on ``switchboard``.  If a
+        value is already registered under this key it is returned unchanged (idempotent
+        across repeated / multi-brevity renders).
+
+    ordinary : tuple
+        The full-space column-name tuple (e.g. ``('inf', 'trace', 'diamond', ...)``).
+
+    leakage : tuple
+        The subspace/leakage column-name tuple (e.g. ``('sub-inf', 'sub-trace', ...)``).
+
+    Returns
+    -------
+    SwitchValue
+    """
+    if name in switchboard:
+        return switchboard[name]
+
+    ms_idx = switchboard.metric_space_switch_index
+    deps = tuple(switchboard.mdl_final.dependencies) + (ms_idx,)
+    switchboard.add(name, deps)
+    sv = switchboard[name]
+
+    mdl_base = switchboard.mdl_final.base
+    for idx in _np.ndindex(sv.base.shape):
+        model_idx, ms = idx[:-1], idx[-1]
+        mdl = mdl_base[model_idx]
+        basis = getattr(mdl, 'basis', None)
+        leaky = (not isinstance(mdl, _ws.NotApplicable)) and basis is not None \
+            and bool(getattr(basis, 'implies_leakage_modeling', False))
+        sv.base[idx] = leakage if (ms == 0 and leaky) else ordinary
+    return sv
+
+
 def create_offline_zip(output_dir="."):
     """
     Creates a zip file containing the a directory ("offline") of files need to display "offline" reports.
@@ -211,7 +264,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     # Does any model in any estimate carry a basis that implies leakage modeling? If so,
     # we expose an interactive "Metrics" switch letting the reader flip the gates-vs-target
     # tables between subspace-restricted (leakage-aware) and standard full-space columns.
-    # The per-cell column choice is made in `pygsti.report.section.basis_aware_display`.
+    # The per-cell column choice is made in `basis_aware_display` (defined above).
     any_leakage = False
     for results in results_dict.values():
         for est in results.estimates.values():

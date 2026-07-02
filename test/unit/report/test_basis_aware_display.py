@@ -12,7 +12,7 @@ import pytest
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.leakage import leaky_qubit_model_from_pspec
 from pygsti.report.workspace import Workspace, NotApplicable
-from pygsti.report.section import basis_aware_display
+from pygsti.report.factory import basis_aware_display
 from pygsti.report import reportables as _reportables
 from pygsti.baseobjs.basis import Basis
 from ..util import BaseCase

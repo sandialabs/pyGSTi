@@ -9,7 +9,6 @@
 #***************************************************************************************************
 
 from pygsti.report.section import Section as _Section
-from pygsti.report.section import basis_aware_display as _basis_aware_display
 
 from pygsti.report import workspace as _ws
 
@@ -54,6 +53,8 @@ class SummarySection(_Section):
             leakage += ('unmodeled',)
             wildcardBudget = switchboard.wildcard_budget_optional
             name += '_wc'
+        from pygsti.report.factory import basis_aware_display as _basis_aware_display
+        # ^ deferred to avoid a circular import: factory imports the section package.
         summary_display = _basis_aware_display(switchboard, name, ordinary, leakage)
 
         if confidence_level is not None and ci_brevity <= 1:
