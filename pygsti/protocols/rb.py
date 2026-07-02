@@ -10,7 +10,7 @@ RB Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
-from typing import Optional, Literal, Union, Hashable
+from typing import Optional, Literal, Union, Hashable, TYPE_CHECKING
 from collections import defaultdict
 import numpy as _np
 
@@ -20,7 +20,9 @@ from pygsti import tools as _tools
 from pygsti.algorithms import randomcircuit as _rc
 from pygsti.algorithms import rbfit as _rbfit
 from pygsti.algorithms import mirroring as _mirroring
-from pygsti.baseobjs.label import SSLabelMapper
+
+if TYPE_CHECKING:
+    from pygsti.baseobjs.label import SSLabelMapper
 
 # Type aliases for the constrained string arguments shared across the RB protocols.
 DataType = Literal['success_probabilities', 'adjusted_success_probabilities', 'energies']
@@ -715,7 +717,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                 defaultfit = 'full'
             self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> DirectRBDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -1004,7 +1006,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                              descriptor, add_default_protocol=False)
         return ret
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> MirrorRBDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -1318,7 +1320,7 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
         
         return (avg_gate_counts_crb, avg_gate_counts_icrb)
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> InterleavedRBDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 

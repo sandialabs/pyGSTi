@@ -9,17 +9,20 @@ Volumetric Benchmarking Protocol objects
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
-from typing import Union, Optional, Literal, Iterable
-import numpy as _np
+from __future__ import annotations
+from typing import Union, Optional, Literal, Iterable, TYPE_CHECKING
 import copy as _copy
+import numpy as _np
 
 from pygsti import tools as _tools
 from pygsti.algorithms import randomcircuit as _rc
 from pygsti.protocols import protocol as _proto
 from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
 from pygsti.circuits.circuit import Circuit as _Circuit
-from pygsti.baseobjs.label import HomogeneousSeq, SSLabelMapper
+from pygsti.baseobjs.label import HomogeneousSeq
+
+if TYPE_CHECKING:
+    from pygsti.baseobjs.label import SSLabelMapper
 
 # Type aliases for the arguments shared across the by-depth experiment designs.
 DepthList = Union[list[int], tuple[int, ...]]
@@ -62,7 +65,7 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         super().__init__(circuit_lists, qubit_labels=qubit_labels, remove_duplicates=remove_duplicates)
         self.depths = depths
 
-    def map_qubit_labels(self, mapper: SSLabelMapper) -> "ByDepthDesign":
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> ByDepthDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -196,7 +199,7 @@ class BenchmarkingDesign(ByDepthDesign):
                 [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)]
         return mapped_circuits_and_idealouts_by_depth
 
-    def map_qubit_labels(self, mapper: SSLabelMapper) -> "BenchmarkingDesign":
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> BenchmarkingDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -535,7 +538,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         self.fixed_versus_depth = fixed_versus_depth
         self.seed = seed
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> PeriodicMirrorCircuitDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
