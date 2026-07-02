@@ -10,7 +10,7 @@ RB Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
-from typing import Optional, Literal, Union, Hashable, TYPE_CHECKING
+from typing import Optional, Literal, Union, Hashable, Callable, TYPE_CHECKING
 from collections import defaultdict
 import numpy as _np
 
@@ -23,6 +23,8 @@ from pygsti.algorithms import mirroring as _mirroring
 
 if TYPE_CHECKING:
     from pygsti.baseobjs.label import SSLabelMapper
+    from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
+    from pygsti.circuits.circuit import Circuit as _Circuit
 
 # Type aliases for the constrained string arguments shared across the RB protocols.
 DataType = Literal['success_probabilities', 'adjusted_success_probabilities', 'energies']
@@ -127,9 +129,10 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
     """
 
     @classmethod
-    def from_existing_circuits(cls, data_by_depth, qubit_labels=None,
-                               randomizeout=False, citerations=20, compilerargs=(), interleaved_circuit=None,
-                               descriptor='A Clifford RB experiment', add_default_protocol=False):
+    def from_existing_circuits(cls, data_by_depth: dict, qubit_labels: _vb.QubitLabels=None,
+                               randomizeout: bool=False, citerations: int=20, compilerargs: Union[list, tuple]=(),
+                               interleaved_circuit: Optional['_Circuit']=None,
+                               descriptor: str='A Clifford RB experiment', add_default_protocol: bool=False) -> "CliffordRBDesign":
         """
         Create a :class:`CliffordRBDesign` from an existing set of sampled RB circuits.
 
@@ -215,9 +218,12 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                               interleaved_circuit, native_gate_counts=native_gate_counts)
         return self
 
-    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
-                 interleaved_circuit=None, citerations=20, compilerargs=(), exact_compilation_key=None,
-                 descriptor='A Clifford RB experiment', add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
+    def __init__(self, pspec: '_QubitProcessorSpec', clifford_compilations: dict, depths: _vb.DepthList,
+                 circuits_per_depth: int, qubit_labels: _vb.QubitLabels=None, randomizeout: bool=False,
+                 interleaved_circuit: Optional['_Circuit']=None, citerations: int=20, compilerargs: Union[list, tuple]=(),
+                 exact_compilation_key: Optional[Hashable]=None,
+                 descriptor: str='A Clifford RB experiment', add_default_protocol: bool=False,
+                 seed: Optional[int]=None, verbosity: int=1, num_processes: int=1):
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         ideal_outs = []
@@ -258,9 +264,12 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                               randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
                               interleaved_circuit, native_gate_counts=native_gate_counts)
 
-    def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                         randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                         interleaved_circuit, native_gate_counts=None, exact_compilation_key=None):
+    def _init_foundation(self, depths: _vb.DepthList, circuit_lists: _vb.CircuitLists, ideal_outs: Union[list, tuple],
+                         circuits_per_depth: Union[int, list], qubit_labels: _vb.QubitLabels,
+                         randomizeout: bool, citerations: int, compilerargs: Union[list, tuple], descriptor: str,
+                         add_default_protocol: bool,
+                         interleaved_circuit: Optional['_Circuit'], native_gate_counts: Optional[list]=None,
+                         exact_compilation_key: Optional[Hashable]=None) -> None:
         self.native_gate_count_lists = native_gate_counts
         if self.native_gate_count_lists is not None:
             # If we have native gate information, pair this with circuit data so that we serialize/truncate properly
@@ -284,7 +293,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         #set some auxfile information for interleaved_circuit
         self.auxfile_types['interleaved_circuit'] = 'circuit-str-json'
 
-    def average_native_gates_per_clifford_for_circuit(self, list_idx, circ_idx):
+    def average_native_gates_per_clifford_for_circuit(self, list_idx: int, circ_idx: int) -> dict:
         """The average number of native gates per Clifford for a specific circuit
 
         Parameters
@@ -311,7 +320,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         
         return avg_gate_counts
 
-    def average_native_gates_per_clifford_for_circuit_list(self, list_idx):
+    def average_native_gates_per_clifford_for_circuit_list(self, list_idx: int) -> dict:
         """The average number of gates per Clifford for a circuit list
 
         This essentially gives the average number of native gates per Clifford
@@ -524,11 +533,13 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
     """
 
     @classmethod
-    def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
-                               sampler='edgegrab', samplerargs=None, addlocal=False,
-                               lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
-                               citerations=20, compilerargs=(), partitioned=False,
-                               descriptor='A DRB experiment', add_default_protocol=False):
+    def from_existing_circuits(cls, circuits_and_idealouts_by_depth: dict, qubit_labels: _vb.QubitLabels=None,
+                               sampler: Union[str, Callable]='edgegrab', samplerargs: Optional[Union[list, tuple]]=None,
+                               addlocal: bool=False,
+                               lsargs: Union[list, tuple]=(), randomizeout: bool=False, cliffordtwirl: bool=True,
+                               conditionaltwirl: bool=True,
+                               citerations: int=20, compilerargs: Union[list, tuple]=(), partitioned: bool=False,
+                               descriptor: str='A DRB experiment', add_default_protocol: bool=False) -> "DirectRBDesign":
         """
         Create a :class:`DirectRBDesign` from an existing set of sampled RB circuits.
 
@@ -641,11 +652,14 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                               add_default_protocol)
         return self
 
-    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
-                 sampler='edgegrab', samplerargs=None,
-                 addlocal=False, lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
-                 citerations=20, compilerargs=(), partitioned=False, descriptor='A DRB experiment',
-                 add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
+    def __init__(self, pspec: '_QubitProcessorSpec', clifford_compilations: dict, depths: _vb.DepthList,
+                 circuits_per_depth: int, qubit_labels: _vb.QubitLabels=None,
+                 sampler: Union[str, Callable]='edgegrab', samplerargs: Optional[Union[list, tuple]]=None,
+                 addlocal: bool=False, lsargs: Union[list, tuple]=(), randomizeout: bool=False,
+                 cliffordtwirl: bool=True, conditionaltwirl: bool=True,
+                 citerations: int=20, compilerargs: Union[list, tuple]=(), partitioned: bool=False,
+                 descriptor: str='A DRB experiment',
+                 add_default_protocol: bool=False, seed: Optional[int]=None, verbosity: int=1, num_processes: int=1):
 
         if samplerargs is None:
             samplerargs = [0.25, ]
@@ -689,10 +703,13 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                               conditionaltwirl, citerations, compilerargs, partitioned, descriptor,
                               add_default_protocol)
 
-    def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                         sampler, samplerargs, addlocal, lsargs, randomizeout, cliffordtwirl,
-                         conditionaltwirl, citerations, compilerargs, partitioned, descriptor,
-                         add_default_protocol):
+    def _init_foundation(self, depths: _vb.DepthList, circuit_lists: _vb.CircuitLists, ideal_outs: Union[list, tuple],
+                         circuits_per_depth: Union[int, list], qubit_labels: _vb.QubitLabels,
+                         sampler: Union[str, Callable], samplerargs: Optional[Union[list, tuple]], addlocal: bool,
+                         lsargs: Union[list, tuple], randomizeout: bool, cliffordtwirl: bool,
+                         conditionaltwirl: bool, citerations: int, compilerargs: Union[list, tuple], partitioned: bool,
+                         descriptor: str,
+                         add_default_protocol: bool) -> None:
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.randomizeout = randomizeout
@@ -829,11 +846,12 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
     """
 
     @classmethod
-    def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
-                               circuit_type='clifford',
-                               sampler='edgegrab', samplerargs=(0.25, ), localclifford=True,
-                               paulirandomize=True, descriptor='A mirror RB experiment',
-                               add_default_protocol=False):
+    def from_existing_circuits(cls, circuits_and_idealouts_by_depth: dict, qubit_labels: _vb.QubitLabels=None,
+                               circuit_type: str='clifford',
+                               sampler: Union[str, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.25, ),
+                               localclifford: bool=True,
+                               paulirandomize: bool=True, descriptor: str='A mirror RB experiment',
+                               add_default_protocol: bool=False) -> "MirrorRBDesign":
         """
         Create a :class:`MirrorRBDesign` from an existing set of sampled RB circuits.
 
@@ -866,10 +884,12 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                               add_default_protocol)
         return self
 
-    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, circuit_type='clifford',
-                 clifford_compilations=None, sampler='edgegrab', samplerargs=(0.25, ),
-                 localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
-                 add_default_protocol=False, seed=None, num_processes=1, verbosity=1):
+    def __init__(self, pspec: '_QubitProcessorSpec', depths: _vb.DepthList, circuits_per_depth: int,
+                 qubit_labels: _vb.QubitLabels=None, circuit_type: str='clifford',
+                 clifford_compilations: Optional[dict]=None, sampler: Union[str, Callable]='edgegrab',
+                 samplerargs: Union[list, tuple]=(0.25, ),
+                 localclifford: bool=True, paulirandomize: bool=True, descriptor: str='A mirror RB experiment',
+                 add_default_protocol: bool=False, seed: Optional[int]=None, num_processes: int=1, verbosity: int=1):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
@@ -937,9 +957,11 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                               circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
                               add_default_protocol, seed=seed)
 
-    def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                         circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
-                         add_default_protocol, seed=None):
+    def _init_foundation(self, depths: _vb.DepthList, circuit_lists: _vb.CircuitLists, ideal_outs: Union[list, tuple],
+                         circuits_per_depth: Union[int, list], qubit_labels: _vb.QubitLabels,
+                         circuit_type: str, sampler: Union[str, Callable], samplerargs: Union[list, tuple],
+                         localclifford: bool, paulirandomize: bool, descriptor: str,
+                         add_default_protocol: bool, seed: Optional[int]=None) -> None:
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
@@ -953,7 +975,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
 
-    def merge_with(self, other_edesign, sort_depths=False):
+    def merge_with(self, other_edesign: _proto.ExperimentDesign, sort_depths: bool=False) -> "MirrorRBDesign":
         """
         Merge this MRB experiment design with another one and return the result.
 
@@ -1094,11 +1116,12 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         Whether to add a default RB protocol to the experiment design, which can be run
         later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
     """
-    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, layer_sampling='mixed1q2q',
-                 sampler='edgegrab', samplerargs=None,
-                 addlocal=False, lsargs=(),
-                 descriptor='A BiRB experiment',
-                 add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
+    def __init__(self, pspec: '_QubitProcessorSpec', clifford_compilations: dict, depths: _vb.DepthList,
+                 circuits_per_depth: int, qubit_labels: _vb.QubitLabels=None, layer_sampling: str='mixed1q2q',
+                 sampler: Union[str, Callable]='edgegrab', samplerargs: Optional[Union[list, tuple]]=None,
+                 addlocal: bool=False, lsargs: Union[list, tuple]=(),
+                 descriptor: str='A BiRB experiment',
+                 add_default_protocol: bool=False, seed: Optional[int]=None, verbosity: int=1, num_processes: int=1):
 
         if samplerargs is None:
             samplerargs = [0.25, ]
@@ -1142,9 +1165,12 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
                               sampler, samplerargs, addlocal, lsargs, descriptor,
                               add_default_protocol)
 
-    def _init_foundation(self, depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels, layer_sampling,
-                         sampler, samplerargs,  addlocal, lsargs, descriptor,
-                         add_default_protocol):
+    def _init_foundation(self, depths: _vb.DepthList, circuit_lists: _vb.CircuitLists, measurements: Union[list, tuple],
+                         signs: Union[list, tuple], circuits_per_depth: int, qubit_labels: _vb.QubitLabels,
+                         layer_sampling: str,
+                         sampler: Union[str, Callable], samplerargs: Optional[Union[list, tuple]], addlocal: bool,
+                         lsargs: Union[list, tuple], descriptor: str,
+                         add_default_protocol: bool) -> None:
         # Pair these attributes with circuit data so that we serialize/truncate properly
         self.paired_with_circuit_attrs = ["measurements", "signs"]
 
@@ -1264,10 +1290,13 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
         attribute.
     """
 
-    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, interleaved_circuit, qubit_labels=None, randomizeout=False,
-                 citerations=20, compilerargs=(), exact_compilation_key=None,
-                 descriptor='An Interleaved RB experiment', add_default_protocol=False, seed=None, verbosity=1, num_processes=1,
-                 interleave = False):
+    def __init__(self, pspec: '_QubitProcessorSpec', clifford_compilations: dict, depths: _vb.DepthList,
+                 circuits_per_depth: int, interleaved_circuit: '_Circuit', qubit_labels: _vb.QubitLabels=None,
+                 randomizeout: bool=False,
+                 citerations: int=20, compilerargs: Union[list, tuple]=(), exact_compilation_key: Optional[Hashable]=None,
+                 descriptor: str='An Interleaved RB experiment', add_default_protocol: bool=False,
+                 seed: Optional[int]=None, verbosity: int=1, num_processes: int=1,
+                 interleave: bool=False):
         #Farm out the construction of the experiment designs to CliffordRBDesign:
         print('Constructing Standard CRB Subdesign:')
         crb_subdesign = CliffordRBDesign(pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels, randomizeout,
@@ -1283,15 +1312,19 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
                               citerations, compilerargs, exact_compilation_key, interleave)
 
     @classmethod
-    def from_existing_designs(cls, crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout=False,
-                              citerations=20, compilerargs=(), exact_compilation_key=None, interleave=False):        
+    def from_existing_designs(cls, crb_subdesign: 'CliffordRBDesign', icrb_subdesign: 'CliffordRBDesign',
+                              circuits_per_depth: int, interleaved_circuit: '_Circuit', randomizeout: bool=False,
+                              citerations: int=20, compilerargs: Union[list, tuple]=(),
+                              exact_compilation_key: Optional[Hashable]=None, interleave: bool=False) -> "InterleavedRBDesign":        
         self = cls.__new__(cls)
         self._init_foundation(self, crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout,
                               citerations, compilerargs, exact_compilation_key, interleave)
 
     #helper method for reducing code duplication on different class constructors.
-    def _init_foundation(self, crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout,
-                              citerations, compilerargs, exact_compilation_key, interleave):
+    def _init_foundation(self, crb_subdesign: 'CliffordRBDesign', icrb_subdesign: 'CliffordRBDesign',
+                              circuits_per_depth: int, interleaved_circuit: '_Circuit', randomizeout: bool,
+                              citerations: int, compilerargs: Union[list, tuple], exact_compilation_key: Optional[Hashable],
+                              interleave: bool) -> None:
         super().__init__({'crb':crb_subdesign, 
                           'icrb':icrb_subdesign}, interleave=interleave)
         self.circuits_per_depth = circuits_per_depth
@@ -1353,8 +1386,8 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
     """
 
     def __init__(self, datatype: DataType='success_probabilities', defaultfit: DefaultFit='full',
-                 asymptote: Asymptote='std', rtype: RType='EI', seed=(0.8, 0.95),
-                 bootstrap_samples=200, depths: Depths='all', name: Optional[str]=None):
+                 asymptote: Asymptote='std', rtype: RType='EI', seed: Optional[Union[list, tuple]]=(0.8, 0.95),
+                 bootstrap_samples: int=200, depths: Depths='all', name: Optional[str]=None):
         """
         Initialize an RB protocol for analyzing RB data.
 
@@ -1422,7 +1455,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
         else:
             self.energies = False
 
-    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None):
+    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None) -> 'RandomizedBenchmarkingResults':
         """
         Run this protocol on `data`.
 
@@ -1471,7 +1504,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             else:
                 raise ValueError("No 'std' asymptote for %s datatype!" % self.asymptote)
 
-        def _get_rb_fits(circuitdata_per_depth):
+        def _get_rb_fits(circuitdata_per_depth: dict) -> tuple:
             adj_sps = []
             for depth in depths:
                 percircuitdata = circuitdata_per_depth[depth]
@@ -1580,8 +1613,9 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         self.defaultfit: DefaultFit = defaultfit
         self.auxfile_types['fits'] = 'dict:serialized-object'  # b/c NamedDict don't json
 
-    def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8, 5), ylim=None, xlim=None,
-             legend=True, title=None, figpath=None):
+    def plot(self, fitkey: Optional[Hashable]=None, decay: bool=True, success_probabilities: bool=True,
+             size: tuple=(8, 5), ylim: Optional[tuple]=None, xlim: Optional[tuple]=None,
+             legend: bool=True, title: Optional[str]=None, figpath: Optional[str]=None) -> None:
         """
         Plots RB data and, optionally, a fitted exponential decay.
 
@@ -1680,7 +1714,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         return
     
 
-    def copy(self):
+    def copy(self) -> 'RandomizedBenchmarkingResults':
         """
         Creates a copy of this :class:`RandomizedBenchmarkingResults` object.
 
@@ -1705,8 +1739,8 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
     """
 
     def __init__(self, defaultfit: DefaultFit='full', asymptote: Asymptote='std',
-                 rtype: RType='EI', seed: Optional[list[float]]=(0.8, 0.95),
-                 bootstrap_samples=200, depths: Depths='all', name: Optional[str]=None):
+                 rtype: RType='EI', seed: Optional[Union[list, tuple]]=(0.8, 0.95),
+                 bootstrap_samples: int=200, depths: Depths='all', name: Optional[str]=None):
         """
         Initialize an RB protocol for analyzing RB data.
 
@@ -1753,7 +1787,7 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
         self.datatype: DataType = 'success_probabilities'
         self.defaultfit: DefaultFit = defaultfit
 
-    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None):
+    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None) -> _proto.ProtocolResultsDir:
         """
         Run this protocol on `data`.
 
@@ -1837,4 +1871,4 @@ class InterleavedRandomizedBenchmarkingResults(_proto.ProtocolResults):
 
 
 RB = RandomizedBenchmarking
-RBResults = RandomizedBenchmarkingResults  # shorthand
+RBResults = RandomizedBenchmarkingResults
