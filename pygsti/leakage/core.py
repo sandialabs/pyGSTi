@@ -218,7 +218,18 @@ def augment_for_leakage_modeling(b_in: Basis, E: np.ndarray) -> Basis:
         already implies leakage modeling. We don't intend for this function to be used
         in this setting; the labels will probably come out looking like nonsense.
         """
-        warnings.warn('', DubiousTargetWarning)
+        warnings.warn(msg, DubiousTargetWarning)
+    hermitian_input = b_in.is_hermitian()
+    if not hermitian_input:
+        msg = \
+        f"""
+        The input basis, {b_in}, is not Hermitian. The augmented basis is Hermitian by
+        construction (each candidate element is replaced by its Hermitian part), so it
+        cannot inherit its elements from b_in. In particular, any skew-Hermitian element
+        of b_in maps to the zero matrix. We'll verify that the construction still yields
+        a linearly independent spanning set, and raise a ValueError if it does not.
+        """
+        warnings.warn(msg, DubiousTargetWarning)
     if la.norm(np.imag(E)) > 1e-10:
         raise ValueError("E must be real")
     pgmt.assert_hermitian(E, tol=1e-10)
@@ -262,5 +273,14 @@ def augment_for_leakage_modeling(b_in: Basis, E: np.ndarray) -> Basis:
     out_name  = 'Leakage augmented ' + b_in.name
     out_basis = ExplicitBasis(elements, labels, name=out_name)
     assert out_basis.implies_leakage_modeling
+
+    if not hermitian_input:
+        vectorized = np.column_stack([el.ravel() for el in elements])
+        if np.linalg.matrix_rank(vectorized) < b_in.dim:
+            raise ValueError(
+                f"Augmenting the non-Hermitian basis {b_in} did not produce a valid "
+                f"basis: after Hermitizing and projecting, the {b_in.dim} constructed "
+                f"elements are linearly dependent. Use a Hermitian input basis instead."
+            )
 
     return out_basis
