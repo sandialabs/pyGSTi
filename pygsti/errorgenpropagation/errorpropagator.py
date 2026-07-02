@@ -35,7 +35,13 @@ from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel a
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
 from itertools import islice
 
-from typing import Union, Optional
+from typing import Union, Optional, Literal, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pygsti.circuits import Circuit as _Circuit
+    from pygsti.baseobjs import Basis as _Basis
+
+
 
 class ErrorGeneratorPropagator:
 
@@ -93,8 +99,8 @@ class ErrorGeneratorPropagator:
         self.fixed_errorgen_layer = fixed_errorgen_layer
 
 
-    def eoc_error_channel(self, circuit, include_spam=True, use_bch=False,
-                          bch_kwargs=None, mx_basis='pp', circuit_conversion_kwargs=None):
+    def eoc_error_channel(self, circuit: _Circuit, include_spam: bool=True, use_bch: bool=False,
+                          bch_kwargs: dict=None, mx_basis: Union[_Basis, str]='pp', circuit_conversion_kwargs: dict=None):
         """
         Propagate all of the error generators for each circuit layer to the end of the circuit
         and return the result of exponentiating these error generators, and if necessary taking
@@ -220,7 +226,7 @@ class ErrorGeneratorPropagator:
     #    return eoc_error_channel
 #
 
-    def propagate_errorgens(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
+    def propagate_errorgens(self, circuit: _Circuit, include_spam: bool=True, circuit_conversion_kwargs: dict=None):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging.
@@ -270,7 +276,8 @@ class ErrorGeneratorPropagator:
         return propagated_errorgen_layers
         
 
-    def propagate_errorgens_bch(self, circuit, bch_order=1, include_spam=True, truncation_threshold=1e-14, mode='magnus', circuit_conversion_kwargs=None):
+    def propagate_errorgens_bch(self, circuit: _Circuit, bch_order: int=1, include_spam: bool=True, truncation_threshold: float=1e-14, 
+                                mode: Literal['magnus', 'pairwise']='magnus', circuit_conversion_kwargs: dict=None):
         """
         Propagate all of the error generators for each circuit to the end,
         performing approximation/recombination using the BCH approximation.

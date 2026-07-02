@@ -33,11 +33,17 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 
-from typing import Literal, Optional, Union, Callable, Iterable
+from typing import Literal, Optional, Union, Callable, Iterable, TYPE_CHECKING
+if TYPE_CHECKING:
+    from pygsti.models.model import OpModel as _OpModel
+    from pygsti.circuits import Circuit as _Circuit
+    from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _EEL
+    from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator as _ErrorGeneratorPropagator
 
 # ----------- Error Generator to Polynomial Variable Utilities ---------- #
 
-def error_generator_to_polynomial_variable_maps(errorgen_transform_map, return_reverse=False):
+def error_generator_to_polynomial_variable_maps(errorgen_transform_map: dict[tuple[_LSE, int], tuple[_LSE, complex]], 
+                                                return_reverse: bool=False):
     """
     Helper function which returns a map from error generator label + layer index tuples to integers for use
     as variable indices for Polynomials.
@@ -68,8 +74,8 @@ def error_generator_to_polynomial_variable_maps(errorgen_transform_map, return_r
     else:
         return errorgen_to_var_map
 
-def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map, circuit, include_spam=True, 
-                                                        aggregate_shared_parameter_gates=False, return_reverse=False):
+def error_generator_to_polynomial_variable_maps_by_gate(model: _OpModel, errorgen_var_map: dict[tuple[_LSE,int], int], circuit: _Circuit, include_spam: bool=True, 
+                                                        aggregate_shared_parameter_gates: bool=False, return_reverse: bool=False):
     """
     Function which takes an existing mapping from error generator circuit layer index
     pairs to integer variable indices and aggregates error generators that
@@ -77,6 +83,9 @@ def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map,
     
     Parameters
     ----------
+    model : _OpModel
+        Model to use for identifying error generators associated with each circuit layer.
+
     errorgen_to_var_map : dict
         A dictionary whose keys are tuples of LocalStimErrorgenLabels and integer circuit layer indices
         and whose value is an integer corresponding to the corresponding variable index to use in constructed
@@ -202,7 +211,7 @@ def error_generator_to_polynomial_variable_maps_by_gate(model, errorgen_var_map,
     else:
         return errorgen_var_gate_aggregated_map
 
-def _truncate_lse_support(errorgen, qubit_indices, validate_locality=True):
+def _truncate_lse_support(errorgen: _LSE, qubit_indices: Iterable[int], validate_locality: bool=True) -> _LSE:
     """
     Helper function for truncating the support of a LocalStimErrorgenLabel to a subset of qubit indices
     with the option of checking for locality of the input error generator on these indices, raising
@@ -245,7 +254,7 @@ def _truncate_lse_support(errorgen, qubit_indices, validate_locality=True):
     new_errorgen = _LSE(errorgen.errorgen_type, new_bels)
     return new_errorgen
 
-def errorgen_gate_contributors(model, errorgen, circuit, layer_idx, include_spam=True, return_operators=False):
+def errorgen_gate_contributors(model: _OpModel, errorgen: _EEL, circuit: _Circuit, layer_idx: int, include_spam: bool=True, return_operators: bool=False):
     """
     Walks through the gates in the specified circuit layer and query the parent 
     model to figure out which gates could have given rise to a particular error generator
@@ -253,6 +262,9 @@ def errorgen_gate_contributors(model, errorgen, circuit, layer_idx, include_spam
     
     Parameters
     ----------
+    model : _OpModel
+        Model to use for identifying error generators associated with each circuit layer. 
+
     errorgen : `ElementaryErrorgenLabel`
         Error generator layer to find instance of.
         
@@ -330,7 +342,9 @@ def errorgen_gate_contributors(model, errorgen, circuit, layer_idx, include_spam
     else:
         return label_list_for_errorgen
 
-def construct_polynomial_parameter_vector_from_propagator(error_propagator, var_to_errorgen_map, circuit, include_spam=True):
+def construct_polynomial_parameter_vector_from_propagator(error_propagator: _ErrorGeneratorPropagator, 
+                                                          var_to_errorgen_map: dict[int, Union[tuple[_LSE, int], list[tuple[_LSE, int]]]], 
+                                                          circuit: _Circuit, include_spam: bool=True):
     """
     Constructs a vector of polynomial variable parameters for use in evaluation of error generator Polynomial
     objects corresponding to the error generator rate dictionary associated with the input ErrorGeneratorPropagator's 
@@ -381,7 +395,9 @@ def construct_polynomial_parameter_vector_from_propagator(error_propagator, var_
 
 #---------------- Error Generator Polynomial Construction -------------------#
 
-def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, magnus_order=1):
+def magnus_symbolic_polynomial(errorgen_transform_maps: list[dict[tuple[_LSE, int], tuple[_LSE, complex]]], 
+                               errorgen_to_var_map: dict[tuple[_LSE, int], int], 
+                               magnus_order: int=1) -> dict[_LSE, _Polynomial]:
     """
     Function for computing the symbolic magnus approximation for the effective end-or-circuit error generator.
     
@@ -449,7 +465,9 @@ def magnus_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, mag
     
     return combined_magnus_order_dict    
 
-def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps, errorgen_to_var_map, identity=None):
+def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps: list[dict[tuple[_LSE, int], tuple[_LSE, complex]]], 
+                                                  errorgen_to_var_map: dict[tuple[_LSE, int], int], 
+                                                  identity: Optional[stim.PauliString]=None) -> dict[_LSE, _Polynomial]:
     r"""
     Helper function for computing the second-order correction term in the
     magnus expansion.
@@ -511,7 +529,11 @@ def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps, error
     
     return second_order_comm_dict
 
-def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_layer_1, errorgen_layer_2, errorgen_to_var_map, addl_weight=1.0, identity=None):
+def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_layer_1: dict[tuple[_LSE, int], tuple[_LSE, complex]], 
+                                                                   errorgen_layer_2: dict[tuple[_LSE, int], tuple[_LSE, complex]], 
+                                                                   errorgen_to_var_map: dict[tuple[_LSE, int], int], 
+                                                                   addl_weight: float=1.0, 
+                                                                   identity: Optional[stim.PauliString]=None) -> dict[_LSE, _Polynomial]:
     """
     Helper function for computing the pairwise commutator of two error generator layers symbolically, i.e. returning a data 
     structure which expresses the rates as polynomials in the original generators. 
@@ -578,7 +600,9 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
     
     return commuted_errorgen_poly_dict
 
-def error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, order=1):
+def error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict: dict[_LSE, _Polynomial], 
+                                                         errorgen_to_var_map: dict[tuple[_LSE, int], int], 
+                                                         order: int=1)-> list[dict[_LSE, _Polynomial]]:
     """
     Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
     error generator dictionary. (Excluding the zeroth-order identity).
@@ -648,7 +672,11 @@ def error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen
 
     return taylor_order_terms
 
-def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, desired_bitstring, order=1):
+def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict: dict[_LSE, _Polynomial], 
+                                                          errorgen_to_var_map: dict[tuple[_LSE, int], int], 
+                                                          tableau: stim.Tableau, 
+                                                          desired_bitstring: str, 
+                                                          order: int=1) -> _Polynomial:
     """
     Compute the kth-order correction to the probability of the specified bit string.
     
@@ -684,7 +712,11 @@ def stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorge
                                                                                   tableau, [desired_bitstring], order=order)
     return correction_polys[0]
 
-def bulk_stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, desired_bitstrings, order=1):
+def bulk_stabilizer_probability_correction_symbolic_polynomial(errorgen_dict: dict[_LSE, _Polynomial], 
+                                                               errorgen_to_var_map: dict[tuple[_LSE, int], int], 
+                                                               tableau: stim.Tableau, 
+                                                               desired_bitstrings: list[str], 
+                                                               order: int=1) -> list[_Polynomial]:
     """
     Compute the kth-order correction to the probability of the specified bit string.
     
@@ -711,9 +743,9 @@ def bulk_stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, er
 
     Returns
     -------
-    correction : Polynomial
-        Polynomial corresponding to the correction to the output probability for the
-        desired bitstring induced by the error generator (to specified order).
+    correction_polys : list of Polynomial
+        List of Polynomial corresponding to the corrections to the output probability for the
+        desired bitstrings induced by the error generator (to specified order).
     """    
     num_random = _eprop.random_support(tableau)
     if num_random > 2148:
@@ -743,7 +775,11 @@ def bulk_stabilizer_probability_correction_symbolic_polynomial(errorgen_dict, er
     
     return correction_polys
 
-def stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, pauli, order = 1):
+def stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict: dict[_LSE, _Polynomial], 
+                                                                errorgen_to_var_map: dict[tuple[_LSE, int], int], 
+                                                                tableau: stim.Tableau, 
+                                                                pauli: stim.PauliString, 
+                                                                order:int = 1) -> _Polynomial:
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
     
@@ -779,7 +815,11 @@ def stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict, e
     return correction_polys[0]
 
 
-def bulk_stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, tableau, paulis, order = 1):
+def bulk_stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_dict: dict[_LSE, _Polynomial], 
+                                                                     errorgen_to_var_map: dict[tuple[_LSE, int], int], 
+                                                                     tableau: stim.Tableau, 
+                                                                     paulis: list[stim.PauliString],
+                                                                     order: int = 1) -> list[_Polynomial]:
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
     
@@ -806,9 +846,9 @@ def bulk_stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_di
     
     Returns
     -------
-    correction : Polynomial
-        Polynomial corresponding to the correction to the output Pauli expectation value for the
-        desired Pauli induced by the error generator (to specified order).
+    correction_polys : Polynomial
+        List of Polynomial corresponding to the correction to the output Pauli expectation value for the
+        desired Paulis induced by the error generator (to specified order).
     """
     #accumulate the terms across orders (with short circuit logic for order 1 to save time):
     taylor_expansion = error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict, errorgen_to_var_map, order)
@@ -835,7 +875,8 @@ def bulk_stabilizer_pauli_expectation_correction_symbolic_polynomial(errorgen_di
     return correction_polys
 
 #helper function for forming the combined taylor-expansion polynomials.
-def _combined_taylor_expansion_polynomial(taylor_expansion, errorgen_to_var_map):
+def _combined_taylor_expansion_polynomial(taylor_expansion: list[dict[_LSE, _Polynomial]], 
+                                          errorgen_to_var_map: dict[tuple[_LSE, int], int]) -> dict[_LSE, _Polynomial]:
     """
     Helper function for combining the polynomial dictionaries for each order of the taylor
     expansion which combines terms across orders.
