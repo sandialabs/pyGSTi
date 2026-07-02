@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import warnings
 import numpy as np
 import scipy.linalg as la
 
@@ -16,6 +17,7 @@ from pygsti.baseobjs.basis import Basis, ExplicitBasis, _eye_label
 from pygsti.tools import basistools as pgbt
 from pygsti.tools import matrixtools as pgmt
 from pygsti.tools.metaprogramming import set_docstring
+from pygsti.tools.exceptions import DubiousTargetWarning
 
 
 NOTATION = \
@@ -168,6 +170,7 @@ def augment_for_leakage_modeling(b_in: Basis, E: np.ndarray) -> Basis:
 
       * Element 0 is proportional to E. Its label has the form 'C[I...I]', where
         the bracket holds as many 'I' characters as the identity label of b_in.
+        (If b_in has no such label, we use a single 'I'.)
 
       * The first k = rank(E)^2 elements span M[C]. Elements 1, ..., k^2-1 are labeled
         'C[ell]', where 'ell' is the label of their corresponding element in b_in.
@@ -180,19 +183,32 @@ def augment_for_leakage_modeling(b_in: Basis, E: np.ndarray) -> Basis:
 
     Notes
     -----
-    Let k=rank(E). Assume that E has already been replaced by the orthogonal
-    projector onto its range, and index the basis elements starting from zero.
+    1. pyGSTi's built-in bases for leakage modeling do not necessarily follow
+       the element labeling scheme described above.
 
-    We construct basis elements 1, ..., k^2-1 by first projecting the original
-    basis elements onto M[C]. Then we use pivoted QR to identify the k^2-1
-    matrices that are "most supported" on M[C] after projecting out E.
+    2. We raise a DubiousTargetWarning if b_in.implies_leakage_modeling is True.
 
-    We construct the remaining elements by projecting the original basis
-    elements onto M[C]^⟂. Then we use pivoted QR to identify the
-    dim(basis) - k^2 - 1 matrices that are "most supported" on M[C]^⟂
-    after projecting out I - E.
+    3. Let k=rank(E). Assume that E has already been replaced by the orthogonal
+       projector onto its range, and index the basis elements starting from zero.
+
+       We construct basis elements 1, ..., k^2-1 by first projecting the original
+       basis elements onto M[C]. Then we use pivoted QR to identify the k^2-1
+       matrices that are "most supported" on M[C] after projecting out E.
+
+       We construct the remaining elements by projecting the original basis
+       elements onto M[C]^⟂. Then we use pivoted QR to identify the
+       dim(basis) - k^2 - 1 matrices that are "most supported" on M[C]^⟂
+       after projecting out I - E.
     """
     # Step 0: argument validation
+    if b_in.implies_leakage_modeling:
+        msg = \
+        f"""
+        You're trying to augment a basis, {b_in}, for leakage modeling, even though it
+        already implies leakage modeling. We don't intend for this function to be used
+        in this setting; the labels will probably come out looking like nonsense.
+        """
+        warnings.warn('', DubiousTargetWarning)
     if la.norm(np.imag(E)) > 1e-10:
         raise ValueError("E must be real")
     pgmt.assert_hermitian(E, tol=1e-10)
