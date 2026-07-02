@@ -31,7 +31,7 @@ from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models import ImplicitOpModel as _ImplicitOpModel
 from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 
-from typing import Optional, Union, TYPE_CHECKING, Callable
+from typing import Optional, Union, TYPE_CHECKING, Callable, Any
 
 if TYPE_CHECKING:
     import mpi4py
@@ -4469,7 +4469,8 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache: tuple[
                                                 num_germs: Optional[int]=None, op_penalty: float=0.0, l1_penalty: float=0.0, 
                                                 num_nongauge_params: Optional[int]=None, num_params: Optional[int]=None, 
                                                 force_rank_increase: bool=False, germ_lengths: _np.ndarray=None,
-                                                gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
+                                                gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None,
+                                                float_type: Any=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
 
