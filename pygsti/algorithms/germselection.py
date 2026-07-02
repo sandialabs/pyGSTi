@@ -4270,7 +4270,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
                         #unless the germ is the current best.
                         bestDDDs= [currentDDD.copy() + \
                             twirledDerivDaggerDerivList[k][candidateGermIdx]@\
-                            twirledDerivDaggerDerivList[k][candidateGermIdx].T\
+                            twirledDerivDaggerDerivList[k][candidateGermIdx].conj().T\
                             for k, currentDDD in enumerate(currentDDDList)]
                 testDDDs = None
 
