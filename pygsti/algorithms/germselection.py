@@ -4631,7 +4631,7 @@ def stable_pinv(mat):
             pinv_s[i]= 1/sval
     
     #new form the pseudoinverse:
-    pinv= Vh.conj().T@(pinv_s*U.conj().T)
+    pinv= Vh.T@(pinv_s*U.T)
     return pinv
 
 
@@ -5165,9 +5165,10 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
     pseudoinverse we are updating and a flag for specifying if we're requiring
     the rank to increase.
     """
-    
+    assert _np.linalg.norm(vector_update.imag)<=1e-16
+
     #calculate some quantities we need. Following notation from matrix cookbook.
-    beta = 1 + vector_update.conj().T@pinv_A@vector_update
+    beta = 1 + vector_update.T@pinv_A@vector_update
     v= pinv_A@vector_update
     w = proj_A@vector_update
     
@@ -5179,9 +5180,9 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
         #print('Case 1')
         #the diagonal of an outer-product of 2 vectors is just a vector of the element-wise
         #products of corresponding elements.
-        vw = v@w.conj().T
+        vw = v@w.T
         vw_term = (-1/norm_w**2)*(vw + vw.T)
-        ww_term = (beta/norm_w**4)*(w@w.conj().T)
+        ww_term = (beta/norm_w**4)*(w@w.T)
         
         G = vw_term + ww_term
         
@@ -5192,7 +5193,7 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
     
     elif (norm_w<1e-10) and (beta>1e-10):
         #print('Case 3/5')
-        G = (-beta/_np.abs(beta)**2)*(v@v.conj().T)
+        G = (-beta/_np.abs(beta)**2)*(v@v.T)
         
         rank_increase_flag = False
         
@@ -5205,7 +5206,7 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
         gamma = pinv_A@v
         norm_v= _np.linalg.norm(v)
         
-        gamma_v= gamma@v.conj().T
+        gamma_v= gamma@v.T
         gamma_v_term = (-1/norm_v**2)*(gamma_v+gamma_v.T)
         vv_term = (_np.sum(v*gamma)/norm_v**4)*(v@v.conj().T)
         
