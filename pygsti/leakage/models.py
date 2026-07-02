@@ -98,6 +98,22 @@ def leaky_qubit_model_from_pspec(
     from pygsti.modelmembers.povms import UnconstrainedPOVM
     from pygsti.modelmembers.states import FullState
     assert ps_2level.num_qubits == 1
+    if len(ps_2level.instrument_names) > 0:
+        raise NotImplementedError(
+            f"ps_2level contains instruments {ps_2level.instrument_names}, and this "
+            f"function does not know how to lift instruments to the 3-level space. "
+            f"(There is no canonical choice for how an instrument should act on the "
+            f"leakage level.) Remove the instruments and add 3-level replacements to "
+            f"the returned model yourself."
+        )
+    factory_like = [name for name, u in ps_2level.gate_unitaries.items() if callable(u)]
+    if factory_like:
+        raise NotImplementedError(
+            f"ps_2level contains continuously-parameterized gates (factories) "
+            f"{factory_like}, and this function does not know how to lift factories "
+            f"to the 3-level space. Remove them and add 3-level replacements to the "
+            f"returned model yourself."
+        )
     if '{idle}' in ps_2level.gate_names:
         ps_2level.rename_gate_inplace('{idle}', default_idle_gatename)
 
@@ -243,6 +259,20 @@ def promote_bb_to_bt(
     from pygsti.modelmembers.states import FullState
 
     assert qubit_model.state_space.num_qubits == 2
+    if len(qubit_model.instruments) > 0:
+        raise NotImplementedError(
+            f"qubit_model contains instruments {list(qubit_model.instruments.keys())}, "
+            f"and this function does not know how to lift instruments to the 6-level "
+            f"space. (There is no canonical choice for how an instrument should act on "
+            f"the leakage level.) Remove the instruments and add 6-level replacements "
+            f"to the returned model yourself."
+        )
+    if len(qubit_model.factories) > 0:
+        raise NotImplementedError(
+            f"qubit_model contains factories {list(qubit_model.factories.keys())}, and "
+            f"this function does not know how to lift factories to the 6-level space. "
+            f"Remove them and add 6-level replacements to the returned model yourself."
+        )
     ps_4level = qubit_model.create_processor_spec()
     if '{idle}' in ps_4level.gate_names:
         ps_4level.rename_gate_inplace('{idle}', default_idle_gatename)

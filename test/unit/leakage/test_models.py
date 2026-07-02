@@ -166,6 +166,23 @@ class LeakyQubitModelTester(BaseCase):
         with self.assertRaises(ValueError):
             leaky_qubit_model_from_pspec(self.pspec, mx_basis='std')
 
+    def test_pspec_with_instruments_rejected(self):
+        # Instruments are not lifted to the 3-level space (there is no canonical
+        # choice for how an instrument should act on the leakage level).
+        from pygsti.processors import QubitProcessorSpec
+        pspec = QubitProcessorSpec(1, ['Gxpi2', 'Gypi2'], qubit_labels=['Q0'],
+                                   instrument_names=['Iz'])
+        with self.assertRaises(NotImplementedError):
+            leaky_qubit_model_from_pspec(pspec)
+
+    def test_pspec_with_factories_rejected(self):
+        # Continuously-parameterized gates ('Gzr' has a callable unitary) are
+        # factories, which are not lifted to the 3-level space.
+        from pygsti.processors import QubitProcessorSpec
+        pspec = QubitProcessorSpec(1, ['Gxpi2', 'Gzr'], qubit_labels=['Q0'])
+        with self.assertRaises(NotImplementedError):
+            leaky_qubit_model_from_pspec(pspec)
+
     def test_alternate_gateset_builds(self):
         from pygsti.processors import QubitProcessorSpec
         pspec = QubitProcessorSpec(1, ['Gxpi2', 'Gzpi2', 'Ghtest'],
@@ -356,6 +373,26 @@ class PromoteBBToBTTester(BaseCase):
         # A non-Hermitian component ('std') in either register basis is rejected.
         with self.assertRaises(ValueError):
             promote_bb_to_bt(self.model_2q, sys1_basis='std')
+
+    def test_model_with_instruments_rejected(self):
+        # Instruments are not lifted to the 6-level space (there is no canonical
+        # choice for how an instrument should act on the leakage level).
+        from pygsti.modelmembers.instruments import Instrument
+        model = self.model_2q.copy()
+        E0 = np.zeros((16, 16)); E0[0, 0] = 1.0
+        model.instruments['Iz'] = Instrument({'p0': E0, 'p1': np.eye(16) - E0})
+        with self.assertRaises(NotImplementedError):
+            promote_bb_to_bt(model)
+
+    def test_model_with_factories_rejected(self):
+        # Factories (continuously-parameterized operations) are not lifted.
+        from pygsti.modelmembers.operations.opfactory import UnitaryOpFactory
+        import scipy.linalg as la
+        model = self.model_2q.copy()
+        zrot = lambda args: la.expm(-0.5j * args[0] * np.kron(np.diag([1.0, -1.0]), np.eye(2)))
+        model.factories['Gzr'] = UnitaryOpFactory(zrot, model.state_space, superop_basis='pp')
+        with self.assertRaises(NotImplementedError):
+            promote_bb_to_bt(model)
 
     def test_variety_of_source_models(self):
         from pygsti.processors import QubitProcessorSpec
