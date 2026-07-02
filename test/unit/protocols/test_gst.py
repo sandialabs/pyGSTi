@@ -454,9 +454,14 @@ class StandardGST2QInferredTargetTester(BaseCase):
     @classmethod
     def setUpClass(cls):
         cls.gst_design = smq2Q_XYICNOT.create_gst_experiment_design(max_max_length=1)
-        mdl_datagen = smq2Q_XYICNOT.target_model().depolarize(op_noise=0.01, spam_noise=0.005)
-        ds = simulate_data(mdl_datagen, cls.gst_design.all_circuits_needing_data,
-                           1000, sample_error='none')
+        # This test only exercises target-model inference, so the counts don't need
+        # to come from a simulation; arbitrary fixed counts per circuit suffice.
+        from pygsti.data import DataSet
+        outcome_labels = ['00', '01', '10', '11']
+        ds = DataSet(outcome_labels=outcome_labels)
+        for circuit in cls.gst_design.all_circuits_needing_data:
+            ds.add_count_list(circuit, outcome_labels, [400, 300, 200, 100])
+        ds.done_adding_data()
         cls.gst_data = ProtocolData(cls.gst_design, ds)
 
     def test_run_with_inferred_target(self):
