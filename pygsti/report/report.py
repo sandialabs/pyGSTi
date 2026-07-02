@@ -15,6 +15,7 @@ import time as _time
 import os as _os
 from collections import defaultdict as _defaultdict
 from pathlib import Path as _Path
+from typing import Iterable, Optional, Union
 
 from pygsti.report import merge_helpers as _merge
 from pygsti.report import workspace as _ws
@@ -66,9 +67,9 @@ class Report:
         A ``Workspace`` used for caching figure computation. By
         default, a new workspace will be used.
     """
-    def __init__(self, templates, results: _proto.ProtocolResults, sections, flags,
-                 global_qtys, report_params, build_defaults=None,
-                 pdf_available=True, workspace=None):
+    def __init__(self, templates: dict, results: _proto.ProtocolResults, sections: Iterable, flags: set,
+                 global_qtys: dict, report_params: dict, build_defaults: Optional[dict]=None,
+                 pdf_available: bool=True, workspace: Optional[_ws.Workspace]=None):
         self._templates = templates
         self._results = results
         self._sections = sections
@@ -79,7 +80,7 @@ class Report:
         self._build_defaults = build_defaults or {}
         self._pdf_available = pdf_available
 
-    def _build(self, build_options=None):
+    def _build(self, build_options: Optional[dict]=None) -> dict:
         """ Render all sections to a map of report elements for templating """
         full_params = {
             'results': self._results,
@@ -93,10 +94,10 @@ class Report:
 
         return qtys
 
-    def write_html(self, path, auto_open=False, link_to=None,
-                   connected=False, build_options=None, brevity=0,
-                   precision=None, resizable=True, autosize='initial',
-                   single_file=False, verbosity=0):
+    def write_html(self, path: Union[str, _os.PathLike], auto_open: bool=False, link_to: Optional[list]=None,
+                   connected: bool=False, build_options: Optional[dict]=None, brevity: int=0,
+                   precision: Optional[Union[int, dict]]=None, resizable: bool=True, autosize: str='initial',
+                   single_file: bool=False, verbosity: int=0) -> None:
         """
         Write this report to the disk as a collection of HTML documents.
 
@@ -199,7 +200,8 @@ class Report:
                 verbosity=verbosity
             )
 
-    def write_notebook(self, path, auto_open=False, connected=False, verbosity=0, use_pickle=False):
+    def write_notebook(self, path: Union[str, _os.PathLike], auto_open: bool=False, connected: bool=False,
+                       verbosity: int=0, use_pickle: bool=False) -> None:
         """
         Write this report to the disk as an IPython notebook
 
@@ -385,10 +387,10 @@ class Report:
         else:
             nb.save_to(str(path))
 
-    def write_pdf(self, path, latex_cmd='pdflatex', latex_flags=None,
-                  build_options=None,
-                  brevity=0, precision=None, auto_open=False,
-                  comm=None, verbosity=0):
+    def write_pdf(self, path: Union[str, _os.PathLike], latex_cmd: str='pdflatex', latex_flags: Optional[list]=None,
+                  build_options: Optional[dict]=None,
+                  brevity: int=0, precision: Optional[Union[int, dict]]=None, auto_open: bool=False,
+                  comm=None, verbosity: int=0) -> None:
         """
         Write this report to the disk as a PDF document.
 
