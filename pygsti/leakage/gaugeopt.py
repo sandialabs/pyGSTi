@@ -59,6 +59,55 @@ def _direct_sum_unitary_group(subspace_bases, full_basis, triviality_flags=None)
     return g_full
 
 
+def _leakage_direct_sum_group(basis: Basis):
+    """
+    Build the U(k) ⨁ U(m) direct-sum gauge group implied by a leakage basis, where k is
+    the dimension of the computational subspace C designated by `basis` and m is the
+    dimension of its orthogonal complement (the leakage subspace).
+
+    The subgroup factors are specified by Hilbert--Schmidt bases per
+    `_direct_sum_unitary_group`: the default basis name for each factor's dimension
+    ('pp' for a qubit-sized factor, 'gm' otherwise). With the default triviality flags,
+    a one-dimensional leakage factor contributes a TrivialGaugeGroup.
+
+    DirectSumUnitaryGroup elements act as block-diagonal unitaries in the *standard
+    level ordering*, so this construction requires the computational subspace to be
+    spanned by the first k levels (computational effect E = diag(1,...,1,0,...,0)).
+    We raise NotImplementedError for leakage bases that violate that layout, such as
+    tensor-product bases like pp ⨂ l2p1 whose computational levels are interleaved
+    with leakage levels.
+    """
+    import numpy as np
+    from pygsti.baseobjs.basis import default_basis_for_udims
+    from pygsti.leakage.core import computational_effect
+
+    E = computational_effect(basis)
+    udim = E.shape[0]
+    k = int(round(np.trace(E).real))
+    m = udim - k
+    if m == 0:
+        raise ValueError(
+            f"basis {basis} does not imply leakage modeling (its computational "
+            f"subspace is the full {udim}-dimensional Hilbert space), so there is "
+            f"no leakage-preserving direct-sum gauge group to build."
+        )
+    expected_E = np.zeros((udim, udim))
+    expected_E[:k, :k] = np.eye(k)
+    if not np.allclose(E, expected_E, atol=1e-10):
+        raise NotImplementedError(
+            f"The computational subspace of basis {basis} is not spanned by the "
+            f"first {k} standard-basis levels, but DirectSumUnitaryGroup only "
+            f"supports block-diagonal unitaries in the standard level ordering. "
+            f"(This arises e.g. for tensor-product leakage bases like pp ⨂ l2p1, "
+            f"whose computational levels are interleaved with leakage levels.)"
+        )
+    sub_bases = [
+        Basis.cast(default_basis_for_udims([k]), k**2),
+        Basis.cast(default_basis_for_udims([m]), m**2),
+    ]
+    return _direct_sum_unitary_group(sub_bases, basis)
+
+
 def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     """
     goppparams_dicts is a list-of-dicts (LoDs) representation of a gauge optimization suite
@@ -137,7 +186,7 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
     # step uses squared Frobenius norm as an objective, since that's better-behaved
     # than plain Frobenius norm.
     inner_dict = inner_dict.copy()
-    gg = _direct_sum_unitary_group([Basis.cast('pp', 4), Basis.cast('pp', 1)], tm.basis)
+    gg = _leakage_direct_sum_group(tm.basis)
     inner_dict['gauge_group'] = gg
     inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
     inner_dict['gates_metric'] = 'frobenius squared'
