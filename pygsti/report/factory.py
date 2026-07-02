@@ -1304,6 +1304,28 @@ def construct_standard_report(results, title="auto",
 
     results = results if isinstance(results, dict) else {"unique": results}
 
+    if confidence_level is not None:
+        # Error bars are rendered from Hessian-based confidence region factories, which
+        # are expensive and therefore never computed here. Warn now if they're missing,
+        # rather than letting the report silently come out bare.
+        missing = []
+        for res_key, res in results.items():
+            for est_key, est in res.estimates.items():
+                if est_key == 'Target':
+                    continue
+                if not any(_get_viewable_crf(est, est_key, mdl_lbl) is not None
+                           for mdl_lbl in est.goparameters):
+                    missing.append(est_key if len(results) == 1 else f"{res_key}:{est_key}")
+        if missing:
+            _warnings.warn(
+                f"confidence_level={confidence_level} requests error bars, but no "
+                f"confidence region factory with a computed Hessian was found for "
+                f"estimate(s) {missing}. These estimates will be rendered without "
+                f"error bars. Call ModelEstimateResults.add_hessians() on your "
+                f"results object(s) before report generation to compute the "
+                f"necessary Hessians."
+            )
+
     # set flags
     flags = set()
     for res in results.values():
