@@ -105,13 +105,21 @@ class WorkspaceMakeFactoryAnnotationsTester(BaseCase):
     def test_makefactory_annotated(self):
         # This will fail on unpatched codebase because of annotations in exec string
         factory = Workspace._makefactory(self.dummy_ws, DummyAnnotatedClass, autodisplay=False)
-        
+
+        # Add a breakpoint here and check print(inspect.getsource(factory)) if the following line
+        # is failing due to a syntax error in the call.
         inst = factory(1, 'hello', c='world')
         self.assertIsInstance(inst, DummyAnnotatedClass)
         self.assertIs(inst.ws, self.dummy_ws)
         self.assertEqual(inst.a, 1)
         self.assertEqual(inst.b, 'hello')
         self.assertEqual(inst.c, 'world')
+
+        # Verify that annotations are preserved in the signature of the generated function
+        sig = inspect.signature(factory)
+        self.assertEqual(sig.parameters['a'].annotation, 'int')
+        self.assertEqual(sig.parameters['b'].annotation, 'NonExistentType')
+        self.assertEqual(sig.parameters['c'].annotation, 'str')
 
     def test_full_workspace_construction_smoke(self):
         # This smoke test will fail on unpatched codebase during Workspace.__init__ -> _register_components
