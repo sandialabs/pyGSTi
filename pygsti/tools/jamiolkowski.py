@@ -131,7 +131,11 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     try:
         temp = choi_mx_basis.create_simple_equivalent()
         BVec : Union[_np.ndarray, list] = temp.elements  # type: ignore
-    except:
+    except (AssertionError, ValueError, NotImplementedError):
+        # create_simple_equivalent fails for bases with no same-name builtin equivalent.
+        # In particular, a leakage tensor-product basis like pp ⊗ l2p1 raises
+        # AssertionError ("Unknown builtin basis name 'pp*l2p1'"). Such bases are
+        # already simple, so use their elements directly.
         assert hasattr(choi_mx_basis, 'elements')
         BVec : Union[_np.ndarray, list] = choi_mx_basis.elements  # type: ignore
     
