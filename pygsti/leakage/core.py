@@ -164,7 +164,7 @@ S[H] (an order-basis.dim identity matrix).
 """ + NOTATION)
 def computational_projector(basis: Basis) -> np.ndarray:
     dim = basis.dim
-    if basis.first_element_is_identity:
+    if not basis.implies_leakage_modeling:
         return np.eye(dim)
     U = computational_superkets(basis)
     P = U @ U.T
