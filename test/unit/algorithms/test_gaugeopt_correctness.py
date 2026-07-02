@@ -423,9 +423,12 @@ class FindPerfectGauge_DirectSumGaugeGroup4LevelTester(BaseCase):
         rho0 = np.zeros((4, 4)); rho0[0, 0] = 1.0
         E0 = np.diag([1., 0., 0., 0.]).astype(complex)
         E1 = np.eye(4) - E0
-        target.preps['rho0'] = FullState(stdmx_to_vec(rho0, basis))
+        # The basis is Hermitian, so these superkets are real up to rounding; take the
+        # real part explicitly to avoid ComplexWarnings from FullState's real storage.
+        target.preps['rho0'] = FullState(np.real(stdmx_to_vec(rho0, basis)))
         target.povms['Mdefault'] = UnconstrainedPOVM(
-            [('0', stdmx_to_vec(E0, basis)), ('1', stdmx_to_vec(E1, basis))], evotype='default')
+            [('0', np.real(stdmx_to_vec(E0, basis))), ('1', np.real(stdmx_to_vec(E1, basis)))],
+            evotype='default')
 
         u_x = la.expm(-0.25j * np.pi * pgbc.sigmax)
         u_y = la.expm(-0.25j * np.pi * pgbc.sigmay)
