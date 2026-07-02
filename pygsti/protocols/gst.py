@@ -21,7 +21,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
-from typing import Optional, Union, Any, TYPE_CHECKING
+from typing import Optional, Union, Any, TYPE_CHECKING, Literal
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -3247,8 +3247,8 @@ class ModelEstimateResults(_proto.ProtocolResults):
         self.estimates[estimate_key] = estimate
 
     def add_model_test(self, target_model: _Model, themodel: _Model,
-                       estimate_key: str='test', gaugeopt_keys="auto", verbosity=2,
-                       simulator: Optional[ForwardSimulator.Castable]=None) -> None:
+                       estimate_key: str='test', gaugeopt_keys: Optional[Union[list[str], Literal['auto']]]="auto",
+                       verbosity: int=2, simulator: Optional[ForwardSimulator.Castable]=None) -> None:
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
