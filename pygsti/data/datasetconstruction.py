@@ -222,7 +222,7 @@ def simulate_data(model_or_dataset: Union[_OpModel, _ds.DataSet],
     return dataset
 
 
-def _adjust_probabilities_inbounds(ps: dict[Hashable, float], tol: float):
+def _adjust_probabilities_inbounds(ps: dict[Hashable, float], tol: float) -> None:
     #Adjust to probabilities if needed (and warn if not close to in-bounds)
     # ps is a dict w/keys = outcome labels and values = probabilities
     for ol in ps:
@@ -234,7 +234,7 @@ def _adjust_probabilities_inbounds(ps: dict[Hashable, float], tol: float):
             ps[ol] = 1.0
 
 
-def _adjust_unit_sum(ps: dict[Hashable, float], tol: float):
+def _adjust_unit_sum(ps: dict[Hashable, float], tol: float) -> None:
     #Check that sum ~= 1 (and nudge if needed) since binomial and
     #  multinomial random calls assume this.
     OVERTOL = 1.0 + tol
@@ -259,7 +259,7 @@ def _adjust_unit_sum(ps: dict[Hashable, float], tol: float):
 
 def _sample_distribution(ps: dict[Hashable, float],
                          sample_error: Literal['binomial', 'multinomial', 'clip', 'round', 'none'],
-                         nSamples, rndm_state):
+                         nSamples: int, rndm_state: _rndm.RandomState) -> dict:
     counts = {}  # don't use an ordered dict here - add_count_dict will sort keys
     labels = [ol for ol, _ in sorted(list(ps.items()), key=lambda x: x[1])]
     # "outcome labels" - sort by prob for consistent generation
@@ -294,7 +294,7 @@ def _sample_distribution(ps: dict[Hashable, float],
     return counts
 
 
-def aggregate_dataset_outcomes(dataset: _ds.DataSet, label_merge_dict, record_zero_counts: bool=True):
+def aggregate_dataset_outcomes(dataset: _ds.DataSet, label_merge_dict: dict, record_zero_counts: bool=True) -> _ds.DataSet:
     """
     Creates a DataSet which merges certain outcomes in input DataSet.
 
@@ -373,7 +373,7 @@ def aggregate_dataset_outcomes(dataset: _ds.DataSet, label_merge_dict, record_ze
     return merged_dataset
 
 
-def _create_qubit_merge_dict(num_qubits, qubits_to_keep):
+def _create_qubit_merge_dict(num_qubits: int, qubits_to_keep: Sequence[int]) -> dict:
     """
     Creates a dictionary appropriate for use with :func:`aggregate_dataset_outcomes`.
 
@@ -399,7 +399,7 @@ def _create_qubit_merge_dict(num_qubits, qubits_to_keep):
     return _create_merge_dict(qubits_to_keep, outcome_labels)
 
 
-def _create_merge_dict(indices_to_keep, outcome_labels):
+def _create_merge_dict(indices_to_keep: Sequence[int], outcome_labels: Sequence[Any]) -> dict:
     """
     Creates a dictionary appropriate for use with :func:`aggregate_dataset_outcomes`.
 
@@ -442,9 +442,9 @@ def _create_merge_dict(indices_to_keep, outcome_labels):
     return dict(merge_dict)  # return a *normal* dict
 
 
-def filter_dataset(dataset: _ds.DataSet, sectors_to_keep, sindices_to_keep=None,
-                   new_sectors=None, idle: Union[str, _lbl.Label, tuple[Any, ...]]=((),), record_zero_counts: bool=True,
-                   filtercircuits: bool=True):
+def filter_dataset(dataset: _ds.DataSet, sectors_to_keep: Sequence[Any], sindices_to_keep: Optional[Sequence[int]]=None,
+                   new_sectors: Optional[Sequence[Any]]=None, idle: Union[str, _lbl.Label, tuple[Any, ...]]=((),), record_zero_counts: bool=True,
+                   filtercircuits: bool=True) -> _ds.DataSet:
     """
     Creates a DataSet that is the restriction of `dataset` to `sectors_to_keep`.
 

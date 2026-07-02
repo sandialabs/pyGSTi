@@ -832,7 +832,7 @@ class GaugeRobustModelTable(WorkspaceTable):
         formatters = [None] * len(colHeadings)
         confidence_region_info = None  # Don't deal with CIs yet...
 
-        def _get_gig_decomp(mx, tmx):  # "Gauge invariant gateset" decomposition
+        def _get_gig_decomp(mx: _np.ndarray, tmx: _np.ndarray) -> tuple:  # "Gauge invariant gateset" decomposition
             G0, G = tmx, mx
             #ev0, U0 = _tools.sorted_eig(G0)
             #ev, U = _tools.sorted_eig(G)
@@ -1586,7 +1586,7 @@ class ErrgenTable(WorkspaceTable):
         stoProjsM = []
         caProjsM = []
 
-        def _get_min_max(max_lst, m):
+        def _get_min_max(max_lst: list, m: float) -> Optional[tuple]:
             """return a [min,max] already in list if there's one within an
                order of magnitude"""
             m = max(m, ABS_THRESHOLD)
@@ -1597,7 +1597,7 @@ class ErrgenTable(WorkspaceTable):
 
         ABS_THRESHOLD = 1e-6  # don't let color scales run from 0 to 0: at least this much!
 
-        def add_max(max_lst, m):
+        def add_max(max_lst: list, m: float) -> None:
             """add `m` to a list of maximas if it's different enough from
                existing elements"""
             m = max(m, ABS_THRESHOLD)
@@ -1910,7 +1910,7 @@ class NQubitErrgenTable(WorkspaceTable):
         table = _ReportTable(colHeadings, (None,) * len(colHeadings),
                              confidence_region_info=confidence_region_info)
 
-        def _get_min_max(max_lst, m):
+        def _get_min_max(max_lst: list, m: float) -> Optional[tuple]:
             """return a [min,max] already in list if there's one within an
                order of magnitude"""
             m = max(m, ABS_THRESHOLD)
@@ -1921,7 +1921,7 @@ class NQubitErrgenTable(WorkspaceTable):
 
         ABS_THRESHOLD = 1e-6  # don't let color scales run from 0 to 0: at least this much!
 
-        def add_max(max_lst, m):
+        def add_max(max_lst: list, m: float) -> None:
             """add `m` to a list of maximas if it's different enough from
                existing elements"""
             m = max(m, ABS_THRESHOLD)
@@ -1930,7 +1930,7 @@ class NQubitErrgenTable(WorkspaceTable):
 
         pre_rows = []; displayed_params = set()
 
-        def process_gate(lbl, gate, comppos_prefix, sslbls):
+        def process_gate(lbl: Any, gate: _op.LinearOperator, comppos_prefix: tuple, sslbls: Any) -> None:
             if isinstance(gate, _op.ComposedOp):
                 for i, fgate in enumerate(gate.factorops):
                     process_gate(lbl, fgate, comppos_prefix + (i,), sslbls)
@@ -1964,7 +1964,7 @@ class NQubitErrgenTable(WorkspaceTable):
             else:
                 raise ValueError("Unknown gate type for NQubitErrgenTable: %s" % str(type(gate)))
 
-        def _get_plot_info(lindblad_dict, basis_lbls, typ):
+        def _get_plot_info(lindblad_dict: Mapping, basis_lbls: Mapping, typ: str) -> tuple:
             # for now just make a 1D plot - can get fancy later...
             ylabels = [""]
             xlabels = []
@@ -3649,7 +3649,7 @@ class SoftwareEnvTable(WorkspaceTable):
 
         import platform
 
-        def _get_package_version(module_name):
+        def _get_package_version(module_name: str) -> str:
             """ Extract the current version of a python module """
             if module_name == "cvxopt":
                 #special case b/c cvxopt can be weird...

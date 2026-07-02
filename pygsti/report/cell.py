@@ -50,14 +50,14 @@ class Cell(object):
         self.formatterName = formatter_name
         self.label = label
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state_dict = self.__dict__.copy()
         return state_dict
 
-    def __setstate__(self, d: dict[str, Any]):
+    def __setstate__(self, d: dict[str, Any]) -> None:
         self.__dict__.update(d)
 
-    def _render_data(self, fmt: str, spec: dict):
+    def _render_data(self, fmt: str, spec: dict) -> str:
         '''
         Render self.data as a string
 
@@ -83,7 +83,7 @@ class Cell(object):
             else:
                 raise ValueError("Unformatted None in Cell")
 
-    def render(self, fmt: str, spec: dict[Hashable, Any]):
+    def render(self, fmt: str, spec: dict[Hashable, Any]) -> str:
         """
         Render full cell as a string
 

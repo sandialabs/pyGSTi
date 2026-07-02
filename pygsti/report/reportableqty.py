@@ -73,7 +73,7 @@ class ReportableQty(object):
         self.nonMarkovianEBs: bool = non_markovian_ebs
 
     def __str__(self) -> str:
-        def f(val, specs): return str(val)
+        def f(val: Any, specs: Optional[dict[str, Any]]) -> str: return str(val)
         return self.render_with(f)
 
     def __repr__(self) -> str:
@@ -284,7 +284,7 @@ class ReportableQty(object):
         if _np.linalg.norm(self.value - _np.conjugate(self.value).T) > 1e-8:
             raise ValueError("Contained value must be Hermitian!")
 
-        def _convert(a):
+        def _convert(a: _np.ndarray) -> _np.ndarray:
             ret = _np.empty(a.shape, 'd')
             for i in range(a.shape[0]):
                 ret[i, i] = a[i, i].real

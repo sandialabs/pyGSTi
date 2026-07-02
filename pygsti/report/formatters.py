@@ -38,7 +38,7 @@ If the Formatter class does not offer enough functionality,
 # 'specs' is a dictionary of rendering options
 
 
-def _no_format(x, specs):
+def _no_format(x: Any, specs: Mapping[str, Any]) -> Any:
     return x
 
 
@@ -95,7 +95,7 @@ format_dict['Verbatim'] = {
     'python': _no_format}
 
 
-def _pi_python(x, specs):
+def _pi_python(x: Any, specs: Mapping[str, Any]) -> Any:
     if isinstance(x, _numbers.Number):
         return x * _np.pi
     else:
@@ -140,7 +140,7 @@ pre_convert_latex = _Formatter(stringreplacers=[
     ('<STAR>', '\\bigstar')])
 
 
-def special_convert_latex(x, specs: Mapping[str, Any]):
+def special_convert_latex(x: Any, specs: Mapping[str, Any]) -> str:
     """
     Special conversion rules for latex
 

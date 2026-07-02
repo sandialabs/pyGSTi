@@ -10,9 +10,12 @@ Defines the ReportTable class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
 from pygsti.report.colormaps import Colormap as _Colormap
-import plotly.graph_objs
-from typing import Optional
+from typing import Optional, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import plotly.graph_objs
 
 class ReportFigure(object):
     """
@@ -64,13 +67,13 @@ class ReportFigure(object):
         self.pythonvalue = python_value
         self.metadata = dict(kwargs).copy()
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state = self.__dict__.copy()
         if hasattr(self.plotlyfig, 'to_dict'):
             state['plotlyfig'] = {'__plotlydict__': self.plotlyfig.to_dict()}
         return state
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         if isinstance(state['plotlyfig'], dict) and '__plotlydict__' in state['plotlyfig']:
             import plotly.graph_objs as go
             state['plotlyfig'] = go.Figure(state['plotlyfig']['__plotlydict__'])

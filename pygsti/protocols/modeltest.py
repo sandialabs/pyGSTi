@@ -10,10 +10,14 @@ ModelTest Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
 import collections as _collections
 import warnings as _warnings
 import pathlib as _pathlib
-from typing import Optional
+from typing import Optional, Any, Union, TYPE_CHECKING
+if TYPE_CHECKING:
+    from pygsti.models.model import Model as _Model
+    from pygsti.protocols.gst import ModelEstimateResults as _ModelEstimateResults
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from pygsti.protocols.estimate import Estimate as _Estimate
@@ -72,7 +76,7 @@ class ModelTest(_proto.Protocol):
     """
 
     @classmethod
-    def create_objective_builder(cls, obj):
+    def create_objective_builder(cls, obj: Any) -> '_objfns.ObjectiveFunctionBuilder':
         """
         Creates objective function builders from `obj` that are commonly used in model tests.
 
@@ -95,9 +99,10 @@ class ModelTest(_proto.Protocol):
         elif isinstance(obj, (list, tuple)): return builder_cls(*obj)
         else: raise ValueError("Cannot build a objective-fn builder from '%s'" % str(type(obj)))
 
-    def __init__(self, model_to_test, target_model=None, gaugeopt_suite=None,
-                 objfn_builder=None, badfit_options=None,
-                 set_trivial_gauge_group=True, verbosity=2, name=None):
+    def __init__(self, model_to_test: _Model, target_model: Optional[_Model] = None,
+                 gaugeopt_suite: Any = None,
+                 objfn_builder: Any = None, badfit_options: Any = None,
+                 set_trivial_gauge_group: bool = True, verbosity: int = 2, name: Optional[str] = None):
 
         from .gst import GSTBadFitOptions as _GSTBadFitOptions
         from .gst import GSTGaugeOptSuite as _GSTGaugeOptSuite
@@ -128,8 +133,11 @@ class ModelTest(_proto.Protocol):
         self.circuit_weights = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
-    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
-            simulator: Optional[ForwardSimulator.Castable]=None):
+    def run(self, data: _proto.ProtocolData, memlimit: Optional[int] = None, comm=None,
+            checkpoint: Optional[ModelTestCheckpoint] = None,
+            checkpoint_path: Optional[Union[str, _pathlib.Path]] = None,
+            disable_checkpointing: bool = False,
+            simulator: Optional[ForwardSimulator.Castable]=None) -> '_ModelEstimateResults':
         """
         Run this protocol on `data`.
 
@@ -329,9 +337,11 @@ class ModelTestCheckpoint(_proto.ProtocolCheckpoint):
 
     """
 
-    def __init__(self, last_completed_iter = -1, 
-                 last_completed_circuit_list = None, objfn_vals = None,
-                 chi2k_distributed_vals=None, name= None, parent = None):
+    def __init__(self, last_completed_iter: int = -1,
+                 last_completed_circuit_list: Optional[Union[list, _CircuitList]] = None,
+                 objfn_vals: Optional[list] = None,
+                 chi2k_distributed_vals: Optional[list] = None, name: Optional[str] = None,
+                 parent: Optional['_proto.ProtocolCheckpoint'] = None):
         self.last_completed_iter = last_completed_iter
         self.last_completed_circuit_list = last_completed_circuit_list if last_completed_circuit_list is not None else []
         self.objfn_vals = objfn_vals if objfn_vals is not None else []
@@ -339,7 +349,7 @@ class ModelTestCheckpoint(_proto.ProtocolCheckpoint):
 
         super().__init__(name, parent)
 
-    def _to_nice_serialization(self):
+    def _to_nice_serialization(self) -> dict:
         state = super()._to_nice_serialization()
         state.update({'last_completed_iter': self.last_completed_iter,
                       'last_completed_circuit_list': [ckt.str for ckt in self.last_completed_circuit_list],
@@ -350,7 +360,7 @@ class ModelTestCheckpoint(_proto.ProtocolCheckpoint):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state: dict) -> ModelTestCheckpoint:  # memo holds already de-serialized objects
         last_completed_iter = state['last_completed_iter']
         last_completed_circuit_list = [Circuit(ckt_str) for ckt_str in state['last_completed_circuit_list']]
         objfn_vals = state['objfn_vals']
