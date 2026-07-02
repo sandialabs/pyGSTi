@@ -434,7 +434,7 @@ class FindPerfectGauge_DirectSumGaugeGroup4LevelTester(BaseCase):
         u_y = la.expm(-0.25j * np.pi * pgbc.sigmay)
         for name, u2 in [('Gxpi2', u_x), ('Gypi2', u_y)]:
             u4 = la.block_diag(u2, np.eye(2))
-            target.operations[pgl.Label((name, 'Q0'))] = pgo.unitary_to_superop(u4, basis)
+            target.operations[pgl.Label((name, 'Q0'))] = np.real(pgo.unitary_to_superop(u4, basis))
 
         target.default_gauge_group = _leakage_direct_sum_group(basis)
         self.target = target
@@ -445,7 +445,7 @@ class FindPerfectGauge_DirectSumGaugeGroup4LevelTester(BaseCase):
             h = np.random.randn(2, 2) + 1j * np.random.randn(2, 2)
             return la.expm(-0.5j * (h + h.T.conj()))
         U = la.block_diag(_rand_u2(), _rand_u2())
-        U_superop = FullArbitraryOp(pgo.unitary_to_superop(U, basis), basis)
+        U_superop = FullArbitraryOp(np.real(pgo.unitary_to_superop(U, basis)), basis)
         self.gauge_grp_el = FullGaugeGroupElement(U_superop)
         self.model.transform_inplace(self.gauge_grp_el)
 

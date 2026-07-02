@@ -1335,6 +1335,13 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
         self._u = u
         self._m = unitary_to_superop(self._u, self.basis)
         self._invm = unitary_to_superop(self._u.T.conj(), self.basis)
+        if getattr(self.basis, 'real', False):
+            # In a Hermitian (real) basis these superoperators are mathematically real,
+            # but for some basis types unitary_to_superop returns a complex dtype with
+            # vanishing imaginary part, which triggers ComplexWarnings downstream when
+            # transformed members are written into real parameter storage.
+            self._m = _np.real(self._m)
+            self._invm = _np.real(self._invm)
         return
 
     @property

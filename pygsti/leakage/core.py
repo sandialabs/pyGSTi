@@ -271,7 +271,12 @@ def augment_for_leakage_modeling(b_in: Basis, E: np.ndarray) -> Basis:
         element /= la.norm(element)
         element[:] = element.round(decimals=16)
     out_name  = 'Leakage augmented ' + b_in.name
-    out_basis = ExplicitBasis(elements, labels, name=out_name)
+    out_basis = ExplicitBasis(elements, labels, name=out_name, real=True)
+    # ^ real=True: the elements are Hermitian by construction, so the expansion
+    #   coefficients of any Hermitian operator in this basis are real. Without it,
+    #   ExplicitBasis defaults to real=False and downstream Hermitian-basis checks
+    #   (e.g. _assert_hermitian_basis in pygsti.leakage.models) would wrongly reject
+    #   the augmented basis.
     assert out_basis.implies_leakage_modeling
 
     if not hermitian_input:
