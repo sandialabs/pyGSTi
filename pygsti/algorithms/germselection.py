@@ -1330,7 +1330,7 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=None):
     numpy array
         An array of shape (op_dim^2, num_model_params)
     """
-    float_type = _resolve_float_type(model)
+    float_type = _resolve_float_type(float_type, model)
 
     prod = model.sim.product(circuit)
 
@@ -1379,7 +1379,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
     numpy array
         An array of shape (num_simplified_circuits, op_dim^2, num_model_params)
     """
-    float_type = _resolve_float_type(model)
+    float_type = _resolve_float_type(float_type, model)
 
     # This function assumes model has no spam elements so `lookup` below
     #  gives indexes into products computed by evalTree.
@@ -2014,10 +2014,6 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
             [_compute_bulk_twirled_ddd_compact(model, germs_list, tol,
                                               evd_tol=1e-10, float_type=float_type, printer=printer)
              for model in model_list]
-             
-             #_compute_bulk_twirled_ddd_compact returns a tuple with three lists
-             #corresponding to the u, sigma and vh matrices for each germ's J^T J matrix's_list
-             #compact svd.
         currentDDDList = []
         nonzero_weight_indices= _np.nonzero(weights)
         nonzero_weight_indices= nonzero_weight_indices[0]
