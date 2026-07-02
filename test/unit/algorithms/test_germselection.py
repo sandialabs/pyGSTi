@@ -136,6 +136,46 @@ class GermSelectionTester(GermSelectionData, BaseCase):
                 partial_deriv_dagger_deriv=pDDD, op_penalty=1.0
             )
 
+    def test_float_type_memory_footprint(self):
+        from pygsti.modelpacks import smq2Q_XYCPHASE
+        import io, sys
+        import numpy as np
+        
+        target_model = smq2Q_XYCPHASE.target_model('full TP')
+        
+        def get_mem_est(float_type_val):
+            stdout = io.StringIO()
+            old_stdout = sys.stdout
+            sys.stdout = stdout
+            try:
+                germsel.find_germs(
+                    target_model, 
+                    algorithm='greedy', 
+                    mode='compactEVD', 
+                    float_type=float_type_val, 
+                    candidate_germ_counts={1: 'all upto'}, 
+                    seed=0, 
+                    verbosity=1
+                )
+            finally:
+                sys.stdout = old_stdout
+            
+            output = stdout.getvalue()
+            for line in output.split('\n'):
+                if 'Memory estimate of' in line and 'for all-Jac mode' in line:
+                    return float(line.split('Memory estimate of')[1].split('GB')[0].strip())
+            return None
+
+        mem_double = get_mem_est(np.double)
+        mem_single = get_mem_est(np.single)
+        
+        self.assertIsNotNone(mem_double)
+        self.assertIsNotNone(mem_single)
+        
+        # Validate memory footprint is strictly lower for np.single
+        self.assertTrue(mem_single < mem_double)
+        self.assertAlmostEqual(mem_single, mem_double / 2, places=1)
+
     def test_randomize_model_list_raises_on_conflicting_arg_spec(self):
         with self.assertRaises(ValueError):
             germsel.randomize_model_list(
