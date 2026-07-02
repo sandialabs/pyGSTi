@@ -1199,15 +1199,58 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         return cls(state['operation_dimension'])
 
 
+def _normalize_level_partition(level_partition, expected_block_sizes, udim):
+    """
+    Validate and canonicalize a `level_partition` for a direct-sum gauge group.
+
+    `level_partition` assigns the standard-basis levels of the direct-sum Hilbert space H
+    to the summands, one sub-list per summand: ``level_partition[i]`` lists the levels of H
+    that summand ``i`` acts on. ``None`` means the default contiguous layout (summand 0 gets
+    levels ``0..d0-1``, summand 1 the next block, and so on), which is what a plain
+    ``block_diag`` produces. A non-trivial partition lets a summand's block sit on
+    *interleaved* levels (e.g. a computational subspace on levels {0,1,3,4} of a leakage
+    Hilbert space) by conjugating the block-diagonal unitary with the corresponding
+    permutation.
+
+    Returns ``None`` (contiguous) or a tuple of int tuples. Raises ValueError if the block
+    sizes disagree with `expected_block_sizes` or the levels are not a permutation of
+    ``range(udim)``.
+    """
+    if level_partition is None:
+        return None
+    blocks = tuple(tuple(int(x) for x in block) for block in level_partition)
+    if len(blocks) != len(expected_block_sizes):
+        raise ValueError(
+            f"level_partition has {len(blocks)} blocks but there are "
+            f"{len(expected_block_sizes)} summands.")
+    for i, (blk, sz) in enumerate(zip(blocks, expected_block_sizes)):
+        if len(blk) != sz:
+            raise ValueError(
+                f"level_partition block {i} has {len(blk)} levels but summand {i} "
+                f"has Hilbert-space dimension {sz}.")
+    flat = [lvl for blk in blocks for lvl in blk]
+    if sorted(flat) != list(range(udim)):
+        raise ValueError(
+            f"level_partition must assign each of the {udim} standard-basis levels exactly "
+            f"once (i.e. be a permutation of range({udim})); got {flat}.")
+    return blocks
+
+
 class DirectSumUnitaryGroup(GaugeGroup):
     """
     A subgroup of the unitary group on a Hilbert space H, where H has a direct sum structure.
 
-    Unitaries in this group are block diagonal and preserve the direct sum structure of H.
+    Unitaries in this group are block diagonal (up to a fixed relabeling of levels) and
+    preserve the direct sum structure of H.
+
+    `level_partition`, if given, lists the standard-basis levels of H that each summand acts
+    on -- one sub-list per subgroup. This allows a summand to occupy interleaved levels of H
+    rather than a contiguous leading block; see `_normalize_level_partition`. The default
+    (``None``) is the contiguous layout produced by a plain block-diagonal unitary.
     """
 
     def __init__(self, subgroups: Tuple[Union[UnitaryGaugeGroup, U1Group, TrivialGaugeGroup], ...],
-                 basis, name="Direct sum gauge group"):
+                 basis, level_partition=None, name="Direct sum gauge group"):
 
         # Step 1. Get the size of the direct sum Hilbert space
         udim = 0
@@ -1231,6 +1274,8 @@ class DirectSumUnitaryGroup(GaugeGroup):
 
         self.basis = basis
         self.subgroups = subgroups
+        self.level_partition = _normalize_level_partition(
+            level_partition, [sg.state_space.udim for sg in subgroups], udim)
         self._param_dims = _np.array([sg.num_params for sg in subgroups])
         self._num_params = _np.sum(self._param_dims)
         super().__init__(name)
@@ -1248,7 +1293,7 @@ class DirectSumUnitaryGroup(GaugeGroup):
             sub_element = sg.compute_element(sub_param_vec)
             subelements.append(sub_element)
             offset += pd
-        out = DirectSumUnitaryGroupElement(tuple(subelements), self.basis)
+        out = DirectSumUnitaryGroupElement(tuple(subelements), self.basis, self.level_partition)
         return out
 
     @property
@@ -1262,6 +1307,8 @@ class DirectSumUnitaryGroup(GaugeGroup):
             'subgroups': tuple([se.to_nice_serialization() for se in self.subgroups]),
             'state_space_dimension': int(self.basis.dim),
             'basis': self.basis if isinstance(self.basis, str) else self.basis.to_nice_serialization(),
+            'level_partition': None if self.level_partition is None
+                               else [list(block) for block in self.level_partition],
             'name': self.name
         })
         return state
@@ -1277,15 +1324,18 @@ class DirectSumUnitaryGroup(GaugeGroup):
             subgroups.append(sg)
         subgroups = tuple(subgroups)
         basis = state['basis'] if isinstance(state['basis'], str) else _Basis.from_nice_serialization(state['basis'])
+        level_partition = state.get('level_partition', None)
         name = state['name']
-        return cls(subgroups, basis, name)
+        return cls(subgroups, basis, level_partition, name)
 
 
 class DirectSumUnitaryGroupElement(GaugeGroupElement):
 
-    def __init__(self, subelements: Tuple[Union[UnitaryGaugeGroupElement, U1GroupElement, TrivialGaugeGroupElement], ...], basis):
+    def __init__(self, subelements: Tuple[Union[UnitaryGaugeGroupElement, U1GroupElement, TrivialGaugeGroupElement], ...], basis, level_partition=None):
         self.subelements = subelements
         self.basis = basis
+        self.level_partition = None if level_partition is None \
+            else tuple(tuple(int(x) for x in block) for block in level_partition)
         self._update_matrices()
         self._vectorized_op_dim = self.basis.dim ** 2
         self._num_params = _np.sum([se.num_params for se in self.subelements])
@@ -1332,6 +1382,16 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
             u_blocks.append(u)
             num_params.append(se.num_params)
         u = _la.block_diag(*u_blocks)
+        if self.level_partition is not None:
+            # block_diag places the summands on contiguous leading levels. When the
+            # summands actually occupy interleaved levels of H, conjugate by the
+            # permutation P that scatters each grouped level to its true position:
+            # u_full = P @ block_diag(...) @ P.T. (P is real, so dtype is unchanged.)
+            grouped_order = [lvl for block in self.level_partition for lvl in block]
+            perm = _np.zeros((len(grouped_order), len(grouped_order)))
+            for grouped_idx, level in enumerate(grouped_order):
+                perm[level, grouped_idx] = 1.0
+            u = perm @ u @ perm.T
         self._u = u
         self._m = unitary_to_superop(self._u, self.basis)
         self._invm = unitary_to_superop(self._u.T.conj(), self.basis)
@@ -1355,7 +1415,9 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
         state = super()._to_nice_serialization()
         state.update({
             'subelements': tuple([se.to_nice_serialization() for se in self.subelements]),
-            'basis': self.basis if isinstance(self.basis, str) else self.basis.to_nice_serialization()
+            'basis': self.basis if isinstance(self.basis, str) else self.basis.to_nice_serialization(),
+            'level_partition': None if self.level_partition is None
+                               else [list(block) for block in self.level_partition]
         })
         return state
 
@@ -1370,4 +1432,5 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
             subelements.append(se)
         subelements = tuple(subelements)
         basis = state['basis'] if isinstance(state['basis'], str) else _Basis.from_nice_serialization(state['basis'])
-        return cls(subelements, basis)
+        level_partition = state.get('level_partition', None)
+        return cls(subelements, basis, level_partition)

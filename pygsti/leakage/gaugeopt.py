@@ -19,7 +19,8 @@ if TYPE_CHECKING:
     from pygsti.protocols.gst import GSTGaugeOptSuite, ModelEstimateResults
 
 
-def _direct_sum_unitary_group(subspace_bases, full_basis, triviality_flags=None):
+def _direct_sum_unitary_group(subspace_bases, full_basis, triviality_flags=None,
+                              level_partition=None):
     """
     Build a gauge group that acts as an independent unitary on each summand of a
     direct-sum decomposition H = H₀ ⨁ H₁ ⨁ ... of Hilbert space.
@@ -36,7 +37,10 @@ def _direct_sum_unitary_group(subspace_bases, full_basis, triviality_flags=None)
 
     The subgroups are combined into a DirectSumUnitaryGroup on `full_basis`.
     `triviality_flags`, if given, overrides the default per-summand choice and must have
-    the same length as `subspace_bases`.
+    the same length as `subspace_bases`. `level_partition`, if given, lists the
+    standard-basis levels of H that each summand occupies (one sub-list per summand),
+    allowing interleaved rather than contiguous summands; see
+    `pygsti.models.gaugegroup.DirectSumUnitaryGroup`.
     """
     from pygsti.models.gaugegroup import (UnitaryGaugeGroup,
         DirectSumUnitaryGroup, U1Group, TrivialGaugeGroup)
@@ -55,7 +59,7 @@ def _direct_sum_unitary_group(subspace_bases, full_basis, triviality_flags=None)
         else:
             g = U1Group()
         subgroups.append(g)
-    g_full = DirectSumUnitaryGroup(tuple(subgroups), full_basis)
+    g_full = DirectSumUnitaryGroup(tuple(subgroups), full_basis, level_partition=level_partition)
     return g_full
 
 
@@ -70,12 +74,17 @@ def _leakage_direct_sum_group(basis: Basis):
     ('pp' for a qubit-sized factor, 'gm' otherwise). With the default triviality flags,
     a one-dimensional leakage factor contributes a TrivialGaugeGroup.
 
-    DirectSumUnitaryGroup elements act as block-diagonal unitaries in the *standard
-    level ordering*, so this construction requires the computational subspace to be
-    spanned by the first k levels (computational effect E = diag(1,...,1,0,...,0)).
-    We raise NotImplementedError for leakage bases that violate that layout, such as
-    tensor-product bases like pp ⨂ l2p1 whose computational levels are interleaved
-    with leakage levels.
+    DirectSumUnitaryGroup elements act as block-diagonal unitaries, but they accept a
+    `level_partition` that lets each block sit on interleaved standard-basis levels. This
+    construction therefore supports any leakage basis whose computational effect E is a
+    *coordinate* projector -- i.e. E is diagonal with 0/1 entries, so the computational
+    subspace is spanned by some subset of standard-basis levels (which need not be the
+    leading k levels). Tensor-product leakage bases like pp ⨂ l2p1, whose computational
+    levels {0,1,3,4} are interleaved with leakage levels, are handled this way.
+
+    We raise NotImplementedError only if E is a projector onto a genuinely non-coordinate
+    subspace (E not diagonal), which does not arise in leakage modeling -- there a
+    permutation no longer suffices and a general change of basis would be required.
     """
     import numpy as np
     from pygsti.baseobjs.basis import default_basis_for_udims
@@ -91,21 +100,31 @@ def _leakage_direct_sum_group(basis: Basis):
             f"subspace is the full {udim}-dimensional Hilbert space), so there is "
             f"no leakage-preserving direct-sum gauge group to build."
         )
-    expected_E = np.zeros((udim, udim))
-    expected_E[:k, :k] = np.eye(k)
-    if not np.allclose(E, expected_E, atol=1e-10):
+    diag = np.diag(E).real
+    off_diagonal = E - np.diag(np.diag(E))
+    is_coordinate_projector = (
+        np.allclose(off_diagonal, 0, atol=1e-10)
+        and np.all(np.isclose(diag, 0, atol=1e-10) | np.isclose(diag, 1, atol=1e-10))
+    )
+    if not is_coordinate_projector:
         raise NotImplementedError(
-            f"The computational subspace of basis {basis} is not spanned by the "
-            f"first {k} standard-basis levels, but DirectSumUnitaryGroup only "
-            f"supports block-diagonal unitaries in the standard level ordering. "
-            f"(This arises e.g. for tensor-product leakage bases like pp ⨂ l2p1, "
-            f"whose computational levels are interleaved with leakage levels.)"
+            f"The computational effect of basis {basis} is a projector onto a "
+            f"non-coordinate subspace (it is not diagonal in the standard basis). "
+            f"DirectSumUnitaryGroup can place a summand on any subset of standard-basis "
+            f"levels via a level permutation, but a computational subspace that mixes "
+            f"levels would require a general change of basis, which is not implemented."
         )
+    comp_levels = [i for i in range(udim) if diag[i] > 0.5]
+    leak_levels = [i for i in range(udim) if diag[i] <= 0.5]
     sub_bases = [
         Basis.cast(default_basis_for_udims([k]), k**2),
         Basis.cast(default_basis_for_udims([m]), m**2),
     ]
-    return _direct_sum_unitary_group(sub_bases, basis)
+    # A contiguous leading computational block is the block_diag default, so leave the
+    # partition as None in that (common, qubit-sized) case; only pass an explicit
+    # partition when the computational levels are interleaved with leakage levels.
+    level_partition = None if comp_levels == list(range(k)) else [comp_levels, leak_levels]
+    return _direct_sum_unitary_group(sub_bases, basis, level_partition=level_partition)
 
 
 def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
