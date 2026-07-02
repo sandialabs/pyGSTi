@@ -136,6 +136,46 @@ class GermSelectionTester(GermSelectionData, BaseCase):
                 partial_deriv_dagger_deriv=pDDD, op_penalty=1.0
             )
 
+    def test_float_type_memory_footprint(self):
+        from pygsti.modelpacks import smq2Q_XYCPHASE
+        import io, sys
+        import numpy as np
+        
+        target_model = smq2Q_XYCPHASE.target_model('full TP')
+        
+        def get_mem_est(float_type_val):
+            stdout = io.StringIO()
+            old_stdout = sys.stdout
+            sys.stdout = stdout
+            try:
+                germsel.find_germs(
+                    target_model, 
+                    algorithm='greedy', 
+                    mode='compactEVD', 
+                    float_type=float_type_val, 
+                    candidate_germ_counts={1: 'all upto'}, 
+                    seed=0, 
+                    verbosity=1
+                )
+            finally:
+                sys.stdout = old_stdout
+            
+            output = stdout.getvalue()
+            for line in output.split('\n'):
+                if 'Memory estimate of' in line and 'for all-Jac mode' in line:
+                    return float(line.split('Memory estimate of')[1].split('GB')[0].strip())
+            return None
+
+        mem_double = get_mem_est(np.double)
+        mem_single = get_mem_est(np.single)
+        
+        self.assertIsNotNone(mem_double)
+        self.assertIsNotNone(mem_single)
+        
+        # Validate memory footprint is strictly lower for np.single
+        self.assertTrue(mem_single < mem_double)
+        self.assertAlmostEqual(mem_single, mem_double / 2, places=1)
+
     def test_randomize_model_list_raises_on_conflicting_arg_spec(self):
         with self.assertRaises(ValueError):
             germsel.randomize_model_list(
@@ -347,7 +387,27 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
         germs = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='compactEVD',
-                                   assume_real=True, float_type=np.double,  verbosity=1)
+                                   verbosity=1)
+                                   
+    def test_greedy_low_rank_update_complex_dtype(self):
+        # A test to cover the patched bug where complex arrays caused 
+        # linear algebra failures in the compactEVD mode.
+        import pygsti
+        complex_model = self.target_model.copy()
+        complex_model.basis = pygsti.baseobjs.Basis.cast('std', 4)
+        
+        germs = germsel.find_germs(
+            complex_model, 
+            seed=2017, 
+            candidate_germ_counts={3: 'all upto', 4: 10},
+            randomize=False, 
+            algorithm='greedy', 
+            mode='compactEVD',
+            float_type=np.complex128,  
+            verbosity=0
+        )
+        self.assertIsNotNone(germs)
+        self.assertTrue(len(germs) > 0)
                                    
     def test_forced_germs_none(self):
         # TODO assert correctness
@@ -355,15 +415,15 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
         germs_compactEVD = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='compactEVD',
-                                   assume_real=True, float_type=np.double,  verbosity=1, force=None)
+                                    verbosity=1, force=None)
         germs_allJac = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='all-Jac',
-                                   assume_real=True, float_type=np.double,  verbosity=1, force=None)
+                                    verbosity=1, force=None)
         germs_singleJac = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='single-Jac',
-                                   assume_real=True, float_type=np.double,  verbosity=1, force=None)
+                                    verbosity=1, force=None)
     
     def test_force_germs_outside_candidate_set(self):
         #TODO assert correctness
@@ -372,14 +432,14 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
         germs = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='compactEVD',
-                                   assume_real=True, float_type=np.double,  verbosity=1, 
+                                    verbosity=1, 
                                    force=pc.list_random_circuits_onelen(fixtures.opLabels, length=7, count=2, seed=_SEED))
                                    
 class GermSelectionPenaltyTester(GermSelectionData, BaseCase):
 
     common_kwargs  : dict[str, Any] = dict(
         randomize=True, seed=1234, candidate_germ_counts={7:'all upto'},
-        assume_real=True, float_type=np.double, mode='compactEVD', algorithm='greedy'
+        mode='compactEVD', algorithm='greedy'
     )
 
     def setUp(self):
@@ -424,7 +484,7 @@ class EndToEndGermSelectionTester(GermSelectionData, BaseCase):
     #previously proven to be useful as such.
     def lite_germ_selection_end_to_end_test(self):
         liteGerms = germsel.find_germs(self.target_model, randomize=False, algorithm='greedy', verbosity=1,
-                                       assume_real=True, float_type=np.double)
+                                       float_type=np.double)
         # TODO assert correctness
         
     def robust_germ_selection_end_to_end_test(self):

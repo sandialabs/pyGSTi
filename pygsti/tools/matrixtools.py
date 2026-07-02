@@ -840,7 +840,7 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
         evals, evecs = _np.linalg.eigh(m)
         inv_evecs = evecs.T.conj()
     else:
-        evals, evecs = _np.linalg.eigh(m)
+        evals, evecs = _np.linalg.eig(m)
         inv_evecs = _np.linalg.inv(evecs)
     return evecs, evals, inv_evecs
 

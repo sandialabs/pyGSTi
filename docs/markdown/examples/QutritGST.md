@@ -39,7 +39,7 @@ Now construct the operation sequences needed by GST. Then we construct an empty 
 
 ```{code-cell} ipython3
 fiducialPrep, fiducialMeasure = find_fiducials(target_model, candidate_fid_counts={4: 'all upto'}, algorithm= 'greedy')
-germs = find_germs(target_model, randomize=False, candidate_germ_counts={4: 'all upto'}, mode= 'compactEVD', assume_real=True, float_type=np.double)
+germs = find_germs(target_model, randomize=False, candidate_germ_counts={4: 'all upto'}, mode= 'compactEVD', float_type=np.double)
 maxLengths = [1,2,4]
 ```
 
