@@ -9,14 +9,31 @@ Volumetric Benchmarking Protocol objects
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
-import numpy as _np
+from __future__ import annotations
+from typing import Union, Optional, Literal, Iterable, Any, Callable, TYPE_CHECKING
 import copy as _copy
+import numpy as _np
 
 from pygsti import tools as _tools
 from pygsti.algorithms import randomcircuit as _rc
 from pygsti.protocols import protocol as _proto
 from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.baseobjs.label import HomogeneousSeq
+
+if TYPE_CHECKING:
+    from pygsti.baseobjs.label import SSLabelMapper
+    from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
+    from pygsti.data.dataset import DataSet as _DataSet
+    from pygsti.data.datacomparator import DataComparator as _DataComparator
+
+# Type aliases for the arguments shared across the by-depth experiment designs.
+DepthList = Union[list[int], tuple[int, ...]]
+CircuitLists = Union[list[list[_Circuit]], tuple[list[_Circuit]]]
+QubitLabels = Optional[Union[HomogeneousSeq, Literal['multiple']]]
+# The by-depth summary-statistics protocols accept either an explicit list of
+# depths or the special string 'all'.
+Depths = Union[Literal['all'], list[int]]
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):
@@ -42,13 +59,16 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         all the circuits that need data.
     """
 
-    def __init__(self, depths, circuit_lists, qubit_labels=None, remove_duplicates=True):
+    def __init__(self, depths: DepthList,
+                 circuit_lists: CircuitLists,
+                 qubit_labels: QubitLabels=None,
+                 remove_duplicates: bool=True):
         assert(len(depths) == len(circuit_lists)), \
             "Number of depths must equal the number of circuit lists!"
         super().__init__(circuit_lists, qubit_labels=qubit_labels, remove_duplicates=remove_duplicates)
         self.depths = depths
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> ByDepthDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -68,7 +88,7 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return ByDepthDesign(self.depths, mapped_circuit_lists, mapped_qubit_labels, remove_duplicates=False)
 
-    def truncate_to_lists(self, list_indices_to_keep):
+    def truncate_to_lists(self, list_indices_to_keep: Iterable[int]) -> "ByDepthDesign":
         """
         Truncates this experiment design by only keeping a subset of its circuit lists.
 
@@ -87,7 +107,8 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         ret.circuit_lists = [self.circuit_lists[i] for i in list_indices_to_keep]
         return ret
 
-    def merge_with(self, other_edesign, remove_duplicates=True, sort_depths=False):
+    def merge_with(self, other_edesign: _proto.ExperimentDesign, remove_duplicates: bool=True,
+                   sort_depths: bool=False) -> "ByDepthDesign":
         """
         Merge this experiment design with another one and return the result.
 
@@ -157,7 +178,9 @@ class BenchmarkingDesign(ByDepthDesign):
     and are truncated when circuit lists are truncated.
     """
 
-    def __init__(self, depths, circuit_lists, ideal_outs, qubit_labels=None, remove_duplicates=False):
+    def __init__(self, depths: DepthList, circuit_lists: CircuitLists,
+                 ideal_outs: Union[list, tuple], qubit_labels: QubitLabels=None,
+                 remove_duplicates: bool=False):
         assert(len(depths) == len(ideal_outs))
         super().__init__(depths, circuit_lists, qubit_labels, remove_duplicates)
         
@@ -171,7 +194,7 @@ class BenchmarkingDesign(ByDepthDesign):
         for paired_attr in self.paired_with_circuit_attrs:
             self.auxfile_types[paired_attr] = 'json'
 
-    def _mapped_circuits_and_idealouts_by_depth(self, mapper):
+    def _mapped_circuits_and_idealouts_by_depth(self, mapper: SSLabelMapper) -> dict:
         """ Used in derived classes """
         mapped_circuits_and_idealouts_by_depth = {}
         for depth, circuit_list, idealout_list in zip(self.depths, self.circuit_lists, self.idealout_lists):
@@ -179,7 +202,7 @@ class BenchmarkingDesign(ByDepthDesign):
                 [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)]
         return mapped_circuits_and_idealouts_by_depth
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> BenchmarkingDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -200,7 +223,7 @@ class BenchmarkingDesign(ByDepthDesign):
         return BenchmarkingDesign(self.depths, mapped_circuit_lists, list(self.idealout_lists),
                                   mapped_qubit_labels, remove_duplicates=False)
     
-    def truncate_to_lists(self, list_indices_to_keep):
+    def truncate_to_lists(self, list_indices_to_keep: Iterable[int]) -> "BenchmarkingDesign":
         """
         Truncates this experiment design by only keeping a subset of its circuit lists.
 
@@ -223,7 +246,7 @@ class BenchmarkingDesign(ByDepthDesign):
             setattr(ret, paired_attr, new_val)
         return ret
 
-    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+    def _truncate_to_circuits_inplace(self, circuits_to_keep: list[_Circuit]) -> None:
         truncated_circuit_lists = []
         paired_attr_lists_list = [getattr(self, paired_attr) for paired_attr in self.paired_with_circuit_attrs]
         truncated_paired_attr_lists_list = [[] for _ in range(len(self.paired_with_circuit_attrs))]
@@ -245,7 +268,7 @@ class BenchmarkingDesign(ByDepthDesign):
             setattr(self, paired_attr, paired_attr_lists)
         super()._truncate_to_circuits_inplace(circuits_to_keep)
 
-    def _truncate_to_design_inplace(self, other_design):
+    def _truncate_to_design_inplace(self, other_design: _proto.ExperimentDesign) -> None:
         truncated_circuit_lists = []
         paired_attr_lists_list = [getattr(self, paired_attr) for paired_attr in self.paired_with_circuit_attrs]
         truncated_paired_attr_lists_list = [[] for _ in range(len(self.paired_with_circuit_attrs))]
@@ -267,10 +290,10 @@ class BenchmarkingDesign(ByDepthDesign):
             setattr(self, paired_attr, paired_attr_lists)
         super()._truncate_to_design_inplace(other_design)
 
-    def _truncate_to_available_data_inplace(self, dataset):
+    def _truncate_to_available_data_inplace(self, dataset: '_DataSet') -> None:
         self._truncate_to_circuits_inplace(set(dataset.keys()))
 
-    def _merge_data(self, other_edesign, sort_depths):
+    def _merge_data(self, other_edesign: _proto.ExperimentDesign, sort_depths: bool) -> tuple:
         assert self.paired_with_circuit_attrs == other_edesign.paired_with_circuit_attrs, \
             "To merge, `paired_with_circuit_attrs` must be equal"
 
@@ -297,7 +320,8 @@ class BenchmarkingDesign(ByDepthDesign):
             depths = sorted(depths)
         return depths, circuits_by_depth, paired_attrs_by_depth
 
-    def merge_with(self, other_edesign, remove_duplicates=True, sort_depths=False):
+    def merge_with(self, other_edesign: _proto.ExperimentDesign, remove_duplicates: bool=True,
+                   sort_depths: bool=False) -> "BenchmarkingDesign":
         """
         Merge this experiment design with another one and return the result.
 
@@ -403,10 +427,11 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         A string describing the generated experiment. Stored in the returned dictionary.
     """
     @classmethod
-    def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
-                               sampler='edgegrab', samplerargs=(0.125,), localclifford=True,
-                               paulirandomize=True, fixed_versus_depth=False,
-                               descriptor='A random germ mirror circuit experiment'):
+    def from_existing_circuits(cls, circuits_and_idealouts_by_depth: dict, qubit_labels: QubitLabels=None,
+                               sampler: Union[str, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.125,),
+                               localclifford: bool=True,
+                               paulirandomize: bool=True, fixed_versus_depth: bool=False,
+                               descriptor: str='A random germ mirror circuit experiment') -> "PeriodicMirrorCircuitDesign":
         """
         Create a :class:`PeriodicMirrorCircuitDesign` from an existing set of sampled RB circuits.
 
@@ -476,10 +501,11 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                               sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor)
         return self
 
-    def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, clifford_compilations=None,
-                 sampler='edgegrab', samplerargs=(0.125,),
-                 localclifford=True, paulirandomize=True, fixed_versus_depth=False,
-                 descriptor='A random germ mirror circuit experiment', seed=None):
+    def __init__(self, pspec: '_QubitProcessorSpec', depths: DepthList, circuits_per_depth: int,
+                 qubit_labels: QubitLabels=None, clifford_compilations: Optional[dict]=None,
+                 sampler: Union[str, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.125,),
+                 localclifford: bool=True, paulirandomize: bool=True, fixed_versus_depth: bool=False,
+                 descriptor: str='A random germ mirror circuit experiment', seed: Optional[int]=None):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = [[] for d in depths]
@@ -505,8 +531,10 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor, seed=seed)
 
-    def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                         sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor, seed=None):
+    def _init_foundation(self, depths: DepthList, circuit_lists: CircuitLists, ideal_outs: Union[list, tuple],
+                         circuits_per_depth: int, qubit_labels: QubitLabels,
+                         sampler: Union[str, Callable], samplerargs: Union[list, tuple], localclifford: bool,
+                         paulirandomize: bool, fixed_versus_depth: bool, descriptor: str, seed: Optional[int]=None) -> None:
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
@@ -517,7 +545,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         self.fixed_versus_depth = fixed_versus_depth
         self.seed = seed
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> PeriodicMirrorCircuitDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -565,10 +593,10 @@ class SummaryStatistics(_proto.Protocol):
     circuit_statistics = ('two_q_gate_count', 'depth', 'idealout', 'circuit_index', 'width')
     # dscmp_statistics = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
-    def __init__(self, name):
+    def __init__(self, name: Optional[str]):
         super().__init__(name)
 
-    def _compute_summary_statistics(self, data, energy = False):
+    def _compute_summary_statistics(self, data: _proto.ProtocolData, energy: bool=False) -> _tools.NamedDict:
         """
         Computes all summary statistics for the given data.
 
@@ -582,7 +610,7 @@ class SummaryStatistics(_proto.Protocol):
         NamedDict
         """
         
-        def outcome_energy(outcome, measurement, sign):
+        def outcome_energy(outcome: str, measurement: str, sign: int) -> int:
             """
             Computes the result of a Pauli measurement from a computational basis outcome
             Parameters
@@ -607,7 +635,7 @@ class SummaryStatistics(_proto.Protocol):
                     energy = -1*energy
             return sign*energy
 
-        def avg_energy(dsrow, measurement, sign):
+        def avg_energy(dsrow: Any, measurement: str, sign: int) -> float:
             """Computes the result of a Pauli measurement from counts of computational basis measurements
             Parameters
             ----------
@@ -631,11 +659,11 @@ class SummaryStatistics(_proto.Protocol):
                 energy += dsrow.counts[i] * out_eng    
             return energy / dsrow.total
         
-        def success_counts(dsrow, circ, idealout):
+        def success_counts(dsrow: Any, circ: _Circuit, idealout: Any) -> float:
             if dsrow.total == 0: return 0  # shortcut?
             return dsrow.get(tuple(idealout), 0.)
 
-        def hamming_distance_counts(dsrow, circ, idealout):
+        def hamming_distance_counts(dsrow: Any, circ: _Circuit, idealout: Any) -> _np.ndarray:
             nQ = len(circ.line_labels)  # number of qubits
             assert(nQ == len(idealout[-1]))
             hamming_distance_counts = _np.zeros(nQ + 1, float)
@@ -645,7 +673,7 @@ class SummaryStatistics(_proto.Protocol):
                     hamming_distance_counts[_tools.rbtools.hamming_distance(outbitstring, idealout[-1])] += counts
             return hamming_distance_counts
 
-        def adjusted_success_probability(hamming_distance_counts):
+        def adjusted_success_probability(hamming_distance_counts: _np.ndarray) -> float:
 
             """ A scaled success probability that is useful for mirror circuit benchmarks """
             if _np.sum(hamming_distance_counts) == 0.:
@@ -655,12 +683,12 @@ class SummaryStatistics(_proto.Protocol):
                 adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
                 return adjSP
             
-        def _get_energies(icirc, circ, dsrow, measurement, sign):
+        def _get_energies(icirc: int, circ: _Circuit, dsrow: Any, measurement: str, sign: int) -> dict:
             eng = avg_energy(dsrow, measurement, sign)
             ret = {'energies': eng, 'total_counts': dsrow.total}
             return ret
 
-        def _get_summary_values(icirc, circ, dsrow, idealout):
+        def _get_summary_values(icirc: int, circ: _Circuit, dsrow: Any, idealout: Any) -> dict:
             sc = success_counts(dsrow, circ, idealout)
             tc = dsrow.total
             hdc = hamming_distance_counts(dsrow, circ, idealout)
@@ -683,7 +711,7 @@ class SummaryStatistics(_proto.Protocol):
             return self._compute_dict(data, ['energies',  'total_counts'],
                                      _get_energies, for_passes = 'all', energy = True)
     
-    def _compute_circuit_statistics(self, data):
+    def _compute_circuit_statistics(self, data: _proto.ProtocolData) -> _tools.NamedDict:
         """
         Computes all circuit statistics for the given data.
 
@@ -696,7 +724,7 @@ class SummaryStatistics(_proto.Protocol):
         -------
         NamedDict
         """
-        def _get_circuit_values(icirc, circ, dsrow, idealout):
+        def _get_circuit_values(icirc: int, circ: _Circuit, dsrow: Any, idealout: Any) -> dict:
             ret = {'two_q_gate_count': circ.two_q_gate_count(),
                    'depth': circ.depth,
                    'idealout': idealout,
@@ -707,7 +735,7 @@ class SummaryStatistics(_proto.Protocol):
 
         return self._compute_dict(data, self.circuit_statistics, _get_circuit_values, for_passes="first")
 
-    def _compute_predicted_probs(self, data, model):
+    def _compute_predicted_probs(self, data: _proto.ProtocolData, model: _SuccessFailModel) -> _tools.NamedDict:
         """
         Compute the predicted success probabilities of `model` given `data`.
 
@@ -723,7 +751,7 @@ class SummaryStatistics(_proto.Protocol):
         -------
         NamedDict
         """
-        def _get_success_prob(icirc, circ, dsrow, idealout):
+        def _get_success_prob(icirc: int, circ: _Circuit, dsrow: Any, idealout: Any) -> dict:
             #if set(circ.line_labels) != set(qubits):
             #    trimmedcirc = circ.copy(editable=True)
             #    for q in circ.line_labels:
@@ -736,7 +764,7 @@ class SummaryStatistics(_proto.Protocol):
         return self._compute_dict(data, ('success_probabilities',),
                                   _get_success_prob, for_passes="none")
 
-    def _compute_dict(self, data, component_names, compute_fn, for_passes="all", energy = False):
+    def _compute_dict(self, data: _proto.ProtocolData, component_names: Union[list, tuple], compute_fn: Callable, for_passes: str="all", energy: bool=False) -> _tools.NamedDict:
         """
         Executes a computation function row-by-row on the data in `data` and packages the results.
 
@@ -795,7 +823,7 @@ class SummaryStatistics(_proto.Protocol):
     
         return qty_data
 
-    def _create_depthwidth_dict(self, depths, widths, fillfn, seriestype):
+    def _create_depthwidth_dict(self, depths: Union[list, tuple], widths: Union[list, tuple], fillfn: Callable, seriestype: str) -> _tools.NamedDict:
         """
         Create a nested :class:`NamedDict` with depht and width indices.
 
@@ -822,7 +850,7 @@ class SummaryStatistics(_proto.Protocol):
             'Depth', 'int', None, None, {depth: _tools.NamedDict(
                 'Width', 'int', 'Value', seriestype, {width: fillfn() for width in widths}) for depth in depths})
 
-    def _add_bootstrap_qtys(self, data_cache, num_qtys, finitecounts=True):
+    def _add_bootstrap_qtys(self, data_cache: dict, num_qtys: int, finitecounts: bool=True) -> None:
         """
         Adds bootstrapped "summary data".
 
@@ -984,8 +1012,11 @@ class ByDepthSummaryStatistics(SummaryStatistics):
         results produced by this protocol.  If None, the class name will
         be used.
     """
-    def __init__(self, depths='all', statistics_to_compute=('polarization',), names_to_compute=None,
-                 custom_data_src=None, name=None):
+    def __init__(self, depths: Depths='all',
+                 statistics_to_compute: tuple=('polarization',),
+                 names_to_compute: Optional[tuple]=None,
+                 custom_data_src: Optional[_SuccessFailModel]=None,
+                 name: Optional[str]=None):
         super().__init__(name)
         self.depths = depths
         self.statistics_to_compute = statistics_to_compute
@@ -994,7 +1025,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
         # because this *could* be a model or a qty dict (or just a string?)
         self.auxfile_types['custom_data_src'] = 'serialized-object'
 
-    def _get_statistic_per_depth(self, statistic, data):
+    def _get_statistic_per_depth(self, statistic: str, data: _proto.ProtocolData) -> _tools.NamedDict:
         design = data.edesign
 
         if self.custom_data_src is None:  # then use the data in `data`
@@ -1046,7 +1077,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
 
         return statistic_per_depth
 
-    def run(self, data, memlimit=None, comm=None, dscomparator=None):
+    def run(self, data: Union[_proto.ProtocolResults, _proto.ProtocolResultsDir], memlimit: Optional[int]=None, comm=None, dscomparator: Optional['_DataComparator']=None) -> 'SummaryStatisticsResults':
         """
         Run this protocol on `data`.
         Parameters
@@ -1099,7 +1130,7 @@ class SummaryStatisticsResults(_proto.ProtocolResults):
     protocol_instance : Protocol
         The protocol that generated these results.
     """
-    def __init__(self, data, protocol_instance):
+    def __init__(self, data: _proto.ProtocolData, protocol_instance: _proto.Protocol):
         """
         Initialize an empty SummaryStatisticsResults object.
         """
@@ -1107,7 +1138,7 @@ class SummaryStatisticsResults(_proto.ProtocolResults):
         self.statistics = {}
         self.auxfile_types['statistics'] = 'dict:serialized-object'  # dict of NamedDicts
 
-    def _my_attributes_as_nameddict(self):
+    def _my_attributes_as_nameddict(self) -> _tools.NamedDict:
         """Overrides base class behavior so elements of self.statistics form top-level NamedDict"""
         stats = _tools.NamedDict('ValueName', 'category')
         for k, v in self.statistics.items():

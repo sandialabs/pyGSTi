@@ -13,9 +13,12 @@ Plotly-to-Matplotlib conversion functions.
 import gc as _gc
 
 import numpy as _np
+from typing import Union, Optional, Literal, Any, Sequence, Callable
 
 from pygsti.report.plothelpers import _eformat
 from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.report.colormaps import LinlogColormap as _LinlogColormap
+from pygsti.report.figure import ReportFigure as _ReportFigure
 
 try:
     import matplotlib as _matplotlib
@@ -40,13 +43,13 @@ class MplLinLogNorm(_matplotlib.colors.Normalize):
         Whether clipping should be performed. See :class:`matplotlib.colors.Normalize`.
     """
 
-    def __init__(self, linlog_colormap, clip=False):
+    def __init__(self, linlog_colormap: _LinlogColormap, clip: bool=False):
         cm = linlog_colormap
         super(MplLinLogNorm, self).__init__(vmin=cm.vmin, vmax=cm.vmax, clip=clip)
         self.trans = cm.trans
         self.cm = cm
 
-    def inverse(self, value):
+    def inverse(self, value: Union[float, _np.ndarray]) -> Union[float, _np.ndarray]:
         """
         Inverse of __call__ as per matplotlib spec.
 
@@ -69,11 +72,11 @@ class MplLinLogNorm(_matplotlib.colors.Normalize):
         else:
             return return_value.view(_np.ma.MaskedArray)
 
-    def __call__(self, value, clip=None):
+    def __call__(self, value: Union[float, _np.ndarray], clip: Optional[bool]=None) -> Union[float, _np.ndarray]:
         return self.cm.normalize(value)
 
 
-def mpl_make_linear_norm(vmin, vmax, clip=False):
+def mpl_make_linear_norm(vmin: float, vmax: float, clip: bool=False):
     """
     Create a linear matplotlib normalization
 
@@ -95,7 +98,7 @@ def mpl_make_linear_norm(vmin, vmax, clip=False):
     return _matplotlib.colors.Normalize(vmin=vmin, vmax=vmax, clip=clip)
 
 
-def mpl_make_linear_cmap(rgb_colors, name=None):
+def mpl_make_linear_cmap(rgb_colors: Sequence[Sequence[Any]], name: Optional[str]=None):
     """
     Make a color map that simply linearly interpolates between a set of colors in RGB space.
 
@@ -126,7 +129,7 @@ def mpl_make_linear_cmap(rgb_colors, name=None):
     return _matplotlib.colors.LinearSegmentedColormap(name, cdict)
 
 
-def mpl_besttxtcolor(x, cmap, norm):
+def mpl_besttxtcolor(x: float, cmap, norm) -> Literal['black', 'white']:
     """
     Determining function for whether text should be white or black
 
@@ -153,7 +156,7 @@ def mpl_besttxtcolor(x, cmap, norm):
     return "black" if 0.5 <= P else "white"
 
 
-def mpl_process_lbl(lbl, math=False):
+def mpl_process_lbl(lbl: str, math: Optional[bool]=False) -> str:
     """
     Process a (plotly-compatible) text label `lbl` to matplotlb text.
 
@@ -193,7 +196,7 @@ def mpl_process_lbl(lbl, math=False):
     return l
 
 
-def mpl_process_lbls(lbl_list):
+def mpl_process_lbls(lbl_list: list[str]) -> list[str]:
     """
     Process a list of plotly labels into matplotlib ones
 
@@ -210,7 +213,7 @@ def mpl_process_lbls(lbl_list):
     return [mpl_process_lbl(lbl) for lbl in lbl_list]
 
 
-def mpl_color(plotly_color):
+def mpl_color(plotly_color: str) -> Union[str, tuple]:
     """
     Convert a plotly color name to a matplotlib compatible one.
 
@@ -239,8 +242,9 @@ def mpl_color(plotly_color):
         return plotly_color  # hope this is a color name matplotlib understands
 
 
-def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp',
-                         box_labels_font_size=6):
+def plotly_to_matplotlib(pygsti_fig: _ReportFigure, save_to: Optional[str]=None, fontsize: Optional[int]=12,
+                         prec: Union[int, str]='compacthp',
+                         box_labels_font_size: Optional[int]=6):
     """
     Convert a pygsti (plotly) figure to a matplotlib figure.
 
@@ -290,7 +294,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
         mpl_fig.set_size_inches(*mpl_size)  # was 12,8 for "super" color plot
         pygsti_fig.metadata['mpl_fig_size'] = mpl_size  # record for later use by rendering commands
 
-    def get(obj, x, default):
+    def get(obj: Any, x: str, default: Any) -> Any:
         """ Needed b/c in plotly v3 layout no longer is a dict """
         try:
             ret = obj[x]
@@ -418,7 +422,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 
             grid = bool(len(shapes) > 1)
             if grid:
-                def _get_minor_tics(t):
+                def _get_minor_tics(t: Sequence[float]) -> list[float]:
                     return [(t[i] + t[i + 1]) / 2.0 for i in range(len(t) - 1)]
                 axes.set_xticks(_get_minor_tics(xtics), minor=True)
                 axes.set_yticks(_get_minor_tics(ytics), minor=True)
@@ -614,7 +618,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
 #Special processing for the key-plot: since it uses so much weird
 # plotly and matplotlib construction it makes no sense to try to
 # automatically convert.
-def special_keyplot(pygsti_fig, save_to, fontsize):
+def special_keyplot(pygsti_fig: _ReportFigure, save_to: str, fontsize: int):
     """
     Create a plot showing the layout of a single sub-block of a goodness-of-fit box plot.
 
@@ -653,10 +657,10 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
         axes.set_ylabel(ylabel, fontsize=(fontsize + 4))
 
     #Copied from _summable_color_boxplot
-    def _val_filter(vals):  # filter to latex-ify circuits.  Later add filter as a possible parameter
+    def _val_filter(vals: Sequence[Any]) -> list:  # filter to latex-ify circuits.  Later add filter as a possible parameter
         formatted_vals = []
         for val in vals:
-            if type(val) in (tuple, _Circuit) and all([type(el) == str for el in val]):
+            if isinstance(val, (tuple, _Circuit)) and all([isinstance(el, str) for el in val]):
                 if len(val) == 0:
                     formatted_vals.append(r"$\{\}$")
                 else:

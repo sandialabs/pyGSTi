@@ -10,7 +10,10 @@ Classes corresponding to tables within a Workspace context.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import warnings as _warnings
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Union, Literal
 
 import numpy as _np
 
@@ -20,7 +23,7 @@ from pygsti.report import workspaceplots as _wp
 from pygsti.report.reportables import evaluate as _ev
 from pygsti.report.table import ReportTable as _ReportTable
 from pygsti.report.workspace import WorkspaceTable
-from pygsti.report.reportableqty import ReportableQty as _ReportableQty, minimum as _rqty_minimum
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 from pygsti import circuits as _circuits
 from pygsti import models as _models
 from pygsti import baseobjs as _baseobjs
@@ -35,6 +38,21 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.data import DataSet as _DataSet
 from pygsti import SpaceT
 
+if TYPE_CHECKING:
+    from pygsti.report.workspace import Workspace as _Workspace
+    from pygsti.models.model import Model as _Model
+    from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+    from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactoryView as _CRFView
+    from pygsti.objectivefns.wildcardbudget import WildcardBudget as _WildcardBudget
+    from pygsti.objectivefns.objectivefns import (
+        ObjectiveFunctionBuilder as _ObjectiveFunctionBuilder,
+        ModelDatasetCircuitsStore as _ModelDatasetCircuitsStore,
+    )
+    from pygsti.baseobjs.profiler import Profiler as _Profiler
+
+AVAILABLE_METRICS = Literal['inf','agi','geni','trace','diamond','nuinf','nuagi','evinf','evagi',
+                            'evnuinf','evnuagi','evdiamond','evnudiamond','frob']
+
 
 class BlankTable(WorkspaceTable):
     """
@@ -46,11 +64,11 @@ class BlankTable(WorkspaceTable):
         The containing (parent) workspace.
     """
 
-    def __init__(self, ws):
+    def __init__(self, ws: _Workspace) -> None:
         """A completely blank placeholder table."""
         super(BlankTable, self).__init__(ws, self._create)
 
-    def _create(self):
+    def _create(self) -> _ReportTable:
         table = _ReportTable(['Blank'], [None])
         table.finish()
         return table
@@ -87,9 +105,11 @@ class SpamTable(WorkspaceTable):
         vector representation columns in the table.
     """
 
-    def __init__(self, ws, models, titles=None,
-                 display_as="boxes", confidence_region_infos=None,
-                 include_hs_vec=True):
+    def __init__(self, ws: _Workspace, models: Union[_Model, Sequence[_Model]],
+                 titles: Optional[Sequence[str]] = None,
+                 display_as: str = "boxes",
+                 confidence_region_infos: Any = None,
+                 include_hs_vec: bool = True) -> None:
         """
         A table of one or more model's SPAM elements.
 
@@ -120,8 +140,11 @@ class SpamTable(WorkspaceTable):
                                         titles, display_as, confidence_region_infos,
                                         include_hs_vec)
 
-    def _create(self, models, titles, display_as, confidence_region_infos,
-                include_hs_vec):
+    def _create(self, models: Union[_Model, Sequence[_Model]],
+                titles: Optional[Sequence[str]],
+                display_as: str,
+                confidence_region_infos: Any,
+                include_hs_vec: bool) -> _ReportTable:
 
         if isinstance(models, _models.Model):
             models = [models]
@@ -328,7 +351,7 @@ class SpamParametersTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws, models, titles=None, confidence_region_info=None):
+    def __init__(self, ws: _Workspace, models: Union[_Model, Sequence[_Model]], titles: Optional[Sequence[str]] = None, confidence_region_info: Optional[_CRFView] = None) -> None:
         """
         Create a table for model's "SPAM parameters", that is, the
         dot products of prep-vectors and effect-vectors.
@@ -352,7 +375,7 @@ class SpamParametersTable(WorkspaceTable):
         """
         super(SpamParametersTable, self).__init__(ws, self._create, models, titles, confidence_region_info)
 
-    def _create(self, models, titles, confidence_region_info):
+    def _create(self, models: Union[_Model, Sequence[_Model]], titles: Optional[Sequence[str]], confidence_region_info: Optional[_CRFView]) -> _ReportTable:
 
         if isinstance(models, _models.Model):
             models = [models]
@@ -424,8 +447,8 @@ class GatesTable(WorkspaceTable):
         element of `models`.
     """
 
-    def __init__(self, ws, models, titles=None, display_as="boxes",
-                 confidence_region_infos=None):
+    def __init__(self, ws: _Workspace, models: Union[_Model, Sequence[_Model]], titles: Optional[Sequence[str]] = None, display_as: str = "boxes",
+                 confidence_region_infos: Any = None) -> None:
         """
         Create a table showing a model's raw gates.
 
@@ -456,7 +479,7 @@ class GatesTable(WorkspaceTable):
         super(GatesTable, self).__init__(ws, self._create, models, titles,
                                          display_as, confidence_region_infos)
 
-    def _create(self, models, titles, display_as, confidence_region_infos):
+    def _create(self, models: Union[_Model, Sequence[_Model]], titles: Optional[Sequence[str]], display_as: str, confidence_region_infos: Any) -> _ReportTable:
 
         if isinstance(models, _models.Model):
             models = [models]
@@ -613,9 +636,9 @@ class ChoiTable(WorkspaceTable):
         on a bar plot, and/or the matrix as a plot of colored boxes.
     """
 
-    def __init__(self, ws, models, titles=None,
-                 confidence_region_info=None,
-                 display=("matrix", "eigenvalues", "barplot")):
+    def __init__(self, ws: _Workspace, models: Union[_Model, Sequence[_Model]], titles: Optional[Sequence[str]] = None,
+                 confidence_region_info: Optional[_CRFView] = None,
+                 display: Sequence[str] = ("matrix", "eigenvalues", "barplot")) -> None:
         """
         Create a table of the Choi matrices and/or their eigenvalues of
         a model's gates.
@@ -647,7 +670,7 @@ class ChoiTable(WorkspaceTable):
         super(ChoiTable, self).__init__(ws, self._create, models, titles,
                                         confidence_region_info, display)
 
-    def _create(self, models, titles, confidence_region_info, display):
+    def _create(self, models: Union[_Model, Sequence[_Model]], titles: Optional[Sequence[str]], confidence_region_info: Optional[_CRFView], display: Sequence[str]) -> _ReportTable:
         if isinstance(models, _models.Model):
             models = [models]
 
@@ -770,8 +793,8 @@ class GaugeRobustModelTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws, model, target_model, display_as="boxes",
-                 confidence_region_info=None):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, display_as: str = "boxes",
+                 confidence_region_info: Optional[_CRFView] = None) -> None:
         """
         Create a table showing a gauge-invariant representation of a model.
 
@@ -800,7 +823,7 @@ class GaugeRobustModelTable(WorkspaceTable):
         super(GaugeRobustModelTable, self).__init__(ws, self._create, model, target_model,
                                                     display_as, confidence_region_info)
 
-    def _create(self, model, target_model, display_as, confidence_region_info):
+    def _create(self, model: _Model, target_model: _Model, display_as: str, confidence_region_info: Optional[_CRFView]) -> _ReportTable:
 
         assert(isinstance(model, _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
         opLabels = model.primitive_op_labels  # use labels of 1st model
@@ -809,7 +832,7 @@ class GaugeRobustModelTable(WorkspaceTable):
         formatters = [None] * len(colHeadings)
         confidence_region_info = None  # Don't deal with CIs yet...
 
-        def _get_gig_decomp(mx, tmx):  # "Gauge invariant gateset" decomposition
+        def _get_gig_decomp(mx: _np.ndarray, tmx: _np.ndarray) -> tuple:  # "Gauge invariant gateset" decomposition
             G0, G = tmx, mx
             #ev0, U0 = _tools.sorted_eig(G0)
             #ev, U = _tools.sorted_eig(G)
@@ -943,8 +966,8 @@ class GaugeRobustMetricTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws, model, target_model, metric,
-                 confidence_region_info=None):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, metric: AVAILABLE_METRICS,
+                 confidence_region_info: Optional[_CRFView] = None) -> None:
         """
         Create a table showing a standard metric in a gauge-robust way.
 
@@ -986,7 +1009,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
         super(GaugeRobustMetricTable, self).__init__(ws, self._create, model, target_model,
                                                      metric, confidence_region_info)
 
-    def _create(self, model, target_model, metric, confidence_region_info):
+    def _create(self, model: _Model, target_model: _Model, metric: AVAILABLE_METRICS, confidence_region_info: Optional[_CRFView]) -> _ReportTable:
 
         assert(isinstance(model, _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
         opLabels = model.primitive_op_labels
@@ -1082,7 +1105,12 @@ class GaugeRobustMetricTable(WorkspaceTable):
                         el2 = _reportables.evaluate_opfn_by_name(
                             metric, target_mdl_in_best_gauge[i], target_mdl_in_best_gauge[j], lbl,
                             confidence_region_info)
-                        el = _rqty_minimum(el1, el2)
+                        assert isinstance(el1, _ReportableQty)
+                        assert isinstance(el2, _ReportableQty)
+                        if el1 <= el2:
+                            el = el1
+                        else:
+                            el = el2
                     except Exception:
                         _warnings.warn("Error computing %s for %s,%s ops in gauge-robust metrics table!" %
                                        (metric, lbl, lbl2))
@@ -1122,7 +1150,7 @@ class ModelVsTargetTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws, model, target_model, clifford_compilation, confidence_region_info=None):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, clifford_compilation: Optional[Mapping[str, Any]], confidence_region_info: Optional[_CRFView] = None) -> None:
         """
         Create a table comparing a model (as a whole) to a target model
         using metrics that can be evaluatd for an entire model.
@@ -1149,7 +1177,7 @@ class ModelVsTargetTable(WorkspaceTable):
                                                  target_model, clifford_compilation,
                                                  confidence_region_info)
 
-    def _create(self, model, target_model, clifford_compilation, confidence_region_info):
+    def _create(self, model: _Model, target_model: _Model, clifford_compilation: Optional[Mapping[str, Any]], confidence_region_info: Optional[_CRFView]) -> _ReportTable:
 
         colHeadings = ('Metric', "Value")
         formatters = (None, None)
@@ -1221,9 +1249,9 @@ class GatesVsTargetTable(WorkspaceTable):
         fill in the "unmodeled" error column when it is requested.
     """
 
-    def __init__(self, ws, model, target_model, confidence_region_info=None,
-                 display=('inf', 'agi', 'trace', 'diamond', 'nuinf', 'nuagi'),
-                 virtual_ops=None, wildcard=None):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: Optional[_Model], confidence_region_info: Optional[_CRFView] = None,
+                 display: Sequence[str] = ('inf', 'agi', 'trace', 'diamond', 'nuinf', 'nuagi'),
+                 virtual_ops: Optional[Sequence[_Circuit]] = None, wildcard: Optional[_WildcardBudget] = None) -> None:
         """
         Create a table comparing a model's gates to a target model using
         metrics such as the  infidelity, diamond-norm distance, and trace distance.
@@ -1274,8 +1302,8 @@ class GatesVsTargetTable(WorkspaceTable):
                                                  target_model, confidence_region_info,
                                                  display, virtual_ops, wildcard)
 
-    def _create(self, model, target_model, confidence_region_info,
-                display, virtual_ops, wildcard):
+    def _create(self, model: _Model, target_model: Optional[_Model], confidence_region_info: Optional[_CRFView],
+                display: Sequence[str], virtual_ops: Optional[Sequence[_Circuit]], wildcard: Optional[_WildcardBudget]) -> _ReportTable:
 
         opLabels = model.primitive_op_labels  # operation labels
         instLabels = list(model.instruments.keys())  # requires an explicit model!
@@ -1375,7 +1403,7 @@ class SpamVsTargetTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws, model, target_model, confidence_region_info=None):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView] = None) -> None:
         """
         Create a table comparing a model's SPAM operations to a target model
         using state infidelity and trace distance.
@@ -1396,7 +1424,7 @@ class SpamVsTargetTable(WorkspaceTable):
         super(SpamVsTargetTable, self).__init__(ws, self._create, model,
                                                 target_model, confidence_region_info)
 
-    def _create(self, model, target_model, confidence_region_info):
+    def _create(self, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView]) -> _ReportTable:
 
         prepLabels = list(model.preps.keys())
         povmLabels = list(model.povms.keys())
@@ -1479,9 +1507,9 @@ class ErrgenTable(WorkspaceTable):
         - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
     """
 
-    def __init__(self, ws, model, target_model, confidence_region_info=None,
-                 display=("errgen", "H", "S", "CA"), display_as="boxes",
-                 gen_type="logGTi"):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView] = None,
+                 display: Sequence[str] = ("errgen", "H", "S", "CA"), display_as: str = "boxes",
+                 gen_type: str = "logGTi") -> None:
         """
         Create a table listing the error generators obtained by
         comparing a model's gates to a target model.
@@ -1520,8 +1548,8 @@ class ErrgenTable(WorkspaceTable):
                                           target_model, confidence_region_info,
                                           display, display_as, gen_type)
 
-    def _create(self, model, target_model,
-                confidence_region_info, display, display_as, gen_type):
+    def _create(self, model: _Model, target_model: _Model,
+                confidence_region_info: Optional[_CRFView], display: Sequence[str], display_as: str, gen_type: str) -> _ReportTable:
 
         opLabels = model.primitive_op_labels  # operation labels
         basis = model.basis
@@ -1558,7 +1586,7 @@ class ErrgenTable(WorkspaceTable):
         stoProjsM = []
         caProjsM = []
 
-        def _get_min_max(max_lst, m):
+        def _get_min_max(max_lst: list, m: float) -> Optional[tuple]:
             """return a [min,max] already in list if there's one within an
                order of magnitude"""
             m = max(m, ABS_THRESHOLD)
@@ -1569,7 +1597,7 @@ class ErrgenTable(WorkspaceTable):
 
         ABS_THRESHOLD = 1e-6  # don't let color scales run from 0 to 0: at least this much!
 
-        def add_max(max_lst, m):
+        def add_max(max_lst: list, m: float) -> None:
             """add `m` to a list of maximas if it's different enough from
                existing elements"""
             m = max(m, ABS_THRESHOLD)
@@ -1713,8 +1741,8 @@ class GaugeRobustErrgenTable(WorkspaceTable):
         - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
     """
 
-    def __init__(self, ws, model, target_model, confidence_region_info=None,
-                 gen_type="logGTi"):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView] = None,
+                 gen_type: str = "logGTi") -> None:
         """
         Create a table listing the first-order gauge invariant ("gauge robust")
         linear combinations of standard error generator coefficients for
@@ -1746,7 +1774,7 @@ class GaugeRobustErrgenTable(WorkspaceTable):
                                                      target_model, confidence_region_info,
                                                      gen_type)
 
-    def _create(self, model, target_model, confidence_region_info, gen_type):
+    def _create(self, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView], gen_type: str) -> _ReportTable:
         assert(isinstance(model, _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         colHeadings = ['Error rates', 'Value']
@@ -1816,8 +1844,8 @@ class NQubitErrgenTable(WorkspaceTable):
         (space-conserving and better for large matrices).
     """
 
-    def __init__(self, ws, model, confidence_region_info=None,
-                 display=("H", "S", "A"), display_as="boxes"):
+    def __init__(self, ws: _Workspace, model: _Model, confidence_region_info: Optional[_CRFView] = None,
+                 display: Sequence[str] = ("H", "S", "A"), display_as: str = "boxes") -> None:
         """
         Create a table listing the error rates of the gates in `model`.
 
@@ -1855,7 +1883,7 @@ class NQubitErrgenTable(WorkspaceTable):
                                                 confidence_region_info,
                                                 display, display_as)
 
-    def _create(self, model, confidence_region_info, display, display_as):
+    def _create(self, model: _Model, confidence_region_info: Optional[_CRFView], display: Sequence[str], display_as: str) -> _ReportTable:
         opLabels = model.primitive_op_labels  # operation labels
 
         #basis = model.basis
@@ -1882,7 +1910,7 @@ class NQubitErrgenTable(WorkspaceTable):
         table = _ReportTable(colHeadings, (None,) * len(colHeadings),
                              confidence_region_info=confidence_region_info)
 
-        def _get_min_max(max_lst, m):
+        def _get_min_max(max_lst: list, m: float) -> Optional[tuple]:
             """return a [min,max] already in list if there's one within an
                order of magnitude"""
             m = max(m, ABS_THRESHOLD)
@@ -1893,7 +1921,7 @@ class NQubitErrgenTable(WorkspaceTable):
 
         ABS_THRESHOLD = 1e-6  # don't let color scales run from 0 to 0: at least this much!
 
-        def add_max(max_lst, m):
+        def add_max(max_lst: list, m: float) -> None:
             """add `m` to a list of maximas if it's different enough from
                existing elements"""
             m = max(m, ABS_THRESHOLD)
@@ -1902,7 +1930,7 @@ class NQubitErrgenTable(WorkspaceTable):
 
         pre_rows = []; displayed_params = set()
 
-        def process_gate(lbl, gate, comppos_prefix, sslbls):
+        def process_gate(lbl: Any, gate: _op.LinearOperator, comppos_prefix: tuple, sslbls: Any) -> None:
             if isinstance(gate, _op.ComposedOp):
                 for i, fgate in enumerate(gate.factorops):
                     process_gate(lbl, fgate, comppos_prefix + (i,), sslbls)
@@ -1936,7 +1964,7 @@ class NQubitErrgenTable(WorkspaceTable):
             else:
                 raise ValueError("Unknown gate type for NQubitErrgenTable: %s" % str(type(gate)))
 
-        def _get_plot_info(lindblad_dict, basis_lbls, typ):
+        def _get_plot_info(lindblad_dict: Mapping, basis_lbls: Mapping, typ: str) -> tuple:
             # for now just make a 1D plot - can get fancy later...
             ylabels = [""]
             xlabels = []
@@ -2046,7 +2074,7 @@ class OldRotationAxisVsTargetTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws, model, target_model, confidence_region_info=None):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView] = None) -> None:
         """
         Create a table comparing the rotation axes of the single-qubit gates in
         `model` with those in `target_model`.  Differences are shown as
@@ -2068,7 +2096,7 @@ class OldRotationAxisVsTargetTable(WorkspaceTable):
         super(OldRotationAxisVsTargetTable, self).__init__(
             ws, self._create, model, target_model, confidence_region_info)
 
-    def _create(self, model, target_model, confidence_region_info):
+    def _create(self, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView]) -> _ReportTable:
 
         opLabels = model.primitive_op_labels  # operation labels
 
@@ -2111,7 +2139,7 @@ class GateDecompTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws, model, target_model, confidence_region_info=None):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView] = None) -> None:
         """
         Create table for decomposing a model's gates.
 
@@ -2138,7 +2166,7 @@ class GateDecompTable(WorkspaceTable):
         super(GateDecompTable, self).__init__(ws, self._create, model,
                                               target_model, confidence_region_info)
 
-    def _create(self, model, target_model, confidence_region_info):
+    def _create(self, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView]) -> _ReportTable:
         opLabels = model.primitive_op_labels  # operation labels
 
         colHeadings = ('Gate', 'Ham. Evals.', 'Rotn. angle', 'Rotn. axis', 'Log Error') \
@@ -2203,7 +2231,7 @@ class OldGateDecompTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws, model, confidence_region_info=None):
+    def __init__(self, ws: _Workspace, model: _Model, confidence_region_info: Optional[_CRFView] = None) -> None:
         """
         Create table for decomposing a single-qubit model's gates.
 
@@ -2226,7 +2254,7 @@ class OldGateDecompTable(WorkspaceTable):
         """
         super(OldGateDecompTable, self).__init__(ws, self._create, model, confidence_region_info)
 
-    def _create(self, model, confidence_region_info):
+    def _create(self, model: _Model, confidence_region_info: Optional[_CRFView]) -> _ReportTable:
 
         opLabels = model.primitive_op_labels  # operation labels
         colHeadings = ('Gate', 'Eigenvalues', 'Fixed pt', 'Rotn. axis', 'Diag. decay', 'Off-diag. decay')
@@ -2278,7 +2306,7 @@ class OldRotationAxisTable(WorkspaceTable):
         space).
     """
 
-    def __init__(self, ws, model, confidence_region_info=None, show_axis_angle_err_bars=True):
+    def __init__(self, ws: _Workspace, model: _Model, confidence_region_info: Optional[_CRFView] = None, show_axis_angle_err_bars: bool = True) -> None:
         """
         Create a table of the angle between a gate rotation axes for
         gates belonging to a single-qubit model.
@@ -2304,7 +2332,7 @@ class OldRotationAxisTable(WorkspaceTable):
         super(OldRotationAxisTable, self).__init__(ws, self._create, model, confidence_region_info,
                                                    show_axis_angle_err_bars)
 
-    def _create(self, model, confidence_region_info, show_axis_angle_err_bars):
+    def _create(self, model: _Model, confidence_region_info: Optional[_CRFView], show_axis_angle_err_bars: bool) -> _ReportTable:
 
         opLabels = model.primitive_op_labels
 
@@ -2408,10 +2436,10 @@ class GateEigenvalueTable(WorkspaceTable):
         automatically discarded so they are not displayed twice.
     """
 
-    def __init__(self, ws, model, target_model=None,
-                 confidence_region_info=None,
-                 display=('evals', 'rel', 'log-evals', 'log-rel', 'polar', 'relpolar'),
-                 virtual_ops=None):
+    def __init__(self, ws: _Workspace, model: _Model, target_model: Optional[_Model] = None,
+                 confidence_region_info: Optional[_CRFView] = None,
+                 display: Sequence[str] = ('evals', 'rel', 'log-evals', 'log-rel', 'polar', 'relpolar'),
+                 virtual_ops: Optional[Sequence[_Circuit]] = None) -> None:
         """
         Create table which lists and displays (using a polar plot)
         the eigenvalues of a model's gates.
@@ -2463,9 +2491,9 @@ class GateEigenvalueTable(WorkspaceTable):
                                                   confidence_region_info, display,
                                                   virtual_ops)
 
-    def _create(self, model, target_model,
-                confidence_region_info, display,
-                virtual_ops):
+    def _create(self, model: _Model, target_model: Optional[_Model],
+                confidence_region_info: Optional[_CRFView], display: Sequence[str],
+                virtual_ops: Optional[Sequence[_Circuit]]) -> _ReportTable:
 
         opLabels = model.primitive_op_labels  # operation labels
         assert(isinstance(model, _models.ExplicitOpModel)), "GateEigenvalueTable only works with explicit models"
@@ -2791,7 +2819,7 @@ class DataSetOverviewTable(WorkspaceTable):
         A list of the maximum lengths used, if available.
     """
 
-    def __init__(self, ws, dataset, max_length_list=None):
+    def __init__(self, ws: _Workspace, dataset: _DataSet, max_length_list: Optional[Sequence[int]] = None) -> None:
         """
         Create a table that gives a summary of the properties of `dataset`.
 
@@ -2809,7 +2837,7 @@ class DataSetOverviewTable(WorkspaceTable):
         """
         super(DataSetOverviewTable, self).__init__(ws, self._create, dataset, max_length_list)
 
-    def _create(self, dataset, max_length_list):
+    def _create(self, dataset: _DataSet, max_length_list: Optional[Sequence[int]]) -> _ReportTable:
 
         colHeadings = ('Quantity', 'Value')
         formatters = (None, None)
@@ -2890,8 +2918,8 @@ class FitComparisonTable(WorkspaceTable):
         accelerate objective function construction.
     """
 
-    def __init__(self, ws, xs, circuits_by_x, model_by_x, dataset_by_x, objfn_builder='logl',
-                 x_label='L', np_by_x=None, comm=None, wildcard=None, mdc_stores=None):
+    def __init__(self, ws: _Workspace, xs: Sequence[Any], circuits_by_x: Sequence[Union[_CircuitList, Sequence[_Circuit]]], model_by_x: Sequence[Optional[_Model]], dataset_by_x: Union[_DataSet, Sequence[_DataSet]], objfn_builder: Union[str, _ObjectiveFunctionBuilder] = 'logl',
+                 x_label: str = 'L', np_by_x: Optional[Sequence[int]] = None, comm=None, wildcard: Optional[_WildcardBudget] = None, mdc_stores: Optional[Sequence[Optional[_ModelDatasetCircuitsStore]]] = None) -> None:
         """
         Create a table showing how the chi^2 or log-likelihood changed with
         successive GST iterations.
@@ -2950,8 +2978,8 @@ class FitComparisonTable(WorkspaceTable):
                                                  dataset_by_x, objfn_builder, x_label, np_by_x, comm,
                                                  wildcard, mdc_stores)
 
-    def _create(self, xs, circuits_by_x, model_by_x, dataset_by_x, objfn_builder, x_label, np_by_x, comm, wildcard,
-                mdc_stores):
+    def _create(self, xs: Sequence[Any], circuits_by_x: Sequence[Union[_CircuitList, Sequence[_Circuit]]], model_by_x: Sequence[Optional[_Model]], dataset_by_x: Union[_DataSet, Sequence[_DataSet]], objfn_builder: Union[str, _ObjectiveFunctionBuilder], x_label: str, np_by_x: Optional[Sequence[int]], comm, wildcard: Optional[_WildcardBudget],
+                mdc_stores: Optional[Sequence[Optional[_ModelDatasetCircuitsStore]]]) -> _ReportTable:
 
         if objfn_builder == "chi2" or (isinstance(objfn_builder, _objfns.ObjectiveFunctionBuilder)
                                        and objfn_builder.cls_to_build == _objfns.Chi2Function):
@@ -3031,7 +3059,7 @@ class CircuitTable(WorkspaceTable):
         all the other column headers.
     """
 
-    def __init__(self, ws, circuit_lists, titles, num_cols=1, common_title=None):
+    def __init__(self, ws: _Workspace, circuit_lists: Sequence[Any], titles: Union[str, Sequence[str]], num_cols: int = 1, common_title: Optional[str] = None) -> None:
         """
         Creates a table of enumerating one or more sets of circuits.
 
@@ -3059,7 +3087,7 @@ class CircuitTable(WorkspaceTable):
         super(CircuitTable, self).__init__(ws, self._create, circuit_lists, titles,
                                            num_cols, common_title)
 
-    def _create(self, circuit_lists, titles, num_cols, common_title):
+    def _create(self, circuit_lists: Sequence[Any], titles: Union[str, Sequence[str]], num_cols: int, common_title: Optional[str]) -> _ReportTable:
 
         if len(circuit_lists) == 0:
             circuit_lists = [[]]
@@ -3182,9 +3210,9 @@ class GatesSingleMetricTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws, metric, models, target_models, titles,
-                 rowtitles=None, table_title=None, op_label=None,
-                 confidence_region_info=None):
+    def __init__(self, ws: _Workspace, metric: AVAILABLE_METRICS, models: Sequence[Any], target_models: Sequence[Any], titles: Sequence[str],
+                 rowtitles: Optional[Sequence[str]] = None, table_title: Optional[str] = None, op_label: Optional[str] = None,
+                 confidence_region_info: Optional[_CRFView] = None) -> None:
         """
         Create a table comparing the gates of various models (`models`) to
         those of `target_models` using the metric named by `metric`.
@@ -3256,8 +3284,8 @@ class GatesSingleMetricTable(WorkspaceTable):
             ws, self._create, metric, models, target_models, titles,
             rowtitles, table_title, op_label, confidence_region_info)
 
-    def _create(self, metric, models, target_models, titles,
-                rowtitles, table_title, op_label, confidence_region_info):
+    def _create(self, metric: AVAILABLE_METRICS, models: Sequence[Any], target_models: Sequence[Any], titles: Sequence[str],
+                rowtitles: Optional[Sequence[str]], table_title: Optional[str], op_label: Optional[str], confidence_region_info: Optional[_CRFView]) -> _ReportTable:
 
         if rowtitles is None:
             assert(op_label is None), "`op_label` must be None when `rowtitles` is"
@@ -3352,8 +3380,8 @@ class StandardErrgenTable(WorkspaceTable):
       and Qutrit (qt).
     """
 
-    def __init__(self, ws, model_dim, projection_type,
-                 projection_basis):
+    def __init__(self, ws: _Workspace, model_dim: int, projection_type: str,
+                 projection_basis: str) -> None:
         """
         Create a table of the "standard" gate error generators, such as those
         which correspond to Hamiltonian or Stochastic errors.  Each generator
@@ -3385,8 +3413,8 @@ class StandardErrgenTable(WorkspaceTable):
             ws, self._create, model_dim, projection_type,
             projection_basis)
 
-    def _create(self, model_dim, elementary_errorgen_type,
-                elementary_errorgen_basis):
+    def _create(self, model_dim: int, elementary_errorgen_type: str,
+                elementary_errorgen_basis: str) -> _ReportTable:
 
         d2 = model_dim  # number of projections == dim of gate
         d = int(_np.sqrt(d2))  # dim of density matrix
@@ -3440,7 +3468,7 @@ class GaugeOptParamsTable(WorkspaceTable):
         :func:`gaugeopt_to_target` function.
     """
 
-    def __init__(self, ws, gaugeopt_args):
+    def __init__(self, ws: _Workspace, gaugeopt_args: Union[bool, Mapping[str, Any], Sequence[Mapping[str, Any]]]) -> None:
         """
         Create a table displaying a list of gauge
         optimization parameters.
@@ -3458,7 +3486,7 @@ class GaugeOptParamsTable(WorkspaceTable):
         """
         super(GaugeOptParamsTable, self).__init__(ws, self._create, gaugeopt_args)
 
-    def _create(self, gaugeopt_args):
+    def _create(self, gaugeopt_args: Union[bool, Mapping[str, Any], Sequence[Mapping[str, Any]]]) -> _ReportTable:
 
         colHeadings = ('G-Opt Param', 'Value')
         formatters = ('Bold', 'Bold')
@@ -3512,7 +3540,7 @@ class MetadataTable(WorkspaceTable):
         A parameter dictionary to display
     """
 
-    def __init__(self, ws, model, params):
+    def __init__(self, ws: _Workspace, model: _Model, params: Mapping[str, Any]) -> None:
         """
         Create a table of parameters and options from a `Results` object.
 
@@ -3531,7 +3559,7 @@ class MetadataTable(WorkspaceTable):
         """
         super(MetadataTable, self).__init__(ws, self._create, model, params)
 
-    def _create(self, model, params_dict):
+    def _create(self, model: _Model, params_dict: Mapping[str, Any]) -> _ReportTable:
 
         colHeadings = ('Quantity', 'Value')
         formatters = ('Bold', 'Bold')
@@ -3607,7 +3635,7 @@ class SoftwareEnvTable(WorkspaceTable):
         The containing (parent) workspace.
     """
 
-    def __init__(self, ws):
+    def __init__(self, ws: _Workspace) -> None:
         """
         Create a table displaying the software environment relevant to pyGSTi.
 
@@ -3617,11 +3645,11 @@ class SoftwareEnvTable(WorkspaceTable):
         """
         super(SoftwareEnvTable, self).__init__(ws, self._create)
 
-    def _create(self):
+    def _create(self) -> _ReportTable:
 
         import platform
 
-        def _get_package_version(module_name):
+        def _get_package_version(module_name: str) -> str:
             """ Extract the current version of a python module """
             if module_name == "cvxopt":
                 #special case b/c cvxopt can be weird...
@@ -3694,7 +3722,7 @@ class ProfilerTable(WorkspaceTable):
         What the timer values should be sorted by.
     """
 
-    def __init__(self, ws, profiler, sort_by="time"):
+    def __init__(self, ws: _Workspace, profiler: Optional[_Profiler], sort_by: str = "time") -> None:
         """
         Create a table of profiler timing information.
 
@@ -3708,7 +3736,7 @@ class ProfilerTable(WorkspaceTable):
         """
         super(ProfilerTable, self).__init__(ws, self._create, profiler, sort_by)
 
-    def _create(self, profiler, sort_by):
+    def _create(self, profiler: Optional[_Profiler], sort_by: str) -> _ReportTable:
 
         colHeadings = ('Label', 'Time (sec)')
         formatters = ('Bold', 'Bold')
@@ -3748,7 +3776,7 @@ class WildcardBudgetTable(WorkspaceTable):
         The wildcard budget object to extract timings from.
     """
 
-    def __init__(self, ws, budget):
+    def __init__(self, ws: _Workspace, budget: Optional[_WildcardBudget]) -> None:
         """
         Create a table of wildcard budget information.
 
@@ -3759,7 +3787,7 @@ class WildcardBudgetTable(WorkspaceTable):
         """
         super(WildcardBudgetTable, self).__init__(ws, self._create, budget)
 
-    def _create(self, budget):
+    def _create(self, budget: Optional[_WildcardBudget]) -> _ReportTable:
 
         colHeadings = ('Element', 'Description', 'Budget')
         formatters = ('Bold', 'Bold', 'Bold')
@@ -3785,11 +3813,11 @@ class ExampleTable(WorkspaceTable):
         The containing (parent) workspace.
     """
 
-    def __init__(self, ws):
+    def __init__(self, ws: _Workspace) -> None:
         """A table showing how to use table features."""
         super(ExampleTable, self).__init__(ws, self._create)
 
-    def _create(self):
+    def _create(self) -> _ReportTable:
         colHeadings = ["Hover over me...", "And me!", "Click the pig"]
         tooltips = ["This tooltip can give more information about what this column displays",
                     "Unfortunately, we can't show nicely formatted math in these tooltips (yet)",

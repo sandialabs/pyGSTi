@@ -10,55 +10,18 @@ The ReportableQty class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
 from copy import deepcopy as _deepcopy
 
+from typing import Any, Callable, Optional, Union
 import numpy as _np
 
 from pygsti.baseobjs.label import Label as _Label
 
+# A scalar/array operand combined directly with a ReportableQty's underlying value
+# (not another ReportableQty) in the arithmetic operators below.
+_Operand = Union[int, float, complex, _np.ndarray]
 
-def minimum(qty1, qty2):
-    """
-    Returns a ReportableQty that is the minimum of `qty1` and `qty2`.
-
-    Parameters
-    ----------
-    qty1 : ReportableQty
-        First quantity.
-
-    qty2 : ReportableQty
-        Second quantity.
-
-    Returns
-    -------
-    ReportableQty
-    """
-    if qty1.value <= qty2.value:
-        return qty1
-    else:
-        return qty2
-
-
-def maximum(qty1, qty2):
-    """
-    Returns a ReportableQty that is the maximum of `qty1` and `qty2`.
-
-    Parameters
-    ----------
-    qty1 : ReportableQty
-        First quantity.
-
-    qty2 : ReportableQty
-        Second quantity.
-
-    Returns
-    -------
-    ReportableQty
-    """
-    if qty1.value >= qty2.value:
-        return qty1
-    else:
-        return qty2
 
 
 class ReportableQty(object):
@@ -86,7 +49,7 @@ class ReportableQty(object):
         Returns the size of this ReportableQty's value.
     """
 
-    def __init__(self, value, errbar=None, non_markovian_ebs=False):
+    def __init__(self, value: object, errbar: object = None, non_markovian_ebs: bool = False) -> None:
         """
         Initialize a new ReportableQty object, which
         is essentially a container for a value and error bars.
@@ -102,50 +65,67 @@ class ReportableQty(object):
         non_markovian_ebs : bool
             boolean indicating if non markovian error bars should be used
         """
-        self._value = value
-        self._errorbar = errbar
+        # Stored as `Any` because a ReportableQty may hold arbitrary values (floats, numpy
+        # arrays, strings, figures, ...) that are operated on numerically throughout this class.
+        self._value: Any = value
+        self._errorbar: Any = errbar
 
-        self.nonMarkovianEBs = non_markovian_ebs
+        self.nonMarkovianEBs: bool = non_markovian_ebs
 
-    def __str__(self):
-        def f(val, specs): return str(val)
+    def __str__(self) -> str:
+        def f(val: Any, specs: Optional[dict[str, Any]]) -> str: return str(val)
         return self.render_with(f)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return 'ReportableQty({})'.format(str(self))
 
-    def __add__(self, x):
+    def __le__(self, other: ReportableQty) -> bool:
+        """
+        Compare two ReportableQty based upon their specified value assuming it is a scalar value.
+        """
+        return self.value <= other.value
+
+    def __gt__(self, other: ReportableQty) -> bool:
+        return not (self <= other)
+    
+    def __ge__(self, other: ReportableQty) -> bool:
+        return self.value >= other.value
+    
+    def __lt__(self, other: ReportableQty) -> bool:
+        return not (self >= other)
+
+    def __add__(self, x: _Operand) -> ReportableQty:
         if self.has_errorbar:
             return ReportableQty(self.value + x, self.errorbar, self.nonMarkovianEBs)
         else:
             return ReportableQty(self.value + x)
 
-    def __mul__(self, x):
+    def __mul__(self, x: _Operand) -> ReportableQty:
         if self.has_errorbar:
             return ReportableQty(self.value * x, self.errorbar * x, self.nonMarkovianEBs)
         else:
             return ReportableQty(self.value * x)
 
-    def __truediv__(self, x):
+    def __truediv__(self, x: _Operand) -> ReportableQty:
         if self.has_errorbar:
             return ReportableQty(self.value / x, self.errorbar / x, self.nonMarkovianEBs)
         else:
             return ReportableQty(self.value / x)
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         state_dict = self.__dict__.copy()
         return state_dict
 
-    def __setstate__(self, d):
+    def __setstate__(self, d: dict[str, Any]) -> None:
         self.__dict__.update(d)
 
-    def __copy__(self):
+    def __copy__(self) -> ReportableQty:
         return ReportableQty(self.value, self.errorbar)
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo: dict[int, Any]) -> ReportableQty:
         return ReportableQty(_deepcopy(self.value, memo), _deepcopy(self.errorbar, memo))
 
-    def log(self):
+    def log(self) -> ReportableQty:
         """
         Returns a ReportableQty that is the logarithm of this one.
 
@@ -166,7 +146,7 @@ class ReportableQty(object):
         else:
             return ReportableQty(_np.log(v))
 
-    def real(self):
+    def real(self) -> ReportableQty:
         """
         Returns a ReportableQty that is the real part of this one.
 
@@ -179,7 +159,7 @@ class ReportableQty(object):
         else:
             return ReportableQty(_np.real(self.value))
 
-    def imag(self):
+    def imag(self) -> ReportableQty:
         """
         Returns a ReportableQty that is the imaginary part of this one.
 
@@ -192,7 +172,8 @@ class ReportableQty(object):
         else:
             return ReportableQty(_np.imag(self.value))
 
-    def absdiff(self, constant_value, separate_re_im=False):
+    def absdiff(self, constant_value: Union[float, _np.ndarray],
+                separate_re_im: bool = False) -> Union[ReportableQty, tuple[ReportableQty, ReportableQty]]:
         """
         Create a ReportableQty that is the difference between `constant_value` and this one.
 
@@ -233,7 +214,7 @@ class ReportableQty(object):
             else:
                 return ReportableQty(v)
 
-    def infidelity_diff(self, constant_value):
+    def infidelity_diff(self, constant_value: Union[float, _np.ndarray]) -> ReportableQty:
         """
         Creates a ReportableQty that is the difference between `constant_value` and this one.
 
@@ -262,7 +243,7 @@ class ReportableQty(object):
         else:
             return ReportableQty(v)
 
-    def mod(self, x):
+    def mod(self, x: int) -> ReportableQty:
         """
         Creates a ReportableQty that holds `this_qty mod x`.
 
@@ -284,7 +265,7 @@ class ReportableQty(object):
         else:
             return ReportableQty(v)
 
-    def hermitian_to_real(self):
+    def hermitian_to_real(self) -> ReportableQty:
         """
         Creates a ReportableQty that holds a real "version" of a Hermitian matrix.
 
@@ -303,7 +284,7 @@ class ReportableQty(object):
         if _np.linalg.norm(self.value - _np.conjugate(self.value).T) > 1e-8:
             raise ValueError("Contained value must be Hermitian!")
 
-        def _convert(a):
+        def _convert(a: _np.ndarray) -> _np.ndarray:
             ret = _np.empty(a.shape, 'd')
             for i in range(a.shape[0]):
                 ret[i, i] = a[i, i].real
@@ -319,7 +300,7 @@ class ReportableQty(object):
         else:
             return ReportableQty(v)
 
-    def reshape(self, *args):
+    def reshape(self, *args: int) -> ReportableQty:
         """
         Returns a ReportableQty whose underlying values are reshaped.
 
@@ -333,7 +314,7 @@ class ReportableQty(object):
             return ReportableQty(self.value.reshape(*args))
 
     @property
-    def size(self):
+    def size(self) -> int:
         """
         Returns the size of this ReportableQty's value.
 
@@ -344,7 +325,7 @@ class ReportableQty(object):
         return self.value.size
 
     @staticmethod
-    def from_val(value, non_markovian_ebs=False):
+    def from_val(value: object, non_markovian_ebs: bool = False) -> ReportableQty:
         """
         Convert Table values into ReportableQtys or leave them be if they are well-formed types.
 
@@ -374,7 +355,7 @@ class ReportableQty(object):
         if isinstance(value, _Label):  # distinguish b/c Label is also a *tuple*
             return ReportableQty(value, non_markovian_ebs=non_markovian_ebs)
         if isinstance(value, tuple):
-            assert len(value) == 2, 'Tuple does not have eb field ' + \
+            assert len(value) == 2, 'tuple does not have eb field ' + \
                                     'or has too many fields: len = {}'.format(
                 len(value))
             return ReportableQty(value[0], value[1], non_markovian_ebs=non_markovian_ebs)
@@ -382,7 +363,7 @@ class ReportableQty(object):
             return ReportableQty(value, non_markovian_ebs=non_markovian_ebs)
 
     @property
-    def has_errorbar(self):
+    def has_errorbar(self) -> bool:
         """
         Return whether this quantity is storing an error bar (bool).
 
@@ -392,7 +373,7 @@ class ReportableQty(object):
         """
         return self.errorbar is not None
 
-    def scale_inplace(self, factor):
+    def scale_inplace(self, factor: float) -> None:
         """
         Scale the value and error bar (if present) by `factor`.
 
@@ -410,7 +391,7 @@ class ReportableQty(object):
             self._errorbar *= factor
 
     @property
-    def value(self):
+    def value(self) -> Any:
         """
         Returns the quantity's value
 
@@ -422,7 +403,7 @@ class ReportableQty(object):
         return self._value
 
     @property
-    def errorbar(self):
+    def errorbar(self) -> Any:
         """
         Returns the quantity's error bar(s)
 
@@ -434,7 +415,7 @@ class ReportableQty(object):
         return self._errorbar
 
     @property
-    def value_and_errorbar(self):
+    def value_and_errorbar(self) -> tuple[Any, Any]:
         """
         Returns the quantity's value and error bar(s)
 
@@ -449,7 +430,8 @@ class ReportableQty(object):
         # XXX isn't this redundant?
         return self.value, self.errorbar
 
-    def render_with(self, f, specs=None, ebstring='%s +/- %s', nmebstring=None):
+    def render_with(self, f: Callable[..., str], specs: Optional[dict[str, Any]] = None,
+                    ebstring: str = '%s +/- %s', nmebstring: Optional[str] = None) -> str:
         """
         Render this `ReportableQty` using the function `f`.
 
