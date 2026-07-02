@@ -10,11 +10,14 @@ Stability analysis protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Literal, Optional, Union, Any
+from __future__ import annotations
+from typing import Literal, Optional, Union, Any, TYPE_CHECKING
 from pygsti.protocols import protocol as _proto
 from pygsti.circuits import Circuit as _Circuit
-from pygsti.extras.drift.stabilityanalyzer import StabilityAnalyzer as _StabilityAnalyzer
 from pygsti.baseobjs.label import HomogeneousSeq
+
+if TYPE_CHECKING:
+    from pygsti.extras.drift.stabilityanalyzer import StabilityAnalyzer as _StabilityAnalyzer
 
 class StabilityAnalysisDesign(_proto.ExperimentDesign):
     """
@@ -206,15 +209,15 @@ class StabilityAnalysis(_proto.Protocol):
         be used.
     """
 
-    def __init__(self, significance: Optional[float]=0.05, transform: Literal['auto', 'dft', 'dct', 'lsp']='auto',
+    def __init__(self, significance: float=0.05, transform: Literal['auto', 'dft', 'dct', 'lsp']='auto',
                  marginalize: Union[Literal['auto'], bool]='auto', mergeoutcomes: Optional[dict]=None,
                  constnumtimes: Union[Literal['auto'], bool]='auto', ids: bool=False,
-                 frequencies: Union[Literal['auto'], list[list[float]]]='auto', freqpointers=None,
+                 frequencies: Union[Literal['auto'], list[list[float]]]='auto', freqpointers: Optional[dict]=None,
                  freqstest: Optional[list[float]]=None, tests: Union[Literal['auto'], tuple]='auto',
                  inclass_correction: Optional[dict[Literal['dataset','circuit','outcome','spectrum'], Any]]=None,
                  betweenclass_weighting: Optional[Union[Literal['auto'], dict]]='auto', 
                  estimator: Literal['auto', 'filter', 'mle']='auto',
-                 modelselector: Optional[tuple]=None, verbosity: Optional[int]=1, name: Optional[str]=None):
+                 modelselector: Optional[tuple]=None, verbosity: int=1, name: Optional[str]=None):
         """
         Implements instability ("drift") detection and characterization on timeseries data from *any* set of
         quantum circuits on *any* number of qubits. This uses the StabilityAnalyzer object, and directly
@@ -406,7 +409,7 @@ class StabilityAnalysis(_proto.Protocol):
         # ...
         #self.auxfile_types['big_thing'] = 'pickle'
 
-    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None):
+    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None) -> 'StabilityAnalysisResults':
         #design = data.edesign  # experiment design (specifies circuits)
         """
         Run this protocol on `data`.
@@ -484,7 +487,7 @@ class StabilityAnalysisResults(_proto.ProtocolResults):
         be updated in the future.
     """
 
-    def __init__(self, data: _proto.ProtocolResults, protocol_instance: _proto.Protocol, stabilityanalyzer: _StabilityAnalyzer):
+    def __init__(self, data: _proto.ProtocolData, protocol_instance: _proto.Protocol, stabilityanalyzer: _StabilityAnalyzer):
         """
         Initialize an empty `StabilityAnalysisResults` object.
         """
@@ -493,6 +496,6 @@ class StabilityAnalysisResults(_proto.ProtocolResults):
         self.stabilityanalyzer = stabilityanalyzer
         self.auxfile_types['stabilityanalyzer'] = 'pickle'
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> Any:
         # punt to stabilityanalyzer for now
         return getattr(self.stabilityanalyzer, attr)

@@ -11,6 +11,7 @@
 import copy as _copy
 import itertools as _itertools
 import warnings as _warnings
+from typing import Optional, Union
 
 import numpy as _np
 
@@ -243,8 +244,8 @@ class StabilityAnalyzer(object):
 
     """
 
-    def __init__(self, ds, transform='auto', marginalize='auto', mergeoutcomes=None, constnumtimes='auto',
-                 ids=False):
+    def __init__(self, ds, transform='auto', marginalize: Union[str, bool]='auto', mergeoutcomes=None,
+                 constnumtimes: Union[str, bool]='auto', ids=False):
         """
         Initialize a StabilityAnalyzer, by inputing time-series data and some information on how it should be
         processed.
@@ -471,7 +472,7 @@ class StabilityAnalyzer(object):
         s += " from tests at a global significance of {}%" .format(100 * self._significance[detectorkey])
         return s
 
-    def compute_spectra(self, frequencies='auto', freqpointers=None):
+    def compute_spectra(self, frequencies: Union[str, list[list[float]]]='auto', freqpointers=None):
         """"
         Generates and records power spectra. This is the first stage in instability detection
         and characterization with a StabilityAnalyzer.
@@ -957,8 +958,10 @@ class StabilityAnalyzer(object):
 
         return pvalue
 
-    def run_instability_detection(self, significance=0.05, freqstest=None, tests='auto', inclass_correction=None,
-                                  betweenclass_weighting='auto', saveas='default', default=True, overwrite=False,
+    def run_instability_detection(self, significance=0.05, freqstest=None, tests: Union[str, tuple, list]='auto',
+                                  inclass_correction=None,
+                                  betweenclass_weighting: Optional[Union[str, dict]]='auto', saveas='default',
+                                  default=True, overwrite=False,
                                   verbosity=1):
         """
         Runs instability detection, by performing statistical hypothesis tests on the power spectra generated
