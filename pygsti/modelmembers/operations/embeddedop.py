@@ -20,6 +20,8 @@ from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti import SpaceT
+
+
 class EmbeddedOp(_LinearOperator):
     """
     An operation containing a single lower (or equal) dimensional operation within it.

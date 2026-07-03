@@ -128,7 +128,17 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     if not isinstance(choi_mx_basis, _Basis):
         choi_mx_basis = _Basis.cast(choi_mx_basis, N)  # we'd like a basis of dimension N
 
-    BVec = choi_mx_basis.create_simple_equivalent().elements
+    try:
+        temp = choi_mx_basis.create_simple_equivalent()
+        BVec : Union[_np.ndarray, list] = temp.elements  # type: ignore
+    except (AssertionError, ValueError, NotImplementedError):
+        # create_simple_equivalent fails for bases with no same-name builtin equivalent.
+        # In particular, a leakage tensor-product basis like pp ⊗ l2p1 raises
+        # AssertionError ("Unknown builtin basis name 'pp*l2p1'"). Such bases are
+        # already simple, so use their elements directly.
+        assert hasattr(choi_mx_basis, 'elements')
+        BVec : Union[_np.ndarray, list] = choi_mx_basis.elements  # type: ignore
+    
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
@@ -149,7 +159,7 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
     #  (dimension of density matrix) but we'd like a Jmx with trace == 1, so normalize:
     if normalized:
-        choiMx /= dmDim
+        choiMx = choiMx / dmDim
     return choiMx
 
 # GStd = sum_ij Jij (BSi x BSj^*)

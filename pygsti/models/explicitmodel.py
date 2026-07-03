@@ -119,7 +119,13 @@ class ExplicitOpModel(_mdl.OpModel):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    #Whether access to gates & spam vecs via Model indexing is allowed
+    # Whether access to gates & spam vecs via Model indexing is *forbidden*.
+    # This is consulted per-instance (``self._strict``) in ``__getitem__``/
+    # ``__setitem__``; the value here is only the default for instances that
+    # don't set their own.  Set ``some_model._strict = True`` to enable strict
+    # mode on a single model without mutating shared class state -- important
+    # so that tests toggling strict mode stay isolated under parallel/xdist
+    # execution rather than racing on this class attribute.
     _strict = False
 
     def __init__(self, state_space, basis="pp", default_gate_type="full",
@@ -307,7 +313,7 @@ class ExplicitOpModel(_mdl.OpModel):
             appropriate state space for the Model and appropriate type
             given the prefix of the label.
         """
-        if ExplicitOpModel._strict:
+        if self._strict:
             raise KeyError("Strict-mode: invalid key %s" % repr(label))
 
         if not isinstance(label, _Label): label = _Label(label)
@@ -334,7 +340,7 @@ class ExplicitOpModel(_mdl.OpModel):
         label : string
             the gate, state vector, or POVM label.
         """
-        if ExplicitOpModel._strict:
+        if self._strict:
             raise KeyError("Strict-mode: invalid key %s" % label)
 
         if not isinstance(label, _Label): label = _Label(label)

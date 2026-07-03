@@ -12,8 +12,10 @@ Defines the Basis object and supporting functions
 from __future__ import annotations
 # Used to allow certain type annotations. (e.g. class method returning instance of the class).
 
+from typing import Sequence
 import copy as _copy
 import itertools as _itertools
+import re as _re
 import warnings as _warnings
 from functools import lru_cache
 from typing import (
@@ -54,6 +56,49 @@ def _sparse_equal(a, b, atol=1e-8):
         V1 = v1[sidx1]
         V2 = v2[sidx2]
     return _np.allclose(V1, V2, atol=atol)
+
+
+def default_basis_for_udims(udims: Sequence[int]):
+    """
+    Pick a default basis spec for a system whose per-qudit Hilbert-space dimensions
+    are given by `udims`.
+
+    Qubits (dimension 2) get 'pp' -- the entrenched pyGSTi convention, and one that
+    downstream code special-cases -- and every other dimension gets 'gm', which is
+    valid for all d. Note that a dimension-4 entry means a single ququart (and hence
+    'gm'); callers who mean two qubits should pass ``[2, 2]``, not ``[4]``.
+
+    Returns a basis-name string when every qudit has the same dimension, because a
+    name is dimension-agnostic and resolves correctly at every downstream use site
+    (e.g. when a single-qudit sub-op needs the per-qudit basis rather than the full
+    product basis). Only genuinely mixed-dimension systems return an explicit
+    `TensorProdBasis`.
+    """
+    udim_to_name = {2: 'pp'}
+    if all(u == udims[0] for u in udims):
+        return udim_to_name.get(udims[0], 'gm')
+    return TensorProdBasis([(udim_to_name.get(u, 'gm'), u * u) for u in udims])
+
+
+_EYE_LABEL_REGEX = _re.compile(r'^(?:I|C\[I+\])+$')
+# ^ Matches labels that can denote (a projection of) the identity: any concatenation of
+#   'I' characters and 'C[I...I]' groups. The 'C[I...I]' form is the convention used by
+#   leakage-implying bases (see pygsti.leakage); bare 'I' runs cover ordinary bases like
+#   'pp' and 'gm', legacy leakage bases labeled before the 'C[...]' convention existed,
+#   and the per-factor segments that TensorProdBasis concatenates into its labels
+#   (e.g. 'IC[I]' for pp ⊗ l2p1).
+
+
+def _eye_label(basis) -> str:
+    assert hasattr(basis, 'labels')
+    candidates = [ell for ell in basis.labels if _EYE_LABEL_REGEX.match(ell)]
+    if len(candidates) == 0:
+        return ''
+    # Prefer the candidate with the most 'I' characters (ties broken by string length).
+    # On legacy bases, whose candidates are all-'I' strings, this reduces to the old
+    # rule of taking the longest such label.
+    lbl = max(candidates, key=lambda ell: (ell.count('I'), len(ell)))
+    return lbl
 
 
 class Basis(_NicelySerializable):
@@ -160,6 +205,12 @@ class Basis(_NicelySerializable):
         The "vectors" of this basis, always 1D (sparse or dense) arrays.
     """
 
+    # Declared for static analysis; concrete storage is provided by subclasses
+    # (LazyBasis via @property, ExplicitBasis via instance attributes).
+    labels: tuple
+    elements: _np.ndarray
+    ellookup: dict
+
     # Implementation note: casting functions are classmethods, but current implementations
     # could be static methods.
 
@@ -263,6 +314,8 @@ class Basis(_NicelySerializable):
         self.longname = longname
         self.real = real  # whether coefficients must be real (*not* whether elements are real - they're always complex)
         self.sparse = sparse  # whether elements are stored as sparse vectors/matrices
+        self._is_hermitian : Optional[bool] = None
+        self._implies_leakage : Optional[bool] = None
 
     @property
     def dim(self):
@@ -318,6 +371,64 @@ class Basis(_NicelySerializable):
         return int(_np.prod(self.elshape))
 
     @property
+    def implies_leakage_modeling(self) -> Optional[bool]:
+        """
+        True if this basis designates a proper subspace of Hilbert space as "computational."
+
+        A basis implies leakage modeling when all three of the following hold:
+
+        1. It has an *identity-candidate* label: a label matching ``^(?:I|C\\[I+\\])+$``,
+           i.e. any concatenation of 'I' characters and 'C[I...I]' groups (see
+           `_EYE_LABEL_REGEX`). When several labels qualify, the one containing the most
+           'I' characters is used. This is how the basis *names* the element that plays
+           the role of "identity on the computational subspace": ordinary bases like
+           'pp' and 'gm' have exactly one such label ('I', 'II', ...), leakage bases use
+           the 'C[I...I]' convention, and tensor products concatenate per-factor
+           segments (e.g. 'IC[I]' for pp ⊗ l2p1).
+
+        2. The element carrying that label is proportional to a *real orthogonal
+           projector* E. This is what makes "the computational subspace" well defined:
+           we take C = range(E). An element that is not (proportional to) a projector
+           doesn't single out a subspace, so no leakage interpretation is possible; the
+           probe below fails and we return False.
+
+        3. rank(E) is strictly less than the Hilbert-space dimension, i.e. C is a
+           *proper* subspace of H. When E is proportional to the full identity (as in
+           'pp' or 'gm'), there is no leakage level to model, and this property is
+           False even though condition 2 holds.
+
+        Example: the built-in 'l2p1' basis (a qutrit basis, "leakage-2-plus-1") has an
+        element labeled 'C[I]' proportional to diag(1, 1, 0). That element is a rank-2
+        projector on a 3-dimensional Hilbert space, so ``Basis.cast('l2p1', 9)``
+        implies leakage modeling with C spanned by the first two levels. By contrast,
+        'gm' of the same dimension has identity-candidate 'I' with element
+        proportional to diag(1, 1, 1) — a full-rank projector — so it does not.
+
+        Conditions 2 and 3 are checked by calling :func:`matrixtools.induced_projector`
+        as a probe: it returns the projector onto range(E) if the labeled element is
+        proportional to a real orthogonal projector, and we treat a probe failure as
+        "no leakage modeling" rather than an error.
+
+        See :mod:`pygsti.leakage.core` for the functions this property drives
+        (`computational_effect`, `computational_superkets`, `computational_projector`).
+        """
+        if (not hasattr(self, '_implies_leakage')) or (not isinstance(self._implies_leakage, bool)):
+            label = _eye_label(self)
+            if len(label) == 0:
+                self._implies_leakage = False
+                return False
+            I_before = self.ellookup[label]
+            from pygsti.tools.matrixtools import induced_projector
+            try:
+                I_after = induced_projector(I_before, require_real=True)
+                self._implies_leakage = round(_np.trace(I_after).real)**2 < I_after.size
+            except ValueError:
+                # The identity-candidate element is not proportional to a real
+                # orthogonal projector, so it doesn't designate a computational subspace.
+                self._implies_leakage = False
+        return self._implies_leakage
+
+    @property
     def first_element_is_identity(self):
         """
         True if the first element of this basis is *proportional* to the identity matrix, False otherwise.
@@ -355,6 +466,16 @@ class Basis(_NicelySerializable):
         bool
         """
         return not self.is_complete()
+
+    def is_hermitian(self) -> bool:
+        from pygsti.tools.matrixtools import is_hermitian as matrix_is_hermitian
+        if self.elndim != 2 or self.elshape[0] != self.elshape[1]:
+            return False
+        if not hasattr(self, '_is_hermitian') or self._is_hermitian is None:
+            tol = self.dim * _np.finfo(self.elements[0].dtype).eps
+            is_hermitian = all([matrix_is_hermitian(el, tol=tol) for el in self.elements])
+            self._is_hermitian = is_hermitian
+        return self._is_hermitian
 
     @property
     def vector_elements(self):
