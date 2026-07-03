@@ -9,18 +9,24 @@ Defines the CircuitList class, for holding meta-data alongside a list or tuple o
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
+from __future__ import annotations
+from typing import Optional, Union
 import copy as _copy
 import uuid as _uuid
 import numpy as _np
 
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.tools import listtools as _lt
 
-
 class CircuitList(_NicelySerializable):
     """
-    A unmutable list (a tuple) of :class:`Circuit` objects and associated metadata.
+    A UNMUTABLE list (a tuple) of :class:`Circuit` objects and associated metadata.
+
+    Since a CircuitList is unmutable and the circuits must be castable to a `Circuit`
+    and `CircuitList` is not castable to a `Circuit`, X[i] != `CircuitList`. Thus, there
+    should not be a case that recursive case with `CircuitList`.
 
     Parameters
     ----------
@@ -43,7 +49,7 @@ class CircuitList(_NicelySerializable):
     """
 
     @classmethod
-    def cast(cls, circuits):
+    def cast(cls, circuits: Union[CircuitList, list[_Circuit.Castable]]):
         """
         Convert (if needed) an object into a :class:`CircuitList`.
 
@@ -60,7 +66,10 @@ class CircuitList(_NicelySerializable):
             return circuits
         return cls(circuits)
 
-    def __init__(self, circuits, op_label_aliases=None, circuit_rules=None, circuit_weights=None, name=None):
+    def __init__(self, circuits: list[_Circuit.Castable],
+                 op_label_aliases: Optional[dict[_Label, _Circuit]]=None,
+                 circuit_rules: Optional[list[tuple]]=None,
+                 circuit_weights:Optional[list]=None, name:Optional[str]=None):
         """
         Create a CircuitList.
 
@@ -93,7 +102,7 @@ class CircuitList(_NicelySerializable):
         self.circuit_rules = circuit_rules
         self.circuit_weights = circuit_weights
         self.name = name  # an optional name for this circuit list
-        self.uuid = _uuid.uuid4()  # like a persistent id(), useful for peristent (file) caches
+        self.uuid = _uuid.uuid4()  # like a persistent id(), useful for persistent (file) caches
 
     def _to_nice_serialization(self):  # memo holds already serialized objects
         from pygsti.io.writers import convert_circuits_to_strings as _convert_circuits_to_strings
@@ -212,7 +221,7 @@ class CircuitList(_NicelySerializable):
         Parameters
         ----------
         elementvec : numpy array
-            An array containting the values to use when constructing a
+            An array containing the values to use when constructing a
             matrix of values for this CircuitList. This array may contain more
             values than are needed by this CircuitList.  Indices into this array
             are given by `elindices_lookup`.
@@ -246,3 +255,31 @@ class CircuitList(_NicelySerializable):
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
         
         return ret
+
+    def tensor_circuits(self, other_circuitlist: CircuitList, new_name: Optional[str]=None):
+        """
+        Given two `CircuitList` objects, X(=self) and Y(=other_circuitlist), of the same length,
+        combine the two of them so that every `Circuit` within X is tensored with the 
+        corresponding `Circuit` in Y.
+
+        Returns:
+            `CircuitList` with the subcircuits tensored together.
+
+        Notes
+        -----
+        TODO: Remove this function or change its behavior to something more useful.
+        """
+        if isinstance(other_circuitlist, _Circuit):
+            raise TypeError("Cannot tensor a CircuitList with a Circuit. You must provide a CircuitList.")
+
+        if len(self._circuits) != len(other_circuitlist._circuits):
+            raise ValueError('Cannot tensor CircuitLists of different lengths.')
+
+        circuits = []
+        for c1, c2 in zip(self._circuits, other_circuitlist._circuits):
+            if len(c1) != len(c2):
+                raise ValueError("Cannot tensor circuits of different lengths.")
+            circuits.append(c1.tensor_circuit(c2))
+
+        out = CircuitList(circuits, name=new_name)
+        return out

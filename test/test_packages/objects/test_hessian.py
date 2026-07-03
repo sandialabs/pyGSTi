@@ -28,8 +28,8 @@ class TestHessianMethods(BaseTestCase):
         op_labels = list(self.model.operations.keys()) # also == std.gates
         self.maxLengthList = [1]
         #circuits for XY model.
-        self.gss = pygsti.circuits.make_lsgst_structs(op_labels, prep_fiducials[0:4], 
-                                                          meas_fiducials[0:3], smq1Q_XY.germs(), self.maxLengthList)
+        self.gss = pygsti.circuits.create_lsgst_circuit_lists(op_labels, prep_fiducials[0:4],
+                                                              meas_fiducials[0:3], smq1Q_XY.germs(), self.maxLengthList)
 
         self.edesign =  proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct) for circuit_struct in self.gss])
 
@@ -82,9 +82,9 @@ class TestHessianMethods(BaseTestCase):
         self.assertEqual(n,44) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Model: G0=SP0=False
-        tst.operations[L(())] = pygsti.modelmembers.operations.FullTPOp(tst.operations[L(())])
-        tst.operations['Gxpi2',0] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gxpi2',0])
-        tst.operations['Gypi2',0] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gypi2',0])
+        tst.operations[L(())] = pygsti.modelmembers.operations.FullTPOp(tst.operations[L(())].to_dense())
+        tst.operations['Gxpi2',0] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gxpi2',0].to_dense())
+        tst.operations['Gypi2',0] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gypi2',0].to_dense())
         n = tst.num_params
         self.assertEqual(n,47) # 3*12 + 2*4 + 3 = 47
 
@@ -130,7 +130,7 @@ class TestHessianMethods(BaseTestCase):
         res = proto.ModelEstimateResults(data, proto.StandardGST(modes="full TP"))
 
         #Add estimate for hessian-based CI --------------------------------------------------
-        builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder()
+        builder = pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.PoissonPicDeltaLogLFunction)
         res.add_estimate(
             proto.estimate.Estimate.create_gst_estimate(
                 res, smq1Q_XY.target_model(), smq1Q_XY.target_model(),
@@ -304,21 +304,24 @@ class TestHessianMethods(BaseTestCase):
                     df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
                                             FnObj, return_fn_val=True, verbosity=4)
 
-
             def fnOfSpam_float(rhoVecs, povms):
                 lbls = list(povms[0].keys())
-                return float( np.dot( rhoVecs[0].T, povms[0][lbls[0]] ) )
+                rho_dense = rhoVecs[0].to_dense() if hasattr(rhoVecs[0], 'to_dense') else rhoVecs[0]
+                e_dense = povms[0][lbls[0]].to_dense() if hasattr(povms[0][lbls[0]], 'to_dense') else povms[0][lbls[0]]
+                v = rho_dense.T @ e_dense
+                u = v.item()
+                return float(u)
             def fnOfSpam_0D(rhoVecs, povms):
-                lbls = list(povms[0].keys())
-                return np.array( float( np.dot( rhoVecs[0].T, povms[0][lbls[0]] ) ) )
+                u = fnOfSpam_float(rhoVecs, povms)
+                return np.array( u )
             def fnOfSpam_1D(rhoVecs, povms):
-                lbls = list(povms[0].keys())
-                return np.array( [ float(np.dot( rhoVecs[0].T, povms[0][lbls[0]]) ), 0] )
+                u = fnOfSpam_float(rhoVecs, povms)
+                return np.array( [u, 0] )
             def fnOfSpam_2D(rhoVecs, povms):
-                lbls = list(povms[0].keys())
-                return np.array( [[ float(np.dot( rhoVecs[0].T, povms[0][lbls[0]] )), 0],[0,0]] )
+                u = fnOfSpam_float(rhoVecs, povms)
+                return np.array([[u, 0], [0,0]] )
             def fnOfSpam_3D(rhoVecs, povms):
-                return np.zeros( (2,2,2), 'd') #just to test for error
+                return np.zeros( (2,2,2), 'd') # just to test for error
 
             for fnOfSpam in (fnOfSpam_float, fnOfSpam_0D, fnOfSpam_1D, fnOfSpam_2D, fnOfSpam_3D):
                 FnClass = gsf.spamfn_factory(fnOfSpam)
@@ -333,13 +336,13 @@ class TestHessianMethods(BaseTestCase):
 
 
             def fnOfGateSet_float(mdl):
-                return float( mdl.operations['Gxpi2',0][0,0] )
+                return float( mdl.operations['Gxpi2',0].to_dense()[0,0] )
             def fnOfGateSet_0D(mdl):
-                return np.array( mdl.operations['Gxpi2',0][0,0]  )
+                return np.array( mdl.operations['Gxpi2',0].to_dense()[0,0] )
             def fnOfGateSet_1D(mdl):
-                return np.array( mdl.operations['Gxpi2',0][0,:] )
+                return np.array( mdl.operations['Gxpi2',0].to_dense()[0,:] )
             def fnOfGateSet_2D(mdl):
-                return np.array( mdl.operations['Gxpi2',0] )
+                return np.array( mdl.operations['Gxpi2',0].to_dense() )
             def fnOfGateSet_3D(mdl):
                 return np.zeros( (2,2,2), 'd') #just to test for error
 

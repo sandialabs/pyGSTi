@@ -1,5 +1,8 @@
+import pytest
+
 from pygsti import io
 from pygsti.io import writers
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from . import IOBase, with_temp_path
 # from ..reference_gen import io_gen
 from .references import generator as io_gen
@@ -112,10 +115,14 @@ class WriteModelTester(IOBase):
 
     @with_temp_path
     def test_write_model_no_identity(self, tmp_path):
-        writers.write_model(io_gen.std_model_no_identity, tmp_path)
+        # Legacy .txt format; Model.write only supports JSON.
+        # See issues/706/c2-io-load-write-model-format-mismatch.md
+        with pytest.warns(pyGSTiDeprecationWarning):
+            writers.write_model(io_gen.std_model_no_identity, tmp_path)
         self.assertFilesEquivalent(tmp_path, self.reference_path('gateset_noidentity.txt'))
 
     @with_temp_path
     def test_write_model(self, tmp_path):
-        writers.write_model(self.mdl, tmp_path, self.title)
+        with pytest.warns(pyGSTiDeprecationWarning):
+            writers.write_model(self.mdl, tmp_path, self.title)
         self.assertFilesEquivalent(tmp_path, self.reference_path_ref)

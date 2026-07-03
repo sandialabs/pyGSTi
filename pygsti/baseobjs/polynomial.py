@@ -16,12 +16,18 @@ import numpy as _np
 
 from pygsti.evotypes.basereps import PolynomialRep as _PolynomialRep
 
+from typing import Optional, Sequence, Tuple, Union, Callable
+
 assert(_platform.architecture()[0].endswith("bit"))  # e.g. "64bit"
 PLATFORM_BITS = int(_platform.architecture()[0].strip("bit"))
 
 
 def _vinds_to_int(vinds, vindices_per_int, max_num_vars):
-    """ Convert tuple index of ints to single int given max_numvars """
+    """ 
+    Convert tuple index of ints to single int given max_numvars 
+    
+    """
+    vinds = sorted(vinds)  # <-- canonicalize for commutative variables
     ints_in_key = int(_np.ceil(len(vinds) / vindices_per_int))
     ret_tup = []
     for k in range(ints_in_key):
@@ -74,8 +80,8 @@ class Polynomial(object):
         into a single int when there are at most `max_num_vars` variables.
     """
 
-    @classmethod
-    def _vindices_per_int(cls, max_num_vars):
+    @staticmethod
+    def _vindices_per_int(max_num_vars):
         """
         The number of variable indices that fit into a single int when there are at most `max_num_vars` variables.
 
@@ -119,8 +125,8 @@ class Polynomial(object):
         self._rep = rep
         return self
 
-    @classmethod
-    def product(cls, list_of_polys):
+    @staticmethod
+    def product(list_of_polys):
         """
         Take the product of multiple polynomials.
 
@@ -137,10 +143,40 @@ class Polynomial(object):
         for p in list_of_polys[1:]:
             rep = rep.mult(p._rep)
         return Polynomial.from_rep(rep)
+    
+    @staticmethod
+    def sum(list_of_polys):
+        """
+        Take the sum of multiple polynomials.
+
+        Parameters
+        ----------
+        list_of_polys : list
+            List of polynomials to take the product of.
+
+        Returns
+        -------
+        Polynomial
+        """
+        if not list_of_polys:
+            return Polynomial({})
+        max_num_vars = list_of_polys[0].max_num_vars
+        assert all([max_num_vars == poly.max_num_vars for poly in list_of_polys])
+        vindices_per_int = Polynomial._vindices_per_int(max_num_vars) 
+        
+        #initalize an empty PolynomialRep and accumulate into this.
+        #TODO: There is a bug/incompatibility between the cython and python
+        #versions of the PolynomalRep code. The python version accepts None for the int_coeff_dict
+        #but cython doesn't. Making a new Polynomial is a workaround.
+        newpoly = Polynomial({}, max_num_vars)
+        rep = newpoly._rep
+        for p in list_of_polys:
+            rep.add_inplace(p._rep)
+        return newpoly
 
     def __init__(self, coeffs=None, max_num_vars=100):
         """
-        Initializes a new Polynomial object (a subclass of dict).
+        Initializes a new Polynomial object.
 
         Internally (as a dict) a Polynomial represents variables by integer
         indices, e.g. "2" means "x_2".  Keys are tuples of variable indices and
@@ -157,14 +193,53 @@ class Polynomial(object):
             (see above). If None, the zero polynomial (no terms) is created.
 
         max_num_vars : int, optional
-            The maximum number of variables the represenatation is allowed to
+            The maximum number of variables the representation is allowed to
             have (x_0 to x_(`max_num_vars-1`)).  This sets the maximum allowed
             variable index within this polynomial.
         """
         vindices_per_int = Polynomial._vindices_per_int(max_num_vars)
 
-        int_coeffs = {_vinds_to_int(k, vindices_per_int, max_num_vars): v for k, v in coeffs.items()}
+        int_coeffs = {}
+        for k, v in coeffs.items():
+            ik = _vinds_to_int(k, vindices_per_int, max_num_vars)  # now sorts internally
+            int_coeffs[ik] = int_coeffs.get(ik, 0) + v
+
         self._rep = _PolynomialRep(int_coeffs, max_num_vars, vindices_per_int)
+
+    @classmethod
+    def from_variable_and_coefficient_lists(cls, variables: Sequence[Tuple[int, ...]],
+                                            coefficients: Sequence[complex],
+                                            max_num_vars: int = 100) -> "Polynomial":
+        """
+        Construct a Polynomial from parallel lists of monomials and coefficients.
+
+        Unlike the dict-based constructor, `variables` may list the same monomial
+        more than once; repeated monomials have their coefficients summed.
+
+        Parameters
+        ----------
+        variables : sequence of tuple of int
+            Monomial terms, each a tuple of variable indices (e.g. `(0, 0, 1)` for
+            `x0^2 x1`).  May contain repeats.
+
+        coefficients : sequence of complex
+            The coefficient multiplying each monomial in `variables`; must be the
+            same length as `variables`.
+
+        max_num_vars : int, optional
+            The maximum number of variables the representation may have
+            (x_0 to x_(`max_num_vars-1`)).
+
+        Returns
+        -------
+        Polynomial
+        """
+        assert len(variables) == len(coefficients), "Iterable of variables and coefficients must have the same length."
+
+        coeffs = {}
+        for k, v in zip(variables, coefficients):
+            coeffs[k] = coeffs.get(k, 0) + v
+        return cls(coeffs, max_num_vars)
 
     @property
     def coeffs(self):
@@ -191,7 +266,6 @@ class Polynomial(object):
                     indx = nxt
             #assert(len(ret) <= max_order) #TODO: is this needed anymore?
             return tuple(sorted(ret))
-
         return {int_to_vinds(k): val for k, val in self._rep.int_coeffs.items()}
 
     @property
@@ -200,7 +274,7 @@ class Polynomial(object):
         The maximum number of independent variables this polynomial can hold.
 
         Powers of variables are not "independent", e.g. the polynomial x0^2 + 2*x0 + 3
-        has a single indepdent variable.
+        has a single independent variable.
 
         Returns
         -------
@@ -356,9 +430,12 @@ class Polynomial(object):
         -------
         None
         """
-        new_coeffs = {mapfn(k): v for k, v in self.coeffs.items()}
-        new_int_coeffs = {_vinds_to_int(k, self._rep.vindices_per_int, self._rep.max_num_vars): v
-                          for k, v in new_coeffs.items()}
+        vindices_per_int = self._rep.vindices_per_int
+        max_num_vars = self._rep.max_num_vars
+        new_int_coeffs = {}
+        for k, v in self.coeffs.items():
+            ik = _vinds_to_int(mapfn(k), vindices_per_int, max_num_vars)
+            new_int_coeffs[ik] = new_int_coeffs.get(ik, 0) + v
         self._rep.reinit(new_int_coeffs)
 
     def mapvec_indices(self, mapvec):
@@ -456,35 +533,100 @@ class Polynomial(object):
         newpoly.scale(x)
         return newpoly
 
-    def __str__(self):
+    def _format_var_label(self, i, var_labels: Optional[Union[dict, Sequence, Callable]]=None):
+        """
+        Format the label for variable index `i`.
+
+        Parameters
+        ----------
+        i : int
+            Variable index.
+
+        var_labels : None, dict, sequence, or Callable
+            Controls how variable indices are converted to strings:
+
+            - None: use the default label ``x{i}``
+            - dict: use ``var_labels[i]`` when present, otherwise ``x{i}``
+            - sequence: use ``var_labels[i]`` when possible, otherwise ``x{i}``
+            - Callable: use ``var_labels(i)``
+
+        Returns
+        -------
+        str
+        """
+        if var_labels is None:
+            return f"x{i}"
+        try:
+            if callable(var_labels):
+                return var_labels(i)
+            elif isinstance(var_labels, dict):
+                return var_labels.get(i, f"x{i}")
+            else: #sequence
+                return var_labels[i]
+        except (IndexError, KeyError, TypeError):
+            return f"x{i}"
+
+    def to_string(self, var_labels: Optional[Union[dict, Sequence, Callable]]=None):
+        """
+        Construct a string representation of this polynomial.
+
+        Parameters
+        ----------
+        var_labels : None, dict, sequence, or Callable, optional
+            Controls how variable indices are converted to strings:
+
+            - None: use default labels like ``x0``, ``x1``, ...
+            - dict: map variable index to label
+            - sequence: use the i-th element as the label for variable ``i``
+            - Callable: a function taking an integer index and returning a label
+
+        Returns
+        -------
+        str
+        """
         def fmt(x):
             if abs(_np.imag(x)) > 1e-6:
-                if abs(_np.real(x)) > 1e-6: return "(%.3f+%.3fj)" % (x.real, x.imag)
-                else: return "(%.3fj)" % x.imag
-            else: return "%.3f" % x.real
+                if abs(_np.real(x)) > 1e-6:
+                    return f"({x.real:.3f}+{x.imag:.3f}j)"
+                else:
+                    return f"({x.imag:.3f}j)"
+            else:
+                return f"{x.real:.3f}"
 
         termstrs = []
         coeffs = self.coeffs
-        sorted_keys = sorted(list(coeffs.keys()))
+        sorted_keys = sorted(coeffs.keys())
+
         for k in sorted_keys:
-            varstr = ""; last_i = None; n = 1
+            varstr = ""
+            last_i = None
+            n = 1
+
             for i in sorted(k):
-                if i == last_i: n += 1
+                if i == last_i:
+                    n += 1
                 elif last_i is not None:
-                    varstr += "x%d%s" % (last_i, ("^%d" % n) if n > 1 else "")
+                    label = self._format_var_label(last_i, var_labels)
+                    power = f"^{n}" if n > 1 else ""
+                    varstr += f"{label}{power}"
                     n = 1
                 last_i = i
+
             if last_i is not None:
-                varstr += "x%d%s" % (last_i, ("^%d" % n) if n > 1 else "")
-            #print("DB: k = ",k, " varstr = ",varstr)
+                label = self._format_var_label(last_i, var_labels)
+                power = f"^{n}" if n > 1 else ""
+                varstr += f"{label}{power}"
+
             if abs(coeffs[k]) > 1e-4:
-                termstrs.append("%s%s" % (fmt(coeffs[k]), varstr))
-        if len(termstrs) > 0:
-            return " + ".join(termstrs)
-        else: return "0"
+                termstrs.append(f"{fmt(coeffs[k])}{varstr}")
+
+        return " + ".join(termstrs) if termstrs else "0"
+
+    def __str__(self):
+        return self.to_string()
 
     def __repr__(self):
-        return "Poly[ " + str(self) + " ]"
+        return "Poly[ " + self.__str__() + " ]"
 
     def __add__(self, x):
         newpoly = self.copy()
@@ -523,6 +665,15 @@ class Polynomial(object):
 
     def __copy__(self):
         return self.copy()
+    
+    def __eq__(self, other):
+        #TODO: Write a more efficient "rep-level" equality test. (will require updates in c-land).
+        if not isinstance(other, Polynomial):
+            return False
+        return self.coeffs == other.coeffs
+    
+    def __hash__(self) -> int:
+        raise RuntimeError('Polynomial objects are mutable. As such, they cannot be hashed.')
 
     def to_rep(self):  # , max_num_vars=None not needed anymore -- given at __init__ time
         """
@@ -600,7 +751,7 @@ def bulk_load_compact_polynomials(vtape, ctape, keep_compact=False, max_num_vars
 
 def compact_polynomial_list(list_of_polys):
     """
-    Create a single vtape,ctape pair from a list of normal Polynomals
+    Create a single vtape,ctape pair from a list of normal Polynomials
 
     Parameters
     ----------

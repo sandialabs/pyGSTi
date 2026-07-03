@@ -6,7 +6,7 @@
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-""" A Python implementation of LinearOperator Set Tomography """
+""" A Python implementation of Gate Set Tomography """
 from .pgtypes import (
     SpaceT
 )
@@ -15,6 +15,7 @@ from . import baseobjs
 from . import algorithms as alg
 from . import circuits
 from . import data
+from . import leakage
 from . import models
 from . import modelmembers as mm
 from . import forwardsims

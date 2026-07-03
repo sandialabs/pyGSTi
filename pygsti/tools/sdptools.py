@@ -12,27 +12,63 @@ Functions for constructing semidefinite programming models
 
 from __future__ import annotations
 
+import importlib.util
 import numpy as np
+import warnings
 
-from typing import Union, List, Tuple, TYPE_CHECKING
+from typing import Union, List, Tuple, Sequence, TYPE_CHECKING
 if TYPE_CHECKING:
     import cvxpy as cp
     ExpressionLike = Union[cp.Expression, np.ndarray]
 
-from pygsti.baseobjs import Basis
+from pygsti.baseobjs.basis import Basis, BasisLike
+from pygsti.tools.matrixtools import assert_hermitian
 from pygsti.tools.basistools import stdmx_to_vec
 from pygsti.tools.jamiolkowski import jamiolkowski_iso
+from pygsti.tools.exceptions import CVXPYFailure
 
-BasisLike = Union[str, Basis]
 
-try:
-    import cvxpy as cp
-    CVXPY_ENABLED = True
-    mosek_warning_pattern = ".*Incorrect array format causing data to be copied*"
-    import warnings
-    warnings.filterwarnings('ignore', mosek_warning_pattern)
-except:
-    CVXPY_ENABLED = False
+CVXPY_ENABLED = importlib.util.find_spec("cvxpy") is not None
+_MOSEK_WARNING_PATTERN = ".*Incorrect array format causing data to be copied*"
+_CVXPY = None
+
+
+def _get_cvxpy():
+    global _CVXPY
+    if _CVXPY is None:
+        import cvxpy as cp
+        warnings.filterwarnings('ignore', _MOSEK_WARNING_PATTERN)
+        _CVXPY = cp
+    return _CVXPY
+
+
+SDP_SOLVER_PRIORITY = ['MOSEK', 'CLARABEL', 'CVXOPT']
+
+
+def solve_sdp(prob: cp.Problem, **kwargs) -> tuple[np.floating, dict[str, np.ndarray]]:
+    cp = _get_cvxpy()
+
+    objective_val : np.floating = np.array(np.nan).item()
+    varvals : dict[str, np.ndarray] = dict()
+    for i, solver in enumerate(SDP_SOLVER_PRIORITY):
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore','.*Solution may be inaccurate.*', UserWarning)
+                prob.solve(solver=solver, **kwargs)
+            objective_val = prob.value                                       # type: ignore
+            varvals.update({k: v.value for (k, v) in prob.var_dict.items()}) # type: ignore
+            break
+        except (AssertionError, cp.SolverError) as e:
+            if solver != 'MOSEK':
+                msg = f"Received error {e} when trying to use solver={solver}."
+                if i + 1 == len(SDP_SOLVER_PRIORITY):
+                    failure_msg  = "Out of solvers. Returning NaN."
+                else:
+                    failure_msg  = f"Trying {SDP_SOLVER_PRIORITY[i+1]} next."
+                msg += f'\n{failure_msg}'
+                warnings.warn(msg, CVXPYFailure)
+
+    return objective_val, varvals
 
 
 def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List[cp.Variable]]:
@@ -49,7 +85,7 @@ def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List
     #              rho0, rho1 are density matrices
     #              X is linear operator
     #
-    # ".dag" returns the adjoint.
+    cp = _get_cvxpy()
     dim = J.shape[0]
     smallDim = int(np.sqrt(dim))
     assert dim == smallDim**2
@@ -111,6 +147,7 @@ def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[
     require that the epigraph is affine and that no structured variables (like
     Hermitian matrices) are used.
     """
+    cp = _get_cvxpy()
     constraints = []
     d = arg.shape[0]
     small_d = int(np.sqrt(d))
@@ -133,6 +170,7 @@ def diamond_norm_canon(arg : cp.Expression, basis) -> Tuple[cp.Expression, List[
 
 
 def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expression, List[cp.Constraint]]:
+    cp = _get_cvxpy()
     d = purestate_dim ** 2
     basis = Basis.cast(basis, d)
     constraints = []
@@ -159,8 +197,9 @@ def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expr
     return X, constraints
 
 
-def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree: bool=False, seepfree: bool=False, n_leak: int=0, cptp: bool=True, subspace_diamond: bool=False):
+def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree: bool=False, seepfree: bool=False, cptp: bool=True, subspace_diamond: bool=False):
     assert CVXPY_ENABLED
+    cp = _get_cvxpy()
     dim_mixed = superop.shape[0]
     dim_pure = int(np.sqrt(dim_mixed))
     assert dim_pure**2 == dim_mixed
@@ -172,10 +211,9 @@ def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfre
         proj_superop = cp.Variable((dim_mixed, dim_mixed))
     diamondnorm_arg = superop - proj_superop
     if (leakfree or seepfree or subspace_diamond):
-        assert n_leak == 1
-        from pygsti.tools.leakage import leading_dxd_submatrix_basis_vectors
-        dim_pure_compsub  = dim_pure - n_leak
-        U = leading_dxd_submatrix_basis_vectors(dim_pure_compsub, dim_pure, basis)
+        assert basis.implies_leakage_modeling
+        from pygsti.leakage.core import computational_superkets
+        U = computational_superkets(basis)
         P = U @ U.T.conj()
         I = np.eye(dim_mixed)
         if leakfree:
@@ -219,6 +257,7 @@ def root_fidelity_canon(sigma: cp.Expression, rho: cp.Expression) -> Tuple[cp.Ex
     variable for \\sqrt{F}(sigma, rho) and constraints is a list of CVXPY Constraint
     objects used in the semidefinite representation of the hypograph.
     """
+    cp = _get_cvxpy()
     t = cp.Variable()
     d = sigma.shape[0]
     X = cp.Variable(shape=(d, d), complex=True)

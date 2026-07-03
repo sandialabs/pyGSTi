@@ -269,7 +269,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     fig.plotlyfig['layout']['xaxis'].update(tickvals=xtics)
     fig.plotlyfig['layout']['yaxis'].update(tickvals=ytics)
     
-    #I *think* it is the case that the only context in which this function is currrently
+    #I *think* it is the case that the only context in which this function is currently
     #used is in the per-sequence detail plots, so adding the boundaries between
     #plaquettes here should (hopefully) not break anything.
 
@@ -325,7 +325,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     y_endpoint_list = [pt for pair in y_endpoints for pt in pair]
     
     #need to couple these end points with either constant x or y coordinates
-    #which are halfway betweent the boxes.
+    #which are halfway between the boxes.
     y_pos = _np.arange(0.5, data.shape[0]-1, 1)
     x_pos = _np.arange(0.5, data.shape[1]-1, 1)
 
@@ -812,7 +812,7 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
           int <  0 = number of significant figures given by -int
 
     hover_info : bool, optional
-        Whether to incude interactive hover labels.
+        Whether to include interactive hover labels.
 
     sum_up : bool, optional
         False displays each matrix element as it's own color box
@@ -882,7 +882,7 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
         Whether or not to show the color scale bar.
 
     hover_info : bool, optional
-        Whether to incude interactive hover labels.
+        Whether to include interactive hover labels.
 
     sum_up : bool, optional
         False displays each matrix element as it's own color box
@@ -2060,7 +2060,7 @@ class BoxKeyPlot(WorkspacePlot):
 
 class ColorBoxPlot(WorkspacePlot):
     """
-    Plot of colored boxes arranged into plaquettes showing various quanties for each circuit in an analysis.
+    Plot of colored boxes arranged into plaquettes showing various quantities for each circuit in an analysis.
 
     Parameters
     ----------
@@ -2412,7 +2412,7 @@ class ColorBoxPlot(WorkspacePlot):
                     detectorkey = None
                     test = None
 
-                # If these componentes aren't given, we use defaults
+                # If these components aren't given, we use defaults
                 if detectorkey is None: detectorkey = stabilityanalyzer._def_detection
                 if test is None: test = ('circuit', )
                 assert('circuit' in test), \
@@ -3597,7 +3597,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
         The containing (parent) workspace.
 
     projections : ndarray
-        A 1-dimensional array of length equal to the numer of elements in
+        A 1-dimensional array of length equal to the number of elements in
         the given basis (usually equal to the gate dimension).  Ordering of
         the values is assumed to correspond to the ordering given by the
         routines in `pygsti.tools`, (e.g. :func:`pp_matrices` when
@@ -3657,7 +3657,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
         Parameters
         ----------
         projections : ndarray
-          A 1-dimensional array of length equal to the numer of elements in
+          A 1-dimensional array of length equal to the number of elements in
           the given basis (usually equal to the gate dimension).  Ordering of
           the values is assumed to correspond to the ordering given by the
           routines in `pygsti.tools`, (e.g. :func:`pp_matrices` when
@@ -3994,7 +3994,7 @@ class GramMatrixBarPlot(WorkspacePlot):
 
     target : Model
         A target model which is used for it's mapping of SPAM labels to
-        SPAM specifiers and for Gram matrix comparision.
+        SPAM specifiers and for Gram matrix comparison.
 
     maxlen : integer, optional
         The maximum length string used when searching for the
@@ -4023,7 +4023,7 @@ class GramMatrixBarPlot(WorkspacePlot):
 
         target : Model
             A target model which is used for it's mapping of SPAM labels to
-            SPAM specifiers and for Gram matrix comparision.
+            SPAM specifiers and for Gram matrix comparison.
 
         maxlen : integer, optional
             The maximum length string used when searching for the
@@ -4124,7 +4124,7 @@ class FitComparisonBarPlot(WorkspacePlot):
 
     objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
         The objective function to use, or one of the given strings
-        to use a defaut log-likelihood or chi^2 function.
+        to use a default log-likelihood or chi^2 function.
 
     x_label : str, optional
         A label for the 'x' variable which indexes the different models.
@@ -4182,7 +4182,7 @@ class FitComparisonBarPlot(WorkspacePlot):
 
         objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
             The objective function to use, or one of the given strings
-            to use a defaut log-likelihood or chi^2 function.
+            to use a default log-likelihood or chi^2 function.
 
         x_label : str, optional
             A label for the 'x' variable which indexes the different models.
@@ -4234,15 +4234,16 @@ class FitComparisonBarPlot(WorkspacePlot):
         if mdc_stores is None:
             mdc_stores = [None]*len(model_by_x)
 
-        for X, mdl, circuits, dataset, Np, mdc_store in zip(x_names, model_by_x, circuits_by_x, 
-                                                            dataset_by_x, np_by_x, mdc_stores):
+        for X, mdl, circuits, dataset, Np, mdc_store in zip(
+            x_names, model_by_x, circuits_by_x, dataset_by_x, np_by_x, mdc_stores
+        ):
             if circuits is None or mdl is None:
                 Nsig, rating = _np.nan, 5
             else:
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.rated_n_sigma, dataset, mdl,
                                                           circuits, objfn_builder, Np, wildcard,
                                                           return_all=True, comm=comm, mdc_store=mdc_store)
-                #Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
+                # Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
 
             if rating == 5: color = "darkgreen"
             elif rating == 4: color = "lightgreen"
@@ -4340,7 +4341,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
 
     objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
         The objective function to use, or one of the given strings
-        to use a defaut log-likelihood or chi^2 function.
+        to use a default log-likelihood or chi^2 function.
 
     x_label : str, optional
         Label for the 'X' variable which indexes different models.
@@ -4397,7 +4398,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
 
         objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
             The objective function to use, or one of the given strings
-            to use a defaut log-likelihood or chi^2 function.
+            to use a default log-likelihood or chi^2 function.
 
         x_label, y_label : str, optional
             Labels for the 'X' and 'Y' variables which index the different gate
