@@ -1522,7 +1522,7 @@ def construct_compact_evd_cache(fiducial_indices, complete_jacobian, element_map
     for fid_index in fiducial_indices:
         fid_element_indices = element_map[fid_index]
         fid_jacobian_components = _np.take(complete_jacobian, fid_element_indices, axis=0)
-        e, U = compact_EVD(fid_jacobian_components.T@fid_jacobian_components, eigenvalue_tolerance)
+        e, U = compact_EVD(fid_jacobian_components.T@fid_jacobian_components, eigenvalue_tolerance, assume_hermitian=True)
         sqrteU_dict[fid_index]= U@_np.diag(_np.sqrt(e))  
     return sqrteU_dict    
     
@@ -2015,7 +2015,7 @@ def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
                 directional_deriv = jac@vec_mat
                 direc_deriv_gram = directional_deriv.T@directional_deriv                                        
                 #now take twirledDerivDerivDagger and construct its compact EVD.
-                e, U= compact_EVD(direc_deriv_gram, evd_tol)
+                e, U= compact_EVD(direc_deriv_gram, evd_tol, assume_hermitian=True)
                 e_list.append(e)
                 
                 #by doing this I am assuming that the matrix is PSD, but since these are all
@@ -2042,7 +2042,7 @@ def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
             direc_deriv_gram = directional_deriv.T@directional_deriv
     
             #now take twirledDerivDerivDagger and construct its compact EVD.
-            e, U= compact_EVD(direc_deriv_gram, evd_tol)
+            e, U= compact_EVD(direc_deriv_gram, evd_tol, assume_hermitian=True)
             e_list.append(e)
 
             sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )         
