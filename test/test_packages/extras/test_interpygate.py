@@ -33,6 +33,7 @@ def unvec_square(vec: _np.ndarray, order):
     mat = vec.reshape((n, n), order=order)
     return mat
 
+
 class ExampleProcess(interp.PhysicalProcess):
 
     def __init__(self):

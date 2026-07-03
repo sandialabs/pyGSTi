@@ -149,6 +149,7 @@ namespace CReps {
     INT ret, end, m;
     INT sz = ceil(1.0 * vinds.size() / _vindices_per_int);
     PolynomialVarsIndex ret_tup(sz);
+    std::sort(vinds.begin(), vinds.end());
     for(INT k=0; k<sz-1; k++) {
       ret = 0; m = 1;
       for(std::size_t i=_vindices_per_int*k; i<_vindices_per_int*(k+1); i++) { // last tuple index is most significant
