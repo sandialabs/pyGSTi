@@ -294,16 +294,9 @@ class FixedLayerErrorgenPropTester(BaseCase):
         self.assertEqual(set(zeros[0].values()), {0})
         self.assertEqual(len(zeros[0]), len(prop.fixed_errorgen_layer))
 
-    # ------------------------------------------------------------------
-    # C3: matrix output path is broken in fixed-layer mode (self.model is None).
-    # ------------------------------------------------------------------
 
-    @unittest.expectedFailure
-    def test_fixed_layer_matrix_path_should_work_C3(self):
-        # Captures C3: errorgen_layer_dict_to_errorgen / eoc_error_channel dereference
-        # self.model.state_space, but self.model is None in fixed-layer mode, so these raise
-        # AttributeError. This test asserts the *desired* behavior (a 4**n x 4**n channel) and
-        # is expected to fail until C3 is resolved; remove the marker when it is fixed.
+    def test_eoc_channel_fixed_errorgen(self):
+        #confirm dense EOC channel array works with fixed error gener
         prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
         channel = prop.eoc_error_channel(self.empty_circuit)
         self.assertEqual(channel.shape, (4 ** 2, 4 ** 2))

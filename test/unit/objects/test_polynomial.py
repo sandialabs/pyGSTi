@@ -622,8 +622,8 @@ class CompactPolynomialTester(BaseCase):
         self.assertEqual(list(cout), [ 2.+0.j,  6.+0.j,  2.+0.j,  3.+0.j, 10.+0.j, 12.+0.j,  6.+0.j])
 
 
-class PolynomialBranchFeatureTester(BaseCase):
-    """Direct unit tests for the branch's new/changed Polynomial behavior:
+class PolynomialFeatureTester(BaseCase):
+    """Direct unit tests for additional Polynomial behavior:
     monomial canonicalization, ``sum``, ``from_variable_and_coefficient_lists``,
     ``to_string``, ``__eq__`` and ``__hash__``.
     """
@@ -712,7 +712,7 @@ class PolynomialBranchFeatureTester(BaseCase):
             {p: 1}  # unusable as a dict key
 
     # ------------------------------------------------------------------
-    # to_string (default labels work; custom labels are currently broken)
+    # to_string 
     # ------------------------------------------------------------------
 
     def test_to_string_default_labels(self):

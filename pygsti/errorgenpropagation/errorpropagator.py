@@ -100,7 +100,8 @@ class ErrorGeneratorPropagator:
 
 
     def eoc_error_channel(self, circuit: _Circuit, include_spam: bool=True, use_bch: bool=False,
-                          bch_kwargs: dict=None, mx_basis: Union[_Basis, str]='pp', circuit_conversion_kwargs: dict=None):
+                          bch_kwargs: dict=None, mx_basis: Union[_Basis, str]='pp', 
+                          circuit_conversion_kwargs: dict=None) -> _np.ndarray:
         """
         Propagate all of the error generators for each circuit layer to the end of the circuit
         and return the result of exponentiating these error generators, and if necessary taking
@@ -136,7 +137,7 @@ class ErrorGeneratorPropagator:
         -------
         eoc_error_channel : numpy.ndarray
             A numpy array corresponding to the end-of-circuit error channel resulting
-            from the propagated error generators. This is 
+            from the propagated error generators. 
         """
 
         if use_bch:
@@ -226,7 +227,8 @@ class ErrorGeneratorPropagator:
     #    return eoc_error_channel
 #
 
-    def propagate_errorgens(self, circuit: _Circuit, include_spam: bool=True, circuit_conversion_kwargs: dict=None):
+    def propagate_errorgens(self, circuit: _Circuit, include_spam: bool=True, 
+                            circuit_conversion_kwargs: dict=None):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging.
@@ -387,7 +389,8 @@ class ErrorGeneratorPropagator:
 #        return propagated_errorgen_layers
 
     #TODO: Refactor this to just use the concatenation of the individual maps.
-    def errorgen_transform_map(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
+    def errorgen_transform_map(self, circuit: _Circuit, include_spam: bool=True, 
+                               circuit_conversion_kwargs: dict=None) -> dict[tuple[_LSE, int], tuple[_LSE, complex]]:
         """
         Construct a map giving the relationship between input error generators and their final
         value following propagation through the circuit.  
@@ -437,7 +440,8 @@ class ErrorGeneratorPropagator:
 
         return input_output_errgen_map
     
-    def errorgen_transform_maps(self, circuit, include_spam=True, circuit_conversion_kwargs=None):
+    def errorgen_transform_maps(self, circuit: _Circuit, include_spam: bool=True, 
+                                circuit_conversion_kwargs: dict=None) -> list[dict[tuple[_LSE, int], tuple[_LSE, complex]]]:
         """
         Construct a list of maps giving the relationship between input error generators and their final
         value following propagation through the circuit on an input-layer-by-input-layer basis.  
@@ -493,7 +497,7 @@ class ErrorGeneratorPropagator:
 
         return input_output_errgen_maps
 
-    def construct_stim_layers(self, circuit, drop_first_layer=True, circuit_conversion_kwargs=None):
+    def construct_stim_layers(self, circuit: _Circuit, drop_first_layer: bool=True, circuit_conversion_kwargs: dict=None) -> list[stim.Tableau]:
         """
         Converts a `Circuit` to a list of stim Tableau objects corresponding to each
         gate layer.
@@ -531,7 +535,7 @@ class ErrorGeneratorPropagator:
             stim_layers = stim_layers[1:]
         return stim_layers
     
-    def construct_propagation_layers(self, stim_layers):
+    def construct_propagation_layers(self, stim_layers: list[stim.Tableau]) -> list[stim.Tableau]:
         """
         Construct a list of stim Tableau objects corresponding to the Clifford
         operation each error generator will be propagated through. This corresponds
@@ -760,7 +764,12 @@ class ErrorGeneratorPropagator:
         eg_types = [lbl.errorgen_type for lbl in local_errorgen_coeffs]
         eg_bels = [lbl.basis_element_labels for lbl in local_errorgen_coeffs]
         basis_1q = _BuiltinBasis('PP', 4)
-        num_qubits = len(self.model.state_space.qubit_labels)
+        if self.model is not None:
+            num_qubits = len(self.model.state_space.qubit_labels)
+        else: #fixed layer
+            first_errorgen_label = next(iter(self.fixed_errorgen_layer))
+            num_qubits = len(first_errorgen_label.basis_element_labels[0])
+
         errorgen = _np.zeros((4**num_qubits, 4**num_qubits), dtype=complex128)
         #do this in blocks of 1000 to reduce memory requirements.
         for eg_typ_batch, eg_bels_batch, eg_rates_batch in zip(_batched(eg_types, 1000), _batched(eg_bels, 1000), _batched(errorgen_layer.values(), 1000)):

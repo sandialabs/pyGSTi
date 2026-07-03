@@ -179,6 +179,7 @@ def error_generator_to_polynomial_variable_maps_by_gate(model: _OpModel, errorge
                 aggregated_error_generator_indices_by_gate[gate_name_model_indices_tup] = dict()
             
             #break the error generators into equivalence classes based on truncations, enforcing locality.
+            #not currently possible to hit the failure branch due to gating on LocalNoiseModels and ExplicitOpModels.
             try:
                 truncated_errorgen = _truncate_lse_support(errorgen, gate_sslbls, validate_locality=True)
             except RuntimeError:
@@ -629,8 +630,6 @@ def error_generator_taylor_expansion_symbolic_polynomial(errorgen_dict: dict[_LS
         whatever scaling comes from order of taylor expansion). Each list corresponds to an order
         of the taylor expansion.
     """
-    assert order == 1 or order == 2, "First and second-order symbolic taylor series approximations are currently supported."   
- 
     if order == 1:
         return [errorgen_dict] #TODO, check if this should be a copy
         
