@@ -17,6 +17,7 @@ One reason QIP models are useful is that they provide a compact description of a
 ```{code-cell} ipython3
 import pygsti
 from pygsti.report import reportables as rptbl
+from pygsti.tools import optools as opt
 from pygsti.modelpacks import smq1Q_XYI # "stock" information about the X(pi/2), Y(pi/2), Idle 1-qubit system.
 
 #Get two models to compare.
@@ -30,7 +31,7 @@ In these models the "layer operations" are just 1-qubit operators and so can be 
 ```{code-cell} ipython3
 basis = pygsti.baseobjs.Basis.cast("pp",4) # 1-qubit Pauli basis (2x2 matrices)
 print("State Fidelity = ", float(rptbl.vec_fidelity(ideal_model['rho0'].to_dense(on_space='minimal'),noisy_model['rho0'].to_dense(on_space='minimal'),basis)))
-print("Process Fidelity = ", float(rptbl.entanglement_fidelity(ideal_model[('Gxpi2',0)].to_dense(), noisy_model[('Gxpi2',0)].to_dense(), basis)))
+print("Process Fidelity = ", float(opt.entanglement_fidelity(ideal_model[('Gxpi2',0)].to_dense(), noisy_model[('Gxpi2',0)].to_dense(), basis)))
 print("Diamond Distance = ", rptbl.half_diamond_norm(ideal_model[('Gxpi2',0)].to_dense(), noisy_model[('Gxpi2',0)].to_dense(), basis))
 print("Frobenius Distance = ", rptbl.frobenius_diff(ideal_model[('Gxpi2',0)].to_dense(), noisy_model[('Gxpi2',0)].to_dense(), basis))
 ```
