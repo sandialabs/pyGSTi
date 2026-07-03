@@ -4852,8 +4852,7 @@ def germ_set_spanning_vectors(target_model, germ_list, float_type=None,
                 current_vec_score = compute_composite_vector_set_score(
                                                 current_update_cache= current_update_cache,
                                                 vector_update= composite_twirled_deriv_array[:, [idx]],
-                                                num_nongauge_params= numNonGaugeParams,
-                                                float_type= float_type)
+                                                num_nongauge_params= numNonGaugeParams)
 
                 if current_vec_score < best_vec_score:
                     best_vec_score = current_vec_score

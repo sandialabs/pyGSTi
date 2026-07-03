@@ -78,8 +78,8 @@ class MyDataSimulator(pygsti.protocols.ModelFreeformSimulator):
         B = process_matrices['target']
         ret['process fidelity'] = pygsti.tools.entanglement_fidelity(A, B, 'pp')
         
-        state = pygsti.tools.ppvec_to_stdmx(final_states['base'])  
-        target_state = pygsti.tools.ppvec_to_stdmx(final_states['target'])
+        state = pygsti.tools.ppvec_to_stdmx(final_states['base'].to_dense())  
+        target_state = pygsti.tools.ppvec_to_stdmx(final_states['target'].to_dense())
         ret['final state fidelity'] = pygsti.tools.fidelity(state, target_state)
         
         p = probs['base']
