@@ -54,7 +54,6 @@ This is a bugfix release patching the following issues:
 
 Development-related change: Pushes to the `bugfix` branch no longer trigger automatic merges into `develop`, and these changes will need to be merged in manually going forward.
 
-
 ## [0.9.14.2] - 2025-11-08
 
 This is a bugfix release patching the following issues:
