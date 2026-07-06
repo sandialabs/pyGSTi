@@ -1861,7 +1861,7 @@ def construct_compact_evd_cache(model, fids_list, prep_or_meas, fid_cache, eigen
         fid_mat= _np.concatenate(fidArrayList, axis=1)
         fid_mat_gramian = fid_mat@fid_mat.conj().T
         
-        e, U = compact_EVD(fid_mat_gramian, eigenvalue_tolerance)
+        e, U = compact_EVD(fid_mat_gramian, eigenvalue_tolerance, assume_hermitian=True)
         sqrteU_dict[fiducial]= U@_np.diag(_np.sqrt(e))  
         
         #check reconstruction:

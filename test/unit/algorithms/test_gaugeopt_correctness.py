@@ -14,6 +14,7 @@ import pygsti.baseobjs.label as pgl
 import pygsti.baseobjs.basisconstructors as pgbc
 import pygsti.algorithms.gaugeopt as gop
 from pygsti.models import ExplicitOpModel
+from pygsti.modelmembers.operations import FullArbitraryOp
 import pytest
 
 
@@ -23,7 +24,7 @@ def gate_metrics_dict(model, target):
     for lbl in model.operations.keys():
         model_gate = model.operations[lbl].to_dense('minimal')
         target_gate = target.operations[lbl].to_dense('minimal')
-        metrics['infids'][lbl] = pgo.entanglement_infidelity(model_gate, target_gate)
+        metrics['infids'][lbl] = pgo.entanglement_infidelity(model_gate, target_gate, model.basis)
         metrics['frodists'][lbl] = pgo.frobeniusdist(model_gate, target_gate)
         metrics['tracedists'][lbl] = pgo.tracedist(model_gate, target_gate)
     return metrics
@@ -295,3 +296,275 @@ class FindPerfectGauge_Instruments_Tester(BaseCase):
         print(f'LS GaugeOpt over UnitaryGaugeGroup : {times}.')
         return
 
+
+class FindPerfectGauge_DirectSumGaugeGroupTester(BaseCase):
+
+    
+    def _prep(self, seed, use_u1gaugegroup: bool):
+        from pygsti.baseobjs.basis import Basis
+        from pygsti.leakage import leaky_qubit_model_from_pspec
+        from pygsti.leakage.gaugeopt import _direct_sum_unitary_group
+        tm2 = smq1Q_XYI.target_model()
+        self.target = leaky_qubit_model_from_pspec(tm2.create_processor_spec())
+
+        bases  = [Basis.cast('pp', 4), Basis.cast('pp', 1)]
+        tflags = [False, not use_u1gaugegroup]
+        ggrp = _direct_sum_unitary_group(bases, self.target.basis, triviality_flags=tflags)
+        self.target.default_gauge_group = ggrp
+
+        self.model = self.target.copy()
+        np.random.seed(seed)
+        U2x2 = la.expm(np.random.randn()/2 * -1j * (pgbc.sigmax + pgbc.sigmaz)/np.sqrt(2))
+        self.U = la.block_diag(U2x2, np.array([[1j]]))
+        U_superop = FullArbitraryOp(pgo.unitary_to_superop(self.U, 'l2p1'), 'l2p1')
+
+        self.gauge_grp_el = FullGaugeGroupElement(U_superop)
+        self.model.transform_inplace(self.gauge_grp_el)
+        self.metrics_before = gate_metrics_dict(self.model, self.target)
+
+        check_gate_metrics_are_nontrivial(self.metrics_before, tol=1e-2)
+        return
+    
+    def test_lbfgs_frodist(self):
+        self.setUp()
+        times = []
+        for seed in [1]:
+            for tf in [False, True]:
+                self._prep(seed, tf)
+                tic = time.time()
+                newmodel = gop.gaugeopt_to_target(self.model, self.target, method='L-BFGS-B', tol=1e-14, spam_metric='frobenius squared', gates_metric='frobenius squared')
+                toc = time.time()
+                dt = toc - tic
+                metrics_after = gate_metrics_dict(newmodel, self.target)
+                check_gate_metrics_near_zero(metrics_after, tol=1e-6)
+                times.append(dt)
+        return
+
+
+
+class LeakageDirectSumGroupTester(BaseCase):
+    """
+    Structural tests for pygsti.leakage.gaugeopt._leakage_direct_sum_group, which
+    infers a U(k) (+) U(m) direct-sum gauge group from a leakage basis.
+    """
+
+    def test_leaky_qubit_matches_old_hardcode(self):
+        # For l2p1 (k=2, m=1) the group must match the previously hardcoded
+        # U(2) (+) U(1) construction: a unitary factor and a trivial factor.
+        from pygsti.baseobjs.basis import Basis
+        from pygsti.models.gaugegroup import TrivialGaugeGroup
+        from pygsti.leakage.gaugeopt import _leakage_direct_sum_group
+        gg = _leakage_direct_sum_group(Basis.cast('l2p1', 9))
+        self.assertEqual(len(gg.subgroups), 2)
+        self.assertIsInstance(gg.subgroups[0], UnitaryGaugeGroup)
+        self.assertIsInstance(gg.subgroups[1], TrivialGaugeGroup)
+
+    def test_qutrit_computational_subspace(self):
+        # k=3, m=1: a ququart with a qutrit computational subspace.
+        from pygsti.baseobjs.basis import Basis
+        from pygsti.models.gaugegroup import TrivialGaugeGroup
+        from pygsti.leakage.core import augment_for_leakage_modeling
+        from pygsti.leakage.gaugeopt import _leakage_direct_sum_group
+        basis = augment_for_leakage_modeling(Basis.cast('gm', 16), np.diag([1., 1., 1., 0.]))
+        gg = _leakage_direct_sum_group(basis)
+        self.assertIsInstance(gg.subgroups[0], UnitaryGaugeGroup)
+        self.assertEqual(gg.subgroups[0].state_space.udim, 3)
+        self.assertIsInstance(gg.subgroups[1], TrivialGaugeGroup)
+
+    def test_two_leakage_levels(self):
+        # k=2, m=2: both factors are nontrivial unitary groups.
+        from pygsti.baseobjs.basis import Basis
+        from pygsti.leakage.core import augment_for_leakage_modeling
+        from pygsti.leakage.gaugeopt import _leakage_direct_sum_group
+        basis = augment_for_leakage_modeling(Basis.cast('gm', 16), np.diag([1., 1., 0., 0.]))
+        gg = _leakage_direct_sum_group(basis)
+        self.assertIsInstance(gg.subgroups[0], UnitaryGaugeGroup)
+        self.assertIsInstance(gg.subgroups[1], UnitaryGaugeGroup)
+        self.assertEqual(gg.subgroups[0].state_space.udim, 2)
+        self.assertEqual(gg.subgroups[1].state_space.udim, 2)
+
+    def test_non_leakage_basis_rejected(self):
+        from pygsti.baseobjs.basis import Basis
+        from pygsti.leakage.gaugeopt import _leakage_direct_sum_group
+        with self.assertRaises(ValueError):
+            _leakage_direct_sum_group(Basis.cast('gm', 9))
+
+    def test_interleaved_computational_levels_accepted(self):
+        # pp (x) l2p1 has computational levels {0,1,3,4} interleaved with leakage
+        # levels {2,5}. The group carries a level_partition so its block-diagonal
+        # unitaries are permuted onto those levels: U(4) on comp (+) U(2) on leak.
+        from pygsti.baseobjs.basis import Basis, TensorProdBasis
+        from pygsti.leakage.gaugeopt import _leakage_direct_sum_group
+        basis = TensorProdBasis((Basis.cast('pp', 4), Basis.cast('l2p1', 9)))
+        gg = _leakage_direct_sum_group(basis)
+        self.assertEqual(len(gg.subgroups), 2)
+        self.assertIsInstance(gg.subgroups[0], UnitaryGaugeGroup)
+        self.assertIsInstance(gg.subgroups[1], UnitaryGaugeGroup)
+        self.assertEqual(gg.subgroups[0].state_space.udim, 4)
+        self.assertEqual(gg.subgroups[1].state_space.udim, 2)
+        self.assertEqual(gg.level_partition, ((0, 1, 3, 4), (2, 5)))
+        # The resulting unitary must not couple computational and leakage levels.
+        el = gg.compute_element(np.random.RandomState(0).randn(gg.num_params))
+        comp, leak = [0, 1, 3, 4], [2, 5]
+        self.assertLess(np.abs(el._u[np.ix_(comp, leak)]).max(), 1e-12)
+        self.assertLess(np.abs(el._u[np.ix_(leak, comp)]).max(), 1e-12)
+
+    def test_non_coordinate_subspace_rejected(self):
+        # A computational effect that is a projector onto a non-coordinate subspace
+        # (not diagonal in the standard basis) cannot be handled by a level
+        # permutation, so the construction must refuse.
+        from pygsti.baseobjs.basis import Basis
+        from pygsti.leakage.core import augment_for_leakage_modeling
+        from pygsti.leakage.gaugeopt import _leakage_direct_sum_group
+        # Rank-1 projector onto (|0>+|1>)/sqrt(2): Hermitian, but not diagonal.
+        v = np.array([1., 1., 0.]) / np.sqrt(2)
+        E = np.outer(v, v)
+        basis = augment_for_leakage_modeling(Basis.cast('gm', 9), E)
+        with self.assertRaises(NotImplementedError):
+            _leakage_direct_sum_group(basis)
+
+
+class FindPerfectGauge_DirectSumGaugeGroup4LevelTester(BaseCase):
+    """
+    Gauge-recovery test for the generalized direct-sum gauge group on a 4-level
+    system: a 2-dimensional computational subspace plus a 2-dimensional leakage
+    subspace (k=2, m=2), which the old hardcoded U(2) (+) U(1) group could not
+    express.
+    """
+
+    def _prep(self, seed):
+        from pygsti.baseobjs import ExplicitStateSpace
+        from pygsti.baseobjs.basis import Basis
+        from pygsti.leakage.core import augment_for_leakage_modeling
+        from pygsti.leakage.gaugeopt import _leakage_direct_sum_group
+        from pygsti.modelmembers.povms import UnconstrainedPOVM
+        from pygsti.modelmembers.states import FullState
+        from pygsti.tools.basistools import stdmx_to_vec
+
+        basis = augment_for_leakage_modeling(Basis.cast('gm', 16), np.diag([1., 1., 0., 0.]))
+        ss = ExplicitStateSpace(['Q0'], [4])
+        target = ExplicitOpModel(ss, basis)
+
+        rho0 = np.zeros((4, 4)); rho0[0, 0] = 1.0
+        E0 = np.diag([1., 0., 0., 0.]).astype(complex)
+        E1 = np.eye(4) - E0
+        # The basis is Hermitian, so these superkets are real up to rounding; take the
+        # real part explicitly to avoid ComplexWarnings from FullState's real storage.
+        target.preps['rho0'] = FullState(np.real(stdmx_to_vec(rho0, basis)))
+        target.povms['Mdefault'] = UnconstrainedPOVM(
+            [('0', np.real(stdmx_to_vec(E0, basis))), ('1', np.real(stdmx_to_vec(E1, basis)))],
+            evotype='default')
+
+        u_x = la.expm(-0.25j * np.pi * pgbc.sigmax)
+        u_y = la.expm(-0.25j * np.pi * pgbc.sigmay)
+        for name, u2 in [('Gxpi2', u_x), ('Gypi2', u_y)]:
+            u4 = la.block_diag(u2, np.eye(2))
+            target.operations[pgl.Label((name, 'Q0'))] = np.real(pgo.unitary_to_superop(u4, basis))
+
+        target.default_gauge_group = _leakage_direct_sum_group(basis)
+        self.target = target
+        self.model = target.copy()
+
+        np.random.seed(seed)
+        def _rand_u2():
+            h = np.random.randn(2, 2) + 1j * np.random.randn(2, 2)
+            return la.expm(-0.5j * (h + h.T.conj()))
+        U = la.block_diag(_rand_u2(), _rand_u2())
+        U_superop = FullArbitraryOp(np.real(pgo.unitary_to_superop(U, basis)), basis)
+        self.gauge_grp_el = FullGaugeGroupElement(U_superop)
+        self.model.transform_inplace(self.gauge_grp_el)
+
+        self.metrics_before = gate_metrics_dict(self.model, self.target)
+        check_gate_metrics_are_nontrivial(self.metrics_before, tol=1e-2)
+        return
+
+    def test_lbfgs_frodist(self):
+        for seed in [1]:
+            self._prep(seed)
+            newmodel = gop.gaugeopt_to_target(
+                self.model, self.target, method='L-BFGS-B', tol=1e-14,
+                spam_metric='frobenius squared', gates_metric='frobenius squared')
+            metrics_after = gate_metrics_dict(newmodel, self.target)
+            check_gate_metrics_near_zero(metrics_after, tol=1e-6)
+        return
+
+
+class FindPerfectGauge_DirectSumGaugeGroupInterleavedTester(BaseCase):
+    """
+    Gauge-recovery test for the generalized direct-sum gauge group on a leakage basis
+    with *interleaved* computational and leakage levels: pp (x) l2p1, a 6-level system
+    whose computational subspace is levels {0,1,3,4} and leakage subspace is {2,5}
+    (k=4, m=2). The gauge group carries a level_partition so its U(4) (+) U(2)
+    block-diagonal unitaries are permuted onto the correct levels.
+    """
+
+    def _embed(self, blocks, level_partition, udim):
+        # Scatter a block-diagonal unitary onto the (possibly interleaved) levels named
+        # by level_partition -- the same permutation the gauge group applies internally.
+        grouped_order = [lvl for block in level_partition for lvl in block]
+        u_grouped = la.block_diag(*blocks)
+        perm = np.zeros((udim, udim))
+        for grouped_idx, level in enumerate(grouped_order):
+            perm[level, grouped_idx] = 1.0
+        return perm @ u_grouped @ perm.T
+
+    def _prep(self, seed):
+        from pygsti.baseobjs import ExplicitStateSpace
+        from pygsti.baseobjs.basis import Basis, TensorProdBasis
+        from pygsti.leakage.gaugeopt import _leakage_direct_sum_group
+        from pygsti.modelmembers.povms import UnconstrainedPOVM
+        from pygsti.modelmembers.states import FullState
+        from pygsti.tools.basistools import stdmx_to_vec
+
+        basis = TensorProdBasis((Basis.cast('pp', 4), Basis.cast('l2p1', 9)))
+        gg = _leakage_direct_sum_group(basis)
+        partition = gg.level_partition  # ((0,1,3,4), (2,5))
+        udim = 6
+
+        ss = ExplicitStateSpace(['Q0'], [6])
+        target = ExplicitOpModel(ss, basis)
+
+        rho0 = np.zeros((6, 6)); rho0[0, 0] = 1.0
+        E0 = np.diag([1., 0., 0., 0., 0., 0.]).astype(complex)
+        E1 = np.eye(6) - E0
+        # The basis is Hermitian, so these superkets are real up to rounding; take the
+        # real part explicitly to avoid ComplexWarnings from FullState's real storage.
+        target.preps['rho0'] = FullState(np.real(stdmx_to_vec(rho0, basis)))
+        target.povms['Mdefault'] = UnconstrainedPOVM(
+            [('0', np.real(stdmx_to_vec(E0, basis))), ('1', np.real(stdmx_to_vec(E1, basis)))],
+            evotype='default')
+
+        u_x = la.expm(-0.25j * np.pi * pgbc.sigmax)
+        u_y = la.expm(-0.25j * np.pi * pgbc.sigmay)
+        for name, u2 in [('Gxpi2', u_x), ('Gypi2', u_y)]:
+            # gate acts as u2 on two of the four computational levels, identity elsewhere
+            u_comp = la.block_diag(u2, np.eye(2))
+            u6 = self._embed([u_comp, np.eye(2)], partition, udim)
+            target.operations[pgl.Label((name, 'Q0'))] = np.real(pgo.unitary_to_superop(u6, basis))
+
+        target.default_gauge_group = gg
+        self.target = target
+        self.model = target.copy()
+
+        np.random.seed(seed)
+        def _rand_u(n):
+            h = np.random.randn(n, n) + 1j * np.random.randn(n, n)
+            return la.expm(-0.5j * (h + h.T.conj()))
+        U = self._embed([_rand_u(4), _rand_u(2)], partition, udim)
+        U_superop = FullArbitraryOp(np.real(pgo.unitary_to_superop(U, basis)), basis)
+        self.gauge_grp_el = FullGaugeGroupElement(U_superop)
+        self.model.transform_inplace(self.gauge_grp_el)
+
+        self.metrics_before = gate_metrics_dict(self.model, self.target)
+        check_gate_metrics_are_nontrivial(self.metrics_before, tol=1e-2)
+        return
+
+    def test_lbfgs_frodist(self):
+        for seed in [1]:
+            self._prep(seed)
+            newmodel = gop.gaugeopt_to_target(
+                self.model, self.target, method='L-BFGS-B', tol=1e-14,
+                spam_metric='frobenius squared', gates_metric='frobenius squared')
+            metrics_after = gate_metrics_dict(newmodel, self.target)
+            check_gate_metrics_near_zero(metrics_after, tol=1e-6)
+        return

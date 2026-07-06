@@ -117,11 +117,11 @@ In addition to there being multiple options for the algorithm to use, there are 
 For `find_germs` the `mode` kwarg acts as a flag to indicate the caching scheme used for storing the Jacobians for the candidate
 germs. Default value of 'allJac' caches all of the Jacobians and requires the most memory. 'singleJac' doesn't cache anything and instead generates these Jacobians on the fly. The final option, 'compactEVD', is currently only configured to work with the greedy search algorithm. When selected the compact eigenvalue decomposition/compact SVD of each of the Jacobians is constructed and is cached. This uses an intermediate amount of memory between 'singleJac' and 'allJac'. When compactEVD mode is selected we also perform the greedy search iterations using an alternative method based on low-rank update techniques, which means in practice this mode can be orders-of-magnitude faster than the other modes, though typically only for two-or-more qubits. This alternative approach means that this mode also only works with the score function option set to 'all'. (Note: this mode can also be a bit more finicky than other modes, so be prepared to tinker a bit, you can see hints of this finickiness below).
 
-`find_germs` also accepts the kwargs `assume_real` and `float_type`. `assume_real` is a flag indicating that the process matrices for germs will be real-valued, as is the case when working with the Pauli basis, which can allow for unlocking certain optimizations in these cases. `float_type` allows fine-tuning the numpy floating point number types used in the computation, which can allow for better computational performance and a lower memory-footprint in the correct circumstances.
+`find_germs` also accepts the kwarg `float_type`. `float_type` is dynamically inferred based on the target model's basis (e.g., standard Pauli representations automatically use real-valued arrays). `float_type` can still be optionally specified for memory tuning (e.g. downcasting to `np.single`), which can allow for a lower memory footprint. When manually specified `float_type` is validated for compatibility against the model's basis. 
 
 ```{code-cell} ipython3
 greedyGerms_compactEVD = germsel.find_germs(target_model, algorithm='greedy', seed = 1234, mode='compactEVD', verbosity=1,
-                                            assume_real=True, float_type=np.double)
+                                            float_type=np.double)
 ```
 
 #### Germ and fiducial lengths
@@ -196,8 +196,7 @@ omit_identityPrepFids, omit_identityMeasFids = fidsel.find_fiducials(target_mode
 So far we have implicitly been constructing examples of what we call the 'Robust' germ set. This is a germ set designed to be robust against second-order effects that result in a plateuing of our sensitivity at long circuit depths. Unless your system has very low error rates, it is likely that even with this second order effect you'll be decoherence limited long before entering the regime where this effect is significant. By setting the kwarg `randomize` to `False` you can change the behavior of germ selection such that it produces a significantly smaller, but also somewhat less robust, germ set called the 'Standard' or 'Lite' germ set. While not the default behavior of `find_germs`, we've found that for most applications the lite germ set is more than sufficient, so we recommend using it unless there is specific reason to prefer the robust experiment design (e.g. if you need high precision estimates for an idle gate known to have a very high fidelity). For more on these different germ sets see [this paper](https://arxiv.org/abs/2307.15767).
 
 ```{code-cell} ipython3
-liteGerms = germsel.find_germs(target_model, randomize=False, algorithm='greedy', verbosity=1,
-                                            assume_real=True, float_type=np.double)
+liteGerms = germsel.find_germs(target_model, randomize=False, algorithm='greedy', verbosity=1)
 ```
 
 #### Verbosity

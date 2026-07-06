@@ -108,6 +108,59 @@ def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
     return None
 
 
+def basis_aware_display(switchboard, name, ordinary, leakage):
+    """
+    Register (once, keyed by `name`) and return a per-cell display ``SwitchValue`` for a
+    gates-vs-target table.
+
+    Each cell's column tuple is chosen from that cell's model basis together with the
+    interactive "Metrics" switch: the leakage (subspace-restricted) columns are used only
+    when the cell's model basis implies leakage modeling *and* the reader has the "Metrics"
+    switch in its 0-th ("Subspace") position; otherwise the ordinary full-space columns are
+    used.  Because ``display`` is thereby a per-cell switched value, the metric *headers* a
+    reader sees always match the metric *computation* used to fill them, and a report whose
+    cells have different bases simply renders different columns per switch position.
+
+    Parameters
+    ----------
+    switchboard : Switchboard
+        The report's master switchboard.  Must have ``mdl_final`` populated and a
+        ``metric_space_switch_index`` attribute (both set in ``_create_master_switchboard``).
+
+    name : str
+        Key under which the display ``SwitchValue`` is registered on ``switchboard``.  If a
+        value is already registered under this key it is returned unchanged (idempotent
+        across repeated / multi-brevity renders).
+
+    ordinary : tuple
+        The full-space column-name tuple (e.g. ``('inf', 'trace', 'diamond', ...)``).
+
+    leakage : tuple
+        The subspace/leakage column-name tuple (e.g. ``('sub-inf', 'sub-trace', ...)``).
+
+    Returns
+    -------
+    SwitchValue
+    """
+    if name in switchboard:
+        return switchboard[name]
+
+    ms_idx = switchboard.metric_space_switch_index
+    deps = tuple(switchboard.mdl_final.dependencies) + (ms_idx,)
+    switchboard.add(name, deps)
+    sv = switchboard[name]
+
+    mdl_base = switchboard.mdl_final.base
+    for idx in _np.ndindex(sv.base.shape):
+        model_idx, ms = idx[:-1], idx[-1]
+        mdl = mdl_base[model_idx]
+        basis = getattr(mdl, 'basis', None)
+        leaky = (not isinstance(mdl, _ws.NotApplicable)) and basis is not None \
+            and bool(getattr(basis, 'implies_leakage_modeling', False))
+        sv.base[idx] = leakage if (ms == 0 and leaky) else ordinary
+    return sv
+
+
 def create_offline_zip(output_dir="."):
     """
     Creates a zip file containing the a directory ("offline") of files need to display "offline" reports.
@@ -208,13 +261,37 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     multiGO = bool(len(gauge_opt_labels) > 1)
     #multiL = bool(len(swLs) > 1)
 
+    # Does any model in any estimate carry a basis that implies leakage modeling? If so,
+    # we expose an interactive "Metrics" switch letting the reader flip the gates-vs-target
+    # tables between subspace-restricted (leakage-aware) and standard full-space columns.
+    # The per-cell column choice is made in `basis_aware_display` (defined above).
+    any_leakage = False
+    for results in results_dict.values():
+        for est in results.estimates.values():
+            for mdl in est.models.values():
+                basis = getattr(mdl, 'basis', None)
+                if basis is not None and getattr(basis, 'implies_leakage_modeling', False):
+                    any_leakage = True
+                    break
+            if any_leakage:
+                break
+        if any_leakage:
+            break
+
     switchBd = ws.Switchboard(
-        ["Dataset", "Estimate", "Gauge-Opt", "max(L)"],
-        [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs))],
-        ["dropdown", "dropdown", "buttons", "slider"], [0, 0, 0, len(swLs) - 1],
-        show=[multidataset, multiest, multiGO, False],  # "global" switches only + gauge-opt (OK if doesn't apply)
+        ["Dataset", "Estimate", "Gauge-Opt", "max(L)", "Metrics"],
+        [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs)),
+         ["Subspace", "Full-space"]],
+        ["dropdown", "dropdown", "buttons", "slider", "buttons"],
+        [0, 0, 0, len(swLs) - 1, 0],
+        # "global" switches only + gauge-opt (OK if doesn't apply); the "Metrics" switch is
+        # shown only when some basis implies leakage (otherwise both positions coincide).
+        show=[multidataset, multiest, multiGO, False, any_leakage],
         use_loadable_items=embed_figures
     )
+    # Switch index of the "Metrics" (Subspace | Full-space) toggle, read by the
+    # gates-vs-target figure factories via `basis_aware_display`.
+    switchBd.metric_space_switch_index = 4
 
     switchBd.add("ds", (0,))
     switchBd.add("prep_fiducials", (0,))
@@ -1252,9 +1329,12 @@ def construct_standard_report(results, title="auto",
     confidence_level = _validated_confidence_level(confidence_level)
 
     advanced_options = advanced_options or {}
-    n_leak = advanced_options.get('n_leak', 0)
-    # ^ It would be preferable to store n_leak in a Basis object, or something similar.
-    #   We're using this for now since it's simple and gets the job done.
+    if 'leakage_modeling' in advanced_options or 'n_leak' in advanced_options:
+        _warnings.warn(
+            "'leakage_modeling'/'n_leak' in advanced_options are deprecated and ignored: "
+            "leakage metrics are now shown automatically wherever a model's basis permits, "
+            "with an interactive Subspace/Full-space 'Metrics' switch in the report.",
+            DeprecationWarning)
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
@@ -1276,6 +1356,28 @@ def construct_standard_report(results, title="auto",
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results = results if isinstance(results, dict) else {"unique": results}
+
+    if confidence_level is not None:
+        # Error bars are rendered from Hessian-based confidence region factories, which
+        # are expensive and therefore never computed here. Warn now if they're missing,
+        # rather than letting the report silently come out bare.
+        missing = []
+        for res_key, res in results.items():
+            for est_key, est in res.estimates.items():
+                if est_key == 'Target':
+                    continue
+                if not any(_get_viewable_crf(est, est_key, mdl_lbl) is not None
+                           for mdl_lbl in est.goparameters):
+                    missing.append(est_key if len(results) == 1 else f"{res_key}:{est_key}")
+        if missing:
+            _warnings.warn(
+                f"confidence_level={confidence_level} requests error bars, but no "
+                f"confidence region factory with a computed Hessian was found for "
+                f"estimate(s) {missing}. These estimates will be rendered without "
+                f"error bars. Call ModelEstimateResults.add_hessians() on your "
+                f"results object(s) before report generation to compute the "
+                f"necessary Hessians."
+            )
 
     # set flags
     flags = set()
@@ -1397,8 +1499,7 @@ def construct_standard_report(results, title="auto",
         'gauge_opt_labels': tuple(gauge_opt_labels),
         'max_lengths': tuple(Ls),
         'switchbd_maxlengths': tuple(swLs),
-        'show_unmodeled_error': bool('ShowUnmodeledError' in flags),
-        'n_leak' : n_leak
+        'show_unmodeled_error': bool('ShowUnmodeledError' in flags)
     }
 
     templates = dict(
