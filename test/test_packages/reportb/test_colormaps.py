@@ -90,6 +90,45 @@ class ColormapTests(BaseTestCase):
             fig = ReportFigure(go.Figure(data=data, layout=layout))
             plotly_to_matplotlib(fig) #invalid mode
 
+    def test_mpl_conversion_heatmap_without_plt_data(self):
+        """Minimal reproducer for the ``KeyError: 'plt_data'`` seen in report generation.
+
+        The multi-subplot matrix plot builders ``_matrices_color_boxplot`` and
+        ``_opmatrices_color_boxplot`` (pygsti/report/workspaceplots.py) return a
+        ``ReportFigure`` that contains a ``heatmap`` trace but does *not* carry
+        ``plt_data`` (or a ``colormap``) in its metadata.  When such a figure is
+        rendered to matplotlib (PDF reports, or HTML reports with ``link_to``
+        including 'pdf'/'pkl'), ``plotly_to_matplotlib`` fails at
+        ``pygsti/report/mpl_colormaps.py`` with ``KeyError: 'plt_data'``.
+
+        This test constructs the minimal figure that triggers the bug and asserts
+        the *desired* behavior: the figure should render to matplotlib without
+        raising.  While the bug is present this test FAILS (the KeyError is the
+        undesired behavior we want surfaced).
+        """
+        try:
+            import matplotlib
+            from pygsti.report.mpl_colormaps import plotly_to_matplotlib
+        except ImportError:
+            return  # no matplotlib => stop here
+
+        nX, nY = 5, 3
+        heatmap_data = [go.Heatmap(z=np.ones((nY, nX), 'd'),
+                                   colorscale=[[0, 'white'], [1, 'black']],
+                                   showscale=False, zmin=0, zmax=1, hoverinfo='none')]
+        layout = go.Layout(width=800, height=400,
+                           xaxis=dict(type="linear"),
+                           yaxis=dict(type="linear"))
+
+        # Mimic _matrices_color_boxplot / _opmatrices_color_boxplot: the figure is
+        # built with ReportFigure(fig) -- no colormap and no plt_data metadata.
+        fig = ReportFigure(go.Figure(data=heatmap_data, layout=layout))
+
+        # Desired behavior: this should render without raising.  While the bug is
+        # present, plotly_to_matplotlib raises ``KeyError: 'plt_data'`` and this
+        # call fails the test.
+        plotly_to_matplotlib(fig, temp_files + "/testMPLHeatmapNoPltData.pdf")
+
 
 if __name__ == '__main__':
     import unittest
