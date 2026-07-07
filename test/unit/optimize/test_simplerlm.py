@@ -116,6 +116,24 @@ class SimplishLeastSqReturnTupleTester(BaseCase):
         self.assertTrue(np.isscalar(norm_f))
         self.assertIsInstance(f, np.ndarray)
 
+    def test_xf_matches_linear_x_star(self):
+        """Solution must equal the analytic least-squares answer, not just converge to some point."""
+        xf, converged, *_ = self._run_linear()
+        self.assertTrue(converged)
+        np.testing.assert_allclose(xf, LINEAR_X_STAR, atol=1e-8)
+
+    def test_f_is_residual_at_xf(self):
+        """Returned f must equal obj_fn(xf), not f at some earlier iterate."""
+        xf, _, _, _, _, _, f = self._run_linear()
+        from .fixtures import LINEAR_A, LINEAR_B
+        expected_f = LINEAR_A @ xf - LINEAR_B
+        np.testing.assert_allclose(f, expected_f, atol=1e-10)
+
+    def test_f_shape_matches_n_elements(self):
+        from .fixtures import LINEAR_A
+        _, _, _, _, _, _, f = self._run_linear()
+        self.assertEqual(f.shape, (LINEAR_A.shape[0],))
+
     def test_converged_flag_true_on_success(self):
         _, converged, _, *_ = self._run_linear()
         self.assertTrue(converged)
@@ -306,9 +324,17 @@ class SimplerLMOptimizerSerializationTester(BaseCase):
         self.assertEqual(opt.oob_check_mode, opt2.oob_check_mode)
         self.assertEqual(opt.lsvec_mode, opt2.lsvec_mode)
 
-    def test_serialization_state_is_dict(self):
+    def test_serialization_state_is_dict_with_expected_keys(self):
         state = self._make()._to_nice_serialization()
         self.assertIsInstance(state, dict)
+        expected_keys = {
+            'maximum_iterations', 'tolerance',
+            'number_of_finite_difference_iterations',
+            'initial_mu_and_nu', 'out_of_bounds_check_interval',
+            'out_of_bounds_action', 'lsvec_mode',
+        }
+        self.assertTrue(expected_keys.issubset(state.keys()),
+                        f"Missing keys: {expected_keys - state.keys()}")
 
 
 # ---------------------------------------------------------------------------

@@ -141,27 +141,64 @@ class CheckJacTester(BaseCase):
 class CreateObjfnPrinterTester(BaseCase):
     """create_objfn_printer returns a callable that prints elapsed time and value."""
 
+    def _make_callback(self, fn=None):
+        if fn is None:
+            fn = lambda x: np.dot(x, x)
+        return opt.create_objfn_printer(fn, start_time=time.time())
+
     def test_returns_callable(self):
-        callback = opt.create_objfn_printer(lambda x: np.dot(x, x))
-        self.assertTrue(callable(callback))
+        self.assertTrue(callable(self._make_callback()))
 
-    def test_callback_does_not_raise(self):
-        fn = lambda x: np.dot(x, x)
-        callback = opt.create_objfn_printer(fn, start_time=time.time())
-        x = np.array([1.0, 2.0])
-        # Should print something and return None without raising
-        with contextlib.redirect_stdout(io.StringIO()):
-            result = callback(x)
+    def test_callback_returns_none(self):
+        """Optimizer loop relies on None return meaning 'continue'."""
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = self._make_callback()(np.array([1.0, 2.0]))
         self.assertIsNone(result)
 
-    def test_callback_with_f_argument(self):
-        """Some optimizers pass f value directly to the callback."""
-        fn = lambda x: np.dot(x, x)
-        callback = opt.create_objfn_printer(fn, start_time=time.time())
-        x = np.array([1.0, 2.0])
-        with contextlib.redirect_stdout(io.StringIO()):
-            result = callback(x, f=5.0)
+    def test_callback_prints_objective_value(self):
+        """Printed output must contain the numeric value of fn(x) = 5.0."""
+        fn = lambda x: 5.0  # constant, easy to find in output
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self._make_callback(fn)(np.array([1.0, 2.0]))
+        self.assertIn("5", buf.getvalue(),
+                      "Expected objective value '5' in printer output")
+
+    def test_callback_prints_elapsed_time(self):
+        """Printed output must contain some indication of elapsed time (a dot or digit)."""
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self._make_callback()(np.array([3.0, 4.0]))
+        # Elapsed time is always a non-negative float; output must be non-empty
+        self.assertGreater(len(buf.getvalue().strip()), 0)
+
+    def test_callback_with_f_and_accepted_prints_supplied_value(self):
+        """When both f= and accepted= are supplied the printer uses f directly,
+        not obj_func(x).  Verify by supplying a constant fn returning 99.0 but
+        passing f=42.0 — output must contain 42, not 99."""
+        fn_sentinel = lambda x: 99.0
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = self._make_callback(fn_sentinel)(np.array([1.0]), f=42.0, accepted=True)
         self.assertIsNone(result)
+        output = buf.getvalue()
+        self.assertIn("42", output,
+                      "Printer should display the supplied f= value when accepted= also given")
+        self.assertNotIn("99", output,
+                         "Printer must NOT call obj_func when f= and accepted= are both supplied")
+
+    def test_callback_with_only_f_kwarg_still_calls_obj_func(self):
+        """When f= is supplied but accepted= is not, the printer ignores f= and
+        calls obj_func(x) instead.  This is the current behavior (pin it)."""
+        fn_sentinel = lambda x: 77.0
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            result = self._make_callback(fn_sentinel)(np.array([1.0]), f=42.0)
+        self.assertIsNone(result)
+        output = buf.getvalue()
+        self.assertIn("77", output,
+                      "Printer should call obj_func(x) and display 77.0 when accepted= not given")
 
 
 # ---------------------------------------------------------------------------

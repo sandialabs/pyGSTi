@@ -79,25 +79,60 @@ class CustomLeastSqTerminationTester(BaseCase):
 
 
 class CustomLeastSqReturnTupleTester(BaseCase):
-    """Return tuple has exactly 8 elements with the right types."""
+    """Return tuple has exactly 8 elements with the right types and values."""
 
-    def test_return_tuple_length_and_types(self):
+    def setUp(self):
         x0 = np.array([10.0, 10.0], 'd')
         ari = make_linear_ari()
-        result = _run(linear_obj_fn, linear_jac_fn, x0, ari)
+        self.result = _run(linear_obj_fn, linear_jac_fn, x0, ari)
+        self.xf, self.converged, self.msg, self.mu, self.nu, self.norm_f, self.f, self.raw_jtj = self.result
+
+    def test_return_tuple_length(self):
         # custom_leastsq returns (global_x, converged, msg, mu, nu, norm_f, global_f, rawJTJ)
-        self.assertEqual(len(result), 8)
-        xf, converged, msg, mu, nu, norm_f, f, raw_jtj = result
-        self.assertIsInstance(xf, np.ndarray)
-        self.assertIsInstance(converged, bool)
-        self.assertIsInstance(msg, str)
+        self.assertEqual(len(self.result), 8)
+
+    def test_return_types(self):
+        self.assertIsInstance(self.xf, np.ndarray)
+        self.assertIsInstance(self.converged, bool)
+        self.assertIsInstance(self.msg, str)
         # mu is numpy.float64; nu is a plain int — both are numeric scalars
-        self.assertTrue(np.isscalar(mu))
-        self.assertTrue(np.isscalar(nu))
-        self.assertTrue(np.isscalar(norm_f))
-        self.assertIsInstance(f, np.ndarray)
+        self.assertTrue(np.isscalar(self.mu))
+        self.assertTrue(np.isscalar(self.nu))
+        self.assertTrue(np.isscalar(self.norm_f))
+        self.assertIsInstance(self.f, np.ndarray)
         # rawJTJ may be an ndarray or None depending on convergence path
-        self.assertTrue(raw_jtj is None or isinstance(raw_jtj, np.ndarray))
+        self.assertTrue(self.raw_jtj is None or isinstance(self.raw_jtj, np.ndarray))
+
+    def test_converged_true(self):
+        self.assertTrue(self.converged)
+
+    def test_xf_matches_linear_x_star(self):
+        """Solution must match the analytic least-squares answer, not just converge to some point."""
+        np.testing.assert_allclose(self.xf, LINEAR_X_STAR, atol=1e-8)
+
+    def test_norm_f_equals_dot_f_f(self):
+        """norm_f must equal sum(f**2), not some other norm."""
+        self.assertAlmostEqual(self.norm_f, float(np.dot(self.f, self.f)), places=8)
+
+    def test_norm_f_is_nonnegative(self):
+        self.assertGreaterEqual(self.norm_f, 0.0)
+
+    def test_mu_is_positive(self):
+        self.assertGreater(self.mu, 0.0)
+
+    def test_nu_is_at_least_2(self):
+        self.assertGreaterEqual(self.nu, 2)
+
+    def test_raw_jtj_shape_when_present(self):
+        """If rawJTJ is returned it must be square with side == len(x)."""
+        if self.raw_jtj is not None:
+            n = len(self.xf)
+            self.assertEqual(self.raw_jtj.shape, (n, n))
+
+    def test_f_shape_matches_n_elements(self):
+        """Residual vector length must equal the number of elements in the problem."""
+        from .fixtures import LINEAR_A
+        self.assertEqual(len(self.f), LINEAR_A.shape[0])
 
 
 class CustomLeastSqLinearConvergenceTester(BaseCase):
@@ -234,10 +269,17 @@ class CustomLMOptimizerSerializationTester(BaseCase):
         self.assertEqual(opt.init_munu, opt2.init_munu)
         self.assertEqual(opt.lsvec_mode, opt2.lsvec_mode)
 
-    def test_serialization_state_is_dict(self):
+    def test_serialization_state_is_dict_with_expected_keys(self):
         opt = self._make_optimizer()
         state = opt._to_nice_serialization()
         self.assertIsInstance(state, dict)
+        expected_keys = {
+            'maximum_iterations', 'maximum_function_evaluations', 'tolerance',
+            'damping_mode', 'damping_basis', 'use_acceleration',
+            'uphill_step_threshold', 'initial_mu_and_nu', 'lsvec_mode',
+        }
+        self.assertTrue(expected_keys.issubset(state.keys()),
+                        f"Missing keys: {expected_keys - state.keys()}")
 
     def test_default_constructor_serializes_and_restores(self):
         opt = CustomLMOptimizer()

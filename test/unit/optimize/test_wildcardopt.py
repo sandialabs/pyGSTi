@@ -140,13 +140,40 @@ class ComputeFdTester(BaseCase):
         np.testing.assert_allclose(hess_fd, np.eye(2), atol=1e-4)
 
     def test_gradient_only_mode(self):
-        """compute_hessian=False should return only the gradient array."""
+        """compute_hessian=False should return only the gradient array with correct values."""
         result = _compute_fd(self.x, newton_fn, compute_hessian=False)
         # Returns only the gradient (1-D array), not a (grad, hess) tuple
         self.assertIsInstance(result, np.ndarray)
         self.assertEqual(result.ndim, 1)
         self.assertEqual(len(result), 2)
+        # Analytic gradient of 0.5*||x - x*||^2 is x - x*
+        _, grad_analytic, _ = newton_fn_with_derivs(self.x)
+        np.testing.assert_allclose(result, grad_analytic, atol=1e-4)
 
     def test_gradient_at_minimum_is_near_zero(self):
         grad_fd, _ = _compute_fd(NEWTON_X_STAR.copy(), newton_fn)
         np.testing.assert_allclose(grad_fd, np.zeros(2), atol=1e-4)
+
+    def test_non_diagonal_hessian(self):
+        """
+        Verify _compute_fd recovers a non-diagonal Hessian correctly.
+
+        Objective: f(x) = 0.5 * x^T M x  where M = [[2, 1], [1, 3]].
+        Gradient:  Df(x) = M x
+        Hessian:   H = M  (constant, non-diagonal)
+
+        At x = [1, 1]:  grad = [3, 4],  hess = [[2, 1], [1, 3]].
+        """
+        M = np.array([[2.0, 1.0], [1.0, 3.0]])
+
+        def quadratic_fn(x):
+            return 0.5 * float(x @ M @ x)
+
+        x = np.array([1.0, 1.0], 'd')
+        grad_fd, hess_fd = _compute_fd(x, quadratic_fn)
+
+        expected_grad = M @ x          # [3, 4]
+        expected_hess = M              # [[2, 1], [1, 3]]
+
+        np.testing.assert_allclose(grad_fd, expected_grad, atol=1e-4)
+        np.testing.assert_allclose(hess_fd, expected_hess, atol=1e-4)
