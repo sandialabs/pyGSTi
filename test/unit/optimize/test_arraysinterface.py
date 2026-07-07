@@ -5,16 +5,15 @@ Coverage
 --------
 * UndistributedArraysInterface — every public method, pinned to current
   numeric behaviour so refactors can verify they changed nothing.
-* Two xfail tests document *intended* but currently-broken behaviour:
-  - norm2_jac should return the *squared* Frobenius norm (not the raw norm).
-  - min_x should exist on UndistributedArraysInterface (API parity with Distributed).
+* norm2_jac (squared Frobenius norm) and min_x were previously inconsistent
+  with DistributedArraysInterface; both were fixed during the optimize refactor
+  and are now verified to match the distributed convention.
 
 DistributedArraysInterface is covered by test/integration/test_optimize_mpi.py
 which requires mpi4py and runs under CI.
 """
 
 import numpy as np
-import pytest
 
 from pygsti.optimize.arraysinterface import UndistributedArraysInterface
 from ..util import BaseCase
@@ -199,87 +198,53 @@ class UndistributedVectorOpsTester(BaseCase):
 
 class UndistributedNorm2JacTester(BaseCase):
     """
-    Characterisation tests for norm2_jac.
+    norm2_jac returns the *squared* Frobenius norm, consistent with its
+    docstring, norm2_f/norm2_x/norm2_jtj, and DistributedArraysInterface.
 
-    norm2_jac currently returns np.linalg.norm(j)  (NOT squared).
-    This is inconsistent with the docstring, with norm2_f, norm2_x, and
-    with DistributedArraysInterface.norm2_jac which returns norm(j)**2.
-
-    The first test PINS THE CURRENT BEHAVIOUR.
-    The second test (xfail, strict=True) documents the INTENDED behaviour.
-    When the bug is fixed the xfail will flip to passing and should be removed.
+    (Previously it returned the raw norm — this was fixed during the optimize
+    refactor.  Jnorm is display-only, computed as sqrt(norm2_jac), so the fix
+    changes only logged output, not solver behaviour.)
     """
 
     def setUp(self):
         self.ari = make_ari(4, 3)
-        # 3×4 Jacobian whose Frobenius norm is 5.0 exactly
+        # 3×4 Jacobian whose Frobenius norm is 5.0 exactly (squared = 25.0)
         self.j = np.array([
             [3.0, 0.0, 0.0, 0.0],
             [0.0, 4.0, 0.0, 0.0],
             [0.0, 0.0, 0.0, 0.0],
         ], dtype='d').T  # shape (4, 3)
 
-    def test_norm2_jac_current_behaviour_returns_raw_norm(self):
-        """
-        Pin current (possibly buggy) behaviour: returns norm(j) = 5.0, not 25.0.
-
-        NOTE: latent discrepancy — UndistributedArraysInterface returns the
-        raw Frobenius norm while DistributedArraysInterface returns the squared
-        norm.  See test_norm2_jac_intended_behaviour_is_squared (xfail) below.
-        """
-        result = self.ari.norm2_jac(self.j)
-        self.assertAlmostEqual(result, 5.0, places=10)
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "norm2_jac should return the *squared* Frobenius norm (25.0) to "
-            "match its docstring, norm2_f/norm2_x, and DistributedArraysInterface. "
-            "Currently returns the raw norm (5.0).  Fix during refactor."
-        )
-    )
-    def test_norm2_jac_intended_behaviour_is_squared(self):
+    def test_norm2_jac_returns_squared_frobenius_norm(self):
         result = self.ari.norm2_jac(self.j)
         self.assertAlmostEqual(result, 25.0, places=10)
+
+    def test_norm2_jac_consistent_with_norm2_jtj_convention(self):
+        """Both should return squared norms (value >= raw norm for norms > 1)."""
+        raw_norm = np.linalg.norm(self.j)
+        self.assertAlmostEqual(self.ari.norm2_jac(self.j), raw_norm ** 2, places=10)
 
 
 class UndistributedMinXTester(BaseCase):
     """
-    Characterisation tests for min_x API parity.
-
-    DistributedArraysInterface has a min_x method.
-    UndistributedArraysInterface does NOT.  This is an API asymmetry — code
-    that calls ari.min_x() will crash in serial but not distributed mode.
-
-    The first test PINS THE CURRENT BEHAVIOUR (AttributeError).
-    The second test (xfail, strict=True) documents the INTENDED behaviour
-    (min_x returns the minimum element).
+    min_x returns the minimum element, giving API parity with
+    DistributedArraysInterface.  (Added during the optimize refactor.)
     """
 
     def setUp(self):
         self.ari = make_ari(4, 3)
         self.x = np.array([-1.0, 2.0, 0.5])
 
-    def test_min_x_is_missing_current_behaviour(self):
-        """
-        Pin current behaviour: min_x does not exist on UndistributedArraysInterface.
+    def test_min_x_exists(self):
+        self.assertTrue(hasattr(self.ari, 'min_x'))
 
-        NOTE: latent discrepancy — min_x is present on DistributedArraysInterface
-        but absent here.  See test_min_x_intended_behaviour (xfail) below.
-        """
-        self.assertFalse(hasattr(self.ari, 'min_x'))
+    def test_min_x_returns_minimum_element(self):
+        self.assertAlmostEqual(self.ari.min_x(self.x), -1.0, places=10)
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "UndistributedArraysInterface should have a min_x method for API "
-            "parity with DistributedArraysInterface.  Currently missing.  "
-            "Add during refactor: return np.min(x)."
-        )
-    )
-    def test_min_x_intended_behaviour(self):
-        result = self.ari.min_x(self.x)
-        self.assertAlmostEqual(result, -1.0, places=10)
+    def test_min_x_matches_numpy(self):
+        rng = np.random.default_rng(0)
+        v = rng.standard_normal(10)
+        self.assertAlmostEqual(self.ari.min_x(v), float(np.min(v)), places=12)
 
 
 class UndistributedFillOpsTester(BaseCase):

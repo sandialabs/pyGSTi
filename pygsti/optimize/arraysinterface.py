@@ -446,6 +446,21 @@ class UndistributedArraysInterface(ArraysInterface):
         """
         return _np.max(x)
 
+    def min_x(self, x):
+        """
+        Compute the minimum of an `x`-type vector.
+
+        Parameters
+        ----------
+        x : numpy.ndarray or LocalNumpyArray
+            The vector to operate on.
+
+        Returns
+        -------
+        float
+        """
+        return _np.min(x)
+
     def norm2_f(self, f):
         """
         Compute the Frobenius norm squared of an `f`-type vector.
@@ -489,7 +504,7 @@ class UndistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        return _np.linalg.norm(j)
+        return _np.linalg.norm(j)**2
 
     def fill_jtf(self, j, f, jtf):
         """
@@ -615,6 +630,47 @@ class DistributedArraysInterface(ArraysInterface):
         self.resource_alloc = self.layout.resource_alloc()
         self.extra_elements = extra_elements
         self.lsvec_mode = lsvec_mode  # e.g. 'normal' or 'circuits'
+
+    def _allreduce(self, local_value, op, unit_ralloc_key, return_scalar=True):
+        """
+        Perform a distributed all-reduce of a locally-computed quantity.
+
+        Handles the shared-memory allocation, all-reduce operation, result
+        extraction, host-comm barrier, and shared-memory cleanup that is common
+        to all the scalar/vector reduction methods below.
+
+        Parameters
+        ----------
+        local_value : numpy.ndarray
+            The locally-computed value(s) to reduce.  Reshaped to at least 1-D.
+
+        op : {'sum', 'max', 'min'}
+            The all-reduce operation to perform.
+
+        unit_ralloc_key : str
+            The resource-allocation key naming the group of processors over which
+            to reduce, e.g. ``'param-fine'`` or ``'atom-processing'``.
+
+        return_scalar : bool, optional
+            If True, return the single reduced element (as for a scalar quantity).
+            If False, return a copy of the full reduced array (as for a vector).
+
+        Returns
+        -------
+        float or numpy.ndarray
+        """
+        local_value = _np.asarray(local_value)
+        shape = local_value.shape if local_value.shape else (1,)
+        local_value = _compat.reshape_no_copy(local_value, shape)  # for compatibility with allreduce_*
+        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, shape, 'd')
+        allreduce = {'sum': self.resource_alloc.allreduce_sum,
+                     'max': self.resource_alloc.allreduce_max,
+                     'min': self.resource_alloc.allreduce_min}[op]
+        allreduce(result, local_value, unit_ralloc=self.layout.resource_alloc(unit_ralloc_key))
+        ret = result[0] if return_scalar else result.copy()  # "copies" the returned data
+        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
+        _smt.cleanup_shared_ndarray(result_shm)
+        return ret
 
     def allocate_jtf(self):
         """
@@ -971,15 +1027,7 @@ class DistributedArraysInterface(ArraysInterface):
         # Assumes jac_v is 'jtj' type and minus_jtf is 'jtf' type.
         # Returns a *global* parameter array that is dot(jac_v.T, minus_jtf)
         local_dot = _np.dot(jac_v.T, minus_jtf)  # (nP, nP_fine) * (nP_fine) = (nP,)
-
-        #Note: Could make this more efficient by being given a shared array like this as the destination
-        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (jac_v.shape[1],), 'd')
-        self.resource_alloc.allreduce_sum(result, local_dot,
-                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
-        ret = result.copy()
-        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
-        _smt.cleanup_shared_ndarray(result_shm)
-        return ret
+        return self._allreduce(local_dot, 'sum', 'param-fine', return_scalar=False)
 
     def fill_dx_svd(self, jac_v, global_vec, dx):
         """
@@ -1024,15 +1072,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         # assumes x's are in "fine" mode
-        local_dot = _np.array(_np.dot(x1, x2))
-        local_dot = _compat.reshape_no_copy(local_dot, (1,))  # for compatibility with allreduce_sum
-        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        self.resource_alloc.allreduce_sum(result, local_dot,
-                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
-        ret = result[0]  # "copies" the single returned element
-        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
-        _smt.cleanup_shared_ndarray(result_shm)
-        return ret
+        return self._allreduce(_np.dot(x1, x2), 'sum', 'param-fine')
 
     def norm2_x(self, x):
         """
@@ -1063,15 +1103,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         # assumes x's are in "fine" mode
-        local_infnorm = _np.array(_np.linalg.norm(x, ord=_np.inf))
-        local_infnorm = _compat.reshape_no_copy(local_infnorm, (1,))  # for compatibility with allreduce_sum
-        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        self.resource_alloc.allreduce_max(result, local_infnorm,
-                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
-        ret = result[0]  # "copies" the single returned element
-        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
-        _smt.cleanup_shared_ndarray(result_shm)
-        return ret
+        return self._allreduce(_np.linalg.norm(x, ord=_np.inf), 'max', 'param-fine')
 
     def min_x(self, x):
         """
@@ -1087,15 +1119,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         # assumes x's are in "fine" mode
-        local_min = _np.array(_np.min(x))
-        local_min = _compat.reshape_no_copy(local_min, (1,))  # for compatibility with allreduce_sum
-        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        self.resource_alloc.allreduce_min(result, local_min,
-                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
-        ret = result[0]  # "copies" the single returned element
-        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
-        _smt.cleanup_shared_ndarray(result_shm)
-        return ret
+        return self._allreduce(_np.min(x), 'min', 'param-fine')
 
     def max_x(self, x):
         """
@@ -1111,15 +1135,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         # assumes x's are in "fine" mode
-        local_max = _np.array(_np.max(x))
-        local_max = _compat.reshape_no_copy(local_max, (1,))  # for compatibility with allreduce_sum
-        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        self.resource_alloc.allreduce_max(result, local_max,
-                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
-        ret = result[0]  # "copies" the single returned element
-        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
-        _smt.cleanup_shared_ndarray(result_shm)
-        return ret
+        return self._allreduce(_np.max(x), 'max', 'param-fine')
 
     def norm2_f(self, f):
         """
@@ -1134,15 +1150,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        local_dot = _np.array(_np.dot(f, f))
-        local_dot = _compat.reshape_no_copy(local_dot, (1,))  # for compatibility with allreduce_sum
-        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        self.resource_alloc.allreduce_sum(result, local_dot,
-                                          unit_ralloc=self.layout.resource_alloc('atom-processing'))
-        ret = result[0]  # "copies" the single returned element
-        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
-        _smt.cleanup_shared_ndarray(result_shm)
-        return ret
+        return self._allreduce(_np.dot(f, f), 'sum', 'atom-processing')
 
     def norm2_jac(self, j):
         """
@@ -1157,15 +1165,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        local_norm2 = _np.array(_np.linalg.norm(j)**2)
-        local_norm2 = _compat.reshape_no_copy(local_norm2, (1,))  # for compatibility with allreduce_sum
-        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        self.resource_alloc.allreduce_sum(result, local_norm2,
-                                          unit_ralloc=self.layout.resource_alloc('param-processing'))
-        ret = result[0]  # "copies" the single returned element
-        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
-        _smt.cleanup_shared_ndarray(result_shm)
-        return ret
+        return self._allreduce(_np.linalg.norm(j)**2, 'sum', 'param-processing')
 
     def norm2_jtj(self, jtj):
         """
@@ -1180,15 +1180,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        local_norm2 = _np.array(_np.linalg.norm(jtj)**2)
-        local_norm2 = _compat.reshape_no_copy(local_norm2, (1,))  # for compatibility with allreduce_sum
-        result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
-        self.resource_alloc.allreduce_sum(result, local_norm2,
-                                          unit_ralloc=self.layout.resource_alloc('param-fine'))
-        ret = result[0]  # "copies" the single returned element
-        self.resource_alloc.host_comm_barrier()  # make sure we don't cleanup too quickly
-        _smt.cleanup_shared_ndarray(result_shm)
-        return ret
+        return self._allreduce(_np.linalg.norm(jtj)**2, 'sum', 'param-fine')
 
     def fill_jtf(self, j, f, jtf):
         """
