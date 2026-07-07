@@ -444,58 +444,6 @@ def _fmin_particle_swarm(f, x0, err_crit, iter_max, printer, popsize=100, c1=2, 
     gbest = particles[0]; ibest = 0
     # bDoLocalFitnessOpt = False
 
-    #DEBUG
-    #if False:
-    #    import pickle as _pickle
-    #    bestGaugeMx = _pickle.load(open("bestGaugeMx.debug"))
-    #    lbfgsbGaugeMx = _pickle.load(open("lbfgsbGaugeMx.debug"))
-    #    cgGaugeMx = _pickle.load(open("cgGaugeMx.debug"))
-    #    initialGaugeMx = x0.reshape( (4,4) )
-    #
-    #    #DEBUG: dump line cut to plot
-    #    nPts = 100
-    #    print "DEBUG: best offsets = \n", bestGaugeMx - initialGaugeMx
-    #    print "DEBUG: lbfgs offsets = \n", lbfgsbGaugeMx - initialGaugeMx
-    #    print "DEBUG: cg offsets = \n", cgGaugeMx - initialGaugeMx
-    #
-    #    print "# DEBUG plot"
-    #    #fDebug = open("x0ToBest.dat","w")
-    #    #fDebug = open("x0ToLBFGS.dat","w")
-    #    fDebug = open("x0ToCG.dat","w")
-    #    #fDebug = open("LBFGSToBest.dat","w")
-    #    #fDebug = open("CGToBest.dat","w")
-    #    #fDebug = open("CGToLBFGS.dat","w")
-    #
-    #    for i in range(nPts+1):
-    #        alpha = float(i) / nPts
-    #        #matM = (1.0-alpha) * initialGaugeMx + alpha*bestGaugeMx
-    #        #matM = (1.0-alpha) * initialGaugeMx + alpha*lbfgsbGaugeMx
-    #        matM = (1.0-alpha) * initialGaugeMx + alpha*cgGaugeMx
-    #        #matM = (1.0-alpha) * lbfgsbGaugeMx + alpha*bestGaugeMx
-    #        #matM = (1.0-alpha) * cgGaugeMx + alpha*bestGaugeMx
-    #        #matM = (1.0-alpha) * cgGaugeMx + alpha*lbfgsbGaugeMx
-    #        print >> fDebug, "%g %g" % (alpha, f(matM.flatten()))
-    #    exit()
-    #
-    #
-    #    fDebug = open("lineDataFromX0.dat","w")
-    #    min_offset = -1; max_offset = 1
-    #    for i in range(nPts+1):
-    #        offset = min_offset + float(i)/nPts * (max_offset-min_offset)
-    #        print >> fDebug, "%g" % offset,
-    #
-    #        for k in range(len(x0)):
-    #            x = x0.copy(); x[k] += offset
-    #            try:
-    #                print >> fDebug, " %g" % f(x),
-    #            except:
-    #                print >> fDebug, " nan",
-    #        print >> fDebug, ""
-    #
-    #    print >> fDebug, "#END DEBUG plot"
-    #    exit()
-    #END DEBUG
-
     #err = 1e10
     for iter_num in range(iter_max):
         w = 1.0  # - i/iter_max

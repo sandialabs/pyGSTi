@@ -115,17 +115,6 @@ def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_d
         else:
             callbackf = None
 
-        #DEBUG: If you need to debug a wildcard budget, uncommend the function above and try this:
-        # import bpdb; bpdb.set_trace()
-        # wv_test = _np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2])  # trial budget
-        # _wildcard_fit_criteria_debug(wv_test)  # try this
-        # callbackf(_np.array([5e-1, 5e-1, 5e-1, 5e-1, 0.2]))  # or this
-
-        #OLD: scipy optimize - proved unreliable
-        #soln = _spo.minimize(_wildcard_objective, wvec_init,
-        #                     method='Nelder-Mead', callback=callbackf, tol=1e-6)
-        #if not soln.success:
-        #    _warnings.warn("Nelder-Mead optimization failed to converge!")
         soln = _minimize(_wildcard_objective, wvec_init, 'supersimplex',
                          callback=callbackf, maxiter=10, tol=1e-2, abs_outer_tol=1e-4,
                          min_inner_maxiter=1000, max_inner_maxiter=1000, inner_tol=1e-6,
