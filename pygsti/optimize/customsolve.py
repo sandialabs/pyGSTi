@@ -14,7 +14,6 @@ import numpy as _np
 import scipy as _scipy
 
 from pygsti.optimize.arraysinterface import DistributedArraysInterface as _DistributedArraysInterface
-from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 
@@ -442,79 +441,3 @@ def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, ari, resource_a
                     if my_host_index != row_host_index:  # otherwise src did it for us (shared mem)
                         comm.Recv(xval_buf, source=row_rank, tag=1234)
                         x[p - my_row_slice.start] = xval_buf[0]
-
-
-#NOTE: this implementation is partly done, and was stopped after realizing
-# that the given reference had a row/col typo and really A should be split into
-# *rows* not columns, and this makes the algorithm not so useful for us.  Kept
-# around for MPI usage reference.
-def _tallskinny_custom_solve(a, b, resource_alloc):
-    """
-    Note
-    ----
-    Based on "Parallel QR algorithm for data-driven decompositions" by Sayadi et al.
-    (Center for Turbulence Research 335 Proceedings of the Summer Program 2014)
-    """
-    from mpy4py import MPI
-    assert(a.shape[0] >= a.shape[1]), "This routine assumes tall-skinny matrices!"
-    # Note: the assertion above is needed because we assume below that the R matrices
-    # returned from scipy.qr have shape (N,N) where the input is shape (M,N), which is
-    # only true when M >= N (see scipy docstring for 'economic' mode).
-
-    #Perform parallel QR decomposition of A (`a`)
-    comm = resource_alloc.comm
-    rank = comm.rank
-    nColsPerProc = int(_np.ceil(a.shape[1] / comm.size))
-    if rank < nColsPerProc * comm.size:
-        loc_col_slice = slice(rank * nColsPerProc, (rank + 1) * nColsPerProc)
-    else:
-        loc_col_slice = None  # don't use this processor - we need a uniform distribution of rows
-
-    # Step 1: perform local QR decomp on this processor's columns of A
-    if loc_col_slice is not None:
-        Ai = a[:, loc_col_slice]
-        Q1i, Ri = _scipy.linalg.qr(Ai, mode='economic', check_finite=True)
-        Ri = _np.ascontiguousarray(Ri)
-        assert(Ri.shape == (nColsPerProc, nColsPerProc))  # follows from M >= N assertion above
-    else:
-        Q1i = Ri = _np.empty((0, 0), 'd')
-
-    # Step 2: gather all Ri matrices onto root proc (or host),
-    # perform a local QR decomp there, and scatter resulting Q2i matrices.
-    sizes = comm.gather(Ri.size, root=0)
-    if comm.rank == 0:
-        displacements = _np.concatenate(([0], _np.cumsum(sizes)))
-        Rprime = _np.empty(displacements[-1], 'd')
-        comm.Gatherv(Ri, [Rprime, sizes, displacements[0:-1], MPI.DOUBLE], root=0)
-        Rprime = _compat.reshape_no_copy(Rprime, (displacements[-1] // nColsPerProc, nColsPerProc))
-        Q2, R = _scipy.linalg.qr(Rprime, mode='economic', check_finite=True)
-        Q2 = _np.ascontiguousarray(Q2)
-        Q2_sizes = _np.array([(s // nColsPerProc) * Q2.shape[1] for s in sizes], 'd')
-        Q2_displacements = _np.concatenate(([0], _np.cumsum(Q2_sizes)))
-        Q2i = _np.empty((Ri.shape[0], Q2.shape[1]), 'd')
-        comm.Scatterv([Q2, Q2_sizes, Q2_displacements[0:-1], MPI.DOUBLE], Q2i, root=0)
-    else:
-        comm.Gatherv(Ri, [None, None, None, MPI.DOUBLE], root=0)
-        Q2i = _np.empty((Ri.shape[0], Ri.shape[0]), 'd')  # assume Q2.shape[1] == Ri.shape[0]
-        comm.Scatterv([None, None, None, MPI.DOUBLE], Q2i, root=0)
-
-    # Step 3:  all processors performs a simple dot product to get
-    # the pieces of the final Q matrix
-    Qi = _np.dot(Q1i, Q2i)
-
-    # we could gather Qi => Q, but just need b' = Q.T * b, so compute:
-    bprime_i = _np.dot(Qi.T, b)
-
-    # Step 4: gather b'_i => b' on root proc (or host) then solve Rx = b'
-    # (on root) via back-substitution.
-    if comm.rank == 0:
-        #nActiveProcs = a.shape[1] / nColsPerProc
-        sizes = Qi.shape[1]
-    #TODO: finish with something like:
-    #comm.Gatherv(bprime_i, [bprime, sizes, displacements[0:-1], MPI.DOUBLE], root=0)
-    bprime = comm.gather(bprime_i, root=0)
-    bprime
-    #if comm.rank == 0:
-    #    x = back_substitute(R, bprime)
-    #x = comm.bcast(x, root=0)
-    #return x
