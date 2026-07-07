@@ -73,7 +73,7 @@ class AdvancedOptions(dict):
         """
         invalid_keys = [k for k in d.keys() if k not in self._valid_keys_set]
         if invalid_keys:
-            raise ValueError("Invalid keys '%s'. Valid keys are: '%s'" % ("', '".join(invalid_keys),
+            raise ValueError("Invalid keys '%s'. Valid keys are: '%s'" % ("', '".join(map(str, invalid_keys)),
                                                                           "', '".join(sorted(self.valid_keys))))
         super().update(d)
 
