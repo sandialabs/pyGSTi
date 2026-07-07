@@ -2600,7 +2600,7 @@ class Circuit(object):
             if isinstance(other_lbl, _LabelStr):
                 other_lbl = _Label(other_lbl.name, circuit.line_labels)
             
-            lbl = lbl.concate(other_lbl)
+            lbl = lbl.concat(other_lbl)
             new_layers.append(lbl)
             ind += 1
 
