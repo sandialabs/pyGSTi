@@ -7,7 +7,7 @@ from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label, LabelTup
 import copy
 
-from pygsti.tools.graphcoloring import *
+from pygsti.tools.graphcoloring import find_edge_coloring
 
 
 def find_neighbors(vertices: list, edges: list) -> dict:
