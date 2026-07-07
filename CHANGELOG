@@ -1,6 +1,11 @@
 # CHANGELOG
 
-## [0.10] - 2026-07-03
+## [0.10.1] - 2026-07-06
+
+Bugfix release. The only updates are to pyproject.toml to declare import-time dependencies.
+Thanks to @basnijholt for reporting this bug and creating a PR to fix.
+
+## [0.10.0] - 2026-07-03
 
 Major new features: symbolic error generator propagation (error generator polynomials), Lindblad-parameterized instruments, new GST objective functions, a generalized `pygsti.leakage` subpackage, turn-key MPI/SLURM helpers, and JupyterBook/ReadTheDocs documentation. Supported Python versions are now 3.10-3.13.
 

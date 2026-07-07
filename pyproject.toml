@@ -27,7 +27,9 @@ dependencies=[
     'stim',
     'plotly>=3.8.0',
     'pandas',
+    'matplotlib',
     'networkx',
+    'typing_extensions',
     'tqdm>=4.42.0'
 ]
 requires-python='>=3.10'
