@@ -20,7 +20,6 @@ from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.label import Label as _Label
-from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
@@ -428,6 +427,7 @@ class ImplicitOpModel(_mdl.OpModel):
             root_key, sub_key = mm_key.split('|')
             root_dicts[root_key][sub_key].update(mm_dict)  # Note: sub_keys should already be created
         return mdl
+
 
 def _init_spam_layers(model, prep_layers, povm_layers):
     """ Helper function for initializing the .prep_blks and .povm_blks elements of an implicit model"""
