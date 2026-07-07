@@ -1,4 +1,6 @@
+import os
 import pickle
+import tempfile
 from contextlib import contextmanager
 from io import StringIO
 from unittest import mock
@@ -97,8 +99,11 @@ class VerbosityPrinterFileInstance(object):
         super(VerbosityPrinterFileInstance, self).setUp()
         self.redirect_output = self.redirect_file_io
         self.redirect_error = self.redirect_file_io
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        log_path = os.path.join(self._tmpdir.name, 'test_file.log')
         with self.redirect_file_io():
-            self.vbp = vbp.VerbosityPrinter(self.verbosity, filename='/tmp/test_file.log')
+            self.vbp = vbp.VerbosityPrinter(self.verbosity, filename=log_path)
 
     @contextmanager
     def redirect_file_io(self):
@@ -318,9 +323,6 @@ class VerbosityPrinterHelperTester(BaseCase):
 
 class VerbosityPrinterPutBehaviorTester(BaseCase):
     def test_put_behaviors(self):
-        import tempfile
-        import os
-
         # Helper to test combination of (filename, split, stderr, flush)
         def run_put_test(filename, split, stderr, flush):
             printer = vbp.VerbosityPrinter(1, filename=filename, split=split)
