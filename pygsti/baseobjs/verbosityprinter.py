@@ -10,23 +10,30 @@ Defines the VerbosityPrinter class, used for logging output.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import math as _math  # used for digit formatting
 import sys as _sys
 from contextlib import contextmanager as _contextmanager
 from copy import deepcopy as _dc
+from typing import Any, Generator, Optional, TYPE_CHECKING, Union
 
 from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 
+if TYPE_CHECKING:
+    import mpi4py
 
-def _num_digits(n):
+
+def _num_digits(n: int) -> int:
     return int(_math.log10(n)) + 1 if n > 0 else 1
 
 # This function isn't a part of the public interface, instead it has a wrapper in the VerbosityPrinter class
 
 
-def _build_progress_bar(iteration, total, bar_length=100, num_decimals=2, fill_char='#',
-                        empty_char='-', prefix='Progress:', suffix='Complete', end='\n'):
+def _build_progress_bar(iteration: int, total: int, bar_length: int = 100, num_decimals: int = 2, fill_char: str = '#',
+                        empty_char: str = '-', prefix: str = 'Progress:', suffix: str = 'Complete',
+                        end: str = '\n') -> str:
     """
     Parameters
     ----------
@@ -64,7 +71,7 @@ def _build_progress_bar(iteration, total, bar_length=100, num_decimals=2, fill_c
 # Another hidden function for providing verbose progress output
 
 
-def _build_verbose_iteration(iteration, total, prefix, suffix, end):
+def _build_verbose_iteration(iteration: int, total: int, prefix: str, suffix: str, end: str) -> str:
     digits = _num_digits(total)
     return '%s Iter %s of %s %s: %s' % (prefix, str(iteration + 1).zfill(digits), total, suffix, end)
 
@@ -159,25 +166,25 @@ class VerbosityPrinter(object):
 
     # Rules for handling comm --This is a global variable-- (technically) it should probably only be set once, at the
     # beginning of the program
-    _comm_path = ''
+    _comm_path: str = ''
     # The name of the generated files, e.g. 'comm_output'. '' means don't output to comm files.  Must also be set
-    _comm_file_name = ''
-    _comm_file_ext = '.txt'
+    _comm_file_name: str = ''
+    _comm_file_ext: str = '.txt'
 
-    def _create_file(self, filename):
-        with open(filename, 'w') as newFile:
-            newFile.close()
+    def _create_file(self, filename: str) -> None:
+        with open(filename, 'w'):
+            pass
 
-    def _get_comm_file(self, comm_id):
+    def _get_comm_file(self, comm_id: int) -> str:
         if len(VerbosityPrinter._comm_file_name) == 0: return ''
-        return '%s%s%s%s' % (VerbosityPrinter._comm_path,
-                             VerbosityPrinter._comm_file_name,
-                             comm_id,
-                             VerbosityPrinter._comm_file_ext)
+        return (f'{VerbosityPrinter._comm_path}{VerbosityPrinter._comm_file_name}'
+                f'{comm_id}{VerbosityPrinter._comm_file_ext}')
 
     # The printer is initialized with a set verbosity, and an optional filename.
     # If a filename is not provided, VerbosityPrinter writes to stdout
-    def __init__(self, verbosity=1, filename=None, comm=None, warnings=True, split=False, clear_file=True):
+    def __init__(self, verbosity: int = 1, filename: Optional[str] = None,
+                 comm: Optional[Union['mpi4py.MPI.Comm', _ResourceAllocation]] = None,
+                 warnings: bool = True, split: bool = False, clear_file: bool = True) -> None:
         '''
         Customize a verbosity printer object
 
@@ -197,9 +204,9 @@ class VerbosityPrinter(object):
             Whether or not to print warnings
         '''
         if isinstance(comm, _ResourceAllocation): comm = comm.comm
-        if comm:
-            if comm.Get_rank() != 0 and not filename:  # A filename will override the default comm behavior
-                filename = self._get_comm_file(comm.Get_rank())
+        # A filename will override the default comm behavior
+        if comm and comm.Get_rank() != 0 and not filename:
+            filename = self._get_comm_file(comm.Get_rank())
         self.verbosity = verbosity
         self.filename = filename
         if filename is not None and len(filename) > 0 and clear_file:
@@ -215,7 +222,7 @@ class VerbosityPrinter(object):
         self.recorded_output = None
         self.split = split
 
-    def clone(self):
+    def clone(self) -> VerbosityPrinter:
         """
         Instead of deepcopy, initialize a new printer object and feed it some select deepcopied members
 
@@ -238,7 +245,8 @@ class VerbosityPrinter(object):
     # Function for converting between interfaces:
     # Accepts either a verbosity level (integer) or a pre-constructed VerbosityPrinter
     @staticmethod
-    def create_printer(verbosity, comm=None):
+    def create_printer(verbosity: Union[int, VerbosityPrinter],
+                       comm: Optional[Union['mpi4py.MPI.Comm', _ResourceAllocation]] = None) -> VerbosityPrinter:
         """
         Function for converting between interfaces
 
@@ -256,14 +264,14 @@ class VerbosityPrinter(object):
             The printer object, constructed from either an integer or another printer
         """
         if _compat.isint(verbosity):
-            printer = VerbosityPrinter(verbosity, comm=comm)
-        else:
-            if isinstance(comm, _ResourceAllocation): comm = comm.comm
-            printer = verbosity.clone()  # deepcopy the printer object if it has been passed as a verbosity
-            printer._comm = comm  # override happens here
+            return VerbosityPrinter(verbosity, comm=comm)  # type: ignore[arg-type]
+
+        if isinstance(comm, _ResourceAllocation): comm = comm.comm
+        printer = verbosity.clone()  # type: ignore[union-attr]  # deepcopy the passed-in printer
+        printer._comm = comm  # override happens here
         return printer
 
-    def __add__(self, other):
+    def __add__(self, other: int) -> VerbosityPrinter:
         '''
         Increase the verbosity of a VerbosityPrinter
         '''
@@ -272,7 +280,7 @@ class VerbosityPrinter(object):
         p.extra_indents -= other
         return p
 
-    def __sub__(self, other):
+    def __sub__(self, other: int) -> VerbosityPrinter:
         '''
         Decrease the verbosity of a VerbosityPrinter
         '''
@@ -281,54 +289,47 @@ class VerbosityPrinter(object):
         p.extra_indents += other
         return p
 
-    def __getstate__(self):
+    def __getstate__(self) -> dict[str, Any]:
         #Return the state (for pickling) -- *don't* pickle Comm object
         to_pickle = self.__dict__.copy()
         del to_pickle['_comm']  # one *cannot* pickle Comm objects
         return to_pickle
 
-    def __setstate__(self, state_dict):
+    def __setstate__(self, state_dict: dict[str, Any]) -> None:
         self.__dict__.update(state_dict)
         self._comm = None  # initialize to None upon unpickling
 
-    def _indent_string(self, message_level=None, indent_char='  ',  indent_offset=0):
+    def _indent_string(self, message_level: Optional[int] = None, indent_char: str = '  ',
+                       indent_offset: int = 0) -> str:
         if message_level is None:
             message_level = self.defaultVerbosity
-        num_indents = message_level - 1 + indent_offset + self.extra_indents
-        indent = indent_char * num_indents
-        return indent
+        return indent_char * (message_level - 1 + indent_offset + self.extra_indents)
 
     # Used once a file has been created - open the file whenever a message needs to be sent (rather than opening it for
     # the entire program)
-    def _append_to(self, filename, message):
+    def _append_to(self, filename: str, message: str) -> None:
         with open(filename, 'a') as output:
             output.write(message)  # + '\n')
 
     # Hidden function for deciding what to do with our output
-    def _put(self, message, flush=True, stderr=False):
+    def _put(self, message: str, flush: bool = True, stderr: bool = False) -> None:
+        stream = _sys.stderr if stderr else _sys.stdout
         if self.filename is None:  # Handles the case where comm is None or comm is rank 0
-            if stderr:
-                print(message, end='', file=_sys.stderr)
-            else:
-                print(message, end='')
+            print(message, end='', file=stream)
         elif len(self.filename) > 0:
             if self.split:
-                if stderr:
-                    print(message, end='', file=_sys.stderr)
-                else:
-                    print(message, end='')
+                print(message, end='', file=stream)
             self._append_to(self.filename, message)
         if flush:
             _sys.stdout.flush()
 
     # Hidden function for recording output to memory
-    def _record(self, typ, level, message):
+    def _record(self, typ: str, level: int, message: str) -> None:
         if self.recorded_output is not None:
-            global_level = level + self.extra_indents
-            self.recorded_output.append((typ, global_level, message))
+            self.recorded_output.append((typ, level + self.extra_indents, message))
 
     # special function reserved for logging errors
-    def error(self, message):
+    def error(self, message: str) -> None:
         """
         Log an error to the screen/file
 
@@ -346,7 +347,8 @@ class VerbosityPrinter(object):
 
     # special function reserved for logging warnings
 
-    def warning(self, message, message_level=None, indent_char='  ', do_indent=True, indent_offset=0):
+    def warning(self, message: str, message_level: Optional[int] = None, indent_char: str = '  ',
+                do_indent: bool = True, indent_offset: int = 0) -> None:
         """
         Log a warning to the screen/file if verbosity > 1
 
@@ -368,8 +370,9 @@ class VerbosityPrinter(object):
             self._put(msg, stderr=True)
             self._record("WARNING", 0, msg)
 
-    def log(self, message, message_level=None, indent_char='  ', show_statustype=False, do_indent=True,
-            indent_offset=0, end='\n', flush=True):
+    def log(self, message: Any, message_level: Optional[int] = None, indent_char: str = '  ',
+            show_statustype: bool = False, do_indent: bool = True, indent_offset: int = 0,
+            end: str = '\n', flush: bool = True) -> None:
         """
         Log a status message to screen/file.
 
