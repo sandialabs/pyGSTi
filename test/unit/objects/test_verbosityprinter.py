@@ -314,3 +314,100 @@ class VerbosityPrinterHelperTester(BaseCase):
         res = vbp._build_verbose_iteration(0, 10, prefix="Prep:", suffix="Done", end="\n")
         # 10 is 2 digits, so 0+1 = 1 should be zero-padded to "01"
         self.assertIn("Prep: Iter 01 of 10 Done:", res)
+
+
+class VerbosityPrinterPutBehaviorTester(BaseCase):
+    def test_put_behaviors(self):
+        import tempfile
+        import os
+
+        # Helper to test combination of (filename, split, stderr, flush)
+        def run_put_test(filename, split, stderr, flush):
+            printer = vbp.VerbosityPrinter(1, filename=filename, split=split)
+            
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                
+                # Spy on stdout.flush
+                mock_stdout.flush = mock.MagicMock()
+                
+                printer._put("test_msg", flush=flush, stderr=stderr)
+                
+                # Check flush was called if and only if flush is True
+                if flush:
+                    mock_stdout.flush.assert_called_once()
+                else:
+                    mock_stdout.flush.assert_not_called()
+                    
+                stdout_val = mock_stdout.getvalue()
+                stderr_val = mock_stderr.getvalue()
+                
+                return stdout_val, stderr_val
+
+        # Case 1: filename is None, stderr=False
+        stdout_val, stderr_val = run_put_test(None, split=False, stderr=False, flush=True)
+        self.assertEqual(stdout_val, "test_msg")
+        self.assertEqual(stderr_val, "")
+
+        # Case 2: filename is None, stderr=True
+        stdout_val, stderr_val = run_put_test(None, split=False, stderr=True, flush=True)
+        self.assertEqual(stdout_val, "")
+        self.assertEqual(stderr_val, "test_msg")
+
+        # Case 3: filename is empty string
+        stdout_val, stderr_val = run_put_test("", split=False, stderr=False, flush=True)
+        self.assertEqual(stdout_val, "")
+        self.assertEqual(stderr_val, "")
+
+        # Case 4: filename is empty string, split=True
+        stdout_val, stderr_val = run_put_test("", split=True, stderr=False, flush=True)
+        self.assertEqual(stdout_val, "")
+        self.assertEqual(stderr_val, "")
+
+        # Case 5: real file, split=False, stderr=False
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test.log")
+            printer = vbp.VerbosityPrinter(1, filename=filepath, split=False)
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                printer._put("file_msg", flush=True, stderr=False)
+                self.assertEqual(mock_stdout.getvalue(), "")
+                self.assertEqual(mock_stderr.getvalue(), "")
+            with open(filepath, "r") as f:
+                self.assertEqual(f.read(), "file_msg")
+
+        # Case 6: real file, split=False, stderr=True
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test.log")
+            printer = vbp.VerbosityPrinter(1, filename=filepath, split=False)
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                printer._put("file_msg", flush=True, stderr=True)
+                self.assertEqual(mock_stdout.getvalue(), "")
+                self.assertEqual(mock_stderr.getvalue(), "")
+            with open(filepath, "r") as f:
+                self.assertEqual(f.read(), "file_msg")
+
+        # Case 7: real file, split=True, stderr=False
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test.log")
+            printer = vbp.VerbosityPrinter(1, filename=filepath, split=True)
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                printer._put("split_msg", flush=True, stderr=False)
+                self.assertEqual(mock_stdout.getvalue(), "split_msg")
+                self.assertEqual(mock_stderr.getvalue(), "")
+            with open(filepath, "r") as f:
+                self.assertEqual(f.read(), "split_msg")
+
+        # Case 8: real file, split=True, stderr=True
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = os.path.join(tmpdir, "test.log")
+            printer = vbp.VerbosityPrinter(1, filename=filepath, split=True)
+            with mock.patch('sys.stdout', new_callable=StringIO) as mock_stdout, \
+                 mock.patch('sys.stderr', new_callable=StringIO) as mock_stderr:
+                printer._put("split_msg", flush=True, stderr=True)
+                self.assertEqual(mock_stdout.getvalue(), "")
+                self.assertEqual(mock_stderr.getvalue(), "split_msg")
+            with open(filepath, "r") as f:
+                self.assertEqual(f.read(), "split_msg")
