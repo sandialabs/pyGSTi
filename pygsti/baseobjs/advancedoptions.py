@@ -31,13 +31,29 @@ class AdvancedOptions(dict):
         the valid (allowed) keys.
     """
     valid_keys = ()
+    """
+    A tuple of the valid keys for this dictionary.
+    This is intended to be a sorted tuple for readable error messages.
+    """
+
+    _valid_keys_set = frozenset()
+    """
+    A frozenset of the valid keys for this dictionary.
+    This is used for efficient O(1) key validation.
+    It is automatically generated from `valid_keys` by `__init_subclass__`.
+    """
+
+    def __init_subclass__(cls, **kwargs):
+        """Initializes subclass and populates the _valid_keys_set from valid_keys"""
+        super().__init_subclass__(**kwargs)
+        cls._valid_keys_set = frozenset(cls.valid_keys)
 
     def __init__(self, items=None):
         super().__init__()
         self.update(items or {})
 
     def __setitem__(self, key, val):
-        if key not in self.valid_keys:
+        if key not in self._valid_keys_set:
             raise ValueError("Invalid key '%s'. Valid keys are: '%s'" %
                              (str(key), "', '".join(sorted(self.valid_keys))))
         super().__setitem__(key, val)
@@ -55,7 +71,7 @@ class AdvancedOptions(dict):
         -------
         None
         """
-        invalid_keys = [k for k in d.keys() if k not in self.valid_keys]
+        invalid_keys = [k for k in d.keys() if k not in self._valid_keys_set]
         if invalid_keys:
             raise ValueError("Invalid keys '%s'. Valid keys are: '%s'" % ("', '".join(invalid_keys),
                                                                           "', '".join(sorted(self.valid_keys))))
@@ -71,6 +87,7 @@ class GSTAdvancedOptions(AdvancedOptions):
     valid_keys : tuple
         the valid (allowed) keys.
     """
+    # Note: this tuple is kept in sorted order for readable error messages
     valid_keys = (
         'always_perform_mle',
         'bad_fit_threshold',
