@@ -315,7 +315,7 @@ class ResidualTVD:
     probability distributions and T is a transition matrix.
     """
 
-    def __init__(self, weight, n_bits, initial_treg_factor=1e-3, solver="SCS"):
+    def __init__(self, weight, n_bits, initial_treg_factor=1e-3, solver="CLARABEL"):
         """
         Create a ResidualTVD function object.
 
@@ -536,7 +536,7 @@ class RegularizedDeltaLikelihood:
         (max_logL - logL) + alpha * fixed_T_residual_tvd
     """
 
-    def __init__(self, data_p, data_q, solver="SCS"):
+    def __init__(self, data_p, data_q, solver="CLARABEL"):
         """
         Initialize a RegularizedLikelihood function object.
 
@@ -696,7 +696,7 @@ class ProfileLikelihood:
     optimize-T (ResidualTVD) and optimize-(P,Q) (RegularizedLikelihood) steps.
     """
 
-    def __init__(self, weight, n_bits, data_ref, data_test, solver="SCS"):
+    def __init__(self, weight, n_bits, data_ref, data_test, solver="CLARABEL"):
         """
         Create a ProfileLikelihood function object.
 
@@ -1009,7 +1009,7 @@ class ResidualTVDWithConfidence:
     side of the confidence region, and it is assumed to be symmetric.
     """
 
-    def __init__(self, weight, n_bits, data_ref, data_test, solver="SCS", initial_treg_factor=1e-3):
+    def __init__(self, weight, n_bits, data_ref, data_test, solver="CLARABEL", initial_treg_factor=1e-3):
         """
         Create a ResidualTVDWithConfidence function object.
 
@@ -1220,7 +1220,7 @@ class ProfileLikelihoodPlot:
 
 def compute_disturbances_with_confidence(n_bits, data_ref, data_test, confidence_percent=68.0,
                                          max_weight=4, maxiters=20, search_tol=0.1, reltol=1e-5,
-                                         abstol=1e-5, solver="SCS", initial_treg_factor=1e-3, verbosity=1):
+                                         abstol=1e-5, solver="CLARABEL", initial_treg_factor=1e-3, verbosity=1):
     """
     Compute the weight-X distrubances between two data sets (including error bars).
 
@@ -1311,7 +1311,7 @@ def compute_ovd_over_tvd_ratio(n_bits, data_ref, data_test, p_ideal, return_all=
 
 def compute_ovd_corrected_disturbances_noconfidence(n_bits, data_ref, data_test, p_ideal,
                                                     max_weight=4, maxiters=20, search_tol=0.1, reltol=1e-5,
-                                                    abstol=1e-5, solver="SCS", initial_treg_factor=1e-3, verbosity=1):
+                                                    abstol=1e-5, solver="CLARABEL", initial_treg_factor=1e-3, verbosity=1):
     """
     Compute the weight-X distrubances between two data sets (including error bars).
 
@@ -1384,7 +1384,7 @@ def compute_ovd_corrected_disturbances_noconfidence(n_bits, data_ref, data_test,
 
 def compute_residual_tvds(n_bits, data_ref, data_test, confidence_percent=68.0,
                           max_weight=4, maxiters=20, search_tol=0.1, reltol=1e-5,
-                          abstol=1e-5, solver="SCS", initial_treg_factor=1e-3, verbosity=1):
+                          abstol=1e-5, solver="CLARABEL", initial_treg_factor=1e-3, verbosity=1):
     """
     Compute the weight-X residual TVDs between two data sets (including error bars).
 
@@ -1515,7 +1515,7 @@ def resample_data(data, n_data_points=None, seed=None):
 
 
 def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, num_bootstrap_samples=20,
-                                           max_weight=4, solver="SCS", verbosity=1, seed=0,
+                                           max_weight=4, solver="CLARABEL", verbosity=1, seed=0,
                                            return_resampled_data=False, add_one_to_data=True):
     """
     Compute the weight-X distrubances between two data sets (including error bars).
@@ -1612,7 +1612,7 @@ def compute_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, num_boot
 
 
 def compute_ovd_corrected_disturbances_bootstrap_rawdata(n_bits, data_ref, data_test, p_ideal, num_bootstrap_samples=20,
-                                                         max_weight=4, solver="SCS", verbosity=1, seed=0,
+                                                         max_weight=4, solver="CLARABEL", verbosity=1, seed=0,
                                                          return_resampled_data=False, add_one_to_data=True):
     """
     Compute the weight-X distrubances between two data sets (including error bars).
@@ -1765,7 +1765,7 @@ def compute_disturbances_from_bootstrap_rawdata(ml_disturbances, bootstrap_distu
 
 
 def compute_disturbances(n_bits, data_ref, data_test, num_bootstrap_samples=20,
-                         max_weight=4, solver="SCS", verbosity=1, add_one_to_data=True):
+                         max_weight=4, solver="CLARABEL", verbosity=1, add_one_to_data=True):
     """
     Compute the weight-X disturbances between two data sets (including error bars).
 
@@ -1814,7 +1814,7 @@ def compute_disturbances(n_bits, data_ref, data_test, num_bootstrap_samples=20,
 
 
 def compute_ovd_corrected_disturbances(n_bits, data_ref, data_test, p_ideal, num_bootstrap_samples=20,
-                                       max_weight=4, solver="SCS", verbosity=1, add_one_to_data=True):
+                                       max_weight=4, solver="CLARABEL", verbosity=1, add_one_to_data=True):
     """
     Compute the weight-X disturbances between two data sets (including error bars).
 

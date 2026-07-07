@@ -727,7 +727,7 @@ def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_orde
     """
     Function for computing the nth-order Zassenhaus formula for a set of error generators.
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
-    for more information on this approxmation.
+    for more information on this approximation.
 
     Given an exponentiated sum of operators exp(X1+X2+...+Xn) the Zassenhaus formula allows one to disentangle this
     exponentiated sum into a product of exponentiated operators given by exp(X1)exp(X2)...exp(Xn)\prod_{k=2}^\infty exp(W_k) where
@@ -7075,7 +7075,7 @@ def zassenhaus_formula_numerical(errorgen_groups: list[dict[_EEL, float]], error
     """
     Function for numerically computing the nth-order Zassenhaus formula for a set of error generators.
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
-    for more information on this approxmation.
+    for more information on this approximation.
 
     Due to the numerical nature of this implementation it is not meant for efficient computation and
     primarily supports testing.
@@ -8189,7 +8189,7 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
 
 def alpha_pauli_numerical(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, pauli: stim.PauliString):
     """
-    First-order error generator sensitivity function for pauli expectatons. This implementation calculates
+    First-order error generator sensitivity function for pauli expectations. This implementation calculates
     this quantity numerically, and as such is primarily intended for used as parting of testing
     infrastructure. 
     
@@ -8406,7 +8406,7 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
         raise RuntimeError('Number of random bits is greater than 1074, magnitude of probability scale will underflow!')
     scale = 1/2**(num_random) 
     
-    #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
+    #accumulate the terms across orders (with short circuit logic for order 1 to save time):
     if order == 1:
         combined_taylor_dict = errorgen_dict
     else:
@@ -8467,7 +8467,7 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
         float corresponding to the correction to the expectation value for the
         selected pauli operator induced by the error generator (to specified order).
     """
-    #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
+    #accumulate the terms across orders (with short circuit logic for order 1 to save time):
     if order == 1:
         combined_taylor_dict = errorgen_dict
     else:
@@ -8544,7 +8544,7 @@ def stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_pr
 
 def stabilizer_probability(tableau, desired_bitstring):
     """
-    Calculate the output probability for the specifed output bitstring.
+    Calculate the output probability for the specified output bitstring.
     
     TODO: Should be able to do this more efficiently for many bitstrings
     by looking at the structure of the random support.
@@ -8567,7 +8567,7 @@ def stabilizer_probability(tableau, desired_bitstring):
 
 def stabilizer_pauli_expectation(tableau, pauli):
     """
-    Calculate the output probability for the specifed output bitstring.
+    Calculate the output probability for the specified output bitstring.
       
     Parameters
     ----------
@@ -8606,7 +8606,7 @@ def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring
     
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
-        case this should be a Clifford circuit and convertable to a stim.Tableau.
+        case this should be a Clifford circuit and convertible to a stim.Tableau.
         
     desired_bitstring : str
         String of 0's and 1's corresponding to the output bitstring being measured.
@@ -8653,7 +8653,7 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, orde
     
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
-        case this should be a Clifford circuit and convertable to a stim.Tableau.
+        case this should be a Clifford circuit and convertible to a stim.Tableau.
         
     pauli : str or stim.PauliString
         Pauli operator to compute expectation value for.
@@ -8740,7 +8740,7 @@ def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict, errorgen_p
 def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, truncation_threshold=1e-14):
     """
     Calculate the approximate probability distribution over all bitstrings using a first-order approximation.
-    Note the size of this distribtion scales exponentially in the qubit count, so this is very inefficient for
+    Note the size of this distribution scales exponentially in the qubit count, so this is very inefficient for
     any more than a few qubits.
 
     Parameters
@@ -8751,7 +8751,7 @@ def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, trunca
     
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
-        case this should be a Clifford circuit and convertable to a stim.Tableau.
+        case this should be a Clifford circuit and convertible to a stim.Tableau.
 
     order : int, optional (default 1)
         Order of the correction (i.e. order of the taylor series expansion for

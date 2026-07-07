@@ -160,15 +160,13 @@ print("\n%d experiments to run GST." % len(pfprExperiments_greedy))
 As mentioned above, the per-germ global FPR scheme is a two step process. First we identify a reduced set of amplified parameters for each germ to require sensitivity to, and then next we identify reduced sets of fiducials with sensitivity to those particular parameters.
 
 ```{code-cell} ipython3
-#Note that we are setting the assume_real flag to True below as we know that we am working in the Pauli basis and as such the 
-#process matrices for the germs will be real-valued allowing for memory savings and somewhat faster performance. 
-#If you're working with a non-hermitian basis or aren't sure keep this set to it's default value of False.
-#Likewise, float_type specifies the numpy data type to use, and is primarily useful either in conjunction with
-#assume_real, or when needing to fine-tune the memory requirements of the algorithm (running this algorithm for
-#more than 2-qubits can be very memory intensive). When running this function for more than two-qubits, consider
+#Note that float_type specifies the numpy data type to use, and is primarily useful
+#when needing to fine-tune the memory requirements of the algorithm (running this algorithm for
+#more than 2-qubits can be very memory intensive). The correct real or complex typing is automatically inferred
+#from the model's basis. When running this function for more than two-qubits, consider
 #setting the mode kwarg to 'RRQR', which is typically significantly faster for larger qubit counts, but is slightly
 #less performant in terms of the cost function of the returned solutions.
-germ_set_spanning_vectors, _ = pygsti.alg.germ_set_spanning_vectors(target_model, germs, assume_real=True, float_type= np.double)
+germ_set_spanning_vectors, _ = pygsti.alg.germ_set_spanning_vectors(target_model, germs, float_type= np.double)
 
 #Next use this set of vectors to find a sufficient reduced set of fiducial pairs.
 #Alternatively this function can also take as input a list of germs

@@ -48,10 +48,10 @@ class CodecsTestCase(BaseTestCase):
             num_samples=1000,sample_error='binomial', seed=100)
 
         #Make an model with instruments
-        E = self.datagen_gateset.povms['Mdefault']['0']
-        Erem = self.datagen_gateset.povms['Mdefault']['1']
-        Gmz_plus = np.dot(E,E.T)
-        Gmz_minus = np.dot(Erem,Erem.T)
+        E = self.datagen_gateset.povms['Mdefault']['0'].to_dense().reshape(-1, 1)
+        Erem = self.datagen_gateset.povms['Mdefault']['1'].to_dense().reshape(-1, 1)
+        Gmz_plus = np.dot(E, E.T)
+        Gmz_minus = np.dot(Erem, Erem.T)
         self.mdl_withInst = self.datagen_gateset.copy()
         self.mdl_withInst.instruments['Iz'] = pygsti.modelmembers.instruments.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.mdl_withInst.instruments['Iztp'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})

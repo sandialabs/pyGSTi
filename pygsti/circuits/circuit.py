@@ -2528,8 +2528,28 @@ class Circuit(object):
         # lines, so a gate with implicit sslbls cannot sit in a layer that the insertion below
         # writes to (the first circuit.num_layers layers): it would straddle the new lines.
         # Layers beyond the insertion region are unaffected (e.g. a trailing global idle).
-        if circuit.num_layers > 0 and len(circuit._line_labels) > 0 and len(self._line_labels) > 0 \
-           and _sslbls_of_nested_lists_of_simple_labels(self._labels[:circuit.num_layers]) is None:
+        circ_nonempty: bool = circuit.num_layers > 0 and len(circuit._line_labels) > 0
+        self_nonempty: bool = self.num_layers > 0 and len(self._line_labels) > 0
+        expanded_self_has_implicit_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels[:circuit.num_layers]) is None
+        expanded_circ_has_implicit_sslbls = _sslbls_of_nested_lists_of_simple_labels(circuit._labels[:self.num_layers]) is None
+        implicit_idle_layer = _Label(())
+        implicit_sslbls_matter = False
+        for i in range(min(len(self), len(circuit))):
+            lbl = self[i]
+            lbl2 = circuit[i]
+            assert isinstance(lbl, _Label)
+            assert isinstance(lbl2, _Label)
+            # Only an actual *gate* with implicit (None) sslbls straddles the new lines.
+            # An empty idle layer (Label(())) contains no gates and is always safe to tensor
+            # (it just idles its own circuit's lines), so it must not trip this guard --
+            # SimultaneousExperimentDesign pads shorter circuits with such trailing idle layers.
+            lbl_implicit_gate = (lbl != implicit_idle_layer and lbl.sslbls is None)
+            lbl2_implicit_gate = (lbl2 != implicit_idle_layer and lbl2.sslbls is None)
+            if lbl_implicit_gate or lbl2_implicit_gate:
+                implicit_sslbls_matter = True
+                break
+
+        if circ_nonempty and self_nonempty and (expanded_self_has_implicit_sslbls or expanded_circ_has_implicit_sslbls) and (implicit_sslbls_matter):
             raise ValueError("Cannot tensor: this circuit contains gates with implicit (None) state-space "
                              "labels in the layers being tensored, which are interpreted as acting on *all* "
                              "of the circuit's lines and so cannot coexist with the new lines being added.  "
@@ -3339,7 +3359,7 @@ class Circuit(object):
 
         while productive:  # keep iterating
             productive = False
-            # Loop through all the qubits, to try and compress squences of 1-qubit gates on the qubit in question.
+            # Loop through all the qubits, to try and compress sequences of 1-qubit gates on the qubit in question.
             for ilayer in range(0, len(self._labels) - 1):
                 layerA_comps = self._layer_components(ilayer)
                 layerB_comps = self._layer_components(ilayer + 1)
@@ -3685,9 +3705,9 @@ class Circuit(object):
     def duration(self):
         # similar to depth()
         if self._static:
-            return sum([lbl.time for lbl in self._labels])
+            return sum([getattr(lbl, "time", 0) for lbl in self._labels])
         else:
-            return sum([_Label(layer_lbl).time for layer_lbl in self._labels])
+            return sum([getattr(_Label(layer_lbl), "time", 0.0) for layer_lbl in self._labels])
 
     def two_q_gate_count(self):
         """
@@ -4712,7 +4732,7 @@ class Circuit(object):
     def convert_to_qiskit(self,
                           num_qubits: Optional[int] = None,
                           qubit_conversion: Union[None, str, Dict[str, Union[int, qiskit.circuit.Qubit]]] = None,
-                          gatename_conversion: Optional[Dict[str, qiskit.circuit.Instruction]] = None,
+                          qiskit_gate_conversion: Optional[Dict[str, qiskit.circuit.Instruction]] = None,
                           block_between_layers: bool = True,
                           qubits_to_measure: Union[None, str, List[str]] = None,
                           ) -> qiskit.QuantumCircuit:
@@ -4733,7 +4753,7 @@ class Circuit(object):
             or Qiskit Qubit objects. If none, a literal mapping is used. If 'remove-Q' is set,
             then the 'Q' at the beginning of the line label is removed: e.g., 'Q53' becomes 53 (integer).
 
-        gatename_conversion : dict, optional
+        qiskit_gate_conversion : dict, optional
             A dictionary mapping gate names contained in this circuit to the corresponding
             gate names used in the rendered Qiskit QuantumCircuit.  If None, a standard set of conversions
             is used (see :func:`standard_gatenames_qiskit_conversions`).
@@ -4774,46 +4794,85 @@ class Circuit(object):
             qubit_conversion = {label: label for label in self.line_labels}
         elif qubit_conversion == 'remove-Q':
             qubit_conversion = {label: (int(label[1:]) if (isinstance(label, str) and label[0]=='Q' and label[1:].isnumeric()) else label) for label in self.line_labels}
+        assert isinstance(qubit_conversion, dict)
+
+        # Currently only using 'Iz' as valid intermediate measurement ('IM') label.
+        # TODO: Expand to all intermediate measurements.
+        num_IMs = self.str.count('Iz')
+        num_IMs_used = 0
+        im_dict = {}
 
 
-        qiskit_qc = qiskit.QuantumCircuit(num_qubits)
+        if qubits_to_measure is None:
+            cr = qiskit.ClassicalRegister(num_IMs, name='cr')
 
-        qiskit_gate_conversion = _itgs.standard_gatenames_qiskit_conversions()
+        elif isinstance(qubits_to_measure, str):
+            if qubits_to_measure == 'all':
+                cr = qiskit.ClassicalRegister(num_IMs + num_qubits, name='cr')
+            elif qubits_to_measure == 'active':
+                num_active_qubits = len(qubit_conversion.values())
+                cr = qiskit.ClassicalRegister(num_IMs + num_active_qubits, name='cr')
+            else:
+                    raise ValueError(f"unknown string option for 'qubits_to_measure': {qubits_to_measure}")
+            
+        elif isinstance(qubits_to_measure, list):
+            num_qubits_to_measure = len(qubits_to_measure)
+            cr = qiskit.ClassicalRegister(num_IMs + num_qubits_to_measure, name='cr')
+        
+        else:
+                raise ValueError(f"could not parse argument for 'qubits_to_measure': {qubits_to_measure}")
+
+        qr = qiskit.QuantumRegister(num_qubits)
+        qiskit_qc = qiskit.QuantumCircuit(qr, cr)
+
+        if qiskit_gate_conversion is None:
+            qiskit_gate_conversion = _itgs.standard_gatenames_qiskit_conversions()
 
         for i in range(depth):
             layer = self.layer_label(i).components
             for gate in layer:
-                qiskit_gate, qiskit_gate_name, is_standard_gate = qiskit_gate_conversion[gate.name]
-                qiskit_qubits = [qubit_conversion[qubit] for qubit in gate.qubits]
-                qiskit_qc.append(qiskit_gate(*(gate.args)), qiskit_qubits, copy=False)
-
+                if gate.name == 'Iz':
+                    assert len(gate.qubits) == 1, f'Mid-circuit measurements are currently only defined for 1 qubit, but gate {gate} uses {len(gate.qubits)} qubits.'
+                    qiskit_qc.measure(qubit_conversion[gate.qubits[0]], cr[num_IMs_used])
+                    im_dict[num_IMs_used] = gate.qubits
+                    num_IMs_used += 1
+                else:
+                    qiskit_gate, qiskit_gate_name, is_standard_gate = qiskit_gate_conversion[gate.name]
+                    qiskit_qubits = [qubit_conversion[qubit] for qubit in gate.qubits]
+                    qiskit_qc.append(qiskit_gate(*(gate.args)), qiskit_qubits, copy=False)
+            
             if block_between_layers:
                 qiskit_qc.barrier()
 
+        ordered_data_indices = None
         if qubits_to_measure is not None:
             if isinstance(qubits_to_measure, str):
                 if qubits_to_measure == 'all':
-                    qiskit_qc.measure_all()
+                    qiskit_qc.barrier()
+                    qiskit_qc.measure(qr[:], cr[num_IMs:])
+                    ordered_data_indices = [qubit_conversion[k] + num_IMs for k in sorted(qubit_conversion.keys())]
 
                 elif qubits_to_measure == 'active':
                     qiskit_qubits_to_measure = [v for v in qubit_conversion.values()]
-                    new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "cr")
-                    qiskit_qc.add_register(new_creg)
                     qiskit_qc.barrier()
-                    qiskit_qc.measure(qiskit_qubits_to_measure, new_creg)
+                    qiskit_qc.measure(qiskit_qubits_to_measure, cr[num_IMs:])
+                    ordered_data_indices = [i + num_IMs for i in range(len(qubit_conversion.keys()))]
 
                 else:
                     raise ValueError(f"unknown string option for 'qubits_to_measure': {qubits_to_measure}")
 
             elif isinstance(qubits_to_measure, list):
                 qiskit_qubits_to_measure = [qubit_conversion[qubit] for qubit in qubits_to_measure]
-                new_creg = qiskit_qc._create_creg(len(qiskit_qubits_to_measure), "cr")
-                qiskit_qc.add_register(new_creg)
                 qiskit_qc.barrier()
-                qiskit_qc.measure(qiskit_qubits_to_measure, new_creg)
+                qiskit_qc.measure(qiskit_qubits_to_measure, cr[num_IMs:])
+                ordered_data_indices = [q + num_IMs for q in qiskit_qubits_to_measure]
 
             else:
                 raise ValueError(f"could not parse argument for 'qubits_to_measure': {qubits_to_measure}")
+
+
+        qiskit_qc.metadata = {'im_dict': im_dict if len(im_dict) > 0 else None,
+                              'ordered_data_indices': ordered_data_indices}
 
         return qiskit_qc
 
@@ -4824,7 +4883,7 @@ class Circuit(object):
                             block_between_layers=True,
                             block_between_gates=False,
                             include_delay_on_idle=False,
-                            gateargs_map=None):  # TODO
+                            gateargs_map=None, auxiliary_lookup=None):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -4909,12 +4968,7 @@ class Circuit(object):
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
-        if 'Iz' in self.str:
-            # using_IMs = True
-            num_IMs = self.str.count('Iz')
-        else:
-            # using_IMs = False
-            num_IMs = 0
+        num_IMs = self.str.count('I')
         num_IMs_used = 0
 
         # Init the openqasm string.
@@ -4948,7 +5002,7 @@ class Circuit(object):
                 assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
 
                 # Find the openqasm for the gate.
-                if gate.name.__str__() != 'Iz':
+                if gate.name.__str__() != 'Iz' and gate.name.__str__() != 'Ipc' and gate.name.__str__() != 'Izr':
                     openqasmlist_for_gate = gatename_conversion.get(gate.name, None)
 
                     if openqasmlist_for_gate is None:
@@ -4985,11 +5039,34 @@ class Circuit(object):
                                 openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self._line_labels[-1]]))
 
                 else:
-                    assert len(gate.qubits) == 1
-                    q = gate.qubits[0]
-                    # classical_bit = num_IMs_used
-                    openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
-                    num_IMs_used += 1
+                    assert gate.name.__str__()[0] == 'I', "Please use instrument prefix 'I'. There may also be an object that cannot be parsed to QASM"
+                    assert 'Iz' in gate.name.__str__() or 'Ipc' in gate.name.__str__(), "Only mid-circuit Z basis measurement 'Iz' and various parity checks 'Ipc' supported at present."
+                    if gate.name.__str__() == 'Iz':
+                        assert len(gate.qubits) == 1
+                        q = gate.qubits[0]
+                        # classical_bit = num_IMs_used
+                        openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
+                        num_IMs_used += 1
+                    elif gate.name.__str__() == 'Izr':
+                        assert len(gate.qubits) == 1
+                        q = gate.qubits[0]
+                        # classical_bit = num_IMs_used
+                        openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
+                        openqasm_for_gate += "reset q[{0}];\n".format(str(qubit_conversion[q]))
+                        num_IMs_used += 1
+                    else:
+                        assert auxiliary_lookup is not None, "Parity check 'Ipc' requires an ancilla, did you forget to set 'ancilla_label'?"
+                        openqasm_for_gate = ""
+                        for control in gate.qubits:
+                            openqasm_for_gate += 'cx q[{0}], q[{1}];\n'.format(str(qubit_conversion[control]), auxiliary_lookup[gate.qubits])
+                            if block_between_gates:
+                                openqasm_for_gate += 'barrier '
+                                for q in self._line_labels[:-1]:
+                                    openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self._line_labels[-1]]))
+                        openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(auxiliary_lookup[gate.qubits]), num_IMs_used)
+                        openqasm_for_gate += "reset q[{0}];\n".format(str(auxiliary_lookup[gate.qubits]))
+                        num_IMs_used += 1
 
                 # Add the openqasm for the gate to the openqasm string.
                 openqasm += openqasm_for_gate
@@ -5291,7 +5368,7 @@ class SeparatePOVMCircuit(object):
     Separately holds a POVM-less :class:`Circuit` object, a POVM label, and a list of effect labels.
 
     This is often used to hold "expanded" circuits whose instrument labels have been replaced with
-    specific instrument members and whose POVMs have simillarly been "expanded" except that we keep
+    specific instrument members and whose POVMs have similarly been "expanded" except that we keep
     the entire expanded POVM together in this one data structure.  (There's no especially good reason
     for this other than practicality - that since almost *all* circuits end with a POVM, holding each
     POVM outcome (effect) separately would be very wasteful.

@@ -27,10 +27,12 @@ dependencies=[
     'stim',
     'plotly>=3.8.0',
     'pandas',
+    'matplotlib',
     'networkx',
+    'typing_extensions',
     'tqdm>=4.42.0'
 ]
-requires-python='>=3.9'
+requires-python='>=3.10'
 keywords=[
     'pygsti',
     'tomography',
@@ -81,6 +83,11 @@ notebooks = [
     'notebook',
     'jupyter_server'
 ]
+# torch is deliberately NOT part of `complete` (or the `testing`/`no_mpi`
+# chains): it is rarely used and its default Linux wheels drag in ~2.5 GB of
+# nvidia-* CUDA wheels. Install it explicitly when needed, e.g.
+# `pip install pygsti[complete,pytorch]`. CI installs `...,pytorch` so the
+# TorchForwardSimulator tests actually run instead of being skipped.
 pytorch = ['torch']
 report_pdf_figures = ['matplotlib']
 reports = ['pygsti[html_reports,report_pdf_figures]']
@@ -88,6 +95,7 @@ testing_no_cython_mpi = [
     'pytest',
     'pytest-xdist',
     'pytest-cov',
+    'hypothesis',
     'nbval',
     'nbformat',
     'packaging',
@@ -95,15 +103,16 @@ testing_no_cython_mpi = [
     'seaborn',
     'ply',
     'cirq-core',
-    'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
+    'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,reports]'
 ]
 testing_no_cython = ['pygsti[multiprocessor,testing_no_cython_mpi]']
 testing = ['pygsti[extensions,testing_no_cython]']
 no_mpi = ['pygsti[evolutionary_optimization,extensions,linting,mongodb,testing_no_cython_mpi]']
-complete = ['pygsti[multiprocessor,no_mpi]']
+complete = ['pygsti[multiprocessor,no_mpi,docs]']
 
 [project.urls]
 Homepage = 'https://www.pygsti.info'
+Documentation = 'https://pygsti.readthedocs.io/en/latest/'
 Repository = 'https://github.com/sandialabs/pyGSTi'
 Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
 

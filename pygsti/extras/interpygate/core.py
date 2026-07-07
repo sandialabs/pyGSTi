@@ -19,6 +19,7 @@ from scipy.interpolate import LinearNDInterpolator as _linND
 from ...modelmembers.operations import DenseOperator as _DenseOperator
 from ...modelmembers.operations.opfactory import OpFactory as _OpFactory
 from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs import _compatibility as _compat
 from ...tools import optools as _ot
 
 try:
@@ -532,7 +533,7 @@ class InterpolatedQuantityFactory(object):
         if rank in root_ranks:
             #Only root ranks store data (fn_to_interpolate only needs to return results on root proc)
             flat_data = _np.empty(len(my_points) * int(_np.prod(expected_fn_output_shape)), dtype='d')
-            data = flat_data.view(); data.shape = (len(my_points),) + expected_fn_output_shape
+            data = flat_data.view(); data = _compat.reshape_no_copy(data, (len(my_points),) + expected_fn_output_shape)
             if (comm is not None):
                 printer.log("Group %d processing %d points on %d processors." % (color, len(my_points),
                                                                                  mpi_workers_per_process))
@@ -566,7 +567,7 @@ class InterpolatedQuantityFactory(object):
 
         self.points = all_points
         self.data = flat_data.view()
-        self.data.shape = (len(all_points),) + self.qty_shape  # indices are (iPoint, <data_indices>)
+        self.data = _compat.reshape_no_copy(self.data, (len(all_points),) + self.qty_shape)  # indices are (iPoint, <data_indices>)
 
     def build(self, comm=None, mpi_workers_per_process=1, verbosity=0):
 

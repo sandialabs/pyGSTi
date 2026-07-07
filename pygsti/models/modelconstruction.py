@@ -39,9 +39,12 @@ from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
 from pygsti.baseobjs import label as _label
 from pygsti.baseobjs import statespace as _statespace
-from pygsti.baseobjs.basis import Basis as _Basis
-from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
-from pygsti.baseobjs.basis import DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.basis import (
+    Basis           as _Basis, 
+    ExplicitBasis   as _ExplicitBasis,
+    DirectSumBasis  as _DirectSumBasis,
+    TensorProdBasis as _TensorProdBasis
+)
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
@@ -64,7 +67,7 @@ def create_spam_vector(vec_expr, state_space, basis):
     Parameters
     ----------
     vec_expr : string
-        the expression which determines which vector to build.  Currenlty, only
+        the expression which determines which vector to build.  Currently, only
         integers are allowed, which specify a the vector for the pure state of
         that index.  For example, "1" means return vectorize(``|1><1|``).  The
         index labels the absolute index of the state within the entire state
@@ -570,7 +573,10 @@ def _create_explicit_model_from_expressions(state_space, basis,
 
     from pygsti.circuits.circuitparser import parse_label
 
-    parsed_op_labels = [parse_label(str(opLabel)) for opLabel in op_labels]
+    # Canonicalize non-string labels through Label first, since e.g. str(('Gxpi2', 0)) and
+    # str(()) (the idle layer) are not directly parseable, whereas str(Label(...)) is.
+    parsed_op_labels = [parse_label(opLabel if isinstance(opLabel, str) else str(_label.Label(opLabel)))
+                        for opLabel in op_labels]
     if len(set(parsed_op_labels)) != len(op_labels):
         msg = f"""
         There are fewer unique Label objects after parsing op_labels than
@@ -664,7 +670,7 @@ def create_explicit_model_from_expressions(state_space,
 
         - "std" = operation matrix operates on density mx expressed as sum of matrix
           units
-        - "gm"  = operation matrix operates on dentity mx expressed as sum of
+        - "gm"  = operation matrix operates on density mx expressed as sum of
           normalized Gell-Mann matrices
         - "pp"  = operation matrix operates on density mx expresses as sum of
           tensor-product of Pauli matrices
@@ -1468,6 +1474,19 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
     gatedict : dict
         A dictionary mapping gate names to local gate operations.
     """
+    if isinstance(basis, _TensorProdBasis):
+        b0 : _Basis = basis.component_bases[0]
+        if all(b0.name == bi.name for bi in basis.component_bases[1:]):
+            basis = b0.name
+        else:
+            raise NotImplementedError(
+                "Cannot construct local gate operations for a TensorProdBasis whose "
+                "component bases have different names "
+                f"({[bi.name for bi in basis.component_bases]}). Local gates are built "
+                "in a per-qudit basis, which is only well-defined when every component "
+                "basis has the same name."
+            )
+
     std_gate_unitaries = _itgs.standard_gatename_unitaries()
     if custom_gates is None: custom_gates = {}
     if modelnoise is None: modelnoise = _OpModelPerOpNoise({})
@@ -1856,7 +1875,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         available gate placement.
 
     independent_spam : bool, optional
-        Similar to `indepenent_gates` but for SPAM operations.
+        Similar to `independent_gates` but for SPAM operations.
 
     errcomp_type : {'gates', 'errorgens'}
         Whether errors should be combined by composing error maps (`gates`) or by
@@ -2064,7 +2083,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qudits (taken as a "base
+        Additional weight, beyond the number of target qudits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qudit gates can have up to weight-2
         errors and 2-qudit gates can have up to weight-3 errors.
@@ -2309,8 +2328,14 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
     if lindblad_error_coeffs is not None:
 
         if not allow_nonlocal:  # the easy case
-            modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, lindblad_parameterization)
-                                                   for lbl, val in lindblad_error_coeffs.items()}))
+            # Normalize any string error-generator keys (e.g. "HX") to the tuple form
+            # (e.g. ("H", "X")) understood by LindbladErrorgen.from_elementary_errorgens.
+            def _normalize_local_key(k):
+                return (k[0], k[1:]) if isinstance(k, str) else k
+            modelnoises.append(_OpModelPerOpNoise(
+                {lbl: _LindbladNoise({_normalize_local_key(k): v for k, v in val.items()},
+                                     lindblad_parameterization)
+                 for lbl, val in lindblad_error_coeffs.items()}))
         else:  # then need to process labels like ('H', 'XX:0,1') or 'HXX:0,1'
             def process_stencil_labels(flat_lindblad_errs):
                 nonlocal_errors = _collections.OrderedDict()
@@ -2417,7 +2442,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
+        Additional weight, beyond the number of target qubits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
@@ -2436,7 +2461,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
 
     bidirectional_cnots : bool
         Whether CNOT gates can be performed in either direction (and each direction should
-        be treated as an indepedent gate)
+        be treated as an independent gate)
 
     verbosity : int, optional
         An integer >= 0 dictating how much output to send to stdout.

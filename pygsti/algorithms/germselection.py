@@ -24,12 +24,14 @@ from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
 from pygsti import circuits as _circuits
 from pygsti import baseobjs as _baseobjs
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import mpitools as _mpit
+from pygsti.tools.matrixtools import eigendecomposition as _eigendecomposition
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models import ImplicitOpModel as _ImplicitOpModel
 from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 
-from typing import Optional, Union, TYPE_CHECKING, Callable
+from typing import Optional, Union, TYPE_CHECKING, Callable, Any
 
 if TYPE_CHECKING:
     import mpi4py
@@ -37,6 +39,22 @@ if TYPE_CHECKING:
     from pygsti.models import Model
 
 FLOATSIZE = 8  # in bytes: TODO: a better way
+
+
+def _resolve_float_type(float_type, model):
+    if float_type is None:
+        float_type = _np.double if model.basis.real else _np.cdouble
+    elif model.basis.real:
+        if float_type not in (_np.double, _np.single):
+            raise ValueError(f"Model basis '{model.basis.name}' is real-valued, but a complex "
+                             f"float_type ({float_type}) was provided. Please use a real dtype (like np.double) "
+                             f"or leave float_type=None to infer automatically.")
+    else:
+        if float_type not in (_np.cdouble, _np.csingle):
+            raise ValueError(f"Model basis '{model.basis.name}' is complex-valued, but a real "
+                             f"float_type ({float_type}) was provided. Please use a complex dtype (like np.cdouble) "
+                             f"or leave float_type=None to infer automatically.")
+    return float_type
 
 def find_germs(target_model: Model, randomize: bool=True, randomization_strength: float=1e-2,
                num_gs_copies: int=5, seed: Optional[int]=None, 
@@ -46,8 +64,8 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
                algorithm: str='greedy', algorithm_kwargs: Optional[dict]=None, mem_limit: Optional[int]=None, 
                comm: Optional[mpi4py.MPI.Comm]=None,
                profiler: Optional[Profiler]=None, verbosity: int=1, num_nongauge_params: Optional[int]=None,
-               assume_real: bool=False, float_type: _np.dtype=_np.cdouble,
-               mode: str="all-Jac", toss_random_frac: Optional[float]=None,
+               float_type: Optional[_np.dtype]=None,
+               mode: str="compactEVD", toss_random_frac: Optional[float]=None,
                force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None,
                load_cevd_cache_filename: Optional[str]=None, file_compression: bool=False) -> list[_circuits.Circuit]:
     """
@@ -105,7 +123,7 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
     force : str or list, optional
         A list of Circuits which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
-        be included.  Seting to None is the same as an empty list.
+        be included.  Setting to None is the same as an empty list.
 
     algorithm : {'greedy', 'grasp', 'slack'}, optional
         Specifies the algorithm to use to generate the germ set. Current
@@ -121,7 +139,7 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
         'slack': From a initial set of germs, add or remove a germ at each step in 
         an attempt to improve the germ-set score. Will allow moves that 
         degrade the score in an attempt to escape local optima as long as 
-        the degredation is within some specified amount of "slack". See 
+        the degradation is within some specified amount of "slack". See 
         :func:`find_germs_integer_slack` for more details.
 
     algorithm_kwargs : dict
@@ -147,10 +165,12 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
 
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
-        
-    float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
     
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
+        
     toss_random_frac : float, optional
         If specified this is a number between 0 and 1 that indicates the random fraction of candidate
         germs to drop randomly following the deduping procedure.
@@ -164,12 +184,12 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
         the Jacobians is constructed and is cached. This uses an intermediate amount of memory 
         between singleJac and allJac. When compactEVD mode is selected perform the greedy
         search iterations using an alternative method based on low-rank updates to the 
-        psuedoinverse. This alternative approach means that this mode also only works with the
+        pseudoinverse. This alternative approach means that this mode also only works with the
         score function option set to 'all'.
     
     force_rank_increase : bool, optional (default False) 
         Optional flag that can be used in conjunction with the greedy search algorithm
-        in compactEVD mode. When set we require that each subsequant addition to the germ
+        in compactEVD mode. When set we require that each subsequent addition to the germ
         set must increase the rank of the experiment design's composite Jacobian. Can potentially
         speed up the search when set to True.
         
@@ -254,15 +274,7 @@ def find_germs(target_model: Model, randomize: bool=True, randomization_strength
                     availableGermsList.append(forced_germ)
         printer.log('Length Available Germ List After Adding Back In Forced Germs: '+ str(len(availableGermsList)), 1)
     
-    #Add some checks related to the new option to switch up data types:
-    if not assume_real:
-        if not (float_type is _np.cdouble or float_type is _np.csingle):
-            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
-            raise ValueError('Unless working with (known) real-valued quantities only, please select an appropriate complex numpy dtype (either cdouble or csingle).')
-    else:
-        if not (float_type is _np.double or float_type is _np.single):
-            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
-            raise ValueError('When assuming real-valued quantities, please select a real-values numpy dtype (either double or single).')
+    float_type = _resolve_float_type(float_type, target_model)
         
     #How many bytes per float?
     FLOATSIZE= float_type(0).itemsize
@@ -455,7 +467,7 @@ def compute_germ_set_score(germs: list[_circuits.Circuit], target_model: Optiona
                            neighborhood_size: Optional[int]=5,
                            randomization_strength: float=1e-2, score_func: str='all',
                            op_penalty: float=0.0, l1_penalty: float=0.0, num_nongauge_params: Optional[int]=None,
-                           float_type: _np.dtype=_np.cdouble, gate_penalty: Optional[dict[str,float]]=None) -> _scoring.CompositeScore:
+                           float_type: Optional[_np.dtype]=None, gate_penalty: Optional[dict[str,float]]=None) -> _scoring.CompositeScore:
     """
     Calculate the score of a germ set with respect to a model.
 
@@ -494,7 +506,7 @@ def compute_germ_set_score(germs: list[_circuits.Circuit], target_model: Optiona
 
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
-        
+
     float_type : numpy dtype object, optional
         Numpy data type to use for floating point arrays.
 
@@ -613,7 +625,7 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
                                      model: Optional[Model]=None, partial_germs_list: Optional[list[_circuits.Circuit]]=None, 
                                      eps: Optional[float]=None, germ_lengths: _np.ndarray=None,
                                      op_penalty: float=0.0, l1_penalty: float=0.0, num_nongauge_params: Optional[int]=None,
-                                     float_type: _np.dtype=_np.cdouble, gate_penalty: Optional[dict[str,float]]=None, 
+                                     float_type: Optional[_np.dtype]=None, gate_penalty: Optional[dict[str,float]]=None, 
                                      germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
@@ -680,10 +692,10 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
 
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
-
+    
     float_type : numpy dtype object, optional
         Numpy data type to use for floating point arrays.
-    
+
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
         of the specified gate(s) in each germ. Should be specified as a dictionary whose keys are strings
@@ -707,6 +719,7 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
             raise ValueError("Must provide either partial_deriv_dagger_deriv or "
                              "(model, partial_germs_list)!")
         else:
+            float_type = _resolve_float_type(float_type, model)
             Np= model.num_params
             combinedDDD=_np.zeros((Np, Np), dtype=float_type)
             pDDD_kwargs = {'float_type':float_type}
@@ -774,7 +787,7 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
 
 
 def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
-                              germ_lengths=None, comm=None, float_type=_np.cdouble):
+                              germ_lengths=None, comm=None, float_type=None):
     """
     Calculate the positive squares of the germ Jacobians.
 
@@ -804,9 +817,9 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
-        
+
     float_type : numpy dtype object, optional
-        Numpy data type to use in floating point arrays.
+        Numpy data type to use for floating point arrays.
 
     Returns
     -------
@@ -834,7 +847,7 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     return twirledDerivDaggerDeriv
 
 
-def _compute_twirled_ddd(model, germ, eps=1e-6, float_type=_np.cdouble):
+def _compute_twirled_ddd(model, germ, eps=1e-6, float_type=None):
     """
     Calculate the positive squares of the germ Jacobian.
 
@@ -854,6 +867,9 @@ def _compute_twirled_ddd(model, germ, eps=1e-6, float_type=_np.cdouble):
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
         (i.e. abs(eval1 - eval2) < eps ? )
+
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
 
     Returns
     -------
@@ -920,7 +936,7 @@ def _germ_set_score_slack(weights, model_num, score_func, deriv_dagger_deriv_lis
         Coefficient for a penalty linear in the number of germs.
 
     score_dict : dict, optional
-        A dictionary to cache the score valies for the given `model_num` and
+        A dictionary to cache the score values for the given `model_num` and
         `weights`, i.e. `score_dict[model_num, tuple(weights)]` is set to the
         returned value.
 
@@ -956,7 +972,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     Applies random unitary perturbations to a model or list of models.
 
     If `model_list` is a length-1 list, then `num_copies` determines how
-    many randomizations to create.  If `model_list` containes multiple
+    many randomizations to create.  If `model_list` contains multiple
     models, then `num_copies` must be `None` and each model is
     randomized once to create the corresponding returned model.
 
@@ -1000,7 +1016,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     return newmodelList
 
 
-def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=_np.cdouble, comm=None, num_gauge_params = None):
+def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=None, comm=None, num_gauge_params = None):
     """
     Check to see if the germs_list is amplificationally complete (AC).
 
@@ -1025,10 +1041,12 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
         An eigenvalue of `jacobian^T*jacobian` is considered zero and thus a
         parameter un-amplified when its reciprocal is greater than threshold.
         Also used for eigenvector degeneracy testing in twirling operation.
-        
-    float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
     
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
+
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -1115,7 +1133,7 @@ def _num_non_spam_gauge_params(model):
 # so SOP is op_dim^2 x op_dim^2 and acts on vectorized *gates*
 # Recall vectorizing identity (when vec(.) concats rows as flatten does):
 #     vec( A * X * B ) = A tensor B^T * vec( X )
-def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble, tol=1e-12):
+def _super_op_for_perfect_twirl(wrt, eps, float_type: _np.dtype, tol=1e-12):
     """
     Return super operator for doing a perfect twirl with respect to wrt.
         
@@ -1128,7 +1146,8 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble, tol=1e-12):
     eps : float
         Tolerance used for evaluating whether two eigenvalues are degenerate.
         
-    float_type : numpy dtype (optional, default numpy.cdouble)
+    float_type : numpy dtype
+        The numpy data type to be used for floating point arrays.
         When specified return the resulting superduperoperator as an ndarray
         with this dtype.
         
@@ -1282,7 +1301,7 @@ def _sq_sing_vals_from_deriv(deriv, weights=None):
     return sortedEigenvals
 
 
-def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
+def _twirled_deriv(model, circuit, eps=1e-6, float_type=None):
     """
     Compute the "Twirled Derivative" of a circuit.
 
@@ -1302,13 +1321,17 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
         (i.e. `abs(eval1 - eval2) < eps` ? )
         
     float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
-        
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
+
     Returns
     -------
     numpy array
         An array of shape (op_dim^2, num_model_params)
     """
+    float_type = _resolve_float_type(float_type, model)
+
     prod = model.sim.product(circuit)
 
     # flattened_op_dim x vec_model_dim
@@ -1321,7 +1344,7 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
     return _np.dot(twirler, dProd)
 
 
-def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float_type=_np.cdouble):
+def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float_type=None):
     """
     Compute the "Twirled Derivative" of a set of circuits.
 
@@ -1347,7 +1370,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
-        
+
     float_type : numpy dtype object, optional
         Numpy data type to use for floating point arrays.
 
@@ -1356,6 +1379,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
     numpy array
         An array of shape (num_simplified_circuits, op_dim^2, num_model_params)
     """
+    float_type = _resolve_float_type(float_type, model)
 
     # This function assumes model has no spam elements so `lookup` below
     #  gives indexes into products computed by evalTree.
@@ -1449,7 +1473,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
     op_dim = model.dim
     dprods = model.sim.bulk_dproduct(germToPowL, flat=True)  # shape (nGerms*flattened_op_dim, vec_model_dim)
-    dprods.shape = (nGerms, op_dim**2, dprods.shape[1])
+    dprods = _compat.reshape_no_copy(dprods, (nGerms, op_dim**2, dprods.shape[1]))
 
     germLengths = _np.array([len(germ) for germ in germs_to_test], 'd')
 
@@ -1468,7 +1492,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
 def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
                        return_spectrum=False, threshold=1e6, check=False,
-                       float_type=_np.cdouble, comm=None, nGaugeParams = None):
+                       float_type=None, comm=None, nGaugeParams = None):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 
@@ -1510,6 +1534,11 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
         
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
+
     nGaugeParams : int, optional (default None)
         A optional kwarg for specifying the number of gauge
         parameters. Specifying this if already precomputed can
@@ -1575,7 +1604,7 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
 def find_germs_depthfirst(model_list, germs_list, randomize=True,
                           randomization_strength=1e-3, num_copies=None, seed=0, op_penalty=0,
                           score_func='all', tol=1e-6, threshold=1e6, check=False,
-                          force="singletons", verbosity=0, float_type=_np.cdouble):
+                          force="singletons", verbosity=0, float_type=None):
     """
     Greedy germ selection algorithm starting with 0 germs.
 
@@ -1590,15 +1619,15 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
         The model or list of Models to select germs for.
 
     germs_list : list of Circuit
-        The list of germs to contruct a germ set from.
+        The list of germs to construct a germ set from.
 
     randomize : bool, optional
         Whether or not to randomize `model_list` (usually just a single
-        `Model`) with small (see `randomizationStrengh`) unitary maps
+        `Model`) with small (see `randomization_strength`) unitary maps
         in order to avoid "accidental" symmetries which could allow for
         fewer germs but *only* for that particular model.  Setting this
         to `True` will increase the run time by a factor equal to the
-        numer of randomized copies (`num_copies`).
+        number of randomized copies (`num_copies`).
 
     randomization_strength : float, optional
         The strength of the unitary noise used to randomize input Model(s);
@@ -1622,7 +1651,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
 
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
-        the differece between eigenvalues below which they're treated as
+        the difference between eigenvalues below which they're treated as
         degenerate.
 
     threshold : float, optional
@@ -1641,6 +1670,11 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
     verbosity : int, optional
         Level of detail printed to stdout.
 
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
+
     Returns
     -------
     list
@@ -1650,6 +1684,8 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
+
 
     (reducedModelList,
      numGaugeParams, numNonGaugeParams, _) = _get_model_params(model_list)
@@ -1737,7 +1773,7 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
                             check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons", 
                             pretest: bool=True, mem_limit: Optional[int]=None, comm: Optional[mpi4py.MPI.Comm]=None, 
                             profiler: Optional[Profiler]=None, verbosity: int=0, num_nongauge_params: Optional[int]=None, 
-                            float_type: _np.dtype= _np.cdouble, mode: str="all-Jac", gate_penalty: Optional[dict[str,float]]=None)-> list[_circuits.Circuit]:
+                             float_type: Optional[_np.dtype]=None, mode: str="compactEVD", gate_penalty: Optional[dict[str,float]]=None)-> list[_circuits.Circuit]:
     """
     Greedy algorithm starting with 0 germs.
 
@@ -1756,15 +1792,15 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
         The model or list of `Model` objects to select germs for.
 
     germs_list : list of Circuit
-        The list of germs to contruct a germ set from.
+        The list of germs to construct a germ set from.
 
     randomize : bool, optional
         Whether or not to randomize `model_list` (usually just a single
-        `Model`) with small (see `randomizationStrengh`) unitary maps
+        `Model`) with small (see `randomization_strength`) unitary maps
         in order to avoid "accidental" symmetries which could allow for
         fewer germs but *only* for that particular model.  Setting this
         to `True` will increase the run time by a factor equal to the
-        numer of randomized copies (`num_copies`).
+        number of randomized copies (`num_copies`).
 
     randomization_strength : float, optional
         The strength of the unitary noise used to randomize input Model(s);
@@ -1788,7 +1824,7 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
 
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
-        the differece between eigenvalues below which they're treated as
+        the difference between eigenvalues below which they're treated as
         degenerate.
 
     threshold : float, optional
@@ -1823,9 +1859,11 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
 
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
-        
+
     float_type : numpy dtype object, optional
-        Use an alternative data type for the values of the numpy arrays generated.
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
@@ -1846,6 +1884,7 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
 
     dim = model_list[0].dim
     Np = model_list[0].num_params
@@ -1975,10 +2014,6 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
             [_compute_bulk_twirled_ddd_compact(model, germs_list, tol,
                                               evd_tol=1e-10, float_type=float_type, printer=printer)
              for model in model_list]
-             
-             #_compute_bulk_twirled_ddd_compact returns a tuple with three lists
-             #corresponding to the u, sigma and vh matrices for each germ's J^T J matrix's_list
-             #compact svd.
         currentDDDList = []
         nonzero_weight_indices= _np.nonzero(weights)
         nonzero_weight_indices= nonzero_weight_indices[0]
@@ -1986,9 +2021,9 @@ def find_germs_breadthfirst(model_list: list[Model], germs_list: list[_circuits.
             #reconstruct the needed J^T J matrices
             for j, idx in enumerate(nonzero_weight_indices):
                 if j==0:
-                    temp_DDD = derivDaggerDeriv[0][idx] @ derivDaggerDeriv[2][idx]
+                    temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].conj().T
                 else:
-                    temp_DDD += derivDaggerDeriv[0][idx] @ derivDaggerDeriv[2][idx]
+                    temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].conj().T
 
             currentDDDList.append(temp_DDD)
 
@@ -2124,7 +2159,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
                              slack_frac=False, return_all=False, tol=1e-6,
                              check=False, force="singletons",
                              force_score=1e100, threshold=1e6,
-                             verbosity=1, float_type=_np.cdouble):
+                             verbosity=1, float_type=None):
     """
     Find a locally optimal subset of the germs in germs_list.
 
@@ -2222,7 +2257,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
     force : str or list, optional
         A list of Circuits which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
-        be included.  Seting to None is the same as an empty list.
+        be included.  Setting to None is the same as an empty list.
 
     force_score : float, optional (default is 1e100)
         When `force` designates a non-empty set of circuits, the score to
@@ -2236,7 +2271,9 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
         Integer >= 0 indicating the amount of detail to print.
 
     float_type : numpy dtype object, optional
-        Use an alternative data type for the values of the numpy arrays generated.
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     See Also
     --------
@@ -2247,6 +2284,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
 
     if (fixed_slack and slack_frac) or (not fixed_slack and not slack_frac):
         raise ValueError("Either fixed_slack *or* slack_frac should be specified")
@@ -2476,7 +2514,7 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
                      l1_penalty: float=1e-2, op_penalty: float=0.0, score_func: str='all', tol: float=1e-6, 
                      threshold: float=1e6, check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons",
                      iterations: int=5, return_all: bool=False, shuffle: bool=False, verbosity: int=0, 
-                     num_nongauge_params: Optional[int]=None, float_type: _np.dtype=_np.cdouble,
+                     num_nongauge_params: Optional[int]=None, float_type: Optional[_np.dtype]=None,
                      gate_penalty: Optional[dict[str,float]]=None) -> list[_circuits.Circuit]:
     """
     Use GRASP to find a high-performing germ set.
@@ -2496,7 +2534,7 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
         List of all germ circuits to consider.
 
     alpha : float
-        A number between 0 and 1 that roughly specifies a score theshold
+        A number between 0 and 1 that roughly specifies a score threshold
         relative to the spread of scores that a germ must score better than in
         order to be included in the RCL. A value of 0 for `alpha` corresponds
         to a purely greedy algorithm (only the best-scoring germ set is
@@ -2559,7 +2597,7 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
     force : str or list, optional
         A list of Circuits which *must* be included in the final germ set.
         If set to the special string "singletons" then all length-1 strings will
-        be included.  Seting to None is the same as an empty list.
+        be included.  Setting to None is the same as an empty list.
 
     iterations : int, optional
         The number of GRASP iterations to perform.
@@ -2581,8 +2619,10 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
         
-    float_type : Numpy dtype object, optional
-        Numpy data type to use for floating point arrays
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
 
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
@@ -2600,6 +2640,7 @@ def find_germs_grasp(model_list: list[Model], germs_list: list[_circuits.Circuit
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
 
     (_, numGaugeParams,
      numNonGaugeParams, _) = _get_model_params(model_list)
@@ -2778,7 +2819,7 @@ def create_circuit_cache(model, circuit_list):
         The model (associates operation matrices with operation labels).
 
     ckt_list : list of Circuits
-        Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
+        Full list of all fiducial circuits available for constructing an informationally complete state preparation.
     
     Returns
     -------
@@ -2889,7 +2930,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #equivalently minimize the maximum eigenvalue of the inverse. This is called 'worst' in pygsti. The other option,
 #which is the default, is to minimize the sum of the reciprocals of the eigenvalues of the gramian of 
 #the jacobian. This is called 'all' and corresponds roughly, but not exactly, to minimizing the average
-#covariance. Going forward I will refer to this as the psuedoinverse-trace (since that is indeed what it is).
+#covariance. Going forward I will refer to this as the pseudoinverse-trace (since that is indeed what it is).
 
 #We haven't fully figured out how to low-rank updatify the 'worst' objective function (there are a few
 #half-baked ideas based on used iterative methods we might try to make fully baked if there is a demand
@@ -2902,10 +2943,10 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #candidate germs likewise has a jacobian associated with it that we'll denote by A_i.
 #I'll be referring the the A_i matrices (and interchangeably their gramians) as 'updates'.
 
-#We want to know how each of these updates would change the psuedoinverse-trace (and also rank)
+#We want to know how each of these updates would change the pseudoinverse-trace (and also rank)
 #of the jacobian for the current set of germs were it to be added and then select the germ
-#that improves the psuedoinverse-trace (and rank) the most in a greedy fashion. That is, for each
-#of the updates we want to calculate the psuedoinverse-trace of the matrix J'_i:
+#that improves the pseudoinverse-trace (and rank) the most in a greedy fashion. That is, for each
+#of the updates we want to calculate the pseudoinverse-trace of the matrix J'_i:
 
 #pinvtrace(J'_i)= pinvtrace(J^T@J + A_i^T@A_i)
 
@@ -2945,7 +2986,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #so is full-rank (ditto for C). If this were the case then this would solve our problem.
 #At the start of each iteration we pre-compute the inverse of J^T@J once and then use the formula
 #to calculate the updated inverse after adding A_i^T@A_i. Since J^T@J isn't full-rank, however,
-#we need a version of this that works for the psuedoinverse instead (simply replacing the inverses
+#we need a version of this that works for the pseudoinverse instead (simply replacing the inverses
 #with psuedoinverses in the woodbury formula doesn't work except in a couple special cases that we 
 #won't satisfy). 
 
@@ -2968,8 +3009,8 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #(I-UU^T)A, the component of A that is orthogonal to U. R_B is defined analogously
 #but swapping U->V and A->B.
 
-#K won't have the same psuedoinverse as the matrix we care about, but since K has the same spectrum 
-#it will also have the same psuedoinverse-trace as the matrix we care about. So, for the next stage
+#K won't have the same pseudoinverse as the matrix we care about, but since K has the same spectrum 
+#it will also have the same pseudoinverse-trace as the matrix we care about. So, for the next stage
 #we can instead proceed with respect to K. Since K has a nice block structure this will simplify
 #the application of the result from minamide's paper. 
 
@@ -3021,7 +3062,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #There are a few more tricks to keep in mind that are used to accelerate the calculation even more 
 #(and without knowing about makes the implementation details harder to parse).
 
-#   1. The psuedoinverse of a diagonal matrix is simply a diagonal matrix with the non-zero diagonal
+#   1. The pseudoinverse of a diagonal matrix is simply a diagonal matrix with the non-zero diagonal
 #      entries inverted, so no need for a costly SVD (which is how numpy internally implements pinv)
 #   2. The since it is diagonal the matrix multiplications involving E^+ can be done in quadratic time since all we need to do is 
 #      rescale the rows of the other matrix be the appropriate diagonal element. In numpy this can be done using element-wise multiplication
@@ -3038,7 +3079,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 
 
 #Future Performance Enhancements:
-#Inventory of possible future perofrmance enhancements.
+#Inventory of possible future performance enhancements.
 #   1. At the start of each iteration we compute a so-called 'update cache'. This is really just the eigenvalues and eigenvectors
 #      for the jacobian of our current candidate set as well as the projector onto the orthogonal complement of U's column space.
 #      This is calculated in the standard way using eigh. We could in principle use the second half of the Matthew Brand result
@@ -3048,7 +3089,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #      updates are both small, but will give us diminishing returns as the Jacobian for the current solution set approaches being full-rank.
 #      We could always use some heuristic to swap between the two approaches once the rank is past some threshold, though. For 3-qubit+ 
 #      systems profiling suggests that constructing the update cache takes nearly the same amount of time as running through hundreds of
-#      low-rank updates, so this could be a source of pretty large speedups. Vauge numerical stability concerns (and currently being fast enough)
+#      low-rank updates, so this could be a source of pretty large speedups. Vague numerical stability concerns (and currently being fast enough)
 #      are the main reasons we haven't already done so.
 #   2. Better search space pruning. We can do a better job at identifying useless germs and not including them in future iterations.
 #      We currently have an option called 'force_rank_increase' that is plumbed in. This is currently used to short-circuit the low-rank
@@ -3063,7 +3104,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #new function that computes the J^T J matrices but then returns the result in the form of the 
 #compact EVD in order to save on memory.    
 def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
-                                       comm=None, evd_tol=1e-10,  float_type=_np.cdouble,
+                                       comm=None, evd_tol=1e-10,  float_type=None,
                                        printer=None, return_eigs=False):
 
     """
@@ -3101,8 +3142,8 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
         across multiple processors.
         
     float_type : numpy dtype object, optional
-        Numpy data type to use in floating point arrays.
-        
+        Numpy data type to use for floating point arrays.
+
     return_eigs : bool, optional, default False
         If True then additionally return a list of the arrays of eigenvalues for each
         germ's twirled derivative gramian.
@@ -3151,7 +3192,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                 twirledDerivDerivDagger = twirledDeriv@(twirledDeriv.conj().T) 
                                                         
                 #now take twirledDerivDerivDagger and construct its compact EVD.
-                e, U= compact_EVD(twirledDerivDerivDagger, evd_tol)
+                e, U= compact_EVD(twirledDerivDerivDagger, evd_tol, assume_hermitian=True)
                 
                 #now connect this to the compact EVD of twirledDerivDaggerDeriv
                 #using the definition of the left and right singular
@@ -3182,7 +3223,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
             twirledDerivDerivDagger = twirledDeriv@(twirledDeriv.conj().T) 
                                                     
             #now take twirledDerivDerivDagger and construct its compact EVD.
-            e, U= compact_EVD(twirledDerivDerivDagger, evd_tol)
+            e, U= compact_EVD(twirledDerivDerivDagger, evd_tol, assume_hermitian=True)
             
             #now connect this to the compact EVD of twirledDerivDaggerDeriv
             #using the definition of the left and right singular
@@ -3208,10 +3249,10 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
     else:
         return sqrteU_list
     
-#New function for computing the compact eigenvalue decompostion of a matrix.
+#New function for computing the compact eigenvalue decomposition of a matrix.
 #Assumes that we are working with a diagonalizable matrix, no safety checks made.
 
-def compact_EVD(mat, threshold= 1e-10):
+def compact_EVD(mat, threshold= 1e-10, assume_hermitian=False):
     """
     Generate the compact eigenvalue decomposition of the input matrix.
     Assumes of course that the user has specified a diagonalizable matrix,
@@ -3225,6 +3266,10 @@ def compact_EVD(mat, threshold= 1e-10):
     threshold : float, optional
         threshold value for deciding if an eigenvalue is zero.
         
+    assume_hermitian : bool, optional
+        If True, forcefully symmetrizes the matrix to guarantee it is evaluated as
+        Hermitian, improving numerical stability against complex floating-point noise.
+        
     output:
     
     e : ndarray
@@ -3234,12 +3279,12 @@ def compact_EVD(mat, threshold= 1e-10):
     """
     
     #take the EVD of mat.
-    e, U= _np.linalg.eigh(mat)
+    U, e, _ = _eigendecomposition(mat, assume_hermitian=assume_hermitian)
 
     #How many non-zero eigenvalues are there and what are their indices
     nonzero_eigenvalue_indices= _np.nonzero(_np.abs(e)>threshold)
 
-    #extract the corresponding columns and values fom U and s:
+    #extract the corresponding columns and values form U and s:
     #For EVD/eigh We want the columns of U and the rows of Uh:
     nonzero_e_values = e[nonzero_eigenvalue_indices]
     nonzero_U_columns = U[:, nonzero_eigenvalue_indices[0]]
@@ -3281,10 +3326,10 @@ def compact_EVD_via_SVD(mat, threshold= 1e-10):
     #How many non-zero eigenvalues are there and what are their indices
     nonzero_eigenvalue_indices= _np.nonzero(_np.abs(s)>threshold)
 
-    #extract the corresponding columns and values fom U and s:
+    #extract the corresponding columns and values form U and s:
     #For EVD/eigh We want the columns of U and the rows of Uh:
     nonzero_e_values = s[nonzero_eigenvalue_indices]**2
-    nonzero_U_columns = Vh.T[:, nonzero_eigenvalue_indices[0]]
+    nonzero_U_columns = Vh.conj().T[:, nonzero_eigenvalue_indices[0]]
     
     return nonzero_e_values, nonzero_U_columns    
 
@@ -3318,7 +3363,7 @@ def construct_update_cache(mat, evd_tol=1e-10):
     """
     
     #Start by constructing a compact EVD of the input matrix. 
-    e, U = compact_EVD(mat, evd_tol)
+    e, U = compact_EVD(mat, evd_tol, assume_hermitian=True)
     
     #construct the projector
     #I think the conjugation is superfluous when we have real
@@ -3441,7 +3486,7 @@ def riedel_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=Tr
     output:
     
     trace : float
-        Value of the trace of the updated psuedoinverse matrix.
+        Value of the trace of the updated pseudoinverse matrix.
     
     updated_rank : int
         total rank of the updated matrix.
@@ -3496,7 +3541,7 @@ def riedel_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=Tr
 def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=False):
     """
     This function performs a low-rank update to the components of
-    the psuedo inverse of a matrix relevant to the calculation of that
+    the pseudo inverse of a matrix relevant to the calculation of that
     matrix's updated trace. It takes as input a symmetric update of the form:
     A@A.T, in other words a symmetric rank-decomposition of the update
     matrix. Since the update is symmetric we only pass as input one
@@ -3523,7 +3568,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         original matrix's eigenvectors.
         
     updated_trace : float
-        Value of the trace of the updated psuedoinverse matrix.
+        Value of the trace of the updated pseudoinverse matrix.
     
     updated_rank : int
         total rank of the updated matrix.
@@ -3549,7 +3594,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
     if len(nonzero_indices_update[0])==0 and force_rank_increase:
         return None, None, False
     #We also need to add logic for the case where the projection onto the orthogonal
-    #complement is empty, which reduces the psuedoinverse update such that we can
+    #complement is empty, which reduces the pseudoinverse update such that we can
     #actually use the standard woodbury formula result.
     elif (len(nonzero_indices_update[0])==0) and (not force_rank_increase):
         #I have a bunch of intermediate matrices I need to construct. Some of which are used to build up
@@ -3602,7 +3647,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         updated_rank= len(orig_e)
         rank_increased=False
     
-    #otherwise apply the full minamide result to update the psuedoinverse.
+    #otherwise apply the full minamide result to update the pseudoinverse.
     else:
         updated_rank= len(orig_e)+ len(nonzero_indices_update[0])
         P= q_update[: , nonzero_indices_update[0]]
@@ -3610,7 +3655,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         #Now form the matrix R_update which is given by P.T @ proj_update.
         R_update= P.T@proj_update
         
-        #Get the psuedoinverse of R_update:
+        #Get the pseudoinverse of R_update:
         try:
             pinv_R_update= _np.linalg.pinv(R_update, rcond=1e-10) #hardcoded
         except _np.linalg.LinAlgError:
@@ -3685,8 +3730,8 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
                             op_penalty: float=0, score_func: str='all', tol: float=1e-6, threshold: float=1e6,
                             check: bool=False, force: Optional[Union[str, list[_circuits.Circuit]]]="singletons", pretest: bool=True, 
                             mem_limit: Optional[int]=None, comm: Optional[mpi4py.MPI.Comm]=None, profiler: Optional[Profiler]=None, 
-                            verbosity: int=0, num_nongauge_params: Optional[int]=None, float_type: _np.dtype= _np.cdouble, 
-                            mode: str="all-Jac", force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None, 
+                            verbosity: int=0, num_nongauge_params: Optional[int]=None, float_type: Optional[_np.dtype]=None,
+                            mode: str="compactEVD", force_rank_increase: bool=False, save_cevd_cache_filename: Optional[str]=None, 
                             load_cevd_cache_filename: Optional[str]=None, file_compression: bool=False, evd_tol: float=1e-10, 
                             initial_germ_set_test: bool=True, gate_penalty: Optional[dict[str,float]]=None) -> list[_circuits.Circuit]:
     """
@@ -3707,15 +3752,15 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
         The model or list of Models to select germs for.
 
     germs_list : list of Circuit
-        The list of germs to contruct a germ set from.
+        The list of germs to construct a germ set from.
 
     randomize : bool, optional
         Whether or not to randomize `model_list` (usually just a single
-        `Model`) with small (see `randomizationStrengh`) unitary maps
+        `Model`) with small (see `randomization_strength`) unitary maps
         in order to avoid "accidental" symmetries which could allow for
         fewer germs but *only* for that particular model.  Setting this
         to `True` will increase the run time by a factor equal to the
-        numer of randomized copies (`num_copies`).
+        number of randomized copies (`num_copies`).
 
     randomization_strength : float, optional
         The strength of the unitary noise used to randomize input Model(s);
@@ -3739,7 +3784,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
 
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
-        the differece between eigenvalues below which they're treated as
+        the difference between eigenvalues below which they're treated as
         degenerate.
 
     threshold : float, optional
@@ -3777,8 +3822,10 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
         
     float_type : numpy dtype object, optional
-        Use an alternative data type for the values of the numpy arrays generated.
-        
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
+
     force_rank_increase : bool, optional
         Whether to force the greedy iteration to select a new germ that increases the rank
         of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
@@ -3816,6 +3863,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
 
     model_list = _setup_model_list(model_list, randomize,
                                    randomization_strength, num_copies, seed)
+    float_type = _resolve_float_type(float_type, model_list[0])
 
     dim = model_list[0].dim
     Np = model_list[0].num_params
@@ -3970,7 +4018,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
             if save_cevd_cache_filename is not None:
                 if len(twirledDerivDaggerDerivList)>1:
                     raise ValueError('Currently not configured to save compactEVD caches to disk when there is more than one model in the model list. i.e. this is not currently compatible with model randomization to get the non-lite germs.')
-                #otherwise conver the first entry of twirledDerivDaggerDerivList,
+                #otherwise convert the first entry of twirledDerivDaggerDerivList,
                 #which itself a list of a half of the symmetric rank decompositions
                 #and save it to disk using _np.savez or _np.savez_compressed
                 printer.log('Saving Compact EVD Cache to Disk', 1)
@@ -4007,7 +4055,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
                                 **nonAC_kwargs)
                 elif mode=='compactEVD':
                     initial_scores[i][j] = compute_composite_germ_set_score(
-                            partial_deriv_dagger_deriv=(twirledDerivDaggerDerivList[j][i] @ twirledDerivDaggerDerivList[j][i].T)[None,:,:], 
+                            partial_deriv_dagger_deriv=(twirledDerivDaggerDerivList[j][i] @ twirledDerivDaggerDerivList[j][i].conj().T)[None,:,:], 
                             init_n=1, germ_lengths= [germLengths[i]],
                             **nonAC_kwargs)
         #We should now have the composite scores for every germ and for every model. Now, for every germ we'll assign it's "best score"
@@ -4064,9 +4112,9 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
             #reconstruct the needed J^T J matrices
             for j, idx in enumerate(nonzero_weight_indices):
                 if j==0:
-                    temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
+                    temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].conj().T
                 else:
-                    temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
+                    temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].conj().T
             currentDDDList.append(temp_DDD)
 
     else:  # should be unreachable since we set 'mode' internally above
@@ -4222,7 +4270,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
                         #unless the germ is the current best.
                         bestDDDs= [currentDDD.copy() + \
                             twirledDerivDaggerDerivList[k][candidateGermIdx]@\
-                            twirledDerivDaggerDerivList[k][candidateGermIdx].T\
+                            twirledDerivDaggerDerivList[k][candidateGermIdx].conj().T\
                             for k, currentDDD in enumerate(currentDDDList)]
                 testDDDs = None
 
@@ -4259,7 +4307,7 @@ def compute_composite_germ_set_score_compactevd(current_update_cache: tuple[_np.
                                                 partial_germs_list: Optional[list[_circuits.Circuit]]=None, eps: Optional[float]=None, 
                                                 num_germs: Optional[int]=None, op_penalty: float=0.0, l1_penalty: float=0.0, 
                                                 num_nongauge_params: Optional[int]=None, num_params: Optional[int]=None, 
-                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type: _np.dtype=_np.cdouble,
+                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None,
                                                 gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
@@ -4335,9 +4383,6 @@ def compute_composite_germ_set_score_compactevd(current_update_cache: tuple[_np.
         of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
         with respect to the chosen score function). Also results in pruning in subsequent
         optimization iterations. Defaults to False.
-    
-    float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
     
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
@@ -4393,7 +4438,7 @@ def compute_composite_germ_set_score_compactevd(current_update_cache: tuple[_np.
         AC_score = -_np.inf
         N_AC = -_np.inf
     else:
-        #I want compatibility eith the lines below that pick off just the non_gauge eigenvalues. Rather than
+        #I want compatibility with the lines below that pick off just the non_gauge eigenvalues. Rather than
         #do some index gymnastics I'll just pad this eigenvalue list (which is compact) and make it the expected
         #length (num params). Pad on the left because the code below assumes eigenvalues in ascending order.
         padded_updated_eigenvalues= _np.pad(updated_eigenvalues, (num_params-len(updated_eigenvalues),0))
@@ -4423,8 +4468,9 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache: tuple[
                                                 partial_germs_list: Optional[list[_circuits.Circuit]]=None, eps: Optional[float]=None, 
                                                 num_germs: Optional[int]=None, op_penalty: float=0.0, l1_penalty: float=0.0, 
                                                 num_nongauge_params: Optional[int]=None, num_params: Optional[int]=None, 
-                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None, float_type: _np.dtype=_np.cdouble,
-                                                gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None) -> _scoring.CompositeScore:
+                                                force_rank_increase: bool=False, germ_lengths: _np.ndarray=None,
+                                                gate_penalty: Optional[dict[str,float]]=None, germ_list: Optional[list[_circuits.Circuit]]=None,
+                                                float_type: Any=None) -> _scoring.CompositeScore:
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -4499,9 +4545,6 @@ def compute_composite_germ_set_score_low_rank_trace(current_update_cache: tuple[
         of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
         with respect to the chosen score function). Also results in pruning in subsequent
         optimization iterations. Defaults to False.
-
-    float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
     
     gate_penalty : dict, optional (default None)
         An optional dictionary allowing the specification of gate-specific penalties to add for each instance
@@ -4579,7 +4622,7 @@ def fast_kron(a,b):
     return (a[:, None, :, None]*b[None, :, None, :]).reshape(a.shape[0]*b.shape[0],a.shape[1]*b.shape[1])
    
    
-#Stabler implementation of the psuedoinverse using the alternative lapack driver for SVD:
+#Stabler implementation of the pseudoinverse using the alternative lapack driver for SVD:
 def stable_pinv(mat):
     U, s, Vh = _sla.svd(mat, lapack_driver='gesvd', full_matrices=False)
     pinv_s= _np.zeros((len(s),1))
@@ -4587,21 +4630,21 @@ def stable_pinv(mat):
         if sval>1e-10: #HARDCODED
             pinv_s[i]= 1/sval
     
-    #new form the psuedoinverse:
+    #new form the pseudoinverse:
     pinv= Vh.T@(pinv_s*U.T)
     return pinv
 
 
 #---------- Minimal Germ Spanning Vectors------------#
 #Not a great name for this section of code. Idea here is to
-#take a user-inputed AC germ-set (presumably from a prior germ
+#take a user-inputted AC germ-set (presumably from a prior germ
 #selection run and then identify a minimal set of amplified directions
-#that spans model space collectively accross all germs.
+#that spans model space collectively across all germs.
 #this can then be used as input to a version of FPR that is
 #globally aware of the overlap in amplified directions
 #of parameter space.
 
-def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_type=_np.cdouble, 
+def germ_set_spanning_vectors(target_model, germ_list, float_type=None, 
                               num_nongauge_params=None, tol = 1e-6, pretest=False, evd_tol = 1e-10,
                               verbosity=1, threshold = 1e6, mode = 'greedy', update_cache_low_rank = False,
                               final_test = True, comm=None): 
@@ -4615,13 +4658,15 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
-        
-    float_type : numpy dtype object, optional
-        Numpy data type to use for floating point arrays.
     
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays. Automatically resolved based on whether the
+        model's basis is real-valued. Can be manually specified by user, which can be useful for controlling
+        memory footprint.
+
     tol : float, optional
         Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
-        the differece between eigenvalues below which they're treated as
+        the difference between eigenvalues below which they're treated as
         degenerate.
     
     pretest : boolean, optional
@@ -4675,7 +4720,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         selected for each other germ in the set we maintain amplificational completeness.
 
     currentDDD : ndarray
-        The J^T@J matrix for subset of twirled derivative columns selected accross
+        The J^T@J matrix for subset of twirled derivative columns selected across
         all of the germs. The spectrum of this matrix provides information about the
         amplificational properties of the reduced vector set. 
     """
@@ -4685,15 +4730,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         target_model = target_model.copy()
         target_model.sim = 'matrix'
     
-    #Add some checks related to the option to switch up data types:
-    if not assume_real:
-        if not (float_type is _np.cdouble or float_type is _np.csingle):
-            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
-            raise ValueError('Unless working with (known) real-valued quantities only, please select an appropriate complex numpy dtype (either cdouble or csingle).')
-    else:
-        if not (float_type is _np.double or float_type is _np.single):
-            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
-            raise ValueError('When assuming real-valued quantities, please select a real-values numpy dtype (either double or single).')
+    float_type = _resolve_float_type(float_type, target_model)
     
     Np = target_model.num_params
     
@@ -4761,7 +4798,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         
         #for the initial iteration since we're just adding a single vector, independent of the score function used
         #we basically just want to choose the vector associated with the largest eigenvalue (as this will minimize both
-        #the psuedoinverse-trace and the minimum psuedoinverse eigenvalue conditions).
+        #the pseudoinverse-trace and the minimum pseudoinverse eigenvalue conditions).
         best_initial_vec_index= _np.argmax(composite_eigenvalue_array)
         printer.log('Best initial vector found: ' + str(best_initial_vec_index), 2)
         
@@ -4776,7 +4813,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         #have a factor of sqrt(e) folded into them, so I am dividing that back out here.
         
         #initial value of the current twirled derivative gramian.
-        currentDDD = composite_twirled_deriv_array[:, [best_initial_vec_index]]@ composite_twirled_deriv_array[:, [best_initial_vec_index]].T
+        currentDDD = composite_twirled_deriv_array[:, [best_initial_vec_index]]@ composite_twirled_deriv_array[:, [best_initial_vec_index]].conj().T
         
         #Now start the greedy search. The initial number of amplified parameters is 1.
         initN=1
@@ -4796,12 +4833,12 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
                 current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
             else:
                 if update_cache_low_rank:
-                    #do a rank one psuedoinverse update wrt the best vector from the prior round
+                    #do a rank one pseudoinverse update wrt the best vector from the prior round
                     current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol, 
                                                                            prev_update_cache = prev_update_cache,
                                                                            rank_one_update=composite_twirled_deriv_array[:, [idx_best_candidate_vec]]) # noqa: F821
                 else:
-                    #otherwise rebuild the update cache from scratch using a fresh psuedoinverse. Could be useful if worried about stability.
+                    #otherwise rebuild the update cache from scratch using a fresh pseudoinverse. Could be useful if worried about stability.
                     current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
             
             candidate_vec_indices = _np.where(weights == 0)[0]
@@ -4815,8 +4852,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
                 current_vec_score = compute_composite_vector_set_score(
                                                 current_update_cache= current_update_cache,
                                                 vector_update= composite_twirled_deriv_array[:, [idx]],
-                                                num_nongauge_params= numNonGaugeParams,
-                                                float_type= float_type)
+                                                num_nongauge_params= numNonGaugeParams)
 
                 if current_vec_score < best_vec_score:
                     best_vec_score = current_vec_score
@@ -4832,7 +4868,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
             printer.log('Best score this iteration: ' + str(best_vec_score), 2)
             
             #update currentDDD
-            currentDDD= composite_twirled_deriv_array[:, _np.where(weights == 1)[0]]@ composite_twirled_deriv_array[:, _np.where(weights == 1)[0]].T
+            currentDDD= composite_twirled_deriv_array[:, _np.where(weights == 1)[0]]@ composite_twirled_deriv_array[:, _np.where(weights == 1)[0]].conj().T
         
             #Add this vector to the germ vector dictionary
             germ_vec_dict[idx_to_germ_idx[idx_best_candidate_vec][0]].append(composite_twirled_deriv_array[:, [idx_best_candidate_vec]]/_np.sqrt(composite_eigenvalue_array[idx_best_candidate_vec]))
@@ -4844,7 +4880,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         
         #if true, perform a final test and verify that the final score 
         if final_test:
-            #restricted version of the psuedoinverse trace that only looks at the non-gauge parameters.
+            #restricted version of the pseudoinverse trace that only looks at the non-gauge parameters.
             #Only care about gramians, so assume hermitian
             def restricted_pinv_trace(mat, num_nongauge):
                 #flip so in descending order
@@ -4889,7 +4925,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
             germ_vec_dict[idx_to_germ_idx[vec_idx][0]].append(composite_twirled_deriv_array[:, [vec_idx]]/_np.sqrt(composite_eigenvalue_array[vec_idx]))
         
         #temporarily copy, fix the return behavior later to avoid this.
-        currentDDD= selected_vector_subset @ selected_vector_subset.T
+        currentDDD= selected_vector_subset @ selected_vector_subset.conj().T
         #Need to map back the selected vectors indices (which we should be able to pull
         #directly by taking the first numNonGaugeParams of P) and use them to map back into
         #the germ set for germ_vec_dict construction purposes.
@@ -4904,8 +4940,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
 #model vectors rather than full germs.
 def compute_composite_vector_set_score(current_update_cache, vector_update, 
                                        model=None, num_nongauge_params=None, 
-                                       force_rank_increase=False, 
-                                       float_type=_np.cdouble):
+                                       force_rank_increase=False):
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -4944,7 +4979,6 @@ def compute_composite_vector_set_score(current_update_cache, vector_update,
         of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
         with respect to the chosen score function). Also results in pruning in subsequent
         optimization iterations. Defaults to False.
-    
     
     Returns
     -------
@@ -4993,7 +5027,7 @@ def compute_composite_vector_set_score(current_update_cache, vector_update,
 #version specialized for rank one updates
 def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, rank_one_update=None):
     """
-    Calculates the parts of the psuedoinverse update loop algorithm that we can 
+    Calculates the parts of the pseudoinverse update loop algorithm that we can 
     pre-compute and reuse throughout all of the potential updates.
     
     This is based on a result from Carl Meyer in Generalized Inversion of 
@@ -5015,7 +5049,7 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
     Output:
     
     pinv_A : ndarray
-        The psuedoinverse of the input matrix
+        The pseudoinverse of the input matrix
     
     proj_A : ndarray
         A projectors onto the orthogonal complement of the column space of the input matrix.
@@ -5028,7 +5062,7 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
         
     """
     
-    #Start by constructing the psuedoinverse of the input matrix.
+    #Start by constructing the pseudoinverse of the input matrix.
     
     #if these are both specified then use a rank-one update for the psuedoinversion.
     if ((prev_update_cache is not None) and (rank_one_update is  not None)):
@@ -5039,7 +5073,7 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
         else:
             rank=prev_update_cache[3]
         
-    #Else construct the psuedoinverse from scratch.
+    #Else construct the pseudoinverse from scratch.
     #Use the scipy implementation since I can get the rank out easily
     else:
         try:
@@ -5058,13 +5092,13 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
     #I think that's all we can pre-compute, so return those values:
     return pinv_A, proj_A, _np.trace(pinv_A), rank
     
-#function for doing rank-1 psuedoinverse-trace update:
+#function for doing rank-1 pseudoinverse-trace update:
 def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, force_rank_increase=False):
     """
-        Helper function for calculating rank-one updates to the trace of the psuedoinverse.
-        Takes as input a rank-one update, the psuedo-inverse of the matrix
+        Helper function for calculating rank-one updates to the trace of the pseudoinverse.
+        Takes as input a rank-one update, the pseudo-inverse of the matrix
         we're updating, the projector onto the column space for the matrix whose
-        psuedoinverse we are updating and a flag for specifying if we're requiring
+        pseudoinverse we are updating and a flag for specifying if we're requiring
         the rank to increase.
     """
     #calculate some quantities we need. Following notation from matrix cookbook.
@@ -5121,16 +5155,17 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
     return updated_trace, rank_increase_flag
     
     
-#function for doing rank-1 psuedoinverse update:
+#function for doing rank-1 pseudoinverse update:
 def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_increase=False):
     """
-    Helper function for calculating rank-one psuedoinverse updates.
-    Takes as input a rank-one update, the psuedo-inverse of the matrix
+    Helper function for calculating rank-one pseudoinverse updates.
+    Takes as input a rank-one update, the pseudo-inverse of the matrix
     we're updating, the projector onto the column space for the matrix whose
-    psuedoinverse we are updating and a flag for specifying if we're requiring
+    pseudoinverse we are updating and a flag for specifying if we're requiring
     the rank to increase.
     """
-    
+    assert _np.linalg.norm(vector_update.imag)<=1e-16
+
     #calculate some quantities we need. Following notation from matrix cookbook.
     beta = 1 + vector_update.T@pinv_A@vector_update
     v= pinv_A@vector_update
@@ -5172,7 +5207,7 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
         
         gamma_v= gamma@v.T
         gamma_v_term = (-1/norm_v**2)*(gamma_v+gamma_v.T)
-        vv_term = (_np.sum(v*gamma)/norm_v**4)*(v@v.T)
+        vv_term = (_np.sum(v*gamma)/norm_v**4)*(v@v.conj().T)
         
         G = gamma_v_term + vv_term
         

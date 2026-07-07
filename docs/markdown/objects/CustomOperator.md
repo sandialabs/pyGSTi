@@ -75,7 +75,9 @@ mdl.operations[('Gxpi2',0)] = MyXPi2Operator()
 print(mdl)
 ```
 
-Next, to demonstrate everything is working like it should, we'll optimize this model using gate set tomography (see the [GST overview tutorial](../gst/Overview) for the details on what all this stuff does).  GST by default attempts to gauge optimize its final estimate to look like the target model (see the [gauge optimization tutorial](../utilities/GaugeOpt) for details).  This would requires all of the operators in our model to implement the (gauge) `transform` method.  Because `MyXPi2Operator` doesn't, we tell GST not to perform any gauge optimization by setting `gauge_opt_params=False` below.
+Next, to demonstrate everything is working like it should, we'll optimize this model using gate set tomography (see the [GST overview tutorial](../gst/Overview) for the details on what all this stuff does).  GST by default attempts to gauge optimize its final estimate to look like the target model (see the [gauge optimization tutorial](../utilities/GaugeOpt) for details).  This would require all the operators in our model to implement the (gauge) `transform` method.  Because `MyXPi2Operator` doesn't, we tell GST not to perform any gauge optimization by setting `gauge_opt_suite_name='none'` below.
+
+Note: `gauge_opt_suite_name='none'` is different from `gauge_opt_suite_name=None`. The former explicitly skips gauge optimization, while the latter defers entirely to downstream functions for how to handle gauge optimization.
 
 ```{code-cell} ipython3
 # Generate "fake" data from a depolarized version of the target (ideal) model
@@ -88,7 +90,7 @@ ds = pygsti.data.simulate_data(mdl_datagen, listOfExperiments, num_samples=1000,
 
 #Run GST *without* gauge optimization
 results = pygsti.run_long_sequence_gst(ds, mdl, smq1Q_XYI.prep_fiducials(), smq1Q_XYI.meas_fiducials(),
-                                      smq1Q_XYI.germs(), maxLengths, gauge_opt_params=False)
+                                      smq1Q_XYI.germs(), maxLengths, gauge_opt_suite_name='none')
 ```
 
 **That's it!  We just ran GST with a custom operation.**

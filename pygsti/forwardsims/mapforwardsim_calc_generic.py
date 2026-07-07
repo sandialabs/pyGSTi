@@ -1,4 +1,4 @@
-"""Defines generic Python-version of map forward simuator calculations"""
+"""Defines generic Python-version of map forward simulator calculations"""
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -28,7 +28,7 @@ def mapfill_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_a
     # The required ending condition is that array_to_fill on each processor has been filled.  But if
     # memory is being shared and resource_alloc contains multiple processors on a single host, we only
     # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
-    # shared memory that we don't want to have muliple procs using simultaneously to compute the
+    # shared memory that we don't want to have multiple procs using simultaneously to compute the
     # same thing.  Thus, we carefully guard any shared mem updates/usage
     # using "if shared_mem_leader" (and barriers, if needed) below.
     shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
@@ -84,7 +84,7 @@ def cond_update_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, param_
     # The required ending condition is that array_to_fill on each processor has been filled.  But if
     # memory is being shared and resource_alloc contains multiple processors on a single host, we only
     # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
-    # shared memory that we don't want to have muliple procs using simultaneously to compute the
+    # shared memory that we don't want to have multiple procs using simultaneously to compute the
     # same thing.  Thus, we carefully guard any shared mem updates/usage
     # using "if shared_mem_leader" (and barriers, if needed) below.
     shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
@@ -309,12 +309,12 @@ def mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, la
             t = t0
             rhoVec.set_time(t)
             rho = rhoVec._rep.actionable_staterep()
-            t += rholabel.time
+            t += getattr(rholabel, 'time', 0.0)
 
             for gl in remainder:
                 op = fwdsim.model._circuit_layer_operator(gl, 'op')
                 op.set_time(t)
-                t += gl.time if hasattr(gl, "time") else 0.0  # time in gate label == gate duration?
+                t += getattr(gl, 'time', 0.0) # time in gate label == gate duration?
                 rho = op._rep.acton(rho)
 
             j = outcome_to_elbl_index[outcome]
@@ -401,7 +401,7 @@ def mapfill_timedep_dterms(fwdsim, array_to_fill, dest_indices, dest_param_indic
 
     fwdsim.model.from_vector(orig_vec, close=True)
 
-    #Now each processor has filled the relavant parts of dpr_cache,
+    #Now each processor has filled the relevant parts of dpr_cache,
     # so gather together:
     _mpit.gather_slices(all_slices, owners, array_to_fill, [], axes=1, comm=comm)
 

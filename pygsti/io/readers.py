@@ -640,7 +640,7 @@ def read_data_from_dir(dirname, preloaded_edesign=None, quick_load=False, comm=N
         Directory name.
 
     preloaded_edesign : ExperimentDesign, optional
-        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        The experiment design belonging to the to-be-loaded data object, in cases
         when this has been loaded already (only use this if you know what
         you're doing).
 
@@ -678,7 +678,7 @@ def read_data_from_mongodb(mongodb, doc_id, preloaded_edesign=None, quick_load=F
         The user-defined identifier of the data to load.
 
     preloaded_edesign : ExperimentDesign, optional
-        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        The experiment design belonging to the to-be-loaded data object, in cases
         when this has been loaded already (only use this if you know what
         you're doing).
 

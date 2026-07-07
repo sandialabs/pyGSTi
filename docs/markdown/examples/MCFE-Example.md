@@ -14,6 +14,10 @@ kernelspec:
 # Mirror Circuit Fidelity Estimation
 
 ```{code-cell} ipython3
+!pip install qiskit-aer -q  # qiskit-aer is REQUIRED by this notebook. This makes sure you have it.
+```
+
+```{code-cell} ipython3
 import pygsti
 from collections import defaultdict
 import numpy as np

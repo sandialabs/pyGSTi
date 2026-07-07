@@ -140,6 +140,24 @@ The practical issue is therefore *not* "the fallback is slow." It is that silent
 
 **Tracker.** [sandialabs/pyGSTi#715](https://github.com/sandialabs/pyGSTi/issues/715).
 
+## 18. Inconsistent ModelMember copy/deepcopy/pickle semantics around `_parent`
+
+**What it is.** Three distinct code paths handle `_parent` differently when copying a `ModelMember`:
+
+1. **`ModelChild.copy(parent=...)`** (`modelmember.py`) — seeds the deepcopy memo with `memo[id(self.parent)] = None`, so the parent model is *not* copied; caller sets the new parent explicitly.
+2. **`ModelChild.__getstate__`** — nulls `_parent` for the pickle/JSON path; `relink_parent` restores it on deserialization.
+3. **`_DenseCopyMixin.__deepcopy__`** (`modelmember.py`) — copies `__dict__` verbatim, *including* `_parent`. A bare `copy.deepcopy(dense_member)` therefore deep-copies the entire parent model as a side effect.
+
+Path 3 is *intentionally* inconsistent with paths 1 and 2 because the regression test for [#651](https://github.com/sandialabs/pyGSTi/issues/651) (`test/unit/modelmembers/test_operation.py::test_deepcopy`) requires it: the test calls `copy.deepcopy(op)` where `op._parent` is a live model, then asserts that `o2.parent` is a distinct but equivalent model.
+
+**Where it bites.** Any future maintainer who "normalises" `_DenseCopyMixin.__deepcopy__` to null or drop `_parent` (for consistency with `__getstate__` or `ModelChild.copy`) will silently break the #651 test with `AttributeError: 'NoneType' object has no attribute 'create_modelmember_graph'`. The `_DenseCopyMixin` docstring in `modelmember.py` carries a prominent warning about this, but it is easy to miss during a refactor.
+
+Additionally, the path-3 behaviour is arguably surprising to callers: `copy.deepcopy(op)` has an invisible, potentially expensive side effect (copying the parent model) that `ModelChild.copy()` deliberately avoids.
+
+**Do not change `_DenseCopyMixin.__deepcopy__` without first resolving the tracking issue.**
+
+**Tracker.** [sandialabs/pyGSTi#804](https://github.com/sandialabs/pyGSTi/issues/804)
+
 ## 17. POVM inheritance structure refactor
 
 **What it is.** [pygsti/modelmembers/povms/povm.py](../pygsti/modelmembers/povms/povm.py)'s `POVM` base class and `_BasePOVM` have inverted-ish roles: `POVM` actually implements a fully-wired-up zero-parameter POVM, but most concrete subclasses do have parameters. This forces awkward overrides.

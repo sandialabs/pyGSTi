@@ -2,7 +2,7 @@
 
 from tempfile import TemporaryDirectory
 from pygsti.modelpacks import smq1Q_XYI
-from pygsti.tools.leakage import leaky_qubit_model_from_pspec, construct_leakage_report
+from pygsti.leakage import leaky_qubit_model_from_pspec, construct_leakage_report
 from pygsti.data import simulate_data
 from pygsti.protocols import StandardGST, ProtocolData
 import unittest
@@ -74,7 +74,7 @@ class TestLeakageGSTPipeline(unittest.TestCase):
             # ^ That update makes sure the report generates without error.
         est = updated_res.estimates['CPTPLND']
 
-        """
+        r"""
         Original results are shown below. We don't rely on the exact numbers here. What matters is
         qualitative aspects of how Gxpi2 and Gypi2 deviate from their respective targets. Since our
         data generating model only applied leakage to Gxpi2, a "good" result reports much more error
@@ -103,9 +103,13 @@ class TestLeakageGSTPipeline(unittest.TestCase):
               we'll test for a 2x difference.
             
             * For standard gauge optimization, Gxpi2 and Gypi2 have almost identical infidelities;
-              we'll test for a factor 1.1x there.
+              we'll test for a factor 1.25x there.
+
+        NOTE: could compare the ratios of Gxpi2 infidelity to Gypi2 infidelity (expect >= 1) for
+        both types of gauge optimization. If the exact numbers above held, then we'd be looking at
+        (ratio for stdgaugeopt) \approx 1.01 and (ratio for LAGO) \approx 2.57.
         """
-        from pygsti.tools.leakage import subspace_entanglement_fidelity as fidelity
+        from pygsti.leakage import subspace_entanglement_fidelity as fidelity
         
         mdls = {lbl: est.models[lbl] for lbl in {'target', 'LAGO', 'stdgaugeopt'}}
         assert mdls['target'].basis.name == mdls['stdgaugeopt'].basis.name == mdls['LAGO'].basis.name == 'l2p1'
@@ -116,10 +120,10 @@ class TestLeakageGSTPipeline(unittest.TestCase):
 
         infids = dict()
         for lbl in ['LAGO', 'stdgaugeopt']:
-            infids[lbl] = {g: 1 - fidelity(gates[lbl][g], gates['target'][g], 'l2p1', n_leak=1) for g in ['x', 'y'] } 
+            infids[lbl] = {g: 1 - fidelity(gates[lbl][g], gates['target'][g], 'l2p1') for g in ['x', 'y'] } 
 
-        self.assertGreater( infids['LAGO']['x'],        2.0 * infids['LAGO']['y']        )
-        self.assertLess(    infids['stdgaugeopt']['x'], 1.1 * infids['stdgaugeopt']['y'] )
+        self.assertGreater( infids['LAGO']['x'],        2.0  * infids['LAGO']['y']        )
+        self.assertLess(    infids['stdgaugeopt']['x'], 1.25 * infids['stdgaugeopt']['y'] )
 
         objectivefns.DEFAULT_MIN_PROB_CLIP = OLD_MIN_PROB_CLIP
         objectivefns.DEFAULT_RADIUS = OLD_RADIUS

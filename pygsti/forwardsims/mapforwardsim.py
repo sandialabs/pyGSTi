@@ -77,11 +77,11 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
                 t = time  # Note: time in labels == duration
                 rholabel = spc.circuit_without_povm[0]
                 op = self.model.circuit_layer_operator(rholabel, 'prep'); op.set_time(t)
-                t += rholabel.time if hasattr(rholabel, "time") else 0
+                t += getattr(rholabel, "time", 0.0)
                 state = op._rep
                 for ol in spc.circuit_without_povm[1:]:
                     op = self.model.circuit_layer_operator(ol, 'op'); op.set_time(t)
-                    t += ol.time if hasattr(ol, "time") else 0.0
+                    t += getattr(ol, "time", 0.0)
                     state = op._rep.acton(state)
                 ps = []
                 for elabel in spc.full_effect_labels:
@@ -229,7 +229,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         derivative_dimensions : int or tuple[int], optional
             Optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            and second derivatives with respect to the circuit outcome probabilities.  This must be
             non-None when `array_types` contains `'ep'` or `'epp'` types.
             If a tuple, then must be length 1.
 

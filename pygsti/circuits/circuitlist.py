@@ -102,7 +102,7 @@ class CircuitList(_NicelySerializable):
         self.circuit_rules = circuit_rules
         self.circuit_weights = circuit_weights
         self.name = name  # an optional name for this circuit list
-        self.uuid = _uuid.uuid4()  # like a persistent id(), useful for peristent (file) caches
+        self.uuid = _uuid.uuid4()  # like a persistent id(), useful for persistent (file) caches
 
     def _to_nice_serialization(self):  # memo holds already serialized objects
         from pygsti.io.writers import convert_circuits_to_strings as _convert_circuits_to_strings
@@ -221,7 +221,7 @@ class CircuitList(_NicelySerializable):
         Parameters
         ----------
         elementvec : numpy array
-            An array containting the values to use when constructing a
+            An array containing the values to use when constructing a
             matrix of values for this CircuitList. This array may contain more
             values than are needed by this CircuitList.  Indices into this array
             are given by `elindices_lookup`.
@@ -258,14 +258,22 @@ class CircuitList(_NicelySerializable):
 
     def tensor_circuits(self, other_circuitlist: CircuitList, new_name: Optional[str]=None):
         """
-        Given two `CircuitList` objects, X, Y, combine the two of them so that every `Circuit`
-        within this `CircuitList`, X, is tensored with the corresponding `Circuit` in Y.
+        Given two `CircuitList` objects, X(=self) and Y(=other_circuitlist), of the same length,
+        combine the two of them so that every `Circuit` within X is tensored with the 
+        corresponding `Circuit` in Y.
 
         Returns:
             `CircuitList` with the subcircuits tensored together.
+
+        Notes
+        -----
+        TODO: Remove this function or change its behavior to something more useful.
         """
         if isinstance(other_circuitlist, _Circuit):
             raise TypeError("Cannot tensor a CircuitList with a Circuit. You must provide a CircuitList.")
+
+        if len(self._circuits) != len(other_circuitlist._circuits):
+            raise ValueError('Cannot tensor CircuitLists of different lengths.')
 
         circuits = []
         for c1, c2 in zip(self._circuits, other_circuitlist._circuits):

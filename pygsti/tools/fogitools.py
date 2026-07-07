@@ -404,7 +404,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         """Turn user-supplied norm-order into an array of norm orders based, sometimes, on the vecs being normalized """
         if isinstance(given_norm_order, int):
             norm_order_array = _np.ones(local_fogi_dirs.shape[1], dtype=_np.int64) * given_norm_order
-        elif given_norm_order == "auto":  # automaticaly choose norm order based on fogi direction composition
+        elif given_norm_order == "auto":  # automatically choose norm order based on fogi direction composition
             lbl_lookup = {}; off = 0
             for label_list in label_lists:
                 lbl_lookup.update({i + off: lbl for i, lbl in enumerate(label_list)})

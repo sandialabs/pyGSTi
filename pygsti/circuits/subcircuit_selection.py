@@ -524,7 +524,7 @@ def greedy_growth_subcirc_selection(full_circ: _Circuit,
         the compiled depth of each subcircuit and the start and end layers of each subcircuit.
     """
 
-    # TODO: sample until success wuth some upper bound on the number of samples that can be taken?
+    # TODO: sample until success with some upper bound on the number of samples that can be taken?
 
     full_width = len(full_circ.line_labels)
     full_depth = len(full_circ)

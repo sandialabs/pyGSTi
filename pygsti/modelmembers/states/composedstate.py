@@ -17,6 +17,7 @@ from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorMapContainer as _ErrorMapContainer
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti import SpaceT
 
 class ComposedState(_State):
@@ -300,7 +301,7 @@ class ComposedState(_State):
         dmVec = self.state_vec.to_dense("minimal")
 
         derrgen = self.error_map.deriv_wrt_params(wrt_filter)  # shape (dim*dim, n_params)
-        derrgen.shape = (self.dim, self.dim, derrgen.shape[1])  # => (dim,dim,n_params)
+        derrgen = _compat.reshape_no_copy(derrgen, (self.dim, self.dim, derrgen.shape[1]))  # => (dim,dim,n_params)
 
         #derror map acts on dmVec
         #return _np.einsum("ijk,j->ik", derrgen, dmVec) # return shape = (dim,n_params)
@@ -332,7 +333,7 @@ class ComposedState(_State):
         dmVec = self.state_vec.to_dense("minimal")
 
         herrgen = self.error_map.hessian_wrt_params(wrt_filter1, wrt_filter2)  # shape (dim*dim, nParams1, nParams2)
-        herrgen.shape = (self.dim, self.dim, herrgen.shape[1], herrgen.shape[2])  # => (dim,dim,nParams1, nParams2)
+        herrgen = _compat.reshape_no_copy(herrgen, (self.dim, self.dim, herrgen.shape[1], herrgen.shape[2]))  # => (dim,dim,nParams1, nParams2)
 
         #derror map acts on dmVec
         #return _np.einsum("ijkl,j->ikl", herrgen, dmVec) # return shape = (dim,n_params)

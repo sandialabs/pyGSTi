@@ -466,7 +466,7 @@ def qiskit_circuits_to_subcircuit_mirror_edesign(
     aggregate_subcircs : bool
         Whether or not the provided Qiskit circuits should be used to create
         one combined subcircuit experiment design or kept separate.
-        Circuit aggregration can be useful if the provided circuits are all
+        Circuit aggregation can be useful if the provided circuits are all
         instances of the same 'family' of the circuit, e.g., all
         Bernstein-Vazirani circuits with different secret keys.
 
@@ -828,7 +828,7 @@ def make_mirror_edesign(test_edesign: _FreeformDesign,
                     CP_Rinv_Linv, L_T_Rinv_Linv_bs = random_compiler.compile(circ=R_inv+L_refref_inv)
                     L_T_Rinv_Linv = L_refref + T + CP_Rinv_Linv
 
-                    # the assertion belows check if the circuit addition in the function call above has caused a line label reordering. If so, the MCFE code will compare bitstrings incorrectly, which is bad. This issue is fixable with enough Circuit.reorder_lines() calls, but the better approach is simply to ensure that all circuits in test_edesign and ref_edesign obey a lexicographical ordering. This is easily done by using something like 'c = c.reorder_lines(sorted(c.line_labels)) on the circuits *prior* to creating the mirror edesign.
+                    # the assertion below check if the circuit addition in the function call above has caused a line label reordering. If so, the MCFE code will compare bitstrings incorrectly, which is bad. This issue is fixable with enough Circuit.reorder_lines() calls, but the better approach is simply to ensure that all circuits in test_edesign and ref_edesign obey a lexicographical ordering. This is easily done by using something like 'c = c.reorder_lines(sorted(c.line_labels)) on the circuits *prior* to creating the mirror edesign.
 
                     assert L_T_Rinv_Linv.line_labels == qubits, f'line labels have been permuted: should be {qubits} but is {L_T_Rinv_Linv.line_labels} instead.'
 

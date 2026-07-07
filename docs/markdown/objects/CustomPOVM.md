@@ -138,8 +138,8 @@ print(mult_meas_model['Mdefault'])
 Z_parity_povm = pygsti.modelmembers.povms.TensorProductPOVM([computational_povm, parity_povm])
 parity_Z_povm = pygsti.modelmembers.povms.TensorProductPOVM([parity_povm, computational_povm])
 
-mult_meas_model['M_Z_par'] = Z_parity_povm
-mult_meas_model['M_par_Z'] = parity_Z_povm
+mult_meas_model['M_zpar'] = Z_parity_povm
+mult_meas_model['M_parz'] = parity_Z_povm
 
 print(mult_meas_model)
 ```
@@ -166,12 +166,12 @@ Now, let's run the same circuit but use our other measurements.
 
 ```{code-cell} ipython3
 # Using the Z-parity should give us 1 on qubit 0 and even for qubits 2 & 3...
-dict(mult_meas_model.probabilities( pygsti.circuits.Circuit([('Gxpi2', 0), ('Gxpi2', 0), "M_Z_par"], line_labels=(0,1,2)) ))
+dict(mult_meas_model.probabilities( pygsti.circuits.Circuit([('Gxpi2', 0), ('Gxpi2', 0), "M_zpar"], line_labels=(0,1,2)) ))
 ```
 
 ```{code-cell} ipython3
 # ... while using parity-Z should give us odd for qubits 0 & 1 and 0 for qubit 2
-dict(mult_meas_model.probabilities( pygsti.circuits.Circuit([('Gxpi2', 0), ('Gxpi2', 0), "M_par_Z"], line_labels=(0,1,2)) ))
+dict(mult_meas_model.probabilities( pygsti.circuits.Circuit([('Gxpi2', 0), ('Gxpi2', 0), "M_parz"], line_labels=(0,1,2)) ))
 ```
 
 

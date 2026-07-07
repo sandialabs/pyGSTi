@@ -201,7 +201,7 @@ class TreeNode(object):
             A list of tuples specifying the paths to keep.
 
         paths_are_sorted : bool, optional
-            Whether `paths` is sorted (lexographically).  Setting this to `True` will save
+            Whether `paths` is sorted (lexicographically).  Setting this to `True` will save
             a little time.
 
         Returns

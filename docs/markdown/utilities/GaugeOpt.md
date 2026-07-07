@@ -102,14 +102,14 @@ listOfExperiments = pygsti.circuits.create_lsgst_circuits(
 ds = pygsti.data.simulate_data(mdl_datagen, listOfExperiments, num_samples=10000, seed=1234)
 ```
 
-The `gauge_opt_params` argument of `run_long_sequence_gst` takes a dictionary of arguments to be passed to a `gaugeopt_to_target`:
+The `gauge_opt_params` argument of `run_long_sequence_gst` takes a dictionary of arguments to be passed to a `gaugeopt_to_target` (when supplying `gauge_opt_params` you must also pass `gauge_opt_suite_name=None` to disable the default `'stdgaugeopt'` suite):
 
 ```{code-cell} ipython3
 #Perform GST with custom gauge optmization post-processing parameters
 target_model = std.target_model()
 results = pygsti.run_long_sequence_gst(
     ds, target_model, std.prep_fiducials(), std.meas_fiducials(), std.germs(), [1,2,4],
-    gauge_opt_params={'item_weights': {'gates': 1.0, 'spam': 0.1}}, verbosity=1)
+    gauge_opt_params={'item_weights': {'gates': 1.0, 'spam': 0.1}}, gauge_opt_suite_name=None, verbosity=1)
 ```
 
 The `run_stdpractice_gst` function supports performing multiple gauge transformations and also supports daisy-chaining several calls to `gaugeopt_to_target` (performing multiple calls to `gaugeopt_to_target` whereby the output `Model` of a call serves as the input of the subsequence call).  This is specified via the `gauge_opt_suite` argument, which may be set to a dictionary of whose keys are gauge-optimization-suite labels and whose values are one of:

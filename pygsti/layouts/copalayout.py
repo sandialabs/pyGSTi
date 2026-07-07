@@ -176,8 +176,8 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
     def __init__(self, circuits, unique_circuits, to_unique, elindex_outcome_tuples,
                  unique_complete_circuits=None, param_dimensions=(), resource_alloc=None):
-        # See class definitiion for docstring -- usually this is only called by derived classes; see `create_from` above
-        # to_unique : dict maping indices of `circuits` to indices of `unique_circuits`
+        # See class definition for docstring -- usually this is only called by derived classes; see `create_from` above
+        # to_unique : dict mapping indices of `circuits` to indices of `unique_circuits`
         # elindex_outcome_tuples : dict w/keys == indices into `unique_circuits` (which is why `unique_circuits`
         #                          is needed) and values == lists of (element_index, outcome) pairs.
 
@@ -312,7 +312,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
             Note that, even though the `"p"` and `"jtf"` types are the same shape
             they are used for different purposes and are distributed differently
             when there are multiple processors.  The `"p"` type is for use with
-            other element-dimentions-containing arrays, whereas the `"jtf"` type
+            other element-dimensions-containing arrays, whereas the `"jtf"` type
             assumes that the element dimension has already been summed over.
 
         dtype : numpy.dtype
@@ -416,7 +416,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
             Whether the returned array is allowed to be a shared-memory array, which results
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
-            the caller assumes responsibilty for freeing the memory via
+            the caller assumes responsibility for freeing the memory via
             :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
