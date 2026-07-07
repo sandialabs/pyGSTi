@@ -432,29 +432,27 @@ class VerbosityPrinter(object):
                 self._put(formattedMessage, flush=flush)
                 self._record("LOG", message_level, formattedMessage)
 
-    def _progress_bar(self, iteration, total, bar_length, num_decimals, fill_char, empty_char, prefix, suffix, indent):
-        progressBar = ''
+    def _progress_bar(self, iteration: int, total: int, bar_length: int, num_decimals: int, fill_char: str,
+                      empty_char: str, prefix: str, suffix: str, indent: str) -> str:
         # 'self.progressLevel == 1' disallows nested progress bars !!!
-        unnested = self.progressLevel == 1
-        if unnested:
-            progressBar = _build_progress_bar(iteration, total, bar_length, num_decimals,
-                                              fill_char, empty_char, prefix, suffix)
-            progressBar = indent + progressBar
-        return progressBar
+        if self.progressLevel != 1:
+            return ''
+        return indent + _build_progress_bar(iteration, total, bar_length, num_decimals,
+                                            fill_char, empty_char, prefix, suffix)
 
-    def _verbose_iteration(self, iteration, total, prefix, suffix, verbose_messages, indent, end):
-        iteration = _build_verbose_iteration(iteration, total, prefix, suffix, end)
-        iteration = indent + iteration
+    def _verbose_iteration(self, iteration: int, total: int, prefix: str, suffix: str,
+                           verbose_messages: list[str], indent: str, end: str) -> str:
+        result = indent + _build_verbose_iteration(iteration, total, prefix, suffix, end)
         for verboseMessage in verbose_messages:
-            iteration += (indent + verboseMessage + '\n')
-        return iteration
+            result += (indent + verboseMessage + '\n')
+        return result
 
-    def __str__(self):
+    def __str__(self) -> str:
         return 'Printer Object: Progress Level: %s Verbosity %s Indents %s' \
             % (self.progressLevel, self.verbosity, self.extra_indents)
 
     @_contextmanager
-    def verbosity_env(self, level):
+    def verbosity_env(self, level: int) -> Generator[None, None, None]:
         """
         Create a temporary environment with a different verbosity level.
 
@@ -477,7 +475,7 @@ class VerbosityPrinter(object):
             self.defaultVerbosity = original
 
     @_contextmanager
-    def progress_logging(self, message_level=1):
+    def progress_logging(self, message_level: int = 1) -> Generator[None, None, None]:
         """
         Context manager for logging progress bars/iterations.
 
@@ -498,8 +496,10 @@ class VerbosityPrinter(object):
             self._end_progress()
 
     # A wrapper for show_progress that only works if verbosity is above a certain value (Status by default)
-    def show_progress(self, iteration, total, bar_length=50, num_decimals=2, fill_char='#',
-                      empty_char='-', prefix='Progress:', suffix='', verbose_messages=None, indent_char='  ', end='\n'):
+    def show_progress(self, iteration: int, total: int, bar_length: int = 50, num_decimals: int = 2,
+                      fill_char: str = '#', empty_char: str = '-', prefix: str = 'Progress:', suffix: str = '',
+                      verbose_messages: Optional[list[str]] = None, indent_char: str = '  ',
+                      end: str = '\n') -> None:
         """
         Displays a progress message (to be used within a `progress_logging` block).
 
@@ -571,27 +571,23 @@ class VerbosityPrinter(object):
 
     # must be explicitly called when the progress (e.g. loop) is done:
     #  This allows for early exits
-    def _end_progress(self):
+    def _end_progress(self) -> None:
         if self.progressLevel > 0:
             last_progress_params = self._progressParamsStack.pop()
             if self.verbosity == self._progressStack.pop():
                 if last_progress_params is not None:
-                    (iteration, total, barLength,
-                     numDecimals, fillChar, emptyChar,
-                     prefix, suffix, indent) = last_progress_params
-                    progress = self._progress_bar(iteration + 1, total, barLength,
-                                                  numDecimals, fillChar, emptyChar,
-                                                  prefix, suffix, indent)
+                    iteration, *rest = last_progress_params
+                    progress = self._progress_bar(iteration + 1, *rest)
                     self._put(progress)  # send the progress logging to either file or stdout
                     self._record("LOG", self.verbosity, progress)
 
                 # Show the statuses that were queued while the progressBar was active
                 for item in self._delayQueue:
                     print(item)
-                del self._delayQueue[:]
+                self._delayQueue.clear()
                 self.progressLevel -= 1
 
-    def start_recording(self):
+    def start_recording(self) -> None:
         """
         Begins recording the output (to memory).
 
@@ -604,7 +600,7 @@ class VerbosityPrinter(object):
         """
         self.recorded_output = []
 
-    def is_recording(self):
+    def is_recording(self) -> bool:
         """
         Returns whether this VerbosityPrinter is currently recording.
 
@@ -614,7 +610,7 @@ class VerbosityPrinter(object):
         """
         return bool(self.recorded_output is not None)
 
-    def stop_recording(self):
+    def stop_recording(self) -> Optional[list]:
         """
         Stops recording and returns recorded output.
 
