@@ -3,7 +3,7 @@ from pygsti.baseobjs.label import Label
 
 from pygsti.circuits.circuit import Circuit
 from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp
-from pygsti.models.localnoisemodel import LocalNoiseModel
+
 from pygsti.models.explicitmodel import ExplicitOpModel
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.processors.processorspec import QubitProcessorSpec
@@ -131,6 +131,26 @@ class LocalNoiseModelInstanceTester(BaseCase):
         c3.done_editing()
         prob3 = mdl_local.probabilities(c3)
         self.assertEqual(len(prob3), 16) # Full 4 qubit space
+
+    def test_getitem(self):
+        mdl_local = create_crosstalk_free_model(self.pspec_2Q,
+                                                ideal_gate_type='H+S', ideal_spam_type='tensor product H+S', independent_gates=False,
+                                                ensure_composed_gates=False)
+
+        # Test getting a prep
+        self.assertIs(mdl_local['rho0'], mdl_local.prep_blks['layers']['rho0'])
+
+        # Test getting a POVM
+        self.assertIs(mdl_local['Mdefault'], mdl_local.povm_blks['layers']['Mdefault'])
+
+        # Test getting a gate from operation_blks['gates']
+        self.assertIs(mdl_local['Gx'], mdl_local.operation_blks['gates']['Gx'])
+
+        # Test getting a layer from operation_blks['layers']
+        self.assertIs(mdl_local[('Gx', 'qb0')], mdl_local.operation_blks['layers'][('Gx', 'qb0')])
+
+        # Test getting a layer using a string with a colon
+        self.assertIs(mdl_local['Gx:qb0'], mdl_local.operation_blks['layers'][('Gx', 'qb0')])
 
 
 class ToExplicitModelTester(BaseCase):

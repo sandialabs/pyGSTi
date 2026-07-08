@@ -243,7 +243,7 @@ def _print_table(title, graph, results):
             note = f"INVALID (proper={r['proper']}, complete={r['complete']})"
         elif r["detail"]:
             note = r["detail"]
-        print(f"{algo:16s} {r['status']:9s} {colors:>7s} {r['seconds']*1000:>10.1f}  {note}")
+        print(f"{algo:16s} {r['status']:9s} {colors:>7s} {r['seconds'] * 1000:>10.1f}  {note}")
     print("=" * 78)
 
 
