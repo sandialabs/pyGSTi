@@ -65,7 +65,7 @@ cdef class EffectRepComputational(EffectRep):
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
-    def to_dense(self, on_space, outvec=None):
+    def to_dense(self, on_space='minimal', outvec=None):
         return _mt.zvals_to_dense(self.zvals, superket=(on_space not in ('minimal', 'Hilbert')))
 
 

@@ -96,7 +96,7 @@ cdef class OpRepClifford(OpRep):
                                          <INT*>self.smatrix_inv.data, <INT*>self.svector_inv.data,
                                          <double complex*>self.unitary_dagger.data, self.state_space.num_qubits)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space='minimal'):
         if on_space in ('minimal', 'Hilbert'):
             return self.unitary
         elif on_space == 'HilbertSchmidt':

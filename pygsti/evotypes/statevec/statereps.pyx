@@ -54,7 +54,7 @@ cdef class StateRep(_basereps_cython.StateRep):
         # a probability/amplitude by POVM effect reps.
         return self  # for most classes, the rep itself is actionable
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space='minimal'):
         if on_space in ('minimal', 'Hilbert'):
             return self.data
         elif on_space == 'HilbertSchmidt':

@@ -92,7 +92,7 @@ cdef class OpRepDenseSuperop(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space='minimal'):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return self.to_dense_superop()
@@ -156,7 +156,7 @@ cdef class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         self.superop_base[:, :] = _ot.unitary_to_superop(self.base, self.basis)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space='minimal'):
         if on_space in ('minimal', 'HilbertSchmidt'):
             return self.to_dense_superop()
         else:  # 'Hilbert'
@@ -217,7 +217,7 @@ cdef class OpRepSparse(OpRep):
     def __reduce__(self):
         return (OpRepSparse, (self.data, self.indices, self.indptr, self.state_space))
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space='minimal'):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
 
@@ -277,7 +277,7 @@ cdef class OpRepKraus(OpRep):
     def copy(self):
         return OpRepKraus(self.basis, [k.copy() for k in self.kraus_reps], self.state_space)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space='minimal'):
         assert(on_space in ('minimal', 'HilbertSchmidt')), \
             'Can only compute OpRepKraus.to_dense on HilbertSchmidt space!'
         return sum([rep.to_dense(on_space) for rep in self.kraus_reps])
@@ -315,7 +315,7 @@ cdef class OpRepRandomUnitary(OpRep):
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space='minimal'):
         assert(on_space in ('minimal', 'HilbertSchmidt'))  # below code only works in this case
         return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
 
