@@ -6,7 +6,7 @@ from pygsti.baseobjs.label import Label, LabelTupTup
 
 
 def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: Circuit) -> tuple[dict[int, int],
-                                                                                        dict[int, tuple[int]]]:
+                                                                                             dict[int, tuple[int]]]:
     """
     Parameters:
     ------------
@@ -29,6 +29,7 @@ def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: Circu
     lanes = {}
     lan_num = 0
     visited: dict[int, int] = {}
+
     def reachable_nodes(starting_point: int,
                         graph_qubits_to_neighbors: dict[int, set[int]],
                         visited: dict[int, set[int]]):
@@ -82,7 +83,6 @@ def compute_subcircuits(circuit: Circuit,
     if qubit_to_lanes is None or lane_to_qubits is None:
         qubit_to_lanes, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit)
 
-
     if "lanes" in circuit.saved_auxinfo:
         # Check if the lane info matches and I can just return that set up.
         if len(lane_to_qubits) == len(circuit.saved_auxinfo["lanes"]):
@@ -120,18 +120,19 @@ def compute_subcircuits(circuit: Circuit,
 
 
 def batch_tensor(
-    circuits : Sequence[Circuit],
+    circuits: Sequence[Circuit],
     layer_mappers: Dict[int, Dict],
     global_line_order: Optional[Tuple[Union[int, str], ...]] = None,
-    target_lines : Optional[Sequence[Tuple[Union[int, str], ...]]] = None
-    ) -> Circuit:
+    target_lines: Optional[Sequence[Tuple[Union[int, str], ...]]] = None
+) -> Circuit:
     """
     `circuits`: Sequence of `Circuit` the circuits you want to tensor together.
     `layer_mappers`: dictionary of lane size to a dictionary of `Label` to `Label`.
         Need to ensure that you have something that maps from () -> Idle gate.
         Else you may get spurious "COMPOUND" gates.
     'target_lines' : Optional sequence of state space labels used by each circuit.
-    `global_line_order`: The final order of the state space labels (used if one wants to make it not just arange(total_lines))
+    `global_line_order`: The final order of the state space labels (used if one wants to make it
+        not just arange(total_lines))
 
     Tensor together a sequence of Circuits padding smaller circuits to the length of the largest circuit
     with noisy idles.
@@ -155,7 +156,7 @@ def batch_tensor(
         total_lines = sum([c.num_lines for c in circuits])
         max_cir_len = max(*[len(c) for c in circuits])
 
-    s : Set[int] = set()
+    s: Set[int] = set()
     for c, t in zip(circuits, target_lines):
         assert not s.intersection(t)
         assert len(t) == c.num_lines
@@ -163,23 +164,23 @@ def batch_tensor(
 
     if global_line_order is None:
         global_line_order = tuple(sorted(list(s)))
-    
+
     running_lanes = {}
     for i, c_in in enumerate(circuits):
         # Ensure c_in has a populated lanes cache
         if "lanes" not in c_in.saved_auxinfo or len(c_in.saved_auxinfo["lanes"]) == 0:
             compute_subcircuits(c_in, cache_lanes_in_circuit=True)
-            
+
         mapper = {k: v for k, v in zip(c_in.line_labels, target_lines[i])}
         for key, val in c_in.saved_auxinfo["lanes"].items():
             mapped_key = tuple(sorted(tuple(mapper[l] for l in key)))
             padded_val = list(val) + [Label(())] * (max_cir_len - len(val))
-            
+
             mapped_val = []
             for ell in padded_val:
                 mapped_ell = layer_mappers[c_in.num_lines][ell]
                 final_ell = mapped_ell.map_state_space_labels(lambda l: mapper[l])
-                
+
                 if isinstance(final_ell, LabelTupTup):
                     sorted_components = sorted(final_ell.components, key=lambda x: x.qubits[0])
                     final_ell = LabelTupTup(tuple(sorted_components))
@@ -198,7 +199,7 @@ def batch_tensor(
     #   so the next line sets c._static = False. (We repeat this pattern in the loop below.)
     c._static = False
     c._labels = [layer_mappers[c.num_lines][ell] for ell in c._labels]
-    c.map_state_space_labels_inplace({k:v for k,v in zip(c.line_labels, target_lines[0])})
+    c.map_state_space_labels_inplace({k: v for k, v in zip(c.line_labels, target_lines[0])})
     c.done_editing()
     for i, c2 in enumerate(circuits[1:]):
         c2 = c2.copy(editable=True)
@@ -206,7 +207,7 @@ def batch_tensor(
         c2.done_editing()
         c2._static = False
         c2._labels = [layer_mappers[c2.num_lines][ell] for ell in c2._labels]
-        c2.map_state_space_labels_inplace({k:v for k,v in zip(c2.line_labels, target_lines[i+1])})
+        c2.map_state_space_labels_inplace({k: v for k, v in zip(c2.line_labels, target_lines[i + 1])})
         c2.done_editing()
         c = c.tensor_circuit(c2)
 

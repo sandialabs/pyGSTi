@@ -2449,6 +2449,7 @@ def zvals_to_dense(self, zvals, superket=True):
             _fastcalc.fast_kron_complex(ret, fast_kron_array, fast_kron_factordims)
         return ret
 
+
 def int64_parity(x: Union[int, _np.ndarray]) -> Union[int, _np.ndarray]:
     """
     Compute the partity of x.
@@ -2578,9 +2579,9 @@ def _zvals_int64_indices_and_signs(zvals_int: int, nqubits: int) -> tuple[_np.nd
     return final_indices, signs
 
 
-def zvals_int64_to_dense(zvals_int: int, nqubits: int, outvec: Optional[_np.ndarray] = None,
-                          trust_outvec_sparsity: bool = False,
-                          abs_elval: Optional[float] = None) -> _np.ndarray:
+def zvals_int64_to_dense(
+        zvals_int: int, nqubits: int, outvec: Optional[_np.ndarray] = None,
+        trust_outvec_sparsity: bool = False, abs_elval: Optional[float] = None) -> _np.ndarray:
     """
     Fills a dense array with the super-ket representation of a computational basis state.
 
@@ -2658,8 +2659,9 @@ def zvals_int64_to_dense(zvals_int: int, nqubits: int, outvec: Optional[_np.ndar
     return outvec
 
 
-def zvals_int64_probability(zvals_int: int, nqubits: int, state_data: _np.ndarray,
-                             abs_elval: Optional[float] = None) -> float:
+def zvals_int64_probability(
+        zvals_int: int, nqubits: int, state_data: _np.ndarray,
+        abs_elval: Optional[float] = None) -> float:
     """
     Compute the inner product of a computational-basis POVM effect with a dense state vector.
 
