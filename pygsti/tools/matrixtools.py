@@ -2449,7 +2449,6 @@ def zvals_to_dense(self, zvals, superket=True):
             _fastcalc.fast_kron_complex(ret, fast_kron_array, fast_kron_factordims)
         return ret
 
-
 def int64_parity(x):
     """
     Compute the partity of x.
@@ -2457,13 +2456,15 @@ def int64_parity(x):
     Recursively divide a (64-bit) integer (x) into two equal
     halves and take their XOR until only 1 bit is left.
 
+    This function is vectorized and works on numpy arrays.
+
     Parameters
     ----------
-    x : int64
+    x : int64 or numpy.ndarray
 
     Returns
     -------
-    int64
+    int64 or numpy.ndarray
     """
     x = (x & 0x00000000FFFFFFFF) ^ (x >> 32)
     x = (x & 0x000000000000FFFF) ^ (x >> 16)
@@ -2474,9 +2475,67 @@ def int64_parity(x):
     return x & 1  # return the last bit (0 or 1)
 
 
+def _spread_bits(x):
+    """
+    Insert a 0 bit after each of the (up to 32) low-order bits of `x`, e.g.
+    ...b3 b2 b1 b0 -> ...0 b3 0 b2 0 b1 0 b0.
+
+    This is the standard "Morton code" bit-spreading trick (see e.g. the
+    "Interleave bits" section of "Bit Twiddling Hacks"), specialized to
+    64-bit integers and to spreading a single value (rather than
+    interleaving two values together).  It is vectorized and works on
+    numpy arrays as well as scalars.  Crucially, this operation is
+    *order-preserving*: if x1 < x2 then _spread_bits(x1) < _spread_bits(x2).
+
+    Parameters
+    ----------
+    x : int64 or numpy.ndarray
+        Value(s) with at most 32 significant bits.
+
+    Returns
+    -------
+    int64 or numpy.ndarray
+    """
+    x = x & 0x00000000FFFFFFFF
+    x = (x | (x << 16)) & 0x0000FFFF0000FFFF
+    x = (x | (x << 8)) & 0x00FF00FF00FF00FF
+    x = (x | (x << 4)) & 0x0F0F0F0F0F0F0F0F
+    x = (x | (x << 2)) & 0x3333333333333333
+    x = (x | (x << 1)) & 0x5555555555555555
+    return x
+
+
+def _reverse_bits_scalar(x, nbits):
+    """
+    Reverse the lowest `nbits` bits of the (scalar) integer `x`.
+
+    This is a cheap O(nbits) operation intended to be called once per
+    `zvals_int64_to_dense` call (on the scalar `zvals_int`), not per-element.
+    """
+    result = 0
+    for i in range(nbits):
+        if (x >> i) & 1:
+            result |= 1 << (nbits - 1 - i)
+    return result
+
+
+# Cache of (r, final_indices) arrays computed by zvals_int64_to_dense, keyed by nqubits.
+# These arrays depend only on nqubits (not on zvals_int/abs_elval/outvec), so they can be
+# safely reused across calls with the same nqubits.
+_zvals_int64_to_dense_cache = {}
+
+
 def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=False, abs_elval=None):
     """
     Fills a dense array with the super-ket representation of a computational basis state.
+
+    This is the vectorized ("fast") version of this function.  The index arrays used
+    internally depend only on `nqubits`, so they are cached (keyed by `nqubits`) and
+    reused across calls to avoid recomputation.  The nonzero indices are additionally
+    computed and visited in *sorted* (monotonically increasing) order, so that the
+    scatter-write into `outvec` is sequential rather than jumping around unpredictably
+    (the naive bit-indexing scheme corresponds to a bit-reversal permutation, which is
+    a textbook-bad memory access pattern once `outvec` no longer fits in cache).
 
     Parameters
     ----------
@@ -2504,48 +2563,64 @@ def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=
     -------
     numpy.ndarray
     """
-
     if outvec is None:
         outvec = _np.zeros(4**nqubits, 'd')
+        # `outvec` is guaranteed to be freshly all-zero here, so there is no need to
+        # (redundantly) reset it below.  This matters a lot in practice: `np.zeros`
+        # for a large array is backed by lazily-mapped, copy-on-write OS zero-pages
+        # and so is essentially free, but explicitly writing zeros into it (as
+        # `outvec[:] = 0` does) forces the *entire* O(4**nqubits)-sized array to be
+        # physically paged in and zeroed, even though we only ever touch O(2**nqubits)
+        # of its elements below.  Skipping this avoids that (otherwise dominant) cost.
+    elif not trust_outvec_sparsity:
+        # `outvec` was supplied by the caller, so we can't assume it's already zero
+        # (e.g. it may be a reused scratch buffer with leftover data).
+        outvec[:] = 0
+
     if abs_elval is None:
         abs_elval = 1 / (_np.sqrt(2)**nqubits)
 
-    # when trust_outvec_sparsity is True, assume we only need to fill in the
-    # non-zero elements of outvec (i.e. that outvec is already zero wherever
-    # this vector is zero).
-    if not trust_outvec_sparsity:
-        outvec[:] = 0  # reset everything to zero
-
     N = nqubits
+    if N == 0:
+        # With N=0, `finds=0` is the only iteration and `finds & zvals_int == 0`
+        # always has even parity, so the (single) output element is +abs_elval.
+        if outvec.size > 0: outvec[0] = abs_elval
+        return outvec
 
-    # there are nQubits factors
-    # each factor (4-element, 1Q dmvec) has 2 zero elements and 2 nonzero ones
-    # loop is over all non-zero elements of the final outvec by looping over
-    #  all the sets of *entirely* nonzero elements from the factors.
+    # Vectorized implementation:
+    # The 2**N nonzero elements of the resulting vector are at indices that
+    # are base-4 numbers whose digits are only 0 or 3.  Rather than indexing
+    # these via the "natural" bit order of `finds` (which produces a
+    # bit-reversal permutation of indices -- see docstring above), we index
+    # via `r = 0..2**N-1` directly and use `_spread_bits(r)` to get the
+    # corresponding index.  Because bit-spreading is order-preserving, the
+    # resulting `final_indices` array comes out already sorted, so `r` and
+    # `final_indices` depend only on N and can be cached and reused as-is
+    # (with sequential-access benefits) across calls.
+    cached = _zvals_int64_to_dense_cache.get(N)
+    if cached is None:
+        r = _np.arange(2**N, dtype=_np.int64)
+        final_indices = 3 * _spread_bits(r)
+        _zvals_int64_to_dense_cache[N] = (r, final_indices)
+    else:
+        r, final_indices = cached
 
-    # Let the two possible nonzero elements of the k-th factor be represented
-    # by the k-th bit of `finds` below, which ranges from 0 to 2^nFactors-1
-    for finds in range(2**N):
+    # 2. Compute the signs for all 2**N elements at once.
+    # The original (unsorted) formulation computes minus_sign = parity(finds & zvals_int),
+    # where `finds` is the bit-reversal (over N bits) of `r`.  Since bitwise-AND commutes
+    # with a (consistent) bit-reversal permutation of both operands, and bit-reversal
+    # preserves popcount/parity, we have:
+    #     parity(finds & zvals_int) == parity(bit_reverse(r) & zvals_int)
+    #                                == parity(r & bit_reverse(zvals_int))
+    # So we only need to bit-reverse the *scalar* zvals_int once (cheap, O(N)),
+    # rather than bit-reversing the whole `r` array (which would reintroduce the
+    # non-sequential access pattern we're trying to avoid).
+    zvals_rev = _reverse_bits_scalar(int(zvals_int), N)
+    parities = int64_parity(r & _np.int64(zvals_rev))
+    signs = 1 - 2 * parities  # maps {0,1} -> {+1,-1}
 
-        #Create the final index (within outvec) corresponding to finds
-        # assume, like tensorprod, that factor ordering == kron ordering
-        # so outvec = kron( factor[0], factor[1], ... factor[N-1] ).
-        # Let factorDim[k] == 4**(N-1-k) be the stride associated with the k-th index
-        # Whenever finds[bit k] == 0 => finalIndx += 0*factorDim[k]
-        #          finds[bit k] == 1 => finalIndx += 3*factorDim[k] (3 b/c factor's 2nd nonzero el is at index 3)
-        finalIndx = sum([3 * (4**(N - 1 - k)) for k in range(N) if bool(finds & (1 << k))])
-
-        #Determine the sign of this element (the element is either +/- (1/sqrt(2))^N )
-        # A minus sign is picked up whenever finds[bit k] == 1 (which means we're looking
-        # at the index=3 element of the factor vec) AND zvals_int[bit k] == 1
-        # (which means it's a [1 0 0 -1] state rather than a [1 0 0 1] state).
-        # Since we only care whether the number of minus signs is even or odd, we can
-        # BITWISE-AND finds with zvals_int (giving an integer whose binary-expansion's
-        # number of 1's == the number of minus signs) and compute the parity of this.
-        minus_sign = int64_parity(finds & zvals_int)
-
-        outvec[finalIndx] = -abs_elval if minus_sign else abs_elval
-
+    # 3. Assign the values to the output vector (sequential scatter-write).
+    outvec[final_indices] = signs * abs_elval
     return outvec
 
 
