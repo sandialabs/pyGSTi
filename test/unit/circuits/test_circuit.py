@@ -1388,3 +1388,12 @@ class CircuitBugfixRegressionTester(BaseCase):
         q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(tensored_c)
         # Should execute successfully using cache
         compute_subcircuits(tensored_c, q2l, l2q)
+
+        # Ensure that the manually built lanes cache in tensored_c is identical to a freshly computed one
+        c_no_cache = tensored_c.copy()
+        c_no_cache.saved_auxinfo = {}
+        fresh_sub_cirs = compute_subcircuits(c_no_cache, q2l, l2q)
+        # Check matching structures
+        self.assertEqual(len(tensored_c.saved_auxinfo["lanes"]), len(l2q))
+        for lane_idx, key in l2q.items():
+            self.assertEqual(tensored_c.saved_auxinfo["lanes"][tuple(sorted(key))], fresh_sub_cirs[lane_idx])

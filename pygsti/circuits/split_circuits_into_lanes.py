@@ -12,14 +12,12 @@ def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: Circu
     ------------
     circuit: Circuit - the circuit to compute qubit to lanes mapping for
 
-    num_qubits: int - The total number of qubits expected in the circuit.
-
     Returns
     --------
     Dictionary mapping qubit number to lane number in the circuit.
     """
 
-    qubits_to_potentially_entangled_others = {i: set((i,)) for i in range(circuit.num_lines)}
+    qubits_to_potentially_entangled_others = {i: set((i,)) for i in circuit.line_labels}
     num_layers = circuit.num_layers
     for layer_ind in range(num_layers):
         layer = circuit.layer(layer_ind)
@@ -72,14 +70,18 @@ def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: Circu
 
 
 def compute_subcircuits(circuit: Circuit,
-                        qubit_to_lanes: dict[int, int],
-                        lane_to_qubits: dict[int, tuple[int, ...]],
+                        qubit_to_lanes: Optional[dict[int, int]] = None,
+                        lane_to_qubits: Optional[dict[int, tuple[int, ...]]] = None,
                         cache_lanes_in_circuit: bool = False) -> list[list[LabelTupTup]]:
     """
     Split a circuit into multiple subcircuits which do not talk across lanes.
 
     Returns a list of those subcircuits in the format of a list of layers.
     """
+
+    if qubit_to_lanes is None or lane_to_qubits is None:
+        qubit_to_lanes, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit)
+
 
     if "lanes" in circuit.saved_auxinfo:
         # Check if the lane info matches and I can just return that set up.
@@ -95,40 +97,24 @@ def compute_subcircuits(circuit: Circuit,
                     raise ValueError(f"lbl cache miss: {key} in circuit {circuit}")
             return lanes_to_gates
 
-    lanes_to_gates = [[] for _ in range(_np.unique(list(qubit_to_lanes.values())).shape[0])]
+    lanes_to_gates = [[] for _ in range(len(lane_to_qubits))]
 
     num_layers = circuit.num_layers
     for layer_ind in range(num_layers):
         layer = circuit.layer_with_idles(layer_ind)
-        group = []
-        group_lane = None
-        sorted_layer = sorted(layer, key=lambda x: x.qubits[0])
-
-        for op in sorted_layer:
-            # We need this to be sorted by the qubit number so we do not get that a lane was split Q1 Q3 Q2 in the layer where Q1 and Q2 are in the same lane.
-            qubits_used = op.qubits # This will be a list of qubits used.
-            # I am assuming that the qubits are indexed numerically and not by strings.
+        lane_groups = [[] for _ in range(len(lane_to_qubits))]
+        for op in layer:
+            qubits_used = op.qubits
             lane = qubit_to_lanes[qubits_used[0]]
+            lane_groups[lane].append(op)
 
-            if group_lane is None:
-                group_lane = lane
-                group.append(op)
-            elif group_lane == lane:
-                group.append(op)
-            else:
-                lanes_to_gates[group_lane].append(LabelTupTup(tuple(group)))
-                group_lane = lane
-                group = [op]
-
-        if len(group) > 0:
-            # We have a left over group.
-            lanes_to_gates[group_lane].append(LabelTupTup(tuple(group)))
+        for lane, group in enumerate(lane_groups):
+            # Sort the operations in each lane group by their first qubit for deterministic output
+            sorted_group = sorted(group, key=lambda x: x.qubits[0])
+            lanes_to_gates[lane].append(LabelTupTup(tuple(sorted_group)))
 
     if cache_lanes_in_circuit:
         circuit = circuit._cache_tensor_lanes(lanes_to_gates, lane_to_qubits)
-
-    if num_layers == 0:
-        return lanes_to_gates
 
     return lanes_to_gates
 
@@ -178,6 +164,33 @@ def batch_tensor(
     if global_line_order is None:
         global_line_order = tuple(sorted(list(s)))
     
+    running_lanes = {}
+    for i, c_in in enumerate(circuits):
+        # Ensure c_in has a populated lanes cache
+        if "lanes" not in c_in.saved_auxinfo or len(c_in.saved_auxinfo["lanes"]) == 0:
+            compute_subcircuits(c_in, cache_lanes_in_circuit=True)
+            
+        mapper = {k: v for k, v in zip(c_in.line_labels, target_lines[i])}
+        for key, val in c_in.saved_auxinfo["lanes"].items():
+            mapped_key = tuple(sorted(tuple(mapper[l] for l in key)))
+            padded_val = list(val) + [Label(())] * (max_cir_len - len(val))
+            
+            mapped_val = []
+            for ell in padded_val:
+                mapped_ell = layer_mappers[c_in.num_lines][ell]
+                final_ell = mapped_ell.map_state_space_labels(lambda l: mapper[l])
+                
+                if isinstance(final_ell, LabelTupTup):
+                    sorted_components = sorted(final_ell.components, key=lambda x: x.qubits[0])
+                    final_ell = LabelTupTup(tuple(sorted_components))
+                else:
+                    if final_ell == Label(()):
+                        final_ell = LabelTupTup(())
+                    else:
+                        final_ell = LabelTupTup((final_ell,))
+                mapped_val.append(final_ell)
+            running_lanes[mapped_key] = mapped_val
+
     c = circuits[0].copy(editable=True)
     c._append_idling_layers_inplace(max_cir_len - len(c))
     c.done_editing()
@@ -198,4 +211,5 @@ def batch_tensor(
         c = c.tensor_circuit(c2)
 
     c = c.reorder_lines(global_line_order)
+    c.saved_auxinfo["lanes"] = running_lanes
     return c
