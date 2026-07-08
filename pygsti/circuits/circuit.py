@@ -2658,7 +2658,7 @@ class Circuit(object):
         """
 
         if "lanes" in self.saved_auxinfo and len(self) > 0:
-            if len(self.saved_auxinfo["lanes"]) == 1:
+            if len(self.saved_auxinfo["lanes"]) <= 1:
                 # We will update this because it is now believed that
                 # we are able to conduct the operation in cross talk free lanes.
                 qubits_used = set()
@@ -3097,6 +3097,7 @@ class Circuit(object):
                 newobj = [map_sslbls(sub) for sub in obj]
             return newobj
         self._labels = map_sslbls(self._labels)
+
 
     def map_state_space_labels(self, mapper) -> Circuit:
         """
@@ -5185,6 +5186,8 @@ class Circuit(object):
         self._str = self.str
         # ^ the accessor on the right-hand side sees that self._str
         #   is None, and so returns a value computed from scratch.
+        if 'lanes' in self.saved_auxinfo:
+            self.saved_auxinfo['lanes'] = {}
         return
 
 
