@@ -2449,7 +2449,7 @@ def zvals_to_dense(self, zvals, superket=True):
             _fastcalc.fast_kron_complex(ret, fast_kron_array, fast_kron_factordims)
         return ret
 
-def int64_parity(x):
+def int64_parity(x: Union[int, _np.ndarray]) -> Union[int, _np.ndarray]:
     """
     Compute the partity of x.
 
@@ -2475,7 +2475,7 @@ def int64_parity(x):
     return x & 1  # return the last bit (0 or 1)
 
 
-def _spread_bits(x):
+def _spread_bits(x: Union[int, _np.ndarray]) -> Union[int, _np.ndarray]:
     """
     Insert a 0 bit after each of the (up to 32) low-order bits of `x`, e.g.
     ...b3 b2 b1 b0 -> ...0 b3 0 b2 0 b1 0 b0.
@@ -2505,7 +2505,7 @@ def _spread_bits(x):
     return x
 
 
-def _reverse_bits_scalar(x, nbits):
+def _reverse_bits_scalar(x: int, nbits: int) -> int:
     """
     Reverse the lowest `nbits` bits of the (scalar) integer `x`.
 
@@ -2519,13 +2519,68 @@ def _reverse_bits_scalar(x, nbits):
     return result
 
 
-# Cache of (r, final_indices) arrays computed by zvals_int64_to_dense, keyed by nqubits.
-# These arrays depend only on nqubits (not on zvals_int/abs_elval/outvec), so they can be
-# safely reused across calls with the same nqubits.
-_zvals_int64_to_dense_cache = {}
+# Cache of (r, final_indices) arrays computed by _zvals_int64_indices_and_signs, keyed by
+# nqubits.  These arrays depend only on nqubits (not on zvals_int/abs_elval/outvec/state_data),
+# so they can be safely reused across calls with the same nqubits.
+_zvals_int64_to_dense_cache: dict = {}
 
 
-def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=False, abs_elval=None):
+def _zvals_int64_indices_and_signs(zvals_int: int, nqubits: int) -> tuple[_np.ndarray, _np.ndarray]:
+    """
+    Shared internals of :func:`zvals_int64_to_dense` and :func:`zvals_int64_probability`.
+
+    Computes the sorted (monotonically increasing) indices of the ``2**nqubits`` nonzero
+    elements of the computational-basis effect/state vector described by `zvals_int` and
+    `nqubits`, along with the +1/-1 sign to apply at each of those indices.  The index
+    array depends only on `nqubits` and so is cached (keyed by `nqubits`) and reused across
+    calls; only the (cheap) sign computation is redone per-call, since it depends on
+    `zvals_int`.  Requires `nqubits >= 1` (the `nqubits == 0` special case is handled by
+    the calling functions).
+
+    See :func:`zvals_int64_to_dense` for a description of the indexing/sign-computation
+    scheme (including why the indices come out pre-sorted, and why only the scalar
+    `zvals_int`, rather than the whole index array, needs to be bit-reversed).
+
+    Parameters
+    ----------
+    zvals_int : int64
+        The array of (up to 64) z-values, encoded as the 0s and 1s in the binary representation
+        of this integer.
+
+    nqubits : int
+        The number of z-values (up to 64); must be >= 1.
+
+    Returns
+    -------
+    final_indices : numpy.ndarray of int64
+        Sorted indices (length ``2**nqubits``) of the nonzero elements.
+
+    signs : numpy.ndarray of int8
+        The +1/-1 sign (length ``2**nqubits``) corresponding to each index in `final_indices`.
+    """
+    N = nqubits
+    cached = _zvals_int64_to_dense_cache.get(N)
+    if cached is None:
+        r = _np.arange(2**N, dtype=_np.int64)
+        final_indices = 3 * _spread_bits(r)
+        _zvals_int64_to_dense_cache[N] = (r, final_indices)
+    else:
+        r, final_indices = cached
+
+    zvals_rev = _reverse_bits_scalar(int(zvals_int), N)
+    # `parities` only ever holds 0s and 1s, so we cast down to int8 immediately (rather
+    # than carrying it around as int64) to shrink this length-2**N temporary array by
+    # 8x.  Callers' final multiplication by `abs_elval` promotes the result to float64
+    # anyway, so there's no precision to lose by keeping `signs` narrow until then.
+    parities = int64_parity(r & _np.int64(zvals_rev)).astype(_np.int8)
+    signs = 1 - 2 * parities  # maps {0,1} -> {+1,-1}; stays int8 (see numpy NEP 50)
+
+    return final_indices, signs
+
+
+def zvals_int64_to_dense(zvals_int: int, nqubits: int, outvec: Optional[_np.ndarray] = None,
+                          trust_outvec_sparsity: bool = False,
+                          abs_elval: Optional[float] = None) -> _np.ndarray:
     """
     Fills a dense array with the super-ket representation of a computational basis state.
 
@@ -2587,41 +2642,66 @@ def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=
         if outvec.size > 0: outvec[0] = abs_elval
         return outvec
 
-    # Vectorized implementation:
-    # The 2**N nonzero elements of the resulting vector are at indices that
-    # are base-4 numbers whose digits are only 0 or 3.  Rather than indexing
-    # these via the "natural" bit order of `finds` (which produces a
-    # bit-reversal permutation of indices -- see docstring above), we index
-    # via `r = 0..2**N-1` directly and use `_spread_bits(r)` to get the
-    # corresponding index.  Because bit-spreading is order-preserving, the
-    # resulting `final_indices` array comes out already sorted, so `r` and
-    # `final_indices` depend only on N and can be cached and reused as-is
-    # (with sequential-access benefits) across calls.
-    cached = _zvals_int64_to_dense_cache.get(N)
-    if cached is None:
-        r = _np.arange(2**N, dtype=_np.int64)
-        final_indices = 3 * _spread_bits(r)
-        _zvals_int64_to_dense_cache[N] = (r, final_indices)
-    else:
-        r, final_indices = cached
+    # The 2**N nonzero elements of the resulting vector are at indices that are
+    # base-4 numbers whose digits are only 0 or 3.  Rather than indexing these via
+    # the "natural" bit order of `finds` (which produces a bit-reversal permutation
+    # of indices), `_zvals_int64_indices_and_signs` indexes via `r = 0..2**N-1`
+    # directly, using order-preserving bit-spreading to get the corresponding
+    # index.  This means `final_indices` comes out already sorted, so the scatter-write
+    # below is sequential rather than jumping around unpredictably (the naive
+    # bit-indexing scheme is a textbook-bad memory access pattern once `outvec` no
+    # longer fits in cache).
+    final_indices, signs = _zvals_int64_indices_and_signs(zvals_int, N)
 
-    # 2. Compute the signs for all 2**N elements at once.
-    # The original (unsorted) formulation computes minus_sign = parity(finds & zvals_int),
-    # where `finds` is the bit-reversal (over N bits) of `r`.  Since bitwise-AND commutes
-    # with a (consistent) bit-reversal permutation of both operands, and bit-reversal
-    # preserves popcount/parity, we have:
-    #     parity(finds & zvals_int) == parity(bit_reverse(r) & zvals_int)
-    #                                == parity(r & bit_reverse(zvals_int))
-    # So we only need to bit-reverse the *scalar* zvals_int once (cheap, O(N)),
-    # rather than bit-reversing the whole `r` array (which would reintroduce the
-    # non-sequential access pattern we're trying to avoid).
-    zvals_rev = _reverse_bits_scalar(int(zvals_int), N)
-    parities = int64_parity(r & _np.int64(zvals_rev))
-    signs = 1 - 2 * parities  # maps {0,1} -> {+1,-1}
-
-    # 3. Assign the values to the output vector (sequential scatter-write).
+    # Assign the values to the output vector (sequential scatter-write).
     outvec[final_indices] = signs * abs_elval
     return outvec
+
+
+def zvals_int64_probability(zvals_int: int, nqubits: int, state_data: _np.ndarray,
+                             abs_elval: Optional[float] = None) -> float:
+    """
+    Compute the inner product of a computational-basis POVM effect with a dense state vector.
+
+    This computes the same result as
+    ``numpy.dot(zvals_int64_to_dense(zvals_int, nqubits), state_data)``, but without ever
+    materializing the full, mostly-zero, length-``4**nqubits`` dense effect vector.  Only
+    the ``2**nqubits`` nonzero elements of the effect (and the corresponding elements of
+    `state_data`) are touched, so this runs in O(2**nqubits) time and memory-traffic rather
+    than O(4**nqubits).  This mirrors the analogous fast, sparse-dot-product C++
+    implementation used by the compiled evotypes (e.g. `EffectCRep_Computational::probability`),
+    but for the pure-Python evotypes.
+
+    Parameters
+    ----------
+    zvals_int : int64
+        The array of (up to 64) z-values, encoded as the 0s and 1s in the binary representation
+        of this integer.  See :func:`zvals_int64_to_dense`.
+
+    nqubits : int
+        The number of z-values (up to 64)
+
+    state_data : numpy.ndarray
+        The dense state vector (length `4**nqubits`) to take the inner product with.
+
+    abs_elval : float, optional
+        the value `1 / (sqrt(2)**nqubits)`, which can be passed here so that
+        it doesn't need to be recomputed on every call to this function.  If
+        `None`, then we just compute the value.
+
+    Returns
+    -------
+    float
+    """
+    if abs_elval is None:
+        abs_elval = 1 / (_np.sqrt(2)**nqubits)
+
+    N = nqubits
+    if N == 0:
+        return abs_elval * state_data[0]
+
+    final_indices, signs = _zvals_int64_indices_and_signs(zvals_int, N)
+    return abs_elval * _np.dot(signs.astype('d'), state_data[final_indices])
 
 
 def sign_fix_qr(q, r, tol=1e-6):
