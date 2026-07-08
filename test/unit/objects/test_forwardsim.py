@@ -9,6 +9,7 @@ from pygsti.forwardsims import ForwardSimulator, \
     MapForwardSimulator, SimpleMapForwardSimulator, \
     MatrixForwardSimulator,  SimpleMatrixForwardSimulator, \
     TorchForwardSimulator
+from pygsti.forwardsims import torchfwdsim
 from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit, create_lsgst_circuit_lists
 from pygsti.baseobjs import Label as L
@@ -279,6 +280,7 @@ class ForwardSimConsistencyTester(TestCase):
 
     PROBS_TOL = 1e-14
     JACS_TOL = 1e-10
+    STASHED_DTYPE = torchfwdsim.DEFAULT_REAL_TYPE
 
     def setUp(self):
         self.model_ideal = smq1Q_XYI.target_model()
@@ -302,8 +304,14 @@ class ForwardSimConsistencyTester(TestCase):
         ]
         if TorchForwardSimulator.ENABLED:
             sims.append(TorchForwardSimulator())
+            import torch
+            torchfwdsim.DEFAULT_REAL_TYPE = torch.float64
         fsth = ForwardSimTestHelper(self.model_noisy, sims, circuits)
         return fsth
+    
+    def tearDown(self) -> None:
+        torchfwdsim.DEFAULT_REAL_TYPE = ForwardSimConsistencyTester.STASHED_DTYPE
+        return super().tearDown()
         
     def test_consistent_probs(self):
         fsth = self.setUp()
@@ -345,6 +353,67 @@ class ForwardSimConsistencyTester(TestCase):
                 msg += temp
             msg += '\n'
             self.assertTrue(False, msg)
+        return
+
+
+class LindbladForwardSimConsistencyTester(TestCase):
+    """End-to-end check that TorchForwardSimulator runs on a full CPTPLND (Lindblad) model and agrees
+    with the other forward simulators (GitHub issue 607).  Every model member is a Lindblad-composed
+    object: the prep is a ComposedState, the POVM a ComposedPOVM, and each gate a
+    ComposedOp([static ideal, ExpErrorgenOp]) -- exercising the whole Torchable op + SPAM chain."""
+
+    PROBS_TOL = 1e-12
+    JACS_TOL = 1e-9
+    STASHED_DTYPE = torchfwdsim.DEFAULT_REAL_TYPE
+
+    def setUp(self):
+        model = smq1Q_XYI.target_model()
+        # Lindblad SPAM *and* operations: ComposedState prep, ComposedPOVM, ComposedOp gates.
+        model.set_all_parameterizations('CPTPLND')
+        # perturb off the ideal so the error generators are nonzero
+        rng = np.random.default_rng(7)
+        model.from_vector(model.to_vector() + 0.03 * rng.standard_normal(model.num_params))
+        self.model_noisy = model
+
+        prep_fiducials = smq1Q_XYI.prep_fiducials()
+        meas_fiducials = smq1Q_XYI.meas_fiducials()
+        germs = smq1Q_XYI.germs()
+        max_lengths = [4]
+        circuits = create_lsgst_circuit_lists(
+            self.model_noisy, prep_fiducials, meas_fiducials, germs, max_lengths
+        )[0]
+        sims = [
+            SimpleMapForwardSimulator(),
+            SimpleMatrixForwardSimulator(),
+            MapForwardSimulator(),
+            MatrixForwardSimulator()
+        ]
+        if TorchForwardSimulator.ENABLED:
+            sims.append(TorchForwardSimulator())
+            import torch
+            torchfwdsim.DEFAULT_REAL_TYPE = torch.float64
+        return ForwardSimTestHelper(self.model_noisy, sims, circuits)
+    
+    def tearDown(self) -> None:
+        torchfwdsim.DEFAULT_REAL_TYPE = LindbladForwardSimConsistencyTester.STASHED_DTYPE
+        return super().tearDown()
+
+    @pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+    def test_consistent_probs(self):
+        fsth = self.setUp()
+        pcl = fsth.probs_colinearities()
+        self.assertFalse(np.any(pcl < 1 - self.PROBS_TOL),
+                         msg=f"Outcome probabilities disagreed across forward simulators: 1-colin="
+                             f"{1 - pcl}")
+        return
+
+    @pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+    def test_consistent_jacs(self):
+        fsth = self.setUp()
+        jcl = fsth.jac_colinearities()
+        self.assertFalse(np.any(jcl < 1 - self.JACS_TOL),
+                         msg=f"Outcome-probability Jacobians disagreed across forward simulators: 1-colin="
+                             f"{1 - jcl}")
         return
 
 

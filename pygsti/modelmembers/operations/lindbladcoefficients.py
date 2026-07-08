@@ -101,7 +101,9 @@ class InvalidParamModeError(ValueError):
 # {param_mode: parameterization class}; the block holds one instance in `self._parameterization` and
 # delegates all param_mode-dependent numeric work to it.
 #
-# The numpy `block_data_jacobian` is what the standard MapForwardSimulator path needs.
+# The *only* primitive needed to make a block Torchable is the parameterization's differentiable
+# `block_data_torch` (see LindbladCoefficientBlock.torch_base), and the numpy `block_data_jacobian`
+# is what the standard MapForwardSimulator path needs.
 # 
 #   --> Adding a new parameterization = adding one _BlockParameterization subclass and registering it.
 #
@@ -135,6 +137,17 @@ class _BlockParameterization:
         """Second derivative of the term-superoperators w.r.t. params (rarely used)."""
         raise NotImplementedError
 
+    # --- Torchable support (differentiable params -> block_data) ---
+    def torch_stateless_data(self, blk, real_dtype, device):
+        """Constants (independent of the free params) needed by `block_data_torch`."""
+        return (len(blk._bel_labels),)
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        """Differentiable torch reconstruction of block_data from the parameter tensor t_param,
+        given the stateless data `sd` returned by `torch_stateless_data`."""
+        raise NotImplementedError
+
 
 class _StaticParam(_BlockParameterization):
     """Zero-parameter block: block_data is a fixed constant."""
@@ -160,6 +173,16 @@ class _StaticParam(_BlockParameterization):
             return _np.zeros((superops.shape[1], superops.shape[2], 0, 0), 'd')
         return _np.zeros((superops.shape[2], superops.shape[3], 0, 0), 'd')
 
+    def torch_stateless_data(self, blk, real_dtype, device):
+        import torch as _torch
+        arr = _np.ascontiguousarray(blk.block_data)
+        ten = _torch.from_numpy(arr).to(dtype=real_dtype, device=device)
+        return (ten,)
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        return sd[0]
+
 
 class _RealVectorElements(_BlockParameterization):
     """Unconstrained real-vector parameterization: block_data == v (identity map).  Shared numeric
@@ -183,6 +206,10 @@ class _RealVectorElements(_BlockParameterization):
         nP = blk.num_params
         return _np.zeros((d1, d2, nP, nP), 'd')
 
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        return t_param
+
 
 class _HamElements(_RealVectorElements):
     def param_labels(self, blk):
@@ -194,6 +221,7 @@ class _DiagElements(_RealVectorElements):
         return [f"{lbl} stochastic coefficient" for lbl in blk._bel_labels]
 
 
+# TODO: Make Torchable
 class _EEGVectorElements(_RealVectorElements):
     """Unconstrained real-vector parameterization for blocks whose coefficients are in one-to-one
     correspondence with an explicit list of elementary error generators (block_data == v).  Like
@@ -247,6 +275,10 @@ class _DiagCholesky(_BlockParameterization):
         I = _np.identity(nP, 'd')
         return trans[:, :, :, None] * (2.0 * I)[None, None, :, :]
 
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        return t_param**2
+
 
 class _Depol(_BlockParameterization):
     """Depolarizing: a single nonnegative coefficient shared by all diagonal generators
@@ -280,6 +312,12 @@ class _Depol(_BlockParameterization):
         base = _np.sum(superops, axis=0)   # shape (d,d)
         return base[:, :, None, None] * 2.0
 
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        import torch as _torch
+        n = sd[0]
+        return (t_param[0]**2) * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
+
 
 class _RelDepol(_BlockParameterization):
     """Relative depolarizing: a single (possibly negative) coefficient shared by all diagonal
@@ -310,6 +348,12 @@ class _RelDepol(_BlockParameterization):
     def superop_hessian(self, blk, superops, superops_are_flat):
         d1, d2 = superops.shape[1:3]
         return _np.zeros((d1, d2, 1, 1), 'd')
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        import torch as _torch
+        n = sd[0]
+        return t_param[0] * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
 
 
 class _OtherElements(_BlockParameterization):
@@ -378,6 +422,17 @@ class _OtherElements(_BlockParameterization):
         snP = num_bels
         # unconstrained Hermitian: Hessian is identically zero
         return _np.zeros([superops.shape[2], superops.shape[3], snP, snP, snP, snP], 'd')
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        import torch as _torch
+        n = sd[0]
+        P = t_param.reshape(n, n)
+        lowP = _torch.tril(P, -1)
+        Re = lowP + lowP.T + _torch.diag(_torch.diagonal(P))
+        lowPT = _torch.tril(P.T, -1)
+        Imag = lowPT - lowPT.T
+        return _torch.complex(Re, Imag)
 
 
 class _OtherCholesky(_BlockParameterization):
@@ -505,6 +560,16 @@ class _OtherCholesky(_BlockParameterization):
         for base, b, r in iter_base_ab_qr(False, False):
             d2Odp2[:, :, base, b, base, r] = superops[b, r] + superops[r, b]
         return d2Odp2
+
+    @staticmethod
+    def block_data_torch(sd, t_param):
+        import torch as _torch
+        n = sd[0]
+        P = t_param.reshape(n, n)
+        Cre = _torch.tril(P, -1) + _torch.diag(_torch.diagonal(P))
+        Cim = _torch.tril(P.T, -1)
+        C = _torch.complex(Cre, Cim)
+        return C @ C.conj().T
 
 
 class LindbladCoefficientBlock(_NicelySerializable):
@@ -1003,6 +1068,26 @@ class LindbladCoefficientBlock(_NicelySerializable):
         assert _np.linalg.norm(_np.imag(d2)) < IMAG_TOL
         return _np.real(d2)
 
+    def stateless_data(self, real_dtype, device):
+        """
+        Returns `(parameterization_class, torch_ctx)`, where `torch_ctx` carries the constants that
+        `torch_base` needs.  This mirrors the Torchable API, but lives on the (non-ModelMember)
+        coefficient block, so that a Torchable `LindbladErrorgen` can compose its blocks' contributions.
+        """
+        inner_sd = self._parameterization.torch_stateless_data(self, real_dtype, device)
+        return (type(self._parameterization), inner_sd)
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable reconstruction of `block_data` from the parameter tensor `t_param`.
+
+        With `sd = blk.stateless_data(...)` and `t_param = torch.from_numpy(blk.to_vector())`,
+        `type(blk).torch_base(sd, t_param)` reproduces `blk.block_data` as a torch Tensor whose
+        autodiff Jacobian w.r.t. `t_param` equals `blk.deriv_wrt_params(...)`. 
+        """
+        param_cls, inner_sd = sd
+        return param_cls.block_data_torch(inner_sd, t_param)
+
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         # Always serialize under the *base* class name; ``block_type`` (below) selects the concrete
@@ -1110,6 +1195,9 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
             block_data_indices[i] = [(1.0, _LEEL('H', (lbl,)))]
         return block_data_indices
 
+    def _coefficient_labels_impl(self):
+        return ["%s Hamiltonian error coefficient" % lbl for lbl in self._bel_labels]
+
 
 class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
     """Pauli-stochastic diagonal (``block_type='other_diagonal'``) Lindblad coefficient block.
@@ -1174,6 +1262,9 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
         for i, lbl in enumerate(self._bel_labels):
             block_data_indices[i] = [(1.0, _LEEL('S', (lbl,)))]
         return block_data_indices
+
+    def _coefficient_labels_impl(self):
+        return ["(%s,%s) other error coefficient" % (lbl, lbl) for lbl in self._bel_labels]
 
 
 class _OtherCoeffBlock(LindbladCoefficientBlock):
@@ -1452,6 +1543,13 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
                 and (self._param_mode == other_coeff_block._param_mode)
                 and (self._eeg_labels == other_coeff_block._eeg_labels)
                 and (self._basis == other_coeff_block._basis))
+
+    def _coefficient_labels_impl(self):
+        labels = []
+        for i, ilbl in enumerate(self._bel_labels):
+            for j, jlbl in enumerate(self._bel_labels):
+                labels.append("(%s,%s) other error coefficient" % (ilbl, jlbl))
+        return labels
 
 
 LindbladCoefficientBlock._BLOCK_TYPES = {
