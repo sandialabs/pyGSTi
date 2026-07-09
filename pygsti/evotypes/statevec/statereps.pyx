@@ -17,6 +17,7 @@ from ...baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import fastcalc as _fastcalc
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
+from ...pgtypes import SpaceT
 
 from .opreps cimport OpRep
 
@@ -54,7 +55,7 @@ cdef class StateRep(_basereps_cython.StateRep):
         # a probability/amplitude by POVM effect reps.
         return self  # for most classes, the rep itself is actionable
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space in ('minimal', 'Hilbert'):
             return self.data
         elif on_space == 'HilbertSchmidt':

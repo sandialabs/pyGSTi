@@ -15,6 +15,7 @@
 import sys
 import numpy as _np
 from ...baseobjs.statespace import StateSpace as _StateSpace
+from ...pgtypes import SpaceT
 from ...tools import matrixtools as _mt
 
 
@@ -57,7 +58,7 @@ cdef class EffectRepConjugatedState(EffectRep):
     def __reduce__(self):
         return (EffectRepConjugatedState, (self.state_rep,))
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         return self.state_rep.to_dense(on_space)
 
 
@@ -86,7 +87,7 @@ cdef class EffectRepComputational(EffectRep):
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
-    def to_dense(self, on_space='minimal', outvec=None):
+    def to_dense(self, on_space: SpaceT = 'minimal', outvec=None):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx' evotype cannot produce Hilbert-space ops!")
         return _mt.zvals_int64_to_dense((<EffectCRep_Computational*>self.c_effect)._zvals_int,
@@ -132,7 +133,7 @@ cdef class EffectRepTensorProduct(EffectRep):
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
 
-    def to_dense(self, on_space='minimal', outvec=None):  # taken from slow version - CONSOLIDATE?
+    def to_dense(self, on_space: SpaceT = 'minimal', outvec=None):  # taken from slow version - CONSOLIDATE?
 
         if outvec is None:
             outvec = _np.zeros(self.state_space.dim, 'd')

@@ -14,6 +14,7 @@
 import sys
 import numpy as _np
 from ...baseobjs.statespace import StateSpace as _StateSpace
+from ...pgtypes import SpaceT
 
 
 cdef class EffectRep(_basereps_cython.EffectRep):
@@ -58,7 +59,7 @@ cdef class EffectRepConjugatedState(EffectRep):
     def __reduce__(self):
         return (EffectRepConjugatedState, (self.state_rep,))
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         return self.state_rep.to_dense(on_space)
 
 
@@ -83,7 +84,7 @@ cdef class EffectRepComputational(EffectRep):
     def __reduce__(self):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
-    def to_dense(self, on_space='minimal', outvec=None, trust_outvec_sparsity=False):
+    def to_dense(self, on_space: SpaceT = 'minimal', outvec=None, trust_outvec_sparsity=False):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
         # non-zero elements of outvec (i.e. that outvec is already zero wherever
         # this vector is zero).
@@ -135,7 +136,7 @@ cdef class EffectRepTensorProduct(EffectRep):
     def factor_effects_have_changed(self):
         self._fill_fast_kron()  # updates effect reps
 
-    def to_dense(self, on_space='minimal', scratch=None):  # taken from slow version - CONSOLIDATE?
+    def to_dense(self, on_space: SpaceT = 'minimal', scratch=None):  # taken from slow version - CONSOLIDATE?
         if on_space not in ('minimal', 'Hilbert'):
             raise ValueError('statevec evotype cannot (yet) generate dense Hilbert-Schmidt effect vectors')
         if scratch is None:

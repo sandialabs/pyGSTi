@@ -17,6 +17,7 @@ import copy as _copy
 
 import itertools as _itertools
 from ...baseobjs.statespace import StateSpace as _StateSpace
+from ...pgtypes import SpaceT
 from ...tools import internalgates as _itgs
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
@@ -104,7 +105,7 @@ cdef class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space in ('minimal', 'Hilbert'):
             return self.base
         elif on_space == 'HilbertSchmidt':
@@ -449,7 +450,7 @@ cdef class OpRepRandomUnitary(OpRep):
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    def to_dense(self, on_space='minimal'):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         assert(on_space == 'HilbertSchmidt')  # below code only works in this case
         return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
 
