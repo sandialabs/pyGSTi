@@ -166,7 +166,6 @@ def batch_tensor(
     if global_line_order is None:
         global_line_order = tuple(sorted(list(s)))
 
-    running_lanes = {}
     c = circuits[0].copy(editable=True)
     c._append_idling_layers_inplace(max_cir_len - len(c))
     c.done_editing()
@@ -188,5 +187,6 @@ def batch_tensor(
         c = c.tensor_circuit(c2)
 
     c = c.reorder_lines(global_line_order)
-    c.saved_auxinfo["lanes"] = running_lanes
+    c.saved_auxinfo["lanes"] = {}
+    compute_subcircuits(c, cache_lanes_in_circuit=True)
     return c
