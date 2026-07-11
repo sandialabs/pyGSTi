@@ -2,8 +2,37 @@ import numpy as _np
 
 from typing import Sequence, Dict, Tuple, Optional, Set, Union
 from pygsti.circuits import Circuit as Circuit
-from pygsti.baseobjs.label import Label, LabelTupTup
+from pygsti.baseobjs.label import Label, LabelTup, LabelTupTup
 
+
+def _map_label_state_space_labels(lbl, sslbl_map):
+    """
+    Map the state-space labels inside a Label, including LabelTupTup members.
+
+    This is used after applying a layer_mapper value, so we do not rely on
+    Circuit.map_state_space_labels_inplace to correctly descend into newly
+    created compound/parallel labels.
+    """
+
+    if lbl == Label(()):
+        return lbl
+
+    if isinstance(lbl, LabelTupTup):
+        return Label(tuple(
+            _map_label_state_space_labels(member, sslbl_map)
+            for member in lbl
+        ))
+
+    if isinstance(lbl, LabelTup):
+        return lbl.map_state_space_labels(sslbl_map)
+
+    if isinstance(lbl, tuple):
+        return tuple(
+            _map_label_state_space_labels(member, sslbl_map)
+            for member in lbl
+        )
+
+    return lbl.map_state_space_labels(sslbl_map)
 
 def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: Circuit) -> tuple[dict[int, int],
                                                                                              dict[int, tuple[int]]]:
@@ -168,21 +197,55 @@ def batch_tensor(
 
     c = circuits[0].copy(editable=True)
     c._append_idling_layers_inplace(max_cir_len - len(c))
-    c.done_editing()
-    # ^ That changes the format of c._labels. We need to edit c while in this format,
-    #   so the next line sets c._static = False. (We repeat this pattern in the loop below.)
+
+    local_num_lines = c.num_lines
+    local_labels = list(c._labels)
+    sslbl_map = {
+        k: v
+        for k, v in zip(c.line_labels, target_lines[0])
+    }
+
+    # First remap the circuit line labels. We will overwrite the operation labels
+    # immediately afterward, so we do not care how this maps the old local labels.
+    c.map_state_space_labels_inplace(sslbl_map)
+
+    # Now rebuild operation labels from the saved local labels, explicitly mapping
+    # any LabelTupTup members.
     c._static = False
-    c._labels = [layer_mappers[c.num_lines][ell] for ell in c._labels]
-    c.map_state_space_labels_inplace({k: v for k, v in zip(c.line_labels, target_lines[0])})
+    c._labels = [
+        _map_label_state_space_labels(
+            layer_mappers[local_num_lines][ell],
+            sslbl_map,
+        )
+        for ell in local_labels
+    ]
+
     c.done_editing()
     for i, c2 in enumerate(circuits[1:]):
         c2 = c2.copy(editable=True)
         c2._append_idling_layers_inplace(max_cir_len - len(c2))
-        c2.done_editing()
+
+        local_num_lines = c2.num_lines
+        local_labels = list(c2._labels)
+        sslbl_map = {
+            k: v
+            for k, v in zip(c2.line_labels, target_lines[i + 1])
+        }
+
+        # Remap line labels first.
+        c2.map_state_space_labels_inplace(sslbl_map)
+
+        # Then rebuild labels from the original local labels, explicitly remapping
+        # LabelTupTup members.
         c2._static = False
-        c2._labels = [layer_mappers[c2.num_lines][ell] for ell in c2._labels]
-        # enumerate counts starting at 0.
-        c2.map_state_space_labels_inplace({k: v for k, v in zip(c2.line_labels, target_lines[i + 1])})
+        c2._labels = [
+            _map_label_state_space_labels(
+                layer_mappers[local_num_lines][ell],
+                sslbl_map,
+            )
+            for ell in local_labels
+        ]
+
         c2.done_editing()
         c = c.tensor_circuit(c2)
 

@@ -1,8 +1,11 @@
 import numpy as np
-from pygsti.protocols import CircuitListsDesign, HasProcessorSpec
+from collections import defaultdict
+from typing import Optional, Union, TYPE_CHECKING
+from tqdm import tqdm
+
+from pygsti.protocols import GateSetTomographyDesign
 from pygsti.processors import QubitProcessorSpec
 from pygsti.circuits.circuitlist import CircuitList
-from pygsti.circuits.circuit import Circuit
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label, LabelTup
 import copy
@@ -161,57 +164,18 @@ def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
                     circs_to_tensor.append( c2 )
                     tensored_lines.append((unused_qubits[i],))
                 c_ten = batch_tensor(circs_to_tensor, layer_mappers, global_line_order, tensored_lines)
-                for i in range(c_ten.num_layers): # This is just a debugging loop to ensure we have everything labeled.
+
+
+                # This is just a debugging loop to ensure we have everything labeled.
+                for i in range(c_ten.num_layers):
                     l0 = set(c_ten.layer(i))
                     l1 = set(c_ten.layer_with_idles(i))
                     assert l0 == l1
+
                 circuit_lists[L].append(c_ten)
                 aux_info[c_ten] = {'edges': edge_set, 'vertices': unused_qubits} #YOLO
 
     return circuit_lists, aux_info
-
-
-def generate_edge_colorings(vertices: list, edges: list) -> list:
-    """
-    Generate a set of edge colorings for a graph until all edges are colored.
-
-    This function takes an edge set of a simple undirected graph and repeatedly 
-    applies the Misra & Gries edge coloring algorithm until every edge is 
-    contained in some edge coloring. It returns a dictionary mapping colors 
-    to the edges colored with that color.
-
-    Parameters:
-    vertices (list): A list of vertices in the graph.
-    edges (list): A list of edges represented as tuples (u, v) where u and v 
-                are vertices in the graph.
-
-    Returns:
-    list: A list of edge colorings (dictionaries whose keys are colors and items are lists colored edges)
-    """
-    list_of_edge_colorings = []
-    uncolored_edges = set(edges)
-
-    while uncolored_edges:
-        # Determine which vertices are neighbors in a graph with only uncolored edges
-        # Could call find_neighbors here...
-        updated_neighbors = {v: [] for v in vertices}
-        for u, v in uncolored_edges:
-            updated_neighbors[u].append(v)
-
-        # Calculate the maximum degree of the graph
-        deg = max(len(updated_neighbors[v]) for v in vertices)
-
-        # Find an edge coloring
-        new_color_patches = find_edge_coloring(deg, vertices, list(uncolored_edges), updated_neighbors)
-        new_color_patches = {k: v for (k, v) in new_color_patches.items() if len(v) > 0}
-
-        # Update color patches and remove newly colored edges from uncolored_edges
-        list_of_edge_colorings.append(new_color_patches)
-        for _, edge_list in new_color_patches.items():
-            uncolored_edges.difference_update(edge_list)
-            uncolored_edges.difference_update([(v,u) for u, v in edge_list]) # need to symmetrize
-
-    return list_of_edge_colorings
 
 
 def make_xfgst_design(nq_pspec: QubitProcessorSpec, oneq_gstdesign, twoq_gstdesign, seed=0):
@@ -219,22 +183,17 @@ def make_xfgst_design(nq_pspec: QubitProcessorSpec, oneq_gstdesign, twoq_gstdesi
     edges = nq_pspec.compute_2Q_connectivity().edges()
 
     # Generate the sub-experiment designs
-    edge_colorings = generate_edge_colorings(vertices, edges)
-    sub_designs = []
-    for i,ec in enumerate(edge_colorings):
-        ed = CrosstalkFreeExperimentDesign(nq_pspec, oneq_gstdesign, twoq_gstdesign, ec, seed=(seed+i))
-        sub_designs.append(ed)
     
-    max_circuitlists_len = max([len(sd.circuit_lists) for sd in sub_designs])
-    circuitlists = [[] for _ in range(max_circuitlists_len)]
-    for sd in sub_designs:
-        for i,cl in enumerate(sd.circuit_lists):
-            circuitlists[i].extend(cl)
-    cld = CircuitListsDesign(circuit_lists=circuitlists)
-    return cld
+    edges = set(edges)
+    neighbors = find_neighbors(vertices, edges)
+    # Calculate the maximum degree of the graph
+    deg = max(len(neighbors[v]) for v in vertices)
+    edge_coloring = find_edge_coloring(deg+1, vertices, edges,neighbors, seed)
+
+    return CrosstalkFreeExperimentDesign(nq_pspec, oneq_gstdesign, twoq_gstdesign, edge_coloring, seed=(seed+1))
 
 
-class CrosstalkFreeExperimentDesign(CircuitListsDesign):
+class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
     """
     This class initializes a crosstalk-free GST experiment design by combining 
     1Q and 2Q GST designs based on a specified edge coloring. It assumes that 
@@ -252,8 +211,8 @@ class CrosstalkFreeExperimentDesign(CircuitListsDesign):
     circuit_lists (list): The generated list of stitched circuits.
     aux_info (dict): Auxiliary information mapping circuits to their corresponding edges and vertices.
     """
-    def __init__(self, processor_spec, oneq_gstdesign, twoq_gstdesign, edge_coloring, 
-                 circuit_stitcher = stitch_circuits_by_germ_power_only, seed = None):
+    def __init__(self, processor_spec, oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign: GateSetTomographyDesign, edge_coloring, 
+                 circuit_stitcher = stitch_circuits_by_germ_power_only, seed = None, nested: bool=False):
         """
         Assume that the GST designs have the same Ls.
 
@@ -273,7 +232,340 @@ class CrosstalkFreeExperimentDesign(CircuitListsDesign):
     
         self.circuit_lists, self.aux_info = circuit_stitcher(self.color_patches, self.vertices, 
                                                             self.oneq_gstdesign, self.twoq_gstdesign, 
-                                                            randgen,
-        )
+                                                            randgen, ensure_containment=nested,
+                                                            )
         
-        CircuitListsDesign.__init__(self, self.circuit_lists, qubit_labels=self.vertices)
+        super().__init__(processor_spec, self.circuit_lists,qubit_labels=self.vertices, nested=nested)
+
+
+def ordered_edge_set(edge_set):
+    """
+    Canonicalize the order of edges, but preserve endpoint orientation.
+
+    If endpoint orientation is meaningful, do NOT sort inside each edge.
+    """
+    return sorted([tuple(edge) for edge in edge_set])
+
+
+def patch_lines(edge_set, vertices):
+    """
+    Return the ordered tensor lines for a patch:
+      - first the 2Q edge lines
+      - then the 1Q unused-qubit lines
+    """
+    edge_set = ordered_edge_set(edge_set)
+
+    used_qubits = {
+        q
+        for edge in edge_set
+        for q in edge
+    }
+
+    unused_qubits = [
+        q
+        for q in vertices
+        if q not in used_qubits
+    ]
+
+    tensored_lines = list(edge_set) + [(q,) for q in unused_qubits]
+
+    return edge_set, unused_qubits, tensored_lines
+
+
+def make_line_mapper(source_lines, target_lines):
+    """
+    Construct a state-space-label mapper from source tensor lines to target
+    tensor lines.
+
+    Example:
+        source_lines = [(0, 1), (4,), (5,)]
+        target_lines = [(2, 3), (0,), (1,)]
+
+        returns:
+            {0: 2, 1: 3, 4: 0, 5: 1}
+    """
+    if len(source_lines) != len(target_lines):
+        raise ValueError("Source and target line lists have different lengths.")
+
+    mapper = {}
+
+    for src_line, dst_line in zip(source_lines, target_lines):
+        if len(src_line) != len(dst_line):
+            raise ValueError(
+                f"Line arity mismatch: source {src_line}, target {dst_line}"
+            )
+
+        for src_label, dst_label in zip(src_line, dst_line):
+            if src_label in mapper and mapper[src_label] != dst_label:
+                raise ValueError(
+                    f"Inconsistent mapping for {src_label}: "
+                    f"{mapper[src_label]} versus {dst_label}"
+                )
+
+            mapper[src_label] = dst_label
+
+    if len(set(mapper.values())) != len(mapper):
+        raise ValueError("Mapper is not one-to-one.")
+
+    return mapper
+
+def build_patch_infos(vertices, color_patches):
+    vertices = list(vertices)
+
+    patch_infos = []
+    groups = defaultdict(list)
+
+    for patch, edge_set in color_patches.items():
+        edge_set, unused_qubits, tensored_lines = patch_lines(edge_set, vertices)
+
+        info = {
+            "patch": patch,
+            "edge_set": edge_set,
+            "unused_qubits": unused_qubits,
+            "tensored_lines": tensored_lines,
+            "num_edges": len(edge_set),
+            "num_unused_qubits": len(unused_qubits),
+        }
+
+        key = (len(edge_set), len(unused_qubits))
+        groups[key].append(info)
+        patch_infos.append(info)
+
+    return patch_infos, groups
+
+def assign_the_designs_with_mapping(
+    oneq_gstdesign_circuitlists: CircuitList,
+    twoq_gstdesign_circuitlists: CircuitList,
+    vertices: list[int],
+    color_patches: dict[int, list[tuple[int,int]]],
+    layer_mappers,
+    debug_check=False,
+    randgen: Optional=None,
+    ensure_containment: bool=False,
+):
+    """
+    Construct crosstalk-free GST circuit lists for each color patch.
+
+    For each germ-power index, this function combines 2Q GST circuits on the edges
+    of each color patch with 1Q GST circuits on the vertices not used by that patch.
+    Each color patch should contain mutually disjoint edges, so that the resulting
+    tensored circuits do not place simultaneous 2Q operations on overlapping qubits.
+
+    Here, a color patch is one color class from an edge coloring of the 2Q
+    connectivity graph. For example, for a five-qubit line,
+
+        0 -- 1 -- 2 -- 3 -- 4
+
+    one valid color patch is ``[(0, 1), (2, 3)]``. For that patch, this function
+    uses 2Q GST designs on edges ``(0, 1)`` and ``(2, 3)``, and a 1Q GST design on
+    the unused qubit ``4``. Another valid patch is ``[(1, 2), (3, 4)]``, with qubit
+    ``0`` receiving a 1Q GST design.
+
+    Patches with the same number of 2Q edges and unused qubits share randomized
+    role-based schedules. A representative tensored circuit is constructed once
+    for each such group and then mapped onto equivalent patches.
+
+    This function does not deduplicate color patches. For example, if both
+    ``[(0, 1), (2, 3)]`` and ``[(1, 0), (3, 2)]`` are supplied, both designs are
+    generated, even though they differ only by edge orientation.
+
+    Parameters
+    ----------
+    oneq_gstdesign_circuitlists : CircuitList
+        Lists of 1Q GST circuits, grouped by germ-power index.
+
+    twoq_gstdesign_circuitlists : CircuitList
+        Lists of 2Q GST circuits, grouped by germ-power index. Must have the same
+        number of germ-power groups as ``oneq_gstdesign_circuitlists``.
+
+    vertices : list[int]
+        Vertices/qubits in the connectivity graph.
+
+    color_patches : dict[int, list[tuple[int, int]]]
+        Mapping from patch/color identifier to the list of disjoint 2Q edges in that patch.
+        Each edge is represented as a pair of qubit labels.
+
+    layer_mappers
+        Mapping information used by ``batch_tensor`` to embed 1Q and 2Q labels into
+        the full tensored state space. Values should not introduce implicit idle
+        labels.
+
+    debug_check : bool, optional
+        If True, check that the generated tensored circuits contain no implicit idle
+        gates. Default is False.
+
+    randgen : numpy.random.Generator, optional
+        Random number generator used to randomize circuit assignments across edge
+        and qubit slots. If None, uses ``np.random.default_rng(0)``.
+
+    ensure_containment: bool, optional
+        If True, ensure that circuitlists[L+1] contains the exact circuits
+        from circuitlists[L]. Containment is enforced patch-wise, so the
+    output remains patch-major. Default is False. 
+
+    Returns
+    -------
+    list[list]
+        ``circuit_lists[L]`` contains the generated crosstalk-free GST circuits for
+        germ-power index ``L``. Within each germ-power group, circuits are ordered
+        patch-major according to the input order of ``color_patches``.
+
+    Raises
+    ------
+    AssertionError
+        If ``oneq_gstdesign_circuitlists`` and ``twoq_gstdesign_circuitlists`` do
+        not have the same number of germ-power groups.
+
+    NotImplementedError
+        If, for any germ-power group, the number of 1Q circuits exceeds the number
+        of 2Q circuits.
+    """
+    if randgen is None:
+        randgen = np.random.default_rng(0)
+
+    assert len(oneq_gstdesign_circuitlists) == len(twoq_gstdesign_circuitlists), \
+        "Not implemented."
+
+    vertices = list(vertices)
+
+    patch_infos, groups = build_patch_infos(vertices, color_patches)
+
+    # Preserve user/color_patches ordering in the final output.
+    patch_order = [info["patch"] for info in patch_infos]
+    patch_info_by_name = {
+        info["patch"]: info
+        for info in patch_infos
+    }
+
+    previous_patch_buffers = {
+        patch: []
+        for patch in patch_order
+    }
+
+    circuit_lists = [[] for _ in twoq_gstdesign_circuitlists]
+
+    for L, (oneq_circuits, twoq_circuits) in tqdm(
+        enumerate(zip(oneq_gstdesign_circuitlists, twoq_gstdesign_circuitlists)),
+        total=len(twoq_gstdesign_circuitlists)
+    ):
+        oneq_len = len(oneq_circuits)
+        twoq_len = len(twoq_circuits)
+
+        max_len = max(oneq_len, twoq_len)
+        min_len = min(oneq_len, twoq_len)
+
+        if oneq_len > twoq_len:
+            raise NotImplementedError()
+
+        # Temporary per-patch storage so output ordering remains patch-major.
+        patch_buffers = {
+            info["patch"]: []
+            for info in patch_infos
+        }
+
+        for group_key, infos in groups.items():
+            num_edges, num_unused_qubits = group_key
+
+            representative = infos[0]
+            representative_lines = representative["tensored_lines"]
+
+            edge_perms = np.empty(
+                (num_edges, max_len),
+                dtype=np.int64
+            )
+
+            for edge_slot in range(num_edges):
+                edge_perms[edge_slot, :] = randgen.permutation(max_len)
+
+            oneq_base_perm = np.hstack((
+                randgen.integers(0, min_len, size=max_len - min_len),
+                np.arange(min_len)
+            ))
+
+            oneq_perms = np.empty(
+                (num_unused_qubits, max_len),
+                dtype=np.int64
+            )
+
+            for qubit_slot in range(num_unused_qubits):
+                oneq_perms[qubit_slot, :] = randgen.permutation(oneq_base_perm)
+
+            mappers = {}
+
+            for info in infos:
+                if info is representative:
+                    mappers[info["patch"]] = None
+                else:
+                    mappers[info["patch"]] = make_line_mapper(
+                        representative_lines,
+                        info["tensored_lines"]
+                    )
+
+            for j in range(max_len):
+                circs_to_tensor = []
+
+                for edge_slot in range(num_edges):
+                    circ_idx = edge_perms[edge_slot, j]
+                    circs_to_tensor.append(twoq_circuits[circ_idx])
+
+                for qubit_slot in range(num_unused_qubits):
+                    circ_idx = oneq_perms[qubit_slot, j]
+                    circs_to_tensor.append(oneq_circuits[circ_idx])
+
+                template_circuit = batch_tensor(
+                    circs_to_tensor,
+                    layer_mappers,
+                    None,
+                    representative_lines
+                )
+
+                if debug_check:
+                    for i in range(template_circuit.num_layers):
+                        l0 = set(template_circuit.layer(i))
+                        l1 = set(template_circuit.layer_with_idles(i))
+                        assert l0 == l1
+
+                patch_buffers[representative["patch"]].append(
+                    template_circuit.copy()
+                )
+
+                for info in infos[1:]:
+                    mapper = mappers[info["patch"]]
+
+                    # mapped_circuit = template_circuit.map_state_space_labels(mapper)
+                    mapped_circuit = template_circuit.copy()
+                    if debug_check:
+                        expected_labels = {
+                            q
+                            for line in info["tensored_lines"]
+                            for q in line
+                        }
+
+                        actual_labels = set(mapped_circuit.line_labels)
+
+                        assert actual_labels == expected_labels, (
+                            actual_labels,
+                            expected_labels
+                        )
+
+                    patch_buffers[info["patch"]].append(mapped_circuit)
+
+        # Preserve patch-major output ordering.
+        output_list = circuit_lists[L]
+
+        if ensure_containment:
+            for patch in patch_order:
+                patch_buffers[patch] = (
+                    previous_patch_buffers[patch] + patch_buffers[patch]
+                )
+
+        for patch in patch_order:
+            output_list.extend(patch_buffers[patch])
+
+        if ensure_containment:
+            previous_patch_buffers = {
+                patch: list(patch_buffers[patch])
+                for patch in patch_order
+            }
+
+    return circuit_lists
