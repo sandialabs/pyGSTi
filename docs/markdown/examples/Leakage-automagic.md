@@ -13,7 +13,7 @@ kernelspec:
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XYI as mp
-from pygsti.tools.leakage import leaky_qubit_model_from_pspec, construct_leakage_report
+from pygsti.leakage import leaky_qubit_model_from_pspec, construct_leakage_report
 from pygsti.data import simulate_data
 from pygsti.protocols import StandardGST, ProtocolData
 import numpy as np

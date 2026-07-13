@@ -1197,8 +1197,8 @@ def povm_diamonddist(model, target_model, povmlbl, _premultiplier=None):
     Notes
     -----
     _premultiplier is not in the public API. It's here for the time being
-    to facilitate leakage modeling. When present, it's a projector built
-    from pygsti.tools.leading_dxd_submatrix_basis_vectors.
+    to facilitate leakage modeling. When present, it's a value returned
+    from pygsti.leakage.computational_projector.
     """
     try:
         povm_mx = compute_povm_map(model, povmlbl)
@@ -1258,8 +1258,8 @@ def instrument_diamonddist(a, b, mx_basis, _premultiplier=None):
     Notes
     -----
     _premultiplier is not in the public API. It's here for the time being
-    to facilitate leakage modeling. When present, it's a projector built
-    from pygsti.tools.leading_dxd_submatrix_basis_vectors.
+    to facilitate leakage modeling. When present, it's a value returned
+    from pygsti.leakage.computational_projector.
     """
     #Turn instrument into a CPTP map on qubit + classical space.
     adim = a.state_space.dim
@@ -2513,8 +2513,8 @@ def project_model(model, target_model,
         gsDict[p].set_all_parameterizations("full")
         NpDict[p] = 0
 
-    errgens = [error_generator(model.operations[gl],
-                               target_model.operations[gl],
+    errgens = [error_generator(model.operations[gl].to_dense('minimal'),
+                               target_model.operations[gl].to_dense('minimal'),
                                target_model.basis, gen_type, logG_weight)
                for gl in opLabels]
 
@@ -2544,7 +2544,7 @@ def project_model(model, target_model,
             lnd_error_gen = _np.tensordot(HBlk.block_data, HGens, (0, 0)) + \
                 _np.tensordot(otherBlk.block_data, otherGens, ((0, 1), (0, 1)))
 
-        targetOp = target_model.operations[gl]
+        targetOp = target_model.operations[gl].to_dense('minimal')
 
         if 'H' in projectiontypes:
             gsDict['H'].operations[gl] = operation_from_error_generator(

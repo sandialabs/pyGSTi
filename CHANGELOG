@@ -1,5 +1,64 @@
 # CHANGELOG
 
+## [0.10.1] - 2026-07-06
+
+Bugfix release. The only updates are to pyproject.toml to declare import-time dependencies.
+Thanks to @basnijholt for reporting this bug and creating a PR to fix.
+
+## [0.10.0] - 2026-07-03
+
+Major new features: symbolic error generator propagation (error generator polynomials), Lindblad-parameterized instruments, new GST objective functions, a generalized `pygsti.leakage` subpackage, turn-key MPI/SLURM helpers, and JupyterBook/ReadTheDocs documentation. Supported Python versions are now 3.10-3.13.
+
+### Added
+* Error generator polynomials: symbolic Magnus/Taylor expansions and polynomial probability/expectation corrections, with a new tutorial (#789)
+* Zassenhaus formula (second order) and 20-1000x performance improvements for error generator propagation sensitivities (#687)
+* Effect-then-gate Lindblad parameterization for instruments: `Instrument.from_effects` / `Instrument.from_cptr_superops` (#693)
+* New GST objective types ('tvd', 'normalized-tvd', Lp^p) and black-box penalty functions (#649); iteration-specific optimizers (#690, @juangmendoza19)
+* `pygsti.leakage` subpackage; leakage modeling now inferred from the basis (`Basis.implies_leakage_modeling`), basis-aware report metrics, `U1Group`, `promote_bb_to_bt` (#707); leakage confidence intervals and more robust LAGO (#699)
+* `Protocol.run_mpi()` and `Protocol.stage_slurm()` for MPI-accelerated runs (#724)
+* Germ selection: `gate_penalty` option (#666) and implicit-model support (#668, @enielse)
+* `ImplicitOpModel.to_explicit_model` (#748); unconstrained 'GLNDU' Lindblad coefficient blocks (#755, #801); A/D line-label prefixes (#810, @sserita)
+
+### Fixed
+* GST with penalty terms in objective functions (#528)
+* Numerous `Circuit` bugs (#765, #767, #772, #738); `Polynomial` commutativity bug (#750, #789)
+* Missing `return_basis` support for embedded ops (#592); zero-parameter model derivatives (#796, @yrasool)
+* IBMQ result retrieval with extra bits and preliminary MCM support (#679, @pcwysoc)
+* Wildcard budgets with `gaugeopt_suite=None` (#710, @enielse); cloud noise models with callable ops (#485, @sserita)
+* NumPy 2.x/2.5 compatibility (#703, #792); lazy `cvxpy` import (#803, #807, @basnijholt)
+* Many bugfixes surfaced by the revived notebook regression suite (#788, #821)
+
+### Changed
+* Python 3.10-3.13 supported; 3.9 dropped (#780)
+* Documentation rebuilt as a Jupyter Book on ReadTheDocs (#673, @sserita; #770-#781)
+* Default germ selection mode is now 'compactEVD'; `assume_real` removed and `float_type` inferred from the model basis (#812)
+* Leakage migration: `pygsti.tools.leakage` -> `pygsti.leakage`; `n_leak` retired in favor of basis-driven inference (#707)
+* `Label` modernization: `time` field removed from default subclasses, homogeneous `sslbls` types, round-trippable serialization (#692, #769, @nkoskelo)
+* `LindbladCoefficientBlock` parameterization-by-composition refactor; `coefficient_labels` removed (#701, #755, #801)
+* `errorgen_gate_contributors` moved to `errgenpolytools` (#789); `torch` moved to the opt-in `pytorch` extra (#788)
+* Gauge optimization refactor and fidelity-objective redefinition (#669)
+
+### Developer-Oriented Changes
+* CI time-to-green under 20 minutes (#780); parallel Cython build race fixed (#794); notebook regression in CI (#788)
+* Characterization/regression suites for `LindbladCoefficientBlock` (#750), `Circuit` (#768), `basis.py` (#790), `label.py` (#769)
+* `agent-docs/` orientation docs (#743); test warning burn-down (#739); `scripts/` and dead-code cleanup (#736, #744, #745)
+
+### Expired Deprecations
+* `DenseOperatorInterface` / `DenseStateInterface` / `DenseEffectInterface` removed; use `.to_dense()` / `.set_dense()` (#805)
+
+### Deprecations
+* The `n_leak` key of `construct_standard_report`'s `advanced_options` is deprecated and ignored; leakage metrics are now shown automatically based on each model's basis (#707)
+
+## [0.9.14.3] - 2025-11-25
+
+This is a bugfix release patching the following issues:
+
+* The benchmarking tool formerly named `bsqale` has been renamed to `scarab` (@ndsieki, #685)
+* Bugfix for drift report generation caused by incorrect Plotly syntax. (@liuyichao82 #688)
+* Fix for a ReadTheDocs build failure that caused the documentation generation to fail. (#691)
+
+Development-related change: Pushes to the `bugfix` branch no longer trigger automatic merges into `develop`, and these changes will need to be merged in manually going forward.
+
 ## [0.9.14.2] - 2025-11-08
 
 This is a bugfix release patching the following issues:

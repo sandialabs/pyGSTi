@@ -23,7 +23,8 @@ import scipy.stats as _stats
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti import models as _models
-from pygsti.baseobjs import BuiltinBasis, VerbosityPrinter, DirectSumBasis
+from pygsti.baseobjs import VerbosityPrinter
+from pygsti.baseobjs.basis import BuiltinBasis, DirectSumBasis, BasisLike
 from pygsti import tools as _tools
 from pygsti import circuits as _circuits
 from pygsti import objectivefns as _objfns
@@ -347,16 +348,17 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                             _povm.optimize_effect(new_vec, lgstModel.povms[povmLabel][effectLabel])
                             new_effects.append((effectLabel, new_vec))
 
-                        # Construct identity vector for complement effect vector
+                        # Compute complement effect by substracting from the identity effect.
                         #  Pad with zeros if needed (ROBIN - is this correct?)
-                        identity = povm[povm.complement_label].identity
+                        identity = povm[povm.complement_label].identity.to_dense('minimal')
                         Idim = identity.shape[0]
                         assert(Idim <= trunc)
-                        if Idim < trunc:
-                            padded_identityVec = _np.concatenate((identity, _np.zeros((trunc - Idim, 1), 'd')))
-                        else:
-                            padded_identityVec = identity
-                        comp_effect = padded_identityVec - sum([v for k, v in new_effects])
+                        comp_effect = _np.zeros(trunc)
+                        comp_effect[:Idim] = identity
+                        for _, v in new_effects:
+                            v_array = v.to_dense('minimal') if hasattr(v, 'to_dense') else v
+                            comp_effect -= v_array
+
                         new_effects.append((povm.complement_label, comp_effect))  # add complement
                         lgstModel.povms[povmLabel] = _povm.TPPOVM(new_effects)
 
@@ -1195,7 +1197,7 @@ def _do_term_runopt(objective, optimizer, printer):
 ###################################################################################
 
 
-def find_closest_unitary_opmx(operation_mx):
+def find_closest_unitary_opmx(operation_mx, op_basis: BasisLike='pp'):
     """
     Find the closest (in fidelity) unitary superoperator to `operation_mx`.
 
@@ -1213,7 +1215,7 @@ def find_closest_unitary_opmx(operation_mx):
         The resulting closest unitary operation matrix.
     """
 
-    gate_JMx = _tools.jamiolkowski_iso(operation_mx, choi_mx_basis="std")
+    gate_JMx = _tools.jamiolkowski_iso(operation_mx, op_mx_basis=op_basis, choi_mx_basis="std")
     # d = _np.sqrt(operation_mx.shape[0])
     # I = _np.identity(d)
 

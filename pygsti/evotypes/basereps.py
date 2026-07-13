@@ -114,8 +114,9 @@ except ImportError:
             """
             new_items = {}
             for k, v in self.items():
-                new_vinds = tuple((mapfn_as_vector[j] for j in self._int_to_vinds(k)))
-                new_items[self._vinds_to_int(new_vinds)] = v
+                new_vinds = tuple([mapfn_as_vector[j] for j in self._int_to_vinds(k)])
+                nk = self._vinds_to_int(new_vinds)  
+                new_items[nk] = new_items.get(nk, 0) + v
             self.clear()
             self.update(new_items)
 
@@ -145,10 +146,11 @@ except ImportError:
             """ The coefficient dictionary (with encoded integer keys) """
             return dict(self)  # for compatibility w/C case which can't derive from dict...
 
+        #TODO: Does this need to be duplicated?
         def _vinds_to_int(self, vinds):
             """ Maps tuple of variable indices to encoded int """
             ints_in_key = int(_np.ceil(len(vinds) / self.vindices_per_int))
-
+            vinds = sorted(vinds) 
             ret_tup = []
             for k in range(ints_in_key):
                 ret = 0; m = 1
@@ -295,6 +297,7 @@ except ImportError:
             -------
             PolynomialRep
             """
+            assert(self.max_num_vars == other.max_num_vars)
             for k, v in other.items():
                 try:
                     self[k] += v

@@ -212,7 +212,7 @@ class CompilationRules(object):
             self._compiled_cache[oplabel] = template_to_use.map_state_space_labels(to_real_label)
         elif oplabel.name in self.function_templates:  # Fourth, construct from local function template
             template_fn_to_use = self.function_templates[oplabel.name]
-            self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel.sslbls, oplabel.args, oplabel.time))
+            self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel.sslbls, oplabel.args, getattr(oplabel, "time", 0.0)))
         else:
             # Failed to compile
             return None

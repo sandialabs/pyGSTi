@@ -54,6 +54,18 @@ class AbstractForwardSimTester(BaseCase):
         with self.assertRaises(NotImplementedError):
             self.fwdsim.bulk_fill_hprobs(np.zeros((1,0,0)), layout)
 
+    def test_free_local_array_is_noop_for_numpy_array(self):
+        layout = self.fwdsim.create_layout([self.circuit], array_types=('e',))
+        local_array = layout.allocate_local_array('e', 'd', zero_out=True)
+        local_array[0] = 1.0
+
+        with self.assertNoWarns():
+            self.assertIsNone(layout.free_local_array(local_array))
+
+        self.assertIsInstance(local_array, np.ndarray)
+        self.assertEqual(local_array.shape, (layout.num_elements,))
+        self.assertEqual(local_array[0], 1.0)
+
 
 class ForwardSimBase(object):
     @classmethod
@@ -143,6 +155,24 @@ class MapForwardSimTester(ForwardSimBase, BaseCase):
         super(MapForwardSimTester, cls).setUpClass()
         cls.model = cls.model.copy()
         cls.model.sim = MapForwardSimulator()
+
+
+class ZeroParamModelTester(BaseCase):
+    def test_dprobs_hprobs_empty_for_zero_param_model(self):
+        # static model has no free params -> dprobs/hprobs return empty arrays
+        # quietly instead of an opaque IndexError (#604)
+        model = smq1Q_XYI.target_model('static')
+        self.assertEqual(model.num_params, 0)
+        circuit = Circuit([L('Gxpi2', 0)], line_labels=(0,))
+        for sim in (MapForwardSimulator(), MatrixForwardSimulator()):
+            model.sim = sim
+            with self.assertNoWarns():
+                dprobs = model.sim.bulk_dprobs([circuit])
+                hprobs = model.sim.bulk_hprobs([circuit])
+            for dprob in next(iter(dprobs.values())).values():
+                self.assertEqual(dprob.shape, (0,))
+            for hprob in next(iter(hprobs.values())).values():
+                self.assertEqual(hprob.shape, (0, 0))
 
 
 class BaseProtocolData:

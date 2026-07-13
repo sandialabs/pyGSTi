@@ -73,7 +73,7 @@ class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space in ('minimal', 'Hilbert'):
             return self.base
         elif on_space == 'HilbertSchmidt':
@@ -428,7 +428,7 @@ class OpRepRandomUnitary(OpRep):
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         assert(on_space == 'HilbertSchmidt')  # below code only works in this case
         return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
 
