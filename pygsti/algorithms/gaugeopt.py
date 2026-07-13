@@ -665,9 +665,9 @@ def _legacy_create_scalar_objective(model, target_model,
             return ret
 
         if "frobenius" in spam_metric:
-            # SPAM and gates can have different choices for squared vs non-squared.
-            #
-            # TODO: remove support for this codepath. It's ridiculous.
+            # Need this path in case gates DON'T use a Frobenius-based penalty.
+            # This path has a secondary use of allowing SPAM and gates to make
+            # different choices as to squared vs plain Frobenius norm.
             wts = item_weights.copy(); wts['gates'] = 0.0
             for k in wts:
                 if k in mdl_ops or k in mdl.instruments:
