@@ -4,6 +4,7 @@ import numpy as np
 import scipy
 
 from pygsti.baseobjs.label import Label
+from pygsti.processors import QuditProcessorSpec
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import modelconstruction as mc
 from pygsti.circuits import Circuit
@@ -13,7 +14,7 @@ from ..util import BaseCase, with_temp_path
 
 def save_and_load(obj, pth):
     obj.write(pth + ".json")
-    return QubitProcessorSpec.read(pth + '.json')
+    return obj.__class__.read(pth + '.json')
 
 
 class ProcessorSpecTester(BaseCase):
@@ -84,6 +85,11 @@ class ProcessorSpecTester(BaseCase):
         self.assertEqual(subset_pspec.gate_num_qubits('Gglobal'), 3)
         self.assertNotIn('Gglobal', subset_pspec.gate_unitaries)
 
+        renamed_pspec = pspec.subset(['Gglobal'], [0, 1, 2])
+        renamed_pspec.rename_gate_inplace('Gglobal', 'Grenamed')
+        self.assertEqual(renamed_pspec.gate_num_qubits('Grenamed'), 3)
+        self.assertNotIn('Gglobal', renamed_pspec.nonstd_gate_num_qudits)
+
         mapped_pspec = pspec.map_qubit_labels({0: 'Q0', 1: 'Q1', 2: 'Q2'})
         self.assertEqual(mapped_pspec.gate_num_qubits('Gglobal'), 3)
         self.assertEqual(mapped_pspec.compute_ops_on_qubits()[('Q0', 'Q1', 'Q2')],
@@ -103,6 +109,44 @@ class ProcessorSpecTester(BaseCase):
 
         with self.assertRaisesRegex(ValueError, "No unitary is available for arity-only gate"):
             pspec.clifford_symplectic_rep_of(Label('Gglobal', (0, 1, 2)))
+
+        self.assertEqual(pspec.compute_one_qubit_gate_relations(), ({}, {}))
+        self.assertEqual(pspec.compute_multiqubit_inversion_relations(), {})
+
+    @with_temp_path
+    def test_qudit_arity_only_nonstd_gate(self, pth):
+        pspec = QuditProcessorSpec(
+            ('Q0', 'Q1'), (3, 2), ['Gnonunitary'],
+            availability={'Gnonunitary': [('Q0', 'Q1')]},
+            nonstd_gate_num_qudits={'Gnonunitary': 2})
+
+        self.assertEqual(pspec.gate_num_qudits('Gnonunitary'), 2)
+        self.assertNotIn('Gnonunitary', pspec.gate_unitaries)
+        self.assertEqual(pspec.available_gatelabels('Gnonunitary', ('Q0', 'Q1')),
+                         (Label('Gnonunitary', ('Q0', 'Q1')),))
+
+        subset_pspec = pspec.subset(['Gnonunitary'], ['Q0', 'Q1'])
+        self.assertEqual(subset_pspec.gate_num_qudits('Gnonunitary'), 2)
+        self.assertNotIn('Gnonunitary', subset_pspec.gate_unitaries)
+
+        mapped_pspec = pspec.map_qudit_labels({'Q0': 'A', 'Q1': 'B'})
+        self.assertEqual(mapped_pspec.gate_num_qudits('Gnonunitary'), 2)
+        self.assertEqual(mapped_pspec.available_gatelabels('Gnonunitary', ('A', 'B')),
+                         (Label('Gnonunitary', ('A', 'B')),))
+
+        loaded_pspec = save_and_load(pspec, pth)
+        self.assertEqual(loaded_pspec.gate_num_qudits('Gnonunitary'), 2)
+        self.assertEqual(loaded_pspec.available_gatelabels('Gnonunitary', ('Q0', 'Q1')),
+                         (Label('Gnonunitary', ('Q0', 'Q1')),))
+
+    def test_arity_only_metadata_validation(self):
+        with self.assertRaisesRegex(ValueError, "both `nonstd_gate_unitaries` and `nonstd_gate_num_qudits`"):
+            QubitProcessorSpec(
+                1, ['Gbad'], nonstd_gate_unitaries={'Gbad': np.identity(2, 'd')},
+                nonstd_gate_num_qubits={'Gbad': 1})
+
+        with self.assertRaisesRegex(ValueError, "Gate arity for Gbad must be positive"):
+            QubitProcessorSpec(1, ['Gbad'], nonstd_gate_num_qubits={'Gbad': 0})
 
     @unittest.skip("REMOVEME")
     def test_construct_with_nonstd_gate_unitary_factory(self):
