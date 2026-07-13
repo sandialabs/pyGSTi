@@ -10,14 +10,24 @@ The TPInstrumentOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Tuple, Any, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
+
 import numpy as _np
 
 from pygsti.modelmembers import modelmember as _mm
 from pygsti.modelmembers.operations import DenseOperator as _DenseOperator
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.tools import slicetools as _slct
 
 
-class TPInstrumentOp(_DenseOperator):
+class TPInstrumentOp(_DenseOperator, _Torchable):
     """
     An element of a :class:`TPInstrument`.
 
@@ -133,6 +143,34 @@ class TPInstrumentOp(_DenseOperator):
         assert(self._ptr.shape == (self.dim, self.dim))
         self._ptr.flags.writeable = False
         self._ptr_has_changed()
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
+        """Record each relevant param_op together with its (constant) linear coefficient, mirroring
+        :meth:`_construct_matrix`:  ``Mi = D_{index+1} + MT`` for ``index < n-1`` (coeffs ``(1, 1)`` over
+        ``[MT, D_{index+1}]``) and ``M_{n-1} = -(n-2) MT - sum_i D_i`` for the last member (coeffs
+        ``(-(n-2), -1, ..., -1)`` over ``[MT, D_1, ..., D_{n-1}]``)."""
+        nEls = self.num_instrument_elements
+        if self.index < nEls - 1:
+            coeffs = (1.0, 1.0)
+        else:
+            coeffs = tuple([float(-(nEls - 2))] + [-1.0] * (nEls - 1))
+        member_data = []
+        for sub, inds, c in zip(self.submembers(), self._submember_rpindices, coeffs):
+            assert isinstance(sub, _Torchable), \
+                "Every TPInstrument param_op must be Torchable to use the Torch forward simulator; got %s" \
+                % type(sub).__name__
+            idx = _torch.as_tensor(_slct.to_array(inds), dtype=_torch.long, device=device)
+            member_data.append((type(sub), sub.stateless_data(real_dtype, device), idx, c))
+        return (tuple(member_data),)
+
+    @staticmethod
+    def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
+        (member_data,) = sd
+        terms = [c * stype.torch_base(ssd, t_param[idx]) for (stype, ssd, idx, c) in member_data]
+        out = terms[0]
+        for t in terms[1:]:
+            out = out + t
+        return out
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

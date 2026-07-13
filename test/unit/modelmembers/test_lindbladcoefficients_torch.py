@@ -1,9 +1,8 @@
 """
-Torchable de-risking for LindbladCoefficientBlock (GitHub issue 607, Approach A).
+Tests the helper classes behind LindbladCoefficientBlock's implementation of the Torchable API.
 
-Proves the design "sets up Torchable": each parameterization supplies a differentiable
-``block_data_torch`` (params -> block_data), exposed on the block as ``stateless_data`` /
-``torch_base``.  We check that
+Each parameterization supplies a differentiable ``block_data_torch`` (params -> block_data),
+exposed on the block as ``stateless_data`` / ``torch_base``.  We check that
 
   (1) ``torch_base(stateless_data(torch.float32, 'cpu'), torch.from_numpy(to_vector()))`` reproduces ``block_data``;
   (2) ``torch.func.jacrev(torch_base)`` equals the numpy ``deriv_wrt_params`` -- i.e. PyTorch
@@ -30,7 +29,9 @@ CASES = [('pp', 4, 'ham', 'elements'),
          ('pp', 4, 'other_diagonal', 'reldepol'),
          ('pp', 4, 'other', 'elements'),
          ('pp', 4, 'other', 'cholesky'),
-         ('gm', 9, 'other', 'cholesky')]
+         ('gm', 9, 'other', 'cholesky'),
+         ('pp', 4, 'other_unconstrained', 'elements'),
+         ('gm', 9, 'other_unconstrained', 'elements')]
 IDS = ["%s%d-%s-%s" % c for c in CASES]
 
 

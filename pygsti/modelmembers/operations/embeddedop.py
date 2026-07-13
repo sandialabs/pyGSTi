@@ -10,6 +10,15 @@ The EmbeddedOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Tuple, Any, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
+
 import itertools as _itertools
 
 import numpy as _np
@@ -17,12 +26,13 @@ import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers import modelmember as _modelmember
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
 from pygsti import SpaceT
 
 
-class EmbeddedOp(_LinearOperator):
+class EmbeddedOp(_LinearOperator, _Torchable):
     """
     An operation containing a single lower (or equal) dimensional operation within it.
 
@@ -363,6 +373,24 @@ class EmbeddedOp(_LinearOperator):
         self.embedded_op.from_vector(v, close, dirty_value)
         if self._rep_type == 'dense': self._update_denserep()
         self.dirty = dirty_value
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
+        # The scatter targets (i, j) and sources (gi, gj) are cached, parameter-independent quadruplets
+        # that mirror `to_dense`'s overwrite of `np.identity(dim)`.  `t_bg` is that identity with every
+        # covered (i, j) zeroed out. Parameters are pure pass-through to the embedded op.
+        quads = list(self._iter_matrix_elements('HilbertSchmidt'))
+        i, j, gi, gj = (_torch.tensor(c, dtype=_torch.long, device=device) for c in zip(*quads))
+        bg = _np.identity(self.state_space.dim)
+        bg[[q[0] for q in quads], [q[1] for q in quads]] = 0.0
+        t_bg = _torch.from_numpy(bg).to(dtype=real_dtype, device=device)
+        return (type(self.embedded_op), self.embedded_op.stateless_data(real_dtype, device), t_bg, i, j, gi, gj)
+
+    @staticmethod
+    def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
+        etype, esd, t_bg, i, j, gi, gj = sd
+        A = etype.torch_base(esd, t_param)  # whole t_param: params are pass-through
+        # Destination pairs (i, j) are unique, so this non-accumulating index_put is autograd-safe.
+        return _torch.zeros_like(t_bg).index_put((i, j), A[gi, gj]) + t_bg
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

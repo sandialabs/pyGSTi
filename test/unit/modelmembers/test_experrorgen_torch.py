@@ -1,9 +1,9 @@
 """
-Torchable wiring for the Lindblad op chain (GitHub issue 607).
+Test that higher-level classes used in exponentiated-Lindblad parameterizations
+correctly implement the Torchable API. Tests for lower-level classes can be found
+in test_lindbladcoefficients_torch.py.
 
-The block-level Torchable plumbing is checked in ``test_lindbladcoefficients_torch.py``.  This file
-covers the operation classes that compose it so that ``TorchForwardSimulator`` can run on a CPTPLND/GLND
-model: ``LindbladErrorgen`` -> ``ExpErrorgenOp`` -> ``ComposedOp``.  For each we check that
+For the composition ``LindbladErrorgen`` -> ``ExpErrorgenOp`` -> ``ComposedOp`, we check ...
 
   (1) ``type(obj).torch_base(obj.stateless_data(torch.float32, 'cpu'), torch.from_numpy(obj.to_vector()))`` reproduces the
       numpy ``obj.to_dense('HilbertSchmidt')`` (error generator for the errorgen, ``exp(L)`` process
@@ -24,9 +24,10 @@ from pygsti.modelmembers.operations.experrorgenop import ExpErrorgenOp
 from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen
 
 # (parameterization, expected non-Hamiltonian block param_mode) -- GLND is unconstrained ('elements'),
-# CPTPLND is the CP-constrained Cholesky parameterization ('cholesky').  Both have >1 coefficient block,
+# CPTPLND is the CP-constrained Cholesky parameterization ('cholesky'), and GLNDU is the flat,
+# per-elementary-errorgen 'other_unconstrained' block ('elements').  All have >1 coefficient block,
 # which exercises the per-block parameter slicing in LindbladErrorgen.torch_base.
-MODES = ['GLND', 'CPTPLND']
+MODES = ['GLND', 'CPTPLND', 'GLNDU']
 
 
 def _noisy_cptp_model(mode, seed=4):

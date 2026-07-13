@@ -11,36 +11,49 @@ The ComposedPOVMEffect class and supporting functionality.
 #***************************************************************************************************
 
 
+from __future__ import annotations
+from typing import Tuple, Any, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
+
 import numpy as _np
 
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.baseobjs import _compatibility as _compat
 from pygsti import SpaceT
 
-class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
+
+class ComposedPOVMEffect(_POVMEffect, _Torchable):  # , _ErrorMapContainer
     """
-    TODO: update docstring
-    A Lindblad-parameterized POVMEffect (that is also expandable into terms).
+    A POVM effect formed by composing a static "ideal" effect vector with a parameterized error
+    map that acts on the state immediately before that effect is applied.
+
+    `to_dense()` computes ``errormap.to_dense().conj().T @ static_effect.to_dense()`` -- i.e.,
+    the error map acts on the state before `static_effect` projects it.  All free parameters
+    belong to `errormap`; `static_effect` is fixed with zero parameters. This is also expandable
+    into Taylor-series terms via `taylor_order_terms`.
 
     Parameters
     ----------
-    pure_vec : numpy array or POVMEffect
-        An array or POVMEffect in the *full* density-matrix space (this
-        vector will have dimension 4 in the case of a single qubit) which
-        represents a pure-state preparation or projection.  This is used as
-        the "base" preparation or projection that is followed or preceded
-        by, respectively, the parameterized Lindblad-form error generator.
-        (This argument is *not* copied if it is a POVMEffect.  A numpy array
-        is converted to a new static POVM effect.)
+    static_effect : numpy array or POVMEffect
+        An array or zero-parameter POVMEffect in the *full* density-matrix space (this
+        vector will have dimension 4 in the case of a single qubit) representing the "ideal"
+        projection.  (This argument is *not* copied if it is a POVMEffect.  A numpy array is
+        converted to a new static POVM effect.)
 
-    errormap : MapOperator
-        The error generator action and parameterization, encapsulated in
-        a gate object.  Usually a :class:`LindbladOp`
-        or :class:`ComposedOp` object.  (This argument is *not* copied,
-        to allow ComposedPOVMEffects to share error generator
-        parameters with other gates and spam vectors.)
+    errormap : LinearOperator
+        The error generator action and parameterization, encapsulated in an operator object.
+        Usually a Lindblad-exponentiated error generator (e.g. :class:`ExpErrorgenOp`) or a
+        :class:`ComposedOp`, but any :class:`LinearOperator` works.  (This argument is *not*
+        copied, to allow ComposedPOVMEffects to share error-map parameters with other gates
+        and SPAM vectors.)
     """
 
     def __init__(self, static_effect, errormap):
@@ -139,6 +152,20 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         # map that acts on the *state* vector before dmVec acts
         # as an effect:  E.T -> dot(E.T,errmap) ==> E -> dot(errmap.T,E)
         return _np.dot(self.error_map.to_dense(on_space).conjugate().T, self.effect_vec.to_dense(on_space))
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
+        # All free parameters belong to the error map; the static effect vector is baked in.
+        # Mirrors to_dense: torch_base = error_map_superop.T @ static_effect (error maps are real on
+        # HS space, so the transpose is the numpy .conjugate().T).
+        static_vec = _np.ascontiguousarray(self.effect_vec.to_dense('HilbertSchmidt'))
+        t_effect = _torch.from_numpy(static_vec).to(dtype=real_dtype, device=device)
+        return (type(self.error_map), self.error_map.stateless_data(real_dtype, device), t_effect)
+
+    @staticmethod
+    def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
+        emap_type, emap_sd, t_effect = sd
+        emap = emap_type.torch_base(emap_sd, t_param)  # whole t_param: params delegate to error_map
+        return emap.mT @ t_effect
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """

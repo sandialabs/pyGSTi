@@ -221,7 +221,6 @@ class _DiagElements(_RealVectorElements):
         return [f"{lbl} stochastic coefficient" for lbl in blk._bel_labels]
 
 
-# TODO: Make Torchable
 class _EEGVectorElements(_RealVectorElements):
     """Unconstrained real-vector parameterization for blocks whose coefficients are in one-to-one
     correspondence with an explicit list of elementary error generators (block_data == v).  Like
@@ -231,6 +230,11 @@ class _EEGVectorElements(_RealVectorElements):
 
     def block_data_jacobian(self, blk, v):
         return _np.identity(len(blk._eeg_labels), 'd')
+
+    def torch_stateless_data(self, blk, real_dtype, device):
+        # Sized by _eeg_labels (not _bel_labels): these blocks have one parameter per elementary
+        # error generator.  The identity block_data_torch is inherited from _RealVectorElements.
+        return (len(blk._eeg_labels),)
 
     def param_labels(self, blk):
         labels = []

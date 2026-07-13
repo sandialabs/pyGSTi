@@ -52,8 +52,6 @@ class StatelessCircuit:
         self.op_labels  = spc.circuit_without_povm[1:]
         self.povm_label = spc.povm_label
         self.outcome_probs_dim = len(spc.effect_labels)
-        # ^ This definition of outcome_probs_dim will need to be changed if/when
-        #   we extend any Instrument class to be Torchable.
         return
 
 
@@ -82,16 +80,27 @@ class StatelessModelCircuitStore:
 
 
     def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout, dtype: torch.dtype, device: torch.Device):
+        from itertools import chain as _chain
+        from pygsti.modelmembers.instruments.instrument import Instrument as _Instrument
+        from pygsti.modelmembers.instruments.tpinstrument import TPInstrument as _TPInstrument
+
         circuits = []
         self.outcome_probs_dim = 0
         for _, circuit, outcomes in layout.iter_unique_circuits():
             expanded_circuits = model.expand_instruments_and_separate_povm(circuit, outcomes)
-            if len(expanded_circuits) > 1:
-                raise NotImplementedError()
-            spc = next(iter(expanded_circuits))
-            c = StatelessCircuit(spc)
-            circuits.append(c)
-            self.outcome_probs_dim += c.outcome_probs_dim
+            # A circuit containing instrument layer(s) expands to one SeparatePOVMCircuit per
+            # combination of instrument-member outcomes; each becomes its own StatelessCircuit.  The
+            # layout lays this circuit's outcomes out as the concatenation of the per-SPC outcome tuples
+            # in expansion order, so we guard that the layout's outcome order matches -- a dataset-ordered
+            # layout could differ, which would silently mis-map probabilities to outcomes.
+            assert tuple(_chain(*expanded_circuits.values())) == tuple(outcomes), (
+                "TorchForwardSimulator requires a circuit's layout outcome order to match its "
+                "instrument-expansion order, but they differ (e.g. a dataset-ordered layout)."
+            )
+            for spc in expanded_circuits:
+                c = StatelessCircuit(spc)
+                circuits.append(c)
+                self.outcome_probs_dim += c.outcome_probs_dim
         self.circuits = circuits
 
         # We need to verify assumptions on what layout.iter_unique_circuits() returns.
@@ -111,10 +120,15 @@ class StatelessModelCircuitStore:
             v_prev = v
         assert self.outcome_probs_dim == v_prev.stop
         self.param_metadata = []
+        self.instrument_expansions = {}
+        # ^ maps an instrument's model label -> the tuple of its expanded per-member op labels
+        #   (lbl + "_" + key, in obj.keys() order == the order Instrument.torch_base stacks members).
         for lbl, obj in model._iter_parameterized_objs():
             sld = obj.stateless_data(dtype, device)
             param_data = (lbl, type(obj), sld)
             self.param_metadata.append(param_data)
+            if isinstance(obj, (_Instrument, _TPInstrument)):
+                self.instrument_expansions[lbl] = tuple(lbl + "_" + k for k in obj.keys())
 
         self.params_dim = 0
         self.free_param_sizes = []
@@ -138,9 +152,13 @@ class StatelessModelCircuitStore:
             vec = obj.to_vector()
             vec_size = vec.size
             vec = torch.from_numpy(vec)
-            assert gpind[0] == prev_idx and gpind[-1] == prev_idx + vec_size - 1
-            # ^ We should have gpind = (prev_idx, prev_idx + 1, ..., prev_idx + vec.size - 1).
-            #   That assert checks a cheap necessary condition that this holds.
+            if vec_size > 0:
+                assert gpind[0] == prev_idx and gpind[-1] == prev_idx + vec_size - 1
+                # ^ We should have gpind = (prev_idx, prev_idx + 1, ..., prev_idx + vec.size - 1).
+                #   That assert checks a cheap necessary condition that this holds.
+            # ^ A 0-parameter member (e.g. ComputationalBasisPOVM) has an empty gpindices array, so
+            #   there is nothing to check; we still append its empty tensor below so that free_params
+            #   stays aligned with param_metadata.
             prev_idx += vec_size
             if self.param_metadata[i][0] != lbl:
                 message = """
@@ -176,7 +194,15 @@ class StatelessModelCircuitStore:
             label, type_handle, stateless_data = self.param_metadata[i]
             param_t = type_handle.torch_base(stateless_data, val)
             torch_bases[label] = param_t
-        
+
+            # An instrument's torch_base is a stacked (n_members, d^2, d^2) tensor.  Expose each member
+            # under its expanded op label (Iz_plus, Iz_minus, ...) so circuit_probs_from_torch_bases can
+            # look them up unchanged; slicing the stacked tensor keeps autograd flowing to the params.
+            expansions = self.instrument_expansions.get(label)
+            if expansions is not None:
+                for j, expanded_lbl in enumerate(expansions):
+                    torch_bases[expanded_lbl] = param_t[j]
+
         return torch_bases
 
     def circuit_probs_from_torch_bases(self, torch_bases: Dict[Label, torch.Tensor]) -> torch.Tensor:
