@@ -93,10 +93,11 @@ class StatelessModelCircuitStore:
             # layout lays this circuit's outcomes out as the concatenation of the per-SPC outcome tuples
             # in expansion order, so we guard that the layout's outcome order matches -- a dataset-ordered
             # layout could differ, which would silently mis-map probabilities to outcomes.
-            assert tuple(_chain(*expanded_circuits.values())) == tuple(outcomes), (
-                "TorchForwardSimulator requires a circuit's layout outcome order to match its "
-                "instrument-expansion order, but they differ (e.g. a dataset-ordered layout)."
-            )
+            if tuple(_chain(*expanded_circuits.values())) != tuple(outcomes):
+                raise ValueError(
+                    "TorchForwardSimulator requires a circuit's layout outcome order to match its "
+                    "instrument-expansion order, but they differ (e.g. a dataset-ordered layout)."
+                )
             for spc in expanded_circuits:
                 c = StatelessCircuit(spc)
                 circuits.append(c)

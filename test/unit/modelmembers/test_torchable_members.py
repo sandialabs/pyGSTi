@@ -182,6 +182,36 @@ def test_rootconj_torch_jacobian():
     assert np.allclose(J, Jfd, atol=1e-5)
 
 
+def test_rootconj_torch_base_value_boundary_spectrum():
+    """
+    Consider a RootConjOperator built from *typical* projective effects (spectrum at the 0/1 boundary).
+    Perturbing pushes eigenvalues slightly outside [0, 1], so the numpy reference (rootconj_superop)
+    emits NumericalDomainWarning that must be suppressed. The torch path clamps silently.
+    Since both clip to [0, 1], the value returned by this module's private `_value` helper
+    should match the result of `to_dense()`.
+    """
+    model = std.target_model()
+    E0 = np.diag([1.0, 0.0]).astype(complex)
+    E1 = np.diag([0.0, 1.0]).astype(complex)
+    instr = Instrument.from_effects({'p0': E0, 'p1': E1}, model.basis)
+    rcop = instr['p0'].factorops[0]
+    assert isinstance(rcop, RootConjOperator)
+
+    # Let eigenvalues stray outside [0, 1] far enough to *warn* without *raising*, so a
+    # realistically-sized perturbation stays in the boundary/clamp regime we mean to exercise.
+    rcop.EIGTOL_ERROR = 1.0
+
+    rng = np.random.default_rng(19)
+    v = rcop.to_vector() + 0.02 * rng.standard_normal(rcop.num_params)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')  # numpy path warns (NumericalDomainWarning) at the boundary
+        rcop.from_vector(v)
+        expected = rcop.to_dense('HilbertSchmidt')
+    actual = _value(rcop)
+
+    assert np.allclose(actual, expected, atol=1e-9)
+
+
 # --------------------------------------------------------------------------------------------------
 # Instrument
 # --------------------------------------------------------------------------------------------------

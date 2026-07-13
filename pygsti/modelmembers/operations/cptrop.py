@@ -184,6 +184,12 @@ class RootConjOperator(LinearOperator, _Torchable):
             the eigenvalues to ``[0, 1]`` is also subgradient-ambiguous at eigenvalues of exactly 0 or
             1.  Use torch's reverse-mode AD for this operator only for effects whose spectra are interior
             to ``(0, 1)`` and non-degenerate; the value and forward-mode AD paths have no such restriction.
+
+        Unlike the numpy reference :func:`~pygsti.tools.optools.rootconj_superop` -- which warns
+        when an eigenvalue of ``E`` strays outside ``[0, 1]`` by more than :attr:`EIGTOL_WARNING`
+        and raises a ``ValueError`` past :attr:`EIGTOL_ERROR` -- this path clamps silently at any
+        magnitude of violation.  So under torch-driven optimization it can keep returning
+        (clamped) values in regions where the numpy path would refuse to evaluate.
         """
         etype, esd, B, toMx, fromMx = sd
         v = etype.torch_base(esd, t_param).to(B.dtype)  # whole t_param: params delegate to the effect

@@ -147,6 +147,13 @@ class FullArbitraryOp(_DenseOperator, _Torchable):
         self.dirty = dirty_value
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[int]:
+        # to_vector() returns self._ptr.flatten(), which the Torch forward simulator casts to a real
+        # dtype -- silently discarding any imaginary part.  FullArbitraryOp permits a complex _ptr
+        # (see EPSILON_POWER_FOR_COMPLEX_CAST), so guard that this op is real-valued.  Whether an
+        # ndarray holds real or complex data is fixed by its dtype and can't change without
+        # reallocating the array, so this check isn't meaningfully stateful.
+        assert _np.isrealobj(self._ptr), \
+            "The Torch forward simulator does not support a complex-valued FullArbitraryOp."
         return (self.dim,)
 
     @staticmethod

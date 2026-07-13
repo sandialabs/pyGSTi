@@ -311,9 +311,11 @@ class ForwardSimConsistencyTester(TestCase):
             MatrixForwardSimulator()
         ]
         if TorchForwardSimulator.ENABLED:
-            sims.append(TorchForwardSimulator())
             import torch
+            # TorchForwardSimulator.__init__ captures DEFAULT_REAL_TYPE at construction time, so we
+            # must overwrite it with float64 *before* constructing the sim; tearDown restores it.
             torchfwdsim.DEFAULT_REAL_TYPE = torch.float64
+            sims.append(TorchForwardSimulator())
         return sims
 
     @staticmethod

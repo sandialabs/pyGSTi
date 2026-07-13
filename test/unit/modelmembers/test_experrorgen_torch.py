@@ -3,7 +3,7 @@ Test that higher-level classes used in exponentiated-Lindblad parameterizations
 correctly implement the Torchable API. Tests for lower-level classes can be found
 in test_lindbladcoefficients_torch.py.
 
-For the composition ``LindbladErrorgen`` -> ``ExpErrorgenOp`` -> ``ComposedOp`, we check ...
+For the composition ``LindbladErrorgen`` -> ``ExpErrorgenOp`` -> ``ComposedOp``, we check that
 
   (1) ``type(obj).torch_base(obj.stateless_data(torch.float32, 'cpu'), torch.from_numpy(obj.to_vector()))`` reproduces the
       numpy ``obj.to_dense('HilbertSchmidt')`` (error generator for the errorgen, ``exp(L)`` process
