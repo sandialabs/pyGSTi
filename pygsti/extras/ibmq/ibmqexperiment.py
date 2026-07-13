@@ -25,17 +25,19 @@ try:
     import qiskit as _qiskit
     from qiskit.providers import JobStatus as _JobStatus
     from qiskit.providers.fake_provider import GenericBackendV2 as _GenericBackendV2
+    from qiskit.transpiler import PassManager as _PassManager
+    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
 except:
     _qiskit = None
     _GenericBackendV2 = None
 
 # Try to load IBM Runtime
 try: 
+    from qiskit_ibm_runtime.transpiler.passes import ConvertToMidCircuitMeasure
     from qiskit_ibm_runtime import SamplerV2 as _Sampler
     from qiskit_ibm_runtime import Session as _Session
     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
     from qiskit_ibm_runtime import IBMBackend as _IBMBackend
-    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
 except:
     _Sampler = None
 
@@ -66,7 +68,14 @@ from pygsti.io import metadir as _metadir
 
 
 # Needs to be defined first for multiprocessing reasons
-def _transpile_batch(circs, pass_manager, direct_to_qiskit, qasm_convert_kwargs=None, qiskit_convert_kwargs=None):
+def _transpile_batch(
+    circs,
+    pass_manager,
+    direct_to_qiskit,
+    qasm_convert_kwargs=None,
+    qiskit_convert_kwargs=None,
+    mcm_pass_manager=None,
+):
     batch = []
     for circ in circs:
         # TODO: Replace this with direct to qiskit
@@ -76,10 +85,38 @@ def _transpile_batch(circs, pass_manager, direct_to_qiskit, qasm_convert_kwargs=
             pygsti_openqasm_circ = circ.convert_to_openqasm(**qasm_convert_kwargs)
             qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
 
+            num_IMs = circ.str.count('Iz')
+            if num_IMs > 0:
+                im_dict = {i: '?' for i in range(num_IMs)}
+            else:
+                im_dict = None
+
+            ordered_data_indices = [
+                num_IMs + (
+                    int(label[1:]) if (
+                        isinstance(label, str)
+                        and label[0] == 'Q'
+                        and label[1:].isnumeric()
+                    ) else label
+                )
+                for label in circ.line_labels
+            ]
+
+            qiskit_qc.metadata = {
+                'im_dict': im_dict,
+                'ordered_data_indices': ordered_data_indices
+            }
+
         batch.append(qiskit_qc)
-    
-    # Run pass manager on batch
-    return pass_manager.run(batch)
+
+    # First run the normal transpilation flow.
+    out_batch = pass_manager.run(batch)
+
+    # Then convert eligible non-terminal measure ops to measure_2.
+    if mcm_pass_manager is not None:
+        out_batch = mcm_pass_manager.run(out_batch)
+
+    return out_batch
 
 
 
@@ -281,61 +318,65 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         was a GST experiment, it can input into a GST protocol object that will
         analyze the data).
         """
+        
         assert len(self.qjobs) == len(self.job_ids), \
             "Mismatch between jobs and job ids! If loading from file, use the regen_jobs=True option in from_dir()."
-        
-        def reverse_dict_key_bits(counts_dict):
-            new_dict = {}
-            for key in counts_dict.keys():
-                new_dict[key[::-1]] = counts_dict[key]
-            return new_dict
+      
+        def to_labeled_counts(input_dict, ordered_data_indices, mcm_dict):
 
-        # NOTE: This is probably duplicative of some other code in pyGSTi
-        def partial_trace(ordered_target_indices, input_dict):
+            def qiskit_bitstring_to_outcome_label(bs, ordered_data_indices, mcm_dict):
+                key_list = []
+                if mcm_dict is not None:
+                    for idx, qubits in mcm_dict.items():
+                        idx = int(idx) # precaution due to qpy serialization, which will take dictionary keys that are integers and cast them to string
+                        # key_list.append(f'p{qubits}:{bs[idx]}')
+                        key_list.append(f'p{bs[idx]}')
+                
+                data_string = ''
+                for idx in ordered_data_indices:
+                    data_string += bs[idx]
+
+                key_list.append(data_string)
+                return tuple(key_list)
+                        
+
             output_dict = _defaultdict(int)
-            for bitstring in input_dict.keys():
-                new_string = ''
-                for index in ordered_target_indices:
-                    new_string += bitstring[index]
 
-                output_dict[new_string] += input_dict[bitstring]
-                # try:
-                #     output_dict[new_string] += input_dict[bitstring]
-                # except:
-                #     output_dict[new_string] = input_dict[bitstring]
+            for bitstring, counts in input_dict.items():
+                outcome_label = qiskit_bitstring_to_outcome_label(bs=bitstring[::-1],
+                                                                ordered_data_indices=ordered_data_indices,
+                                                                mcm_dict=mcm_dict)
+                output_dict[outcome_label] += counts
+
             return output_dict
+        
 
-        #if len(self.batch_results):
-        #    print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
-
-        #get results from backend jobs and add to dict
+        # get results from backend jobs and add to dict
         ds = _data.DataSet()
-        # for exp_idx in range(len(self.batch_results), len(self.qjobs)):
         for exp_idx in range(0, len(self.qjobs)):
             qjob = self.qjobs[exp_idx]
             print(f"Querying IBMQ for results objects for batch {exp_idx + 1}...")
             batch_result = qjob.result()
 
             for i, circ in enumerate(self.pygsti_circuit_batches[exp_idx]):
-                #ordered_target_indices = _np.argsort(_np.argsort([int(label[1:]) for label in circ.line_labels]))
-                # ordered_target_indices = [self.processor_spec.qubit_labels.index(q) for q in circ.line_labels]
-                ordered_target_indices = list(range(len(circ.line_labels)))
-                # pygsti labels are sorted lexicographically, qiskit ordering is numeric. #TODO: this assumes that we only measure the pyGSTi qubits on the device, e.g., if the pyGSTi circuit only uses Q100 and Q101, then we only measure device qubits 100 and 101. It may be useful to make this more flexible and associate some kind of 'measured_qubits' field with a metadata dict on each pyGSTi circuit (or transpiled qiskit circ).
 
-                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result[i].data.cr.get_counts()))#TODO: make the name of the measurement register a kwarg (often it is named 'meas' and not 'cr')
-                # print(counts_data)
+                circ_metadata = batch_result[i].metadata['circuit_metadata']
+                im_dict = circ_metadata['im_dict']
+                ordered_data_indices = circ_metadata['ordered_data_indices']
 
+                counts_data = to_labeled_counts(input_dict=batch_result[i].data.cr.get_counts(),
+                                                    ordered_data_indices=ordered_data_indices,
+                                                    mcm_dict=im_dict)
+                
                 ds.add_count_dict(circ, counts_data)
 
             self.batch_results.append(batch_result)
 
-            if not self.disable_checkpointing:
-                self._write_checkpoint()
-
         self.data = _ProtocolData(self.edesign, ds)
 
         if not self.disable_checkpointing:
-            self.data.write(self.checkpoint_path, edesign_already_written=True)
+            self.write()
+
 
     def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_session=None):
         """
@@ -528,33 +569,33 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 raise RuntimeError("Ran out of max attempts and job was still not submitted successfully")
 
     def transpile(self,
-                  ibmq_backend,
-                  direct_to_qiskit=False,
-                  qiskit_pass_kwargs=None,
-                  qasm_convert_kwargs=None,
-                  qiskit_convert_kwargs=None,
-                  num_workers=1,
-                  ):
+              ibmq_backend,
+              direct_to_qiskit=False,
+              qiskit_pass_kwargs=None,
+              qasm_convert_kwargs=None,
+              qiskit_convert_kwargs=None,
+              num_workers=1, use_ibm_mcm=True
+              ):
         """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
 
         Parameters
         ----------
         ibmq_backend:
             IBM backend to use during Qiskit transpilation
-        
+
         direct_to_qiskit: bool, optional
             Whether to use OpenQASM as an intermediary in the conversion from pyGSTi circut
             to Qiskit circuit. If True, `qiskit_convert_kwargs` is passed to
             `Circuit.convert_to_qiskit`. If False, the pyGSTi circuits are first converted to
             OpenQASM and then converted into Qiskit circuits.
-        
+
         qiskit_pass_kwargs: dict, optional
             Only used if direct_to_qiskit is False.
             Additional kwargs to pass in to `generate_preset_pass_manager`.
             If not defined, the default is {'seed_transpiler': self.seed, 'optimization_level': 0,
             'basis_gates': ibmq_backend.operation_names}
             Note that "optimization_level" is a required argument to the pass manager.
-        
+
         qasm_convert_kwargs: dict, optional
             Only used if direct_to_qiskit is False.
             Additional kwargs to pass in to `Circuit.convert_to_openqasm`.
@@ -577,94 +618,155 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         if direct_to_qiskit:
             if qiskit_convert_kwargs is None:
                 qiskit_convert_kwargs = {}
-            qiskit_convert_kwargs['num_qubits'] = qiskit_convert_kwargs.get('num_qubits', self.processor_spec.num_qubits)
-            qiskit_convert_kwargs['qubit_conversion'] = qiskit_convert_kwargs.get('qubit_conversion', 'remove-Q')
-            qiskit_convert_kwargs['block_between_layers'] = qiskit_convert_kwargs.get('block_between_layers', True)
-            qiskit_convert_kwargs['qubits_to_measure'] = qiskit_convert_kwargs.get('qubits_to_measure', 'active')
+            qiskit_convert_kwargs['num_qubits'] = qiskit_convert_kwargs.get(
+                'num_qubits', self.processor_spec.num_qubits
+            )
+            qiskit_convert_kwargs['qubit_conversion'] = qiskit_convert_kwargs.get(
+                'qubit_conversion', 'remove-Q'
+            )
+            qiskit_convert_kwargs['block_between_layers'] = qiskit_convert_kwargs.get(
+                'block_between_layers', True
+            )
+            qiskit_convert_kwargs['qubits_to_measure'] = qiskit_convert_kwargs.get(
+                'qubits_to_measure', 'active'
+            )
 
         else:
             if qasm_convert_kwargs is None:
                 qasm_convert_kwargs = {}
-            qasm_convert_kwargs['num_qubits'] = qasm_convert_kwargs.get('num_qubits', self.processor_spec.num_qubits)
-            qasm_convert_kwargs['standard_gates_version'] = qasm_convert_kwargs.get('standard_gates_version', 'x-sx-rz')
-            
+            qasm_convert_kwargs['num_qubits'] = qasm_convert_kwargs.get(
+                'num_qubits', self.processor_spec.num_qubits
+            )
+            qasm_convert_kwargs['standard_gates_version'] = qasm_convert_kwargs.get(
+                'standard_gates_version', 'x-sx-rz'
+            )
+
         if qiskit_pass_kwargs is None:
             qiskit_pass_kwargs = {}
-        qiskit_pass_kwargs['seed_transpiler'] = qiskit_pass_kwargs.get('seed_transpiler', self.seed)
-        qiskit_pass_kwargs['layout_method'] = qiskit_pass_kwargs.get('layout_method', 'trivial')
-        qiskit_pass_kwargs['routing_method'] = qiskit_pass_kwargs.get('routing_method', 'none')
-        qiskit_pass_kwargs['optimization_level'] = qiskit_pass_kwargs.get('optimization_level', 1)
-        qiskit_pass_kwargs['basis_gates'] = qiskit_pass_kwargs.get('basis_gates', ibmq_backend.operation_names)
+
+        qiskit_pass_kwargs['seed_transpiler'] = qiskit_pass_kwargs.get(
+            'seed_transpiler', self.seed
+        )
+        qiskit_pass_kwargs['layout_method'] = qiskit_pass_kwargs.get(
+            'layout_method', 'trivial'
+        )
+        qiskit_pass_kwargs['routing_method'] = qiskit_pass_kwargs.get(
+            'routing_method', 'none'
+        )
+        qiskit_pass_kwargs['optimization_level'] = qiskit_pass_kwargs.get(
+            'optimization_level', 1
+        )
+
+        # Safety change: copy operation_names so we don't mutate the backend-owned list.
+        operation_names = list(ibmq_backend.operation_names)
+        for op in ['measure_2', 'reset_2']:
+            if op in operation_names:
+                operation_names.remove(op)
+
+        qiskit_pass_kwargs['basis_gates'] = qiskit_pass_kwargs.get(
+            'basis_gates', operation_names
+        )
 
         print(f"transpiling to basis gates {qiskit_pass_kwargs['basis_gates']}")
 
         if not len(self.pygsti_circuit_batches):
-            rand_state = _np.random.RandomState(self.seed) # TODO: Should this be a different seed as transpiler?
+            rand_state = _np.random.RandomState(self.seed)  # TODO: separate seed?
 
             if self.randomized_order:
                 if self.remove_duplicates:
                     circuits = list(set(circuits))
                 rand_state.shuffle(circuits)
             else:
-                assert(not self.remove_duplicates), "Can only remove duplicates if randomizing order!"
+                assert(not self.remove_duplicates), \
+                    "Can only remove duplicates if randomizing order!"
 
             for batch_idx in range(num_batches):
-                start = batch_idx*self.circuits_per_batch
-                end = min(len(circuits), (batch_idx+1)*self.circuits_per_batch)
+                start = batch_idx * self.circuits_per_batch
+                end = min(len(circuits), (batch_idx + 1) * self.circuits_per_batch)
                 self.pygsti_circuit_batches.append(circuits[start:end])
-            
+
             if not self.disable_checkpointing:
                 chkpt_path = _pathlib.Path(self.checkpoint_path) / "ibmqexperiment"
                 with open(chkpt_path / 'meta.json', 'r') as f:
                     metadata = _json.load(f)
-                
-                pcbdata = _metadir._write_auxfile_member(chkpt_path, 'pygsti_circuit_batches', self.auxfile_types['pygsti_circuit_batches'], self.pygsti_circuit_batches)
+
+                pcbdata = _metadir._write_auxfile_member(
+                    chkpt_path,
+                    'pygsti_circuit_batches',
+                    self.auxfile_types['pygsti_circuit_batches'],
+                    self.pygsti_circuit_batches
+                )
                 if 'pygsti_circuit_batches' in metadata:
                     metadata['pygsti_circuit_batches'] = pcbdata
-                
+
                 with open(chkpt_path / 'meta.json', 'w') as f:
                     _json.dump(metadata, f)
 
         if len(self.qiskit_isa_circuit_batches):
-            print(f'Already completed transpilation of {len(self.qiskit_isa_circuit_batches)}/{num_batches} circuit batches')
+            print(
+                f'Already completed transpilation of '
+                f'{len(self.qiskit_isa_circuit_batches)}/{num_batches} circuit batches'
+            )
             if len(self.qiskit_isa_circuit_batches) == num_batches:
                 return
-            
+
         # Set up parallel tasks
-        tasks = [self.pygsti_circuit_batches[i] for i in range(len(self.qiskit_isa_circuit_batches), num_batches)]
+        tasks = [
+            self.pygsti_circuit_batches[i]
+            for i in range(len(self.qiskit_isa_circuit_batches), num_batches)
+        ]
 
-        # we are running transpile_batch where the only arg that changes
-        # across ranks is the circuits. Thus, create a new function with partially applied kwargs
-        # This function now only takes circs as an argument (which are our task elements above)
-
+        # Build the main preset pass manager.
         pm = _pass_manager(**qiskit_pass_kwargs)
 
-        task_fn = _partial(_transpile_batch,
-                        pass_manager=pm,
-                        qasm_convert_kwargs=qasm_convert_kwargs,
-                        direct_to_qiskit=direct_to_qiskit,
-                        qiskit_convert_kwargs=qiskit_convert_kwargs)
+        # Build a second pass manager that converts non-terminal Measure ops
+        # into measure_2, but only if the backend advertises measure_2.
+        mcm_pm = None
+        if 'measure_2' in ibmq_backend.operation_names and use_ibm_mcm:
+            mcm_pm = _PassManager([
+                ConvertToMidCircuitMeasure(
+                    target=ibmq_backend.target,
+                    mcm_name='measure_2',
+                )
+            ])
+
+        # We are running _transpile_batch where the only arg that changes
+        # across ranks is the circuits. Thus, create a new function with
+        # partially applied kwargs.
+        task_fn = _partial(
+            _transpile_batch,
+            pass_manager=pm,
+            mcm_pass_manager=mcm_pm,
+            qasm_convert_kwargs=qasm_convert_kwargs,
+            direct_to_qiskit=direct_to_qiskit,
+            qiskit_convert_kwargs=qiskit_convert_kwargs,
+        )
 
         for task in _tqdm.tqdm(tasks):
             self.qiskit_isa_circuit_batches.append(task_fn(task))
 
-                # Save single batch
+            # Save single batch
             if not self.disable_checkpointing:
                 chkpt_path = _pathlib.Path(self.checkpoint_path) / "ibmqexperiment"
                 with open(chkpt_path / 'meta.json', 'r') as f:
                     metadata = _json.load(f)
 
                 filenm = f"qiskit_isa_circuit_batches{len(self.qiskit_isa_circuit_batches)-1}"
-                _metadir._write_auxfile_member(chkpt_path, filenm, 'qpy', self.qiskit_isa_circuit_batches[-1])    
+                _metadir._write_auxfile_member(
+                    chkpt_path,
+                    filenm,
+                    'qpy',
+                    self.qiskit_isa_circuit_batches[-1]
+                )
                 if 'qiskit_isa_circuit_batches' in metadata:
                     metadata['qiskit_isa_circuit_batches'].append(None)
-                
+
                 with open(chkpt_path / 'meta.json', 'w') as f:
                     _json.dump(metadata, f)
 
     def write(self, dirname=None):
         """
-        Writes to disk, storing both the pyGSTi DataProtocol object in pyGSTi's standard
+        Writes to disk, storing both the pyGSTi ProtocolData object in pyGSTi's standard
         format and saving all of the IBM Q submission information stored in this object,
         written into the subdirectory 'ibmqexperiment'.
 

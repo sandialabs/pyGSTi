@@ -541,7 +541,6 @@ class StateSpace(_NicelySerializable):
 
         return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
     
-
     def difference(self, other_state_space):
         """
         Create a state space whose labels are the difference of the labels of this space and one other.
@@ -1394,6 +1393,7 @@ class ExplicitStateSpace(StateSpace):
         return ' + '.join(
             ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.label_types[lbl] == 'C') else '')
                        for lbl in tpb]) for tpb in self._labels])
+
 
 def default_space_for_dim(dim):
     """

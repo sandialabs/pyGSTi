@@ -1320,8 +1320,12 @@ class GatesVsTargetTable(WorkspaceTable):
                 if target_model is None:
                     qty = _ReportableQty(_np.nan)
                 else:
-                    qty = _reportables.evaluate_opfn_by_name(
-                        disp, model, target_model, gl, confidence_region_info)
+                    try:
+                        qty = _reportables.evaluate_opfn_by_name(
+                            disp, model, target_model, gl, confidence_region_info)
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s op in gates-vs-target table!" % (disp, gl))
+                        qty = _ReportableQty(_np.nan)
                 #tm = _time.time()-tStart #DEBUG
                 #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
                 row_data.append(qty)
@@ -1343,8 +1347,12 @@ class GatesVsTargetTable(WorkspaceTable):
                 if target_model is None:
                     qty = _ReportableQty(_np.nan)
                 else:
-                    qty = _reportables.evaluate_instrumentfn_by_name(
-                        disp, model, target_model, il, confidence_region_info)
+                    try:
+                        qty = _reportables.evaluate_instrumentfn_by_name(
+                            disp, model, target_model, il, confidence_region_info)
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s instrument in gates-vs-target table!" % (disp, il))
+                        qty = _ReportableQty(_np.nan)
                 #tm = _time.time()-tStart #DEBUG
                 #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
                 row_data.append(qty)

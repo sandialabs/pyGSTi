@@ -309,11 +309,12 @@ def mapfill_TDterms(fwdsim, objfn, array_to_fill, dest_indices, num_outcomes, la
             t = t0
             rhoVec.set_time(t)
             rho = rhoVec._rep.actionable_staterep()
-            t += rholabel.time
+            t += getattr(rholabel, 'time', 0.0)
 
             for gl in remainder:
                 op = fwdsim.model._circuit_layer_operator(gl, 'op')
-                op.set_time(t); t += gl.time  # time in gate label == gate duration?
+                op.set_time(t)
+                t += getattr(gl, 'time', 0.0) # time in gate label == gate duration?
                 rho = op._rep.acton(rho)
 
             j = outcome_to_elbl_index[outcome]

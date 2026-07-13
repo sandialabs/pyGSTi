@@ -88,7 +88,7 @@ class CircuitTester(BaseCase):
 
     def test_construct_malformed_input(self):
         with pytest.raises(ValueError):
-            c = circuit.Circuit([("Gxpi2", "A0")])
+            c = circuit.Circuit([("Gxpi2", "B0")])
         return
 
     def test_create_circuitlabel(self):

@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -36,7 +36,7 @@ try:
     os.environ['FI_PROVIDER'] = 'sockets'
     from mpi4py import MPI
     comm = MPI.COMM_WORLD
-except ImportError:
+except (ImportError, RuntimeError): # no mpi module will result in a Runtime error and not an ImportError
     comm = None
 ```
 
@@ -270,5 +270,3 @@ op.to_dense()
 ```{code-cell} ipython3
 op.aux_info
 ```
-
-

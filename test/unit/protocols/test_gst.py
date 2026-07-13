@@ -1,6 +1,6 @@
 from pygsti.data import simulate_data
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
-from pygsti.modelpacks import smq1Q_XYI
+from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction, ObjectiveFunctionBuilder
 from pygsti.models.explicitmodel import ExplicitOpModel
@@ -441,7 +441,33 @@ class StandardGSTTester(BaseProtocolData):
         assert proto_read.name == proto.name
         assert proto_read.modes == proto.modes
         assert proto_read.badfit_options.actions == proto.badfit_options.actions
-    
+
+
+
+class StandardGST2QInferredTargetTester(BaseCase):
+    """
+    Regression test: StandardGST must be able to infer a target model from
+    the 2-qubit ProcessorSpec attached to the experiment design when the
+    caller does not pass `target_model` explicitly.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.gst_design = smq2Q_XYICNOT.create_gst_experiment_design(max_max_length=1)
+        # This test only exercises target-model inference, so the counts don't need
+        # to come from a simulation; arbitrary fixed counts per circuit suffice.
+        from pygsti.data import DataSet
+        outcome_labels = ['00', '01', '10', '11']
+        ds = DataSet(outcome_labels=outcome_labels)
+        for circuit in cls.gst_design.all_circuits_needing_data:
+            ds.add_count_list(circuit, outcome_labels, [400, 300, 200, 100])
+        ds.done_adding_data()
+        cls.gst_data = ProtocolData(cls.gst_design, ds)
+
+    def test_run_with_inferred_target(self):
+        proto = gst.StandardGST(modes=('Target',))
+        results = proto.run(self.gst_data)
+        self.assertIn('Target', results.estimates)
 
 
 #Unit tests are currently performed in objects/test_results.py - TODO: move these tests here

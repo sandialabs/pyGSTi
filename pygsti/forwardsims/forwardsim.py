@@ -496,6 +496,17 @@ class ForwardSimulator(_NicelySerializable):
         global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        if self.model.num_params == 0:
+            # No free parameters => empty derivative arrays (avoids an opaque IndexError, see #604).
+            vdp = _np.empty((global_layout.num_elements, 0), 'd')
+            if resource_alloc.comm_rank == 0:
+                ret = _collections.OrderedDict()
+                for elInds, c, outcomes in global_layout.iter_unique_circuits():
+                    if isinstance(elInds, slice): elInds = _slct.indices(elInds)
+                    ret[c] = _ld.OutcomeLabelDict([(outLbl, vdp[ei]) for ei, outLbl in zip(elInds, outcomes)])
+                return ret
+            else:
+                return None
         with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params):  # 'EP' (vdp)
             #Note: don't use smartc for now.
             local_vdp = copa_layout.allocate_local_array('ep', 'd')
@@ -544,6 +555,16 @@ class ForwardSimulator(_NicelySerializable):
         global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        if self.model.num_params == 0:
+            # No free parameters => empty Hessian arrays (avoids an opaque IndexError, see #604).
+            zero_hessian = _np.empty((0, 0), 'd')
+            if resource_alloc.comm_rank == 0:
+                ret = _collections.OrderedDict()
+                for elInds, c, outcomes in global_layout.iter_unique_circuits():
+                    ret[c] = _ld.OutcomeLabelDict([(outLbl, zero_hessian) for outLbl in outcomes])
+                return ret
+            else:
+                return None
         with resource_alloc.temporarily_track_memory(global_layout.num_elements * self.model.num_params**2):  # 'EPP'
             #Note: don't use smartc for now.
             local_vhp = copa_layout.allocate_local_array('epp', 'd')
