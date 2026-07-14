@@ -1208,3 +1208,76 @@ class CircuitBugfixRegressionTester(BaseCase):
         with self.assertWarns(UserWarning) as cm:
             c.replace_gatename_inplace('Gx', 123)
         self.assertIn('new_gatename', str(cm.warning))
+
+    def test_mutation_clears_lanes_cache(self):
+        from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)", editable=True)
+        # First build/cache lanes
+        q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c)
+        compute_subcircuits(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertIn("lanes", c.saved_auxinfo)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+        # Mutate the circuit
+        c.replace_gatename_with_idle_inplace("Gx")
+        # finalization (done_editing) must clear lanes cache to {}
+        c.done_editing()
+        self.assertEqual(c.saved_auxinfo["lanes"], {})
+
+        # Verify that we can successfully compute subcircuits and cache again
+        q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c)
+        compute_subcircuits(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_rebuild_lanes_cache_when_empty(self):
+        from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)")
+        q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c)
+        compute_subcircuits(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertIn("lanes", c.saved_auxinfo)
+
+        # Manually clear to empty (simulate post-mutation/done_editing empty state)
+        c.saved_auxinfo["lanes"] = {}
+        # compute_subcircuits should notice empty cache, fall back to compute, and successfully cache again
+        compute_subcircuits(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_map_state_space_labels_clears_lanes_cache(self):
+        from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)", editable=True)
+        q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c)
+        compute_subcircuits(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+        c.map_state_space_labels_inplace({0: 10, 1: 11})
+        c.done_editing()
+        self.assertEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_batch_tensor_populates_cache(self):
+        from pygsti.circuits.split_circuits_into_lanes import batch_tensor
+        c1 = circuit.Circuit("Gx:0", line_labels=(0,))
+        c2 = circuit.Circuit("Gy:0", line_labels=(0,))
+        idle_label = Label(())
+        labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), idle_label]
+        map_d = {l: l for l in labels_in_circuits}
+        map_d[idle_label] = Label("Gi", 0)
+        layer_mappers = {1: map_d, 2: map_d}
+
+        # batch_tensor should return a static circuit with a non-empty, fully populated lanes cache
+        tensored_c = batch_tensor([c1, c2], layer_mappers, target_lines=((0,), (1,)))
+        self.assertIn("lanes", tensored_c.saved_auxinfo)
+        self.assertNotEqual(tensored_c.saved_auxinfo["lanes"], {})
+        # Verify that we can query compute_subcircuits without recomputing or "lbl cache miss"
+        from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
+        q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(tensored_c)
+        # Should execute successfully using cache
+        compute_subcircuits(tensored_c, q2l, l2q)
+
+        # Ensure that the manually built lanes cache in tensored_c is identical to a freshly computed one
+        c_no_cache = tensored_c.copy()
+        c_no_cache.saved_auxinfo = {}
+        fresh_sub_cirs = compute_subcircuits(c_no_cache, q2l, l2q)
+        # Check matching structures
+        self.assertEqual(len(tensored_c.saved_auxinfo["lanes"]), len(l2q))
+        for lane_idx, key in l2q.items():
+            self.assertEqual(tensored_c.saved_auxinfo["lanes"][tuple(sorted(key))], fresh_sub_cirs[lane_idx])
