@@ -10,10 +10,14 @@ Defines the ProtectedArray class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from typing import Union, Optional, Iterable
 import copy as _copy
 import numpy as _np
+from warnings import warn
 
 from pygsti.baseobjs import _compatibility as _compat
+
+PROTECTEDARRAYERRORSTRING = "**some or all of assignment destination is read-only"
 
 class ProtectedArray(object):
     """
@@ -41,7 +45,9 @@ class ProtectedArray(object):
         is ignored.
     """
 
-    def __init__(self, input_array, indices_to_protect=None, protected_index_mask= None):
+    def __init__(self, input_array: _np.ndarray,
+                 indices_to_protect: Optional[Union[int, Iterable[Union[list[int], tuple]]]]=None,
+                 protected_index_mask: _np.ndarray= None):
         self.base = input_array
 
         if protected_index_mask is not None:
@@ -77,7 +83,13 @@ class ProtectedArray(object):
             #now loop over the nested subelements and add them to the mask:
             for indices in indices_to_protect:
                 assert(len(indices) <= len(self.base.shape))
-                self.protected_index_mask[indices]=1
+                if len(indices) < len(self.base.shape):
+                    warn("You must fully specify the indices you wish to protect." +
+                         "e.g. for a (3,3) array you would need to specify the row and the column for each individual element" +
+                         " in the array you wish to protect. Note that a slice can allow you to specify multiple at once." +
+                         "So to specify the zeroth row, (0, slice(0, None, None).)", RuntimeWarning)
+                else:
+                    self.protected_index_mask[indices]=1
         #otherwise set the mask to all zeros.
         else:
             self.protected_index_mask = _np.zeros(input_array.shape , dtype= _np.bool_)
@@ -107,6 +119,47 @@ class ProtectedArray(object):
     def __long__(self): return int(self.base)
     def __float__(self): return float(self.base)
     def __complex__(self): return complex(self.base)
+
+    # Arithmetic Assignment Operations
+    def __imul__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __iadd__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __itruediv__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __ifloordiv__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __ipow__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)    
+    
+    def __isub__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __imod__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __imatmul__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+
+    # Logical Assignment Operations
+    def __ilshift__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+
+    def __irshift__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __ior__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __ixor__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    
+    def __iand__(self, other):
+        raise ValueError(PROTECTEDARRAYERRORSTRING)
 
     #Pickle plumbing
 
@@ -158,7 +211,7 @@ class ProtectedArray(object):
     def __setitem__(self, key, val):
                 #check if any of the indices in key have been masked off.
         if _np.any(self.protected_index_mask[key]):  # assigns to a protected index in each dim
-            raise ValueError("**some or all of assignment destination is read-only")
+            raise ValueError(PROTECTEDARRAYERRORSTRING)
         #not sure what the original logic was for this return statement, but I don't see any
         #harm in keeping it.
         return self.base.__setitem__(key, val)

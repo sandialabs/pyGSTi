@@ -11,14 +11,18 @@ Functions for generating bootstrapped error bars
 #***************************************************************************************************
 
 import numpy as _np
+from typing import Literal, Optional
 
 from pygsti.drivers import longsequence as _longseq
 from pygsti import algorithms as _alg
 from pygsti.data.dataset import DataSet as _DataSet
+from pygsti.baseobjs.label import Label as _Label
+from pygsti.circuits import Circuit as _Circuit
 
 
-def create_bootstrap_dataset(input_data_set, generation_method, input_model=None,
-                             seed=None, outcome_labels=None, verbosity=1):
+def create_bootstrap_dataset(input_data_set: _DataSet, generation_method: Literal["nonparametric", "parametric"],
+                             input_model=None, seed: Optional[int]=None, outcome_labels:Optional[list[_Label]]=None,
+                             verbosity: int=1):
     """
     Creates a DataSet used for generating bootstrapped error bars.
 
@@ -106,10 +110,13 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
     return simDS
 
 
-def create_bootstrap_models(num_models, input_data_set, generation_method,
-                            fiducial_prep, fiducial_measure, germs, max_lengths,
-                            input_model=None, target_model=None, start_seed=0,
-                            outcome_labels=None, lsgst_lists=None,
+def create_bootstrap_models(num_models: int, input_data_set: _DataSet,
+                            generation_method: Literal["nonparametric", "parametric"],
+                            fiducial_prep: list[_Circuit], fiducial_measure: list[_Circuit],
+                            germs: list[_Circuit], max_lengths: list[int],
+                            input_model=None, target_model=None, start_seed: int=0,
+                            outcome_labels: Optional[list[_Label]]=None,
+                            lsgst_lists: Optional[list[list[_Circuit]]]=None,
                             return_data=False, verbosity=2):
     """
     Creates a series of "bootstrapped" Models.

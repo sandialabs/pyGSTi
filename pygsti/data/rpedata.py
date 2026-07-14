@@ -9,11 +9,14 @@
 """
 Functions for creating RPE data sets
 """
-
+from typing import Literal, Optional, Union
 from pygsti.data import datasetconstruction as _dsc
 
 
-def make_rpe_data_set(model_or_dataset, string_list_d, num_samples, sample_error='binomial', seed=None):
+def make_rpe_data_set(model_or_dataset, string_list_d,
+                      num_samples: Optional[Union[int, list[int]]],
+                      sample_error: Literal['binomial', 'none', 'round', 'multinomial'] = 'binomial',
+                      seed: Optional[int] = None):
     """
     Generate a fake RPE DataSet using the probabilities obtained from a model.
 
