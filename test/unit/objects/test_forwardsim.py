@@ -300,8 +300,10 @@ class ForwardSimConsistencyTester(TestCase):
 
     @staticmethod
     def standard_sims():
-        """The 4 always-available forward simulators, plus TorchForwardSimulator when installed
-        (whose default dtype, float64, matches the other simulators' precision)."""
+        """The 4 always-available forward simulators, plus TorchForwardSimulator when installed.
+        We request float64 explicitly: PROBS_TOL/JACS_TOL are tight enough to need it, and pinning
+        it here means these comparisons stay correct even if TorchForwardSimulator's own default
+        dtype ever changes."""
         sims = [
             SimpleMapForwardSimulator(),
             SimpleMatrixForwardSimulator(),
@@ -309,7 +311,8 @@ class ForwardSimConsistencyTester(TestCase):
             MatrixForwardSimulator()
         ]
         if TorchForwardSimulator.ENABLED:
-            sims.append(TorchForwardSimulator())
+            import torch
+            sims.append(TorchForwardSimulator(dtype=torch.float64))
         return sims
 
     @staticmethod
@@ -538,7 +541,7 @@ def test_torch_instrument_expansion_plumbing():
 
     model = _iz_instrument_model(Instrument, seed=53)
     circuits = _iz_instrument_circuits()
-    model.sim = TorchForwardSimulator()
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
     layout = model.sim.create_layout(circuits)
     smcs = StatelessModelCircuitStore(model, layout, torch.float64, 'cpu')
     free_params = smcs.get_free_params(model, torch.float64, 'cpu')
@@ -574,7 +577,8 @@ def test_torch_dataset_ordered_layout():
 
     ref = {c: model.probabilities(c) for c in (c1, c2)}  # computed with the default (matrix) sim
 
-    model.sim = TorchForwardSimulator()
+    import torch
+    model.sim = TorchForwardSimulator(dtype=torch.float64)  # the 1e-12 tolerance below needs it
     layout = model.sim.create_layout([c1, c2], dataset=ds)
     probs = np.empty(layout.num_elements, 'd')
     model.sim.bulk_fill_probs(probs, layout)
