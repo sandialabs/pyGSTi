@@ -192,6 +192,41 @@ class ColormapTests(BaseTestCase):
 
         plotly_to_matplotlib(fig, temp_files + "/testMPLMatricesColorBoxplot.pdf")
 
+    def test_matrices_color_boxplot_nonsquare_grid_arrangement(self):
+        """Regression test for the `flattened_idx` gridline/annotation remapping
+        formula in `_matrices_color_boxplot`/`_opmatrices_color_boxplot`.
+
+        The formula used to retag each subplot's gridline shapes with the
+        correct `xref`/`yref` was `num_rows*i + (j+1)`, which is only correct
+        when `num_rows == 1` (the default `'row'` arrangement used by every
+        real caller today).  For a non-square `(rows, cols)` grid with more
+        than one row, this dropped/duplicated shapes onto the wrong subplot.
+        The correct row-major formula is `num_cols*i + (j+1)`.
+        """
+        from collections import Counter
+
+        from pygsti.report.workspaceplots import _matrices_color_boxplot
+
+        seqcmap = cmap.SequentialColormap(0, 1.0, "whiteToBlack")
+        num_rows, num_cols = 2, 3
+        matrices = [np.array([[0.1, 0.2], [0.3, 0.4]]) for _ in range(num_rows * num_cols)]
+
+        fig = _matrices_color_boxplot(matrices, colormap=seqcmap, box_labels=True,
+                                      arrangement=(num_rows, num_cols))
+
+        shapes = fig.plotlyfig.layout.shapes
+        xref_counts = Counter(s.xref for s in shapes)
+        yref_counts = Counter(s.yref for s in shapes)
+
+        #Every one of the 6 panels should have its own (non-empty, and equal-count)
+        #set of gridline shapes -- i.e. none should be missing (dropped) or have
+        #shapes from another panel merged in (duplicated).
+        expected_axes = {'x', 'x2', 'x3', 'x4', 'x5', 'x6'}
+        self.assertEqual(set(xref_counts.keys()), expected_axes)
+        self.assertEqual(set(yref_counts.keys()), {'y', 'y2', 'y3', 'y4', 'y5', 'y6'})
+        self.assertEqual(len(set(xref_counts.values())), 1)  # all panels have the same shape count
+        self.assertEqual(len(set(yref_counts.values())), 1)
+
 
 if __name__ == '__main__':
     import unittest

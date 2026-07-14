@@ -1407,7 +1407,7 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
             fig.update_yaxes(row=i+1, col=j+1, **matrix_dict_layout['yaxis'])
             #add the shapes from the subplot to the main figure but update
             #the axis references to point to the correct subplot.
-            flattened_idx = num_rows*i+ (j+1)
+            flattened_idx = num_cols*i + (j+1)  # row-major index (num_rows would be wrong for non-square grids)
             matrix_shapes = matrix_dict_layout['shapes']
             for shape in matrix_shapes:
                 shape['xref'] = f'x{flattened_idx}'
@@ -1855,7 +1855,7 @@ def _matrices_color_boxplot(matrices, xlabels=None, ylabels=None,
             fig.update_yaxes(row=i+1, col=j+1, **matrix_dict_layout['yaxis'])
             #add the shapes from the subplot to the main figure but update
             #the axis references to point to the correct subplot.
-            flattened_idx = num_rows*i+ (j+1)
+            flattened_idx = num_cols*i + (j+1)  # row-major index (num_rows would be wrong for non-square grids)
             matrix_shapes = matrix_dict_layout['shapes']
             for shape in matrix_shapes:
                 shape['xref'] = f'x{flattened_idx}'
