@@ -261,10 +261,10 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
         """
 
         active_qubits = set()
-        for instruction, qargs, _ in circ.data:
-            if instruction.name in ignore:
+        for instruction in circ.data:
+            if instruction.operation.name in ignore:
                 continue
-            for qubit in qargs:
+            for qubit in instruction.qubits:
                 active_qubits.add(qubit)
 
         return active_qubits
@@ -309,9 +309,8 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
             uses_ancilla = False
 
             for qubit in active_qubits:
-                idx = qubit._index
-                init_register = qk_test_circ.layout.initial_layout[idx]._register
-                if init_register.name == 'ancilla':
+                idx = qk_test_circ.find_bit(qubit).index
+                if isinstance(qk_test_circ.layout.initial_layout[idx], qiskit.circuit.AncillaQubit):
                     uses_ancilla = True
                     print(qubit)
                     break
@@ -372,9 +371,8 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
             uses_ancilla = False
 
             for qubit in active_qubits:
-                idx = qubit._index
-                init_register = qk_ref_inv_circ.layout.initial_layout[idx]._register
-                if init_register.name == 'ancilla':
+                idx = qk_ref_inv_circ.find_bit(qubit).index
+                if isinstance(qk_ref_inv_circ.layout.initial_layout[idx], qiskit.circuit.AncillaQubit):
                     uses_ancilla = True
                     print(qubit)
                     break
@@ -393,7 +391,7 @@ def qiskit_circuits_to_fullstack_mirror_edesign(
 
         qk_ref_circ = qk_ref_inv_circ.inverse()
 
-        qubit_map = {qk_ref_inv_circ._qbit_argument_conversion(i)[0]: f'Q{qk_final_opt_layout[i]}'
+        qubit_map = {qk_ref_inv_circ.qubits[i]: f'Q{qk_final_opt_layout[i]}'
                          for i in qk_init_ref_inv_reduced_layout}
 
         ps_ref_circ, qubit_idx_map = _Circuit.from_qiskit(qk_ref_circ, qubit_conversion=qubit_map,
@@ -573,8 +571,7 @@ def qiskit_circuits_to_subcircuit_mirror_edesign(
                                     )
 
             # convert those reference circuits back to pyGSTi (layer blocking required to separate u3 and cz)
-            qubit_mapping_dict_2 = {qk_test_circ._qbit_argument_conversion(i)[0]: sslbl for sslbl, i in qubit_mapping_dict.items()} # now map back
-            # in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell), the method is called _qbit_argument_conversion.
+            qubit_mapping_dict_2 = {qk_test_circ.qubits[i]: sslbl for sslbl, i in qubit_mapping_dict.items()} # now map back
 
             ps_ref_circ, _ = _Circuit.from_qiskit(qk_ref_circ,
                                                   qubit_conversion=qubit_mapping_dict_2,

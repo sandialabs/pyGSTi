@@ -275,7 +275,8 @@ class TestSubcircuitSelection(BaseCase):
 
         backend = qiskit_ibm_runtime.fake_provider.FakeFez()
 
-        qk_circ = qiskit.circuit.library.QFT(4)
+        qk_circ = qiskit.QuantumCircuit(4)
+        qk_circ.append(qiskit.circuit.library.QFTGate(4), range(4))
         qk_circ = qiskit.transpile(qk_circ, backend=backend)
 
         ps_circ, _ = C.from_qiskit(qk_circ)
