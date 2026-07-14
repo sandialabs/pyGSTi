@@ -161,7 +161,10 @@ class ExperimentDesignTester(BaseCase):
             edesign.write(root)
             loaded_edesign = type(edesign).from_dir(root)
             # TODO: We don't have good edesign equality
-            self.assertEqual(set(edesign.all_circuits_needing_data), set(loaded_edesign.all_circuits_needing_data))
+            self.assertEqual(
+                set([c.serialize() for c in edesign.all_circuits_needing_data]),
+                set([c.serialize() for c in loaded_edesign.all_circuits_needing_data])
+            )
             self.assertEqual(edesign.auxfile_types, loaded_edesign.auxfile_types)
             self.assertEqual(edesign._vals.keys(), loaded_edesign._vals.keys())
 
@@ -174,7 +177,10 @@ class ExperimentDesignTester(BaseCase):
                 edesign.write(root2)
                 loaded_edesign = type(edesign).from_dir(root2)
                 # TODO: We don't have good edesign equality
-                self.assertEqual(set(edesign.all_circuits_needing_data), set(loaded_edesign.all_circuits_needing_data))
+                self.assertEqual(
+                    set([c.serialize() for c in edesign.all_circuits_needing_data]),
+                    set([c.serialize() for c in loaded_edesign.all_circuits_needing_data])
+                )
                 self.assertEqual(edesign.auxfile_types, loaded_edesign.auxfile_types)
                 self.assertEqual(edesign._vals.keys(), loaded_edesign._vals.keys())
                 self.assertTrue((root2 / 'edesign' / 'all_circuits_needing_data.txt').exists())
