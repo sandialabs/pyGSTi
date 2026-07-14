@@ -198,12 +198,13 @@ class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         assert isinstance(self.errorgen, _Torchable)
-        return self.errorgen.stateless_data(real_dtype, device)
+        return (type(self.errorgen), self.errorgen.stateless_data(real_dtype, device))
 
     @staticmethod
     def torch_base(sd, t_param):
         """Differentiable process matrix `exp(L)` from the parameter tensor `t_param`."""
-        L = _LindbladErrorgen.torch_base(sd, t_param)
+        etype, esd = sd
+        L = etype.torch_base(esd, t_param)
         return _torch.linalg.matrix_exp(L)
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called

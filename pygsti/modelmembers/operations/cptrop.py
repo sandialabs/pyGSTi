@@ -177,13 +177,15 @@ class RootConjOperator(LinearOperator, _Torchable):
 
         .. warning::
 
-            This uses ``torch.linalg.eigh`` on the effect matrix ``E``.  The backward pass of ``eigh``
-            contains ``1 / (λᵢ − λⱼ)`` factors, so the Jacobian returned by ``torch.func.jacrev`` is
-            numerically unstable (and NaN in the exactly-degenerate limit) for effects with (near-)
-            degenerate spectra -- e.g. ideal projective effects on two or more qubits.  The clamp of
-            the eigenvalues to ``[0, 1]`` is also subgradient-ambiguous at eigenvalues of exactly 0 or
-            1.  Use torch's reverse-mode AD for this operator only for effects whose spectra are interior
-            to ``(0, 1)`` and non-degenerate; the value and forward-mode AD paths have no such restriction.
+            This uses ``torch.linalg.eigh`` on the effect matrix ``E``.  The AD rules for ``eigh``
+            contain ``1 / (λᵢ − λⱼ)`` factors -- in reverse mode (``torch.func.jacrev``) *and* forward
+            mode (``torch.func.jacfwd``) alike -- so the Jacobian from either mode is numerically
+            unstable, and NaN in the exactly-degenerate limit, for effects with (near-)degenerate
+            spectra.  Independently, ``sqrt`` of the clamped eigenvalues has an infinite derivative at
+            an eigenvalue of exactly 0, so boundary spectra also produce NaN Jacobians in both modes --
+            e.g. ideal projective effects (spectrum of 0s and 1s) yield entirely-NaN Jacobians.  Use
+            torch AD for this operator, in either mode, only for effects whose spectra are interior to
+            ``(0, 1)`` and non-degenerate; only the value path has no such restriction.
 
         Unlike the numpy reference :func:`~pygsti.tools.optools.rootconj_superop` -- which warns
         when an eigenvalue of ``E`` strays outside ``[0, 1]`` by more than :attr:`EIGTOL_WARNING`

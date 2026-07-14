@@ -18,8 +18,10 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from pygsti.baseobjs import QubitSpace
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.modelmembers.operations.composedop import ComposedOp
+from pygsti.modelmembers.operations.embeddederrorgen import EmbeddedErrorgen
 from pygsti.modelmembers.operations.experrorgenop import ExpErrorgenOp
 from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen
 
@@ -90,6 +92,19 @@ def test_experrorgenop_torch_base(mode):
     op = _a_composed_op(_noisy_cptp_model(mode))
     exp = op.factorops[1]
     assert isinstance(exp, ExpErrorgenOp)
+
+    assert np.allclose(_torch_base_np(exp), exp.to_dense('HilbertSchmidt'), atol=1e-9)
+    assert np.allclose(_jacrev_np(exp), exp.deriv_wrt_params(), atol=1e-6)
+
+
+def test_experrorgenop_embedded_errorgen_torch_base():
+    """ExpErrorgenOp.torch_base must dispatch on the wrapped errorgen's type rather than assume
+    LindbladErrorgen: here the errorgen is an EmbeddedErrorgen (the construction CloudNoiseModel
+    uses with errcomp_type='errorgens'), so torch_base must compute exp(embed(L))."""
+    op = _a_composed_op(_noisy_cptp_model('CPTPLND'))
+    eg = op.factorops[1].errorgen
+    assert isinstance(eg, LindbladErrorgen)
+    exp = ExpErrorgenOp(EmbeddedErrorgen(QubitSpace(2), (0,), eg))
 
     assert np.allclose(_torch_base_np(exp), exp.to_dense('HilbertSchmidt'), atol=1e-9)
     assert np.allclose(_jacrev_np(exp), exp.deriv_wrt_params(), atol=1e-6)

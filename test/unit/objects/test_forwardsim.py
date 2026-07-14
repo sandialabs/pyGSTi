@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from unittest import mock, TestCase
 
 import numpy as np
@@ -9,13 +10,12 @@ from pygsti.forwardsims import ForwardSimulator, \
     MapForwardSimulator, SimpleMapForwardSimulator, \
     MatrixForwardSimulator,  SimpleMatrixForwardSimulator, \
     TorchForwardSimulator
-from pygsti.forwardsims import torchfwdsim
 from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit, create_lsgst_circuit_lists
 from pygsti.baseobjs import Label as L
 from ..util import BaseCase
 
-from pygsti.data import simulate_data
+from pygsti.data import DataSet, simulate_data
 from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.modelmembers.operations import EmbeddedOp, FullTPOp
 from pygsti.modelmembers.povms import ComputationalBasisPOVM
@@ -297,13 +297,11 @@ class ForwardSimConsistencyTester(TestCase):
 
     PROBS_TOL = 1e-14
     JACS_TOL = 1e-10
-    STASHED_DTYPE = torchfwdsim.DEFAULT_REAL_TYPE
 
     @staticmethod
     def standard_sims():
-        """The 4 always-available forward simulators, plus TorchForwardSimulator when installed.
-        Constructing TorchForwardSimulator reads the torchfwdsim.DEFAULT_REAL_TYPE module global,
-        so we overwrite it with float64 first; tearDown restores it."""
+        """The 4 always-available forward simulators, plus TorchForwardSimulator when installed
+        (whose default dtype, float64, matches the other simulators' precision)."""
         sims = [
             SimpleMapForwardSimulator(),
             SimpleMatrixForwardSimulator(),
@@ -311,10 +309,6 @@ class ForwardSimConsistencyTester(TestCase):
             MatrixForwardSimulator()
         ]
         if TorchForwardSimulator.ENABLED:
-            import torch
-            # TorchForwardSimulator.__init__ captures DEFAULT_REAL_TYPE at construction time, so we
-            # must overwrite it with float64 *before* constructing the sim; tearDown restores it.
-            torchfwdsim.DEFAULT_REAL_TYPE = torch.float64
             sims.append(TorchForwardSimulator())
         return sims
 
@@ -335,10 +329,6 @@ class ForwardSimConsistencyTester(TestCase):
         model_noisy = model_ideal.depolarize(op_noise=0.05, spam_noise=0.025)
         circuits = self.standard_lsgst_circuits(model_noisy)
         return ForwardSimTestHelper(model_noisy, self.standard_sims(), circuits)
-
-    def tearDown(self) -> None:
-        torchfwdsim.DEFAULT_REAL_TYPE = self.STASHED_DTYPE
-        return super().tearDown()
 
     def test_consistent_probs(self):
         fsth = self.build_helper()
@@ -546,26 +536,54 @@ def test_torch_instrument_expansion_plumbing():
     import torch
     from pygsti.forwardsims.torchfwdsim import StatelessModelCircuitStore
 
-    stashed_dtype = torchfwdsim.DEFAULT_REAL_TYPE
-    torchfwdsim.DEFAULT_REAL_TYPE = torch.float64
-    try:
-        model = _iz_instrument_model(Instrument, seed=53)
-        circuits = _iz_instrument_circuits()
-        model.sim = TorchForwardSimulator()
-        layout = model.sim.create_layout(circuits)
-        smcs = StatelessModelCircuitStore(model, layout, torch.float64, 'cpu')
-        free_params = smcs.get_free_params(model, torch.float64, 'cpu')
-        torch_bases = smcs.get_torch_bases(free_params)
+    model = _iz_instrument_model(Instrument, seed=53)
+    circuits = _iz_instrument_circuits()
+    model.sim = TorchForwardSimulator()
+    layout = model.sim.create_layout(circuits)
+    smcs = StatelessModelCircuitStore(model, layout, torch.float64, 'cpu')
+    free_params = smcs.get_free_params(model, torch.float64, 'cpu')
+    torch_bases = smcs.get_torch_bases(free_params)
 
-        assert L('Iz_plus', 0) in torch_bases
-        assert L('Iz_minus', 0) in torch_bases
+    assert L('Iz_plus', 0) in torch_bases
+    assert L('Iz_minus', 0) in torch_bases
 
-        probs = smcs.circuit_probs_from_torch_bases(torch_bases).detach().numpy()
-        ref = model.sim.bulk_probs(circuits)
-        ref_probs = np.concatenate([np.array(list(p.values())) for p in ref.values()])
-        assert np.allclose(probs, ref_probs, atol=1e-9)
-    finally:
-        torchfwdsim.DEFAULT_REAL_TYPE = stashed_dtype
+    probs = smcs.circuit_probs_from_torch_bases(torch_bases).detach().numpy()
+    ref = model.sim.bulk_probs(circuits)
+    ref_probs = np.concatenate([np.array(list(p.values())) for p in ref.values()])
+    assert np.allclose(probs, ref_probs, atol=1e-9)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_dataset_ordered_layout():
+    """A dataset-built layout orders each circuit's outcomes by the dataset's observed outcomes,
+    which can differ from povm.keys() order or omit unobserved outcomes entirely.
+    TorchForwardSimulator must emit each probability in the layout's slot for that outcome
+    (StatelessModelCircuitStore selects POVM rows by the expanded circuit's effect labels)."""
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.025)
+
+    c1 = Circuit([L('Gxpi2', 0), L('Gxpi2', 0)], line_labels=(0,))  # ~bit flip: p('1') >> p('0')
+    c2 = Circuit([L('Gxpi2', 0), L('Gypi2', 0)], line_labels=(0,))
+    ds = DataSet(outcome_labels=[('0',), ('1',)])
+    # add_count_dict sorts a plain dict's keys; an OrderedDict preserves insertion order, giving
+    # a layout that orders c1's outcomes '1' before '0' -- the reverse of povm.keys() order.
+    ds.add_count_dict(c1, OrderedDict([(('1',), 95), (('0',), 5)]))
+    ds.add_count_dict(c2, {('1',): 50})  # only '1' observed: a strict subset of the POVM's effects
+    ds.done_adding_data()
+
+    ref = {c: model.probabilities(c) for c in (c1, c2)}  # computed with the default (matrix) sim
+
+    model.sim = TorchForwardSimulator()
+    layout = model.sim.create_layout([c1, c2], dataset=ds)
+    probs = np.empty(layout.num_elements, 'd')
+    model.sim.bulk_fill_probs(probs, layout)
+
+    for c in (c1, c2):
+        inds, outcomes = layout.indices_and_outcomes(c)
+        inds = np.arange(layout.num_elements)[inds]
+        for idx, outcome in zip(inds, outcomes):
+            assert abs(probs[idx] - ref[c][outcome]) < 1e-12
 
 
 class ForwardSimIntegrationTester(BaseProtocolData):

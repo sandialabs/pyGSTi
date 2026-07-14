@@ -34,7 +34,7 @@ import warnings as warnings
 try:
     import torch
     TORCH_ENABLED = True
-    DEFAULT_REAL_TYPE = torch.float32
+    DEFAULT_REAL_TYPE = torch.float64
 
 except ImportError:
     TORCH_ENABLED = False
@@ -51,7 +51,11 @@ class StatelessCircuit:
         self.prep_label = spc.circuit_without_povm[0]
         self.op_labels  = spc.circuit_without_povm[1:]
         self.povm_label = spc.povm_label
+        self.effect_labels = tuple(spc.effect_labels)
         self.outcome_probs_dim = len(spc.effect_labels)
+        self.effect_row_indices = None
+        # ^ Set by StatelessModelCircuitStore.__init__ when effect_labels isn't the POVM's full
+        #   effect-label sequence (torch_base POVM matrices stack rows in povm.keys() order).
         return
 
 
@@ -86,6 +90,9 @@ class StatelessModelCircuitStore:
 
         circuits = []
         self.outcome_probs_dim = 0
+        povm_effect_orders = {}
+        # ^ povm label -> the POVM's full effect-label sequence, which is the row order that
+        #   the POVM classes' torch_base implementations stack effects in (povm.keys() order).
         for _, circuit, outcomes in layout.iter_unique_circuits():
             expanded_circuits = model.expand_instruments_and_separate_povm(circuit, outcomes)
             # A circuit containing instrument layer(s) expands to one SeparatePOVMCircuit per
@@ -100,6 +107,15 @@ class StatelessModelCircuitStore:
                 )
             for spc in expanded_circuits:
                 c = StatelessCircuit(spc)
+                # A dataset-built layout can observe a subset of the POVM's outcomes, or observe them
+                # in a different order than povm.keys(); expand_instruments_and_separate_povm filters
+                # and orders spc.effect_labels accordingly. Record the row indices needed to select
+                # those effects from the full torch POVM matrix.
+                if c.povm_label not in povm_effect_orders:
+                    povm_effect_orders[c.povm_label] = model._effect_labels_for_povm(c.povm_label)
+                full_order = povm_effect_orders[c.povm_label]
+                if c.effect_labels != tuple(full_order):
+                    c.effect_row_indices = [full_order.index(el) for el in c.effect_labels]
                 circuits.append(c)
                 self.outcome_probs_dim += c.outcome_probs_dim
         self.circuits = circuits
@@ -218,6 +234,10 @@ class StatelessModelCircuitStore:
             superket = torch_bases[c.prep_label]
             superops = [torch_bases[ol] for ol in c.op_labels]
             povm_mat = torch_bases[c.povm_label]
+            if c.effect_row_indices is not None:
+                povm_mat = povm_mat[c.effect_row_indices]
+                # ^ select (and order) the POVM rows to match c.effect_labels; advanced
+                #   indexing keeps autograd flowing to the POVM's parameters.
             for superop in superops:
                 superket = superop @ superket
             circuit_probs = povm_mat @ superket
@@ -263,21 +283,41 @@ class TorchForwardSimulator(ForwardSimulator):
     ENABLED = TORCH_ENABLED
     model   : ExplicitOpModel | None
 
-    def __init__(self, model : Optional[ExplicitOpModel] = None, use_gpu: Optional[bool]=None):
+    def __init__(self, model : Optional[ExplicitOpModel] = None, use_gpu: Optional[bool] = None,
+                 dtype: Optional[torch.dtype] = None):
+        """
+        Parameters
+        ----------
+        model : ExplicitOpModel, optional
+            The model this simulator will use to compute circuit outcome probabilities.
+
+        use_gpu : bool, optional
+            If True, require a GPU: run on the detected GPU, raising a ValueError if none is
+            found. If False, run on the CPU even when a GPU is available. If None (the default),
+            run on a detected CUDA or XPU device when present and otherwise on the CPU; an Apple
+            MPS device is deliberately not used by default, since MPS only supports float32.
+
+        dtype : torch.dtype, optional
+            The real dtype used for free parameters and all baked constants. If None, defaults
+            to ``DEFAULT_REAL_TYPE`` (``torch.float64``, matching the precision of pyGSTi's other
+            forward simulators), except on an MPS device where float64 is unsupported and
+            float32 is used instead.
+        """
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
 
-        dtype  = DEFAULT_REAL_TYPE
         device = get_device()
         if use_gpu and 'cpu' in device:
             raise ValueError('No GPU detected.')
-        if use_gpu and 'mps' in device:
-            dtype = torch.float32  # we clobber with only supported dtype
         if use_gpu is None and 'mps' in device:
-            device = 'cpu'         # we override per our discretion
-        if not use_gpu:
-            device = 'cpu'         # user clobbers supported GPU
+            device = 'cpu'   # we override per our discretion (MPS lacks float64 support)
+        if use_gpu is False:
+            device = 'cpu'   # user declines a detected GPU
+
+        if dtype is None:
+            dtype = torch.float32 if 'mps' in device else DEFAULT_REAL_TYPE
+            # ^ float32 is the only real floating point dtype that MPS supports
 
         self.dtype  = dtype
         self.device = device
