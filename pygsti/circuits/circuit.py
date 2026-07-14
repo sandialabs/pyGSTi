@@ -29,6 +29,7 @@ from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
 from pygsti.tools.exceptions import QiskitInteropWarning as _QiskitInteropWarning
+from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 
@@ -4289,6 +4290,7 @@ class Circuit(object):
                     qiskit_gate_conversion: Optional[Dict[str, str]] = None,
                     use_standard_gate_conversion_as_backup: bool = True,
                     allow_different_gates_in_same_layer: bool = True,
+                    lossy: Literal['warn', 'ignore', 'raise'] = 'warn',
                     verbose: bool = False
                     ) -> Tuple[Circuit, Dict[int, str]]:
         """
@@ -4322,6 +4324,15 @@ class Circuit(object):
             they will either be placed in the same layer (if True) or split into
             separate layers (if False).
 
+        lossy : {'warn', 'ignore', 'raise'}, optional (default 'warn')
+            Controls how lossy aspects of the conversion are reported. The conversion
+            is lossy when the Qiskit circuit contains structure that a pyGSTi Circuit
+            cannot represent: multiple quantum registers (qreg structure is flattened),
+            classical registers/bits (discarded), or measure instructions (dropped).
+            If 'warn', a QiskitInteropWarning is emitted for each kind of loss.
+            If 'ignore', the conversion silently proceeds.
+            If 'raise', a ValueError is raised instead.
+
         Returns
         -------
         Tuple:
@@ -4333,14 +4344,16 @@ class Circuit(object):
                 to the corresponding pyGSTi qubit.
         """
 
-        try:
-            import qiskit
-            if qiskit.__version__ != '2.1.1':
-                _warnings.warn("Circuit class method `from_qiskit()` is designed for qiskit version 2.1.1 and may not \
-                                function properly for your qiskit version, which is " + qiskit.__version__,
-                               _QiskitInteropWarning)
-        except:
-            raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
+        _check_qiskit_version('Circuit.from_qiskit()')
+
+        assert lossy in ('warn', 'ignore', 'raise'), \
+            f"'lossy' must be 'warn', 'ignore', or 'raise', not {lossy!r}"
+
+        def _lossy_notice(message):
+            if lossy == 'warn':
+                _warnings.warn(message, _QiskitInteropWarning, stacklevel=3)
+            elif lossy == 'raise':
+                raise ValueError(message)
 
         # mapping between qiskit gates and pygsti gate names:
         if qiskit_gate_conversion is not None:
@@ -4355,12 +4368,10 @@ class Circuit(object):
 
         # get all of the qubits in the Qiskit circuit
         if len(circuit.qregs) > 1:
-            _warnings.warn('pyGSTi circuit mapping does not preserve Qiskit qreg structure.',
-                           _QiskitInteropWarning)
+            _lossy_notice('pyGSTi circuit mapping does not preserve Qiskit qreg structure.')
 
-        if len(circuit.cregs):
-            _warnings.warn('pyGSTi circuit mapping discards classical registers.',
-                           _QiskitInteropWarning)
+        if len(circuit.clbits):
+            _lossy_notice('pyGSTi circuit mapping discards classical registers and classical bits.')
 
         qubits = circuit.qubits
 
@@ -4369,14 +4380,12 @@ class Circuit(object):
             unmapped_qubits = set(qubits).difference(set(qubit_conversion.keys()))
             assert len(unmapped_qubits) == 0, f'Missing Qiskit to pygsti conversions for some qubits: {unmapped_qubits}'
 
-            qubit_idx_conversion = {i: qubit_conversion[circuit._qbit_argument_conversion(i)[0]] for i in range(circuit.num_qubits)}
+            qubit_idx_conversion = {i: qubit_conversion[circuit.qubits[i]] for i in range(circuit.num_qubits)}
 
         #if it is None, build a default mapping.
         else:
             # default mapping is the identity mapping: qubit i in the Qiskit circuit maps to qubit i in the pyGSTi circuit
-            qubit_conversion = {circuit._qbit_argument_conversion(i)[0]: f'Q{i}' for i in range(circuit.num_qubits)}
-            # ^ in Qiskit 1.1.1, the method is called qbit_argument_conversion. In Qiskit >=1.2 (as far as Noah can tell),
-            #   the method is called _qbit_argument_conversion.
+            qubit_conversion = {circuit.qubits[i]: f'Q{i}' for i in range(circuit.num_qubits)}
 
             qubit_idx_conversion = {i: f'Q{i}' for i in range(circuit.num_qubits)}
 
@@ -4418,7 +4427,8 @@ class Circuit(object):
             pygsti_gate_qubits = [qubit_conversion[qubit] for qubit in instruction.qubits]
 
             if name == 'measure':
-                _warnings.warn('skipping measure')
+                _lossy_notice('Circuit.from_qiskit() drops measure instructions; measurement '
+                              'outcomes are not represented in the pyGSTi circuit.')
                 continue
 
             if name == 'barrier':
@@ -4691,14 +4701,7 @@ class Circuit(object):
             a Qiskit QuantumCircuit corresponding to the pyGSTi circuits.
         """
 
-        try:
-            import qiskit
-            if qiskit.__version__ != '2.1.1':
-                _warnings.warn("Circuit class method `convert_to_qiskit()` is designed for qiskit version 2.1.1 and may not \
-                                function properly for your qiskit version, which is " + qiskit.__version__,
-                               _QiskitInteropWarning)
-        except:
-            raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
+        qiskit = _check_qiskit_version('Circuit.convert_to_qiskit()')
 
         depth = self.depth
 
