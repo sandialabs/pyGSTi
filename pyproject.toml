@@ -65,8 +65,11 @@ evolutionary_optimization = ['deap']
 extensions = ['cython']
 html_reports = ['jinja2', 'MarkupSafe']
 ibmq = [
-    'qiskit>1',
-    'qiskit-ibm-runtime>=0.17.1',
+    # Keep consistent with TESTED_QISKIT_RANGE in pygsti/tools/_qiskit_interop.py.
+    'qiskit>=1.4,<3',
+    # >=0.44 additionally provides ConvertToMidCircuitMeasure (optional; see
+    # pygsti/extras/ibmq/ibmqexperiment.py).
+    'qiskit-ibm-runtime>=0.40',
     'dill'
 ]
 interpygate = ['csaps']
