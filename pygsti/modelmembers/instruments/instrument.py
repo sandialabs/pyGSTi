@@ -8,16 +8,11 @@
 #***************************************************************************************************
 from __future__ import annotations
 
-try:
-    import torch as _torch
-except ImportError:
-    pass
-
 import collections as _collections
 import numpy as _np
 
 from pygsti.modelmembers import modelmember as _mm
-from pygsti.modelmembers.torchable import Torchable as _Torchable
+from pygsti.modelmembers.torchable import StackedMemberDictTorchable as _StackedMemberDictTorchable
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import states as _state
 from pygsti.evotypes import Evotype as _Evotype
@@ -31,9 +26,8 @@ from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
-from typing import Tuple, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    import torch as _torch
     from collections.abc import Mapping
     from pygsti.modelmembers.povms.effect import POVMEffect
     from pygsti.modelmembers.states.state import State
@@ -95,7 +89,7 @@ def _validate_member_consistency(member_list: MemberPairs, state_space: _StateSp
             "All instrument members must have compatible state spaces!"
 
 
-class Instrument(_Torchable, _collections.OrderedDict):
+class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
     """
     A generalized quantum instrument.
 
@@ -467,30 +461,12 @@ class Instrument(_Torchable, _collections.OrderedDict):
             operation.from_vector(v[factor_local_inds], close, dirty_value)
         self.dirty = dirty_value
 
-    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
-        """Bake per-member stateless data plus the member->parameter index map.
-
-        Mirrors :meth:`to_vector`/:meth:`from_vector`: each member owns the local indices
-        ``self._submember_rpindices`` of the instrument's parameter vector (which may be shared or
-        non-contiguous, e.g. from_effects members sharing one ComposedPOVM error map). Member order
-        matches ``self.keys()``, which the forward simulator uses (independently, via the live
-        Instrument) to map ``torch_base``'s stacked tensor back to per-outcome op labels
-        ``inst_label + "_" + key``.
-        """
-        member_data = []
-        for (_, member), inds in zip(self.items(), self._submember_rpindices):
-            assert isinstance(member, _Torchable), \
-                "Every Instrument member must be Torchable to use the Torch forward simulator; got %s" \
-                % type(member).__name__
-            idx = _torch.as_tensor(_slct.to_array(inds), dtype=_torch.long, device=device)
-            member_data.append((type(member), member.stateless_data(real_dtype, device), idx))
-        return (tuple(member_data),)
-
-    @staticmethod
-    def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
-        (member_data,) = sd
-        mats = [mtype.torch_base(msd, t_param[idx]) for (mtype, msd, idx) in member_data]
-        return _torch.stack(mats)
+    # stateless_data/torch_base: inherited from StackedMemberDictTorchable. Mirrors
+    # to_vector/from_vector: each member owns the local indices self._submember_rpindices of the
+    # instrument's parameter vector (which may be shared or non-contiguous, e.g. from_effects members
+    # sharing one ComposedPOVM error map). Member order matches self.keys(), which the forward
+    # simulator uses (independently, via the live Instrument) to map torch_base's stacked tensor back
+    # to per-outcome op labels (inst_label + "_" + key).
 
     def transform_inplace(self, s: GaugeGroupElement) -> None:
         """

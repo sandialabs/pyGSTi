@@ -165,6 +165,9 @@ class ComposedPOVMEffect(_POVMEffect, _Torchable):  # , _ErrorMapContainer
     def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
         emap_type, emap_sd, t_effect = sd
         emap = emap_type.torch_base(emap_sd, t_param)  # whole t_param: params delegate to error_map
+        assert not emap.is_complex(), \
+            "ComposedPOVMEffect.torch_base assumes a real-valued error map superoperator (it uses " \
+            "emap.mT, not emap.conj().mT); got a complex dtype instead."
         return emap.mT @ t_effect
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):

@@ -24,6 +24,7 @@ except ImportError:
 
 import numpy as _np
 from pygsti.modelmembers.modelmember import ModelMember
+from pygsti.tools import slicetools as _slct
 
 
 class Torchable(ModelMember):
@@ -75,3 +76,29 @@ class StaticTorchable(Torchable):
     @staticmethod
     def torch_base(sd : Tuple, t_param : _torch.Tensor) -> _torch.Tensor:
         return sd[0]
+
+
+class StackedMemberDictTorchable(Torchable):
+    """
+    Mixin for Torchable classes that are themselves ordered dicts of Torchable submembers sharing
+    one parameter vector, keyed by ``self._submember_rpindices`` (e.g. Instrument, TPInstrument).
+
+    ``torch_base`` stacks the members' individual torch_base tensors in ``self.keys()`` order; users
+    of the stacked tensor (e.g. TorchForwardSimulator) rely on that order to recover per-member results.
+    """
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
+        member_data = []
+        for (_, member), inds in zip(self.items(), self._submember_rpindices):
+            assert isinstance(member, Torchable), \
+                "Every %s member must be Torchable to use the Torch forward simulator; got %s" \
+                % (type(self).__name__, type(member).__name__)
+            idx = _torch.as_tensor(_slct.to_array(inds), dtype=_torch.long, device=device)
+            member_data.append((type(member), member.stateless_data(real_dtype, device), idx))
+        return (tuple(member_data),)
+
+    @staticmethod
+    def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
+        (member_data,) = sd
+        mats = [mtype.torch_base(msd, t_param[idx]) for (mtype, msd, idx) in member_data]
+        return _torch.stack(mats)

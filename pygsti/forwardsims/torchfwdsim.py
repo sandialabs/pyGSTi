@@ -138,14 +138,19 @@ class StatelessModelCircuitStore:
         assert self.outcome_probs_dim == v_prev.stop
         self.param_metadata = []
         self.instrument_expansions = {}
-        # ^ maps an instrument's model label -> the tuple of its expanded per-member op labels
-        #   (lbl + "_" + key, in obj.keys() order == the order Instrument.torch_base stacks members).
+        # ^ maps an instrument's model label -> the tuple of its expanded per-member op labels, in
+        #   obj.keys() order == the order Instrument.torch_base stacks members. simplify_operations
+        #   is the same convention model.py itself uses to build these labels (e.g. when expanding
+        #   instrument layers in a circuit), so this can't drift out of sync with it.
         for lbl, obj in model._iter_parameterized_objs():
+            assert isinstance(obj, Torchable), \
+                f"TorchForwardSimulator requires every parameterized model member to be Torchable; " \
+                f"{lbl} is a {type(obj)}, which isn't."
             sld = obj.stateless_data(dtype, device)
             param_data = (lbl, type(obj), sld)
             self.param_metadata.append(param_data)
             if isinstance(obj, (_Instrument, _TPInstrument)):
-                self.instrument_expansions[lbl] = tuple(lbl + "_" + k for k in obj.keys())
+                self.instrument_expansions[lbl] = tuple(obj.simplify_operations(lbl).keys())
 
         self.params_dim = 0
         self.free_param_sizes = []
@@ -284,7 +289,7 @@ class TorchForwardSimulator(ForwardSimulator):
     model   : ExplicitOpModel | None
 
     def __init__(self, model : Optional[ExplicitOpModel] = None, use_gpu: Optional[bool] = None,
-                 dtype: Optional[torch.dtype] = None):
+                 dtype: Optional[torch.dtype] = None, device: Optional[str] = None):
         """
         Parameters
         ----------
@@ -296,24 +301,33 @@ class TorchForwardSimulator(ForwardSimulator):
             found. If False, run on the CPU even when a GPU is available. If None (the default),
             run on a detected CUDA or XPU device when present and otherwise on the CPU; an Apple
             MPS device is deliberately not used by default, since MPS only supports float32.
+            Ignored (must be left as None) if ``device`` is given explicitly.
 
         dtype : torch.dtype, optional
             The real dtype used for free parameters and all baked constants. If None, defaults
             to ``DEFAULT_REAL_TYPE`` (``torch.float64``, matching the precision of pyGSTi's other
             forward simulators), except on an MPS device where float64 is unsupported and
             float32 is used instead.
+
+        device : str, optional
+            An explicit torch device string (e.g. ``'cuda:0'``, ``'cpu'``), bypassing the
+            ``use_gpu``-driven auto-detection above entirely. If None (the default), the device is
+            chosen from ``use_gpu`` as documented above.
         """
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
 
-        device = get_device()
-        if use_gpu and 'cpu' in device:
-            raise ValueError('No GPU detected.')
-        if use_gpu is None and 'mps' in device:
-            device = 'cpu'   # we override per our discretion (MPS lacks float64 support)
-        if use_gpu is False:
-            device = 'cpu'   # user declines a detected GPU
+        if device is None:
+            device = get_device()
+            if use_gpu and 'cpu' in device:
+                raise ValueError('No GPU detected.')
+            if use_gpu is None and 'mps' in device:
+                device = 'cpu'   # we override per our discretion (MPS lacks float64 support)
+            if use_gpu is False:
+                device = 'cpu'   # user declines a detected GPU
+        elif use_gpu is not None:
+            raise ValueError('Specify at most one of `device` and `use_gpu`.')
 
         if dtype is None:
             dtype = torch.float32 if 'mps' in device else DEFAULT_REAL_TYPE

@@ -14,6 +14,7 @@ from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit, create_lsgst_circuit_lists
 from pygsti.baseobjs import Label as L
 from ..util import BaseCase
+from ..modelmembers.test_instrument import z_measurement_projectors
 
 from pygsti.data import DataSet, simulate_data
 from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
@@ -455,12 +456,11 @@ class ComputationalPOVMForwardSimConsistencyTester(ForwardSimConsistencyTester):
 
 def _iz_instrument_model(instrument_cls, seed):
     """A noisy 'full TP' model with a weak-Z-measurement instrument 'Iz' installed, whose two
-    members are built from the ideal POVM's effect projectors (pattern from test_instrument.py)."""
+    members are built from the ideal POVM's effect projectors."""
     model = smq1Q_XYI.target_model('full TP')
     model = model.depolarize(op_noise=0.05, spam_noise=0.025)
-    E = model.povms['Mdefault']['0'].to_dense().ravel()
-    Erem = model.povms['Mdefault']['1'].to_dense().ravel()
-    model.instruments[L('Iz', 0)] = instrument_cls({'plus': np.outer(E, E), 'minus': np.outer(Erem, Erem)})
+    _, _, Gmz_plus, Gmz_minus = z_measurement_projectors(model)
+    model.instruments[L('Iz', 0)] = instrument_cls({'plus': Gmz_plus, 'minus': Gmz_minus})
     rng = np.random.default_rng(seed)
     model.from_vector(model.to_vector() + 0.01 * rng.standard_normal(model.num_params))
     return model

@@ -10,20 +10,13 @@ Defines the TPInstrument class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
-from typing import Tuple, Any, TYPE_CHECKING
-if TYPE_CHECKING:
-    import torch as _torch
-try:
-    import torch as _torch
-except ImportError:
-    pass
 
 import collections as _collections
 import numpy as _np
 
 from pygsti.modelmembers.instruments.tpinstrumentop import TPInstrumentOp as _TPInstrumentOp
 from pygsti.modelmembers import modelmember as _mm
-from pygsti.modelmembers.torchable import Torchable as _Torchable
+from pygsti.modelmembers.torchable import StackedMemberDictTorchable as _StackedMemberDictTorchable
 from pygsti.modelmembers import operations as _op
 
 from pygsti.evotypes import Evotype as _Evotype
@@ -34,7 +27,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
-class TPInstrument(_Torchable, _collections.OrderedDict):
+class TPInstrument(_StackedMemberDictTorchable, _collections.OrderedDict):
     """
     A trace-preservng quantum instrument.
 
@@ -350,26 +343,11 @@ class TPInstrument(_Torchable, _collections.OrderedDict):
             instGate._construct_matrix()
         self.dirty = dirty_value
 
-    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
-        """Bake per-member (TPInstrumentOp) stateless data plus each member's slice of this
-        instrument's parameter vector (``self._submember_rpindices``; the shared MT params make these
-        slices overlap across members).  Member order matches ``self.keys()``, which the forward
-        simulator uses (independently, via the live TPInstrument) to map ``torch_base``'s stacked
-        tensor back to per-outcome op labels (same structure as :meth:`Instrument.stateless_data`)."""
-        member_data = []
-        for (_, member), inds in zip(self.items(), self._submember_rpindices):
-            assert isinstance(member, _Torchable), \
-                "Every TPInstrument member must be Torchable to use the Torch forward simulator; got %s" \
-                % type(member).__name__
-            idx = _torch.as_tensor(_slct.to_array(inds), dtype=_torch.long, device=device)
-            member_data.append((type(member), member.stateless_data(real_dtype, device), idx))
-        return (tuple(member_data),)
-
-    @staticmethod
-    def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
-        (member_data,) = sd
-        mats = [mtype.torch_base(msd, t_param[idx]) for (mtype, msd, idx) in member_data]
-        return _torch.stack(mats)
+    # stateless_data/torch_base: inherited from StackedMemberDictTorchable. Bakes per-member
+    # (TPInstrumentOp) stateless data plus each member's slice of this instrument's parameter vector
+    # (self._submember_rpindices; the shared MT params make these slices overlap across members).
+    # Member order matches self.keys(), which the forward simulator uses (independently, via the
+    # live TPInstrument) to map torch_base's stacked tensor back to per-outcome op labels.
 
     def transform_inplace(self, s):
         """

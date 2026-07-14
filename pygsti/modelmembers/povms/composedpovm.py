@@ -300,6 +300,9 @@ class ComposedPOVM(_POVM, _Torchable):
         """Differentiable POVM matrix `base_povm @ error_map_superop` from the parameter tensor."""
         t_base_rows, emap_type, emap_sd = sd
         superop = emap_type.torch_base(emap_sd, t_param)
+        assert not superop.is_complex(), \
+            "ComposedPOVM.torch_base assumes a real-valued error map superoperator; got a complex " \
+            "dtype instead."
         return t_base_rows @ superop
 
     def from_vector(self, v, close=False, dirty_value=True):
