@@ -211,10 +211,18 @@ def batch_tensor(
 
     # Now rebuild operation labels from the saved local labels, explicitly mapping
     # any LabelTupTup members.
+    # Note: Circuit._labels stores layers as raw Python lists internally (e.g.
+    # [] for an empty/idle layer, [Label(...)] for a single-gate layer).
+    # Normalise them to Label objects before the mapper lookup.
+    def _to_label(ell):
+        if isinstance(ell, list):
+            return Label(tuple(ell))
+        return ell
+
     c._static = False
     c._labels = [
         _map_label_state_space_labels(
-            layer_mappers[local_num_lines][ell],
+            layer_mappers[local_num_lines][_to_label(ell)],
             sslbl_map,
         )
         for ell in local_labels
@@ -240,7 +248,7 @@ def batch_tensor(
         c2._static = False
         c2._labels = [
             _map_label_state_space_labels(
-                layer_mappers[local_num_lines][ell],
+                layer_mappers[local_num_lines][_to_label(ell)],
                 sslbl_map,
             )
             for ell in local_labels
