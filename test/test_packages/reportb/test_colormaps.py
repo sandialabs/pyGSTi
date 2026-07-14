@@ -129,6 +129,69 @@ class ColormapTests(BaseTestCase):
         # call fails the test.
         plotly_to_matplotlib(fig, temp_files + "/testMPLHeatmapNoPltData.pdf")
 
+    def test_mpl_conversion_opmatrices_color_boxplot(self):
+        """Reproduce the ``KeyError: 'plt_data'`` through the actual builder
+        function, `_opmatrices_color_boxplot`, in the same way it is used in
+        real report generation (e.g. real/imaginary error-generator and
+        Hamiltonian-coefficient tables in workspacetables.py -- always called
+        with `colorbar=False, box_labels=True, subtitles=[...]`).
+        """
+        try:
+            import matplotlib
+            from matplotlib.collections import QuadMesh
+            from pygsti.report.mpl_colormaps import plotly_to_matplotlib
+        except ImportError:
+            return  # no matplotlib => stop here
+
+        from pygsti.report.workspaceplots import _opmatrices_color_boxplot
+
+        real_mx = np.array([[0.1, 0.2], [0.3, 0.4]])
+        imag_mx = np.array([[-0.1, 0.0], [0.05, -0.2]])
+
+        fig = _opmatrices_color_boxplot([real_mx, imag_mx], -1.0, 1.0,
+                                        box_labels=True, colorbar=False,
+                                        subtitles=['Real', 'Imag'])
+
+        mpl_fig = plotly_to_matplotlib(fig)
+        try:
+            self.assertEqual(len(mpl_fig.axes), 2)
+            for ax in mpl_fig.axes:
+                quadmeshes = [c for c in ax.collections if isinstance(c, QuadMesh)]
+                self.assertEqual(len(quadmeshes), 1)
+        finally:
+            matplotlib.pyplot.close(mpl_fig)
+
+        plotly_to_matplotlib(fig, temp_files + "/testMPLOpMatricesColorBoxplot.pdf")
+
+    def test_mpl_conversion_matrices_color_boxplot(self):
+        """Same as above but for `_matrices_color_boxplot`."""
+        try:
+            import matplotlib
+            from matplotlib.collections import QuadMesh
+            from pygsti.report.mpl_colormaps import plotly_to_matplotlib
+        except ImportError:
+            return  # no matplotlib => stop here
+
+        from pygsti.report.workspaceplots import _matrices_color_boxplot
+
+        mx1 = np.array([[0.1, 0.2], [0.3, 0.4]])
+        mx2 = np.array([[0.5, 0.6], [0.7, 0.8]])
+        seqcmap = cmap.SequentialColormap(0, 1.0, "whiteToBlack")
+
+        fig = _matrices_color_boxplot([mx1, mx2], box_labels=True, colorbar=False,
+                                      colormap=seqcmap, subtitles=['Mx1', 'Mx2'])
+
+        mpl_fig = plotly_to_matplotlib(fig)
+        try:
+            self.assertEqual(len(mpl_fig.axes), 2)
+            for ax in mpl_fig.axes:
+                quadmeshes = [c for c in ax.collections if isinstance(c, QuadMesh)]
+                self.assertEqual(len(quadmeshes), 1)
+        finally:
+            matplotlib.pyplot.close(mpl_fig)
+
+        plotly_to_matplotlib(fig, temp_files + "/testMPLMatricesColorBoxplot.pdf")
+
 
 if __name__ == '__main__':
     import unittest
