@@ -12,7 +12,7 @@ Defines the QubitGraph class and supporting functions
 from __future__ import annotations
 
 
-from typing import Optional, Union, Iterable, Literal, Sequence
+from typing import Callable, Optional, Union, Iterable, Literal, Sequence
 import collections as _collections
 import itertools as _itertools
 
@@ -69,8 +69,8 @@ class QubitGraph(_NicelySerializable):
     """
 
     @classmethod
-    def common_graph(cls, num_qubits=0, geometry: Literal['line','ring','grid','torus']="line", directed=True,
-                     qubit_labels: Optional[Iterable[QubitLabel_in_Graph]]=None, all_directions=False):
+    def common_graph(cls, num_qubits: int=0, geometry: Literal['line','ring','grid','torus']="line", directed: bool=True,
+                     qubit_labels: Optional[Iterable[QubitLabel_in_Graph]]=None, all_directions: bool=False) -> QubitGraph:
         """
         Create a QubitGraph that is one of several standard types of graphs.
 
@@ -262,7 +262,7 @@ class QubitGraph(_NicelySerializable):
         self._distance_matrix = None
         self._predecessors = None
 
-    def map_qubit_labels(self, mapper):
+    def map_qubit_labels(self, mapper: Union[dict, Callable]) -> QubitGraph:
         """
         Creates a new QubitGraph whose qubit (node) labels are updated according to the mapping function `mapper`.
 
@@ -285,7 +285,7 @@ class QubitGraph(_NicelySerializable):
                           initial_connectivity=self._connectivity,
                           directed=self.directed, direction_names=self.directions)
 
-    def _to_nice_serialization(self):
+    def _to_nice_serialization(self) -> dict:
         state = super()._to_nice_serialization()
         state.update({'node_names': list(self._nodeinds.keys()),
                       'directed': self.directed,
@@ -295,11 +295,11 @@ class QubitGraph(_NicelySerializable):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state) -> QubitGraph:  # memo holds already de-serialized objects
         return cls(state['node_names'], initial_edges=state['edges'],
                    directed=state['directed'], direction_names=state['direction_names'])
 
-    def copy(self):
+    def copy(self) -> QubitGraph:
         """
         Make a copy of this graph.
 
@@ -311,17 +311,17 @@ class QubitGraph(_NicelySerializable):
                           initial_connectivity=self._connectivity,
                           directed=self.directed, direction_names=self.directions)
 
-    def _refresh_dists_and_predecessors(self):
+    def _refresh_dists_and_predecessors(self) -> None:
         if self._dirty:
             self._distance_matrix, self._predecessors = _fw(
                 self._connectivity, return_predecessors=True,
                 directed=self.directed, unweighted=False)  # TIM - why use unweighted=False?
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> bool:
         node1, node2 = key
         return self.is_directly_connected(node1, node2)
 
-    def __setitem__(self, key, val):
+    def __setitem__(self, key, val) -> None:
         node1, node2 = key
         i, j = self._nodeinds[node1], self._nodeinds[node2]
         if (not self.directed) and i > j:  # undirected => no directions
@@ -333,11 +333,11 @@ class QubitGraph(_NicelySerializable):
             self._connectivity[i, j] = dir_index
         self._dirty = True
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._nodeinds)
 
     @property
-    def node_names(self):
+    def node_names(self) -> tuple:
         """
         All the node labels of this graph.
 
@@ -351,7 +351,7 @@ class QubitGraph(_NicelySerializable):
         return tuple(self._nodeinds.keys())
 
     def add_edges(self, edges: list[Union[tuple[QubitLabel_in_Graph, QubitLabel_in_Graph, Union[int, str]],
-                                          tuple[QubitLabel_in_Graph, QubitLabel_in_Graph]]]):
+                                          tuple[QubitLabel_in_Graph, QubitLabel_in_Graph]]]) -> None:
         """
         Add edges (list of tuple pairs or triples) to graph.
 
@@ -368,7 +368,7 @@ class QubitGraph(_NicelySerializable):
         for edge_tuple in edges:  # edge_tuple is either (node1, node2) or (node1, node2, direction)
             self.add_edge(*edge_tuple)
 
-    def add_edge(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph, direction: Optional[Union[int, str]]=None):
+    def add_edge(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph, direction: Optional[Union[int, str]]=None) -> None:
         """
         Add an edge between the qubits labeled by `node1` and `node2`.
 
@@ -400,7 +400,7 @@ class QubitGraph(_NicelySerializable):
             self._connectivity[i, j] = True
         self._dirty = True
 
-    def remove_edge(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph):
+    def remove_edge(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph) -> None:
         """
         Add an edge between the qubits labeled by `node1` and `node2`.
 
@@ -464,7 +464,7 @@ class QubitGraph(_NicelySerializable):
                             ret.add((jlbl, ilbl))
         return sorted(list(ret))
 
-    def radius(self, base_nodes: Iterable[QubitLabel_in_Graph], max_hops: int):
+    def radius(self, base_nodes: Iterable[QubitLabel_in_Graph], max_hops: int) -> list:
         """
         Find all the nodes reachable in `max_hops` from any node in `base_nodes`.
 
@@ -501,7 +501,7 @@ class QubitGraph(_NicelySerializable):
             traverse(node, max_hops)
         return sorted(list(ret))
 
-    def connected_combos(self, possible_nodes: list[QubitLabel_in_Graph], size: int):
+    def connected_combos(self, possible_nodes: list[QubitLabel_in_Graph], size: int) -> int:
         """
         Computes the number of different connected subsets of `possible_nodes` containing `size` nodes.
 
@@ -522,14 +522,14 @@ class QubitGraph(_NicelySerializable):
             if self.is_connected_subgraph(selected_nodes): count += 1
         return count
 
-    def _indices_connected(self, i, j):
+    def _indices_connected(self, i, j) -> bool:
         """ Whether nodes *indexed* by i and j are directly connected """
         if self.directed or i <= j:
             return bool(self._connectivity[i, j])
         else:  # graph is NOT directed and i > j, so check for j->i link
             return bool(self._connectivity[j, i])
 
-    def is_connected(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph):
+    def is_connected(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph) -> bool:
         """
         Is `node1` connected to `node2` (does there exist a path of any length between them?)
 
@@ -549,7 +549,7 @@ class QubitGraph(_NicelySerializable):
         self._refresh_dists_and_predecessors()
         return self._predecessors[i, j] >= 0
 
-    def has_edge(self, edge: tuple[QubitLabel_in_Graph, QubitLabel_in_Graph]):
+    def has_edge(self, edge: tuple[QubitLabel_in_Graph, QubitLabel_in_Graph]) -> bool:
         """
         Is `edge` an edge in this graph.
 
@@ -567,7 +567,7 @@ class QubitGraph(_NicelySerializable):
         """
         return self.is_directly_connected(edge[0], edge[1])
 
-    def is_directly_connected(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph):
+    def is_directly_connected(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph) -> bool:
         """
         Is `node1` *directly* connected to `node2` (does there exist an edge  between them?)
 
@@ -586,7 +586,7 @@ class QubitGraph(_NicelySerializable):
         i, j = self._nodeinds[node1], self._nodeinds[node2]
         return self._indices_connected(i, j)
 
-    def _is_connected_subgraph(self, node_indices: list[int]):
+    def _is_connected_subgraph(self, node_indices: list[int]) -> bool:
         """
         Whether the nodes indexed by the elements of `node_indices` form a connected subgraph.
         """
@@ -614,7 +614,7 @@ class QubitGraph(_NicelySerializable):
                 if not node_indices_set.issubset(glob): return False
             return True
 
-    def is_connected_graph(self):
+    def is_connected_graph(self) -> bool:
         """
         Computes whether this graph is connected (there exist paths between every pair of nodes).
 
@@ -624,7 +624,7 @@ class QubitGraph(_NicelySerializable):
         """
         return self._is_connected_subgraph(list(self._nodeinds.values()))
 
-    def is_connected_subgraph(self, nodes: list[QubitLabel_in_Graph]):
+    def is_connected_subgraph(self, nodes: list[QubitLabel_in_Graph]) -> bool:
         """
         Do a give set of nodes form a connected subgraph?
 
@@ -644,7 +644,7 @@ class QubitGraph(_NicelySerializable):
             if node not in self._nodeinds: return False
         return self._is_connected_subgraph([self._nodeinds[node] for node in nodes])
 
-    def _brute_get_all_connected_sets(self, n: int):
+    def _brute_get_all_connected_sets(self, n: int) -> list:
         """
         Computes all connected sets of `n` qubits using a brute-force approach.
 
@@ -669,7 +669,7 @@ class QubitGraph(_NicelySerializable):
 
         return connectedqubits
 
-    def find_all_connected_sets(self):
+    def find_all_connected_sets(self) -> dict:
         """
         Finds all subgraphs (connected sets of vertices) up to the full graph size.
 
@@ -728,7 +728,7 @@ class QubitGraph(_NicelySerializable):
         grouped_subgraphs = group_subgraphs(output_set)
         return grouped_subgraphs
 
-    def shortest_path(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph):
+    def shortest_path(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph) -> list:
         """
         Get the shortest path between two nodes (qubits).
 
@@ -764,7 +764,7 @@ class QubitGraph(_NicelySerializable):
             current_index = preceeding_index
         return shortestpath
 
-    def shortest_path_edges(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph):
+    def shortest_path_edges(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph) -> list:
         """
         Like :meth:`shortest_path`, but returns a list of (nodeA,nodeB) tuples.
 
@@ -787,7 +787,8 @@ class QubitGraph(_NicelySerializable):
         path = self.shortest_path(node1, node2)
         return [(path[i], path[i + 1]) for i in range(len(path) - 1)]
 
-    def shortest_path_intersect(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph, nodes_to_intersect):
+    def shortest_path_intersect(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph,
+                                nodes_to_intersect: Iterable[QubitLabel_in_Graph]) -> bool:
         """
         Check whether the shortest path between `node1` and `node2` contains any of the nodes in `nodes_to_intersect`.
 
@@ -810,7 +811,7 @@ class QubitGraph(_NicelySerializable):
         path_set = set(self.shortest_path(node1, node2))
         return len(path_set.intersection(nodes_to_intersect)) > 0
 
-    def shortest_path_distance(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph):
+    def shortest_path_distance(self, node1: QubitLabel_in_Graph, node2: QubitLabel_in_Graph) -> int:
         """
         Get the distance of the shortest path between `node1` and `node2`.
 
@@ -830,7 +831,7 @@ class QubitGraph(_NicelySerializable):
         self._refresh_dists_and_predecessors()
         return self._distance_matrix[i, j]
 
-    def shortest_path_distance_matrix(self):
+    def shortest_path_distance_matrix(self) -> _np.ndarray:
         """
         Returns a matrix of shortest path distances.
 
@@ -847,7 +848,7 @@ class QubitGraph(_NicelySerializable):
         self._refresh_dists_and_predecessors()
         return self._distance_matrix.copy()
 
-    def shortest_path_predecessor_matrix(self):
+    def shortest_path_predecessor_matrix(self) -> _np.ndarray:
         """
         Returns a matrix of predecessors used to construct the shortest path between two nodes.
 
@@ -864,7 +865,8 @@ class QubitGraph(_NicelySerializable):
         self._refresh_dists_and_predecessors()
         return self._predecessors.copy()
 
-    def subgraph(self, nodes_to_keep: list[QubitLabel_in_Graph], reset_nodes=False, include_directions=True):
+    def subgraph(self, nodes_to_keep: list[QubitLabel_in_Graph], reset_nodes: bool=False,
+                include_directions: bool=True) -> QubitGraph:
         """
         Return a graph that includes only `nodes_to_keep` and the edges between them.
 
@@ -902,7 +904,8 @@ class QubitGraph(_NicelySerializable):
 
         return QubitGraph(qubit_labels, initial_edges=edges, directed=self.directed)
 
-    def resolve_relative_nodelabel(self, relative_nodelabel: QubitLabel_in_Graph, target_labels: Sequence[Union[str, int]]):
+    def resolve_relative_nodelabel(self, relative_nodelabel: QubitLabel_in_Graph,
+                                   target_labels: Sequence[Union[str, int]]) -> QubitLabel_in_Graph:
         """
         Resolve a "relative nodelabel" into an actual node in this graph.
 
@@ -935,7 +938,8 @@ class QubitGraph(_NicelySerializable):
         else:
             raise ValueError("Unknown node: %s" % str(relative_nodelabel))
 
-    def move_in_directions(self, start_node: QubitLabel_in_Graph, directions: Iterable[Union[str,int]]):
+    def move_in_directions(self, start_node: QubitLabel_in_Graph,
+                           directions: Iterable[Union[str,int]]) -> Optional[QubitLabel_in_Graph]:
         """
         The node you end up on after moving in `directions` from `start_node`.
 
@@ -959,7 +963,7 @@ class QubitGraph(_NicelySerializable):
                 return None
         return node
 
-    def move_in_direction(self, start_node: QubitLabel_in_Graph, direction: Union[int, str]):
+    def move_in_direction(self, start_node: QubitLabel_in_Graph, direction: Union[int, str]) -> Optional[QubitLabel_in_Graph]:
         """
         Get the node that is one step in `direction` of `start_node`.
 
@@ -987,7 +991,7 @@ class QubitGraph(_NicelySerializable):
                 return self._nodes[j]
         return None  # No node in this direction
 
-    def __str__(self):
+    def __str__(self) -> str:
         dirstr = "Directed" if self.directed else "Undirected"
         s = dirstr + ' Qubit Graph w/%d qubits.  Nodes = %s\n' % (self.nqubits, str(self._nodeinds))
         s += ' Edges = ' + str(self.edges()) + '\n'

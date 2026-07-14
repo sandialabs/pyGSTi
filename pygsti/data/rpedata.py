@@ -9,11 +9,15 @@
 """
 Functions for creating RPE data sets
 """
-from typing import Literal, Optional, Union
+from typing import Dict, Literal, Optional, Union
 from pygsti.data import datasetconstruction as _dsc
+from pygsti.data.dataset import DataSet as _DataSet
+from pygsti.models.model import Model as _Model
+from pygsti.circuits.circuit import Circuit as _Circuit
 
 
-def make_rpe_data_set(model_or_dataset, string_list_d,
+def make_rpe_data_set(model_or_dataset: Union[_Model, _DataSet],
+                      string_list_d: Dict[Union[str, tuple], list[_Circuit]],
                       num_samples: Optional[Union[int, list[int]]],
                       sample_error: Literal['binomial', 'none', 'round', 'multinomial'] = 'binomial',
                       seed: Optional[int] = None):

@@ -18,10 +18,12 @@ from pygsti import algorithms as _alg
 from pygsti.data.dataset import DataSet as _DataSet
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.circuits import Circuit as _Circuit
+from pygsti.models.model import Model as _Model
 
 
 def create_bootstrap_dataset(input_data_set: _DataSet, generation_method: Literal["nonparametric", "parametric"],
-                             input_model=None, seed: Optional[int]=None, outcome_labels:Optional[list[_Label]]=None,
+                             input_model: Optional[_Model]=None, seed: Optional[int]=None,
+                             outcome_labels: Optional[list[_Label]]=None,
                              verbosity: int=1):
     """
     Creates a DataSet used for generating bootstrapped error bars.
@@ -114,10 +116,10 @@ def create_bootstrap_models(num_models: int, input_data_set: _DataSet,
                             generation_method: Literal["nonparametric", "parametric"],
                             fiducial_prep: list[_Circuit], fiducial_measure: list[_Circuit],
                             germs: list[_Circuit], max_lengths: list[int],
-                            input_model=None, target_model=None, start_seed: int=0,
+                            input_model: Optional[_Model]=None, target_model: Optional[_Model]=None, start_seed: int=0,
                             outcome_labels: Optional[list[_Label]]=None,
                             lsgst_lists: Optional[list[list[_Circuit]]]=None,
-                            return_data=False, verbosity=2):
+                            return_data: bool=False, verbosity: int=2):
     """
     Creates a series of "bootstrapped" Models.
 
@@ -259,11 +261,11 @@ def gauge_optimize_models(gs_list, target_model,
         to gauge-optimize them to.
 
     gate_metric : { "frobenius", "fidelity", "tracedist" }, optional
-        The metric used within the gauge optimization to determining error
+        The metric used within the gauge optimization to determine error
         in the gates.
 
     spam_metric : { "frobenius", "fidelity", "tracedist" }, optional
-        The metric used within the gauge optimization to determining error
+        The metric used within the gauge optimization to determine error
         in the state preparation and measurement.
 
     plot : bool, optional

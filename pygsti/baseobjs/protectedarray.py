@@ -10,7 +10,7 @@ Defines the ProtectedArray class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Union, Optional, Iterable
+from typing import Sequence, Union, Optional, Iterable
 import copy as _copy
 import numpy as _np
 from warnings import warn
@@ -19,9 +19,19 @@ from pygsti.baseobjs import _compatibility as _compat
 
 PROTECTEDARRAYERRORSTRING = "**some or all of assignment destination is read-only"
 
+# A single index specification along each axis of the array, e.g. `(0, slice(None, None, None))`.
+_IndexSpec = Sequence[Union[int, slice]]
+
 class ProtectedArray(object):
     """
     A numpy ndarray-like class that allows certain elements to be treated as read-only.
+
+    Note that all in-place arithmetic/logical operators (e.g. `+=`, `-=`,
+    `*=`, `/=`, `//=`, `**=`, `%=`, `@=`, `<<=`, `>>=`, `|=`, `^=`, `&=`)
+    unconditionally raise a `ValueError` on `ProtectedArray` instances, even
+    when no indices are currently protected (i.e. when `protected_index_mask`
+    is all-zero). Use `__setitem__` (e.g. `pa[:] = pa[:] + x`) instead, which
+    only raises when a protected index would actually be modified.
 
     Parameters
     ----------
@@ -46,8 +56,8 @@ class ProtectedArray(object):
     """
 
     def __init__(self, input_array: _np.ndarray,
-                 indices_to_protect: Optional[Union[int, Iterable[Union[list[int], tuple]]]]=None,
-                 protected_index_mask: _np.ndarray= None):
+                 indices_to_protect: Optional[Union[int, _IndexSpec, Iterable[_IndexSpec]]]=None,
+                 protected_index_mask: Optional[_np.ndarray]=None):
         self.base = input_array
 
         if protected_index_mask is not None:

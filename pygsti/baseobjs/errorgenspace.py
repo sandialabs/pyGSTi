@@ -10,7 +10,7 @@ Defines the ErrorgenSpace class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from typing import Literal, Union
+from typing import Union
 import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import matrixtools as _mt
@@ -30,9 +30,9 @@ class ErrorgenSpace(_NicelySerializable):
         ----------
         vectors : numpy array
             List of vectors that span the space
-        
-            elemgen_basis : ElementaryErrorgenBasis
-                The elementary error generator basis that define the entries of self.vectors 
+
+        basis : ElementaryErrorgenBasis
+            The elementary error generator basis that define the entries of self.vectors
         """
         super().__init__()
         self.vectors = vectors
@@ -113,14 +113,16 @@ class ErrorgenSpace(_NicelySerializable):
         """
         raise NotImplementedError("TODO in FUTURE")
 
-    def normalize(self, norm_order: Union[int, Literal['inf', '-inf']]=2):
+    def normalize(self, norm_order: Union[int, float]=2):
         """
         Normalize the vectors defining this space according to a given norm.
 
         Parameters
         ----------
-        norm_order : int, optional
-            The order of the norm to use.
+        norm_order : int or float, optional
+            The order of the norm to use.  This is passed directly to
+            `numpy.linalg.norm` as its `ord` argument, so e.g. `numpy.inf`
+            or `-numpy.inf` can be used to request the infinity norm.
 
         Returns
         -------

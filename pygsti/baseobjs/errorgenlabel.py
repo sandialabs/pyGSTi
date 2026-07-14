@@ -11,6 +11,9 @@ Defines the ElementaryErrorgenLabel class and supporting functionality.
 #***************************************************************************************************
 from __future__ import annotations
 
+from typing import Callable, Dict, Union
+
+
 def _to_int_or_strip(x):  # (same as in slowcircuitparser.py)
     return int(x) if x.strip().isdigit() else x.strip()
 
@@ -340,7 +343,7 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             ret.append(''.join(lbl))
         return tuple(ret)
 
-    def map_state_space_labels(self, mapper) -> GlobalElementaryErrorgenLabel:
+    def map_state_space_labels(self, mapper: Union[Dict, Callable]) -> GlobalElementaryErrorgenLabel:
         """
         Creates a new GlobalElementaryErrorgenLabel whose `sslbls` attribute is updated according to a mapping function.
 
