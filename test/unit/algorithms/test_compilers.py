@@ -86,6 +86,38 @@ class CompilersTester(BaseCase):
         self.assertArraysEqual(fixture_2Q.clifford_sym, sym_out)
 
 
+class LabelAwareCliffordCompilationTester(BaseCase):
+    def test_template_search_uses_argumented_gate_labels(self):
+        def unitary_factory(args):
+            return np.identity(4, 'd')
+
+        unitary_factory.shape = (4, 4)
+
+        def srep_factory(label):
+            return symplectic.symplectic_rep_of_clifford_layer(Label('P', label.args[0]), n=2)
+
+        pspec = QubitProcessorSpec(
+            2, ['Gargp'], nonstd_gate_unitaries={'Gargp': unitary_factory},
+            availability={'Gargp': [('Q0', 'Q1')]}, qubit_labels=('Q0', 'Q1'),
+            nonstd_gate_symplecticreps={'Gargp': srep_factory},
+            gate_arg_label_indices={'Gargp': (0,)})
+        compilation_rules = CliffordCompilationRules(pspec, compile_type="absolute")
+
+        label0 = Label('Gargp', (0, 1), args=(0,))
+        label1 = Label('Gargp', (0, 1), args=(1,))
+        target_srep = symplectic.symplectic_rep_of_clifford_layer(Label('P', 1), n=2)
+        template = compilation_rules.add_clifford_compilation_template(
+            'Gtarget', nqubits=2, unitary=None, srep=target_srep,
+            available_gatelabels=(label0, label1), available_sreps={'Gargp': srep_factory},
+            verbosity=0, max_iterations=1)
+
+        self.assertEqual(template, [label1])
+
+        real_circuit = compilation_rules._create_local_compilation_of(
+            Label('Gtarget', ('Q0', 'Q1')), srep=target_srep, verbosity=0)
+        self.assertEqual(real_circuit.layer_label(0), Label('Gargp', ('Q0', 'Q1'), args=('Q1',)))
+
+
 class CompileSymplecticTester(BaseCase):
     def setUp(self):
         super(CompileSymplecticTester, self).setUp()
