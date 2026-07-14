@@ -632,4 +632,4 @@ class VerbosityPrinter(object):
 ########################################################################################################################
 
 # For runnable usage examples and demonstration of how to use the printer class,
-# see the integration test at test/integration/test_verbosityprinter_demo.py
+# see the unit tests at test/unit/objects/test_verbosityprinter.py
