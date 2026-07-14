@@ -13,7 +13,6 @@ Symplectic representation utility functions
 import numpy as _np
 import copy as _copy
 from collections.abc import Mapping as _Mapping
-from typing import Any as _Any
 
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.smartcache import smart_cached
@@ -1060,11 +1059,6 @@ def compute_internal_gate_symplectic_representations(gllist=None):
     return srep_dict
 
 
-def _evaluate_clifford_srep(value: _Any, gate_label: _Label):
-    """Return a symplectic representation from a static value or label-aware callable."""
-    return value(gate_label) if callable(value) else value
-
-
 def _lookup_clifford_srep_for_label(gate_label: _Label, srep_dict: _Mapping, pspec=None):
     """Resolve the symplectic representation for a full operation label.
 
@@ -1074,9 +1068,11 @@ def _lookup_clifford_srep_for_label(gate_label: _Label, srep_dict: _Mapping, psp
     checked before falling back to the legacy name-based lookup.
     """
     if gate_label in srep_dict:
-        return _evaluate_clifford_srep(srep_dict[gate_label], gate_label)
+        srep = srep_dict[gate_label]
+        return srep(gate_label) if callable(srep) else srep
     if gate_label.name in srep_dict:
-        return _evaluate_clifford_srep(srep_dict[gate_label.name], gate_label)
+        srep = srep_dict[gate_label.name]
+        return srep(gate_label) if callable(srep) else srep
     if pspec is not None:
         return pspec.clifford_symplectic_rep_of(gate_label)
     raise KeyError("No symplectic representation for Clifford gate label %s" % str(gate_label))

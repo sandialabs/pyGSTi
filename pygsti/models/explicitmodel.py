@@ -1526,65 +1526,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #Note: does not alter instruments!
         return kicked_gs
 
-    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
-        """
-        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
-
-        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
-        from the returned dictionary.
-
-        Parameters
-        ----------
-        oplabel_filter : iterable, optional
-            A list, tuple, or set of operation labels whose symplectic
-            representations should be returned (if they exist).
-
-        Returns
-        -------
-        dict
-            keys are operation labels and/or just the root names of gates
-            (without any state space indices/labels).  Values are
-            `(symplectic_matrix, phase_vector)` tuples.
-        """
-        gfilter = set(oplabel_filter) if oplabel_filter is not None \
-            else None
-        exact_filter_names = {label.name for label in gfilter if isinstance(label, _Label)} \
-            if gfilter is not None else set()
-
-        srep_dict = {}
-        sreps_by_name = _collections.defaultdict(list)
-
-        def include_label(label):
-            return gfilter is None or label in gfilter or label.name in gfilter
-
-        def sreps_equal(srep1, srep2):
-            return _np.array_equal(srep1[0], srep2[0]) and _np.array_equal(srep1[1], srep2[1])
-
-        for gl, gate in self.operations.items():
-            if not include_label(gl):
-                continue
-
-            if isinstance(gate, _op.EmbeddedOp):
-                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
-                    "EmbeddedClifforGate contains a non-StaticCliffordOp!"
-                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
-            elif isinstance(gate, _op.StaticCliffordOp):
-                srep = (gate.smatrix, gate.svector)
-            else:
-                srep = None
-
-            if srep is not None:
-                sreps_by_name[gl.name].append((gl, srep))
-
-        for name, entries in sreps_by_name.items():
-            first_srep = entries[0][1]
-            if name not in exact_filter_names and all((sreps_equal(first_srep, srep) for _, srep in entries[1:])):
-                srep_dict[name] = first_srep
-            else:
-                for label, srep in entries:
-                    srep_dict[label] = srep
-
-        return srep_dict
+    def _iter_ops_for_clifford_symplectic_reps(self):
+        return self.operations.items()
 
     @_deprecated_fn
     def print_info(self):
