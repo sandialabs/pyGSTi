@@ -599,7 +599,7 @@ class Circuit(object):
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
         self.saved_auxinfo = {}
-        self.saved_auxinfo["lanes"] = {tuple(line_labels): self._labels}
+        self.saved_auxinfo["lanes"] = {tuple(line_labels): list(self._labels)}
 
     #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
@@ -3097,7 +3097,7 @@ class Circuit(object):
                 newobj = [map_sslbls(sub) for sub in obj]
             return newobj
         self._labels = map_sslbls(self._labels)
-
+        self.saved_auxinfo['lanes'] = {}
 
     def map_state_space_labels(self, mapper) -> Circuit:
         """
