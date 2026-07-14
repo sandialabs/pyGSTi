@@ -506,6 +506,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 #Construct a static "base" POVM
                 if isinstance(povm, ComputationalBasisPOVM):  # special easy case
                     base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
+                    base_items = list(base_povm.items())
                 else:
                     try:
                         if povm.evotype.minimal_space == 'Hilbert':

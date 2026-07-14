@@ -52,9 +52,8 @@ from pygsti.tools import listtools as _lt
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
-from typing import Union, Literal
+from typing import Literal
 from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
-
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -250,7 +249,7 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]):
+    def default_gauge_group(self, value: Literal['tp', 'unitary'] | _GaugeGroup):
         """
         The default gauge group.
         """
@@ -496,6 +495,7 @@ class ExplicitOpModel(_mdl.OpModel):
             indicates the maximum amount of truncation induced deviation from the original operations
             (measured by frobenius distance) we're willing to accept without marking the conversion
             as failed.
+
         spam_cp_penalty : float, optional (default 0.5)
             Converting SPAM operations to an error generator representation may 
             introduce trivial gauge degrees of freedom. These gauge degrees of freedom 

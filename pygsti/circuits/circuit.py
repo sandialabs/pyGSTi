@@ -23,7 +23,7 @@ import itertools as _itertools
 import warnings as _warnings
 
 import numpy as _np
-from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup
+from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel, LabelTupTup as _LabelTupTup, LabelTup as _LabelTup, LabelStr as _LabelStr
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
@@ -598,11 +598,13 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
+        self.saved_auxinfo = {}
+        self.saved_auxinfo["lanes"] = {tuple(line_labels): list(self._labels)}
 
     #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
     def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
+                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None, saved_aux: Optional[dict[str, dict]]=None):
         self._labels = labels
         self._line_labels = line_labels
         self._occurrence_id = occurrence
@@ -619,7 +621,7 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
-
+        self.saved_auxinfo = saved_aux if saved_aux else dict()
         return self
 
     #pickle management functions
@@ -1123,13 +1125,13 @@ class Circuit(object):
                 editable_labels =[[lbl] if lbl.IS_SIMPLE else list(lbl.components) for lbl in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
             else:
                 #copy the editable labels (avoiding shallow copy issues)
                 editable_labels = [sublist.copy() for sublist in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
-                                      self._compilable_layer_indices_tup)
+                                      self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
         else: #create static copy
             if self._static:
                 #if presently static leverage precomputed hashable_tup and hash.
@@ -1138,14 +1140,14 @@ class Circuit(object):
                 return ret._copy_init(self._labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup,
-                                      self._hashable_tup, self._hash)
+                                      self._hashable_tup, self._hash, saved_aux=self.saved_auxinfo)
             else:
                 static_labels = _sort_layer_labels(self._labels)
                 hashable_tup = self._tup_copy(static_labels)
                 return ret._copy_init(static_labels, self._line_labels,
                                       editable, self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup,
-                                      hashable_tup, hash(hashable_tup))
+                                      hashable_tup, hash(hashable_tup), saved_aux=self.saved_auxinfo)
     
     def sort_layer_labels_inplace(self):
         """
@@ -1343,13 +1345,27 @@ class Circuit(object):
 
         for i in layers:
             ret_layer = []
-            for l in self._layer_components(i):  # loop over labels in this layer
+            layer_lbl = self.layertup[i]
+            
+            if lines is None: # Add idles only when lines is None
+                if layer_lbl.sslbls is None:
+                    if not layer_lbl.components:
+                        components = [_Label('I', line) for line in self._line_labels]
+                    else:
+                        components = [layer_lbl]
+                else:
+                    components = list(layer_lbl.components)
+                    for line in self._line_labels:
+                        if line not in layer_lbl.sslbls:
+                            components.append(_Label('I', line))
+            else:
+                components = list(layer_lbl.components)
+
+
+            for l in components:
                 sslbls = get_sslbls(l)
                 if sslbls is None:
-                    ## add in special case of identity layer
-                    #if (isinstance(l,_Label) and l.name == self.identity): # ~ is_identity_layer(l)
-                    #    ret_layer.append(l); continue
-                    sslbls = set(self._line_labels)  # otherwise, treat None sslbs as *all* labels
+                    sslbls = set(self._line_labels)
                 else:
                     sslbls = set(sslbls)
                 if (strict and sslbls.issubset(lines)) or \
@@ -2093,10 +2109,16 @@ class Circuit(object):
 
         serial_lbls = []
         for lbl in layertup:
-            if len(lbl.components) == 0:  # special case of an empty-layer label,
+            if isinstance(lbl, _CircuitLabel) and not expand_subcircuits:
+                serial_lbls.append(lbl) # Extending the components will create additional layers
+                                        # but we did not want to expand the subcircuit.
+
+            elif len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
-            serial_lbls.extend(list(lbl.components) * lbl.reps)
-        return Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
+            else:
+                serial_lbls.extend(list(lbl.components) * lbl.reps)
+        tmp = Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
+        return tmp
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
@@ -2539,6 +2561,10 @@ class Circuit(object):
         if len(overlap) > 0:
             raise ValueError(
                 "The line labels of `circuit` and this Circuit must be distinct, but overlap = %s!" % str(overlap))
+        if self._line_labels == '*':
+            raise ValueError("The line labels of 'self', are underspecified and are currently the placeholder labels.")
+        if circuit._line_labels == '*':
+            raise ValueError("The line labels of 'circuit', are underspecified and are currently the placeholder labels.")
 
         all_line_labels = set(self._line_labels + circuit._line_labels)
         if line_order is not None:
@@ -2558,8 +2584,39 @@ class Circuit(object):
         else:
             new_line_labels = self._line_labels + circuit._line_labels
 
+    
         #Add circuit's labels into this circuit
-        self.insert_labels_as_lines_inplace(circuit._labels, line_labels=circuit.line_labels)
+        new_layers = []
+        ind = 0
+        while ind < min(self.num_layers, circuit.num_layers):
+            lbl = self.layer_label(ind)
+            other_lbl = circuit.layer_label(ind)
+
+            # Convert to LabelTup esq formats.
+            if isinstance(lbl, _LabelStr):
+                # These lbls have no qubits associated with them because of reasons.
+                # So we will assume that each line in the circuit of each has that gate applied.
+                lbl = _Label(lbl.name, self.line_labels)
+            if isinstance(other_lbl, _LabelStr):
+                other_lbl = _Label(other_lbl.name, circuit.line_labels)
+            
+            lbl = lbl.concat(other_lbl)
+            new_layers.append(lbl)
+            ind += 1
+
+        # We need to pad with idle gates if the circuits are not the same length.
+        if len(self) < len(circuit):
+            while ind < len(circuit):
+                new_layers.append(circuit.layer_label(ind))
+                ind += 1
+        else:
+            while ind < len(self):
+                new_layers.append(self.layer_label(ind))
+                ind += 1
+    
+
+        self._labels = new_layers
+
         self._line_labels = new_line_labels  # essentially just reorders labels if needed
 
     def tensor_circuit(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None) -> Circuit:
@@ -2585,10 +2642,38 @@ class Circuit(object):
         -------
         Circuit
         """
+
         cpy = self.copy(editable=True)
         cpy.tensor_circuit_inplace(circuit, line_order)
         if self._static: cpy.done_editing()
         return cpy
+
+    
+    def _cache_tensor_lanes(self, sub_circuit_list: list[_Label],
+                            lane_to_qubits: dict[int, tuple[int, ...]]) -> Circuit:
+        """
+        Store the tensor lanes in the circuit if appropriate. 
+        Note that this should only be called in the case that `sub_circuit_list`
+        when tensored is equivalent to the current circuit.
+        """
+
+        if "lanes" in self.saved_auxinfo and len(self) > 0:
+            if len(self.saved_auxinfo["lanes"]) <= 1:
+                # We will update this because it is now believed that
+                # we are able to conduct the operation in cross talk free lanes.
+                qubits_used = set()
+                for qub_in_lane in lane_to_qubits.values():
+                    qubits_used = qubits_used.union(qub_in_lane)
+
+                if len(qubits_used) != self.num_lines:
+                    # Do not update.
+                    return self
+                
+                self.saved_auxinfo["lanes"] = {} # Reset lanes info
+                for i, qubit_labels in lane_to_qubits.items():
+                    self.saved_auxinfo["lanes"][tuple(sorted(qubit_labels))] = sub_circuit_list[i]
+                    
+        return self
 
     def replace_layer_with_circuit_inplace(self, circuit: Circuit, j):
         """
@@ -3012,6 +3097,7 @@ class Circuit(object):
                 newobj = [map_sslbls(sub) for sub in obj]
             return newobj
         self._labels = map_sslbls(self._labels)
+        self.saved_auxinfo['lanes'] = {}
 
     def map_state_space_labels(self, mapper) -> Circuit:
         """
@@ -5100,6 +5186,8 @@ class Circuit(object):
         self._str = self.str
         # ^ the accessor on the right-hand side sees that self._str
         #   is None, and so returns a value computed from scratch.
+        if 'lanes' in self.saved_auxinfo:
+            self.saved_auxinfo['lanes'] = {}
         return
 
 
