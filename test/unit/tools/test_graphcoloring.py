@@ -9,6 +9,7 @@ from pygsti.tools.graphcoloring import (
     switchboard_find_edge_coloring,
     check_valid_edge_coloring,
     find_edge_coloring,
+    detect_topology,
 )
 
 from ..util import BaseCase
@@ -41,8 +42,8 @@ ALL_ALGORITHMS = ["new_bipartite", "vizing", "sinnamon", "misra_gries", "moser_t
 # coloring with at most deg+1 colors (Vizing's theorem) on every family tested.
 DETERMINISTIC_EXACT_ALGORITHMS = ["vizing", "misra_gries"]
 
-# Randomized algorithms that were fixed to terminate and produce valid colorings.
-RANDOMIZED_ALGORITHMS = ["assadi", "moser_tardos", "sinnamon"]
+# Randomized algorithms that terminate and produce a proper, complete coloring.
+RANDOMIZED_ALGORITHMS = ["assadi", "moser_tardos", "sinnamon", "new_bipartite"]
 
 # "SPARSE_SAFE" = algorithms that reliably produced a proper & complete coloring
 # on the low-degree (deg<=4) families in this suite, across runs and within the
@@ -102,6 +103,29 @@ def make_grid_graph(rows, cols):
             if r + 1 < rows:
                 edges.append((idx(r, c), idx(r + 1, c)))
     return _finalize(range(rows * cols), edges)
+
+
+def make_torus_graph(s):
+    """s x s torus (grid with row/column wraparound), max degree 4 for s > 2.
+
+    Mirrors QubitGraph.common_graph's "torus" construction: at s == 2 no
+    wraparound edges are added (they would duplicate the plain grid edges),
+    so a 2x2 "torus" is identical to a 2x2 grid.
+    """
+    def idx(r, c):
+        return r * s + c
+    edges = []
+    for r in range(s):
+        for c in range(s):
+            if c + 1 < s:
+                edges.append((idx(r, c), idx(r, c + 1)))
+            elif s > 2:
+                edges.append((idx(r, c), idx(r, 0)))
+            if r + 1 < s:
+                edges.append((idx(r, c), idx(r + 1, c)))
+            elif s > 2:
+                edges.append((idx(r, c), idx(0, c)))
+    return _finalize(range(s * s), edges)
 
 
 def make_high_degree_graph():
@@ -444,6 +468,152 @@ class GraphColoringReproducibilityTester(BaseCase):
 
 
 # ---------------------------------------------------------------------------
+# Topology detection and the "auto" switchboard algorithm.
+#
+# detect_topology / auto_edge_coloring recognize the canonical topologies
+# produced by ProcessorSpec(geometry=...) / QubitGraph.common_graph ("line",
+# "ring", "grid", "torus") and use a cheap closed-form coloring for them,
+# falling back to `vizing_edge_coloring` otherwise. These tests assume the
+# canonical vertex ordering (position in the vertex list == sequential/
+# row-major position in the topology), which is what `_finalize`-based graph
+# generators above already produce.
+# ---------------------------------------------------------------------------
+
+# (name, graph, expected_topology) fixtures for detect_topology.
+TOPOLOGY_GRAPHS = [
+    ("line_n2", make_path_graph(2), "line"),
+    ("line_n3", make_path_graph(3), "line"),
+    ("line_n8", make_path_graph(8), "line"),
+    ("ring_n2_tie", make_cycle_graph(2), "line"),      # n=2: ring == line (documented tie)
+    ("ring_n3_odd", make_cycle_graph(3), "ring"),
+    ("ring_n4_even", make_cycle_graph(4), "ring"),
+    ("ring_n5_odd", make_cycle_graph(5), "ring"),
+    ("ring_n8_even", make_cycle_graph(8), "ring"),
+    ("grid_2x2_tie", make_grid_graph(2, 2), "grid"),   # s=2: torus == grid (documented tie)
+    ("grid_3x3", make_grid_graph(3, 3), "grid"),
+    ("grid_4x4", make_grid_graph(4, 4), "grid"),
+    ("torus_s2_tie", make_torus_graph(2), "grid"),     # s=2: torus == grid (documented tie)
+    ("torus_s3_odd", make_torus_graph(3), "torus"),
+    ("torus_s4_even", make_torus_graph(4), "torus"),
+    ("torus_s5_odd", make_torus_graph(5), "torus"),
+]
+
+# Graphs that must NOT match any canonical topology.
+UNKNOWN_GRAPHS = [
+    ("complete_K6", make_complete_graph(6)),
+    ("high_degree_hub", make_high_degree_graph()),
+    ("random_3reg_n12", make_random_regular_graph(12, 3, seed=1234)),
+]
+
+
+@pytest.mark.parametrize("name,graph,expected", TOPOLOGY_GRAPHS)
+def test_detect_topology_recognizes_canonical_graphs(name, graph, expected):
+    vertices, edges, neighbors, _deg = graph
+    assert detect_topology(vertices, edges, neighbors) == expected, \
+        f"detect_topology misclassified {name}"
+
+
+@pytest.mark.parametrize("name,graph", UNKNOWN_GRAPHS)
+def test_detect_topology_returns_unknown_for_non_canonical_graphs(name, graph):
+    vertices, edges, neighbors, _deg = graph
+    assert detect_topology(vertices, edges, neighbors) == "unknown", \
+        f"detect_topology should not have matched {name} to a canonical topology"
+
+
+def test_detect_topology_returns_unknown_for_a_grid_missing_an_edge():
+    """A single missing edge must break the exact-match requirement (no
+    partial/subgraph matching)."""
+    vertices, edges, neighbors, _deg = make_grid_graph(3, 3)
+    edges_missing = [e for e in edges if e != edges[0]]
+    neighbors_missing = {v: [] for v in vertices}
+    for u, v in edges_missing:
+        neighbors_missing[u].append(v)
+        neighbors_missing[v].append(u)
+    assert detect_topology(vertices, edges_missing, neighbors_missing) == "unknown"
+
+
+def test_detect_topology_returns_unknown_for_shuffled_vertex_order():
+    """Detection assumes canonical vertex-list ordering; a permuted vertex
+    list for an otherwise-canonical grid must not be misclassified.
+
+    Note: not every permutation breaks detection -- e.g. reversing the vertex
+    list of a square grid corresponds to its 180-degree rotation symmetry, so
+    it is *still* a valid canonical labeling and correctly detected as "grid".
+    We use a simple position swap here, which is not a symmetry of the grid.
+    """
+    vertices, edges, neighbors, _deg = make_grid_graph(3, 3)
+    shuffled = list(vertices)
+    shuffled[1], shuffled[2] = shuffled[2], shuffled[1]
+    assert detect_topology(shuffled, edges, neighbors) == "unknown"
+
+
+@pytest.mark.parametrize("name,graph,topology", TOPOLOGY_GRAPHS)
+def test_auto_algorithm_is_proper_and_complete_on_canonical_graphs(name, graph, topology):
+    vertices, edges, neighbors, deg = graph
+    cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors)
+    proper, complete, _ncolors = assess_coloring(cp, edges)
+    assert proper, f"'auto' produced an improper coloring on {name}"
+    assert complete, f"'auto' left an edge uncolored on {name}"
+    assert check_valid_edge_coloring(cp, ret_false_on_error=True), \
+        f"'auto' failed check_valid_edge_coloring on {name}"
+
+
+@pytest.mark.parametrize("name,graph", UNKNOWN_GRAPHS)
+def test_auto_algorithm_falls_back_and_is_valid_on_non_canonical_graphs(name, graph):
+    """On graphs that don't match a canonical topology, 'auto' must still
+    produce a valid, complete coloring (via the vizing_edge_coloring fallback)."""
+    vertices, edges, neighbors, deg = graph
+    cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors)
+    proper, complete, ncolors = assess_coloring(cp, edges)
+    assert proper and complete, f"'auto' fallback produced an invalid coloring on {name}"
+    assert ncolors <= deg + 1, f"'auto' fallback used {ncolors} colors on {name} (budget {deg + 1})"
+
+
+class AutoEdgeColoringOptimalityTester(BaseCase):
+    """'auto' should achieve the true chromatic index (not just deg+1) on the
+    canonical topologies where a closed-form optimal coloring applies."""
+
+    def test_line_uses_at_most_two_colors(self):
+        for n in (2, 3, 5, 8):
+            vertices, edges, neighbors, deg = make_path_graph(n)
+            cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors)
+            _proper, _complete, ncolors = assess_coloring(cp, edges)
+            self.assertEqual(ncolors, deg, f"line n={n}: expected {deg} colors, got {ncolors}")
+
+    def test_even_ring_uses_two_colors_odd_ring_uses_three(self):
+        for n, expected in ((4, 2), (6, 2), (8, 2), (3, 3), (5, 3), (7, 3)):
+            vertices, edges, neighbors, deg = make_cycle_graph(n)
+            cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors)
+            _proper, _complete, ncolors = assess_coloring(cp, edges)
+            self.assertEqual(ncolors, expected, f"ring n={n}: expected {expected} colors, got {ncolors}")
+
+    def test_grid_uses_exactly_deg_colors(self):
+        for s in (2, 3, 4, 5):
+            vertices, edges, neighbors, deg = make_grid_graph(s, s)
+            cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors)
+            _proper, _complete, ncolors = assess_coloring(cp, edges)
+            self.assertEqual(ncolors, deg, f"grid {s}x{s}: expected {deg} colors, got {ncolors}")
+
+    def test_even_s_torus_uses_exactly_deg_colors(self):
+        for s in (2, 4, 6):
+            vertices, edges, neighbors, deg = make_torus_graph(s)
+            cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors)
+            _proper, _complete, ncolors = assess_coloring(cp, edges)
+            self.assertEqual(ncolors, deg, f"torus s={s}: expected {deg} colors, got {ncolors}")
+
+    def test_odd_s_torus_falls_back_but_stays_valid(self):
+        # Odd-s tori aren't bipartite, so the closed form doesn't apply; 'auto'
+        # must fall back to vizing_edge_coloring and still be valid (<= deg+1).
+        for s in (3, 5):
+            vertices, edges, neighbors, deg = make_torus_graph(s)
+            self.assertEqual(detect_topology(vertices, edges, neighbors), "torus")
+            cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors)
+            proper, complete, ncolors = assess_coloring(cp, edges)
+            self.assertTrue(proper and complete, f"torus s={s} fallback produced an invalid coloring")
+            self.assertLessEqual(ncolors, deg + 1, f"torus s={s} fallback used {ncolors} colors (budget {deg + 1})")
+
+
+# ---------------------------------------------------------------------------
 # Scaling / algorithm-selection suite.
 #
 # These tests characterize *which algorithm to use in which situation*. They are
@@ -468,9 +638,11 @@ class GraphColoringReproducibilityTester(BaseCase):
 #                     including dense complete graphs and grids. It uses a greedy
 #                     simple-case fast path and falls back to a Vizing-chain step
 #                     (the Misra-Gries procedure) for the hard case.
-#   - new_bipartite : fast, but its core popularization step is unimplemented, so
-#                     it leaves edges uncolored on dense/grid graphs -- only
-#                     trust it after verifying completeness.
+#   - new_bipartite : randomized, seedable; always proper and complete (uses
+#                     Case 1 direct assignment when a common free color exists,
+#                     and falls back to one Misra-Gries fan/Kempe-chain step
+#                     otherwise). Frequently achieves the bipartite optimum
+#                     (deg colors) on bipartite families due to random ordering.
 #   - sinnamon      : always terminates and is proper, but uses many extra
 #                     colors (poor quality); avoid when color count matters.
 #   - misra_gries   : deterministic; always terminates; proper+complete and
