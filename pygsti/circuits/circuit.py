@@ -4043,7 +4043,8 @@ class Circuit(object):
                         qubit_conversion: dict,
                         wait_duration=None,
                         gatename_conversion=None,
-                        idle_gate_name='Gi'):
+                        idle_gate_name='Gi',
+                        mcm_label='Iz'):
         """
         Converts this circuit to a Cirq circuit.
 
@@ -4063,9 +4064,17 @@ class Circuit(object):
             Cirq gates that will appear in the Cirq circuit. If only standard pyGSTi names
             are used (e.g., 'Gh', 'Gp', 'Gcnot', 'Gcphase', etc) this dictionary need not
             be specified, and an automatic conversion to the standard Cirq names will be
-            implemented.
+            implemented. Entries may either be a fixed `cirq.Gate` object, or (for
+            parameterized gates, e.g. 'Gzr') a callable that is called with the gate label's
+            args (e.g. `theta -> cirq.ZPowGate(exponent=theta / np.pi)`) to produce the gate.
         idle_gate_name : str, optional
             Name to use for idle gates. Defaults to 'Gi'
+
+        mcm_label : str, optional
+            The pyGSTi instrument name (see :meth:`from_cirq`) that indicates a per-qubit
+            Z-basis mid-circuit measurement, which is converted to a `cirq.measure` operation
+            (with an automatically generated, layer- and qubit-unique key) rather than looked
+            up in `gatename_conversion`. Defaults to 'Iz'.
 
         Returns
         -------
@@ -4093,8 +4102,17 @@ class Circuit(object):
             layer = self.layer_with_idles(i, idle_gate_name)
             operations = []
             for gate in layer:
-                operation = gatename_conversion[gate.name]
-                qubits = map(qubit_conversion.get, gate.qubits)
+                qubits = tuple(map(qubit_conversion.get, gate.qubits))
+                if gate.name == mcm_label:
+                    assert len(qubits) == 1, \
+                        f"Mid-circuit measurement label '{mcm_label}' is only supported acting on a single qubit at a time, but got {gate}."
+                    #generate a key that is unique across both qubit and layer.
+                    operations.append(cirq.measure(*qubits, key=f'{gate.qubits[0]}_{i}'))
+                    continue
+                conversion_entry = gatename_conversion[gate.name]
+                #parameterized gate families (e.g. 'Gzr') are stored as a callable
+                #(args -> cirq gate) rather than a fixed cirq.Gate object.
+                operation = conversion_entry if isinstance(conversion_entry, cirq.Gate) else conversion_entry(*gate.args)
                 operations.append(operation.on(*qubits))
             moments.append(cirq.Moment(operations))
 

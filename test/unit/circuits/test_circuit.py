@@ -866,6 +866,80 @@ MEASURE 2 ro[2]
         with self.assertRaises(NotImplementedError):
             circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0}, drop_terminal_measurements=False)
 
+    def test_convert_to_cirq_parameterized_gates_and_mcm(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        #pyGSTi -> Cirq -> pyGSTi: the parameterized-gate-family callables and the per-qubit
+        #'Iz' -> cirq.measure conversion should round-trip label-for-label (the mcm here is
+        #not terminal from Cirq's perspective, so use drop_terminal_measurements=False to keep it).
+        ckt = circuit.Circuit([
+            Label('Gzr', 0, args=(0.37,)),
+            Label('Gxr', 0, args=(-0.9,)),
+            Label('Gyr', 0, args=(1.1,)),
+            Label('Gczr', (0, 1), args=(0.5,)),
+            Label('Iz', 0),
+        ], line_labels=(0, 1))
+
+        q0, q1 = cirq.LineQubit.range(2)
+        qubit_conversion = {0: q0, 1: q1}
+        cirq_ckt = ckt.convert_to_cirq(qubit_conversion)
+
+        #the mid-circuit measurement should show up as a single cirq.measure operation with an
+        #auto-generated key, not looked up in the (gate-only) gatename_conversion dictionary.
+        measure_ops = [op for moment in cirq_ckt for op in moment.operations
+                       if isinstance(op.gate, cirq.MeasurementGate)]
+        self.assertEqual(len(measure_ops), 1)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            round_tripped = circuit.Circuit.from_cirq(cirq_ckt, qubit_conversion={q0: 0, q1: 1},
+                                                      drop_terminal_measurements=False)
+
+        self.assertEqual(ckt, round_tripped)
+
+    def test_convert_to_cirq_gu3_round_trip_up_to_float_precision(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        #Gu3's args round-trip through a longer chain of trig identities than the single-angle
+        #gates above, so only require the args to agree up to floating-point precision.
+        ckt = circuit.Circuit([Label('Gu3', 0, args=(0.2, 0.3, 0.4))], line_labels=(0,))
+        q0 = cirq.LineQubit(0)
+        cirq_ckt = ckt.convert_to_cirq({0: q0})
+        round_tripped = circuit.Circuit.from_cirq(cirq_ckt, qubit_conversion={q0: 0})
+
+        self.assertEqual(round_tripped.line_labels, ckt.line_labels)
+        self.assertEqual(round_tripped[0].name, 'Gu3')
+        for orig_arg, rt_arg in zip(ckt[0].args, round_tripped[0].args):
+            self.assertAlmostEqual(float(orig_arg), float(rt_arg))
+
+    def test_from_cirq_round_trip_unitary_equivalence(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        #Cirq -> pyGSTi -> Cirq: even though the intermediate pyGSTi circuit strips/reinserts
+        #idles and renames gates, the overall unitary should be preserved (up to global phase).
+        q0, q1 = cirq.LineQubit.range(2)
+        original = cirq.Circuit([
+            cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.15, x_exponent=0.42,
+                                           z_exponent=-0.3).on(q0), cirq.I(q1)]),
+            cirq.Moment([cirq.ZPowGate(exponent=0.61).on(q0), cirq.YPowGate(exponent=-0.24).on(q1)]),
+            cirq.Moment([cirq.CZPowGate(exponent=0.5).on(q0, q1)]),
+            cirq.Moment([cirq.rx(0.77).on(q0), cirq.I(q1)]),
+        ])
+
+        pygsti_ckt = circuit.Circuit.from_cirq(original, qubit_conversion={q0: 0, q1: 1})
+        round_tripped = pygsti_ckt.convert_to_cirq({0: q0, 1: q1})
+
+        self.assertTrue(cirq.allclose_up_to_global_phase(cirq.unitary(original), cirq.unitary(round_tripped)))
+
     def test_from_qiskit(self):
         try:
             import qiskit
