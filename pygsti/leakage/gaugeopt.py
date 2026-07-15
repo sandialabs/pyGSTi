@@ -12,15 +12,16 @@ from __future__ import annotations
 import copy
 from typing import Dict, List, Optional, TYPE_CHECKING, Union
 
-from pygsti.baseobjs.basis import Basis
+from pygsti.baseobjs.basis import Basis, BuiltinBasis
 
 if TYPE_CHECKING:
     from pygsti.models import ExplicitOpModel
     from pygsti.protocols.gst import GSTGaugeOptSuite, ModelEstimateResults
 
 
-def _direct_sum_unitary_group(subspace_bases, full_basis, triviality_flags=None,
-                              level_partition=None):
+def _direct_sum_unitary_group(subspace_bases: list[BuiltinBasis], full_basis: Basis,
+        triviality_flags=None, level_partition=None
+    ):
     """
     Build a gauge group that acts as an independent unitary on each summand of a
     direct-sum decomposition H = H₀ ⨁ H₁ ⨁ ... of Hilbert space.
@@ -186,7 +187,7 @@ def lagoified_gopparams_dicts(gopparams_dicts: List[Dict]) -> List[Dict]:
         # ^ We use subspace-restricted loss functions that only care about mismatches
         #   between an estimate and a target when restricted to the computational subspace.
         #
-        gg = UnitaryGaugeGroup(tm.basis.state_space, tm.basis)
+        gg = UnitaryGaugeGroup(tm.state_space, tm.basis)
         inner_dict['gauge_group'] = gg
         inner_dict['_gaugeGroupEl'] = gg.compute_element(gg.initial_params)
         # ^ We insist on the unitary gauge group because other common gauge groups

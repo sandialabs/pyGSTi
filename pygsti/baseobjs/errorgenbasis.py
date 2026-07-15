@@ -63,6 +63,7 @@ def _all_elements_same_type(lst):
             return False
     return True
 
+
 class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
     This basis object contains the information  necessary for building, 
@@ -329,6 +330,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         difference_state_space = self.state_space
         return ExplicitElementaryErrorgenBasis(difference_state_space, sorted(difference_labels, key=lambda label: label.__str__()), self._basis_1q)
 
+
 class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
     This basis object contains the information  necessary for building, 
@@ -397,7 +399,6 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             cnt += _np.prod(right_lengths) - start_at
 
         return cnt
-
 
     @classmethod
     def _create_ordered_labels(cls, type_str, basis_1q, state_space,
