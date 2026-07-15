@@ -221,7 +221,7 @@ print(parameterized_cirq_circuit)
 print(Circuit.from_cirq(parameterized_cirq_circuit))
 ```
 
-6. Cirq circuits with Z-basis mid-circuit measurements (`cirq.measure`) also convert, each measured qubit becoming its own `'Iz'` instrument label (the same convention used by `convert_to_qiskit`); the measurement key itself is not preserved. By default, *terminal* measurements -- those not followed by any other operation on the same qubit(s) -- are dropped rather than converted, since a terminal Z-basis measurement is exactly pyGSTi's implicit end-of-circuit readout; set `drop_terminal_measurements=False` to keep them as explicit `'Iz'` labels instead.
+6. Cirq circuits with Z-basis mid-circuit measurements (`cirq.measure`) also convert, each measured qubit becoming its own `'Iz'` instrument label (the same convention used by `convert_to_qiskit`); the measurement key itself is not preserved. By default, *terminal* measurements -- those not followed by any other operation on the same qubit(s) -- are dropped rather than converted, since a terminal Z-basis measurement is exactly pyGSTi's implicit end-of-circuit readout; set `drop_terminal_measurements=False` to keep them as explicit `'Iz'` labels instead. These lossy-conversion notices (a dropped terminal measurement, or a discarded measurement key) are emitted as `CirqInteropWarning`s; pass `lossy='ignore'` to `from_cirq` to suppress them, or `lossy='raise'` to promote them to a `ValueError`.
 
 ```{code-cell} ipython3
 mcm_cirq_circuit = cirq.Circuit([
