@@ -4309,6 +4309,7 @@ class Circuit(object):
                     warned_measurement_keys[0] = True
                 return [_Label(mcm_label, (qubit_conversion[qubit],)) for qubit in op.qubits]
 
+            sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
             try:
                 name = cirq_to_gate_name_mapping[op.gate]
             except KeyError:
@@ -4319,7 +4320,6 @@ class Circuit(object):
                         'cirq.resolve_parameters.')
                 for gate_cls, pygsti_name, args_fn in cirq_to_parameterized_gate_name_mapping:
                     if isinstance(op.gate, gate_cls):
-                        sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
                         return [_Label(pygsti_name, sslbls, args=args_fn(op.gate))]
                 msg = 'Could not find matching standard gate name in provided dictionary, nor a matching' \
                      +' parameterized gate family. Falling back to try and find a unitary from' \
@@ -4328,7 +4328,6 @@ class Circuit(object):
                 name = _itgs.unitary_to_standard_gatename(cirq.unitary(op.gate), up_to_phase=True)
                 assert name is not None, f'Could not find a matching standard gate name for {op!r}.'
 
-            sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
             return [_Label(name, state_space_labels=sslbls)]
 
         #initialize empty list of pygsti circuit layers
@@ -4374,9 +4373,11 @@ class Circuit(object):
             #check whether any of the elements are implied idles, and if so use flag
             #to determine whether to include them. We have already checked if this layer
             #is a global idle, so if not then we only need to check if any of the layer
-            #elements are implied idles. This only applies when there's more than one element:
-            #a lone idle in a layer is the explicit gate for that layer, not an "implied" one.
-            elif remove_implied_idles and len(layer_label_elems) > 1 and not all_idles \
+            #elements are implied idles. `not all_idles` together with the presence of a
+            #'Gi' element already implies len(layer_label_elems) > 1 (at least one 'Gi'
+            #and at least one non-'Gi'), so a lone idle in a layer -- the explicit gate for
+            #that layer, not an "implied" one -- never reaches this branch.
+            elif remove_implied_idles and not all_idles \
                     and any(elem.name == 'Gi' for elem in layer_label_elems):
                 stripped_layer_label_elems = [elem for elem in layer_label_elems
                                               if not elem.name == 'Gi']

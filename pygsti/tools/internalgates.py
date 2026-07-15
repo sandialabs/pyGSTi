@@ -657,9 +657,9 @@ def cirq_parameterized_gatenames_standard_conversions():
     `cirq.YPowGate`, and `cirq.ZPowGate`, respectively, so they are covered by the same
     `isinstance` checks without needing separate entries.
 
-    Conversions are exact (agree with `cirq.unitary` up to global phase) only when the
-    matched gate's `global_shift` is 0; a nonzero `global_shift` only ever contributes an
-    overall (unobservable, up to SPAM) global phase, so the conversion is applied regardless.
+    `Gzr`/`Gczr` match `cirq.unitary` exactly when the matched gate's `global_shift` is 0;
+    all other cases match up to a global phase. Since a global phase is unobservable, the
+    conversion is applied regardless of `global_shift`.
 
     Returns
     -------

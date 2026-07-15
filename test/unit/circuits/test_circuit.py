@@ -898,7 +898,6 @@ MEASURE 2 ro[2]
         #terminality is a per-operation check based on whether ANY later moment touches ANY of
         #the op's qubits -- so a measurement on q0 that happens before a later gate on q1 is
         #still terminal for q0 (staggered final measurements across different qubits).
-        import cirq
         q0, q1 = cirq.LineQubit.range(2)
         cirq_circuit = cirq.Circuit([
             cirq.Moment([cirq.measure(q0, key='m0')]),
