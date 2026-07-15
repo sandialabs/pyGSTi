@@ -142,7 +142,10 @@ class DenseState(_DenseCopyMixin, _State):
             if 'Basis object has unexpected dimension' in se and len(serial_memo) > 0:
                 member = list(serial_memo.values())[0]
                 basis = member.parent.basis
-                state_space = basis.state_space
+                # Use the parent model's state_space directly rather than basis.state_space:
+                # composite bases (e.g. TensorProdBasis, DirectSumBasis) don't define state_space,
+                # while every Model is guaranteed to have one.
+                state_space = member.parent.state_space
                 return cls(vec, basis, mm_dict['evotype'], state_space)
             raise e
 

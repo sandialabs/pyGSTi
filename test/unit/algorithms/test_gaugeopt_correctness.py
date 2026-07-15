@@ -424,6 +424,36 @@ class LeakageDirectSumGroupTester(BaseCase):
             _leakage_direct_sum_group(basis)
 
 
+class LagoifiedGopparamsDictsTester(BaseCase):
+    """
+    Regression test for pygsti.leakage.gaugeopt.lagoified_gopparams_dicts.
+
+    It used to build its unitary gauge group from `tm.basis.state_space`, which raises
+    AttributeError whenever `tm.basis` is a composite basis (e.g. TensorProdBasis) --
+    the common case for any multi-subsystem model, leakage or not. It should instead use
+    `tm.state_space`, which every Model has regardless of its basis's type.
+    """
+
+    def test_tensor_prod_basis_target_model_does_not_crash(self):
+        from pygsti.baseobjs import ExplicitStateSpace
+        from pygsti.baseobjs.basis import Basis, TensorProdBasis
+        from pygsti.leakage.gaugeopt import lagoified_gopparams_dicts
+        from pygsti.models.gaugegroup import DirectSumUnitaryGroup
+
+        # A qubit tensored with a leaky qutrit: `basis` is a TensorProdBasis, which (unlike
+        # BuiltinBasis) has no `state_space` attribute of its own.
+        basis = TensorProdBasis((Basis.cast('pp', 4), Basis.cast('l2p1', 9)))
+        self.assertFalse(hasattr(basis, 'state_space'))
+        state_space = ExplicitStateSpace(['Q0', 'Q1'], [2, 3])
+        target_model = ExplicitOpModel(state_space, basis)
+
+        gopparams_dicts = lagoified_gopparams_dicts([{'target_model': target_model}])
+
+        self.assertEqual(len(gopparams_dicts), 2)
+        self.assertIsInstance(gopparams_dicts[0]['gauge_group'], UnitaryGaugeGroup)
+        self.assertIsInstance(gopparams_dicts[1]['gauge_group'], DirectSumUnitaryGroup)
+
+
 class FindPerfectGauge_DirectSumGaugeGroup4LevelTester(BaseCase):
     """
     Gauge-recovery test for the generalized direct-sum gauge group on a 4-level
