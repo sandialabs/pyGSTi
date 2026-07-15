@@ -39,6 +39,32 @@ class Gzr(_UnitaryGateFunction):
         return super(Gzr, cls)._from_nice_serialization(state)
 
 
+class Gxr(_UnitaryGateFunction):
+    shape = (2, 2)
+
+    def __call__(self, theta):
+        theta = float(theta[0])
+        return _np.array([[_np.cos(theta / 2), -1j * _np.sin(theta / 2)],
+                          [-1j * _np.sin(theta / 2), _np.cos(theta / 2)]], complex)
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return super(Gxr, cls)._from_nice_serialization(state)
+
+
+class Gyr(_UnitaryGateFunction):
+    shape = (2, 2)
+
+    def __call__(self, theta):
+        theta = float(theta[0])
+        return _np.array([[_np.cos(theta / 2), -_np.sin(theta / 2)],
+                          [_np.sin(theta / 2), _np.cos(theta / 2)]], complex)
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return super(Gyr, cls)._from_nice_serialization(state)
+
+
 class Gczr(_UnitaryGateFunction):
     shape = (4, 4)
 
@@ -49,7 +75,7 @@ class Gczr(_UnitaryGateFunction):
     @classmethod
     def _from_nice_serialization(cls, state):
         return super(Gczr, cls)._from_nice_serialization(state)
-    
+
 
 
 class Gu3(_UnitaryGateFunction):
@@ -224,6 +250,10 @@ def standard_gatename_unitaries():
 
       * 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
       * 'Gzr' : a parameterized gate that is a Z rotation by an angle, where when the angle = pi then it equals Z.
+      * 'Gxr', 'Gyr' : parameterized gates that are X and Y rotations by an angle theta, defined as
+        expm(-1j*theta*sigma/2) (i.e., matching the Qiskit RXGate/RYGate convention), where when the
+        angle = pi they equal X and Y (up to global phase).
+      * 'Gczr' : a parameterized controlled-Z-rotation gate, diag(1,1,1,exp(1j*theta)).
       * 'Gn' : N gate, pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere, native gate in some spin qubit systems.
       * 'Gu3' : parameterized gate that can encode any single-qubit rotation with three parameters (theta, phi, lambda).
       
@@ -329,6 +359,8 @@ def standard_gatename_unitaries():
     std_unitaries['Gecr'] = std_unitaries['Gecres']  # alias
     
     std_unitaries['Gzr'] = Gzr()
+    std_unitaries['Gxr'] = Gxr()
+    std_unitaries['Gyr'] = Gyr()
     std_unitaries['Gczr'] = Gczr()
 
     std_unitaries['Gu3'] = Gu3()
@@ -509,13 +541,26 @@ def standard_gatenames_cirq_conversions():
     std_gatenames_to_cirq['Gh'] = cirq.H
     std_gatenames_to_cirq['Gt'] = cirq.T
     std_gatenames_to_cirq['Gtdag'] = cirq.T**-1
-    std_gatenames_to_cirq['Gn'] = cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
-                                                    x_exponent=0.4195693767448338, 
+    std_gatenames_to_cirq['Gn'] = cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326,
+                                                    x_exponent=0.4195693767448338,
                                                     z_exponent=-0.2951672353008665)
+
+    #parameterized gates: these map to callables (angle(s) -> cirq gate) rather than a fixed
+    #cirq gate object, since the pyGSTi gate names refer to a whole family of gates parameterized
+    #by the args carried on the gate's Label. convert_to_cirq() special-cases these by calling
+    #the entry with the label's args before calling .on(*qubits) on the result.
+    std_gatenames_to_cirq['Gzr'] = lambda theta: cirq.ZPowGate(exponent=float(theta) / _np.pi)
+    std_gatenames_to_cirq['Gxr'] = lambda theta: cirq.XPowGate(exponent=float(theta) / _np.pi)
+    std_gatenames_to_cirq['Gyr'] = lambda theta: cirq.YPowGate(exponent=float(theta) / _np.pi)
+    std_gatenames_to_cirq['Gu3'] = lambda theta, phi, lamb: cirq.PhasedXZGate(
+        axis_phase_exponent=0.5 - float(lamb) / _np.pi,
+        x_exponent=float(theta) / _np.pi,
+        z_exponent=(float(phi) + _np.pi / 2) / _np.pi - (0.5 - float(lamb) / _np.pi))
 
     #two-qubit gates
 
     std_gatenames_to_cirq['Gcphase'] = cirq.CZ
+    std_gatenames_to_cirq['Gczr'] = lambda theta: cirq.CZPowGate(exponent=float(theta) / _np.pi)
     std_gatenames_to_cirq['Gcnot'] = cirq.CNOT
     std_gatenames_to_cirq['Gswap'] = cirq.SWAP
     std_gatenames_to_cirq['Gzz'] = cirq.ZZPowGate(exponent=0.5, global_shift=-0.5)
@@ -572,8 +617,13 @@ def cirq_gatenames_standard_conversions():
         raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
 
 
-    #reverse the mapping in standard_gatenames_cirq_conversions
-    cirq_to_standard_mapping = {value: key for key,value in standard_gatenames_cirq_conversions().items()}
+    #reverse the mapping in standard_gatenames_cirq_conversions. Skip the plain-function entries
+    #(the parameterized gate families, e.g. 'Gzr' -> lambda theta: ...) since they don't correspond
+    #to a single fixed cirq gate object that could ever be looked up on the reversed side.
+    #Note cirq.Gate instances are themselves callable (calling one applies it to qubits), so we
+    #can't use a bare `callable(value)` check here -- that would also exclude every real gate.
+    cirq_to_standard_mapping = {value: key for key, value in standard_gatenames_cirq_conversions().items()
+                               if isinstance(value, cirq.Gate)}
 
     #A direct reversing doesn't quite do what we want since the originally mapping was not
     #one-to-one (some pyGSTi gate names refer to the same cirq Circuit, primarily because of the cliffords). 
@@ -590,6 +640,66 @@ def cirq_gatenames_standard_conversions():
 
     return cirq_to_standard_mapping
 
+
+def cirq_parameterized_gatenames_standard_conversions():
+    """
+    An ordered list of `(cirq gate class, pygsti gate name, args function)` tuples used by
+    `Circuit.from_cirq` to convert cirq operations whose gate is a member of a continuously
+    parameterized family (e.g. `cirq.ZPowGate`) into a pyGSTi standard parameterized gate
+    (e.g. 'Gzr') with args computed from the cirq gate's parameters.
+
+    This is checked (via `isinstance`) only after an exact dictionary lookup in
+    `cirq_gatenames_standard_conversions` has failed, so exact matches (e.g. `cirq.Z`,
+    `cirq.CZ`, the 24 Clifford `PhasedXZGate`s) are unaffected and continue to map to their
+    existing fixed pyGSTi gate names.
+
+    Note that `cirq.Rx`, `cirq.Ry`, and `cirq.Rz` are subclasses of `cirq.XPowGate`,
+    `cirq.YPowGate`, and `cirq.ZPowGate`, respectively, so they are covered by the same
+    `isinstance` checks without needing separate entries.
+
+    Conversions are exact (agree with `cirq.unitary` up to global phase) only when the
+    matched gate's `global_shift` is 0; a nonzero `global_shift` only ever contributes an
+    overall (unobservable, up to SPAM) global phase, so the conversion is applied regardless.
+
+    Returns
+    -------
+    list of (type, str, callable)
+        Each callable maps a cirq gate instance to a tuple of args suitable for use in
+        `Label(pygsti_name, qubits, args=args_fn(gate))`.
+    """
+    try:
+        import cirq
+    except ImportError:
+        raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+    def _zpow_args(gate):
+        return (float(gate.exponent) * _np.pi,)
+
+    def _xpow_args(gate):
+        return (float(gate.exponent) * _np.pi,)
+
+    def _ypow_args(gate):
+        return (float(gate.exponent) * _np.pi,)
+
+    def _czpow_args(gate):
+        return (float(gate.exponent) * _np.pi,)
+
+    def _phasedxz_args(gate):
+        a = float(gate.axis_phase_exponent)
+        x = float(gate.x_exponent)
+        z = float(gate.z_exponent)
+        theta = _np.pi * x
+        phi = _np.pi * (z + a) - _np.pi / 2
+        lamb = _np.pi / 2 - _np.pi * a
+        return (theta, phi, lamb)
+
+    return [
+        (cirq.ZPowGate, 'Gzr', _zpow_args),
+        (cirq.XPowGate, 'Gxr', _xpow_args),
+        (cirq.YPowGate, 'Gyr', _ypow_args),
+        (cirq.CZPowGate, 'Gczr', _czpow_args),
+        (cirq.PhasedXZGate, 'Gu3', _phasedxz_args),
+    ]
 
 
 def standard_gatenames_quil_conversions():
