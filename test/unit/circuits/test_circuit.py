@@ -678,6 +678,193 @@ MEASURE 2 ro[2]
         self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom_1)
         self.assertEqual(ckt_global_idle_none, converted_pygsti_circuit_global_idle_none)
 
+    def test_from_cirq_parameterized_gates(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        q0, q1 = cirq.LineQubit.range(2)
+
+        #arbitrary-angle Z/X/Y/CZPowGate and Rx/Ry/Rz (subclasses of X/Y/ZPowGate) all dispatch
+        #through the new parameterized-family lookup, since they have no exact-match entry.
+        cirq_circuit = cirq.Circuit([
+            cirq.Moment([cirq.ZPowGate(exponent=0.37).on(q0)]),
+            cirq.Moment([cirq.XPowGate(exponent=-0.21).on(q0)]),
+            cirq.Moment([cirq.YPowGate(exponent=0.66).on(q0)]),
+            cirq.Moment([cirq.rz(0.5).on(q0)]),
+            cirq.Moment([cirq.rx(-0.9).on(q0)]),
+            cirq.Moment([cirq.ry(1.3).on(q0)]),
+            cirq.Moment([cirq.CZPowGate(exponent=0.42).on(q0, q1)]),
+        ])
+
+        converted = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0, q1: 1})
+
+        expected = circuit.Circuit([
+            Label('Gzr', 0, args=(0.37 * np.pi,)),
+            Label('Gxr', 0, args=(-0.21 * np.pi,)),
+            Label('Gyr', 0, args=(0.66 * np.pi,)),
+            Label('Gzr', 0, args=(0.5,)),
+            Label('Gxr', 0, args=(-0.9,)),
+            Label('Gyr', 0, args=(1.3,)),
+            Label('Gczr', (0, 1), args=(0.42 * np.pi,)),
+        ], line_labels=(0, 1))
+
+        self.assertEqual(expected, converted)
+
+        #exact-match gates (Clifford angles) should still map to their existing fixed names,
+        #i.e. the new parameterized dispatch doesn't shadow exact dictionary lookups.
+        exact_circuit = cirq.Circuit([cirq.Moment([cirq.ZPowGate(exponent=0.5).on(q0)])])
+        converted_exact = circuit.Circuit.from_cirq(exact_circuit, qubit_conversion={q0: 0})
+        self.assertEqual(circuit.Circuit([Label('Gzpi2', 0)]), converted_exact)
+
+    def test_from_cirq_phasedxz_gate(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        q0 = cirq.LineQubit(0)
+        #an arbitrary (non-Clifford) PhasedXZGate has no exact match, and should dispatch to Gu3.
+        gate = cirq.PhasedXZGate(axis_phase_exponent=0.2, x_exponent=0.3, z_exponent=0.4)
+        cirq_circuit = cirq.Circuit([cirq.Moment([gate.on(q0)])])
+        converted = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0})
+
+        theta = np.pi * 0.3
+        phi = np.pi * (0.4 + 0.2) - np.pi / 2
+        lamb = np.pi / 2 - np.pi * 0.2
+        expected = circuit.Circuit([Label('Gu3', 0, args=(theta, phi, lamb))])
+        self.assertEqual(expected, converted)
+
+    def test_from_cirq_symbolic_gate_raises(self):
+        try:
+            import cirq
+            import sympy
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        q0 = cirq.LineQubit(0)
+        cirq_circuit = cirq.Circuit([cirq.Moment([cirq.rz(sympy.Symbol('x')).on(q0)])])
+        with self.assertRaises(ValueError):
+            circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0})
+
+    def test_from_cirq_classically_controlled_raises(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        q0, q1 = cirq.LineQubit.range(2)
+        cirq_circuit = cirq.Circuit([
+            cirq.Moment([cirq.measure(q0, key='m')]),
+            cirq.Moment([cirq.X(q1).with_classical_controls('m')]),
+        ])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            with self.assertRaises(NotImplementedError):
+                circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0, q1: 1},
+                                          drop_terminal_measurements=False)
+
+    def test_from_cirq_mcm(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        q0, q1 = cirq.LineQubit.range(2)
+
+        #a genuinely mid-circuit measurement (later moments touch the qubit) is always converted,
+        #regardless of drop_terminal_measurements.
+        cirq_circuit = cirq.Circuit([
+            cirq.Moment([cirq.X(q0)]),
+            cirq.Moment([cirq.measure(q0, key='m')]),
+            cirq.Moment([cirq.Y(q0)]),
+        ])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            converted = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0})
+
+        expected = circuit.Circuit([Label('Gxpi', 0), Label('Iz', 0), Label('Gypi', 0)])
+        self.assertEqual(expected, converted)
+
+        #a multi-qubit measure op splits into one Iz label per qubit within the same layer.
+        multi_meas_circuit = cirq.Circuit([
+            cirq.Moment([cirq.X(q0)]),
+            cirq.Moment([cirq.measure(q0, q1, key='m')]),
+            cirq.Moment([cirq.Y(q0)]),
+        ])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            converted_multi = circuit.Circuit.from_cirq(multi_meas_circuit, qubit_conversion={q0: 0, q1: 1})
+
+        expected_multi = circuit.Circuit([
+            Label('Gxpi', 0),
+            Label([Label('Iz', 0), Label('Iz', 1)]),
+            Label('Gypi', 0),
+        ], line_labels=(0, 1))
+        self.assertEqual(expected_multi, converted_multi)
+
+        #a custom mcm_label is respected.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            converted_custom_label = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0}, mcm_label='Imeas')
+        self.assertEqual(circuit.Circuit([Label('Gxpi', 0), Label('Imeas', 0), Label('Gypi', 0)]), converted_custom_label)
+
+    def test_from_cirq_terminal_measurement_dropped_by_default(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        q0 = cirq.LineQubit(0)
+        #a measurement is terminal iff no LATER moment touches its qubit(s); this measurement
+        #is the last operation on q0, so it should be dropped by default.
+        cirq_circuit = cirq.Circuit([cirq.Moment([cirq.X(q0)]), cirq.Moment([cirq.measure(q0, key='m')])])
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            converted_default = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0})
+        self.assertEqual(circuit.Circuit([Label('Gxpi', 0)]), converted_default)
+        self.assertTrue(any('Dropping terminal' in str(warning.message) for warning in w))
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            converted_kept = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0},
+                                                       drop_terminal_measurements=False)
+        self.assertEqual(circuit.Circuit([Label('Gxpi', 0), Label('Iz', 0)]), converted_kept)
+
+    def test_from_cirq_staggered_terminal_measurement(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        #terminality is a per-operation check based on whether ANY later moment touches ANY of
+        #the op's qubits -- so a measurement on q0 that happens before a later gate on q1 is
+        #still terminal for q0 (staggered final measurements across different qubits).
+        import cirq
+        q0, q1 = cirq.LineQubit.range(2)
+        cirq_circuit = cirq.Circuit([
+            cirq.Moment([cirq.measure(q0, key='m0')]),
+            cirq.Moment([cirq.Y(q1)]),
+        ])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            converted = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0, q1: 1})
+
+        #q0's only content was dropped, so (as with any layer-less line) it doesn't appear at all.
+        self.assertEqual(circuit.Circuit([Label('Gypi', 1)]), converted)
+
+    def test_from_cirq_measurement_invert_mask_raises(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        q0 = cirq.LineQubit(0)
+        cirq_circuit = cirq.Circuit([cirq.Moment([cirq.measure(q0, invert_mask=(True,), key='m')])])
+        with self.assertRaises(NotImplementedError):
+            circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0}, drop_terminal_measurements=False)
 
     def test_from_qiskit(self):
         try:
