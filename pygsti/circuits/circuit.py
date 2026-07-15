@@ -29,6 +29,7 @@ from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
 from pygsti.tools.exceptions import QiskitInteropWarning as _QiskitInteropWarning
+from pygsti.tools.exceptions import CirqInteropWarning as _CirqInteropWarning
 from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
@@ -4122,7 +4123,8 @@ class Circuit(object):
     def from_cirq(circuit: CirqCircuit, qubit_conversion=None, cirq_gate_conversion=None,
                   cirq_parameterized_gate_conversion=None,
                   remove_implied_idles=True, global_idle_replacement_label='auto',
-                  drop_terminal_measurements=True, mcm_label='Iz') -> Circuit:
+                  drop_terminal_measurements=True, mcm_label='Iz',
+                  lossy: Literal['warn', 'ignore', 'raise'] = 'warn') -> Circuit:
         """
         Converts and instantiates a pyGSTi Circuit object from a Cirq Circuit object.
 
@@ -4142,9 +4144,10 @@ class Circuit(object):
         A `cirq.MeasurementGate` operation converts to one `mcm_label` instrument label per
         measured qubit (see `drop_terminal_measurements` and `mcm_label` below); a nontrivial
         `invert_mask` is not supported and raises `NotImplementedError`, and the measurement key
-        is discarded (with a one-time warning). A symbolically-parameterized (sympy) operation, or
-        an operation with no associated gate (e.g. a classically-controlled operation), raises a
-        `ValueError`/`NotImplementedError` respectively rather than being silently mishandled.
+        is discarded (see `lossy` below: a `CirqInteropWarning` by default). A
+        symbolically-parameterized (sympy) operation, or an operation with no associated gate
+        (e.g. a classically-controlled operation), raises a `ValueError`/`NotImplementedError`
+        respectively rather than being silently mishandled.
 
         Parameters
         ----------
@@ -4203,6 +4206,16 @@ class Circuit(object):
             or all measurements if `drop_terminal_measurements` is False) cirq Z-basis
             mid-circuit measurement. Matches the label used by :meth:`convert_to_qiskit`.
 
+        lossy : {'warn', 'ignore', 'raise'}, optional (default 'warn')
+            Controls how lossy aspects of the conversion are reported. The conversion is lossy
+            when a measurement is dropped from the converted circuit (a terminal measurement,
+            see `drop_terminal_measurements`) or when a kept measurement's key is discarded (see
+            `mcm_label`). If 'warn', a CirqInteropWarning is emitted for each kind of loss. If
+            'ignore', the conversion silently proceeds. If 'raise', a ValueError is raised
+            instead -- note that with the default `drop_terminal_measurements=True`, this means
+            any circuit containing a terminal measurement raises, which is the intended semantics
+            of opting into 'raise'.
+
         Returns
         -------
         pygsti_circuit
@@ -4213,6 +4226,15 @@ class Circuit(object):
             import cirq
         except ImportError:
             raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+        assert lossy in ('warn', 'ignore', 'raise'), \
+            f"'lossy' must be 'warn', 'ignore', or 'raise', not {lossy!r}"
+
+        def _lossy_notice(message):
+            if lossy == 'warn':
+                _warnings.warn(message, _CirqInteropWarning, stacklevel=4)
+            elif lossy == 'raise':
+                raise ValueError(message)
 
         #mapping between cirq gates and pygsti gate names:
         if cirq_gate_conversion is not None:
@@ -4274,17 +4296,17 @@ class Circuit(object):
                     raise NotImplementedError(
                         f'Cannot convert cirq measurement operation {op!r} to a pyGSTi label: a '
                         'nontrivial invert_mask is not supported by from_cirq.')
-                if not warned_measurement_keys[0]:
-                    _warnings.warn('pyGSTi circuit mapping discards Cirq measurement keys.')
-                    warned_measurement_keys[0] = True
                 if is_terminal_measurement:
                     if not warned_dropped_terminal[0]:
-                        _warnings.warn(
+                        _lossy_notice(
                             "Dropping terminal Z-basis measurement(s): these correspond to pyGSTi's "
                             'implicit end-of-circuit readout. Pass drop_terminal_measurements=False '
                             f"to instead convert them to explicit '{mcm_label}' instrument labels.")
                         warned_dropped_terminal[0] = True
                     return []
+                if not warned_measurement_keys[0]:
+                    _lossy_notice('pyGSTi circuit mapping discards Cirq measurement keys.')
+                    warned_measurement_keys[0] = True
                 return [_Label(mcm_label, (qubit_conversion[qubit],)) for qubit in op.qubits]
 
             try:
@@ -4302,7 +4324,7 @@ class Circuit(object):
                 msg = 'Could not find matching standard gate name in provided dictionary, nor a matching' \
                      +' parameterized gate family. Falling back to try and find a unitary from' \
                      +' standard_gatename_unitaries which matches up to a global phase.'
-                _warnings.warn(msg)
+                _warnings.warn(msg, _CirqInteropWarning, stacklevel=3)
                 name = _itgs.unitary_to_standard_gatename(cirq.unitary(op.gate), up_to_phase=True)
                 assert name is not None, f'Could not find a matching standard gate name for {op!r}.'
 

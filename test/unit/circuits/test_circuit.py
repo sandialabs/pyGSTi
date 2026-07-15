@@ -9,7 +9,7 @@ from pygsti.circuits import circuit
 from pygsti.baseobjs import Label, CircuitLabel
 from pygsti.processors import QubitProcessorSpec
 from pygsti.tools import symplectic
-from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning, CirqInteropWarning
 from pygsti.models import modelconstruction as mc
 from ..util import BaseCase
 
@@ -825,13 +825,69 @@ MEASURE 2 ro[2]
             warnings.simplefilter('always')
             converted_default = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0})
         self.assertEqual(circuit.Circuit([Label('Gxpi', 0)]), converted_default)
-        self.assertTrue(any('Dropping terminal' in str(warning.message) for warning in w))
+        self.assertTrue(any('Dropping terminal' in str(warning.message)
+                            and issubclass(warning.category, CirqInteropWarning) for warning in w))
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             converted_kept = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0},
                                                        drop_terminal_measurements=False)
         self.assertEqual(circuit.Circuit([Label('Gxpi', 0), Label('Iz', 0)]), converted_kept)
+
+    def test_from_cirq_measurement_key_discard_warns_only_when_kept(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        q0 = cirq.LineQubit(0)
+
+        #a kept (mid-circuit) measurement with a key warns CirqInteropWarning with the
+        #"discards Cirq measurement keys" message.
+        mid_circuit_circuit = cirq.Circuit([
+            cirq.Moment([cirq.X(q0)]),
+            cirq.Moment([cirq.measure(q0, key='m')]),
+            cirq.Moment([cirq.Y(q0)]),
+        ])
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            circuit.Circuit.from_cirq(mid_circuit_circuit, qubit_conversion={q0: 0})
+        self.assertTrue(any('discards Cirq measurement keys' in str(warning.message)
+                            and issubclass(warning.category, CirqInteropWarning) for warning in w))
+
+        #a circuit whose only measurement is terminal (and therefore dropped) emits the drop
+        #notice but NOT the (moot) key-discard notice -- the measurement's key is never kept.
+        terminal_only_circuit = cirq.Circuit([cirq.Moment([cirq.X(q0)]), cirq.Moment([cirq.measure(q0, key='m')])])
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            circuit.Circuit.from_cirq(terminal_only_circuit, qubit_conversion={q0: 0})
+        self.assertTrue(any('Dropping terminal' in str(warning.message) for warning in w))
+        self.assertFalse(any('discards Cirq measurement keys' in str(warning.message) for warning in w))
+
+    def test_from_cirq_lossy_kwarg(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        q0 = cirq.LineQubit(0)
+        cirq_circuit = cirq.Circuit([cirq.Moment([cirq.X(q0)]), cirq.Moment([cirq.measure(q0, key='m')])])
+
+        #lossy='ignore': the conversion silently proceeds, no CirqInteropWarning is emitted.
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            converted = circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0}, lossy='ignore')
+        self.assertEqual(circuit.Circuit([Label('Gxpi', 0)]), converted)
+        self.assertFalse(any(issubclass(warning.category, CirqInteropWarning) for warning in w))
+
+        #lossy='raise': a terminal measurement is loss, so this raises a ValueError (the
+        #intended semantics of opting into 'raise' with the default drop_terminal_measurements).
+        with self.assertRaises(ValueError):
+            circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0}, lossy='raise')
+
+        #an invalid lossy value is rejected outright.
+        with self.assertRaises(AssertionError):
+            circuit.Circuit.from_cirq(cirq_circuit, qubit_conversion={q0: 0}, lossy='bogus')
 
     def test_from_cirq_staggered_terminal_measurement(self):
         try:
