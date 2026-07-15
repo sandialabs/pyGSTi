@@ -940,6 +940,63 @@ MEASURE 2 ro[2]
 
         self.assertTrue(cirq.allclose_up_to_global_phase(cirq.unitary(original), cirq.unitary(round_tripped)))
 
+    def test_convert_to_cirq_matches_simulator_for_crosstalk_free_model(self):
+        #End-to-end check (not just label-level conversion): build random circuits from the
+        #full parameterized-gate family, run them through a pyGSTi crosstalk-free Model's
+        #probabilities(), and independently verify against cirq.Simulator's exact statevector
+        #probabilities for the same circuit (converted via convert_to_cirq). A fixed seed keeps
+        #this deterministic; see projects/expand-cirq-interop/validate_cirq_interop.py in the
+        #workspace for a larger, non-deterministic sweep over more trials/qubit counts.
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        num_qubits = 3
+        line_labels = [f'Q{i}' for i in range(num_qubits)]
+        ring = [(line_labels[i], line_labels[i + 1]) for i in range(num_qubits - 1)]
+        pspec = QubitProcessorSpec(num_qubits, ['Gi', 'Gzr', 'Gxr', 'Gyr', 'Gczr', 'Gu3'],
+                                   availability={'Gczr': ring}, qubit_labels=line_labels)
+        model = mc.create_crosstalk_free_model(pspec)
+
+        cirq_qubits = {q: cirq.NamedQubit(q) for q in line_labels}
+        ordered_cirq_qubits = [cirq_qubits[q] for q in line_labels]
+
+        rng = np.random.RandomState(20260715)
+
+        def random_pygsti_circuit():
+            layers = []
+            for _ in range(6):
+                elems = []
+                used = set()
+                if rng.rand() < 0.5:
+                    pair = ring[rng.randint(len(ring))]
+                    elems.append(Label('Gczr', pair, args=(float(rng.uniform(-2 * np.pi, 2 * np.pi)),)))
+                    used.update(pair)
+                for q in line_labels:
+                    if q in used:
+                        continue
+                    if rng.rand() < 0.7:
+                        name = str(rng.choice(['Gzr', 'Gxr', 'Gyr', 'Gu3']))
+                        nargs = 3 if name == 'Gu3' else 1
+                        args = tuple(float(a) for a in rng.uniform(-2 * np.pi, 2 * np.pi, size=nargs))
+                        elems.append(Label(name, q, args=args))
+                if elems:
+                    layers.append(Label(elems) if len(elems) > 1 else elems[0])
+            return circuit.Circuit(layers, line_labels=line_labels)
+
+        for _ in range(5):
+            pygsti_circuit = random_pygsti_circuit()
+            pygsti_probs = model.probabilities(pygsti_circuit)
+
+            cirq_circuit = pygsti_circuit.convert_to_cirq(cirq_qubits)
+            state_vector = cirq.Simulator().simulate(cirq_circuit, qubit_order=ordered_cirq_qubits).final_state_vector
+            cirq_probs = np.abs(state_vector) ** 2
+
+            for i in range(2 ** num_qubits):
+                bitstring = format(i, f'0{num_qubits}b')
+                self.assertAlmostEqual(pygsti_probs[(bitstring,)], cirq_probs[i], places=6)
+
     def test_from_qiskit(self):
         try:
             import qiskit
