@@ -21,7 +21,6 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from pygsti.baseobjs.statespace import QubitSpace
-from pygsti.modelpacks import smq1Q_XYI
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.modelmembers.operations.fullarbitraryop import FullArbitraryOp
 from pygsti.modelmembers.operations.fulltpop import FullTPOp
@@ -33,6 +32,8 @@ from pygsti.modelmembers.operations import RootConjOperator
 from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM
 from pygsti.modelmembers.povms.composedeffect import ComposedPOVMEffect
 from pygsti.modelmembers.instruments import Instrument, TPInstrument
+from .torchable_test_utils import torch_base_value as _value, torch_base_jacobian, noisy_full_cptplnd_model
+from .test_instrument import z_measurement_projectors
 
 
 @pytest.fixture(autouse=True)
@@ -42,19 +43,6 @@ def _float64_default():
     torch.set_default_dtype(torch.float64)
     yield
     torch.set_default_dtype(stashed)
-
-
-def _value(obj):
-    sd = obj.stateless_data(torch.float64, 'cpu')
-    t = torch.from_numpy(np.ascontiguousarray(obj.to_vector()))
-    return type(obj).torch_base(sd, t).detach().numpy()
-
-
-def _jac(obj, out_size):
-    sd = obj.stateless_data(torch.float64, 'cpu')
-    t = torch.from_numpy(np.ascontiguousarray(obj.to_vector()))
-    J = torch.func.jacrev(lambda tp: type(obj).torch_base(sd, tp))(t)
-    return J.reshape(out_size, -1).detach().numpy()
 
 
 def _glnd_errorgen(seed, scale=0.03):
@@ -72,7 +60,7 @@ def test_fullarbitraryop_torch_base():
     op = FullArbitraryOp(np.eye(4) + 0.1 * rng.standard_normal((4, 4)), basis='pp')
     ref = op.to_dense('HilbertSchmidt')
     assert np.allclose(_value(op), ref, atol=1e-12)
-    assert np.allclose(_jac(op, ref.size), op.deriv_wrt_params(), atol=1e-10)  # jac == identity
+    assert np.allclose(torch_base_jacobian(op), op.deriv_wrt_params(), atol=1e-10)  # jac == identity
 
 
 # --------------------------------------------------------------------------------------------------
@@ -89,13 +77,13 @@ def test_embeddedop_torch_base():
     emb = EmbeddedOp(ss, ['Q1'], FullTPOp(tp1, basis='pp'))
     ref = emb.to_dense('HilbertSchmidt')
     assert np.allclose(_value(emb), ref, atol=1e-12)
-    assert np.allclose(_jac(emb, ref.size), emb.deriv_wrt_params(), atol=1e-10)
+    assert np.allclose(torch_base_jacobian(emb), emb.deriv_wrt_params(), atol=1e-10)
 
     # an ExpErrorgenOp (CPTP gate) embedded on Q0
     emb2 = EmbeddedOp(ss, ['Q0'], ExpErrorgenOp(_glnd_errorgen(2)))
     ref2 = emb2.to_dense('HilbertSchmidt')
     assert np.allclose(_value(emb2), ref2, atol=1e-9)
-    assert np.allclose(_jac(emb2, ref2.size), emb2.deriv_wrt_params(), atol=1e-7)
+    assert np.allclose(torch_base_jacobian(emb2), emb2.deriv_wrt_params(), atol=1e-7)
 
 
 def test_embeddederrorgen_torch_base():
@@ -106,7 +94,7 @@ def test_embeddederrorgen_torch_base():
     with warnings.catch_warnings():  # EmbeddedErrorgen.deriv_wrt_params emits a (benign) UserWarning
         warnings.simplefilter('ignore')
         dref = emb.deriv_wrt_params()
-    assert np.allclose(_jac(emb, ref.size), dref, atol=1e-7)
+    assert np.allclose(torch_base_jacobian(emb), dref, atol=1e-7)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -125,11 +113,7 @@ def test_computational_povm_torch_base():
 # --------------------------------------------------------------------------------------------------
 
 def _noisy_cptplnd_povm(seed=5):
-    m = smq1Q_XYI.target_model()
-    m.set_all_parameterizations('CPTPLND')
-    rng = np.random.default_rng(seed)
-    m.from_vector(m.to_vector() + 0.03 * rng.standard_normal(m.num_params))
-    return m.povms['Mdefault']
+    return noisy_full_cptplnd_model(seed).povms['Mdefault']
 
 
 def test_composed_povm_effect_torch_base():
@@ -139,7 +123,7 @@ def test_composed_povm_effect_torch_base():
         assert isinstance(eff, ComposedPOVMEffect)
         ref = eff.to_dense('HilbertSchmidt')
         assert np.allclose(_value(eff), ref, atol=1e-9)
-        assert np.allclose(_jac(eff, ref.size), eff.deriv_wrt_params(), atol=1e-8)
+        assert np.allclose(torch_base_jacobian(eff), eff.deriv_wrt_params(), atol=1e-8)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -168,7 +152,7 @@ def test_rootconj_torch_base_value():
 def test_rootconj_torch_jacobian():
     rcop = _interior_effect_rootconj()
     ref = rcop.to_dense('HilbertSchmidt')
-    J = _jac(rcop, ref.size)
+    J = torch_base_jacobian(rcop)
 
     # finite-difference reference (RootConjOperator has no analytic deriv_wrt_params)
     v0 = rcop.to_vector()
@@ -216,19 +200,13 @@ def test_rootconj_torch_base_value_boundary_spectrum():
 # Instrument
 # --------------------------------------------------------------------------------------------------
 
-def _projector_superops():
-    model = std.target_model()
-    E = model.povms['Mdefault']['0'].to_dense().ravel()
-    Erem = model.povms['Mdefault']['1'].to_dense().ravel()
-    return {'plus': np.outer(E, E), 'minus': np.outer(Erem, Erem)}
-
-
 def _stacked_denses(instrument):
     return np.stack([instrument[k].to_dense('HilbertSchmidt') for k in instrument.keys()])
 
 
 def test_instrument_torch_base_fullarb():
-    instr = Instrument(_projector_superops())  # FullArbitraryOp members
+    _, _, Gmz_plus, Gmz_minus = z_measurement_projectors(std.target_model())
+    instr = Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})  # FullArbitraryOp members
     rng = np.random.default_rng(12)
     instr.from_vector(instr.to_vector() + 0.02 * rng.standard_normal(instr.num_params))
     assert np.allclose(_value(instr), _stacked_denses(instr), atol=1e-12)
@@ -266,7 +244,7 @@ def test_tpinstrument_op_torch_base():
         member = tpi[key]
         ref = member.to_dense('HilbertSchmidt')
         assert np.allclose(_value(member), ref, atol=1e-10)
-        assert np.allclose(_jac(member, ref.size), member.deriv_wrt_params(), atol=1e-8)
+        assert np.allclose(torch_base_jacobian(member), member.deriv_wrt_params(), atol=1e-8)
     assert tpi[keys[0]].index < n - 1
     assert tpi[keys[-1]].index == n - 1
 
