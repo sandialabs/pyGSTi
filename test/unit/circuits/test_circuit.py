@@ -733,9 +733,53 @@ MEASURE 2 ro[2]
         expected_mapping = {i: f'Q{i}' for i in range(4)}
 
         self.assertEqual(expected_ps_circ, observed_ps_circ)
-        self.assertEqual(expected_mapping, observed_mapping)   
+        self.assertEqual(expected_mapping, observed_mapping)
 
-        
+
+    def test_convert_to_qiskit_measurement_options(self):
+        try:
+            import qiskit
+        except ImportError:
+            self.skipTest('Qiskit is required for this operation, and does not appear to be installed.')
+
+        ps_circ = circuit.Circuit([Label([Label('Gxpi', 'Q0'), Label('Gh', 'Q2')]),
+                                   Label('Gcnot', ('Q0', 'Q1'))], line_labels=('Q0', 'Q1', 'Q2'))
+
+        def num_measures(qk_circ):
+            return sum(1 for inst in qk_circ.data if inst.operation.name == 'measure')
+
+        # default: no measurements, empty classical register
+        qk_circ = ps_circ.convert_to_qiskit(qubit_conversion='remove-Q')
+        self.assertEqual(qk_circ.num_clbits, 0)
+        self.assertEqual(num_measures(qk_circ), 0)
+        self.assertIsNone(qk_circ.metadata['ordered_data_indices'])
+
+        # 'all' measures every qubit of the register, which may be larger than the circuit width
+        qk_circ = ps_circ.convert_to_qiskit(qubit_conversion='remove-Q', num_qubits=5,
+                                            qubits_to_measure='all')
+        self.assertEqual(qk_circ.num_qubits, 5)
+        self.assertEqual(qk_circ.num_clbits, 5)
+        self.assertEqual(num_measures(qk_circ), 5)
+
+        # 'active' measures only the qubits with a conversion entry
+        qk_circ = ps_circ.convert_to_qiskit(qubit_conversion='remove-Q', num_qubits=5,
+                                            qubits_to_measure='active')
+        self.assertEqual(qk_circ.num_qubits, 5)
+        self.assertEqual(qk_circ.num_clbits, 3)
+        self.assertEqual(num_measures(qk_circ), 3)
+
+        # an explicit list of pyGSTi line labels
+        qk_circ = ps_circ.convert_to_qiskit(qubit_conversion='remove-Q',
+                                            qubits_to_measure=['Q0', 'Q2'])
+        self.assertEqual(qk_circ.num_clbits, 2)
+        self.assertEqual(num_measures(qk_circ), 2)
+        self.assertEqual(qk_circ.metadata['ordered_data_indices'], [0, 2])
+
+        # unknown string option
+        with self.assertRaises(ValueError):
+            ps_circ.convert_to_qiskit(qubit_conversion='remove-Q', qubits_to_measure='bogus')
+
+
     def test_convert_to_stim_tableau(self):
         #TODO: Add correctness checks for generated Tableaus.
         #these tests (with the exception of two explicitly meant to raise caught exceptions)

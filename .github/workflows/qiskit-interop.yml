@@ -1,0 +1,64 @@
+# Weekly qiskit interop version-matrix job.
+#
+# The qiskit-facing test files run against the floor and the latest of the tested
+# qiskit range (TESTED_QISKIT_RANGE in pygsti/tools/_qiskit_interop.py, mirrored by
+# the 'ibmq' extra in pyproject.toml), so the range stays continuously honest: when
+# a new qiskit release breaks the interop -- most notably qiskit 3.0 -- this flags
+# it when it ships instead of at user-report time.
+
+name: Qiskit interop version matrix
+
+on:
+  schedule:
+    - cron: '17 6 * * 1' # weekly, Mondays 06:17 UTC
+  workflow_dispatch: # Allow manual running from GitHub
+
+jobs:
+  qiskit-interop:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Floor of the tested conversion range, without qiskit-ibm-runtime
+          # (no runtime release is compatible with both qiskit 1.4 and our
+          # declared runtime floor): the circuit-conversion/mirroring interop
+          # supports bare qiskit 1.4; runtime-dependent tests skip themselves.
+          - label: qiskit-floor-no-runtime
+            pins: 'qiskit==1.4.*'
+            uninstall-runtime: true
+          # Floor of the declared ibmq extra (runtime 0.44 adds the optional
+          # ConvertToMidCircuitMeasure pass; 0.40 is the supported floor without it).
+          - label: runtime-floor
+            pins: 'qiskit-ibm-runtime==0.40.* qiskit<3'
+          # Whatever pip resolves today.
+          - label: latest
+            pins: 'qiskit qiskit-ibm-runtime'
+    name: Qiskit interop (${{ matrix.label }})
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    - name: Install pyGSTi and test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # testing_no_cython_mpi already pulls in the ibmq extra; the matrix pins
+        # then override the resolved qiskit/runtime versions.
+        python -m pip install -e .[testing_no_cython_mpi]
+        if [ "${{ matrix.uninstall-runtime }}" = "true" ]; then
+          python -m pip uninstall -y qiskit-ibm-runtime
+        fi
+        python -m pip install ${{ matrix.pins }}
+        python -c "import qiskit; print('qiskit', qiskit.__version__)"
+        python -c "import qiskit_ibm_runtime; print('runtime', qiskit_ibm_runtime.__version__)" || echo "qiskit-ibm-runtime not installed"
+    - name: Run qiskit interop tests
+      run: |
+        python -m pytest -v \
+          test/unit/tools/test_qiskit_interop.py \
+          test/unit/circuits/test_circuit.py \
+          test/unit/objects/test_subcirc_selection.py \
+          test/unit/protocols/test_mirror_edesign.py \
+          test/unit/protocols/test_scarab.py \
+          test/unit/extras/ibmq/test_ibmqexperiment.py
