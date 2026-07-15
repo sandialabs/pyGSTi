@@ -11,11 +11,12 @@ General matrix utilities. Some, but not all, are specific to matrices over the i
 #***************************************************************************************************
 
 # Contains general matrix utilities. Some, but not all, of these tools are specific to
+from typing import Optional, Sequence, Tuple, Union
 
 import numpy as _np
 
 
-def dot_mod2(m1, m2):
+def dot_mod2(m1: _np.ndarray, m2: _np.ndarray) -> _np.ndarray:
     """
     Returns the product over the integers modulo 2 of two matrices.
 
@@ -34,7 +35,7 @@ def dot_mod2(m1, m2):
     return _np.dot(m1, m2) % 2
 
 
-def multidot_mod2(mlist):
+def multidot_mod2(mlist: Sequence[_np.ndarray]) -> _np.ndarray:
     """
     Returns the product over the integers modulo 2 of a list of matrices.
 
@@ -50,7 +51,7 @@ def multidot_mod2(mlist):
     return _np.linalg.multi_dot(mlist) % 2
 
 
-def det_mod2(m):
+def det_mod2(m: _np.ndarray) -> Union[_np.floating, _np.ndarray]:
     """
     Returns the determinant of a matrix over the integers modulo 2 (GL(n,2)).
 
@@ -68,7 +69,7 @@ def det_mod2(m):
 # A utility function used by the random symplectic matrix sampler.
 
 
-def matrix_directsum(m1, m2):
+def matrix_directsum(m1: _np.ndarray, m2: _np.ndarray) -> _np.ndarray:
     """
     Returns the direct sum of two square matrices of integers.
 
@@ -93,7 +94,7 @@ def matrix_directsum(m1, m2):
     return output
 
 
-def inv_mod2(m):
+def inv_mod2(m: _np.ndarray) -> _np.ndarray:
     """
     Finds the inverse of a matrix over GL(n,2)
 
@@ -111,7 +112,7 @@ def inv_mod2(m):
     return _np.array(gaussian_elimination_mod2(c)[:, t:])
 
 
-def Axb_mod2(A, b):  # noqa N803
+def Axb_mod2(A: _np.ndarray, b: _np.ndarray) -> _np.ndarray:  # noqa N803
     """
     Solves Ax = b over GF(2)
 
@@ -132,7 +133,7 @@ def Axb_mod2(A, b):  # noqa N803
     return _np.array([gaussian_elimination_mod2(C)[:, -1]]).T
 
 
-def gaussian_elimination_mod2(a):
+def gaussian_elimination_mod2(a: _np.ndarray) -> _np.ndarray:
     """
     Gaussian elimination mod2 of a.
 
@@ -163,7 +164,7 @@ def gaussian_elimination_mod2(a):
     return a
 
 
-def diagonal_as_vec(m):
+def diagonal_as_vec(m: _np.ndarray) -> _np.ndarray:
     """
     Returns a 1D array containing the diagonal of the input square 2D array m.
 
@@ -183,7 +184,7 @@ def diagonal_as_vec(m):
     return vec
 
 
-def strictly_upper_triangle(m):
+def strictly_upper_triangle(m: _np.ndarray) -> _np.ndarray:
     """
     Returns a matrix containing the strictly upper triangle of m and zeros elsewhere.
 
@@ -206,7 +207,7 @@ def strictly_upper_triangle(m):
     return out
 
 
-def diagonal_as_matrix(m):
+def diagonal_as_matrix(m: _np.ndarray) -> _np.ndarray:
     """
     Returns a diagonal matrix containing the diagonal of m.
 
@@ -233,7 +234,8 @@ def diagonal_as_matrix(m):
 # Vol. 76, No. 2 (Feb., 1969), pp. 152-164
 
 
-def albert_factor(d, failcount=0, rand_state=None):
+def albert_factor(d: _np.ndarray, failcount: int = 0,
+                   rand_state: Optional[_np.random.RandomState] = None) -> _np.ndarray:
     """
     Returns a matrix M such that d = M M.T for symmetric d, where d and M are matrices over [0,1] mod 2.
 
@@ -291,7 +293,8 @@ def albert_factor(d, failcount=0, rand_state=None):
     return L
 
 
-def random_bitstring(n, p, failcount=0, rand_state=None):
+def random_bitstring(n: int, p: int, failcount: int = 0,
+                      rand_state: Optional[_np.random.RandomState] = None) -> Optional[_np.ndarray]:
     """
     Constructs a random bitstring of length n with parity p
 
@@ -321,7 +324,8 @@ def random_bitstring(n, p, failcount=0, rand_state=None):
         return _np.array(random_bitstring(n, p, failcount + 1, rand_state), dtype='int')
 
 
-def random_invertable_matrix(n, failcount=0, rand_state=None):
+def random_invertable_matrix(n: int, failcount: int = 0,
+                              rand_state: Optional[_np.random.RandomState] = None) -> Optional[_np.ndarray]:
     """
     Finds a random invertable matrix M over GL(n,2)
 
@@ -349,7 +353,8 @@ def random_invertable_matrix(n, failcount=0, rand_state=None):
         return M
 
 
-def random_symmetric_invertable_matrix(n, failcount=0, rand_state=None):
+def random_symmetric_invertable_matrix(n: int, failcount: int = 0,
+                                        rand_state: Optional[_np.random.RandomState] = None) -> Optional[_np.ndarray]:
     """
     Creates a random, symmetric, invertible matrix from GL(n,2)
 
@@ -372,7 +377,8 @@ def random_symmetric_invertable_matrix(n, failcount=0, rand_state=None):
     return dot_mod2(M, M.T)
 
 
-def onesify(a, failcount=0, maxfailcount=100, rand_state=None):
+def onesify(a: _np.ndarray, failcount: int = 0, maxfailcount: int = 100,
+            rand_state: Optional[_np.random.RandomState] = None) -> _np.ndarray:
     """
     Returns M such that `M a M.T` has ones along the main diagonal
 
@@ -422,7 +428,7 @@ def onesify(a, failcount=0, maxfailcount=100, rand_state=None):
         return onesify(a, failcount + 1, maxfailcount=maxfailcount, rand_state=rand_state)
 
 
-def permute_top(a, i):
+def permute_top(a: _np.ndarray, i: int) -> Tuple[_np.ndarray, _np.ndarray]:
     """
     Permutes the first row & col with the i'th row & col
 
@@ -447,7 +453,7 @@ def permute_top(a, i):
     return multidot_mod2([P, a, P]), P
 
 
-def fix_top(a):
+def fix_top(a: _np.ndarray) -> _np.ndarray:
     """
     Computes the permutation matrix `P` such that the [1:t,1:t] submatrix of `P a P` is invertible.
 
@@ -482,7 +488,7 @@ def fix_top(a):
     return P
 
 
-def proper_permutation(a):
+def proper_permutation(a: _np.ndarray) -> _np.ndarray:
     """
     Computes the permutation matrix `P` such that all [n:t,n:t] submatrices of `P a P` are invertible.
 
@@ -508,7 +514,7 @@ def proper_permutation(a):
     #return _np.linalg.multi_dot(list(reversed(Ps))) # Should this not be multidot_mod2 ?
 
 
-def _check_proper_permutation(a):
+def _check_proper_permutation(a: _np.ndarray) -> bool:
     """
     Check to see if the matrix has been properly permuted.
 
