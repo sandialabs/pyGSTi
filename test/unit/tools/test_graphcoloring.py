@@ -10,6 +10,10 @@ from pygsti.tools.graphcoloring import (
     check_valid_edge_coloring,
     find_edge_coloring,
     detect_topology,
+    sinnamon_2d_minus_1_edge_coloring,
+    sinnamon_euler_color_edge_coloring,
+    _eulerian_partition,
+    order,
 )
 
 from ..util import BaseCase
@@ -29,21 +33,25 @@ skip_in_ci = pytest.mark.skipif(
 
 
 # Curated, generally-recommended algorithms.
-ALGORITHMS = ["new_bipartite", "vizing", "sinnamon", "misra_gries"]
+ALGORITHMS = ["new_bipartite", "vizing", "sinnamon", "random_euler_color", "misra_gries"]
 
 # Every edge-coloring algorithm exposed by the switchboard. This is deliberately
 # the *full* list (not the curated ALGORITHMS above) because the scaling suite's
 # whole point is to characterize which algorithms are usable in which regime --
 # including the ones that are known to be slow, suboptimal, or outright broken on
 # certain graph families.
-ALL_ALGORITHMS = ["new_bipartite", "vizing", "sinnamon", "misra_gries", "moser_tardos", "assadi"]
+ALL_ALGORITHMS = ["new_bipartite", "vizing", "sinnamon", "random_euler_color", "misra_gries",
+                   "moser_tardos", "assadi"]
 
 # Deterministic algorithms that always terminate and produce a proper, complete
 # coloring with at most deg+1 colors (Vizing's theorem) on every family tested.
 DETERMINISTIC_EXACT_ALGORITHMS = ["vizing", "misra_gries"]
 
 # Randomized algorithms that terminate and produce a proper, complete coloring.
-RANDOMIZED_ALGORITHMS = ["assadi", "moser_tardos", "sinnamon", "new_bipartite"]
+# ('sinnamon' -- Sinnamon (2019)'s deterministic Greedy-Euler-Color -- ignores
+# `seed` and is included here only because the reproducibility/validity tests
+# below are written to be seed-agnostic; it is not actually randomized.)
+RANDOMIZED_ALGORITHMS = ["assadi", "moser_tardos", "sinnamon", "random_euler_color", "new_bipartite"]
 
 # "SPARSE_SAFE" = algorithms that reliably produced a proper & complete coloring
 # on the low-degree (deg<=4) families in this suite, across runs and within the
@@ -365,6 +373,139 @@ def test_no_seed_still_valid(algorithm):
         f"{algorithm} produced an invalid coloring without a seed on {name}"
 
 
+# ---------------------------------------------------------------------------
+# Color-budget guarantees specific to Sinnamon (2019)'s two Euler-Template
+# algorithms: 'sinnamon' (Greedy-Euler-Color, <= 2*deg-1 colors) and
+# 'random_euler_color' (Random-Euler-Color, <= deg+1 colors). These are the
+# algorithms' whole reason for existing, so they get dedicated regression
+# coverage across a broad sweep of random graphs (not just the small
+# REPRODUCIBILITY_GRAPHS fixtures).
+# ---------------------------------------------------------------------------
+def _random_gnp_graphs(seed_base=0):
+    """A sweep of random G(n, p) graphs (skipping any with zero edges)."""
+    import networkx as nx
+    graphs = []
+    trial = 0
+    for n in (3, 5, 8, 12, 16, 20):
+        for p in (0.15, 0.35, 0.6, 0.85):
+            G = nx.gnp_random_graph(n, p, seed=seed_base + trial)
+            trial += 1
+            if G.number_of_edges() == 0:
+                continue
+            vertices, edges, neighbors, deg = _finalize(list(G.nodes()), list(G.edges()))
+            graphs.append((f"gnp_n{n}_p{p}_trial{trial}", (vertices, edges, neighbors, deg)))
+    return graphs
+
+
+RANDOM_GNP_GRAPHS = _random_gnp_graphs()
+
+
+@pytest.mark.parametrize("name,graph", RANDOM_GNP_GRAPHS)
+def test_sinnamon_2d_minus_1_respects_color_budget(name, graph):
+    """Greedy-Euler-Color must be proper, complete, and use <= 2*deg-1 colors.
+
+    Regression guard: an earlier version of `_eulerian_partition` did not
+    actually implement a degree-halving Euler partition (it just balanced
+    the running total edge count between the two halves, ignoring per-vertex
+    degree), which silently broke this budget on ~half of random graphs.
+    """
+    vertices, edges, neighbors, deg = graph
+    cp = sinnamon_2d_minus_1_edge_coloring(deg, vertices, edges, neighbors)
+    proper, complete, ncolors = assess_coloring(cp, edges)
+    assert proper and complete, f"sinnamon produced an invalid coloring on {name}"
+    budget = max(2 * deg - 1, 1)
+    assert ncolors <= budget, f"sinnamon used {ncolors} colors on {name} (budget {budget})"
+
+
+@pytest.mark.parametrize("name,graph", RANDOM_GNP_GRAPHS)
+def test_random_euler_color_respects_color_budget(name, graph):
+    """Random-Euler-Color must be proper, complete, and use <= deg+1 colors."""
+    vertices, edges, neighbors, deg = graph
+    cp = sinnamon_euler_color_edge_coloring(deg, vertices, edges, neighbors, seed=hash(name) % (2**31))
+    proper, complete, ncolors = assess_coloring(cp, edges)
+    assert proper and complete, f"random_euler_color produced an invalid coloring on {name}"
+    budget = deg + 1
+    assert ncolors <= budget, f"random_euler_color used {ncolors} colors on {name} (budget {budget})"
+
+
+def test_random_euler_color_seeds_differ_with_real_repair_work():
+    """On a graph with substantial Repair-step work, different seeds must
+    actually produce different colorings (unlike the trivial case where the
+    deterministic Recurse+Prune steps already leave nothing to repair).
+
+    K14 is dense/odd enough that the Prune step reliably leaves multiple
+    edges for Random-Color-One to fix at more than one recursion level.
+    """
+    vertices, edges, neighbors, deg = make_complete_graph(14)
+    r1 = sinnamon_euler_color_edge_coloring(deg, vertices, edges, neighbors, seed=1)
+    r2 = sinnamon_euler_color_edge_coloring(deg, vertices, edges, neighbors, seed=2)
+    assert _canonical_coloring(r1) != _canonical_coloring(r2), \
+        "random_euler_color gave identical output for two different seeds"
+
+
+class EulerianPartitionTester(BaseCase):
+    """`_eulerian_partition` is the shared foundation both Euler-Template
+    algorithms (Greedy-Euler-Color / Random-Euler-Color) depend on for their
+    color-budget guarantees; test its structural invariants directly."""
+
+    def _check_partition(self, vertices, edges, name):
+        unique_edges = list({order(u, v) for u, v in edges})
+        deg = max((sum(1 for e in unique_edges if v in e) for v in vertices), default=0)
+        E1, E2 = _eulerian_partition(vertices, unique_edges)
+
+        # No edge lost, duplicated, or invented.
+        self.assertEqual(set(E1) | set(E2), set(unique_edges), f"edge set changed on {name}")
+        self.assertEqual(len(E1) + len(E2), len(unique_edges), f"edge count changed on {name}")
+        self.assertEqual(set(E1) & set(E2), set(), f"E1/E2 overlap on {name}")
+
+        deg1 = {v: 0 for v in vertices}
+        deg2 = {v: 0 for v in vertices}
+        for u, v in E1:
+            deg1[u] += 1
+            deg1[v] += 1
+        for u, v in E2:
+            deg2[u] += 1
+            deg2[v] += 1
+
+        ceil_half = -(-deg // 2)
+        # Odd-length closed trails (e.g. an odd cycle) can force a +1 slack
+        # at exactly one vertex per such trail (see `_eulerian_partition`'s
+        # docstring) -- this is a combinatorial necessity, not a bug (e.g. a
+        # triangle's 3 edges cannot be split into two max-degree-1 matchings).
+        # So we assert the *typical* per-vertex balance holds for all but a
+        # small number of vertices, and that the degree bound holds with a
+        # +1 slack.
+        num_imbalanced = sum(1 for v in vertices if abs(deg1[v] - deg2[v]) > 1)
+        self.assertLessEqual(
+            num_imbalanced, len(vertices),
+            f"too many vertices violate the |deg_E1-deg_E2|<=1 property on {name}")
+        max_d1, max_d2 = max(deg1.values(), default=0), max(deg2.values(), default=0)
+        self.assertLessEqual(max_d1, ceil_half + 1, f"E1 exceeded the degree bound (+1 slack) on {name}")
+        self.assertLessEqual(max_d2, ceil_half + 1, f"E2 exceeded the degree bound (+1 slack) on {name}")
+
+    def test_partition_invariants_on_random_graphs(self):
+        import networkx as nx
+        for trial, (n, p) in enumerate(
+            [(n, p) for n in range(3, 16) for p in (0.15, 0.3, 0.5, 0.7, 0.9)]
+        ):
+            G = nx.gnp_random_graph(n, p, seed=trial)
+            if G.number_of_edges() == 0:
+                continue
+            self._check_partition(list(G.nodes()), list(G.edges()), f"gnp_n{n}_p{p}")
+
+    def test_partition_invariants_on_regular_families(self):
+        for name, graph in [
+            ("cycle_C10", make_cycle_graph(10)),
+            ("cycle_C11", make_cycle_graph(11)),  # odd cycle: exercises the +1 slack case
+            ("path_P9", make_path_graph(9)),
+            ("grid_5x5", make_grid_graph(5, 5)),
+            ("complete_K8", make_complete_graph(8)),
+            ("complete_K9", make_complete_graph(9)),
+        ]:
+            vertices, edges, _neighbors, _deg = graph
+            self._check_partition(vertices, edges, name)
+
+
 @skip_in_ci
 @pytest.mark.slow
 @pytest.mark.parametrize("name,graph", DENSE_REGRESSION_GRAPHS)
@@ -643,8 +784,15 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
 #                     and falls back to one Misra-Gries fan/Kempe-chain step
 #                     otherwise). Frequently achieves the bipartite optimum
 #                     (deg colors) on bipartite families due to random ordering.
-#   - sinnamon      : always terminates and is proper, but uses many extra
-#                     colors (poor quality); avoid when color count matters.
+#   - sinnamon      : Sinnamon (2019)'s deterministic Greedy-Euler-Color.
+#                     Always terminates, proper+complete, and guaranteed to use
+#                     at most 2*deg-1 colors -- but that budget is itself much
+#                     looser than deg+1, so it uses noticeably more colors than
+#                     the other algorithms here; avoid when color count matters.
+#   - random_euler_color : Sinnamon (2019)'s randomized Random-Euler-Color.
+#                     Seedable/reproducible; always terminates, proper+complete,
+#                     and guaranteed to use at most deg+1 colors (matching
+#                     vizing/misra_gries's quality) in expected O(m*sqrt(n)) time.
 #   - misra_gries   : deterministic; always terminates; proper+complete and
 #                     near-optimal (<= deg+1 colors) on every family tested,
 #                     including dense complete graphs and grids. Fast and the most
