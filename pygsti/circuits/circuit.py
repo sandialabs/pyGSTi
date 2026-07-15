@@ -4126,6 +4126,26 @@ class Circuit(object):
         """
         Converts and instantiates a pyGSTi Circuit object from a Cirq Circuit object.
 
+        In addition to gates with an exact match in `cirq_gate_conversion` (see
+        :func:`pygsti.tools.internalgates.standard_gatenames_cirq_conversions`), operations
+        whose gate is a member of one of the following continuously parameterized gate families
+        are converted using the angle(s) computed from the cirq gate's parameters (see
+        :func:`pygsti.tools.internalgates.cirq_parameterized_gatenames_standard_conversions`;
+        `cirq.Rx`/`Ry`/`Rz` are subclasses of `X`/`Y`/`ZPowGate` in cirq, so are covered as well):
+
+        * `ZPowGate(exponent=t)` -> `Gzr`, args `(pi * t,)`
+        * `XPowGate(exponent=t)` -> `Gxr`, args `(pi * t,)`
+        * `YPowGate(exponent=t)` -> `Gyr`, args `(pi * t,)`
+        * `CZPowGate(exponent=t)` -> `Gczr`, args `(pi * t,)`
+        * `PhasedXZGate(a, x, z)` -> `Gu3`, args `(pi*x, pi*(z + a) - pi/2, pi/2 - pi*a)`
+
+        A `cirq.MeasurementGate` operation converts to one `mcm_label` instrument label per
+        measured qubit (see `drop_terminal_measurements` and `mcm_label` below); a nontrivial
+        `invert_mask` is not supported and raises `NotImplementedError`, and the measurement key
+        is discarded (with a one-time warning). A symbolically-parameterized (sympy) operation, or
+        an operation with no associated gate (e.g. a classically-controlled operation), raises a
+        `ValueError`/`NotImplementedError` respectively rather than being silently mishandled.
+
         Parameters
         ----------
         circuit : cirq Circuit

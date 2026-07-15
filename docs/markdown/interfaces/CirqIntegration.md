@@ -209,6 +209,40 @@ converted_cirq_circuit_custom_gate_map = Circuit.from_cirq(cirq_circuit_example,
 print(converted_cirq_circuit_custom_gate_map)
 ```
 
+5. Cirq circuits containing arbitrary-angle parameterized rotations (`cirq.ZPowGate`, `cirq.XPowGate`, `cirq.YPowGate`, `cirq.CZPowGate`, and arbitrary `cirq.PhasedXZGate`s -- the shapes most releases of real Google hardware circuits are built from) also convert cleanly, even when there's no exact-match pyGSTi gate name for the specific angle. These map to the parameterized pyGSTi standard gates `Gzr`, `Gxr`, `Gyr`, `Gczr`, and `Gu3` respectively, with the angle(s) (in radians) carried as the resulting `Label`'s `args`. (`cirq.Rx`/`Ry`/`Rz` are subclasses of `X`/`Y`/`ZPowGate` in Cirq, so they're covered automatically.)
+
+```{code-cell} ipython3
+parameterized_cirq_circuit = cirq.Circuit([
+    cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.15, x_exponent=0.42, z_exponent=-0.3).on(qubit_00)]),
+    cirq.Moment([cirq.ZPowGate(exponent=0.61).on(qubit_00), cirq.YPowGate(exponent=-0.24).on(qubit_01)]),
+    cirq.Moment([cirq.CZPowGate(exponent=0.37).on(qubit_00, qubit_01)]),
+])
+print(parameterized_cirq_circuit)
+print(Circuit.from_cirq(parameterized_cirq_circuit))
+```
+
+6. Cirq circuits with Z-basis mid-circuit measurements (`cirq.measure`) also convert, each measured qubit becoming its own `'Iz'` instrument label (the same convention used by `convert_to_qiskit`); the measurement key itself is not preserved. By default, *terminal* measurements -- those not followed by any other operation on the same qubit(s) -- are dropped rather than converted, since a terminal Z-basis measurement is exactly pyGSTi's implicit end-of-circuit readout; set `drop_terminal_measurements=False` to keep them as explicit `'Iz'` labels instead.
+
+```{code-cell} ipython3
+mcm_cirq_circuit = cirq.Circuit([
+    cirq.Moment([cirq.X(qubit_00)]),
+    cirq.Moment([cirq.measure(qubit_00, key='mid_circuit')]),
+    cirq.Moment([cirq.Y(qubit_00)]),
+    cirq.Moment([cirq.measure(qubit_00, key='terminal')]),
+])
+print(mcm_cirq_circuit)
+#the mid-circuit measurement survives as 'Iz'; the terminal one is dropped by default.
+print(Circuit.from_cirq(mcm_cirq_circuit))
+#pass drop_terminal_measurements=False to keep the terminal measurement too.
+print(Circuit.from_cirq(mcm_cirq_circuit, drop_terminal_measurements=False))
+```
+
+Both `Gzr`/`Gxr`/`Gyr`/`Gczr`/`Gu3` and `'Iz'` labels round-trip back through `convert_to_cirq` as well.
+
+```{code-cell} ipython3
+print(Circuit.from_cirq(parameterized_cirq_circuit).convert_to_cirq({'Q0_0': qubit_00, 'Q0_1': qubit_01}))
+```
+
 ## 4. Run the circuits
 
 Add measurements to the circuits.
@@ -246,5 +280,3 @@ mdl_estimate = gst_results.estimates['full TP'].models['stdgaugeopt']
 print("2DeltaLogL(estimate, data): ", pygsti.tools.two_delta_logl(mdl_estimate, dataset))
 print("2DeltaLogL(ideal, data): ", pygsti.tools.two_delta_logl(target_model, dataset))
 ```
-
-
