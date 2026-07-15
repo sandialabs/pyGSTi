@@ -1066,15 +1066,19 @@ class QubitProcessorSpec(QuditProcessorSpec):
         state['qubit_labels'] = state['qudit_labels']
         static_symplectic_reps = {k: v for k, v in self._symplectic_reps.items() if v is not None}
         if any((isinstance(k, _Lbl) for k in static_symplectic_reps)):
-            state['symplectic_reps'] = [
-                {'key_type': 'label' if isinstance(k, _Lbl) else 'name',
-                 'key': k.to_native() if isinstance(k, _Lbl) else k,
-                 'srep': (self._encodemx(s), self._encodemx(p))}
-                for k, (s, p) in static_symplectic_reps.items()
-            ]
+            serialized_symplectic_reps = []
+            for k, (s, p) in static_symplectic_reps.items():
+                serialized_symplectic_reps.append({
+                    'key_type': 'label' if isinstance(k, _Lbl) else 'name',
+                    'key': k.to_native() if isinstance(k, _Lbl) else k,
+                    'srep': (self._encodemx(s), self._encodemx(p))
+                })
         else:
-            state['symplectic_reps'] = {k: (self._encodemx(s), self._encodemx(p))
-                                        for k, (s, p) in static_symplectic_reps.items()}
+            serialized_symplectic_reps = {
+                k: (self._encodemx(s), self._encodemx(p))
+                for k, (s, p) in static_symplectic_reps.items()
+            }
+        state['symplectic_reps'] = serialized_symplectic_reps
         state['gate_arg_label_indices'] = self.gate_arg_label_indices
         state['nonstd_gate_num_qubits'] = state.pop('nonstd_gate_num_qudits')
         del state['qudit_labels']
@@ -1173,6 +1177,12 @@ class QubitProcessorSpec(QuditProcessorSpec):
         remapped when a clone changes state-space labels.  Name-keyed entries
         are copied unchanged because they remain applicable to all labels of
         that gate name.
+
+        For example, if `gate_arg_label_indices={'Gargp': (0,)}`, then an
+        entry keyed by `Label('Gargp', (0, 1), args=(1,))` maps under
+        `{0: 'Q0', 1: 'Q1'}` to `Label('Gargp', ('Q0', 'Q1'), args=('Q1',))`.
+        Arguments whose indices are not listed in `gate_arg_label_indices`
+        are left unchanged.
         """
         gate_name_set = None if gate_names is None else set(gate_names)
         qubit_label_set = None if qubit_labels is None else set(qubit_labels)
@@ -1310,7 +1320,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
         self.compute_clifford_2Q_connectivity.cache_clear()
         self.compute_2Q_connectivity.cache_clear()
 
-    @lru_cache(maxsize=100)  # TODO: replace w/ @cached_decorator when Python 3.8+ is required, (so doesn't prevent GC)
+    @lru_cache(maxsize=100)
     def compute_clifford_symplectic_reps(self, gatename_filter=None):
         """
         Constructs a dictionary of the symplectic representations for all the Clifford gates in this processor spec.
@@ -1425,8 +1435,9 @@ class QubitProcessorSpec(QuditProcessorSpec):
             map_label = mapper
 
         mapped_sslbls = None if gate_label.sslbls is None else tuple((map_label(sslbl) for sslbl in gate_label.sslbls))
+        label_time = getattr(gate_label, 'time', None)
         if not gate_label.args:
-            return _Lbl(gate_label.name, mapped_sslbls, gate_label.time)
+            return _Lbl(gate_label.name, mapped_sslbls, label_time)
 
         mapped_args = list(gate_label.args)
         for arg_index in self.gate_arg_label_indices.get(gate_label.name, ()):
@@ -1434,7 +1445,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
                 raise ValueError("Cannot map argument %d of %s; the label only has %d argument(s)."
                                  % (arg_index, str(gate_label), len(mapped_args)))
             mapped_args[arg_index] = map_label(mapped_args[arg_index])
-        return _Lbl(gate_label.name, mapped_sslbls, gate_label.time, tuple(mapped_args))
+        return _Lbl(gate_label.name, mapped_sslbls, label_time, tuple(mapped_args))
 
     @lru_cache(maxsize=100)
     def compute_one_qubit_gate_relations(self):
