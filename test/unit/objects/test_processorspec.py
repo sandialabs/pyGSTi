@@ -1,10 +1,7 @@
 import numpy as np
 
 from pygsti.baseobjs.label import Label
-<<<<<<< HEAD
 from pygsti.processors import QuditProcessorSpec
-=======
->>>>>>> develop
 from pygsti.processors import QubitProcessorSpec
 from pygsti.tools import symplectic
 from ..util import BaseCase, with_temp_path
