@@ -111,6 +111,7 @@ def pygsti_c_to_stim_str(pyg_c, include_measurement=True):
     gatenames_to_stim['Gi'] = 'I'
     gatenames_to_stim['Gt'] = 'T'
     gatenames_to_stim['Gtdag'] = 'T_DAG'
+    gatenames_to_stim['Gc10'] = 'C_XYZ'
     
     qs = [str(q) for q in pyg_c.line_labels]
     stim_cstr= 'I '+' '.join(q for q in qs)+'\n'
@@ -245,11 +246,11 @@ def pygsti_c_to_stim(pyg_c, include_measurement=True):
     gatenames_to_stim['Gypi2'] = 'SQRT_Y'
     gatenames_to_stim['Gympi2'] = 'SQRT_Y_DAG'
     gatenames_to_stim['Gcnot'] = 'CX'
-    gatenames_to_stim['Gh'] = 'H'
     gatenames_to_stim['Gcphase'] = 'CZ'
     gatenames_to_stim['Gxpi2'] = 'SQRT_X'
     gatenames_to_stim['Gxmpi2'] = 'SQRT_X_DAG'
     gatenames_to_stim['Gi'] = 'I'
+    gatenames_to_stim['Gc10'] = 'C_XYZ'
     
     qs = [str(q) for q in pyg_c.line_labels]
     stim_cstr= 'I '+' '.join(q for q in qs)+'\n'
@@ -406,8 +407,10 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
     def convert_1q_layer(gatename, stim_layer_string, current_qubit_mapping):
         gate_dict= {'H':'Gh', 
                     'SQRT_Y': 'Gypi2',
+                    'C_XYZ': 'Gc10',
                     'SQRT_Y_DAG': 'Gympi2',
                     'SQRT_X_DAG': 'Gxmpi2',
+                    'SQRT_X': 'Gxpi2',
                     'T': 'Gt',
                     'T_DAG': 'Gtdag',
                     'Z': 'Gzpi',
@@ -455,7 +458,7 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
     gates_happened = False
     for line in cstr.split('\n'):
         #check if gate layer
-        if 'T' in line.split(' ') or 'T_DAG' in line.split(' ') or 'H' in line.split(' ') or 'SQRT_Y' in line.split(' ') or 'SQRT_Y_DAG' in line.split(' ') or 'Z' in line.split(' ') or 'X' in line.split(' ') or 'Y' in line.split(' ')  or 'SQRT_X_DAG' in line.split(' ') or 'I' in line.split(' '):
+        if 'T' in line.split(' ') or 'T_DAG' in line.split(' ') or 'H' in line.split(' ') or 'SQRT_Y' in line.split(' ') or 'SQRT_X' in line.split(' ') or 'SQRT_Y_DAG' in line.split(' ') or 'Z' in line.split(' ') or 'X' in line.split(' ') or 'Y' in line.split(' ')  or 'SQRT_X_DAG' in line.split(' ') or 'I' in line.split(' ') or 'C_XYZ' in line.split(' '):
             gatename = line.split(' ')[0]
             gate_layers.append(convert_1q_layer(gatename, line, current_qubit_mapping))
             gates_happened = True
