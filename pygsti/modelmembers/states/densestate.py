@@ -16,10 +16,8 @@ from pygsti.modelmembers.modelmember import _DenseCopyMixin as _DenseCopyMixin
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
-from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import basistools as _bt
-from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti import SpaceT
 

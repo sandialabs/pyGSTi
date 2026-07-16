@@ -12,6 +12,7 @@ import collections as _collections
 import numpy as _np
 
 from pygsti.modelmembers import modelmember as _mm
+from pygsti.modelmembers.torchable import StackedMemberDictTorchable as _StackedMemberDictTorchable
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import states as _state
 from pygsti.evotypes import Evotype as _Evotype
@@ -88,7 +89,7 @@ def _validate_member_consistency(member_list: MemberPairs, state_space: _StateSp
             "All instrument members must have compatible state spaces!"
 
 
-class Instrument(_mm.ModelMember, _collections.OrderedDict):
+class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
     """
     A generalized quantum instrument.
 
@@ -459,6 +460,13 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         for operation, factor_local_inds in zip(self.values(), self._submember_rpindices):
             operation.from_vector(v[factor_local_inds], close, dirty_value)
         self.dirty = dirty_value
+
+    # stateless_data/torch_base: inherited from StackedMemberDictTorchable. Mirrors
+    # to_vector/from_vector: each member owns the local indices self._submember_rpindices of the
+    # instrument's parameter vector (which may be shared or non-contiguous, e.g. from_effects members
+    # sharing one ComposedPOVM error map). Member order matches self.keys(), which the forward
+    # simulator uses (independently, via the live Instrument) to map torch_base's stacked tensor back
+    # to per-outcome op labels (inst_label + "_" + key).
 
     def transform_inplace(self, s: GaugeGroupElement) -> None:
         """

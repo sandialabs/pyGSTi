@@ -286,6 +286,7 @@ class PromoteBBToBTTester(BaseCase):
         from pygsti.models import create_explicit_model
         pspec_2q  = QubitProcessorSpec(2, ['Gcnot', 'Gxpi2', 'Gypi2'], qubit_labels=['Q0', 'Q1'], geometry='line')
         cls.model_2q = create_explicit_model(pspec_2q)
+        cls.model_2q.set_all_parameterizations('static')
         cls.model_6  = promote_bb_to_bt(cls.model_2q)
 
     # ---- structural properties -------------------------------------------------
@@ -402,6 +403,7 @@ class PromoteBBToBTTester(BaseCase):
         model = self.model_2q.copy()
         E0 = np.zeros((16, 16)); E0[0, 0] = 1.0
         model.instruments['Iz'] = Instrument({'p0': E0, 'p1': np.eye(16) - E0})
+        model.set_all_parameterizations('static')
         with self.assertRaises(NotImplementedError):
             promote_bb_to_bt(model)
 
@@ -412,6 +414,7 @@ class PromoteBBToBTTester(BaseCase):
         model = self.model_2q.copy()
         zrot = lambda args: la.expm(-0.5j * args[0] * np.kron(np.diag([1.0, -1.0]), np.eye(2)))
         model.factories['Gzr'] = UnitaryOpFactory(zrot, model.state_space, superop_basis='pp')
+        model.set_all_parameterizations('static')
         with self.assertRaises(NotImplementedError):
             promote_bb_to_bt(model)
 
@@ -425,7 +428,7 @@ class PromoteBBToBTTester(BaseCase):
         for gates in gate_sets:
             with self.subTest(gates=gates):
                 ps = QubitProcessorSpec(2, gates, qubit_labels=['Q0', 'Q1'], geometry='line')
-                m6 = promote_bb_to_bt(create_explicit_model(ps))
+                m6 = promote_bb_to_bt(create_explicit_model(ps, ideal_gate_type='static'))
                 self.assertEqual(m6.state_space.udim, 6)
                 probs = m6.probabilities(Circuit([], line_labels=['Q0', 'Q1']))
                 self.assertAlmostEqual(probs['00'], 1.0, places=9)

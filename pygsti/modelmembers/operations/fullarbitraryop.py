@@ -10,10 +10,20 @@ The FullArbitraryOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
+
 import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 
 EPSILON_POWER_FOR_COMPLEX_CAST = 0.875
 # ^ Controls threshold at which we explicitly cast complex data to real data, 
@@ -22,7 +32,7 @@ EPSILON_POWER_FOR_COMPLEX_CAST = 0.875
 #   about 1e-14.
 
 
-class FullArbitraryOp(_DenseOperator):
+class FullArbitraryOp(_DenseOperator, _Torchable):
     """
     An operation matrix that is fully parameterized.
 
@@ -135,6 +145,21 @@ class FullArbitraryOp(_DenseOperator):
         self._ptr[:, :] = v.reshape((self.dim, self.dim))
         self._ptr_has_changed()
         self.dirty = dirty_value
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[int]:
+        # to_vector() returns self._ptr.flatten(), which the Torch forward simulator casts to a real
+        # dtype -- silently discarding any imaginary part.  FullArbitraryOp permits a complex _ptr
+        # (see EPSILON_POWER_FOR_COMPLEX_CAST), so guard that this op is real-valued.  Whether an
+        # ndarray holds real or complex data is fixed by its dtype and can't change without
+        # reallocating the array, so this check isn't meaningfully stateful.
+        assert _np.isrealobj(self._ptr), \
+            "The Torch forward simulator does not support a complex-valued FullArbitraryOp."
+        return (self.dim,)
+
+    @staticmethod
+    def torch_base(sd: Tuple[int], t_param: _torch.Tensor) -> _torch.Tensor:
+        dim, = sd
+        return t_param.reshape((dim, dim))
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

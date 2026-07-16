@@ -9,11 +9,14 @@ Defines the TPInstrument class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+
 import collections as _collections
 import numpy as _np
 
 from pygsti.modelmembers.instruments.tpinstrumentop import TPInstrumentOp as _TPInstrumentOp
 from pygsti.modelmembers import modelmember as _mm
+from pygsti.modelmembers.torchable import StackedMemberDictTorchable as _StackedMemberDictTorchable
 from pygsti.modelmembers import operations as _op
 
 from pygsti.evotypes import Evotype as _Evotype
@@ -24,7 +27,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
-class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
+class TPInstrument(_StackedMemberDictTorchable, _collections.OrderedDict):
     """
     A trace-preservng quantum instrument.
 
@@ -339,6 +342,12 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         for instGate in self.values():
             instGate._construct_matrix()
         self.dirty = dirty_value
+
+    # stateless_data/torch_base: inherited from StackedMemberDictTorchable. Bakes per-member
+    # (TPInstrumentOp) stateless data plus each member's slice of this instrument's parameter vector
+    # (self._submember_rpindices; the shared MT params make these slices overlap across members).
+    # Member order matches self.keys(), which the forward simulator uses (independently, via the
+    # live TPInstrument) to map torch_base's stacked tensor back to per-outcome op labels.
 
     def transform_inplace(self, s):
         """
