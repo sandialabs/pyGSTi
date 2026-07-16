@@ -1,19 +1,19 @@
-"""
-Defines a ForwardSimulator class called "TorchForwardSimulator" that can leverage the automatic
-differentation features of PyTorch.
-
-This file also defines two helper classes: StatelessCircuit and StatelessModelCircuitStore.
-
-See also: pyGSTi/modelmembers/torchable.py.
-"""
 #***************************************************************************************************
-# Copyright 2024, National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2024, 2026, National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+"""
+Defines a ForwardSimulator class called "TorchForwardSimulator" that can leverage the automatic
+differentation and GPU-acceleration features of PyTorch.
+
+This file also defines two helper classes: StatelessCircuit and StatelessModelCircuitStore.
+
+See also: pyGSTi/modelmembers/torchable.py.
+"""
 
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ class StatelessModelCircuitStore:
     params_dim       : int
 
 
-    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout, dtype: torch.dtype, device: torch.Device):
+    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout, dtype: torch.dtype, device: torch.device):
         from itertools import chain as _chain
         from pygsti.modelmembers.instruments.instrument import Instrument as _Instrument
         from pygsti.modelmembers.instruments.tpinstrument import TPInstrument as _TPInstrument
@@ -158,7 +158,7 @@ class StatelessModelCircuitStore:
         # ^ Those are set in get_free_params
         return
     
-    def get_free_params(self, model: ExplicitOpModel, dtype: torch.dtype, device: torch.Device) -> Tuple[torch.Tensor]:
+    def get_free_params(self, model: ExplicitOpModel, dtype: torch.dtype, device: torch.device) -> Tuple[torch.Tensor]:
         """
         Return a tuple of Tensors that encode the states of the provided model's ModelMembers
         (where "state" in meant the sense of  object-oriented programming).
@@ -269,15 +269,23 @@ class StatelessModelCircuitStore:
         return probs
 
 
-def get_device():
-    if torch.cuda.device_count() > 0:
-        return 'cuda:0'
-    elif torch.mps.device_count() > 0:
-        return 'mps:0'
-    elif torch.xpu.device_count() > 0:
-        return 'xpu:0'
+def get_device() -> str:
+    if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+        return 'cuda:0'  # NVIDIA and AMD
+    elif torch.mps.is_available() and torch.mps.device_count() > 0:
+        return 'mps:0'  # Apple
+    elif torch.xpu.is_available() and torch.xpu.device_count() > 0:
+        return 'xpu:0'  # Intel
+    elif hasattr(torch, "tpu") and torch.tpu.is_available() and torch.tpu.device_count() > 0:
+        return 'tpu:0'  # Google TPU (Modern: TorchTPU)
     else:
-        return 'cpu'
+        try:  # Google TPU (Legacy: PyTorch/XLA fallback)
+            import torch_xla.core.xla_model as xm  # type: ignore
+            if xm.xla_device() is not None:
+                return 'xla:0'
+        except (ImportError, RuntimeError):
+            pass
+    return 'cpu'
 
 
 class TorchForwardSimulator(ForwardSimulator):
@@ -287,9 +295,11 @@ class TorchForwardSimulator(ForwardSimulator):
 
     ENABLED = TORCH_ENABLED
     model   : ExplicitOpModel | None
+    device  : torch.device
+    dtype   : torch.dtype
 
     def __init__(self, model : Optional[ExplicitOpModel] = None, use_gpu: Optional[bool] = None,
-                 dtype: Optional[torch.dtype] = None, device: Optional[str] = None):
+                 dtype: Optional[torch.dtype] = None, device: torch.device | str = 'auto'):
         """
         Parameters
         ----------
@@ -301,24 +311,24 @@ class TorchForwardSimulator(ForwardSimulator):
             found. If False, run on the CPU even when a GPU is available. If None (the default),
             run on a detected CUDA or XPU device when present and otherwise on the CPU; an Apple
             MPS device is deliberately not used by default, since MPS only supports float32.
-            Ignored (must be left as None) if ``device`` is given explicitly.
+            Ignored (must be left as None) if `device` is given explicitly.
 
         dtype : torch.dtype, optional
             The real dtype used for free parameters and all baked constants. If None, defaults
-            to ``DEFAULT_REAL_TYPE`` (``torch.float64``, matching the precision of pyGSTi's other
+            to `DEFAULT_REAL_TYPE` (`torch.float64`, matching the precision of pyGSTi's other
             forward simulators), except on an MPS device where float64 is unsupported and
             float32 is used instead.
 
-        device : str, optional
-            An explicit torch device string (e.g. ``'cuda:0'``, ``'cpu'``), bypassing the
-            ``use_gpu``-driven auto-detection above entirely. If None (the default), the device is
-            chosen from ``use_gpu`` as documented above.
+        device : torch.device or str
+            If 'auto', then the device is chosen from `use_gpu` as documented above. Otherwise,
+            this must be a torch.device or a string that can be passed to the torch.device
+            constructor. Examples of the latter include 'cuda:0' and 'cpu'.
         """
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
 
-        if device is None:
+        if device == 'auto':
             device = get_device()
             if use_gpu and 'cpu' in device:
                 raise ValueError('No GPU detected.')
@@ -326,11 +336,12 @@ class TorchForwardSimulator(ForwardSimulator):
                 device = 'cpu'   # we override per our discretion (MPS lacks float64 support)
             if use_gpu is False:
                 device = 'cpu'   # user declines a detected GPU
+            device = torch.device(device)
         elif use_gpu is not None:
             raise ValueError('Specify at most one of `device` and `use_gpu`.')
 
         if dtype is None:
-            dtype = torch.float32 if 'mps' in device else DEFAULT_REAL_TYPE
+            dtype = torch.float32 if 'mps' in str(device) else DEFAULT_REAL_TYPE
             # ^ float32 is the only real floating point dtype that MPS supports
 
         self.dtype  = dtype
