@@ -54,6 +54,18 @@ class AbstractForwardSimTester(BaseCase):
         with self.assertRaises(NotImplementedError):
             self.fwdsim.bulk_fill_hprobs(np.zeros((1,0,0)), layout)
 
+    def test_free_local_array_is_noop_for_numpy_array(self):
+        layout = self.fwdsim.create_layout([self.circuit], array_types=('e',))
+        local_array = layout.allocate_local_array('e', 'd', zero_out=True)
+        local_array[0] = 1.0
+
+        with self.assertNoWarns():
+            self.assertIsNone(layout.free_local_array(local_array))
+
+        self.assertIsInstance(local_array, np.ndarray)
+        self.assertEqual(local_array.shape, (layout.num_elements,))
+        self.assertEqual(local_array[0], 1.0)
+
 
 class ForwardSimBase(object):
     @classmethod

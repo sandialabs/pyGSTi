@@ -29,6 +29,7 @@ from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
+from pygsti.evotypes.evotype import Evotype as _Evotype
 from pygsti import SpaceT
 
 
@@ -66,7 +67,11 @@ class EmbeddedOp(_LinearOperator, _Torchable):
         assert(len(self.embedded_op.state_space.sole_tensor_product_block_labels) == len(target_labels)), \
             "Embedded operation's state space has a different number of components than the number of target labels!"
 
-        evotype = operation_to_embed._evotype
+        # Re-derive prefer_dense_reps for our own (parent) state_space instead of
+        # inheriting operation_to_embed's, which can be wrong/huge. See issue #543.
+        evotype = _Evotype.cast(
+            operation_to_embed._evotype.name, state_space=_StateSpace.cast(state_space)
+        )
         rep = self._create_rep_object(evotype, state_space)
 
         self._cached_embedded_errorgen_labels_global = None

@@ -15,6 +15,7 @@ import itertools as _itertools
 import collections as _collections
 import warnings as _warnings
 from functools import lru_cache
+from collections.abc import Callable as _Callable
 
 
 from pygsti.tools import internalgates as _itgs
@@ -49,7 +50,8 @@ class QuditProcessorSpec(ProcessorSpec):
 
     def __init__(self, qudit_labels, qudit_udims, gate_names, nonstd_gate_unitaries=None, availability=None,
                  geometry=None, prep_names=('rho0',), povm_names=('Mdefault',), instrument_names=(),
-                 nonstd_preps=None, nonstd_povms=None, nonstd_instruments=None, aux_info=None):
+                 nonstd_preps=None, nonstd_povms=None, nonstd_instruments=None, aux_info=None,
+                 nonstd_gate_num_qudits=None):
         """
         Parameters
         ----------
@@ -86,6 +88,12 @@ class QuditProcessorSpec(ProcessorSpec):
             takes a single argument - a tuple of label arguments - may be given instead of a single matrix to create
             an operation *factory* which allows continuously-parameterized gates.  This function must also return
             an empty/dummy unitary when `None` is given as it's argument.
+
+        nonstd_gate_num_qudits: dictionary, optional
+            A dictionary with keys that are gate names (strings) and values that give the number of qudits the gate
+            acts on. This allows non-standard gates to be included without defining a unitary matrix. Such gates must
+            supply any needed non-unitary metadata elsewhere, e.g. explicit Clifford symplectic representations in
+            :class:`QubitProcessorSpec`, and unitary-dependent operations will fail when no unitary is available.
 
         availability : dict, optional
             A dictionary whose keys are some subset of the keys (which are gate names) `nonstd_gate_unitaries` and the
@@ -191,11 +199,21 @@ class QuditProcessorSpec(ProcessorSpec):
         assert(not (len(qudit_labels) > 1 and availability is None and geometry is None)), \
             "For multi-qudit processors you must specify either the geometry or the availability!"
 
-        if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
+        if nonstd_gate_unitaries is None:
+            nonstd_gate_unitaries = {}
+        if nonstd_gate_num_qudits is None:
+            nonstd_gate_num_qudits = {}
+        arity_unitary_overlap = set(nonstd_gate_unitaries).intersection(nonstd_gate_num_qudits)
+        if arity_unitary_overlap:
+            raise ValueError("Non-standard gates cannot be given in both `nonstd_gate_unitaries` and "
+                             "`nonstd_gate_num_qudits`: %s" % sorted(arity_unitary_overlap))
 
         #Store inputs for adding models later
         self.gate_names = tuple(gate_names[:])  # copy & cast to tuple
         self.nonstd_gate_unitaries = nonstd_gate_unitaries.copy() if (nonstd_gate_unitaries is not None) else {}
+        self.nonstd_gate_num_qudits = {
+            gname: int(nqudits) for gname, nqudits in nonstd_gate_num_qudits.items()
+        }
         self.prep_names = tuple(prep_names[:])
         self.nonstd_preps = nonstd_preps.copy() if (nonstd_preps is not None) else {}
         self.povm_names = tuple(povm_names[:])
@@ -219,6 +237,9 @@ class QuditProcessorSpec(ProcessorSpec):
                     # apply default availability of [None] rather than all-edges to idle gates
                     availability = {} if availability is None else availability.copy()  # get a copy of the availability
                     availability[gname] = [None]  # and update availability for later processing
+            elif gname in self.nonstd_gate_num_qudits:
+                if self.nonstd_gate_num_qudits[gname] <= 0:
+                    raise ValueError("Gate arity for %s must be positive!" % gname)
             elif gname in std_gate_unitaries:
                 self.gate_unitaries[gname] = std_gate_unitaries[gname]
             elif 'idle' in gname:  # interpret gname as an idle gate on the given number of qudits (all by default)
@@ -236,7 +257,8 @@ class QuditProcessorSpec(ProcessorSpec):
                 self.gate_unitaries[gname] = nq  # an identity gate
             else:
                 raise ValueError(
-                    str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
+                    str(gname) + " is not a valid 'standard' gate name, it must be given in "
+                    "`nonstd_gate_unitaries` or `nonstd_gate_num_qudits`")
 
         # Note: do *not* store the complex vectors defining states, POVM effects, and instrument members
         # as these can be large n-qudit vectors.
@@ -315,6 +337,7 @@ class QuditProcessorSpec(ProcessorSpec):
                       'qudit_udims': list(self.qudit_udims),
                       'gate_names': list(self.gate_names),  # Note: not labels, just strings, so OK
                       'nonstd_gate_unitaries': nonstd_unitaries,
+                      'nonstd_gate_num_qudits': self.nonstd_gate_num_qudits,
                       'availability': self.availability,  # should just have native types
                       'prep_names': list(self.prep_names),
                       'nonstd_preps': nonstd_preps,
@@ -404,7 +427,8 @@ class QuditProcessorSpec(ProcessorSpec):
         return cls(state['qudit_labels'], state['qudit_udims'], state['gate_names'], nonstd_gate_unitaries,
                    availability, geometry, state['prep_names'], state['povm_names'],
                    [tuple(iname) for iname in state['instrument_names']],
-                   nonstd_preps, nonstd_povms, nonstd_instruments, state['aux_info'])
+                   nonstd_preps, nonstd_povms, nonstd_instruments, state['aux_info'],
+                   nonstd_gate_num_qudits=state.get('nonstd_gate_num_qudits', {}))
 
     @property
     def num_qudits(self):
@@ -507,6 +531,8 @@ class QuditProcessorSpec(ProcessorSpec):
         -------
         int
         """
+        if gate_name in self.nonstd_gate_num_qudits:
+            return self.nonstd_gate_num_qudits[gate_name]
         unitary = self.gate_unitaries[gate_name]
         if unitary is None: return len(self.qudit_labels)  # unitary=None => identity on all qudits
         if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qudits
@@ -536,8 +562,20 @@ class QuditProcessorSpec(ProcessorSpec):
 
         self.gate_names = tuple([rename(nm) for nm in self.gate_names])
         self.nonstd_gate_unitaries = {rename(k): v for k, v in self.nonstd_gate_unitaries.items()}
+        self.nonstd_gate_num_qudits = {rename(k): v for k, v in self.nonstd_gate_num_qudits.items()}
         self.gate_unitaries = {rename(k): v for k, v in self.gate_unitaries.items()}
         self.availability = {rename(k): v for k, v in self.availability.items()}
+
+    def _nonstd_gate_num_qudits_for_clone(self, gate_names=None):
+        """Return arity-only gate metadata for a cloned processor spec."""
+        if gate_names is None:
+            return self.nonstd_gate_num_qudits.copy()
+        gate_name_set = set(gate_names)
+        return {
+            gn: nqudits
+            for gn, nqudits in self.nonstd_gate_num_qudits.items()
+            if gn in gate_name_set
+        }
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
         """
@@ -724,7 +762,7 @@ class QuditProcessorSpec(ProcessorSpec):
         if qudit_labels_to_keep == 'all': qudit_labels_to_keep = self.qudit_labels
 
         gate_names = [gn for gn in gate_names_to_include if gn in self.gate_names]
-        gate_unitaries = {gn: self.gate_unitaries[gn] for gn in gate_names}
+        gate_unitaries = {gn: self.gate_unitaries[gn] for gn in gate_names if gn in self.gate_unitaries}
         qudit_labels = [ql for ql in qudit_labels_to_keep if ql in self.qudit_labels]
         qudit_udims_lookup = {ql: udim for ql, udim in zip(self.qudit_labels, self.qudit_udims)}
         qudit_udims = [qudit_udims_lookup[ql] for ql in qudit_labels]
@@ -747,7 +785,8 @@ class QuditProcessorSpec(ProcessorSpec):
         qudit_graph = self.qudit_graph.subgraph(qudit_labels, reset_nodes=False)
 
         return QuditProcessorSpec(qudit_labels, qudit_udims, gate_names, gate_unitaries, availability,
-                                  qudit_graph)
+                                  qudit_graph,
+                                  nonstd_gate_num_qudits=self._nonstd_gate_num_qudits_for_clone(gate_names))
 
     def map_qudit_labels(self, mapper):
         """
@@ -787,11 +826,19 @@ class QuditProcessorSpec(ProcessorSpec):
 
         if isinstance(self, QubitProcessorSpec):  # map to a QubitProcessorSpec even if we call map_qudit_labels
             assert(all([udim == 2 for udim in mapped_qudit_udims]))
-            return QubitProcessorSpec(self.num_qubits, self.gate_names, self.gate_unitaries, availability,
-                                      qudit_graph, mapped_qudit_labels)
+            return QubitProcessorSpec(
+                self.num_qubits, self.gate_names, self.gate_unitaries, availability,
+                qudit_graph, mapped_qudit_labels,
+                nonstd_gate_symplecticreps=self._nonstd_gate_symplecticreps_for_clone(mapper=mapper_func),
+                prep_names=self.prep_names, povm_names=self.povm_names, instrument_names=self.instrument_names,
+                nonstd_preps=self.nonstd_preps, nonstd_povms=self.nonstd_povms,
+                nonstd_instruments=self.nonstd_instruments, aux_info=self.aux_info,
+                gate_arg_label_indices=self.gate_arg_label_indices,
+                nonstd_gate_num_qubits=self.nonstd_gate_num_qudits)
         else:
             return QuditProcessorSpec(mapped_qudit_labels, mapped_qudit_udims, self.gate_names, self.gate_unitaries,
-                                      availability, qudit_graph)
+                                      availability, qudit_graph,
+                                      nonstd_gate_num_qudits=self.nonstd_gate_num_qudits)
 
     @property
     def idle_gate_names(self):
@@ -832,7 +879,8 @@ class QubitProcessorSpec(QuditProcessorSpec):
     def __init__(self, num_qubits, gate_names, nonstd_gate_unitaries=None, availability=None,
                  geometry=None, qubit_labels=None, nonstd_gate_symplecticreps=None,
                  prep_names=('rho0',), povm_names=('Mdefault',), instrument_names=(),
-                 nonstd_preps=None, nonstd_povms=None, nonstd_instruments=None, aux_info=None):
+                 nonstd_preps=None, nonstd_povms=None, nonstd_instruments=None, aux_info=None,
+                 gate_arg_label_indices=None, nonstd_gate_num_qubits=None):
         """
         Parameters
         ----------
@@ -895,7 +943,15 @@ class QubitProcessorSpec(QuditProcessorSpec):
         nonstd_gate_symplecticreps : dict, optional
             A dictionary similar to `nonstd_gate_unitaries` that supplies, instead of a unitary matrix, the symplectic
             representation of a Clifford operations, given as a 2-tuple of numpy arrays. 
-            #TODO: Better explanation of this specifier.
+            Entries may be keyed by gate names or full :class:`Label` objects.  Values may also be callables that take
+            a full gate label and return the symplectic representation for that label.  This is useful for gates whose
+            Clifford action depends on label arguments.
+
+        nonstd_gate_num_qubits : dict, optional
+            A dictionary with keys that are gate names (strings) and values that give the number of qubits the gate
+            acts on. This allows non-standard gates to be included without defining a unitary matrix. Such gates must
+            supply any needed non-unitary metadata elsewhere, e.g. explicit Clifford symplectic representations, and
+            unitary-dependent operations will fail when no unitary is available.
 
         prep_names : list or tuple of str, optional (default ('rho0',))
                 List of strings corresponding to the names of the native state preparation
@@ -970,6 +1026,11 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
         aux_info : dict, optional
             Any additional information that should be attached to this processor spec.
+
+        gate_arg_label_indices : dict, optional
+            A mapping from gate names to the argument indices that should be treated as state-space labels when a gate
+            label is remapped into or out of compilation-template coordinates.  Arguments at these positions are mapped
+            along with the label's `.sslbls`; all other arguments are left untouched.
         """
         assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
         assert(not (num_qubits > 1 and availability is None and geometry is None)), \
@@ -982,20 +1043,44 @@ class QubitProcessorSpec(QuditProcessorSpec):
             else:
                 qubit_labels = tuple(range(num_qubits))
 
-        self._symplectic_reps = {}  # lazily-evaluated symplectic representations for Clifford gates
+        self._symplectic_reps = {}  # lazily-evaluated static symplectic representations for Clifford gates
+        self._symplectic_rep_factories = {}
         if nonstd_gate_symplecticreps is not None:
-            self._symplectic_reps.update(nonstd_gate_symplecticreps)
+            for key, srep in nonstd_gate_symplecticreps.items():
+                if isinstance(srep, _Callable):
+                    self._symplectic_rep_factories[key] = srep
+                else:
+                    self._symplectic_reps[key] = srep
+        self.gate_arg_label_indices = {
+            gate_name: tuple(indices) for gate_name, indices in (gate_arg_label_indices or {}).items()
+        }
 
         super().__init__(qubit_labels, [2] * num_qubits, gate_names, nonstd_gate_unitaries, availability,
                          geometry, prep_names, povm_names, instrument_names,
-                         nonstd_preps, nonstd_povms, nonstd_instruments, aux_info)
+                         nonstd_preps, nonstd_povms, nonstd_instruments, aux_info,
+                         nonstd_gate_num_qudits=nonstd_gate_num_qubits)
 
     def _to_nice_serialization(self):
         #Just some minor tweaks to the state dict created by QuditProcessorSpec:
         state = QuditProcessorSpec._to_nice_serialization(self)
         state['qubit_labels'] = state['qudit_labels']
-        state['symplectic_reps'] = {k: (self._encodemx(s), self._encodemx(p))
-                                    for k, (s, p) in self._symplectic_reps.items()}
+        static_symplectic_reps = {k: v for k, v in self._symplectic_reps.items() if v is not None}
+        if any((isinstance(k, _Lbl) for k in static_symplectic_reps)):
+            serialized_symplectic_reps = []
+            for k, (s, p) in static_symplectic_reps.items():
+                serialized_symplectic_reps.append({
+                    'key_type': 'label' if isinstance(k, _Lbl) else 'name',
+                    'key': k.to_native() if isinstance(k, _Lbl) else k,
+                    'srep': (self._encodemx(s), self._encodemx(p))
+                })
+        else:
+            serialized_symplectic_reps = {
+                k: (self._encodemx(s), self._encodemx(p))
+                for k, (s, p) in static_symplectic_reps.items()
+            }
+        state['symplectic_reps'] = serialized_symplectic_reps
+        state['gate_arg_label_indices'] = self.gate_arg_label_indices
+        state['nonstd_gate_num_qubits'] = state.pop('nonstd_gate_num_qudits')
         del state['qudit_labels']
         del state['qudit_udims']
 
@@ -1011,7 +1096,15 @@ class QubitProcessorSpec(QuditProcessorSpec):
         nonstd_gate_unitaries, nonstd_preps, nonstd_povms, nonstd_instruments = \
             cls._nonstd_elements_from_serialization(state)
 
-        symplectic_reps = {k: (cls._decodemx(s), cls._decodemx(p)) for k, (s, p) in state['symplectic_reps'].items()}
+        serialized_sreps = state['symplectic_reps']
+        if isinstance(serialized_sreps, list):
+            symplectic_reps = {}
+            for item in serialized_sreps:
+                key = _Lbl(item['key']) if item['key_type'] == 'label' else item['key']
+                s, p = item['srep']
+                symplectic_reps[key] = (cls._decodemx(s), cls._decodemx(p))
+        else:
+            symplectic_reps = {k: (cls._decodemx(s), cls._decodemx(p)) for k, (s, p) in serialized_sreps.items()}
         availability = {k: _tuplize(v) for k, v in state['availability'].items()}
         geometry = _qgraph.QubitGraph.from_nice_serialization(state['geometry'])
 
@@ -1023,7 +1116,10 @@ class QubitProcessorSpec(QuditProcessorSpec):
         return cls(len(state['qubit_labels']), state['gate_names'], nonstd_gate_unitaries, availability,
                    geometry, state['qubit_labels'], symplectic_reps, state.get('prep_names', []),
                    state.get('povm_names', []), state.get('instrument_names', []), nonstd_preps, nonstd_povms,
-                   nonstd_instruments, state['aux_info'])
+                   nonstd_instruments, state['aux_info'],
+                   gate_arg_label_indices=state.get('gate_arg_label_indices', {}),
+                   nonstd_gate_num_qubits=state.get('nonstd_gate_num_qubits',
+                                                    state.get('nonstd_gate_num_qudits', {})))
 
     @property
     def qubit_labels(self):
@@ -1067,6 +1163,55 @@ class QubitProcessorSpec(QuditProcessorSpec):
         """
         return self.compute_ops_on_qudits()
 
+    def _gate_arg_label_indices_for_clone(self, gate_names=None):
+        """Return label-like argument metadata for a cloned processor spec."""
+        if gate_names is None:
+            return self.gate_arg_label_indices
+        gate_name_set = set(gate_names)
+        return {gn: indices for gn, indices in self.gate_arg_label_indices.items() if gn in gate_name_set}
+
+    def _nonstd_gate_symplecticreps_for_clone(self, gate_names=None, qubit_labels=None, mapper=None):
+        """Return explicit symplectic reps and factories for a cloned processor spec.
+
+        Exact-label entries are filtered when a subset removes labels and are
+        remapped when a clone changes state-space labels.  Name-keyed entries
+        are copied unchanged because they remain applicable to all labels of
+        that gate name.
+
+        For example, if `gate_arg_label_indices={'Gargp': (0,)}`, then an
+        entry keyed by `Label('Gargp', (0, 1), args=(1,))` maps under
+        `{0: 'Q0', 1: 'Q1'}` to `Label('Gargp', ('Q0', 'Q1'), args=('Q1',))`.
+        Arguments whose indices are not listed in `gate_arg_label_indices`
+        are left unchanged.
+        """
+        gate_name_set = None if gate_names is None else set(gate_names)
+        qubit_label_set = None if qubit_labels is None else set(qubit_labels)
+        ret = {}
+
+        def keep_key(key):
+            gate_name = key.name if isinstance(key, _Lbl) else key
+            if gate_name_set is not None and gate_name not in gate_name_set:
+                return False
+            if qubit_label_set is None or not isinstance(key, _Lbl):
+                return True
+            if key.sslbls is not None and not set(key.sslbls).issubset(qubit_label_set):
+                return False
+            for arg_index in self.gate_arg_label_indices.get(key.name, ()):
+                if arg_index < len(key.args) and key.args[arg_index] not in qubit_label_set:
+                    return False
+            return True
+
+        def map_key(key):
+            if mapper is None or not isinstance(key, _Lbl):
+                return key
+            return self.map_gate_label_state_space(key, mapper)
+
+        for source in (self._symplectic_reps, self._symplectic_rep_factories):
+            for key, srep in source.items():
+                if srep is not None and keep_key(key):
+                    ret[map_key(key)] = srep
+        return ret
+
     def subset(self, gate_names_to_include='all', qubit_labels_to_keep='all'):
         """
         Construct a smaller processor specification by keeping only a select set of gates from this processor spec.
@@ -1084,7 +1229,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
         if qubit_labels_to_keep == 'all': qubit_labels_to_keep = self.qubit_labels
 
         gate_names = [gn for gn in gate_names_to_include if gn in self.gate_names]
-        gate_unitaries = {gn: self.gate_unitaries[gn] for gn in gate_names}
+        gate_unitaries = {gn: self.gate_unitaries[gn] for gn in gate_names if gn in self.gate_unitaries}
         qubit_labels = [ql for ql in qubit_labels_to_keep if ql in self.qubit_labels]
         if len(qubit_labels) != len(qubit_labels_to_keep):
             raise ValueError("Some of specified qubit_labels_to_keep (%s) aren't in this procesor spec (%s)!"
@@ -1103,8 +1248,15 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
         qubit_graph = self.qubit_graph.subgraph(qubit_labels, reset_nodes=False)
 
-        return QubitProcessorSpec(len(qubit_labels), gate_names, gate_unitaries, availability,
-                                  qubit_graph, qubit_labels)
+        return QubitProcessorSpec(
+            len(qubit_labels), gate_names, gate_unitaries, availability,
+            qubit_graph, qubit_labels,
+            nonstd_gate_symplecticreps=self._nonstd_gate_symplecticreps_for_clone(gate_names, qubit_labels),
+            prep_names=self.prep_names, povm_names=self.povm_names, instrument_names=self.instrument_names,
+            nonstd_preps=self.nonstd_preps, nonstd_povms=self.nonstd_povms,
+            nonstd_instruments=self.nonstd_instruments, aux_info=self.aux_info,
+            gate_arg_label_indices=self._gate_arg_label_indices_for_clone(gate_names),
+            nonstd_gate_num_qubits=self._nonstd_gate_num_qudits_for_clone(gate_names))
 
     def map_qubit_labels(self, mapper):
         """
@@ -1139,8 +1291,15 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
         qubit_graph = self.qubit_graph.map_qubit_labels(mapper)
 
-        return QubitProcessorSpec(self.num_qubits, self.gate_names, self.gate_unitaries, availability,
-                                  qubit_graph, mapped_qubit_labels)
+        return QubitProcessorSpec(
+            self.num_qubits, self.gate_names, self.gate_unitaries, availability,
+            qubit_graph, mapped_qubit_labels,
+            nonstd_gate_symplecticreps=self._nonstd_gate_symplecticreps_for_clone(mapper=mapper_func),
+            prep_names=self.prep_names, povm_names=self.povm_names, instrument_names=self.instrument_names,
+            nonstd_preps=self.nonstd_preps, nonstd_povms=self.nonstd_povms,
+            nonstd_instruments=self.nonstd_instruments, aux_info=self.aux_info,
+            gate_arg_label_indices=self.gate_arg_label_indices,
+            nonstd_gate_num_qubits=self.nonstd_gate_num_qudits)
 
     def force_recompute_gate_relationships(self):
         """
@@ -1161,7 +1320,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
         self.compute_clifford_2Q_connectivity.cache_clear()
         self.compute_2Q_connectivity.cache_clear()
 
-    @lru_cache(maxsize=100)  # TODO: replace w/ @cached_decorator when Python 3.8+ is required, (so doesn't prevent GC)
+    @lru_cache(maxsize=100)
     def compute_clifford_symplectic_reps(self, gatename_filter=None):
         """
         Constructs a dictionary of the symplectic representations for all the Clifford gates in this processor spec.
@@ -1175,12 +1334,37 @@ class QubitProcessorSpec(QuditProcessorSpec):
         Returns
         -------
         dict
-            keys are gate names, values are
-            `(symplectic_matrix, phase_vector)` tuples.
+            keys are gate names or full operation labels, values are `(symplectic_matrix, phase_vector)` tuples or
+            label-aware callables that return such tuples.
         """
+        filter_set = set(gatename_filter) if gatename_filter is not None else None
+
+        def matches_filter(key):
+            if filter_set is None:
+                return True
+            if key in filter_set:
+                return True
+            if isinstance(key, _Lbl) and key.name in filter_set:
+                return True
+            if isinstance(key, str):
+                return any((isinstance(filter_key, _Lbl) and filter_key.name == key for filter_key in filter_set))
+            return False
+
         ret = {}
+        for key, srep in self._symplectic_reps.items():
+            if srep is not None and matches_filter(key):
+                ret[key] = srep
+        for key, srep_factory in self._symplectic_rep_factories.items():
+            if matches_filter(key):
+                ret[key] = srep_factory
+
         for gn, unitary in self.gate_unitaries.items():
-            if gatename_filter is not None and gn not in gatename_filter: continue
+            if not matches_filter(gn):
+                continue
+            if gn in ret:
+                continue
+            if callable(unitary):
+                continue
             if gn not in self._symplectic_reps:
                 if unitary is None:  # special case of n-qubit identity
                     unitary = _np.identity(2**self.num_qubits, 'd')  # TODO - more efficient in FUTURE
@@ -1194,6 +1378,74 @@ class QubitProcessorSpec(QuditProcessorSpec):
             if self._symplectic_reps[gn] is not None:
                 ret[gn] = self._symplectic_reps[gn]
         return ret
+
+    def clifford_symplectic_rep_of(self, gate_label):
+        """Return the Clifford symplectic representation for a full gate label.
+
+        The lookup first checks exact label-specific entries, then gate-name
+        entries, then label-aware symplectic factories.  If no explicit
+        symplectic representation is available, fixed unitary gates are
+        converted to symplectic form and callable unitary factories are
+        evaluated using the label's arguments.
+        """
+        gate_label = _Lbl(gate_label)
+        for key in (gate_label, gate_label.name):
+            if key in self._symplectic_reps:
+                srep = self._symplectic_reps[key]
+                if srep is None:
+                    raise ValueError("%s is not a Clifford gate." % str(gate_label))
+                return srep
+            if key in self._symplectic_rep_factories:
+                return self._symplectic_rep_factories[key](gate_label)
+
+        if gate_label.name not in self.gate_unitaries:
+            raise ValueError("No unitary is available for arity-only gate %s. Provide an explicit Clifford "
+                             "symplectic representation for this gate label." % str(gate_label))
+        unitary = self.gate_unitaries[gate_label.name]
+        if callable(unitary):
+            unitary = unitary(gate_label.args)
+        elif unitary is None:  # special case of n-qubit identity
+            unitary = _np.identity(2**self.num_qubits, 'd')  # TODO - more efficient in FUTURE
+        elif isinstance(unitary, (int, _np.int64)):
+            unitary = _np.identity(2**unitary, 'd')  # TODO - more efficient in FUTURE
+
+        try:
+            srep = _symplectic.unitary_to_symplectic(unitary)
+        except ValueError:
+            if not callable(self.gate_unitaries[gate_label.name]):
+                self._symplectic_reps[gate_label.name] = None
+            raise
+        if not callable(self.gate_unitaries[gate_label.name]):
+            self._symplectic_reps[gate_label.name] = srep
+        return srep
+
+    def map_gate_label_state_space(self, gate_label, mapper):
+        """Map a gate label's state-space labels and selected label-like arguments.
+
+        Compilation templates use local state-space labels such as `0, 1, ...`
+        and then rebase those templates onto real processor labels.  Most label
+        arguments are physical parameters and should not be remapped, but some
+        argumented gates use arguments to identify state-space labels.  The
+        `gate_arg_label_indices` constructor argument identifies those positions.
+        """
+        gate_label = _Lbl(gate_label)
+        if isinstance(mapper, dict):
+            map_label = mapper.__getitem__
+        else:
+            map_label = mapper
+
+        mapped_sslbls = None if gate_label.sslbls is None else tuple((map_label(sslbl) for sslbl in gate_label.sslbls))
+        label_time = getattr(gate_label, 'time', None)
+        if not gate_label.args:
+            return _Lbl(gate_label.name, mapped_sslbls, label_time)
+
+        mapped_args = list(gate_label.args)
+        for arg_index in self.gate_arg_label_indices.get(gate_label.name, ()):
+            if arg_index >= len(mapped_args):
+                raise ValueError("Cannot map argument %d of %s; the label only has %d argument(s)."
+                                 % (arg_index, str(gate_label), len(mapped_args)))
+            mapped_args[arg_index] = map_label(mapped_args[arg_index])
+        return _Lbl(gate_label.name, mapped_sslbls, label_time, tuple(mapped_args))
 
     @lru_cache(maxsize=100)
     def compute_one_qubit_gate_relations(self):
@@ -1225,6 +1477,8 @@ class QubitProcessorSpec(QuditProcessorSpec):
         gate_inverse = {}
 
         for gname in self.gate_names:
+            if gname not in self.gate_unitaries:
+                continue
             U = self.gate_unitaries[gname]
             if callable(U): continue  # can't pre-process factories
             if U is None: continue  # can't pre-process global idle
@@ -1277,6 +1531,8 @@ class QubitProcessorSpec(QuditProcessorSpec):
         """
         gate_inverse = {}
         for gname1 in self.gate_names:
+            if gname1 not in self.gate_unitaries:
+                continue
             U1 = self.gate_unitaries[gname1]
             if callable(U1): continue  # can't pre-process factories
             if U1 is None: continue  # can't pre-process global idle
@@ -1287,6 +1543,8 @@ class QubitProcessorSpec(QuditProcessorSpec):
             u1 = _ot.unitary_to_pauligate(U1)
             if _np.shape(u1) != (4, 4):
                 for gname2 in self.gate_names:
+                    if gname2 not in self.gate_unitaries:
+                        continue
                     U2 = self.gate_unitaries[gname2]
                     if callable(U2): continue  # can't pre-process factories
                     if U2 is None: continue  # can't pre-process global idle
@@ -1313,12 +1571,18 @@ class QubitProcessorSpec(QuditProcessorSpec):
             A dictionary with keys that are state space label tuples and values that are lists
             of gate labels, giving the available Clifford gates on those target labels.
         """
-        clifford_gates = set(self.compute_clifford_symplectic_reps().keys())
+        clifford_keys = set(self.compute_clifford_symplectic_reps().keys())
+        clifford_gate_names = {key.name if isinstance(key, _Lbl) else key for key in clifford_keys}
         clifford_ops_on_qubits = _collections.defaultdict(list)
         for gn in self.gate_names:
-            if gn in clifford_gates:
+            if gn in clifford_gate_names:
                 for sslbls in self.resolved_availability(gn, 'tuple'):
-                    clifford_ops_on_qubits[sslbls].append(_Lbl(gn, sslbls))
+                    gate_label = _Lbl(gn, sslbls)
+                    try:
+                        self.clifford_symplectic_rep_of(gate_label)
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    clifford_ops_on_qubits[sslbls].append(gate_label)
 
         return clifford_ops_on_qubits
 
@@ -1338,10 +1602,15 @@ class QubitProcessorSpec(QuditProcessorSpec):
         # which are not Clifford gates then these are not counted as "connections".
         CtwoQ_connectivity = _np.zeros((self.num_qubits, self.num_qubits), dtype=bool)
         qubit_labels = self.qubit_labels
-        clifford_gates = set(self.compute_clifford_symplectic_reps().keys())
+        clifford_keys = set(self.compute_clifford_symplectic_reps().keys())
+        clifford_gate_names = {key.name if isinstance(key, _Lbl) else key for key in clifford_keys}
         for gn in self.gate_names:
-            if self.gate_num_qubits(gn) == 2 and gn in clifford_gates:
+            if self.gate_num_qubits(gn) == 2 and gn in clifford_gate_names:
                 for sslbls in self.resolved_availability(gn, 'tuple'):
+                    try:
+                        self.clifford_symplectic_rep_of(_Lbl(gn, sslbls))
+                    except (KeyError, TypeError, ValueError):
+                        continue
                     CtwoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
 
         return _qgraph.QubitGraph(qubit_labels, CtwoQ_connectivity)
