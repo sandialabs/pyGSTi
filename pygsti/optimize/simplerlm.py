@@ -120,9 +120,11 @@ class SimplerLMOptimizer(Optimizer):
 
     tol : float or dict, optional
         The tolerance, specified as a single float or as a dict
-        with keys `{'relx', 'relf', 'jac', 'maxdx'}`.  A single
+        with keys `{'relx', 'relf', 'f', 'jac', 'maxdx'}`.  A single
         float sets the `'relf'` and `'jac'` elemments and leaves
-        the others at their default values.
+        the others at their default values.  A dict need not specify
+        all keys; missing keys take the values a float `tol` would
+        have produced with `tol=1e-6`.
 
     fditer : int optional
         Internally compute the Jacobian using a finite-difference method
@@ -187,7 +189,11 @@ class SimplerLMOptimizer(Optimizer):
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
 
         super().__init__()
-        if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
+        if isinstance(tol, float):
+            tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
+        else:
+            default_tol = {'relx': 1e-8, 'relf': 1e-6, 'f': 1.0, 'jac': 1e-6, 'maxdx': 1.0}
+            tol = {**default_tol, **tol}
         self.maxiter = maxiter
         self.maxfev = maxfev
         self.tol = tol
@@ -283,13 +289,11 @@ class SimplerLMOptimizer(Optimizer):
             objective_func, jacobian, x0,
             max_iter=self.maxiter,
             num_fd_iters=self.fditer,
-            # NOTE: I think the fallback values below will NEVER be triggered. 
-            # Should probably remove them. See __init__ instead.
-            f_norm2_tol=self.tol.get('f', 1.0),
-            jac_norm_tol=self.tol.get('jac', 1e-6),
-            rel_ftol=self.tol.get('relf', 1e-6),
-            rel_xtol=self.tol.get('relx', 1e-8),
-            max_dx_scale=self.tol.get('maxdx', 1.0),
+            f_norm2_tol=self.tol['f'],
+            jac_norm_tol=self.tol['jac'],
+            rel_ftol=self.tol['relf'],
+            rel_xtol=self.tol['relx'],
+            max_dx_scale=self.tol['maxdx'],
             init_munu=self.init_munu,
             oob_check_interval=self.oob_check_interval,
             oob_action=self.oob_action,
@@ -516,6 +520,9 @@ def simplish_leastsq(
     max_norm_dx = (max_dx_scale**2) * len(global_x) if max_dx_scale else None
     # ^ don't let any component change by more than ~max_dx_scale
 
+    # NOTE: all "norm" variables below (norm_f, norm_dx, norm_x, max_norm_dx, and the
+    # ari.norm2_* helpers) are *squared* 2-norms, not norms. E.g. a log line reading
+    # "norm_dx=96" means ||dx|| ~= 9.8.
 
     f = obj_fn(global_x)  # 'E'-type array
     norm_f = ari.norm2_f(f)
@@ -533,6 +540,33 @@ def simplish_leastsq(
     best_x_state = (mu, nu, norm_f, f.copy())
     # ^ here and elsewhere, need f.copy() b/c f is objfn mem
 
+    def revert_to_best_x(verb):
+        nonlocal oob_check_interval, mu, nu, norm_f
+        printer.log(("** %s with out-of-bounds with check interval=%d, reverting to last know "
+                      "in-bounds point and setting interval=1 **") % (verb, oob_check_interval), 2)
+        oob_check_interval = 1
+        x[:] = best_x[:]
+        mu, nu, norm_f, f[:] = best_x_state
+
+    def eval_candidate(do_oob_check):
+        """Collective. Evaluates obj_fn at global_new_x (caller has filled new_x and allgathered).
+        Returns (new_f, known_inbounds, oob_ok). oob_ok=False means the oob check raised ValueError."""
+        if oob_check_mode == 0 and oob_check_interval > 0:
+            if do_oob_check:
+                try:
+                    new_f = obj_fn(global_new_x, oob_check=True)
+                except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                    return None, False, False
+                return new_f, True, True
+            else:  # don't check this time
+                new_f = obj_fn(global_new_x, oob_check=False)
+                return new_f, False, True
+        else:
+            #Just evaluate objective function normally; never check for in-bounds condition
+            new_f = obj_fn(global_new_x)
+            return new_f, (oob_check_interval == 0), True
+            # ^ assume in bounds if we have no out-of-bounds checks.
+
     try:
 
         for k in range(max_iter):  # outer loop
@@ -547,10 +581,7 @@ def simplish_leastsq(
                     converged = True
                     break
                 else:
-                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                    oob_check_interval = 1
-                    x[:] = best_x[:]
-                    mu, nu, norm_f, f[:] = best_x_state
+                    revert_to_best_x("Converged")
                     continue
 
             if profiler: profiler.memory_check("simplish_leastsq: begin outer iter")
@@ -585,10 +616,7 @@ def simplish_leastsq(
                     converged = True
                     break
                 else:
-                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                    oob_check_interval = 1
-                    x[:] = best_x[:]
-                    mu, nu, norm_f, f[:] = best_x_state
+                    revert_to_best_x("Converged")
                     continue
 
             if k == 0:
@@ -651,62 +679,34 @@ def simplish_leastsq(
                         converged = True
                         break
                     else:
-                        printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                        oob_check_interval = 1
-                        x[:] = best_x[:]
-                        mu, nu, norm_f, f[:] = best_x_state
+                        revert_to_best_x("Converged")
                         break
                 elif (norm_x + rel_xtol) < norm_dx * (_MACH_PRECISION**2):
                     msg = "(near-)singular linear system"
                     break
 
-                if oob_check_mode == 0 and oob_check_interval > 0:
-                    if k % oob_check_interval == 0:
-                        #Check to see if objective function is out of bounds
-
-                        in_bounds = []
-                        ari.allgather_x(new_x, global_new_x)
-                        try:
-                            new_f = obj_fn(global_new_x, oob_check=True)
-                        except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                            in_bounds.append(False)
+                ari.allgather_x(new_x, global_new_x)
+                do_oob_check = (oob_check_mode == 0 and oob_check_interval > 0 and k % oob_check_interval == 0)
+                new_f, new_x_is_known_inbounds, oob_ok = eval_candidate(do_oob_check)
+                if not oob_ok:
+                    MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
+                    if oob_action == "reject" or k < MIN_STOP_ITER:
+                        reject_msg = " (out-of-bounds)"
+                        mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+                        if len(msg) == 0:
+                            continue
                         else:
-                            in_bounds.append(True)
-
-                        if any(in_bounds):  # In adaptive mode, proceed if *any* cases are in-bounds
-                            new_x_is_known_inbounds = True
-                        else:
-                            MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
-                            if oob_action == "reject" or k < MIN_STOP_ITER:
-                                reject_msg = " (out-of-bounds)"
-                                mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
-                                if len(msg) == 0:
-                                    continue
-                                else:
-                                    break
-                            elif oob_action == "stop":
-                                if oob_check_interval == 1:
-                                    msg = "Objective function out-of-bounds! STOP"
-                                    converged = True
-                                    break
-                                else:  # reset to last know in-bounds point and not do oob check every step
-                                    printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                                    oob_check_interval = 1
-                                    x[:] = best_x[:]
-                                    mu, nu, norm_f, f[:] = best_x_state
-                                    break  # restart next outer loop
-                            else:
-                                raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
-                    else:  # don't check this time
-                        ari.allgather_x(new_x, global_new_x)
-                        new_f = obj_fn(global_new_x, oob_check=False)
-                        new_x_is_known_inbounds = False
-                else:
-                    #Just evaluate objective function normally; never check for in-bounds condition
-                    ari.allgather_x(new_x, global_new_x)
-                    new_f = obj_fn(global_new_x)
-                    new_x_is_known_inbounds = oob_check_interval == 0
-                    # ^ assume in bounds if we have no out-of-bounds checks.
+                            break
+                    elif oob_action == "stop":
+                        if oob_check_interval == 1:
+                            msg = "Objective function out-of-bounds! STOP"
+                            converged = True
+                            break
+                        else:  # reset to last know in-bounds point and not do oob check every step
+                            revert_to_best_x("Hit")
+                            break  # restart next outer loop
+                    else:
+                        raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
 
                 norm_new_f = ari.norm2_f(new_f)
                 if not _np.isfinite(norm_new_f):  # avoid infinite loop...
@@ -725,14 +725,11 @@ def simplish_leastsq(
                         converged = True
                         break
                     else:
-                        printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                        oob_check_interval = 1
-                        x[:] = best_x[:]
-                        mu, nu, norm_f, f[:] = best_x_state
+                        revert_to_best_x("Converged")
                         break
 
                 if (dL <= 0 or dF <= 0):
-                    reject_msg = " (out-of-bounds)"
+                    reject_msg = " (dL or dF <= 0)"
                     mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
                     if len(msg) == 0:
                         continue
@@ -760,10 +757,7 @@ def simplish_leastsq(
                                 converged = True
                                 break
                             else:  # reset to last know in-bounds point and not do oob check every step
-                                printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                                oob_check_interval = 1
-                                x[:] = best_x[:]
-                                mu, nu, norm_f, f[:] = best_x_state
+                                revert_to_best_x("Hit")
                                 break  # restart next outer loop
                         else:
                             raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
