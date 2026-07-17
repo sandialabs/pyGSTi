@@ -67,6 +67,21 @@ linting = [
     'autopep8',
     'flake8'
 ]
+# TensorFlow/Keras support for pygsti.extras.ml (the quantum-physics-aware neural networks,
+# a.k.a. QPANNs, sub-package). Pinned to `tensorflow>=2.16` (which brings in Keras 3, via
+# tensorflow's own `keras>=3.0.0` dependency) because pygsti.extras.ml's custom Keras layers
+# were fixed to work against Keras 3's API (Keras 3 made `keras.layers.Dense.kernel` a
+# read-only property, among other changes). If you instead want to match the original QPANN
+# paper's environment (TensorFlow/Keras 2.12), install those older pins directly rather than
+# using this extra -- note that requires Python <=3.11, since `tensorflow<2.16` has no wheels
+# for Python 3.12+. This extra is deliberately NOT included in `testing`/`no_mpi`/`complete`
+# below: TensorFlow is a heavy, platform-specific dependency, and pygsti.extras.ml's tests are
+# not currently run in CI regardless of whether it's installed (see
+# `.github/workflows/feature-branches.yml`'s `run-extra-tests: 'false'`).
+ml = [
+    'tensorflow>=2.16',
+    'keras>=3.0'
+]
 memory_profiling = ['psutil']
 mongodb = ['pymongo']
 msgpack = ['msgpack']
