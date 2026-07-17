@@ -849,8 +849,23 @@ def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: l
         for error_generator_index in unique_indices:
             egtype = cast(Any, _tools.index_to_error_gen(error_generator_index, num_qubits))[0]
 
+            # A definite-outcome bitstring (p_bs exactly 0 or 1) has zero first-order
+            # sensitivity to any Hamiltonian ('H'-type) error: p_bs(eps) is a smooth function
+            # of the (either-sign) rate eps that is bounded to [0, 1], so if it's already sitting
+            # at one of those bounds, its derivative at eps=0 must vanish (otherwise p_bs would
+            # go out of [0, 1] for one sign of eps). This does not hold for 'S'-type (stochastic)
+            # errors, whose rates are constrained to eps >= 0, so being at a boundary doesn't
+            # force a one-sided derivative to vanish. Skipping the (otherwise unnecessary)
+            # alpha_coefficient call here is purely a performance optimization: it was checked
+            # empirically (across many random stabilizer states/qubit counts) that
+            # alpha_coefficient already evaluates to exactly 0 in this regime, so this does not
+            # change any computed alphas -- but computing it anyway costs real time, and for
+            # high-fidelity (near-deterministic, i.e. low "random support") circuits -- the
+            # regime this whole codebase targets -- the vast majority of bitstrings can be at
+            # p_bs = 0, so skipping them here is a substantial speedup in this hot loop.
             if egtype == 'H' and (_np.isclose(probabilities[l], 0.) or _np.isclose(probabilities[l], 1.)):
-                alpha = 0
+                alphas_dict[l, error_generator_index] = 0.0
+                continue
 
             alpha = scale * alpha_coefficient(error_generator_index, num_qubits, tableau, bs)
             alphas_dict[l, error_generator_index] = alpha

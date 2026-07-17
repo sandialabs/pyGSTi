@@ -171,5 +171,64 @@ class MLSubpackageTester(unittest.TestCase):
                       for w0, w1 in zip(initial_weights, model.trainable_variables))
         self.assertTrue(changed)
 
+    def test_definite_outcome_hamiltonian_alpha_is_zero(self):
+        # Regression test for a dead-code bug in `encoding._circuit_loop_probs`: it used to
+        # contain
+        #     if egtype == 'H' and (isclose(probabilities[l], 0.) or isclose(probabilities[l], 1.)):
+        #         alpha = 0
+        #     alpha = scale * alpha_coefficient(...)   # <- ran unconditionally, clobbering the above
+        # so the special case never took effect. The special case is physically motivated: a
+        # bitstring whose ideal probability is already exactly 0 or 1 (a "definite outcome")
+        # must have zero first-order sensitivity to a Hamiltonian ('H'-type) error, because a
+        # Hamiltonian rate can have either sign and the probability is bounded to [0, 1] -- if
+        # the derivative were nonzero, the probability would leave [0, 1] for one sign of the
+        # rate. (This argument doesn't apply to 'S'-type/stochastic rates, which are physically
+        # constrained to be non-negative, so the fixed code only special-cases 'H'.)
+        #
+        # It was checked empirically (see git history/PR discussion) that `alpha_coefficient`
+        # already independently evaluates to exactly 0 in this regime -- so this fix does not
+        # change any previously-computed alpha values -- but it is still a real, worthwhile fix:
+        # it removes confusing dead code, and it skips a real (and, for near-deterministic
+        # circuits, often substantial) amount of otherwise-unnecessary computation, since
+        # `alpha_coefficient` is not cheap and definite-outcome bitstrings are extremely common
+        # for the high-fidelity circuits this codebase targets.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2'], {}, {}, geometry="line", qubit_labels=[0, 1])
+        # Two full-pi rotations on each qubit: a deterministic bit flip, |00> -> |11> w.p. 1.
+        circuit = Circuit('[Gxpi2:0Gxpi2:1][Gxpi2:0Gxpi2:1]@(0,1)')
+        modelled_error_generators = [('H', ('XI',)), ('H', ('IX',)), ('S', ('XI',))]
+
+        tensors = encoding.error_generator_tensors([circuit], modelled_error_generators, pspec,
+                                                     alpha_representation='concise')
+        probabilities, alphas = tensors['probabilities'], tensors['alphas']
+        np.testing.assert_allclose(probabilities, [[0., 0., 0., 1.]])
+
+        # Every bitstring here is a definite outcome (probability exactly 0 or 1), so every
+        # 'H'-type generator's alpha should be exactly 0 for every bitstring and every layer.
+        hamiltonian_columns = [j for j, eg in enumerate(modelled_error_generators) if eg[0] == 'H']
+        for l in range(probabilities.shape[1]):
+            for j in hamiltonian_columns:
+                np.testing.assert_array_equal(alphas[0, l, :, j], 0.0)
+
+        # Confirm the short-circuit is real (not just numerically inconsequential): with every
+        # bitstring at a definite outcome, `alpha_coefficient` should never actually be called
+        # for the 'H'-type generators.
+        nbit_strings = ['00', '01', '10', '11']
+        call_indices = []
+        original_alpha_coefficient = encoding.alpha_coefficient
+
+        def _counting_alpha_coefficient(i, *args, **kwargs):
+            call_indices.append(i)
+            return original_alpha_coefficient(i, *args, **kwargs)
+
+        encoding.alpha_coefficient = _counting_alpha_coefficient
+        try:
+            encoding._circuit_loop_probs(circuit, tensors['indices'][0], nbit_strings, 2)
+        finally:
+            encoding.alpha_coefficient = original_alpha_coefficient
+
+        hamiltonian_indices = {errgentools.error_generator_index(*eg)
+                                for eg in modelled_error_generators if eg[0] == 'H'}
+        self.assertFalse(any(i in hamiltonian_indices for i in call_indices))
+
 if __name__ == '__main__':
     unittest.main()
