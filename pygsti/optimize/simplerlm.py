@@ -171,6 +171,12 @@ class SimplerLMOptimizer(Optimizer):
         by the objective function's `.terms()` and `.lsvec()` methods (`'normal'` mode) or the
         "per-circuit quantities" computed by the objective function's `.percircuit()` and
         `.lsvec_percircuit()` methods (`'percircuit'` mode).
+
+    linesearch : dict, optional
+        Controls the optional backtracking-to-argmin line search performed on a trial
+        LM step when it looks untrusted.  See `simplish_leastsq`'s `linesearch` parameter
+        for the recognized keys (`'mode'`, `'beta'`, `'max_evals'`, `'kappa'`) and their
+        defaults; missing keys (or a `None` dict) take those defaults.
     """
 
     @classmethod
@@ -186,7 +192,8 @@ class SimplerLMOptimizer(Optimizer):
         return cls()
 
     def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, init_munu="auto", oob_check_interval=0,
-                 oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
+                 oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal",
+                 linesearch=None):
 
         super().__init__()
         if isinstance(tol, float):
@@ -194,6 +201,11 @@ class SimplerLMOptimizer(Optimizer):
         else:
             default_tol = {'relx': 1e-8, 'relf': 1e-6, 'f': 1.0, 'jac': 1e-6, 'maxdx': 1.0}
             tol = {**default_tol, **tol}
+        linesearch = dict(linesearch) if linesearch else {}
+        linesearch.setdefault('mode', 'guarded')
+        linesearch.setdefault('beta', 0.25)
+        linesearch.setdefault('max_evals', 6)
+        linesearch.setdefault('kappa', 1.0)
         self.maxiter = maxiter
         self.maxfev = maxfev
         self.tol = tol
@@ -207,6 +219,7 @@ class SimplerLMOptimizer(Optimizer):
         self.called_objective_methods = ('lsvec', 'dlsvec')  # the objective function methods we use (for mem estimate)
         self.serial_solve_proc_threshold = serial_solve_proc_threshold
         self.lsvec_mode = lsvec_mode
+        self.linesearch = linesearch
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -223,7 +236,8 @@ class SimplerLMOptimizer(Optimizer):
             'array_types': self.array_types,
             'called_objective_function_methods': self.called_objective_methods,
             'serial_solve_number_of_processors_threshold': self.serial_solve_proc_threshold,
-            'lsvec_mode': self.lsvec_mode
+            'lsvec_mode': self.lsvec_mode,
+            'linesearch': self.linesearch
         })
         return state
 
@@ -239,7 +253,8 @@ class SimplerLMOptimizer(Optimizer):
                    oob_action=state['out_of_bounds_action'],
                    oob_check_mode=state['out_of_bounds_check_mode'],
                    serial_solve_proc_threshold=state['serial_solve_number_of_processors_threshold'],
-                   lsvec_mode=state.get('lsvec_mode', 'normal'))
+                   lsvec_mode=state.get('lsvec_mode', 'normal'),
+                   linesearch=state.get('linesearch', None))
 
     def run(self, objective: TimeIndependentMDCObjectiveFunction, profiler, printer):
 
@@ -298,6 +313,7 @@ class SimplerLMOptimizer(Optimizer):
             oob_check_interval=self.oob_check_interval,
             oob_action=self.oob_action,
             oob_check_mode=self.oob_check_mode,
+            linesearch=self.linesearch,
             resource_alloc=objective.resource_alloc,
             arrays_interface=ari,
             serial_solve_proc_threshold=self.serial_solve_proc_threshold,
@@ -377,7 +393,8 @@ def simplish_leastsq(
     rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0, max_dx_scale=1.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
     resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
-    x_limits=None, verbosity=0, profiler=None
+    x_limits=None, verbosity=0, profiler=None,
+    linesearch=None
     ):
     """
     An implementation of the Levenberg-Marquardt least-squares optimization algorithm customized for use within pyGSTi.
@@ -477,6 +494,25 @@ def simplish_leastsq(
     profiler : Profiler, optional
         A profiler object used for to track timing and memory usage.
 
+    linesearch : dict, optional
+        Controls the optional backtracking-to-argmin line search performed on a trial
+        LM step when it looks untrusted.  Recognized keys (missing keys, or an entirely
+        `None` dict, take the defaults shown):
+
+        - `'mode'` (default `'guarded'`) : `{'guarded', 'always', 'none'}`.  `'guarded'`
+          only searches when a trigger fires (the `max_dx_scale` clip activated, the step
+          is large relative to `|x|`, or the trial's objective norm is non-finite).
+          `'always'` searches on every trial step.  `'none'` never searches and is
+          bit-identical to the legacy behavior.  The primary motivation is robustness
+          against a full LM step leaving the good basin, not speed.
+        - `'beta'` (default `0.25`) : geometric shrink factor used by the line search,
+          in (0, 1).  Trial points are evaluated at `t = beta, beta**2, beta**3, ...`
+          along the step ray.
+        - `'max_evals'` (default `6`) : maximum number of trial objective evaluations
+          performed per line search.
+        - `'kappa'` (default `1.0`) : scale factor for the `'guarded'` oversize trigger:
+          a search is triggered when `|dx|^2 > kappa^2 * max(1, |x|^2)`.
+
     Returns
     -------
     x : numpy.ndarray
@@ -486,6 +522,25 @@ def simplish_leastsq(
     msg : str
         A message indicating why the solution converged (or didn't).
     """
+    linesearch = dict(linesearch) if linesearch else {}
+    linesearch.setdefault('mode', 'guarded')
+    linesearch.setdefault('beta', 0.25)
+    linesearch.setdefault('max_evals', 6)
+    linesearch.setdefault('kappa', 1.0)
+    ls_mode = linesearch['mode']
+    ls_beta = linesearch['beta']
+    ls_max_evals = linesearch['max_evals']
+    ls_kappa = linesearch['kappa']
+
+    if ls_mode not in ('none', 'guarded', 'always'):
+        raise ValueError("Invalid `linesearch['mode']`: %s" % str(ls_mode))
+    if not (0 < ls_beta < 1):
+        raise ValueError("`linesearch['beta']` must satisfy 0 < beta < 1, got %s" % str(ls_beta))
+    if ls_max_evals < 1:
+        raise ValueError("`linesearch['max_evals']` must be >= 1, got %s" % str(ls_max_evals))
+    if ls_kappa <= 0:
+        raise ValueError("`linesearch['kappa']` must be > 0, got %s" % str(ls_kappa))
+
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
     comm = resource_alloc.comm
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
@@ -567,6 +622,25 @@ def simplish_leastsq(
             return new_f, (oob_check_interval == 0), True
             # ^ assume in bounds if we have no out-of-bounds checks.
 
+    def handle_oob_rejection():
+        """Called when `eval_candidate` reports oob_ok=False. Returns 'continue' or 'break',
+        indicating which the inner-loop call site should do."""
+        nonlocal mu, nu, msg, converged
+        MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
+        if oob_action == "reject" or k < MIN_STOP_ITER:
+            reject_msg = " (out-of-bounds)"
+            mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+            return "continue" if len(msg) == 0 else "break"
+        elif oob_action == "stop":
+            if oob_check_interval == 1:
+                msg = "Objective function out-of-bounds! STOP"
+                converged = True
+            else:  # reset to last know in-bounds point and not do oob check every step
+                revert_to_best_x("Hit")
+            return "break"
+        else:
+            raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
+
     try:
 
         for k in range(max_iter):  # outer loop
@@ -626,6 +700,8 @@ def simplish_leastsq(
 
             #determining increment using adaptive damping
             while True:  # inner loop
+                step_clipped = False
+                step_shrunk_by_ls = False
                 if profiler: profiler.memory_check("simplish_leastsq: begin inner iter")
 
                 # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
@@ -658,6 +734,7 @@ def simplish_leastsq(
                     dx *= _np.sqrt(max_norm_dx / norm_dx)
                     new_x[:] = x + dx
                     norm_dx = ari.norm2_x(dx)
+                    step_clipped = True
 
                 #apply x limits (bounds)
                 if x_limits is not None:
@@ -689,26 +766,56 @@ def simplish_leastsq(
                 do_oob_check = (oob_check_mode == 0 and oob_check_interval > 0 and k % oob_check_interval == 0)
                 new_f, new_x_is_known_inbounds, oob_ok = eval_candidate(do_oob_check)
                 if not oob_ok:
-                    MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
-                    if oob_action == "reject" or k < MIN_STOP_ITER:
-                        reject_msg = " (out-of-bounds)"
-                        mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
-                        if len(msg) == 0:
+                    if handle_oob_rejection() == "continue":
+                        continue
+                    else:
+                        break
+
+                norm_new_f = ari.norm2_f(new_f)
+
+                if ls_mode == 'always':
+                    do_linesearch = True
+                elif ls_mode == 'guarded':
+                    do_linesearch = (step_clipped
+                                      or norm_dx > (ls_kappa**2) * max(1.0, norm_x)
+                                      or not _np.isfinite(norm_new_f))
+                else:  # 'none'
+                    do_linesearch = False
+
+                if do_linesearch:
+                    best_t = 1.0
+                    best_norm = norm_new_f if _np.isfinite(norm_new_f) else _np.inf
+                    t = ls_beta
+                    for _ in range(ls_max_evals):
+                        new_x[:] = x + t * dx
+                        ari.allgather_x(new_x, global_new_x)
+                        trial_norm = ari.norm2_f(obj_fn(global_new_x))
+                        if _np.isfinite(trial_norm) and trial_norm < best_norm:
+                            best_t, best_norm = t, trial_norm
+                            t *= ls_beta
+                        else:
+                            break  # one past the interior minimum (or trial non-finite)
+
+                    if best_t < 1.0:
+                        dx *= best_t
+                        norm_dx = ari.norm2_x(dx)
+                        step_shrunk_by_ls = True
+
+                    # Re-evaluate at the (possibly rescaled) dx: the trial evals above clobbered
+                    # obj_fn's internally-owned memory, so `new_f`/`norm_new_f` no longer reflect x + dx.
+                    new_x[:] = x + dx
+                    ari.allgather_x(new_x, global_new_x)
+                    new_f, new_x_is_known_inbounds, oob_ok = eval_candidate(do_oob_check)
+                    if not oob_ok:
+                        if handle_oob_rejection() == "continue":
                             continue
                         else:
                             break
-                    elif oob_action == "stop":
-                        if oob_check_interval == 1:
-                            msg = "Objective function out-of-bounds! STOP"
-                            converged = True
-                            break
-                        else:  # reset to last know in-bounds point and not do oob check every step
-                            revert_to_best_x("Hit")
-                            break  # restart next outer loop
-                    else:
-                        raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
+                    norm_new_f = ari.norm2_f(new_f)
 
-                norm_new_f = ari.norm2_f(new_f)
+                    if step_shrunk_by_ls:
+                        printer.log("      Line search: t=%g, norm_f %g -> %g" % (best_t, best_norm, norm_new_f), 2)
+
                 if not _np.isfinite(norm_new_f):  # avoid infinite loop...
                     msg = "Infinite norm of objective function!"
                     break
@@ -767,6 +874,8 @@ def simplish_leastsq(
                 t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
                 # always reduce mu for accepted step when |dx| is small
                 mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
+                if step_shrunk_by_ls:
+                    mu_factor = max(mu_factor, 1.0)  # the model was untrusted at full step; never loosen damping
                 mu *= mu_factor
                 nu = 2
                 x[:] = new_x[:]
