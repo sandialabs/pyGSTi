@@ -21,7 +21,7 @@ CustomDense
 #***************************************************************************************************
 
 import tensorflow as tf
-from tensorflow.keras.layers import Dense, Layer, InputSpec
+from tensorflow.keras.layers import Layer, InputSpec
 from tensorflow.keras import initializers, regularizers, constraints
 from typing import Any
 
@@ -185,7 +185,7 @@ class SelectiveDense(Layer):
 # model.summary()
 
 
-class CustomDense(Dense):
+class CustomDense(Layer):
     def __init__(self, units: int, num_errorgens: int, activation=None, use_bias: bool = True,
                  kernel_initializer: Any = 'glorot_uniform', bias_initializer: Any = 'zeros',
                  kernel_regularizer=None, bias_regularizer=None,
@@ -197,6 +197,15 @@ class CustomDense(Dense):
         dimension `num_errorgens` on the kernel (and bias). It is intended for
         settings where a separate linear map is maintained for each "error generator"
         (or similar model index).
+
+        Notes
+        -----
+        This subclasses `keras.layers.Layer` directly (like `SelectiveDense` in this same
+        module) rather than `keras.layers.Dense`. It used to subclass `Dense`, but in Keras 3
+        `Dense.kernel` is a read-only `@property` (added to support LoRA), so `build()`'s
+        `self.kernel = self.add_weight(...)` raised `AttributeError: property 'kernel' ... has
+        no setter`. Subclassing `Layer` directly avoids that property entirely instead of
+        working around it, and doesn't rely on any Keras-version-specific private attributes.
 
         Parameters
         ----------
@@ -212,19 +221,22 @@ class CustomDense(Dense):
             Whether to include and add a bias term.
         kernel_initializer, bias_initializer, kernel_regularizer, bias_regularizer,
         kernel_constraint, bias_constraint :
-            Standard Keras `Dense` configuration options.
+            Standard Keras `Dense`-style configuration options.
         **kwargs
-            Additional keyword arguments passed to the base `Dense`/`Layer`.
+            Additional keyword arguments passed to the base `Layer`.
         """
 
-        super(CustomDense, self).__init__(units, activation=activation, use_bias=use_bias,
-                                           kernel_initializer=kernel_initializer,
-                                           bias_initializer=bias_initializer,
-                                           kernel_regularizer=kernel_regularizer,
-                                           bias_regularizer=bias_regularizer,
-                                            kernel_constraint=kernel_constraint,
-                                           bias_constraint=bias_constraint, **kwargs)
+        super(CustomDense, self).__init__(**kwargs)
+        self.units = units
         self.num_errorgens = num_errorgens
+        self.activation = tf.keras.activations.get(activation)
+        self.use_bias = use_bias
+        self.kernel_initializer = initializers.get(kernel_initializer)
+        self.bias_initializer = initializers.get(bias_initializer)
+        self.kernel_regularizer = regularizers.get(kernel_regularizer)
+        self.bias_regularizer = regularizers.get(bias_regularizer)
+        self.kernel_constraint = constraints.get(kernel_constraint)
+        self.bias_constraint = constraints.get(bias_constraint)
 
     def build(self, input_shape: tf.TensorShape | list | tuple) -> None:
         """Create the layer weights based on the input shape.

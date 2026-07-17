@@ -97,8 +97,16 @@ class QPANN(_keras.Model):
         self.dense_units = dense_units.copy()
         self.probability_computation = probability_computation
         # Masks that find the 'S' (stochastic) and 'H' (Hamiltonian) error generators.
-        self.stochastic_mask = _tf.constant([i[0] == 'S' for i in self.modelled_error_generators])
-        self.hamiltonian_mask = _tf.constant([i[0] == 'H' for i in self.modelled_error_generators])
+        # NOTE: these are plain numpy arrays, not tf.constant(...). A tf.constant created here
+        # (eagerly, at __init__ time) gets captured by reference into whatever FuncGraph happens
+        # to be active at construction time. Keras 3's Model.fit wraps train_step in nested
+        # tf.functions, and if this layer's build()/call() is first triggered from inside that
+        # trace, TF raises `InaccessibleTensorError: ... is out of scope` when it later tries to
+        # use the stale tf.constant from the (by-then-closed) construction-time graph. Plain
+        # numpy/Python values don't have this problem: TF converts them fresh in whatever graph
+        # context actually needs them.
+        self.stochastic_mask = _np.array([i[0] == 'S' for i in self.modelled_error_generators])
+        self.hamiltonian_mask = _np.array([i[0] == 'H' for i in self.modelled_error_generators])
 
     def get_config(self) -> dict:
         """Return a serializable config dictionary for Keras model saving/loading."""
@@ -213,12 +221,13 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
         
         self.number_of_modelled_error_generators = len(modelled_error_generators) # This is the output dimension of the network
         self.modelled_error_generators = modelled_error_generators  
-        self.stochastic_mask = []
         self.snipper = snipper
         self.dense_units = dense_units + [1] # The + [1] is the output layer.
         # Masks that find the 'S' (stochastic) and 'H' (Hamiltonian) error generators.
-        self.stochastic_mask = _tf.constant([i[0] == 'S' for i in self.modelled_error_generators])
-        self.hamiltonian_mask = _tf.constant([i[0] == 'H' for i in self.modelled_error_generators])
+        # NOTE: plain numpy arrays, not tf.constant(...) -- see the identical note in
+        # QPANN.__init__ for why (avoids `InaccessibleTensorError` during `.fit()` on Keras 3).
+        self.stochastic_mask = _np.array([i[0] == 'S' for i in self.modelled_error_generators])
+        self.hamiltonian_mask = _np.array([i[0] == 'H' for i in self.modelled_error_generators])
 
     def get_config(self) -> dict:
         """Return a serializable config dictionary for Keras layer saving/loading."""
