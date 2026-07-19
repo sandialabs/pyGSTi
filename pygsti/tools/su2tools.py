@@ -51,6 +51,21 @@ from pygsti.tools.matrixtools import eigendecomposition as _eigendecomposition
 from pygsti.tools.optools import unitary_to_std_process_mx as _unitary_to_std_process_mx
 from pygsti.tools.wignersymbols import clebsch_gordan as _clebsch_gordan, wigner_6j as _wigner_6j
 
+__all__ = [
+    'batch_normal_expm_1jscales',
+    'distance_mod_phase',
+    'random_euler_angles',
+    'angles_from_2x2_unitaries',
+    'angles_from_2x2_unitary',
+    'axis_rotation_angle_from_2x2_unitaries',
+    'axis_rotation_angle_from_euler_angles',
+    'composition_asmatrix',
+    'composition_inverse',
+    'characters_from_euler_angles',
+    'charactercores_from_euler_angles',
+    'SpinJ',
+]
+
 
 # ***************************************************************************************************
 # Internal helpers

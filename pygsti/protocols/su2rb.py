@@ -54,6 +54,24 @@ from pygsti.tools import wignersymbols as _wg
 from pygsti.tools.su2tools import _validate_spin
 from pygsti.tools.optools import unitary_to_std_process_mx as _unitary_to_std_process_mx
 
+__all__ = [
+    'GATE_NAME',
+    'POVM_NAME',
+    'circuit_from_euler_angles',
+    'euler_angles_from_circuit',
+    'SU2RBDesign',
+    'SU2CharacterRBDesign',
+    'jz_dephasing',
+    'jz_rotation',
+    'compose_noise_channels',
+    'SU2RBDataSimulator',
+    'predicted_zero_noise_variance',
+    'SyntheticSPAMRB',
+    'SyntheticSPAMCharacterRB',
+    'SyntheticSPAMRank1RB',
+    'SyntheticSPAMRBResults',
+]
+
 GATE_NAME = 'Gu'
 """The name of the single arg-carrying gate label used by SU(2) RB circuits."""
 
@@ -1293,6 +1311,16 @@ class SyntheticSPAMRBResults(_proto.ProtocolResults):
         self.decay_stderrs = sigma_f
         self.rates = p
         self.rates_covariance = cov_p
+
+        # Register the ndarray-valued and FitResults-list-valued attributes so
+        # write()/read-from-dir round-trip: the base ProtocolResults.auxfile_types
+        # only covers 'data'/'protocol', and plain JSON serialization (the
+        # default for un-registered attributes) cannot handle numpy arrays or
+        # rbfit.FitResults objects.
+        for attr in ('per_irrep_means', 'per_irrep_stderrs', 'per_irrep_variances',
+                     'decays', 'decay_stderrs', 'rates', 'rates_covariance'):
+            self.auxfile_types[attr] = 'numpy-array'
+        self.auxfile_types['fits'] = 'list:serialized-object'
 
     def rates_dataframe(self):
         """

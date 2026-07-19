@@ -1,6 +1,6 @@
 # 04 — Non-GST protocols
 
-**Covers:** [pygsti/protocols/rb.py](../../pygsti/protocols/rb.py), [rpe.py](../../pygsti/protocols/rpe.py), [stability.py](../../pygsti/protocols/stability.py), [vb.py](../../pygsti/protocols/vb.py), [vbdataframe.py](../../pygsti/protocols/vbdataframe.py), [modeltest.py](../../pygsti/protocols/modeltest.py), [freeformsim.py](../../pygsti/protocols/freeformsim.py), [mirror_edesign.py](../../pygsti/protocols/mirror_edesign.py) (functions only), [scarab.py](../../pygsti/protocols/scarab.py) (functions only).
+**Covers:** [pygsti/protocols/rb.py](../../pygsti/protocols/rb.py), [rpe.py](../../pygsti/protocols/rpe.py), [stability.py](../../pygsti/protocols/stability.py), [vb.py](../../pygsti/protocols/vb.py), [vbdataframe.py](../../pygsti/protocols/vbdataframe.py), [modeltest.py](../../pygsti/protocols/modeltest.py), [freeformsim.py](../../pygsti/protocols/freeformsim.py), [mirror_edesign.py](../../pygsti/protocols/mirror_edesign.py) (functions only), [scarab.py](../../pygsti/protocols/scarab.py) (functions only), [su2rb.py](../../pygsti/protocols/su2rb.py).
 
 The non-GST Protocol families: randomized benchmarking (RB), robust phase estimation (RPE), stability/drift, volumetric benchmarks (VB), model testing, and supporting data-simulation utilities. They share the abstract Protocol contract described in [abstract-api.md](abstract-api.md); this page records what each family's concrete `Design → Protocol → Results` triple looks like.
 
@@ -57,6 +57,7 @@ A few practical notes:
 - **`ModelTest` returns `ModelEstimateResults`** — the same result type GST uses — because it produces an estimate-shaped object (the model under test gets wrapped as an `Estimate`).
 - **VB (`SummaryStatistics`)** is the protocol used by volumetric / mirror-circuit / parity benchmarks. The depth-organized variant is `ByDepthSummaryStatistics`.
 - **`freeformsim.py`** is a data-simulation utility used to generate synthetic outcome counts from a `Model` or an arbitrary state function — useful when you want to drive a non-GST protocol against simulated data instead of hardware.
+- **`su2rb.py`** is a self-contained `Design → DataSimulator → Protocol → Results` family for synthetic-SPAM randomized benchmarking (SSRB) of an arbitrary-spin SU(2)/qudit system, ported and generalized from a research branch. It does not reuse `vb.py`'s `SummaryStatistics`/fitting machinery beyond subclassing `BenchmarkingDesign` for its designs; probabilities are simulated directly against `pygsti.tools.su2tools.SpinJ` representations rather than through a full pyGSTi `Model`. It depends on two new `pygsti.tools` modules: `wignersymbols.py` (exact Clebsch-Gordan/Wigner 6-j) and `su2tools.py` (the `SpinJ` representation class).
 
 ## Primary abstractions
 
@@ -77,6 +78,10 @@ Classes a typical user constructs by name when running a non-GST protocol.
 | [`PeriodicMirrorCircuitDesign`](../../pygsti/protocols/vb.py#L328) | vb.py:328 | Periodic mirror-circuit VB design. |
 | [`SummaryStatistics`](../../pygsti/protocols/vb.py#L544) | vb.py:544 | VB-family protocol that computes summary statistics over an experiment. |
 | [`ModelTest`](../../pygsti/protocols/modeltest.py#L30) | modeltest.py:30 | Tests a Model against data without fitting. |
+| [`SU2RBDesign`](../../pygsti/protocols/su2rb.py#L221) | su2rb.py:221 | Synthetic-SPAM RB (SSRB) design for an arbitrary-spin SU(2)/qudit system. |
+| [`SU2CharacterRBDesign`](../../pygsti/protocols/su2rb.py#L323) | su2rb.py:323 | Design serving both character (SSχRB) and rank-1 (SSR1RB) variants. |
+| [`SU2RBDataSimulator`](../../pygsti/protocols/su2rb.py#L482) | su2rb.py:482 | `DataSimulator` that simulates SU(2) RB circuits directly against a `SpinJ` representation (no full `Model`). |
+| [`SyntheticSPAMRB`](../../pygsti/protocols/su2rb.py#L993) | su2rb.py:993 | Protocol implementing SSRB: per-irrep decay fits and rate recovery. |
 
 ## Secondary abstractions
 
@@ -97,6 +102,9 @@ Niche design variants, framework-constructed result containers, intermediate abs
 | [`VBDataFrame`](../../pygsti/protocols/vbdataframe.py#L161) | vbdataframe.py:161 | DataFrame container for VB data with plotting helpers. |
 | [`FreeformDataSimulator`](../../pygsti/protocols/freeformsim.py#L21) | freeformsim.py:21 | `DataSimulator` for arbitrary state functions. |
 | [`ModelFreeformSimulator`](../../pygsti/protocols/freeformsim.py#L93) | freeformsim.py:93 | `FreeformDataSimulator` driven by a `Model`. |
+| [`SyntheticSPAMCharacterRB`](../../pygsti/protocols/su2rb.py#L1208) | su2rb.py:1208 | Character-weighted SSRB variant (SSχRB); SPAM-robust. |
+| [`SyntheticSPAMRank1RB`](../../pygsti/protocols/su2rb.py#L1226) | su2rb.py:1226 | Legendre/rank-1-weighted SSRB variant (SSR1RB); SPAM-robust. |
+| [`SyntheticSPAMRBResults`](../../pygsti/protocols/su2rb.py#L1242) | su2rb.py:1242 | Results container for the `SyntheticSPAMRB` family (`rates_dataframe()`, `variance_diagnostic()`). |
 
 [`mirror_edesign.py`](../../pygsti/protocols/mirror_edesign.py) and [`scarab.py`](../../pygsti/protocols/scarab.py) contain helper functions only — no top-level classes. `mirror_edesign.py` provides converters (e.g., from Qiskit circuits into mirror-circuit experiment designs); `scarab.py` provides SCARAB benchmarking helpers.
 

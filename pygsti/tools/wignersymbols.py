@@ -27,6 +27,8 @@ the associated unit tests (a testing-only dependency).
 import math as _math
 from fractions import Fraction as _Fraction
 
+__all__ = ['clebsch_gordan', 'wigner_6j']
+
 
 def _as_half_integer(value, name):
     """

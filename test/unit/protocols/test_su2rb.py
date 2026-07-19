@@ -861,6 +861,38 @@ class TestSyntheticSPAMRBNoiseless(BaseCase):
             results = SyntheticSPAMRB().run(data)
         self.assertIsInstance(results, SyntheticSPAMRBResults)
 
+    def test_serialization_round_trip(self):
+        # Regression test: SyntheticSPAMRBResults registered no auxfile_types for its
+        # ndarray/FitResults-list attributes, so write() raised ValueError (plain JSON
+        # serialization can't handle numpy arrays or FitResults objects).
+        j = 0.5
+        design = SU2RBDesign(j, depths=[1, 2, 3], circuits_per_depth=2, seed=0)
+        data = SU2RBDataSimulator(j).run(design)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', UserWarning)
+            results = SyntheticSPAMRB().run(data)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            results.write(tmpdir)
+            from pygsti.io import read_results_from_dir
+            reloaded_dir = read_results_from_dir(tmpdir)
+        reloaded = reloaded_dir.for_protocol[results.name]
+
+        self.assertIsInstance(reloaded, SyntheticSPAMRBResults)
+        self.assertEqual(reloaded.j, results.j)
+        self.assertEqual(reloaded.dim, results.dim)
+        self.assertEqual(reloaded.depths, results.depths)
+        self.assertTrue(np.array_equal(reloaded.per_irrep_means, results.per_irrep_means))
+        self.assertTrue(np.array_equal(reloaded.per_irrep_stderrs, results.per_irrep_stderrs))
+        self.assertTrue(np.array_equal(reloaded.per_irrep_variances, results.per_irrep_variances))
+        self.assertTrue(np.array_equal(reloaded.decays, results.decays))
+        self.assertTrue(np.array_equal(reloaded.decay_stderrs, results.decay_stderrs))
+        self.assertTrue(np.array_equal(reloaded.rates, results.rates))
+        self.assertTrue(np.array_equal(reloaded.rates_covariance, results.rates_covariance))
+        self.assertEqual(len(reloaded.fits), len(results.fits))
+        for f_orig, f_reloaded in zip(results.fits, reloaded.fits):
+            self.assertEqual(f_orig.estimates, f_reloaded.estimates)
+
     def test_failed_irrep_fit_warns(self):
         # A single-depth design under-determines the 2-parameter (a, f) fit for every
         # irrep (scipy.optimize.curve_fit cannot estimate a covariance from one data
