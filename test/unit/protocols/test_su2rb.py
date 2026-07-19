@@ -3,6 +3,7 @@ Tests for pygsti.protocols.su2rb (Phase 3: SU(2) synthetic SPAM RB circuits and
 experiment designs; Phase 4: the SU2RBDataSimulator).
 """
 import tempfile
+import warnings
 
 import numpy as np
 
@@ -11,6 +12,9 @@ from pygsti.protocols.su2rb import (
     SU2RBDesign,
     SU2CharacterRBDesign,
     SU2RBDataSimulator,
+    SyntheticSPAMRB,
+    SyntheticSPAMRBResults,
+    predicted_zero_noise_variance,
     circuit_from_euler_angles,
     euler_angles_from_circuit,
     jz_dephasing,
@@ -667,3 +671,263 @@ class TestSU2RBDataSimulatorConstruction(BaseCase):
         design = SU2RBDesign(1.5, depths=[1], circuits_per_depth=2, seed=10)
         with self.assertRaises(ValueError):
             sim.run(design)
+
+
+# ---------------------------------------------------------------------------
+# predicted_zero_noise_variance (Phase 5)
+# ---------------------------------------------------------------------------
+
+class TestPredictedZeroNoiseVariance(BaseCase):
+    """
+    Golden-table tests against the paper's Tables `variancewithk` and `variancewithj`
+    (6-significant-figure values quoted in the plan / paper LaTeX source), plus the
+    input-validation contract of `predicted_zero_noise_variance`.
+    """
+
+    def _assert_close_6sf(self, actual, golden):
+        # The golden literals themselves are only quoted to 6 significant figures, so
+        # allow a couple of ULPs of rounding slop on top of that (verified against a
+        # from-scratch double-precision recomputation of both paper tables during this
+        # phase's development; see the phase 5 completion notes).
+        self.assertAlmostEqual(actual, golden, delta=abs(golden) * 2e-5 + 1e-9)
+
+    def test_ssrb_is_always_zero(self):
+        for j, k in [(0.5, 0), (0.5, 1), (3.5, 0), (3.5, 7)]:
+            self.assertEqual(predicted_zero_noise_variance(j, k, 'ssrb'), 0.0)
+
+    def test_variancewithk_table_j_seven_halves(self):
+        # Table `variancewithk`: j = 7/2, k = 0..7. The optimal ell for the physical-
+        # SPAM (chiRB/R1RB) columns is as given in the paper text just above the table.
+        j = 3.5
+        ells_for_k = {0: 3.5, 1: 3.5, 2: 3.5, 3: 1.5, 4: 2.5, 5: 2.5, 6: 1.5, 7: 0.5}
+        golden = {
+            # k: (chiRB, R1RB, SSchiRB, SSR1RB)
+            0: (7, 7, 0.0, 0.0),
+            1: (28.6816, 7.52245, 1.07619, 0.269048),
+            2: (91.8386, 12.5807, 3.23842, 0.540816),
+            3: (308.139, 42.3744, 6.15572, 0.773292),
+            4: (268.103, 21.0241, 10.4498, 1.02387),
+            5: (514.734, 32.779, 15.668, 1.28994),
+            6: (404.56, 23.2173, 23.0531, 1.62223),
+            7: (381.656, 21.6442, 34.0697, 2.11888),
+        }
+        for k, (chi, r1, sschi, ssr1) in golden.items():
+            ell = ells_for_k[k]
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'chirb', ell=ell), chi)
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'r1rb', ell=ell), r1)
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'sschirb'), sschi)
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'ssr1rb'), ssr1)
+
+    def test_variancewithj_table(self):
+        # Table `variancewithj`: k = 2j fixed, j = 0..7/2. Optimal ell is 0 for integer
+        # j and 1/2 for half-integer j (paper text just above the table).
+        golden = {
+            # j: (chiRB, R1RB, SSchiRB, SSR1RB)
+            0.0: (0, 0, 0, 0),
+            0.5: (23, 5, 4, 1),
+            1.0: (25.25, 4.89286, 8.66667, 1.40476),
+            1.5: (91.1811, 9.9465, 13.408, 1.63867),
+            2.0: (95.25, 11.163, 18.4047, 1.80578),
+            2.5: (209.672, 15.5894, 23.5132, 1.9322),
+            3.0: (215.636, 18.0822, 28.7441, 2.03407),
+            3.5: (381.656, 21.6442, 34.0697, 2.11888),
+        }
+        for j, (chi, r1, sschi, ssr1) in golden.items():
+            k = round(2 * j)
+            ell = 0.0 if (round(2 * j) % 2 == 0) else 0.5
+            if k == 0:
+                self.assertEqual(predicted_zero_noise_variance(j, k, 'sschirb'), 0.0)
+                self.assertEqual(predicted_zero_noise_variance(j, k, 'ssr1rb'), 0.0)
+                self.assertEqual(chi, 0)
+                self.assertEqual(r1, 0)
+                continue
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'chirb', ell=ell), chi)
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'r1rb', ell=ell), r1)
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'sschirb'), sschi)
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'ssr1rb'), ssr1)
+
+    def test_bad_variant_raises(self):
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1.5, 1, 'not-a-variant')
+
+    def test_bad_k_raises(self):
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1.5, 4, 'sschirb')  # 2j == 3 < 4
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1.5, -1, 'sschirb')
+
+    def test_ell_required_for_physical_spam_variants(self):
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1.5, 1, 'chirb')  # missing ell
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1.5, 1, 'r1rb')  # missing ell
+
+    def test_ell_disallowed_for_synthetic_spam_and_ssrb_variants(self):
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1.5, 1, 'ssrb', ell=1.5)
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1.5, 1, 'sschirb', ell=1.5)
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1.5, 1, 'ssr1rb', ell=1.5)
+
+    def test_invalid_ell_raises(self):
+        # ell=2 is not one of SpinJ(1).spins == [1, 0, -1]; wignersymbols.clebsch_gordan
+        # would otherwise silently treat this as an ordinary |m|<=j selection-rule
+        # violation (returning 0.0), which would then divide-by-zero downstream --
+        # this should instead be reported as a caller error.
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1, 1, 'chirb', ell=2)
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1, 1, 'r1rb', ell=-2)
+        # Also not a valid half-integer at all.
+        with self.assertRaises(ValueError):
+            predicted_zero_noise_variance(1, 1, 'chirb', ell=0.3)
+
+    def test_genuinely_vanishing_mean_returns_inf(self):
+        # j=1, k=1, ell=0 is a *valid* Jz eigenstate, but M[1, 0] = sqrt(1/3) *
+        # <1 0; 1 0 | 1 0> is exactly 0 (a Clebsch-Gordan selection rule, not an
+        # out-of-range ell), so Eq. normalizedvariance's mean-normalized variance
+        # (which divides by M[k,ell]**4) is genuinely infinite rather than an
+        # arithmetic-error artifact.
+        self.assertEqual(predicted_zero_noise_variance(1, 1, 'chirb', ell=0), float('inf'))
+        self.assertEqual(predicted_zero_noise_variance(1, 1, 'r1rb', ell=0), float('inf'))
+
+
+# ---------------------------------------------------------------------------
+# SyntheticSPAMRB / SyntheticSPAMRBResults (Phase 5)
+# ---------------------------------------------------------------------------
+
+class TestSyntheticSPAMRBNoiseless(BaseCase):
+
+    def test_noiseless_decays_and_rates(self):
+        # Zero noise: P is exactly the identity for every circuit/prep (the net ideal
+        # composition of an SSRB circuit is the identity), so X_k = diag(M M^T)[k] = 1
+        # exactly (M is orthogonal) for every sequence/depth -- the fitted decays should
+        # be (numerically) exactly 1, and the recovered rates exactly e_0 (F's row/
+        # column 0 is all ones, so solve(F, ones) = e_0).
+        j = 1.5
+        spinj = SpinJ(j)
+        sim = SU2RBDataSimulator(spinj)
+        design = SU2RBDesign(j, depths=[1, 2, 3, 5, 8], circuits_per_depth=5, seed=3)
+        data = sim.run(design)
+        results = SyntheticSPAMRB().run(data)
+
+        self.assertTrue(np.allclose(results.decays, 1.0, atol=1e-6))
+        expected_p = np.zeros(spinj.dim)
+        expected_p[0] = 1.0
+        self.assertTrue(np.allclose(results.rates, expected_p, atol=1e-6))
+
+    def test_rates_dataframe_and_variance_diagnostic(self):
+        j = 0.5
+        spinj = SpinJ(j)
+        sim = SU2RBDataSimulator(spinj)
+        # >=3 depths: with exactly 2, the 2-parameter (a, f) fit always has zero
+        # residual degrees of freedom, which scipy.optimize.curve_fit treats as an
+        # indeterminate-covariance case (a warning promoted to a fit failure by this
+        # module -- see test_failed_irrep_fit_warns) regardless of data quality.
+        design = SU2RBDesign(j, depths=[1, 2, 3], circuits_per_depth=3, seed=1)
+        data = sim.run(design)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', UserWarning)
+            results = SyntheticSPAMRB().run(data)
+
+        df = results.rates_dataframe()
+        self.assertEqual(len(df), spinj.dim)
+        self.assertEqual(list(df['irrep']), list(range(spinj.dim)))
+        for col in ('decay_f', 'decay_f_stderr', 'rate_p', 'rate_p_stderr'):
+            self.assertIn(col, df.columns)
+
+        diag = results.variance_diagnostic()
+        self.assertEqual(set(diag.keys()), set(range(spinj.dim)))
+        for k, (predicted, empirical) in diag.items():
+            # SyntheticSPAMRB._variance_variant == 'ssrb', whose predicted variance is
+            # always 0.
+            self.assertEqual(predicted, 0.0)
+            self.assertGreaterEqual(empirical, 0.0)
+
+    def test_isinstance_results(self):
+        j = 0.5
+        # >=3 depths: with exactly 2, the 2-parameter (a, f) fit always has zero
+        # residual degrees of freedom, which is treated as a fit failure (see
+        # test_rates_dataframe_and_variance_diagnostic's comment / test_failed_irrep_fit_warns).
+        design = SU2RBDesign(j, depths=[1, 2, 3], circuits_per_depth=2, seed=0)
+        data = SU2RBDataSimulator(j).run(design)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', UserWarning)
+            results = SyntheticSPAMRB().run(data)
+        self.assertIsInstance(results, SyntheticSPAMRBResults)
+
+    def test_failed_irrep_fit_warns(self):
+        # A single-depth design under-determines the 2-parameter (a, f) fit for every
+        # irrep (scipy.optimize.curve_fit cannot estimate a covariance from one data
+        # point), which should surface as a UserWarning naming the failed irreps --
+        # not a silent all-nan `rates`/`rates_covariance` (F mixes every irrep
+        # together, so one failed fit poisons all of them).
+        j = 0.5
+        design = SU2RBDesign(j, depths=[1], circuits_per_depth=2, seed=0)
+        data = SU2RBDataSimulator(j).run(design)
+        with self.assertWarns(UserWarning) as cm:
+            results = SyntheticSPAMRB().run(data)
+        self.assertIn('irrep', str(cm.warning))
+        self.assertTrue(np.all(np.isnan(results.rates)))
+
+
+class TestSyntheticSPAMRBAnalyticEndToEnd(BaseCase):
+    """
+    Phase 5's analytic end-to-end test: simulate SSRB with a known gate-independent
+    noise channel and exact (shots=None) probabilities, and check the fitted per-irrep
+    decays against the closed-form irrep fidelities `f_k = Tr(P_k . Lambda) / (2k+1)`
+    (`Lambda` the noise channel's standard-basis superoperator, `P_k` from
+    `SpinJ.irrep_stdmx_projectors`) -- the standard RB "twirl" formula.
+
+    A weak noise strength (`gamma = 2e-4`) is used deliberately: the per-circuit
+    zero-noise variance (paper Eq. `SSvariance`; `SyntheticSPAMRB._variance_variant ==
+    'ssrb'` is exactly 0 at zero noise) grows continuously from 0 as gamma turns on, so
+    at weak noise the finite-circuit (N=100) sampling scatter around the analytic decay
+    curve is itself O(gamma) and comfortably below a 1e-6 absolute tolerance; at the
+    gamma ~ 0.05 scale used elsewhere in this test module for cross-validation, the
+    same N=100/depths-to-30 budget only resolves the decays to ~1e-4 (this was checked
+    empirically during development -- see the phase 5 completion notes -- and is
+    consistent with the paper's point that synthetic RB's variance is dominated by
+    circuit-sampling scatter rather than by measurement statistics).
+    """
+
+    def _run_and_check(self, j, gamma=2e-4, n_circuits=100, max_depth=30, seed=42, atol=1e-6):
+        spinj = SpinJ(j)
+        dim = spinj.dim
+        noise = jz_dephasing(spinj, gamma, power=1.0)
+        sim = SU2RBDataSimulator(spinj, noise_channel=noise, shots=None, seed=1)
+        depths = list(range(1, max_depth + 1))
+        design = SU2RBDesign(j, depths, circuits_per_depth=n_circuits, seed=seed)
+        data = sim.run(design)
+        results = SyntheticSPAMRB().run(data)
+
+        analytic_f = np.array([
+            np.trace(spinj.irrep_stdmx_projectors[k] @ sim._noise_superop).real / (2 * k + 1)
+            for k in range(dim)
+        ])
+        self.assertTrue(np.allclose(results.decays, analytic_f, atol=atol),
+                         msg="decays=%s analytic=%s" % (results.decays, analytic_f))
+
+        # k=0 (the trivial irrep) fits to (numerically) exactly 1 regardless of noise:
+        # trace preservation makes its series exactly 1 for every single circuit.
+        self.assertAlmostEqual(results.decays[0], 1.0, delta=1e-8)
+
+        # Recovered rates satisfy the f = F @ p round trip.
+        F = spinj.decay_recoupling_matrix
+        self.assertTrue(np.allclose(F @ results.rates, results.decays, atol=1e-10))
+
+        # Covariance propagation: right shape, symmetric, positive semidefinite.
+        cov = results.rates_covariance
+        self.assertEqual(cov.shape, (dim, dim))
+        self.assertTrue(np.allclose(cov, cov.T))
+        eigvals = np.linalg.eigvalsh(cov)
+        self.assertTrue(np.all(eigvals >= -1e-12), msg="eigvals=%s" % eigvals)
+
+        return results
+
+    def test_j_three_halves(self):
+        self._run_and_check(1.5)
+
+    def test_j_seven_halves(self):
+        self._run_and_check(3.5)

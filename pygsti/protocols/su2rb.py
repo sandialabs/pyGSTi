@@ -33,14 +33,24 @@ Circuit conventions (see the spike notes for the full rationale):
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import math as _math
+import warnings as _warnings
+from fractions import Fraction as _Fraction
+
 import numpy as _np
+import pandas as _pd
+import scipy.linalg as _spl
+from scipy.optimize import curve_fit as _curve_fit
+from scipy.optimize import OptimizeWarning as _OptimizeWarning
 
 from pygsti.protocols import vb as _vb
 from pygsti.protocols import protocol as _proto
+from pygsti.algorithms import rbfit as _rbfit
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.data.dataset import DataSet as _DataSet
 from pygsti.tools import su2tools as _su2
+from pygsti.tools import wignersymbols as _wg
 from pygsti.tools.su2tools import _validate_spin
 from pygsti.tools.optools import unitary_to_std_process_mx as _unitary_to_std_process_mx
 
@@ -770,3 +780,456 @@ class SU2RBDataSimulator(_proto.DataSimulator):
                 ds.add_count_dict(circuit, counts)
         ds.done_adding_data()
         return _proto.ProtocolData(edesign, ds)
+
+
+# ***************************************************************************************************
+# Zero-noise sample-complexity (variance) diagnostics
+# ***************************************************************************************************
+
+def _variance_M_entry(j, k, ell):
+    """
+    `M[k, ell] = sqrt((2k+1)/(2j+1)) * <j ell; k 0 | j ell>`, the same formula as
+    `SpinJ.synthetic_spam_matrix`, but evaluated directly via `wignersymbols.
+    clebsch_gordan` for *any* non-negative integer `k` -- not just `k` in `0..2j`.
+
+    This matters here because the paper's zero-noise variance sums (Eqs.
+    `normalizedvariance`/`SSvariance`) range the inner irrep label `k'` over
+    `0..2*k`, which exceeds `2*j` once `k > j`; `SpinJ.synthetic_spam_matrix` only has
+    rows `0..2j`. The corresponding entries are exactly zero once `k > 2*j` (the
+    Clebsch-Gordan triangle inequality `|j - k| <= j` fails), and `clebsch_gordan`
+    already returns `0.0` in that case, so this direct evaluation is well-defined for
+    every `k >= 0` and agrees with `SpinJ.synthetic_spam_matrix` wherever both are
+    defined (verified against the paper's golden Tables `variancewithk`/`variancewithj`
+    in `test_su2rb.py`).
+    """
+    return _math.sqrt((2 * k + 1) / (2 * j + 1)) * _wg.clebsch_gordan(j, ell, k, 0, j, ell)
+
+
+def _variance_C(k, kp, rank1):
+    """
+    `C(k, k')` from Eqs. `normalizedvariance`/`SSvariance`: identically `1` for the
+    character variants, `<k 0; k 0 | k' 0>**2` for the rank-1 variants.
+    """
+    if rank1:
+        return _wg.clebsch_gordan(k, 0, k, 0, kp, 0) ** 2
+    return 1.0
+
+
+def _validate_ell(j_float, two_j, ell):
+    """
+    Validate that `ell` is one of `SpinJ(j).spins` (`j, j-1, ..., -j`) and return it
+    as an exact float.
+
+    `wignersymbols.clebsch_gordan` silently returns `0.0` (rather than raising) for an
+    `ell` outside that range, since from its point of view that's just an ordinary
+    `|m| <= j` selection-rule violation -- but here it means `ell` isn't a physically
+    meaningful Jz eigenstate index for this `j` at all, which is a caller error and
+    should be reported as such (rather than surfacing later as a `ZeroDivisionError`
+    from an `M[k, ell]` that's zero for the wrong reason).
+    """
+    if isinstance(ell, bool):
+        raise TypeError("ell must be an int, float, or Fraction, not bool")
+    if isinstance(ell, _Fraction):
+        two_ell_frac = 2 * ell
+        if two_ell_frac.denominator != 1:
+            raise ValueError("ell = %s is not an integer or half-integer (2*ell must be an integer)" % ell)
+        two_ell = two_ell_frac.numerator
+    elif isinstance(ell, (int, float)):
+        if isinstance(ell, float) and not _math.isfinite(ell):
+            raise ValueError("ell must be finite (got %r)" % ell)
+        two_ell_val = 2 * ell
+        two_ell = round(two_ell_val)
+        if two_ell_val != two_ell:
+            raise ValueError("ell = %r is not an integer or half-integer (2*ell must be an integer)" % ell)
+    else:
+        raise TypeError("ell must be an int, float, or Fraction, not %s" % type(ell).__name__)
+
+    if abs(two_ell) > two_j or (two_j - two_ell) % 2 != 0:
+        valid = [j_float - i for i in range(two_j + 1)]
+        raise ValueError("ell=%r is not a valid Jz eigenstate index for j=%s (must be one of %s)"
+                          % (ell, j_float, valid))
+    return two_ell / 2.0
+
+
+_ZERO_NOISE_VARIANCE_VARIANTS = ('ssrb', 'chirb', 'r1rb', 'sschirb', 'ssr1rb')
+
+
+def predicted_zero_noise_variance(j, k, variant, ell=None):
+    """
+    The paper's exact zero-noise (perfect-gate) sampling variance of the irrep-`k`
+    estimator for one of the synthetic RB protocols (Section "Sample Complexity";
+    Eqs. `normalizedvariance` and `SSvariance`). This is a diagnostic for the sample
+    complexity of a protocol -- smaller is better -- and does not depend on gate
+    noise (the paper's variance results are exact only in the zero-noise limit).
+
+    Parameters
+    ----------
+    j : int, float, or Fraction
+        The spin. `2*j` must be a non-negative integer.
+
+    k : int
+        The irrep label. Must satisfy `0 <= k <= 2*j`.
+
+    variant : {'ssrb', 'chirb', 'r1rb', 'sschirb', 'ssr1rb'}
+        Which protocol's variance to compute:
+
+        - `'ssrb'`: always `0.0` (synthetic-SPAM RB with no character/rank-1
+          weighting has zero variance in the zero-noise limit; paper text just above
+          Eq. `SSvariance`). `ell` must be `None`.
+        - `'chirb'` / `'r1rb'`: the physical-(:math:`J_z`-eigenstate)-SPAM character /
+          rank-1 variants (Eq. `normalizedvariance`, the mean-normalized variance of
+          the estimator for `f_k = 1`). Requires `ell`.
+        - `'sschirb'` / `'ssr1rb'`: the synthetic-SPAM character / rank-1 variants
+          (Eq. `SSvariance`). `ell` must be `None`.
+
+    ell : int, float, or Fraction, optional
+        The physical-SPAM :math:`J_z` eigenstate index (one of `SpinJ(j).spins`),
+        required by the `'chirb'`/`'r1rb'` variants and disallowed by the others.
+        Raises `ValueError` if not one of `SpinJ(j).spins`.
+
+    Returns
+    -------
+    float
+        `float('inf')` for the `'chirb'`/`'r1rb'` variants if `M[k, ell]` (the
+        zero-noise mean of the underlying estimator) is itself exactly `0` for the
+        given `(j, k, ell)` -- e.g. `j=1, k=1, ell=0` -- since Eq. `normalizedvariance`
+        then divides by zero.
+    """
+    variant = variant.lower()
+    if variant not in _ZERO_NOISE_VARIANCE_VARIANTS:
+        raise ValueError("variant must be one of %s; got %r" % (_ZERO_NOISE_VARIANCE_VARIANTS, variant))
+    j_float, two_j = _validate_spin(j)
+    if not (isinstance(k, (int, _np.integer)) and 0 <= k <= two_j):
+        raise ValueError("k must be an integer with 0 <= k <= 2*j=%d; got %r" % (two_j, k))
+
+    if variant == 'ssrb':
+        if ell is not None:
+            raise ValueError("`ell` is not used by the 'ssrb' variant (its variance is always 0.0)")
+        return 0.0
+
+    rank1 = variant in ('r1rb', 'ssr1rb')
+    synthetic_spam = variant in ('sschirb', 'ssr1rb')
+
+    if synthetic_spam:
+        if ell is not None:
+            raise ValueError("`ell` is not used by synthetic-SPAM variants (got variant=%r, ell=%r)"
+                              % (variant, ell))
+        spins = [j_float - i for i in range(two_j + 1)]
+        total = 0.0
+        for kp in range(0, 2 * k + 1):
+            inner = sum(_variance_M_entry(j_float, k, ell_) ** 2 * _variance_M_entry(j_float, kp, ell_)
+                        for ell_ in spins)
+            total += _variance_C(k, kp, rank1) / (2 * kp + 1) * inner ** 2
+        quartic = sum(_variance_M_entry(j_float, k, ell_) ** 4 for ell_ in spins)
+        return (2 * k + 1) ** 2 * total - quartic
+    else:
+        if ell is None:
+            raise ValueError("`ell` (the physical-SPAM Jz eigenstate index) is required for variant=%r"
+                              % variant)
+        ell = _validate_ell(j_float, two_j, ell)
+        m_kl = _variance_M_entry(j_float, k, ell)
+        if m_kl == 0.0:
+            # A genuinely valid ell (e.g. j=1, k=1, ell=0) can still make M[k, ell]
+            # vanish by a Clebsch-Gordan selection rule unrelated to |ell| <= j; Eq.
+            # normalizedvariance's mean-normalized variance is then infinite (the
+            # zero-noise mean <X^k_{ell,ell}> = M[k,ell]**2 is itself 0, so the
+            # normalized variance blows up), not an arithmetic error.
+            return float('inf')
+        total = sum(_variance_C(k, kp, rank1) / (2 * kp + 1) * _variance_M_entry(j_float, kp, ell) ** 2
+                    for kp in range(0, 2 * k + 1))
+        return (2 * k + 1) ** 2 / m_kl ** 4 * total - 1.0
+
+
+# ***************************************************************************************************
+# SyntheticSPAMRB
+# ***************************************************************************************************
+
+def _decay_model(x, a, f):
+    """`A_k * f_k**x` -- the per-irrep decay model (Section 3's "no additive offset"
+    convention: the trivial irrep k=0 is itself one of the fitted series)."""
+    return a * f ** x
+
+
+def _fit_irrep_decay(x, y, p0=(1.0, 0.9)):
+    """
+    Fit `y ~ a * f**x` (no additive offset) via `scipy.optimize.curve_fit`, with `f`
+    (the per-irrep decay parameter) bounded to `[0, 1]` and `a` (the amplitude)
+    unbounded. Ports the `a * b**x` parameterization of the `su2-rb-conservative`
+    branch's `Analysis.fit_exp` (`fitlog=False`).
+
+    Returns
+    -------
+    a, f, sigma_a, sigma_f : float
+        The fitted amplitude/decay and their estimated standard errors (`nan` if the
+        fit failed).
+
+    success : bool
+    """
+    x = _np.asarray(x, dtype=float)
+    y = _np.asarray(y, dtype=float)
+    try:
+        # Promote "covariance could not be estimated" (e.g. too few depths for the
+        # 2-parameter fit) from a warning to an exception, caught below, so this
+        # function's own success/failure contract doesn't depend on the caller's
+        # ambient warnings configuration (pyGSTi's pytest.ini turns
+        # scipy.optimize.OptimizeWarning into an error project-wide).
+        with _warnings.catch_warnings():
+            _warnings.simplefilter('error', _OptimizeWarning)
+            # Tight xtol/ftol/gtol: the default (~1e-8) `trf` stopping tolerances leave
+            # a ~1e-6-level residual on (near-)degenerate series -- e.g. the always-
+            # exactly-1 k=0 series -- that this module's analytic cross-validation
+            # tests (test_su2rb.py) need to resolve well below that level.
+            popt, pcov = _curve_fit(_decay_model, x, y, p0=p0,
+                                     bounds=([-_np.inf, 0.0], [_np.inf, 1.0]), maxfev=10000,
+                                     xtol=1e-14, ftol=1e-14, gtol=1e-14)
+        a, f = float(popt[0]), float(popt[1])
+        sigma_a, sigma_f = (float(s) for s in _np.sqrt(_np.diag(pcov)))
+        success = True
+    except (RuntimeError, _np.linalg.LinAlgError, ValueError, _OptimizeWarning):
+        a, f, sigma_a, sigma_f, success = _np.nan, _np.nan, _np.nan, _np.nan, False
+    return a, f, sigma_a, sigma_f, success
+
+
+class SyntheticSPAMRB(_proto.Protocol):
+    """
+    The synthetic-SPAM randomized benchmarking (SSRB) protocol for an arbitrary-spin
+    SU(2) system: reconstructs, per depth, the `dim`-by-`dim` [prep, effect]
+    probability matrix for each sampled circuit sequence, applies the SPAM-synthesis
+    sandwich `diag(M P M^T)` per sequence, averages over sequences (with standard
+    errors), fits each irrep's averaged series to `A_k * f_k**x` (`x` = depth + 1, no
+    additive offset), and recovers per-irrep rates `p = solve(F, f)` with propagated
+    covariance `Sigma_p = F^-1 diag(sigma_f**2) F^-T`.
+
+    Ports `Analysis.fit_and_get_rates` / `fit_and_plot_with_rates_stderrors` from the
+    `su2-rb-conservative` branch (minus the plotting).
+
+    Parameters
+    ----------
+    seed : (float, float), optional
+        The `(a, f)` seed passed to `scipy.optimize.curve_fit` for each irrep's decay
+        fit.
+
+    name : str, optional
+        The name of this protocol.
+    """
+
+    #: Which `predicted_zero_noise_variance` variant this protocol's estimator
+    #: corresponds to. Overridden by the character/rank-1 subclasses (Phase 6).
+    _variance_variant = 'ssrb'
+
+    def __init__(self, seed=(1.0, 0.9), name=None):
+        super(SyntheticSPAMRB, self).__init__(name)
+        self.seed = tuple(seed)
+
+    def _per_sequence_irrep_values(self, edesign, ds, depth_idx, M):
+        """
+        Shape `(circuits_per_depth, dim)`: `X[s, k] = diag(M @ P^(s) @ M.T)[k]`, where
+        `P^(s)` is the `dim`-by-`dim` [prep, effect] probability matrix for the `s`-th
+        sampled sequence at depth index `depth_idx`, reconstructed from `ds`'s recorded
+        outcome fractions for the `dim` circuits (one per prep) sharing that sequence.
+        """
+        dim = edesign.dim
+        circuits_per_depth = edesign.circuits_per_depth
+        circuits = edesign.circuit_lists[depth_idx]
+        seq_at_depth = edesign.seq_index[depth_idx]
+        prep_at_depth = edesign.prep_index[depth_idx]
+        outcome_labels = [(str(ell),) for ell in range(dim)]
+
+        P = _np.zeros((circuits_per_depth, dim, dim))
+        for circuit, seq_idx, prep_idx in zip(circuits, seq_at_depth, prep_at_depth):
+            fracs = ds[circuit].fractions
+            P[seq_idx, prep_idx, :] = [fracs.get(ol, 0.0) for ol in outcome_labels]
+        # X[s,k] = sum_{l,m} M[k,l] P[s,l,m] M[k,m]
+        return _np.einsum('kl,slm,km->sk', M, P, M)
+
+    def _fit_and_get_rates(self, x, per_irrep_series, F):
+        """
+        Fit each irrep's averaged series (`per_irrep_series[k, :]`, aligned with `x`)
+        to `A_k * f_k**x`, then recover per-irrep rates and their covariance.
+
+        Returns
+        -------
+        fits : list of rbfit.FitResults
+            One per irrep, in `FitResults`-compatible form: `estimates = {'a': 0.0
+            (fixed), 'b': A_k, 'p': f_k}` (matching `rbfit`'s `a + b*p**m` convention
+            with the offset `a` fixed to `0`).
+
+        f, sigma_f : numpy array, shape (dim,)
+        p, cov_p : numpy array, shapes (dim,) and (dim, dim)
+        """
+        dim = per_irrep_series.shape[0]
+        fits = []
+        f = _np.zeros(dim)
+        sigma_f = _np.zeros(dim)
+        failed_irreps = []
+        for k in range(dim):
+            a, fk, sigma_a, sigma_fk, success = _fit_irrep_decay(x, per_irrep_series[k, :], p0=self.seed)
+            f[k], sigma_f[k] = fk, sigma_fk
+            if not success:
+                failed_irreps.append(k)
+            estimates = {'a': 0.0, 'b': a, 'p': fk}
+            variable = {'a': False, 'b': True, 'p': True}
+            stds = {'a': 0.0, 'b': sigma_a, 'p': sigma_fk}
+            fits.append(_rbfit.FitResults('synspam-no-offset', list(self.seed), None, success,
+                                           estimates, variable, stds=stds))
+
+        if failed_irreps:
+            # A failed fit leaves `nan`s in `f`/`sigma_f` for just the failed irrep(s),
+            # but `p = solve(F, f)` and `cov_p` mix *every* irrep together (F is not
+            # block-diagonal), so a single failure silently poisons every entry of
+            # `p`/`cov_p` with `nan`, not just the failed irrep's. Surface that loudly
+            # rather than letting it look like an ordinary (if strange) all-nan result.
+            _warnings.warn(
+                "SyntheticSPAMRB: the per-irrep decay fit failed for irrep(s) %s; "
+                "the recovered rates and covariance (which mix all irreps via F) are "
+                "therefore entirely nan, not just the failed irrep(s)." % failed_irreps,
+                UserWarning)
+
+        invF = _spl.inv(F)
+        p = invF @ f
+        cov_p = invF @ _np.diag(sigma_f ** 2) @ invF.T
+        return fits, f, sigma_f, p, cov_p
+
+    def run(self, data, memlimit=None, comm=None):
+        """
+        Run this protocol on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data, from a `SU2RBDesign` (or, for the character/rank-1
+            subclasses, `SU2CharacterRBDesign`) and a `DataSet` with matching circuits.
+
+        memlimit : int, optional
+            Unused (present for `Protocol` interface compatibility).
+
+        comm : mpi4py.MPI.Comm, optional
+            Unused (present for `Protocol` interface compatibility).
+
+        Returns
+        -------
+        SyntheticSPAMRBResults
+        """
+        edesign = data.edesign
+        ds = data.dataset
+        j, dim = edesign.j, edesign.dim
+        spinj = _su2.SpinJ(j)
+        M = spinj.synthetic_spam_matrix
+        F = spinj.decay_recoupling_matrix
+
+        depths = list(edesign.depths)
+        num_depths = len(depths)
+
+        means = _np.zeros((dim, num_depths))
+        stderrs = _np.zeros((dim, num_depths))
+        variances = _np.zeros((dim, num_depths))
+        for depth_idx in range(num_depths):
+            X = self._per_sequence_irrep_values(edesign, ds, depth_idx, M)
+            n = X.shape[0]
+            means[:, depth_idx] = X.mean(axis=0)
+            var = X.var(axis=0, ddof=1) if n > 1 else _np.zeros(dim)
+            variances[:, depth_idx] = var
+            stderrs[:, depth_idx] = _np.sqrt(var / n)
+
+        x = _np.array(depths, dtype=float) + 1.0
+        fits, f, sigma_f, p, cov_p = self._fit_and_get_rates(x, means, F)
+
+        return SyntheticSPAMRBResults(data, self, depths, means, stderrs, variances, fits, f, sigma_f, p, cov_p)
+
+
+class SyntheticSPAMRBResults(_proto.ProtocolResults):
+    """
+    The results of running `SyntheticSPAMRB` (or one of its character/rank-1
+    subclasses) on synthetic-SPAM RB data.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        The data these results were computed from.
+
+    protocol_instance : SyntheticSPAMRB
+        The protocol that produced these results.
+
+    depths : list of int
+        The RB circuit depths (in the same order as the columns of `means`/`stderrs`/
+        `variances`).
+
+    means, stderrs, variances : numpy array
+        Shape `(dim, len(depths))`: the per-irrep, per-depth sample mean, standard
+        error, and (sequence-count-unnormalized) sample variance of the per-sequence
+        estimator `X_k` (`SyntheticSPAMRB._per_sequence_irrep_values`).
+
+    fits : list of rbfit.FitResults
+        One per irrep `k = 0..dim-1`.
+
+    f, sigma_f : numpy array, shape (dim,)
+        The fitted per-irrep decay parameters and their standard errors.
+
+    p, cov_p : numpy array, shapes (dim,) and (dim, dim)
+        The recovered per-irrep rates (`solve(F, f)`) and their propagated covariance
+        (`F^-1 diag(sigma_f**2) F^-T`).
+
+    Attributes
+    ----------
+    j : float
+        The spin.
+
+    dim : int
+        `2*j + 1`.
+    """
+
+    def __init__(self, data, protocol_instance, depths, means, stderrs, variances, fits, f, sigma_f, p, cov_p):
+        super(SyntheticSPAMRBResults, self).__init__(data, protocol_instance)
+        self.j = data.edesign.j
+        self.dim = data.edesign.dim
+        self.depths = list(depths)
+        self.per_irrep_means = means
+        self.per_irrep_stderrs = stderrs
+        self.per_irrep_variances = variances
+        self.fits = fits
+        self.decays = f
+        self.decay_stderrs = sigma_f
+        self.rates = p
+        self.rates_covariance = cov_p
+
+    def rates_dataframe(self):
+        """
+        A `pandas.DataFrame` rate-table export, with one row per irrep `k`.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns `irrep`, `decay_f`, `decay_f_stderr`, `rate_p`, `rate_p_stderr`.
+        """
+        return _pd.DataFrame({
+            'irrep': _np.arange(self.dim),
+            'decay_f': self.decays,
+            'decay_f_stderr': self.decay_stderrs,
+            'rate_p': self.rates,
+            'rate_p_stderr': _np.sqrt(_np.diag(self.rates_covariance)),
+        })
+
+    def variance_diagnostic(self, depth_index=0):
+        """
+        An order-of-magnitude sanity check comparing this protocol's predicted
+        zero-noise `Var(X_k)` (`predicted_zero_noise_variance`, evaluated for
+        `self.protocol._variance_variant`) against the empirical sample variance of
+        the per-sequence irrep estimator at depth `self.depths[depth_index]`. Since the
+        prediction is exact only at zero gate noise, this is a sanity check (expected
+        order-of-magnitude agreement at low noise/short depths), not an exact-agreement
+        test.
+
+        Parameters
+        ----------
+        depth_index : int, optional
+            Which of `self.depths` to compare the empirical variance at.
+
+        Returns
+        -------
+        dict
+            Maps irrep label `k` -> `(predicted, empirical)`.
+        """
+        variant = self.protocol._variance_variant
+        return {k: (predicted_zero_noise_variance(self.j, k, variant),
+                    float(self.per_irrep_variances[k, depth_index]))
+                for k in range(self.dim)}
