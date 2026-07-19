@@ -36,10 +36,13 @@ Circuit conventions (see the spike notes for the full rationale):
 import numpy as _np
 
 from pygsti.protocols import vb as _vb
+from pygsti.protocols import protocol as _proto
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.data.dataset import DataSet as _DataSet
 from pygsti.tools import su2tools as _su2
 from pygsti.tools.su2tools import _validate_spin
+from pygsti.tools.optools import unitary_to_std_process_mx as _unitary_to_std_process_mx
 
 GATE_NAME = 'Gu'
 """The name of the single arg-carrying gate label used by SU(2) RB circuits."""
@@ -360,3 +363,410 @@ class SU2CharacterRBDesign(SU2RBDesign):
         self.charcores = charcores_lists
         self.auxfile_types['characters'] = 'json'
         self.auxfile_types['charcores'] = 'json'
+
+
+# ***************************************************************************************************
+# Noise channels for SU2RBDataSimulator
+# ***************************************************************************************************
+
+def jz_dephasing(spinj, gamma, power=1.0):
+    """
+    A gate-independent dephasing noise channel, diagonal in the standard (matrix-unit)
+    basis: `E[ell, ell] = exp(-gamma * |i - j|**power)`, where `ell = i + j*dim` are the
+    row-major-raveled matrix-unit indices of a `dim`-by-`dim` density matrix (`i` is the
+    column index, `j` the row index -- since `|i - j|` is symmetric in the two, this
+    labeling ambiguity doesn't matter). Ports `SU2RBSim._set_error_channel_Jz_dephasing`
+    from the `su2-rb-conservative` branch.
+
+    Parameters
+    ----------
+    spinj : SpinJ
+        The representation whose (`dim`-by-`dim`) density matrices this channel acts on.
+
+    gamma : float
+        The dephasing rate. `gamma == 0` gives the identity channel.
+
+    power : float, optional
+        The power `p` in `|i - j|**p` (`p=1` is the branch's "exponential" profile,
+        `p=2` its "gaussian" profile).
+
+    Returns
+    -------
+    numpy array
+        Shape `(dim**2, dim**2)`, a diagonal superoperator acting on row-major-raveled
+        density matrices.
+    """
+    if gamma < 0:
+        raise ValueError("gamma must be non-negative (got %r)" % gamma)
+    dim = spinj.dim
+    ell = _np.arange(dim * dim)
+    i = ell % dim
+    j = ell // dim
+    diag = _np.exp(-gamma * _np.abs(i - j).astype(float) ** power)
+    return _np.diag(diag).astype(complex)
+
+
+def jz_rotation(spinj, theta, power=1.0):
+    """
+    A gate-independent unitary "Z-rotation" noise channel: `U = diag(exp(1j * theta *
+    spins**power))`, in the `spinj.spins`-ordered basis. Ports
+    `SU2RBSim.set_error_channel_rotate_Jz_pow` from the `su2-rb-conservative` branch.
+
+    Parameters
+    ----------
+    spinj : SpinJ
+        The representation whose `spins` this channel's generator is diagonal in.
+
+    theta : float
+        The rotation angle.
+
+    power : float, optional
+        The power `p` in `spins**p` (`p=1` is a rotation about the "physical" Jz axis;
+        `p=2` is the branch's `rotate_Jz2` variant).
+
+    Returns
+    -------
+    numpy array
+        Shape `(dim, dim)`, a unitary.
+    """
+    return _np.diag(_np.exp(1j * theta * (spinj.spins ** power)))
+
+
+def compose_noise_channels(spinj, *channels):
+    """
+    Compose a sequence of noise channels (each either a `(dim, dim)` unitary or a
+    `(dim**2, dim**2)` superoperator) into a single superoperator, applied in the order
+    given (`channels[0]` first).
+
+    Parameters
+    ----------
+    spinj : SpinJ
+        The representation the channels act on.
+
+    *channels : numpy array
+        Each either shape `(dim, dim)` (a unitary) or `(dim**2, dim**2)` (a
+        superoperator).
+
+    Returns
+    -------
+    numpy array
+        Shape `(dim**2, dim**2)`.
+    """
+    dim = spinj.dim
+    composed = _np.eye(dim * dim, dtype=complex)
+    for channel in channels:
+        channel = _np.asarray(channel)
+        if channel.shape == (dim, dim):
+            channel = _unitary_to_std_process_mx(channel)
+        elif channel.shape != (dim * dim, dim * dim):
+            raise ValueError("Each channel must have shape (%d, %d) or (%d, %d); got %s"
+                              % (dim, dim, dim * dim, dim * dim, channel.shape))
+        composed = channel @ composed
+    return composed
+
+
+# ***************************************************************************************************
+# SU2RBDataSimulator
+# ***************************************************************************************************
+
+class SU2RBDataSimulator(_proto.DataSimulator):
+    """
+    Simulates SU(2) synthetic SPAM RB data for `SU2RBDesign`/`SU2CharacterRBDesign`
+    experiment designs, without going through a full pyGSTi `Model`.
+
+    Reads the design's `euler_angles` (and, for `SU2CharacterRBDesign`, `invert_from`)
+    aux data directly -- it never parses circuit labels -- and builds the ZXZ-angle
+    unitaries in batch via the instance's `SpinJ`'s precomputed eigendecompositions,
+    inserting a gate-independent noise channel after every gate (except, per the
+    `su2-rb-conservative` branch's convention, immediately after the "hidden" first
+    gate of a design with `invert_from == 1`; ports `SU2RBSim.compute_probabilities` /
+    `SU2CharacterRBSim._process_circuits`).
+
+    Parameters
+    ----------
+    spinj : SpinJ or (int, float, or Fraction)
+        The representation to simulate in, or a spin `j` from which one is built.
+
+    noise_channel : None, numpy array, optional
+        The gate-independent noise channel applied after each gate. `None` means no
+        noise (the identity channel). A `(dim, dim)` array is treated as a unitary and
+        converted to a superoperator. A `(dim**2, dim**2)` array is treated as a
+        superoperator directly (acting on row-major-raveled density matrices, i.e. in
+        the same convention as `pygsti.tools.optools.unitary_to_std_process_mx`). Use
+        `jz_dephasing`, `jz_rotation`, and/or `compose_noise_channels` (this module) to
+        build one.
+
+    shots : int, optional
+        If `None` (the default), the returned `DataSet` records exact probabilities
+        (as floating-point "counts" that sum to 1 per circuit), following
+        `DataCountsSimulator`'s `sample_error='none'` convention. If an integer, that
+        many shots per circuit are drawn from a multinomial distribution.
+
+    seed : int, optional
+        Seed for the `numpy.random.default_rng` used when `shots` is not `None`.
+
+    Attributes
+    ----------
+    dim : int
+        `spinj.dim`.
+    """
+
+    def __init__(self, spinj, noise_channel=None, shots=None, seed=None):
+        super(SU2RBDataSimulator, self).__init__()
+        if not isinstance(spinj, _su2.SpinJ):
+            spinj = _su2.SpinJ(spinj)
+        self.spinj = spinj
+        self.dim = spinj.dim
+        self.shots = shots
+        self.seed = seed
+        self._noise_superop = self._resolve_noise_channel(noise_channel)
+
+    def _resolve_noise_channel(self, noise_channel):
+        if noise_channel is None:
+            return None
+        noise_channel = _np.asarray(noise_channel)
+        dim = self.dim
+        if noise_channel.shape == (dim, dim):
+            return _unitary_to_std_process_mx(noise_channel)
+        elif noise_channel.shape == (dim * dim, dim * dim):
+            return noise_channel.astype(complex)
+        else:
+            raise ValueError(
+                "noise_channel must be None, a (%d, %d) unitary, or a (%d, %d) superoperator; got shape %s"
+                % (dim, dim, dim * dim, dim * dim, noise_channel.shape))
+
+    @property
+    def is_noiseless(self):
+        """True if this simulator's noise channel is the identity (`noise_channel=None`)."""
+        return self._noise_superop is None
+
+    # -----------------------------------------------------------------
+    # Core composition machinery
+    # -----------------------------------------------------------------
+
+    def _compose_full(self, angles, skip_first_noise):
+        """
+        The general (O(depth)) path: compose the `(dim**2, dim**2)` superoperator for
+        the full gate sequence `angles` (shape `(m+1, 3)`), inserting `self.
+        _noise_superop` after every gate except (if `skip_first_noise`) the first.
+        """
+        dim = self.dim
+        Us = self.spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
+        S = _np.eye(dim * dim, dtype=complex)
+        skip_next_noise = skip_first_noise
+        for U in Us:
+            S = _unitary_to_std_process_mx(U) @ S
+            if not skip_next_noise and self._noise_superop is not None:
+                S = self._noise_superop @ S
+            skip_next_noise = False
+        return S
+
+    def _compose_shortcut(self, angles):
+        """
+        The noiseless-character O(1) shortcut: the composition of a full character-
+        design gate sequence (with noise skipped after the hidden first gate) is, in
+        the absence of any noise, exactly the hidden first gate's superoperator (the
+        appended inverting gate cancels rows `1..m-1`). Ports
+        `SU2CharacterRBSim._process_circuits`'s fast path.
+        """
+        U0 = self.spinj.unitaries_from_angles(angles[0, 0], angles[0, 1], angles[0, 2])[0]
+        return _unitary_to_std_process_mx(U0)
+
+    def _compose(self, angles, skip_first_noise):
+        if self._noise_superop is None and skip_first_noise:
+            return self._compose_shortcut(angles)
+        return self._compose_full(angles, skip_first_noise)
+
+    @staticmethod
+    def _skip_first_noise_for(edesign):
+        return getattr(edesign, 'invert_from', 0) == 1
+
+    def _unique_sequences_at_depth(self, edesign, depth_idx):
+        """
+        The (m+1, 3) angle arrays of the `circuits_per_depth` distinct sampled
+        sequences at depth index `depth_idx`, one per `seq_index` value, ordered by
+        `seq_index`.
+        """
+        seen = {}
+        for angles, seq_idx in zip(edesign.euler_angles[depth_idx], edesign.seq_index[depth_idx]):
+            if seq_idx not in seen:
+                seen[seq_idx] = _np.asarray(angles, dtype=float)
+        return [seen[k] for k in sorted(seen.keys())]
+
+    # -----------------------------------------------------------------
+    # Ideal (computational-basis) SPAM, as row-major-raveled superkets
+    # -----------------------------------------------------------------
+
+    def _ideal_computational_ops(self):
+        """
+        Shape `(dim, dim**2)`: row `ell` is the row-major-raveled `|ell><ell|`
+        projector (used as both the default state preps and the default POVM
+        effects).
+        """
+        dim = self.dim
+        ops = _np.zeros((dim, dim * dim), dtype=complex)
+        for ell in range(dim):
+            ops[ell, ell * dim + ell] = 1.0
+        return ops
+
+    # -----------------------------------------------------------------
+    # Composition cache / SPAM-swap API
+    # -----------------------------------------------------------------
+
+    def compute_nonspam_compositions(self, edesign, depth_indices=None):
+        """
+        Compute the composed noisy (non-SPAM) superoperator for each distinct sampled
+        circuit sequence, at the requested depths.
+
+        This is the capability behind the paper's SPAM-robustness figures: once
+        computed, `probabilities_from_compositions` can re-derive probabilities under
+        arbitrary (e.g. perturbed) state preps/POVMs without re-simulating circuits.
+
+        Parameters
+        ----------
+        edesign : SU2RBDesign or SU2CharacterRBDesign
+            The design whose `euler_angles`/`seq_index` aux data to read.
+
+        depth_indices : iterable of int, optional
+            Which depth indices (into `edesign.depths`) to compute compositions for.
+            If `None` (the default), all depths are computed -- note that the full
+            cache at the paper's scale (10**4 sequences x 12 depths x 64**2 complex
+            doubles) is approximately 4 GB, so pass an explicit subset to bound memory
+            usage for large designs.
+
+        Returns
+        -------
+        dict
+            Maps depth index -> numpy array of shape
+            `(circuits_per_depth, dim**2, dim**2)`, the composed superoperator for
+            each sampled sequence at that depth (ordered by `seq_index`).
+        """
+        skip_first_noise = self._skip_first_noise_for(edesign)
+        if depth_indices is None:
+            depth_indices = range(len(edesign.depths))
+        out = {}
+        for depth_idx in depth_indices:
+            sequences = self._unique_sequences_at_depth(edesign, depth_idx)
+            out[depth_idx] = _np.array([self._compose(angles, skip_first_noise) for angles in sequences])
+        return out
+
+    def probabilities_from_compositions(self, compositions, statepreps=None, povm=None):
+        """
+        Compute prep-by-effect outcome probabilities from precomputed non-SPAM
+        compositions (see `compute_nonspam_compositions`), for post-hoc SPAM sweeps
+        without re-simulating circuits.
+
+        Parameters
+        ----------
+        compositions : dict
+            As returned by `compute_nonspam_compositions`: depth index -> array of
+            shape `(n_sequences, dim**2, dim**2)`.
+
+        statepreps : numpy array, optional
+            Shape `(num_preps, dim**2)`; row `i` is the row-major-raveled density
+            matrix of the `i`-th state preparation. Defaults to the ideal
+            computational-basis preps `|ell><ell|` (`ell = 0..dim-1`, in
+            `SpinJ.spins` order).
+
+        povm : numpy array, optional
+            Shape `(num_effects, dim**2)`; row `e` is the row-major-raveled effect
+            matrix of the `e`-th POVM outcome. Defaults to the ideal
+            computational-basis POVM (same convention as `statepreps`).
+
+        Returns
+        -------
+        dict
+            Maps depth index -> numpy array of shape
+            `(n_sequences, num_preps, num_effects)`.
+        """
+        if statepreps is None:
+            statepreps = self._ideal_computational_ops()
+        if povm is None:
+            povm = self._ideal_computational_ops()
+        statepreps = _np.asarray(statepreps, dtype=complex)
+        povm = _np.asarray(povm, dtype=complex)
+
+        out = {}
+        for depth_idx, compositions_at_depth in compositions.items():
+            # evolved[s, i, :] = compositions_at_depth[s] @ statepreps[i]
+            evolved = _np.einsum('sab,ib->sia', compositions_at_depth, statepreps)
+            # probs[s, i, e] = <povm[e] | evolved[s, i]> = Tr(povm_mx[e] . prep_mx[i] after composition s)
+            probs = _np.einsum('ek,sik->sie', _np.conj(povm), evolved)
+            imag_norm = _np.linalg.norm(probs.imag)
+            if imag_norm > 1e-8:
+                raise ValueError("probabilities_from_compositions produced non-negligible imaginary "
+                                  "part (norm %g); statepreps/povm may not be Hermitian" % imag_norm)
+            out[depth_idx] = probs.real
+        return out
+
+    # -----------------------------------------------------------------
+    # run()
+    # -----------------------------------------------------------------
+
+    def _sample_counts(self, probs, outcome_labels, rng):
+        if self.shots is None:
+            return {ol: float(p) for ol, p in zip(outcome_labels, probs)}
+        clipped = _np.clip(probs, 0, None)
+        total = clipped.sum()
+        clipped = clipped / total if total > 0 else _np.full(len(probs), 1.0 / len(probs))
+        counts = rng.multinomial(self.shots, clipped)
+        return {ol: int(c) for ol, c in zip(outcome_labels, counts)}
+
+    def run(self, edesign, memlimit=None, comm=None):
+        """
+        Simulate SU(2) synthetic SPAM RB data for `edesign`.
+
+        Parameters
+        ----------
+        edesign : SU2RBDesign or SU2CharacterRBDesign
+            The design to simulate. Its `qudit_label` and `j`/`dim` must be consistent
+            with this simulator's `spinj`.
+
+        memlimit : int, optional
+            Unused (present for `DataSimulator` interface compatibility).
+
+        comm : mpi4py.MPI.Comm, optional
+            Unused (present for `DataSimulator` interface compatibility).
+
+        Returns
+        -------
+        ProtocolData
+        """
+        if edesign.dim != self.dim:
+            raise ValueError("edesign.dim=%d does not match this simulator's spinj.dim=%d"
+                              % (edesign.dim, self.dim))
+
+        skip_first_noise = self._skip_first_noise_for(edesign)
+        outcome_labels = [str(ell) for ell in range(self.dim)]
+        rng = _np.random.default_rng(self.seed) if self.shots is not None else None
+        ideal_ops = self._ideal_computational_ops()
+
+        ds = _DataSet(collision_action="aggregate")
+        # DataSet's default repetition-count dtype is float32 (dataset.py's
+        # `Repcount_type`), which is far too coarse for the exact-probability
+        # "counts" recorded when `shots is None`: float32 has ~1e-7 relative
+        # precision, which shows up as an artifact-level discrepancy against
+        # independently-computed probabilities (e.g. from a full pyGSTi Model).
+        # Use float64 so the shots=None counts really are exact.
+        ds.repType = _np.float64
+        for depth_idx, circuits_at_depth in enumerate(edesign.circuit_lists):
+            seq_compositions = {}
+            angles_at_depth = edesign.euler_angles[depth_idx]
+            seq_at_depth = edesign.seq_index[depth_idx]
+            prep_at_depth = edesign.prep_index[depth_idx]
+            for circuit, angles, seq_idx, prep_idx in zip(
+                    circuits_at_depth, angles_at_depth, seq_at_depth, prep_at_depth):
+                if seq_idx not in seq_compositions:
+                    seq_compositions[seq_idx] = self._compose(
+                        _np.asarray(angles, dtype=float), skip_first_noise)
+                S = seq_compositions[seq_idx]
+
+                evolved = S @ ideal_ops[prep_idx]
+                probs = _np.real(_np.diag(evolved.reshape(self.dim, self.dim)))
+                # ^ Tr(|ell'><ell'| . evolved) == evolved.reshape(dim, dim)[ell', ell'],
+                #   for the diagonal computational-basis effects.
+
+                counts = self._sample_counts(probs, outcome_labels, rng)
+                ds.add_count_dict(circuit, counts)
+        ds.done_adding_data()
+        return _proto.ProtocolData(edesign, ds)
