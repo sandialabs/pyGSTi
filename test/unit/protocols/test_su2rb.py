@@ -14,6 +14,8 @@ from pygsti.protocols.su2rb import (
     SU2RBDataSimulator,
     SyntheticSPAMRB,
     SyntheticSPAMRBResults,
+    SyntheticSPAMCharacterRB,
+    SyntheticSPAMRank1RB,
     predicted_zero_noise_variance,
     circuit_from_euler_angles,
     euler_angles_from_circuit,
@@ -23,6 +25,8 @@ from pygsti.protocols.su2rb import (
     GATE_NAME,
     POVM_NAME,
 )
+from pygsti.protocols.protocol import ProtocolData
+from pygsti.data.dataset import DataSet
 from pygsti.tools.su2tools import SpinJ, distance_mod_phase
 from pygsti.tools.optools import unitary_to_std_process_mx
 
@@ -931,3 +935,386 @@ class TestSyntheticSPAMRBAnalyticEndToEnd(BaseCase):
 
     def test_j_seven_halves(self):
         self._run_and_check(3.5)
+
+
+# ---------------------------------------------------------------------------
+# SyntheticSPAMCharacterRB / SyntheticSPAMRank1RB (Phase 6)
+# ---------------------------------------------------------------------------
+
+def _dataset_from_probs(edesign, probs_by_depth, dim):
+    """
+    Build a `ProtocolData` (exact-probability `DataSet`, following
+    `SU2RBDataSimulator.run`'s `shots=None` convention) directly from precomputed
+    per-(depth, sequence, prep) outcome probabilities -- e.g. from
+    `SU2RBDataSimulator.probabilities_from_compositions` -- rather than from a live
+    `SU2RBDataSimulator.run` call. Used by the SPAM-robustness test below to feed
+    perturbed-SPAM probabilities through `SyntheticSPAMRB`/`SyntheticSPAMCharacterRB`/
+    `SyntheticSPAMRank1RB` without re-simulating circuits.
+
+    Parameters
+    ----------
+    edesign : SU2RBDesign or SU2CharacterRBDesign
+
+    probs_by_depth : dict
+        Depth index -> array of shape `(circuits_per_depth, dim, dim)`, as returned
+        by `probabilities_from_compositions` (indexed `[seq_index, prep_index, :]`).
+
+    dim : int
+
+    Returns
+    -------
+    ProtocolData
+    """
+    ds = DataSet(collision_action="aggregate")
+    ds.repType = np.float64
+    outcome_labels = [str(ell) for ell in range(dim)]
+    for depth_idx, circuits_at_depth in enumerate(edesign.circuit_lists):
+        seq_at_depth = edesign.seq_index[depth_idx]
+        prep_at_depth = edesign.prep_index[depth_idx]
+        probs_arr = probs_by_depth[depth_idx]
+        for circuit, seq_idx, prep_idx in zip(circuits_at_depth, seq_at_depth, prep_at_depth):
+            probs = probs_arr[seq_idx, prep_idx, :]
+            counts = {ol: float(p) for ol, p in zip(outcome_labels, probs)}
+            ds.add_count_dict(circuit, counts)
+    ds.done_adding_data()
+    return ProtocolData(edesign, ds)
+
+
+class TestSyntheticSPAMCharacterFamilyRequiresCharacterDesign(BaseCase):
+    """`SyntheticSPAMCharacterRB`/`SyntheticSPAMRank1RB` need the `characters`/
+    `charcores` aux data that only `SU2CharacterRBDesign` provides; running them on
+    plain `SU2RBDesign` data should fail loudly (`TypeError`), not silently
+    misbehave."""
+
+    def _plain_data(self):
+        j = 0.5
+        design = SU2RBDesign(j, depths=[1, 2], circuits_per_depth=2, seed=1)
+        return SU2RBDataSimulator(j).run(design)
+
+    def test_character_rb_rejects_plain_design(self):
+        with self.assertRaises(TypeError):
+            SyntheticSPAMCharacterRB().run(self._plain_data())
+
+    def test_rank1_rb_rejects_plain_design(self):
+        with self.assertRaises(TypeError):
+            SyntheticSPAMRank1RB().run(self._plain_data())
+
+
+class _FakeCircuitRow:
+    """Stand-in for a `DataSet` row: `_reconstruct_prep_effect_probs` only ever reads
+    `.fractions` off of what `ds[circuit]` returns."""
+
+    __slots__ = ('fractions',)
+
+    def __init__(self, fractions):
+        self.fractions = fractions
+
+
+class _FakeCharacterEdesign:
+    """
+    Minimal stand-in for a single-depth `SU2CharacterRBDesign`, exposing only the
+    attributes `_SyntheticSPAMCharacterFamilyRB._per_sequence_irrep_values` actually
+    reads (`dim`, `circuits_per_depth`, `circuit_lists`, `seq_index`, `prep_index`,
+    and the `weight_attr`-named aux list). Used to drive that method directly on
+    hand-fabricated probability/weight data, without going through a real
+    `SU2CharacterRBDesign`/`SU2RBDataSimulator`/`DataSet`.
+    """
+
+    def __init__(self, dim, circuits_per_depth, circuits, seq_index, prep_index, weight_attr, weight_rows):
+        self.dim = dim
+        self.circuits_per_depth = circuits_per_depth
+        self.circuit_lists = [circuits]
+        self.seq_index = [seq_index]
+        self.prep_index = [prep_index]
+        setattr(self, weight_attr, [weight_rows])
+
+
+def _branch_character_transform_single_length(probs_branch, chars, irrep_sizes):
+    """
+    Literal pure-numpy transcription of `SU2CharacterRBSim.character_transform`
+    from the `su2-rb-conservative` branch (`su2rbsims.py:582-615`), specialized to a
+    single RB length (so the branch's `num_lens` axis -- irrelevant to the weight
+    normalization being locked down here -- collapses out).
+
+    Parameters
+    ----------
+    probs_branch : numpy array
+        Shape `(num_statepreps, circuits_per_length, num_effects)` -- the branch's
+        `_probs[:, j, :, :]` for a single length `j`.
+
+    chars : numpy array
+        Shape `(circuits_per_length, num_irreps)` -- the branch's `_chars[j, :, :]`.
+
+    irrep_sizes : numpy array
+        Shape `(num_irreps,)`.
+
+    Returns
+    -------
+    numpy array
+        Shape `(num_statepreps, num_effects, num_irreps)` -- the branch's
+        `arr[:, :, :, j]`.
+    """
+    circuits_per_length = probs_branch.shape[1]
+    wchars = chars * irrep_sizes[np.newaxis, :]                 # branch: wchars = _chars * irrep_sizes[...]
+    permprobs = np.moveaxis(probs_branch, 1, 2)                  # branch: np.moveaxis(probs, (1,2,3), (2,3,1))
+    # branch: P = np.tensordot(currprobs, currchars, axes=1) / circuits_per_length
+    return np.tensordot(permprobs, wchars, axes=1) / circuits_per_length
+
+
+def _branch_synspam_character_transform_single_length(probs_branch, chars, irrep_sizes, M):
+    """
+    Literal pure-numpy transcription of `SU2CharacterRBSim.
+    synspam_character_transform` (`su2rbsims.py:617-657`), specialized to a single
+    RB length (see `_branch_character_transform_single_length`).
+
+    Returns
+    -------
+    numpy array
+        Shape `(num_irreps,)` -- the branch's `synthetic_probs[:, j]`.
+    """
+    block_full = _branch_character_transform_single_length(probs_branch, chars, irrep_sizes)
+    num_irreps = block_full.shape[2]
+    synthetic_probs = np.zeros(num_irreps)
+    for k in range(num_irreps):
+        block = block_full[:, :, k]           # branch: block = P[:,:,k]
+        row_M_k = M[k, :]                      # branch: row_M_k = M[k,:]
+        synthetic_probs[k] = row_M_k @ block @ row_M_k
+    return synthetic_probs
+
+
+class TestSyntheticSPAMCharacterFamilyWeightNormalization(BaseCase):
+    """
+    Locks the (2k+1)-and-irrep-weight normalization scale of
+    `_SyntheticSPAMCharacterFamilyRB._per_sequence_irrep_values` to the
+    `su2-rb-conservative` branch's normative `character_transform`/
+    `synspam_character_transform` (see the plan's Phase 6 section and
+    `_SyntheticSPAMCharacterFamilyRB`'s docstring).
+
+    Unlike the fit-based end-to-end tests elsewhere in this module -- whose
+    `A_k * f_k**x` fit absorbs any constant per-irrep scale error into `A_k` without
+    affecting `f_k`, and whose 0.1-10x variance-ratio sanity check tolerates over a
+    3x scale error -- this test compares raw, pre-fit, pre-average per-sequence
+    values directly against a literal transcription of the branch's tensor
+    contraction (`_branch_synspam_character_transform_single_length`), on
+    hand-fabricated (not necessarily physical) probability and weight arrays, at
+    1e-12. A constant per-irrep scale error in the family's weighting factors would
+    be caught here even though it passes every other test in this module.
+    """
+
+    def _check(self, weight_attr, protocol_cls):
+        rng = np.random.default_rng(2024)
+        dim = 3
+        circuits_per_depth = 5
+
+        # Random (valid) prep-by-effect probability matrices, one per sampled
+        # sequence, and random per-sequence irrep weights standing in for
+        # `characters`/`charcores` (the weighting arithmetic being locked down here
+        # doesn't care whether these are honest chi_k/P_k values).
+        raw = rng.uniform(0.1, 1.0, size=(circuits_per_depth, dim, dim))
+        P = raw / raw.sum(axis=2, keepdims=True)  # P[s, l, :] is a valid distribution
+        weights = rng.uniform(-2.0, 2.0, size=(circuits_per_depth, dim))
+        M = rng.normal(size=(dim, dim))  # need not be an actual SpinJ M for this algebraic check
+        irrep_sizes = 2 * np.arange(dim) + 1
+
+        # --- Branch reference, from the literal transcription above. ---
+        probs_branch = np.moveaxis(P, 0, 1)  # (s, l, m) -> (l=prep, s=circuit, m=effect)
+        reference = _branch_synspam_character_transform_single_length(probs_branch, weights, irrep_sizes, M)
+
+        # --- The actual production code path: build a minimal fake edesign/ds ---
+        # --- exposing exactly what `_per_sequence_irrep_values` reads, and call ---
+        # --- it directly, then average over sequences (matching the branch's ---
+        # --- `/circuits_per_length` normalization, which is baked into ---
+        # --- `_branch_character_transform_single_length` above). ---
+        circuits = [(s, l) for s in range(circuits_per_depth) for l in range(dim)]
+        seq_index = [s for s in range(circuits_per_depth) for l in range(dim)]
+        prep_index = [l for s in range(circuits_per_depth) for l in range(dim)]
+        weight_rows = [weights[s, :].tolist() for s in seq_index]
+        ds = {(s, l): _FakeCircuitRow({(str(m),): P[s, l, m] for m in range(dim)})
+              for s in range(circuits_per_depth) for l in range(dim)}
+        edesign = _FakeCharacterEdesign(dim, circuits_per_depth, circuits, seq_index, prep_index,
+                                         weight_attr, weight_rows)
+
+        X = protocol_cls()._per_sequence_irrep_values(edesign, ds, 0, M)
+        family_mean = X.mean(axis=0)
+
+        self.assertTrue(np.allclose(family_mean, reference, atol=1e-12, rtol=0),
+                         msg="family_mean=%s reference=%s" % (family_mean, reference))
+
+    def test_character_weighting_matches_branch(self):
+        self._check('characters', SyntheticSPAMCharacterRB)
+
+    def test_rank1_weighting_matches_branch(self):
+        self._check('charcores', SyntheticSPAMRank1RB)
+
+
+class TestSyntheticSPAMCharacterFamilyNoiseless(BaseCase):
+    """Noiseless analytic end-to-end check (Phase 6): all f_k should be
+    (statistically) consistent with 1, and the empirical per-sequence-estimator
+    variance should be the right order of magnitude relative to
+    `predicted_zero_noise_variance`."""
+
+    def _check(self, protocol_cls, variant):
+        j = 1.5
+        spinj = SpinJ(j)
+        dim = spinj.dim
+        sim = SU2RBDataSimulator(spinj)
+        design = SU2CharacterRBDesign(j, depths=[1, 2, 3, 4, 5], circuits_per_depth=300, seed=21)
+        data = sim.run(design)
+        results = protocol_cls().run(data)
+
+        # f_k consistent with 1 within a generous multiple of its own stderr (the
+        # character/rank-1 estimators have nonzero zero-noise variance -- unlike
+        # plain SSRB -- so exact agreement isn't expected at finite N).
+        z = np.abs(results.decays - 1.0) / (results.decay_stderrs + 1e-300)
+        self.assertTrue(np.all(z[1:] < 6.0), msg="z-scores vs 1.0: %s" % z)
+
+        # Order-of-magnitude cross-check against the paper's zero-noise variance
+        # formula (predicted_zero_noise_variance), evaluated at the shortest depth.
+        diag = results.variance_diagnostic(depth_index=0)
+        for k in range(1, dim):
+            predicted, empirical = diag[k]
+            self.assertGreater(predicted, 0.0)
+            self.assertGreater(empirical, 0.0)
+            ratio = empirical / predicted
+            self.assertTrue(0.1 < ratio < 10.0,
+                             msg="k=%d predicted=%s empirical=%s ratio=%s" % (k, predicted, empirical, ratio))
+
+        # Pin the *absolute* paper normalization directly on the raw (pre-fit)
+        # per-depth sample means, not just the fitted decays: the A_k*f_k^x fit
+        # above is scale-blind (a constant per-irrep scale error would just be
+        # absorbed into A_k and leave f_k unaffected), so this is the test that
+        # actually locks `per_irrep_means` itself to 1 within its own stderr, at
+        # every depth, for every nontrivial irrep.
+        means = results.per_irrep_means
+        stderrs = results.per_irrep_stderrs
+        z_by_depth = np.abs(means[1:, :] - 1.0) / stderrs[1:, :]
+        self.assertTrue(np.all(z_by_depth < 6.0),
+                         msg="per-depth per_irrep_means z-scores vs 1.0: %s" % z_by_depth)
+
+    def test_character_rb_noiseless(self):
+        self._check(SyntheticSPAMCharacterRB, 'sschirb')
+
+    def test_rank1_rb_noiseless(self):
+        self._check(SyntheticSPAMRank1RB, 'ssr1rb')
+
+
+class TestSyntheticSPAMCharacterFamilyMatchesGateNoise(BaseCase):
+    """Noisy analytic end-to-end check (Phase 6): with a known gate-independent noise
+    channel, SSchiRB/SSR1RB should recover the same per-irrep fidelities as plain
+    SSRB (Phase 5) / the closed-form `f_k = Tr(P_k . Lambda) / (2k+1)` twirl formula
+    -- gate noise is what all three protocols measure; only their SPAM-robustness
+    properties differ (see `TestSyntheticSPAMCharacterFamilySpamRobustness`)."""
+
+    def _check(self, protocol_cls):
+        j = 1.5
+        gamma = 0.05
+        n_circuits = 300
+        max_depth = 15
+        spinj = SpinJ(j)
+        dim = spinj.dim
+        noise = jz_dephasing(spinj, gamma, power=1.0)
+        sim = SU2RBDataSimulator(spinj, noise_channel=noise, shots=None, seed=1)
+        depths = list(range(1, max_depth + 1))
+        design = SU2CharacterRBDesign(j, depths, circuits_per_depth=n_circuits, seed=22)
+        data = sim.run(design)
+        results = protocol_cls().run(data)
+
+        analytic_f = np.array([
+            np.trace(spinj.irrep_stdmx_projectors[k] @ noise).real / (2 * k + 1)
+            for k in range(dim)
+        ])
+        tol = 5.0 * results.decay_stderrs + 1e-3
+        self.assertTrue(np.all(np.abs(results.decays - analytic_f) <= tol),
+                         msg="decays=%s analytic=%s tol=%s" % (results.decays, analytic_f, tol))
+        self.assertAlmostEqual(results.decays[0], 1.0, delta=1e-6)
+
+    def test_character_rb_matches_gate_noise(self):
+        self._check(SyntheticSPAMCharacterRB)
+
+    def test_rank1_rb_matches_gate_noise(self):
+        self._check(SyntheticSPAMRank1RB)
+
+
+class TestSyntheticSPAMCharacterFamilySpamRobustness(BaseCase):
+    """
+    The paper's central SPAM-robustness signature (Phase 6): using the Phase 4
+    SPAM-swap API (`compute_nonspam_compositions`/`probabilities_from_compositions`),
+    perturb the state preps and POVM by small (but not-tiny) random unitary
+    rotations that do not commute with Jz, and check that plain `SyntheticSPAMRB`
+    (which assumes SPAM diagonal in the Jz eigenbasis) acquires a decay-parameter
+    bias far outside its own (very small, since SSRB has zero zero-noise variance)
+    error bars, while `SyntheticSPAMCharacterRB`/`SyntheticSPAMRank1RB` (which are
+    robust to *any* fixed, gate-independent SPAM channel) remain statistically
+    consistent with the true (perturbation-free) per-irrep fidelities within a
+    modest multiple of their own (larger) error bars.
+
+    Seeded throughout; j=1.5 keeps the (already fast) 4x4-superoperator composition
+    cheap enough to run in a few seconds.
+    """
+
+    def test_ssrb_biased_character_variants_unbiased(self):
+        import scipy.linalg as _sla
+
+        j = 1.5
+        gamma = 0.05
+        n_circuits = 200
+        max_depth = 10
+        spinj = SpinJ(j)
+        dim = spinj.dim
+
+        noise = jz_dephasing(spinj, gamma, power=1.0)
+        sim = SU2RBDataSimulator(spinj, noise_channel=noise)
+
+        # A fixed, non-Jz-diagonal (Hermitian-generator) unitary "miscalibration" of
+        # the state preps and POVM effects, applied identically across every circuit.
+        rng = np.random.default_rng(7)
+        theta_prep, theta_povm = 0.3, 0.25
+        H_prep = rng.normal(size=(dim, dim)) + 1j * rng.normal(size=(dim, dim))
+        H_prep = H_prep + H_prep.conj().T
+        H_povm = rng.normal(size=(dim, dim)) + 1j * rng.normal(size=(dim, dim))
+        H_povm = H_povm + H_povm.conj().T
+        U_prep = _sla.expm(-1j * theta_prep * H_prep)
+        U_povm = _sla.expm(-1j * theta_povm * H_povm)
+
+        ideal_ops = sim._ideal_computational_ops()
+        perturbed_preps = np.array([
+            unitary_to_std_process_mx(U_prep) @ ideal_ops[ell] for ell in range(dim)])
+        perturbed_povm = np.array([
+            unitary_to_std_process_mx(U_povm) @ ideal_ops[ell] for ell in range(dim)])
+
+        depths = list(range(1, max_depth + 1))
+        design_ssrb = SU2RBDesign(j, depths, circuits_per_depth=n_circuits, seed=11)
+        design_char = SU2CharacterRBDesign(j, depths, circuits_per_depth=n_circuits, seed=12)
+
+        comp_ssrb = sim.compute_nonspam_compositions(design_ssrb)
+        comp_char = sim.compute_nonspam_compositions(design_char)
+
+        probs_ssrb = sim.probabilities_from_compositions(
+            comp_ssrb, statepreps=perturbed_preps, povm=perturbed_povm)
+        probs_char = sim.probabilities_from_compositions(
+            comp_char, statepreps=perturbed_preps, povm=perturbed_povm)
+
+        data_ssrb = _dataset_from_probs(design_ssrb, probs_ssrb, dim)
+        data_char = _dataset_from_probs(design_char, probs_char, dim)
+
+        results_ssrb = SyntheticSPAMRB().run(data_ssrb)
+        results_chi = SyntheticSPAMCharacterRB().run(data_char)
+        results_r1 = SyntheticSPAMRank1RB().run(data_char)
+
+        analytic_f = np.array([
+            np.trace(spinj.irrep_stdmx_projectors[k] @ noise).real / (2 * k + 1)
+            for k in range(dim)
+        ])
+
+        # SSRB: perturbed-SPAM bias is huge relative to its own (tiny) error bars --
+        # a clear, unmistakable bias signature, for every nontrivial irrep.
+        z_ssrb = np.abs(results_ssrb.decays - analytic_f) / results_ssrb.decay_stderrs
+        self.assertTrue(np.all(z_ssrb[1:] > 8.0), msg="SSRB z-scores: %s" % z_ssrb)
+
+        # SSchiRB / SSR1RB: perturbed-SPAM decays remain consistent with the true
+        # (perturbation-free) fidelities within a modest multiple of their own
+        # (larger) error bars -- no comparable bias signature.
+        z_chi = np.abs(results_chi.decays - analytic_f) / results_chi.decay_stderrs
+        z_r1 = np.abs(results_r1.decays - analytic_f) / results_r1.decay_stderrs
+        self.assertTrue(np.all(z_chi[1:] < 6.0), msg="SSchiRB z-scores: %s" % z_chi)
+        self.assertTrue(np.all(z_r1[1:] < 6.0), msg="SSR1RB z-scores: %s" % z_r1)
