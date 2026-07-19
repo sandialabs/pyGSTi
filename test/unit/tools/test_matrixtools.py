@@ -192,3 +192,29 @@ class MatrixToolsTester(BaseCase):
         self.assertEqual(mt.prime_factors(7), [7])
         self.assertEqual(mt.prime_factors(10), [2, 5])
         self.assertEqual(mt.prime_factors(12), [2, 2, 3])
+
+    def test_eigendecomposition_assume_normal(self):
+        # A non-Hermitian but normal matrix: a unitary conjugate of a diagonal matrix.
+        rng = np.random.default_rng(0)
+        diag = np.array([1 + 2j, 3 - 1j, 0.5j])
+        Q = spl.qr(rng.standard_normal((3, 3)) + 1j * rng.standard_normal((3, 3)))[0]
+        M = Q @ np.diag(diag) @ Q.conj().T
+        evecs, evals, inv_evecs = mt.eigendecomposition(M, assume_normal=True)
+        self.assertArraysAlmostEqual(evecs @ np.diag(evals) @ inv_evecs, M)
+        self.assertArraysAlmostEqual(evecs @ evecs.conj().T, np.eye(3))
+        self.assertArraysAlmostEqual(inv_evecs, evecs.conj().T)
+
+    def test_eigendecomposition_assume_normal_matches_assume_hermitian_for_hermitian_input(self):
+        rng = np.random.default_rng(0)
+        A = rng.standard_normal((4, 4)) + 1j * rng.standard_normal((4, 4))
+        H = A + A.conj().T
+        evecs_n, evals_n, _ = mt.eigendecomposition(H, assume_normal=True)
+        recon_n = evecs_n @ np.diag(evals_n) @ evecs_n.conj().T
+        self.assertArraysAlmostEqual(recon_n, H)
+
+    def test_eigendecomposition_assume_normal_raises_on_non_normal_input(self):
+        N = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0.5]], dtype=complex)
+        # N is not normal: N @ N.conj().T != N.conj().T @ N
+        self.assertFalse(np.allclose(N @ N.conj().T, N.conj().T @ N))
+        with self.assertRaises(ValueError):
+            mt.eigendecomposition(N, assume_normal=True)
