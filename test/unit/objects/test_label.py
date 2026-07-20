@@ -1237,3 +1237,17 @@ class LabelConcateTester(BaseCase):
             for result in (cl1.concat(other), other.concat(cl1)):
                 self.assertIsInstance(result, LabelTupTup)
                 self.assertFalse(has_circuitlabel(result))
+
+    def test_concat_unwraps_single_component(self):
+        # Concatenation resulting in 1 component should return the component itself (LabelTup/LabelTupWithTime)
+        # instead of wrapping it in a LabelTupTup.
+        l1 = L(('Gx', 0))
+        empty = LabelTupTup.init(())
+        res1 = l1.concat(empty)
+        self.assertIsInstance(res1, LabelTup)
+        self.assertEqual(res1, l1)
+
+        res2 = empty.concat(l1)
+        self.assertIsInstance(res2, LabelTup)
+        self.assertEqual(res2, l1)
+
