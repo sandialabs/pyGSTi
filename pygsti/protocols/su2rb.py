@@ -434,16 +434,15 @@ def compose_noise_channels(spinj, *channels):
 
 class SU2RBDataSimulator(_proto.DataSimulator):
     """
-    Simulates SU(2) synthetic SPAM RB data for `SU2RBDesign`/`SU2CharacterRBDesign`
-    experiment designs, without going through a full pyGSTi `Model`.
+    Simulates SU(2) synthetic SPAM RB data for `SU2RBDesign` experiment designs,
+    without going through a full pyGSTi `Model`.
 
-    Reads the design's `euler_angles` (and, for `SU2CharacterRBDesign`, `invert_from`)
-    aux data directly -- it never parses circuit labels -- and builds the ZXZ-angle
-    unitaries in batch via the instance's `SpinJ`'s precomputed eigendecompositions,
-    inserting a gate-independent noise channel after every gate (except, per the
-    `su2-rb-conservative` branch's convention, immediately after the "hidden" first
-    gate of a design with `invert_from == 1`; ports `SU2RBSim.compute_probabilities` /
-    `SU2CharacterRBSim._process_circuits`).
+    Reads the design's `euler_angles` aux data directly -- it never parses circuit
+    labels -- and builds the ZXZ-angle unitaries in batch via the instance's
+    `SpinJ`'s precomputed eigendecompositions, inserting a gate-independent noise
+    channel after every gate except the "hidden" first gate (every `SU2RBDesign` uses
+    that hidden-first-gate convention, so noise is always skipped there); ports
+    `SU2RBSim.compute_probabilities` / `SU2CharacterRBSim._process_circuits`.
 
     Parameters
     ----------
@@ -542,7 +541,15 @@ class SU2RBDataSimulator(_proto.DataSimulator):
 
     @staticmethod
     def _skip_first_noise_for(edesign):
-        return getattr(edesign, 'invert_from', 0) == 1
+        # SU2RBDesign is always hidden-first-gate, so noise is always skipped
+        # immediately after the first gate. The defensive check below guards
+        # against a stale caller still relying on the old invert_from dispatch.
+        if hasattr(edesign, 'invert_from'):
+            raise TypeError(
+                "edesign has an 'invert_from' attribute (%r), but SU2RBDataSimulator "
+                "no longer dispatches on it -- every SU2RBDesign is hidden-first-gate "
+                "and noise is always skipped after the first gate" % type(edesign).__name__)
+        return True
 
     def _unique_sequences_at_depth(self, edesign, depth_idx):
         """
@@ -587,7 +594,7 @@ class SU2RBDataSimulator(_proto.DataSimulator):
 
         Parameters
         ----------
-        edesign : SU2RBDesign or SU2CharacterRBDesign
+        edesign : SU2RBDesign
             The design whose `euler_angles`/`seq_index` aux data to read.
 
         depth_indices : iterable of int, optional
@@ -681,7 +688,7 @@ class SU2RBDataSimulator(_proto.DataSimulator):
 
         Parameters
         ----------
-        edesign : SU2RBDesign or SU2CharacterRBDesign
+        edesign : SU2RBDesign
             The design to simulate. Its `qudit_label` and `j`/`dim` must be consistent
             with this simulator's `spinj`.
 
