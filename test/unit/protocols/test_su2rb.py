@@ -1,6 +1,7 @@
 """
-Tests for pygsti.protocols.su2rb (Phase 3: SU(2) synthetic SPAM RB circuits and
-experiment designs; Phase 4: the SU2RBDataSimulator).
+Tests for pygsti.protocols.su2rb: SU(2) synthetic SPAM RB circuits and experiment
+designs, the SU2RBDataSimulator, the zero-noise variance diagnostics, and the
+SyntheticSPAMRank1RB (SSR1RB) protocol.
 """
 import tempfile
 import warnings
@@ -10,12 +11,9 @@ import numpy as np
 from pygsti.circuits.circuit import Circuit
 from pygsti.protocols.su2rb import (
     SU2RBDesign,
-    SU2CharacterRBDesign,
     SU2RBDataSimulator,
-    SyntheticSPAMRB,
-    SyntheticSPAMRBResults,
-    SyntheticSPAMCharacterRB,
     SyntheticSPAMRank1RB,
+    SyntheticSPAMRBResults,
     predicted_zero_noise_variance,
     circuit_from_euler_angles,
     euler_angles_from_circuit,
@@ -27,7 +25,7 @@ from pygsti.protocols.su2rb import (
 )
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.data.dataset import DataSet
-from pygsti.tools.su2tools import SpinJ, distance_mod_phase
+from pygsti.tools.su2tools import SpinJ, distance_mod_phase, random_euler_angles, composition_inverse
 from pygsti.tools.optools import unitary_to_std_process_mx
 
 from ..util import BaseCase
@@ -81,13 +79,19 @@ class TestEulerAngleCircuitHelpers(BaseCase):
             circuit_from_euler_angles(np.zeros((3, 2)), j=0.5)
 
     def test_euler_angles_from_circuit_requires_gu_layer(self):
+        # NOTE (plan Sec 3 step 5 / inline fix 6): the plan calls for
+        # `euler_angles_from_circuit` to return a `(0, 3)` array for zero `Gu` layers
+        # instead of raising, but that production change is dispositioned to a later
+        # step and has not landed yet (su2rb.py still raises here as of this test).
+        # This test pins the CURRENT (pre-fix) behavior; when the production fix
+        # lands, replace it with a test asserting the `(0, 3)` empty-shape return.
         c = Circuit(['rho0', 'Mdefault'], line_labels=('Q0',))
         with self.assertRaises(ValueError):
             euler_angles_from_circuit(c)
 
 
 # ---------------------------------------------------------------------------
-# SU2RBDesign / SU2CharacterRBDesign
+# SU2RBDesign
 # ---------------------------------------------------------------------------
 
 def _net_unitary(spinj, angles):
@@ -99,39 +103,32 @@ def _net_unitary(spinj, angles):
 
 
 class _SU2RBDesignChecks:
-    """Mixin providing the shared design-level tests, parameterized by spin `j`."""
+    """Mixin providing the shared design-level tests, parameterized by spin `j`.
+    `SU2RBDesign` is the only design class now (Sec 3 step 2 merged the old
+    character design into it), so there is no longer a `design_cls`/extra-attrs
+    axis to parameterize over -- just `j`."""
 
     j = None
-    design_cls = SU2RBDesign
 
     def test_circuit_counts(self):
         depths = [1, 2, 4]
         circuits_per_depth = 3
-        design = self.design_cls(self.j, depths, circuits_per_depth, seed=1234)
+        design = SU2RBDesign(self.j, depths, circuits_per_depth, seed=1234)
         dim = design.dim
         self.assertEqual(dim, round(2 * self.j) + 1)
         for circuits_at_depth in design.circuit_lists:
             self.assertEqual(len(circuits_at_depth), circuits_per_depth * dim)
 
-    def _extra_paired_attrs(self):
-        """Names of additional `paired_with_circuit_attrs`-style aux lists that
-        subclasses (e.g. `SU2CharacterRBDesign`'s `characters`/`charcores`) add on top
-        of the base `euler_angles`/`seq_index`/`prep_index` set. Overridden by the
-        character design test classes below."""
-        return []
-
     def test_aux_lists_aligned_with_circuits(self):
         depths = [1, 3]
         circuits_per_depth = 2
-        design = self.design_cls(self.j, depths, circuits_per_depth, seed=5)
-        extra_attrs = self._extra_paired_attrs()
+        design = SU2RBDesign(self.j, depths, circuits_per_depth, seed=5)
         for depth_idx, circuits_at_depth in enumerate(design.circuit_lists):
             n = len(circuits_at_depth)
             self.assertEqual(len(design.euler_angles[depth_idx]), n)
             self.assertEqual(len(design.seq_index[depth_idx]), n)
             self.assertEqual(len(design.prep_index[depth_idx]), n)
-            for attr in extra_attrs:
-                self.assertEqual(len(getattr(design, attr)[depth_idx]), n)
+            self.assertEqual(len(design.charcores[depth_idx]), n)
             for circuit_idx, c in enumerate(circuits_at_depth):
                 angles = np.array(design.euler_angles[depth_idx][circuit_idx])
                 self.assertTrue(np.array_equal(angles, euler_angles_from_circuit(c)))
@@ -141,9 +138,12 @@ class _SU2RBDesignChecks:
                 self.assertEqual(names[-1], 'Mdefault')
 
     def test_ideal_composition(self):
+        # Every SU2RBDesign is hidden-first-gate: the appended inverting gate only
+        # cancels rows 1..m-1, so the net ideal composition of the full (m+1)-gate
+        # sequence is the random first gate (row 0), not the identity.
         spinj = SpinJ(self.j)
         depths = [1, 2, 5]
-        design = self.design_cls(self.j, depths, circuits_per_depth=4, seed=7)
+        design = SU2RBDesign(self.j, depths, circuits_per_depth=4, seed=7)
         for depth_idx, depth in enumerate(design.depths):
             # only need to check one prep's circuit per sequence -- the angle array is
             # shared across all `dim` preps generated from the same sequence.
@@ -152,15 +152,12 @@ class _SU2RBDesignChecks:
                 angles = np.array(design.euler_angles[depth_idx][circuit_idx])
                 self.assertEqual(angles.shape, (depth + 1, 3))
                 net = _net_unitary(spinj, angles)
-                target = self._target_unitary(spinj, angles)
+                target = spinj.unitaries_from_angles(angles[0, 0], angles[0, 1], angles[0, 2])[0]
                 self.assertLess(distance_mod_phase(net, target), 1e-10)
-
-    def _target_unitary(self, spinj, angles):
-        raise NotImplementedError
 
     def test_truncate_to_lists(self):
         depths = [1, 2, 3]
-        design = self.design_cls(self.j, depths, circuits_per_depth=2, seed=3)
+        design = SU2RBDesign(self.j, depths, circuits_per_depth=2, seed=3)
         truncated = design.truncate_to_lists([0, 2])
         self.assertEqual(truncated.depths, [1, 3])
         self.assertEqual(len(truncated.circuit_lists), 2)
@@ -170,108 +167,57 @@ class _SU2RBDesignChecks:
         self.assertEqual(truncated.euler_angles[1], design.euler_angles[2])
         self.assertEqual(truncated.seq_index[1], design.seq_index[2])
         self.assertEqual(truncated.prep_index[1], design.prep_index[2])
-        for attr in self._extra_paired_attrs():
-            self.assertEqual(getattr(truncated, attr)[0], getattr(design, attr)[0])
-            self.assertEqual(getattr(truncated, attr)[1], getattr(design, attr)[2])
+        self.assertEqual(truncated.charcores[0], design.charcores[0])
+        self.assertEqual(truncated.charcores[1], design.charcores[2])
 
     def test_serialization_round_trip(self):
         depths = [1, 2]
-        design = self.design_cls(self.j, depths, circuits_per_depth=2, seed=11)
+        design = SU2RBDesign(self.j, depths, circuits_per_depth=2, seed=11)
         with tempfile.TemporaryDirectory() as tmpdir:
             design.write(tmpdir)
-            reloaded = self.design_cls.from_dir(tmpdir)
+            reloaded = SU2RBDesign.from_dir(tmpdir)
         self.assertEqual(design.circuit_lists, reloaded.circuit_lists)
         self.assertEqual(design.euler_angles, reloaded.euler_angles)
         self.assertEqual(design.seq_index, reloaded.seq_index)
         self.assertEqual(design.prep_index, reloaded.prep_index)
+        self.assertEqual(design.charcores, reloaded.charcores)
         self.assertEqual(design.j, reloaded.j)
         self.assertEqual(design.dim, reloaded.dim)
-        self._check_extra_serialized_attrs(design, reloaded)
-
-    def _check_extra_serialized_attrs(self, design, reloaded):
-        pass
 
 
 class TestSU2RBDesignHalfInt(_SU2RBDesignChecks, BaseCase):
     j = 0.5
-    design_cls = SU2RBDesign
-
-    def _target_unitary(self, spinj, angles):
-        return np.eye(spinj.dim, dtype=complex)
 
 
 class TestSU2RBDesignThreeHalves(_SU2RBDesignChecks, BaseCase):
     j = 1.5
-    design_cls = SU2RBDesign
-
-    def _target_unitary(self, spinj, angles):
-        return np.eye(spinj.dim, dtype=complex)
 
 
-class TestSU2CharacterRBDesignHalfInt(_SU2RBDesignChecks, BaseCase):
-    j = 0.5
-    design_cls = SU2CharacterRBDesign
+class TestSU2RBDesignExtras(BaseCase):
+    """Design-specific checks that don't fit the shared per-j mixin."""
 
-    def _target_unitary(self, spinj, angles):
-        return spinj.unitaries_from_angles(angles[0, 0], angles[0, 1], angles[0, 2])[0]
-
-    def _extra_paired_attrs(self):
-        return ["characters", "charcores"]
-
-    def _check_extra_serialized_attrs(self, design, reloaded):
-        self.assertEqual(design.characters, reloaded.characters)
-        self.assertEqual(design.charcores, reloaded.charcores)
-
-
-class TestSU2CharacterRBDesignThreeHalves(_SU2RBDesignChecks, BaseCase):
-    j = 1.5
-    design_cls = SU2CharacterRBDesign
-
-    def _target_unitary(self, spinj, angles):
-        return spinj.unitaries_from_angles(angles[0, 0], angles[0, 1], angles[0, 2])[0]
-
-    def _extra_paired_attrs(self):
-        return ["characters", "charcores"]
-
-    def _check_extra_serialized_attrs(self, design, reloaded):
-        self.assertEqual(design.characters, reloaded.characters)
-        self.assertEqual(design.charcores, reloaded.charcores)
-
-
-class TestSU2CharacterRBDesignExtras(BaseCase):
-    """Character-design-specific checks that don't fit the shared mixin."""
-
-    def test_invert_from(self):
-        self.assertEqual(SU2RBDesign.invert_from, 0)
-        self.assertEqual(SU2CharacterRBDesign.invert_from, 1)
-
-    def test_characters_and_charcores_match_direct_evaluation(self):
-        from pygsti.tools.su2tools import characters_from_euler_angles, charactercores_from_euler_angles
+    def test_charcores_match_direct_evaluation(self):
+        from pygsti.tools.su2tools import charactercores_from_euler_angles
 
         j = 1.5
-        design = SU2CharacterRBDesign(j, depths=[1, 4], circuits_per_depth=3, seed=42)
+        design = SU2RBDesign(j, depths=[1, 4], circuits_per_depth=3, seed=42)
         dim = design.dim
         irrep_labels = np.arange(dim)
         for depth_idx in range(len(design.depths)):
             for circuit_idx in range(len(design.circuit_lists[depth_idx])):
                 angles = np.array(design.euler_angles[depth_idx][circuit_idx])
                 first_gate_angles = angles[0, :]
-                expected_chars = characters_from_euler_angles(irrep_labels, first_gate_angles)
                 expected_cores = charactercores_from_euler_angles(irrep_labels, first_gate_angles)
-                actual_chars = np.array(design.characters[depth_idx][circuit_idx])
                 actual_cores = np.array(design.charcores[depth_idx][circuit_idx])
-                self.assertTrue(np.allclose(actual_chars, expected_chars, atol=1e-12))
                 self.assertTrue(np.allclose(actual_cores, expected_cores, atol=1e-12))
 
     def test_depth_zero_raises(self):
         with self.assertRaises(ValueError):
             SU2RBDesign(0.5, depths=[0, 1], circuits_per_depth=2, seed=0)
-        with self.assertRaises(ValueError):
-            SU2CharacterRBDesign(0.5, depths=[0, 1], circuits_per_depth=2, seed=0)
 
 
 # ---------------------------------------------------------------------------
-# SU2RBDataSimulator (Phase 4)
+# SU2RBDataSimulator
 # ---------------------------------------------------------------------------
 
 def _dataset_probs(dataset, circuit, dim):
@@ -362,8 +308,8 @@ class TestSU2RBDataSimulatorNoiseless(BaseCase):
 
 
 class TestSU2RBDataSimulatorCrossValidation(BaseCase):
-    """Phase 4 test (b): model.probabilities(circuit) agreement, pinning the circuit
-    label convention to the simulator's semantics."""
+    """model.probabilities(circuit) agreement, pinning the circuit label convention
+    to the simulator's semantics."""
 
     def test_matches_model_probabilities_j_half(self):
         self._check_j(0.5)
@@ -378,20 +324,6 @@ class TestSU2RBDataSimulatorCrossValidation(BaseCase):
         sim = SU2RBDataSimulator(spinj)
         data = sim.run(design)
 
-        for circuits_at_depth in design.circuit_lists:
-            for circuit in circuits_at_depth:
-                model_probs = model.probabilities(circuit)
-                sim_probs = _dataset_probs(data.dataset, circuit, spinj.dim)
-                for ell in range(spinj.dim):
-                    self.assertAlmostEqual(sim_probs[ell], model_probs[(str(ell),)], places=12)
-
-    def test_matches_model_probabilities_character_design(self):
-        j = 0.5
-        spinj = SpinJ(j)
-        model = _crossval_model(spinj)
-        design = SU2CharacterRBDesign(j, depths=[1, 2], circuits_per_depth=2, seed=100)
-        sim = SU2RBDataSimulator(spinj)
-        data = sim.run(design)
         for circuits_at_depth in design.circuit_lists:
             for circuit in circuits_at_depth:
                 model_probs = model.probabilities(circuit)
@@ -421,12 +353,12 @@ class TestSU2RBDataSimulatorSpamSwap(BaseCase):
                 actual = _dataset_probs(data.dataset, circuit, spinj.dim)
                 self.assertTrue(np.allclose(actual, expected, atol=1e-10))
 
-    def test_probabilities_from_compositions_character_design_unitary_noise(self):
+    def test_probabilities_from_compositions_unitary_noise(self):
         j = 0.5
         spinj = SpinJ(j)
         noise = jz_rotation(spinj, 0.3, 1.0)
         sim = SU2RBDataSimulator(spinj, noise_channel=noise)
-        design = SU2CharacterRBDesign(j, depths=[2, 5], circuits_per_depth=3, seed=4)
+        design = SU2RBDesign(j, depths=[2, 5], circuits_per_depth=3, seed=4)
         data = sim.run(design)
 
         compositions = sim.compute_nonspam_compositions(design)
@@ -524,7 +456,7 @@ class TestSU2RBDataSimulatorShots(BaseCase):
     def test_different_seeds_differ(self):
         j = 1.5
         spinj = SpinJ(j)
-        # Noiseless SSRB circuits have deterministic (one-hot) outcome distributions,
+        # Noiseless circuits have deterministic (one-hot) outcome distributions,
         # which would make multinomial sampling insensitive to the seed; use a noisy
         # simulator so the per-shot outcome distribution is nontrivial.
         noise = jz_dephasing(spinj, 0.3)
@@ -540,13 +472,13 @@ class TestSU2RBDataSimulatorShots(BaseCase):
         self.assertTrue(any_different)
 
 
-class TestSU2RBDataSimulatorCharacterShortcut(BaseCase):
+class TestSU2RBDataSimulatorShortcut(BaseCase):
 
     def test_shortcut_matches_long_path_noiseless(self):
         j = 1.5
         spinj = SpinJ(j)
         sim = SU2RBDataSimulator(spinj)
-        design = SU2CharacterRBDesign(j, depths=[1, 4, 6], circuits_per_depth=3, seed=9)
+        design = SU2RBDesign(j, depths=[1, 4, 6], circuits_per_depth=3, seed=9)
         for depth_idx in range(len(design.depths)):
             for angles in sim._unique_sequences_at_depth(design, depth_idx):
                 S_shortcut = sim._compose_shortcut(angles)
@@ -603,6 +535,69 @@ class TestSU2RBDataSimulatorNoisePlacement(BaseCase):
 
         # The two must differ (sanity check that this test isn't vacuous).
         self.assertFalse(np.allclose(expected_no_skip, expected_skip, atol=1e-6))
+
+    def test_run_skips_noise_after_hidden_gate(self):
+        """
+        Run-level regression test: `_compose_full`'s skip-first-noise semantics
+        (pinned above) only matter if `run()` (and `compute_nonspam_compositions`)
+        actually thread `skip_first_noise=self._skip_first_noise_for(edesign)`
+        through to it. A regression that dropped that threading from *both* call
+        sites would still pass the rest of the suite: the SpamSwap consistency
+        test (`test_probabilities_from_compositions_matches_run`) only compares
+        `run()` against `compute_nonspam_compositions`, so a shared bug in both
+        cancels out, and the end-to-end decay-fit tests absorb a depth-independent
+        extra noise application into the fitted amplitude `A_k`, leaving `f_k`
+        unaffected. This instead hand-composes the expected noisy probabilities
+        directly from the design's `euler_angles` (noise skipped after row 0,
+        applied after every subsequent row) and compares against `run()`'s actual
+        `DataSet`.
+        """
+        j = 0.5
+        spinj = SpinJ(j)
+        dim = spinj.dim
+        N = jz_dephasing(spinj, 0.3, power=1.0)
+        sim = SU2RBDataSimulator(spinj, noise_channel=N)
+        design = SU2RBDesign(j, depths=[2], circuits_per_depth=2, seed=13)
+        data = sim.run(design)
+
+        ideal_ops = sim._ideal_computational_ops()
+        circuits = design.circuit_lists[0]
+        angles_at_depth = design.euler_angles[0]
+        prep_at_depth = design.prep_index[0]
+        for circuit, angles, prep_idx in zip(circuits, angles_at_depth, prep_at_depth):
+            angles = np.array(angles)
+            Us = spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
+            S = unitary_to_std_process_mx(Us[0])
+            for U in Us[1:]:
+                S = N @ unitary_to_std_process_mx(U) @ S
+            expected = np.array([
+                np.real(np.vdot(ideal_ops[e], S @ ideal_ops[prep_idx])) for e in range(dim)
+            ])
+            actual = _dataset_probs(data.dataset, circuit, dim)
+            self.assertTrue(np.allclose(actual, expected, atol=1e-10))
+
+
+class TestSkipFirstNoiseForRegression(BaseCase):
+    """
+    Regression coverage for plan Sec 3 step 4/known-fix 4: `SU2RBDataSimulator` no
+    longer dispatches noise-skipping on an `invert_from` design attribute -- every
+    `SU2RBDesign` is hidden-first-gate, so noise after the first gate is always
+    skipped. A stale edesign-like object still carrying an `invert_from` attribute
+    (e.g. from the pre-strip-down API) should trip the defensive `TypeError` in
+    `_skip_first_noise_for` rather than being silently misinterpreted.
+    """
+
+    def test_skip_first_noise_for_always_true(self):
+        j = 0.5
+        design = SU2RBDesign(j, depths=[1, 2], circuits_per_depth=2, seed=0)
+        self.assertTrue(SU2RBDataSimulator._skip_first_noise_for(design))
+
+    def test_stale_invert_from_attribute_raises_typeerror(self):
+        class _StaleEdesign:
+            invert_from = 1
+
+        with self.assertRaises(TypeError):
+            SU2RBDataSimulator._skip_first_noise_for(_StaleEdesign())
 
 
 class TestNoiseChannelHelpers(BaseCase):
@@ -678,148 +673,355 @@ class TestSU2RBDataSimulatorConstruction(BaseCase):
 
 
 # ---------------------------------------------------------------------------
-# predicted_zero_noise_variance (Phase 5)
+# predicted_zero_noise_variance
 # ---------------------------------------------------------------------------
 
 class TestPredictedZeroNoiseVariance(BaseCase):
     """
-    Golden-table tests against the paper's Tables `variancewithk` and `variancewithj`
-    (6-significant-figure values quoted in the plan / paper LaTeX source), plus the
-    input-validation contract of `predicted_zero_noise_variance`.
+    Golden-table tests against the SSR1RB columns of the paper's Tables
+    `variancewithk` and `variancewithj` (6-significant-figure values quoted in the
+    plan / paper LaTeX source), plus the input-validation contract of
+    `predicted_zero_noise_variance(j, k)`. The other variant columns (chiRB, R1RB,
+    SSchiRB) and the `variant`/`ell` parameters they required are gone under the
+    SSR1RB-only strip-down (plan Sec 3 step 3).
     """
 
     def _assert_close_6sf(self, actual, golden):
         # The golden literals themselves are only quoted to 6 significant figures, so
         # allow a couple of ULPs of rounding slop on top of that (verified against a
-        # from-scratch double-precision recomputation of both paper tables during this
-        # phase's development; see the phase 5 completion notes).
+        # from-scratch double-precision recomputation of both paper tables during the
+        # original phase 5 development; see the phase 5 completion notes).
         self.assertAlmostEqual(actual, golden, delta=abs(golden) * 2e-5 + 1e-9)
 
-    def test_ssrb_is_always_zero(self):
-        for j, k in [(0.5, 0), (0.5, 1), (3.5, 0), (3.5, 7)]:
-            self.assertEqual(predicted_zero_noise_variance(j, k, 'ssrb'), 0.0)
-
     def test_variancewithk_table_j_seven_halves(self):
-        # Table `variancewithk`: j = 7/2, k = 0..7. The optimal ell for the physical-
-        # SPAM (chiRB/R1RB) columns is as given in the paper text just above the table.
+        # Table `variancewithk`: j = 7/2, k = 0..7, SSR1RB column.
         j = 3.5
-        ells_for_k = {0: 3.5, 1: 3.5, 2: 3.5, 3: 1.5, 4: 2.5, 5: 2.5, 6: 1.5, 7: 0.5}
-        golden = {
-            # k: (chiRB, R1RB, SSchiRB, SSR1RB)
-            0: (7, 7, 0.0, 0.0),
-            1: (28.6816, 7.52245, 1.07619, 0.269048),
-            2: (91.8386, 12.5807, 3.23842, 0.540816),
-            3: (308.139, 42.3744, 6.15572, 0.773292),
-            4: (268.103, 21.0241, 10.4498, 1.02387),
-            5: (514.734, 32.779, 15.668, 1.28994),
-            6: (404.56, 23.2173, 23.0531, 1.62223),
-            7: (381.656, 21.6442, 34.0697, 2.11888),
+        golden_ssr1rb = {
+            0: 0.0,
+            1: 0.269048,
+            2: 0.540816,
+            3: 0.773292,
+            4: 1.02387,
+            5: 1.28994,
+            6: 1.62223,
+            7: 2.11888,
         }
-        for k, (chi, r1, sschi, ssr1) in golden.items():
-            ell = ells_for_k[k]
-            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'chirb', ell=ell), chi)
-            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'r1rb', ell=ell), r1)
-            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'sschirb'), sschi)
-            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'ssr1rb'), ssr1)
+        for k, ssr1 in golden_ssr1rb.items():
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k), ssr1)
 
     def test_variancewithj_table(self):
-        # Table `variancewithj`: k = 2j fixed, j = 0..7/2. Optimal ell is 0 for integer
-        # j and 1/2 for half-integer j (paper text just above the table).
-        golden = {
-            # j: (chiRB, R1RB, SSchiRB, SSR1RB)
-            0.0: (0, 0, 0, 0),
-            0.5: (23, 5, 4, 1),
-            1.0: (25.25, 4.89286, 8.66667, 1.40476),
-            1.5: (91.1811, 9.9465, 13.408, 1.63867),
-            2.0: (95.25, 11.163, 18.4047, 1.80578),
-            2.5: (209.672, 15.5894, 23.5132, 1.9322),
-            3.0: (215.636, 18.0822, 28.7441, 2.03407),
-            3.5: (381.656, 21.6442, 34.0697, 2.11888),
+        # Table `variancewithj`: k = 2j fixed, j = 0..7/2, SSR1RB column.
+        golden_ssr1rb = {
+            0.0: 0,
+            0.5: 1,
+            1.0: 1.40476,
+            1.5: 1.63867,
+            2.0: 1.80578,
+            2.5: 1.9322,
+            3.0: 2.03407,
+            3.5: 2.11888,
         }
-        for j, (chi, r1, sschi, ssr1) in golden.items():
+        for j, ssr1 in golden_ssr1rb.items():
             k = round(2 * j)
-            ell = 0.0 if (round(2 * j) % 2 == 0) else 0.5
             if k == 0:
-                self.assertEqual(predicted_zero_noise_variance(j, k, 'sschirb'), 0.0)
-                self.assertEqual(predicted_zero_noise_variance(j, k, 'ssr1rb'), 0.0)
-                self.assertEqual(chi, 0)
-                self.assertEqual(r1, 0)
+                self.assertEqual(predicted_zero_noise_variance(j, k), 0.0)
+                self.assertEqual(ssr1, 0)
                 continue
-            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'chirb', ell=ell), chi)
-            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'r1rb', ell=ell), r1)
-            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'sschirb'), sschi)
-            self._assert_close_6sf(predicted_zero_noise_variance(j, k, 'ssr1rb'), ssr1)
-
-    def test_bad_variant_raises(self):
-        with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1.5, 1, 'not-a-variant')
+            self._assert_close_6sf(predicted_zero_noise_variance(j, k), ssr1)
 
     def test_bad_k_raises(self):
         with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1.5, 4, 'sschirb')  # 2j == 3 < 4
+            predicted_zero_noise_variance(1.5, 4)  # 2j == 3 < 4
         with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1.5, -1, 'sschirb')
-
-    def test_ell_required_for_physical_spam_variants(self):
+            predicted_zero_noise_variance(1.5, -1)
         with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1.5, 1, 'chirb')  # missing ell
-        with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1.5, 1, 'r1rb')  # missing ell
-
-    def test_ell_disallowed_for_synthetic_spam_and_ssrb_variants(self):
-        with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1.5, 1, 'ssrb', ell=1.5)
-        with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1.5, 1, 'sschirb', ell=1.5)
-        with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1.5, 1, 'ssr1rb', ell=1.5)
-
-    def test_invalid_ell_raises(self):
-        # ell=2 is not one of SpinJ(1).spins == [1, 0, -1]; wignersymbols.clebsch_gordan
-        # would otherwise silently treat this as an ordinary |m|<=j selection-rule
-        # violation (returning 0.0), which would then divide-by-zero downstream --
-        # this should instead be reported as a caller error.
-        with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1, 1, 'chirb', ell=2)
-        with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1, 1, 'r1rb', ell=-2)
-        # Also not a valid half-integer at all.
-        with self.assertRaises(ValueError):
-            predicted_zero_noise_variance(1, 1, 'chirb', ell=0.3)
-
-    def test_genuinely_vanishing_mean_returns_inf(self):
-        # j=1, k=1, ell=0 is a *valid* Jz eigenstate, but M[1, 0] = sqrt(1/3) *
-        # <1 0; 1 0 | 1 0> is exactly 0 (a Clebsch-Gordan selection rule, not an
-        # out-of-range ell), so Eq. normalizedvariance's mean-normalized variance
-        # (which divides by M[k,ell]**4) is genuinely infinite rather than an
-        # arithmetic-error artifact.
-        self.assertEqual(predicted_zero_noise_variance(1, 1, 'chirb', ell=0), float('inf'))
-        self.assertEqual(predicted_zero_noise_variance(1, 1, 'r1rb', ell=0), float('inf'))
+            predicted_zero_noise_variance(1.5, 0.5)  # not an integer
 
 
 # ---------------------------------------------------------------------------
-# SyntheticSPAMRB / SyntheticSPAMRBResults (Phase 5)
+# SyntheticSPAMRank1RB / SyntheticSPAMRBResults
 # ---------------------------------------------------------------------------
 
-class TestSyntheticSPAMRBNoiseless(BaseCase):
+def _dataset_from_probs(edesign, probs_by_depth, dim):
+    """
+    Build a `ProtocolData` (exact-probability `DataSet`, following
+    `SU2RBDataSimulator.run`'s `shots=None` convention) directly from precomputed
+    per-(depth, sequence, prep) outcome probabilities -- e.g. from
+    `SU2RBDataSimulator.probabilities_from_compositions` -- rather than from a live
+    `SU2RBDataSimulator.run` call. Used by the SPAM-robustness test below to feed
+    perturbed-SPAM probabilities through `SyntheticSPAMRank1RB` without
+    re-simulating circuits.
 
-    def test_noiseless_decays_and_rates(self):
-        # Zero noise: P is exactly the identity for every circuit/prep (the net ideal
-        # composition of an SSRB circuit is the identity), so X_k = diag(M M^T)[k] = 1
-        # exactly (M is orthogonal) for every sequence/depth -- the fitted decays should
-        # be (numerically) exactly 1, and the recovered rates exactly e_0 (F's row/
-        # column 0 is all ones, so solve(F, ones) = e_0).
+    Parameters
+    ----------
+    edesign : SU2RBDesign
+
+    probs_by_depth : dict
+        Depth index -> array of shape `(circuits_per_depth, dim, dim)`, as returned
+        by `probabilities_from_compositions` (indexed `[seq_index, prep_index, :]`).
+
+    dim : int
+
+    Returns
+    -------
+    ProtocolData
+    """
+    ds = DataSet(collision_action="aggregate")
+    ds.repType = np.float64
+    outcome_labels = [str(ell) for ell in range(dim)]
+    for depth_idx, circuits_at_depth in enumerate(edesign.circuit_lists):
+        seq_at_depth = edesign.seq_index[depth_idx]
+        prep_at_depth = edesign.prep_index[depth_idx]
+        probs_arr = probs_by_depth[depth_idx]
+        for circuit, seq_idx, prep_idx in zip(circuits_at_depth, seq_at_depth, prep_at_depth):
+            probs = probs_arr[seq_idx, prep_idx, :]
+            counts = {ol: float(p) for ol, p in zip(outcome_labels, probs)}
+            ds.add_count_dict(circuit, counts)
+    ds.done_adding_data()
+    return ProtocolData(edesign, ds)
+
+
+class TestSyntheticSPAMRank1RBRequiresCharcores(BaseCase):
+    """`SyntheticSPAMRank1RB` needs the `charcores` aux data that every `SU2RBDesign`
+    provides; an edesign-like object without it should fail loudly (`TypeError`),
+    not silently misbehave. (There is no longer a "plain" design variant lacking
+    `charcores` to use as a foil, so this drives `_per_sequence_irrep_values`
+    directly against a minimal stand-in, the way
+    `TestSyntheticSPAMRank1RBWeightNormalization` below does.)"""
+
+    def test_rejects_edesign_without_charcores(self):
+        class _NoCharcoresEdesign:
+            dim = 2
+            circuits_per_depth = 1
+            circuit_lists = [[]]
+            seq_index = [[]]
+            prep_index = [[]]
+
+        with self.assertRaises(TypeError):
+            SyntheticSPAMRank1RB()._per_sequence_irrep_values(_NoCharcoresEdesign(), {}, 0, np.eye(2))
+
+
+class _FakeCircuitRow:
+    """Stand-in for a `DataSet` row: `_reconstruct_prep_effect_probs` only ever reads
+    `.fractions` off of what `ds[circuit]` returns."""
+
+    __slots__ = ('fractions',)
+
+    def __init__(self, fractions):
+        self.fractions = fractions
+
+
+class _FakeSU2RBEdesign:
+    """
+    Minimal stand-in for a single-depth `SU2RBDesign`, exposing only the attributes
+    `SyntheticSPAMRank1RB._per_sequence_irrep_values` actually reads (`dim`,
+    `circuits_per_depth`, `circuit_lists`, `seq_index`, `prep_index`, `charcores`).
+    Used to drive that method directly on hand-fabricated probability/weight data,
+    without going through a real `SU2RBDesign`/`SU2RBDataSimulator`/`DataSet`.
+    """
+
+    def __init__(self, dim, circuits_per_depth, circuits, seq_index, prep_index, charcores_rows):
+        self.dim = dim
+        self.circuits_per_depth = circuits_per_depth
+        self.circuit_lists = [circuits]
+        self.seq_index = [seq_index]
+        self.prep_index = [prep_index]
+        self.charcores = [charcores_rows]
+
+
+def _branch_character_transform_single_length(probs_branch, weights, irrep_sizes):
+    """
+    Literal pure-numpy transcription of `SU2CharacterRBSim.character_transform`
+    from the `su2-rb-conservative` branch (`su2rbsims.py:582-615`), specialized to a
+    single RB length (so the branch's `num_lens` axis -- irrelevant to the weight
+    normalization being locked down here -- collapses out).
+
+    Parameters
+    ----------
+    probs_branch : numpy array
+        Shape `(num_statepreps, circuits_per_length, num_effects)` -- the branch's
+        `_probs[:, j, :, :]` for a single length `j`.
+
+    weights : numpy array
+        Shape `(circuits_per_length, num_irreps)` -- the branch's `_chars[j, :, :]`
+        (here standing in for either `characters` or, as used below, `charcores`).
+
+    irrep_sizes : numpy array
+        Shape `(num_irreps,)`.
+
+    Returns
+    -------
+    numpy array
+        Shape `(num_statepreps, num_effects, num_irreps)` -- the branch's
+        `arr[:, :, :, j]`.
+    """
+    circuits_per_length = probs_branch.shape[1]
+    wchars = weights * irrep_sizes[np.newaxis, :]                # branch: wchars = _chars * irrep_sizes[...]
+    permprobs = np.moveaxis(probs_branch, 1, 2)                   # branch: np.moveaxis(probs, (1,2,3), (2,3,1))
+    # branch: P = np.tensordot(currprobs, currchars, axes=1) / circuits_per_length
+    return np.tensordot(permprobs, wchars, axes=1) / circuits_per_length
+
+
+def _branch_synspam_character_transform_single_length(probs_branch, weights, irrep_sizes, M):
+    """
+    Literal pure-numpy transcription of `SU2CharacterRBSim.
+    synspam_character_transform` (`su2rbsims.py:617-657`), specialized to a single
+    RB length (see `_branch_character_transform_single_length`).
+
+    Returns
+    -------
+    numpy array
+        Shape `(num_irreps,)` -- the branch's `synthetic_probs[:, j]`.
+    """
+    block_full = _branch_character_transform_single_length(probs_branch, weights, irrep_sizes)
+    num_irreps = block_full.shape[2]
+    synthetic_probs = np.zeros(num_irreps)
+    for k in range(num_irreps):
+        block = block_full[:, :, k]           # branch: block = P[:,:,k]
+        row_M_k = M[k, :]                      # branch: row_M_k = M[k,:]
+        synthetic_probs[k] = row_M_k @ block @ row_M_k
+    return synthetic_probs
+
+
+class TestSyntheticSPAMRank1RBWeightNormalization(BaseCase):
+    """
+    Locks the (2k+1)-and-charcore weight normalization scale of
+    `SyntheticSPAMRank1RB._per_sequence_irrep_values` to the `su2-rb-conservative`
+    branch's normative `character_transform`/`synspam_character_transform` (see
+    `SyntheticSPAMRank1RB`'s docstring) -- the rank-1 half of the former
+    parameterized weight-normalization test (the character-weighted half was
+    dropped along with `SyntheticSPAMCharacterRB`, plan Sec 3 step 5).
+
+    Unlike the fit-based end-to-end tests elsewhere in this module -- whose
+    `A_k * f_k**x` fit absorbs any constant per-irrep scale error into `A_k` without
+    affecting `f_k`, and whose 0.1-10x variance-ratio sanity check tolerates over a
+    3x scale error -- this test compares raw, pre-fit, pre-average per-sequence
+    values directly against a literal transcription of the branch's tensor
+    contraction (`_branch_synspam_character_transform_single_length`), on
+    hand-fabricated (not necessarily physical) probability and weight arrays, at
+    1e-12. A constant per-irrep scale error in the weighting factors would be caught
+    here even though it passes every other test in this module.
+    """
+
+    def test_rank1_weighting_matches_branch(self):
+        rng = np.random.default_rng(2024)
+        dim = 3
+        circuits_per_depth = 5
+
+        # Random (valid) prep-by-effect probability matrices, one per sampled
+        # sequence, and random per-sequence irrep weights standing in for
+        # `charcores` (the weighting arithmetic being locked down here doesn't care
+        # whether these are honest P_k values).
+        raw = rng.uniform(0.1, 1.0, size=(circuits_per_depth, dim, dim))
+        P = raw / raw.sum(axis=2, keepdims=True)  # P[s, l, :] is a valid distribution
+        weights = rng.uniform(-2.0, 2.0, size=(circuits_per_depth, dim))
+        M = rng.normal(size=(dim, dim))  # need not be an actual SpinJ M for this algebraic check
+        irrep_sizes = 2 * np.arange(dim) + 1
+
+        # --- Branch reference, from the literal transcription above. ---
+        probs_branch = np.moveaxis(P, 0, 1)  # (s, l, m) -> (l=prep, s=circuit, m=effect)
+        reference = _branch_synspam_character_transform_single_length(probs_branch, weights, irrep_sizes, M)
+
+        # --- The actual production code path: build a minimal fake edesign/ds ---
+        # --- exposing exactly what `_per_sequence_irrep_values` reads, and call ---
+        # --- it directly, then average over sequences (matching the branch's ---
+        # --- `/circuits_per_length` normalization, which is baked into ---
+        # --- `_branch_character_transform_single_length` above). ---
+        circuits = [(s, l) for s in range(circuits_per_depth) for l in range(dim)]
+        seq_index = [s for s in range(circuits_per_depth) for l in range(dim)]
+        prep_index = [l for s in range(circuits_per_depth) for l in range(dim)]
+        charcores_rows = [weights[s, :].tolist() for s in seq_index]
+        ds = {(s, l): _FakeCircuitRow({(str(m),): P[s, l, m] for m in range(dim)})
+              for s in range(circuits_per_depth) for l in range(dim)}
+        edesign = _FakeSU2RBEdesign(dim, circuits_per_depth, circuits, seq_index, prep_index, charcores_rows)
+
+        X = SyntheticSPAMRank1RB()._per_sequence_irrep_values(edesign, ds, 0, M)
+        family_mean = X.mean(axis=0)
+
+        self.assertTrue(np.allclose(family_mean, reference, atol=1e-12, rtol=0),
+                         msg="family_mean=%s reference=%s" % (family_mean, reference))
+
+
+class TestSyntheticSPAMRank1RBNoiseless(BaseCase):
+    """Noiseless analytic end-to-end check: all f_k should be (statistically)
+    consistent with 1, and the empirical per-sequence-estimator variance should be
+    the right order of magnitude relative to `predicted_zero_noise_variance`. Unlike
+    an unweighted, un-hidden-gate SSRB estimator (removed under the SSR1RB-only
+    strip-down), SSR1RB has nonzero zero-noise variance, so exact agreement isn't
+    expected at finite circuit counts -- this is a statistical check."""
+
+    def test_rank1_rb_noiseless(self):
         j = 1.5
         spinj = SpinJ(j)
+        dim = spinj.dim
         sim = SU2RBDataSimulator(spinj)
-        design = SU2RBDesign(j, depths=[1, 2, 3, 5, 8], circuits_per_depth=5, seed=3)
+        design = SU2RBDesign(j, depths=[1, 2, 3, 4, 5], circuits_per_depth=300, seed=21)
         data = sim.run(design)
-        results = SyntheticSPAMRB().run(data)
+        results = SyntheticSPAMRank1RB().run(data)
 
-        self.assertTrue(np.allclose(results.decays, 1.0, atol=1e-6))
-        expected_p = np.zeros(spinj.dim)
-        expected_p[0] = 1.0
-        self.assertTrue(np.allclose(results.rates, expected_p, atol=1e-6))
+        # f_k consistent with 1 within a generous multiple of its own stderr.
+        z = np.abs(results.decays - 1.0) / (results.decay_stderrs + 1e-300)
+        self.assertTrue(np.all(z[1:] < 6.0), msg="z-scores vs 1.0: %s" % z)
+
+        # Order-of-magnitude cross-check against the paper's zero-noise variance
+        # formula (predicted_zero_noise_variance), evaluated at the shortest depth.
+        diag = results.variance_diagnostic(depth_index=0)
+        for k in range(1, dim):
+            predicted, empirical = diag[k]
+            self.assertGreater(predicted, 0.0)
+            self.assertGreater(empirical, 0.0)
+            ratio = empirical / predicted
+            self.assertTrue(0.1 < ratio < 10.0,
+                             msg="k=%d predicted=%s empirical=%s ratio=%s" % (k, predicted, empirical, ratio))
+
+        # Pin the *absolute* paper normalization directly on the raw (pre-fit)
+        # per-depth sample means, not just the fitted decays: the A_k*f_k^x fit
+        # above is scale-blind (a constant per-irrep scale error would just be
+        # absorbed into A_k and leave f_k unaffected), so this is the test that
+        # actually locks `per_irrep_means` itself to 1 within its own stderr, at
+        # every depth, for every nontrivial irrep.
+        means = results.per_irrep_means
+        stderrs = results.per_irrep_stderrs
+        z_by_depth = np.abs(means[1:, :] - 1.0) / stderrs[1:, :]
+        self.assertTrue(np.all(z_by_depth < 6.0),
+                         msg="per-depth per_irrep_means z-scores vs 1.0: %s" % z_by_depth)
+
+
+class TestSyntheticSPAMRank1RBMatchesGateNoise(BaseCase):
+    """Noisy analytic end-to-end check: with a known gate-independent noise channel,
+    SSR1RB should recover the same per-irrep fidelities as the closed-form
+    `f_k = Tr(P_k . Lambda) / (2k+1)` twirl formula -- gate noise is what SSR1RB
+    measures; only its SPAM-robustness properties are special (see
+    `TestSyntheticSPAMRank1RBSpamRobustness`)."""
+
+    def test_rank1_rb_matches_gate_noise(self):
+        j = 1.5
+        gamma = 0.05
+        n_circuits = 300
+        max_depth = 15
+        spinj = SpinJ(j)
+        dim = spinj.dim
+        noise = jz_dephasing(spinj, gamma, power=1.0)
+        sim = SU2RBDataSimulator(spinj, noise_channel=noise, shots=None, seed=1)
+        depths = list(range(1, max_depth + 1))
+        design = SU2RBDesign(j, depths, circuits_per_depth=n_circuits, seed=22)
+        data = sim.run(design)
+        results = SyntheticSPAMRank1RB().run(data)
+
+        analytic_f = np.array([
+            np.trace(spinj.irrep_stdmx_projectors[k] @ noise).real / (2 * k + 1)
+            for k in range(dim)
+        ])
+        tol = 5.0 * results.decay_stderrs + 1e-3
+        self.assertTrue(np.all(np.abs(results.decays - analytic_f) <= tol),
+                         msg="decays=%s analytic=%s tol=%s" % (results.decays, analytic_f, tol))
+        self.assertAlmostEqual(results.decays[0], 1.0, delta=1e-6)
+
+
+class TestSyntheticSPAMRank1RBApi(BaseCase):
+    """Protocol/Results API-surface checks: DataFrame export, isinstance, and the
+    write()/read-from-dir serialization round trip -- retargeted from the former
+    (plain-SSRB) Phase 5 tests at the single surviving protocol/results pair."""
 
     def test_rates_dataframe_and_variance_diagnostic(self):
         j = 0.5
@@ -833,7 +1035,7 @@ class TestSyntheticSPAMRBNoiseless(BaseCase):
         data = sim.run(design)
         with warnings.catch_warnings():
             warnings.simplefilter('error', UserWarning)
-            results = SyntheticSPAMRB().run(data)
+            results = SyntheticSPAMRank1RB().run(data)
 
         df = results.rates_dataframe()
         self.assertEqual(len(df), spinj.dim)
@@ -841,24 +1043,22 @@ class TestSyntheticSPAMRBNoiseless(BaseCase):
         for col in ('decay_f', 'decay_f_stderr', 'rate_p', 'rate_p_stderr'):
             self.assertIn(col, df.columns)
 
+        # predicted_zero_noise_variance(j, k) is the SSR1RB rank-1 formula -- unlike
+        # the removed plain-SSRB variant, it is not identically 0 for k > 0.
         diag = results.variance_diagnostic()
         self.assertEqual(set(diag.keys()), set(range(spinj.dim)))
         for k, (predicted, empirical) in diag.items():
-            # SyntheticSPAMRB._variance_variant == 'ssrb', whose predicted variance is
-            # always 0.
-            self.assertEqual(predicted, 0.0)
+            self.assertGreaterEqual(predicted, 0.0)
             self.assertGreaterEqual(empirical, 0.0)
 
     def test_isinstance_results(self):
         j = 0.5
-        # >=3 depths: with exactly 2, the 2-parameter (a, f) fit always has zero
-        # residual degrees of freedom, which is treated as a fit failure (see
-        # test_rates_dataframe_and_variance_diagnostic's comment / test_failed_irrep_fit_warns).
+        # >=3 depths: see test_rates_dataframe_and_variance_diagnostic's comment.
         design = SU2RBDesign(j, depths=[1, 2, 3], circuits_per_depth=2, seed=0)
         data = SU2RBDataSimulator(j).run(design)
         with warnings.catch_warnings():
             warnings.simplefilter('error', UserWarning)
-            results = SyntheticSPAMRB().run(data)
+            results = SyntheticSPAMRank1RB().run(data)
         self.assertIsInstance(results, SyntheticSPAMRBResults)
 
     def test_serialization_round_trip(self):
@@ -870,7 +1070,7 @@ class TestSyntheticSPAMRBNoiseless(BaseCase):
         data = SU2RBDataSimulator(j).run(design)
         with warnings.catch_warnings():
             warnings.simplefilter('error', UserWarning)
-            results = SyntheticSPAMRB().run(data)
+            results = SyntheticSPAMRank1RB().run(data)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             results.write(tmpdir)
@@ -903,388 +1103,91 @@ class TestSyntheticSPAMRBNoiseless(BaseCase):
         design = SU2RBDesign(j, depths=[1], circuits_per_depth=2, seed=0)
         data = SU2RBDataSimulator(j).run(design)
         with self.assertWarns(UserWarning) as cm:
-            results = SyntheticSPAMRB().run(data)
+            results = SyntheticSPAMRank1RB().run(data)
         self.assertIn('irrep', str(cm.warning))
         self.assertTrue(np.all(np.isnan(results.rates)))
 
 
-class TestSyntheticSPAMRBAnalyticEndToEnd(BaseCase):
+class TestSyntheticSPAMRank1RBSpamRobustness(BaseCase):
     """
-    Phase 5's analytic end-to-end test: simulate SSRB with a known gate-independent
-    noise channel and exact (shots=None) probabilities, and check the fitted per-irrep
-    decays against the closed-form irrep fidelities `f_k = Tr(P_k . Lambda) / (2k+1)`
-    (`Lambda` the noise channel's standard-basis superoperator, `P_k` from
-    `SpinJ.irrep_stdmx_projectors`) -- the standard RB "twirl" formula.
-
-    A weak noise strength (`gamma = 2e-4`) is used deliberately: the per-circuit
-    zero-noise variance (paper Eq. `SSvariance`; `SyntheticSPAMRB._variance_variant ==
-    'ssrb'` is exactly 0 at zero noise) grows continuously from 0 as gamma turns on, so
-    at weak noise the finite-circuit (N=100) sampling scatter around the analytic decay
-    curve is itself O(gamma) and comfortably below a 1e-6 absolute tolerance; at the
-    gamma ~ 0.05 scale used elsewhere in this test module for cross-validation, the
-    same N=100/depths-to-30 budget only resolves the decays to ~1e-4 (this was checked
-    empirically during development -- see the phase 5 completion notes -- and is
-    consistent with the paper's point that synthetic RB's variance is dominated by
-    circuit-sampling scatter rather than by measurement statistics).
-    """
-
-    def _run_and_check(self, j, gamma=2e-4, n_circuits=100, max_depth=30, seed=42, atol=1e-6):
-        spinj = SpinJ(j)
-        dim = spinj.dim
-        noise = jz_dephasing(spinj, gamma, power=1.0)
-        sim = SU2RBDataSimulator(spinj, noise_channel=noise, shots=None, seed=1)
-        depths = list(range(1, max_depth + 1))
-        design = SU2RBDesign(j, depths, circuits_per_depth=n_circuits, seed=seed)
-        data = sim.run(design)
-        results = SyntheticSPAMRB().run(data)
-
-        analytic_f = np.array([
-            np.trace(spinj.irrep_stdmx_projectors[k] @ sim._noise_superop).real / (2 * k + 1)
-            for k in range(dim)
-        ])
-        self.assertTrue(np.allclose(results.decays, analytic_f, atol=atol),
-                         msg="decays=%s analytic=%s" % (results.decays, analytic_f))
-
-        # k=0 (the trivial irrep) fits to (numerically) exactly 1 regardless of noise:
-        # trace preservation makes its series exactly 1 for every single circuit.
-        self.assertAlmostEqual(results.decays[0], 1.0, delta=1e-8)
-
-        # Recovered rates satisfy the f = F @ p round trip.
-        F = spinj.decay_recoupling_matrix
-        self.assertTrue(np.allclose(F @ results.rates, results.decays, atol=1e-10))
-
-        # Covariance propagation: right shape, symmetric, positive semidefinite.
-        cov = results.rates_covariance
-        self.assertEqual(cov.shape, (dim, dim))
-        self.assertTrue(np.allclose(cov, cov.T))
-        eigvals = np.linalg.eigvalsh(cov)
-        self.assertTrue(np.all(eigvals >= -1e-12), msg="eigvals=%s" % eigvals)
-
-        return results
-
-    def test_j_three_halves(self):
-        self._run_and_check(1.5)
-
-    def test_j_seven_halves(self):
-        self._run_and_check(3.5)
-
-
-# ---------------------------------------------------------------------------
-# SyntheticSPAMCharacterRB / SyntheticSPAMRank1RB (Phase 6)
-# ---------------------------------------------------------------------------
-
-def _dataset_from_probs(edesign, probs_by_depth, dim):
-    """
-    Build a `ProtocolData` (exact-probability `DataSet`, following
-    `SU2RBDataSimulator.run`'s `shots=None` convention) directly from precomputed
-    per-(depth, sequence, prep) outcome probabilities -- e.g. from
-    `SU2RBDataSimulator.probabilities_from_compositions` -- rather than from a live
-    `SU2RBDataSimulator.run` call. Used by the SPAM-robustness test below to feed
-    perturbed-SPAM probabilities through `SyntheticSPAMRB`/`SyntheticSPAMCharacterRB`/
-    `SyntheticSPAMRank1RB` without re-simulating circuits.
-
-    Parameters
-    ----------
-    edesign : SU2RBDesign or SU2CharacterRBDesign
-
-    probs_by_depth : dict
-        Depth index -> array of shape `(circuits_per_depth, dim, dim)`, as returned
-        by `probabilities_from_compositions` (indexed `[seq_index, prep_index, :]`).
-
-    dim : int
-
-    Returns
-    -------
-    ProtocolData
-    """
-    ds = DataSet(collision_action="aggregate")
-    ds.repType = np.float64
-    outcome_labels = [str(ell) for ell in range(dim)]
-    for depth_idx, circuits_at_depth in enumerate(edesign.circuit_lists):
-        seq_at_depth = edesign.seq_index[depth_idx]
-        prep_at_depth = edesign.prep_index[depth_idx]
-        probs_arr = probs_by_depth[depth_idx]
-        for circuit, seq_idx, prep_idx in zip(circuits_at_depth, seq_at_depth, prep_at_depth):
-            probs = probs_arr[seq_idx, prep_idx, :]
-            counts = {ol: float(p) for ol, p in zip(outcome_labels, probs)}
-            ds.add_count_dict(circuit, counts)
-    ds.done_adding_data()
-    return ProtocolData(edesign, ds)
-
-
-class TestSyntheticSPAMCharacterFamilyRequiresCharacterDesign(BaseCase):
-    """`SyntheticSPAMCharacterRB`/`SyntheticSPAMRank1RB` need the `characters`/
-    `charcores` aux data that only `SU2CharacterRBDesign` provides; running them on
-    plain `SU2RBDesign` data should fail loudly (`TypeError`), not silently
-    misbehave."""
-
-    def _plain_data(self):
-        j = 0.5
-        design = SU2RBDesign(j, depths=[1, 2], circuits_per_depth=2, seed=1)
-        return SU2RBDataSimulator(j).run(design)
-
-    def test_character_rb_rejects_plain_design(self):
-        with self.assertRaises(TypeError):
-            SyntheticSPAMCharacterRB().run(self._plain_data())
-
-    def test_rank1_rb_rejects_plain_design(self):
-        with self.assertRaises(TypeError):
-            SyntheticSPAMRank1RB().run(self._plain_data())
-
-
-class _FakeCircuitRow:
-    """Stand-in for a `DataSet` row: `_reconstruct_prep_effect_probs` only ever reads
-    `.fractions` off of what `ds[circuit]` returns."""
-
-    __slots__ = ('fractions',)
-
-    def __init__(self, fractions):
-        self.fractions = fractions
-
-
-class _FakeCharacterEdesign:
-    """
-    Minimal stand-in for a single-depth `SU2CharacterRBDesign`, exposing only the
-    attributes `_SyntheticSPAMCharacterFamilyRB._per_sequence_irrep_values` actually
-    reads (`dim`, `circuits_per_depth`, `circuit_lists`, `seq_index`, `prep_index`,
-    and the `weight_attr`-named aux list). Used to drive that method directly on
-    hand-fabricated probability/weight data, without going through a real
-    `SU2CharacterRBDesign`/`SU2RBDataSimulator`/`DataSet`.
-    """
-
-    def __init__(self, dim, circuits_per_depth, circuits, seq_index, prep_index, weight_attr, weight_rows):
-        self.dim = dim
-        self.circuits_per_depth = circuits_per_depth
-        self.circuit_lists = [circuits]
-        self.seq_index = [seq_index]
-        self.prep_index = [prep_index]
-        setattr(self, weight_attr, [weight_rows])
-
-
-def _branch_character_transform_single_length(probs_branch, chars, irrep_sizes):
-    """
-    Literal pure-numpy transcription of `SU2CharacterRBSim.character_transform`
-    from the `su2-rb-conservative` branch (`su2rbsims.py:582-615`), specialized to a
-    single RB length (so the branch's `num_lens` axis -- irrelevant to the weight
-    normalization being locked down here -- collapses out).
-
-    Parameters
-    ----------
-    probs_branch : numpy array
-        Shape `(num_statepreps, circuits_per_length, num_effects)` -- the branch's
-        `_probs[:, j, :, :]` for a single length `j`.
-
-    chars : numpy array
-        Shape `(circuits_per_length, num_irreps)` -- the branch's `_chars[j, :, :]`.
-
-    irrep_sizes : numpy array
-        Shape `(num_irreps,)`.
-
-    Returns
-    -------
-    numpy array
-        Shape `(num_statepreps, num_effects, num_irreps)` -- the branch's
-        `arr[:, :, :, j]`.
-    """
-    circuits_per_length = probs_branch.shape[1]
-    wchars = chars * irrep_sizes[np.newaxis, :]                 # branch: wchars = _chars * irrep_sizes[...]
-    permprobs = np.moveaxis(probs_branch, 1, 2)                  # branch: np.moveaxis(probs, (1,2,3), (2,3,1))
-    # branch: P = np.tensordot(currprobs, currchars, axes=1) / circuits_per_length
-    return np.tensordot(permprobs, wchars, axes=1) / circuits_per_length
-
-
-def _branch_synspam_character_transform_single_length(probs_branch, chars, irrep_sizes, M):
-    """
-    Literal pure-numpy transcription of `SU2CharacterRBSim.
-    synspam_character_transform` (`su2rbsims.py:617-657`), specialized to a single
-    RB length (see `_branch_character_transform_single_length`).
-
-    Returns
-    -------
-    numpy array
-        Shape `(num_irreps,)` -- the branch's `synthetic_probs[:, j]`.
-    """
-    block_full = _branch_character_transform_single_length(probs_branch, chars, irrep_sizes)
-    num_irreps = block_full.shape[2]
-    synthetic_probs = np.zeros(num_irreps)
-    for k in range(num_irreps):
-        block = block_full[:, :, k]           # branch: block = P[:,:,k]
-        row_M_k = M[k, :]                      # branch: row_M_k = M[k,:]
-        synthetic_probs[k] = row_M_k @ block @ row_M_k
-    return synthetic_probs
-
-
-class TestSyntheticSPAMCharacterFamilyWeightNormalization(BaseCase):
-    """
-    Locks the (2k+1)-and-irrep-weight normalization scale of
-    `_SyntheticSPAMCharacterFamilyRB._per_sequence_irrep_values` to the
-    `su2-rb-conservative` branch's normative `character_transform`/
-    `synspam_character_transform` (see the plan's Phase 6 section and
-    `_SyntheticSPAMCharacterFamilyRB`'s docstring).
-
-    Unlike the fit-based end-to-end tests elsewhere in this module -- whose
-    `A_k * f_k**x` fit absorbs any constant per-irrep scale error into `A_k` without
-    affecting `f_k`, and whose 0.1-10x variance-ratio sanity check tolerates over a
-    3x scale error -- this test compares raw, pre-fit, pre-average per-sequence
-    values directly against a literal transcription of the branch's tensor
-    contraction (`_branch_synspam_character_transform_single_length`), on
-    hand-fabricated (not necessarily physical) probability and weight arrays, at
-    1e-12. A constant per-irrep scale error in the family's weighting factors would
-    be caught here even though it passes every other test in this module.
-    """
-
-    def _check(self, weight_attr, protocol_cls):
-        rng = np.random.default_rng(2024)
-        dim = 3
-        circuits_per_depth = 5
-
-        # Random (valid) prep-by-effect probability matrices, one per sampled
-        # sequence, and random per-sequence irrep weights standing in for
-        # `characters`/`charcores` (the weighting arithmetic being locked down here
-        # doesn't care whether these are honest chi_k/P_k values).
-        raw = rng.uniform(0.1, 1.0, size=(circuits_per_depth, dim, dim))
-        P = raw / raw.sum(axis=2, keepdims=True)  # P[s, l, :] is a valid distribution
-        weights = rng.uniform(-2.0, 2.0, size=(circuits_per_depth, dim))
-        M = rng.normal(size=(dim, dim))  # need not be an actual SpinJ M for this algebraic check
-        irrep_sizes = 2 * np.arange(dim) + 1
-
-        # --- Branch reference, from the literal transcription above. ---
-        probs_branch = np.moveaxis(P, 0, 1)  # (s, l, m) -> (l=prep, s=circuit, m=effect)
-        reference = _branch_synspam_character_transform_single_length(probs_branch, weights, irrep_sizes, M)
-
-        # --- The actual production code path: build a minimal fake edesign/ds ---
-        # --- exposing exactly what `_per_sequence_irrep_values` reads, and call ---
-        # --- it directly, then average over sequences (matching the branch's ---
-        # --- `/circuits_per_length` normalization, which is baked into ---
-        # --- `_branch_character_transform_single_length` above). ---
-        circuits = [(s, l) for s in range(circuits_per_depth) for l in range(dim)]
-        seq_index = [s for s in range(circuits_per_depth) for l in range(dim)]
-        prep_index = [l for s in range(circuits_per_depth) for l in range(dim)]
-        weight_rows = [weights[s, :].tolist() for s in seq_index]
-        ds = {(s, l): _FakeCircuitRow({(str(m),): P[s, l, m] for m in range(dim)})
-              for s in range(circuits_per_depth) for l in range(dim)}
-        edesign = _FakeCharacterEdesign(dim, circuits_per_depth, circuits, seq_index, prep_index,
-                                         weight_attr, weight_rows)
-
-        X = protocol_cls()._per_sequence_irrep_values(edesign, ds, 0, M)
-        family_mean = X.mean(axis=0)
-
-        self.assertTrue(np.allclose(family_mean, reference, atol=1e-12, rtol=0),
-                         msg="family_mean=%s reference=%s" % (family_mean, reference))
-
-    def test_character_weighting_matches_branch(self):
-        self._check('characters', SyntheticSPAMCharacterRB)
-
-    def test_rank1_weighting_matches_branch(self):
-        self._check('charcores', SyntheticSPAMRank1RB)
-
-
-class TestSyntheticSPAMCharacterFamilyNoiseless(BaseCase):
-    """Noiseless analytic end-to-end check (Phase 6): all f_k should be
-    (statistically) consistent with 1, and the empirical per-sequence-estimator
-    variance should be the right order of magnitude relative to
-    `predicted_zero_noise_variance`."""
-
-    def _check(self, protocol_cls, variant):
-        j = 1.5
-        spinj = SpinJ(j)
-        dim = spinj.dim
-        sim = SU2RBDataSimulator(spinj)
-        design = SU2CharacterRBDesign(j, depths=[1, 2, 3, 4, 5], circuits_per_depth=300, seed=21)
-        data = sim.run(design)
-        results = protocol_cls().run(data)
-
-        # f_k consistent with 1 within a generous multiple of its own stderr (the
-        # character/rank-1 estimators have nonzero zero-noise variance -- unlike
-        # plain SSRB -- so exact agreement isn't expected at finite N).
-        z = np.abs(results.decays - 1.0) / (results.decay_stderrs + 1e-300)
-        self.assertTrue(np.all(z[1:] < 6.0), msg="z-scores vs 1.0: %s" % z)
-
-        # Order-of-magnitude cross-check against the paper's zero-noise variance
-        # formula (predicted_zero_noise_variance), evaluated at the shortest depth.
-        diag = results.variance_diagnostic(depth_index=0)
-        for k in range(1, dim):
-            predicted, empirical = diag[k]
-            self.assertGreater(predicted, 0.0)
-            self.assertGreater(empirical, 0.0)
-            ratio = empirical / predicted
-            self.assertTrue(0.1 < ratio < 10.0,
-                             msg="k=%d predicted=%s empirical=%s ratio=%s" % (k, predicted, empirical, ratio))
-
-        # Pin the *absolute* paper normalization directly on the raw (pre-fit)
-        # per-depth sample means, not just the fitted decays: the A_k*f_k^x fit
-        # above is scale-blind (a constant per-irrep scale error would just be
-        # absorbed into A_k and leave f_k unaffected), so this is the test that
-        # actually locks `per_irrep_means` itself to 1 within its own stderr, at
-        # every depth, for every nontrivial irrep.
-        means = results.per_irrep_means
-        stderrs = results.per_irrep_stderrs
-        z_by_depth = np.abs(means[1:, :] - 1.0) / stderrs[1:, :]
-        self.assertTrue(np.all(z_by_depth < 6.0),
-                         msg="per-depth per_irrep_means z-scores vs 1.0: %s" % z_by_depth)
-
-    def test_character_rb_noiseless(self):
-        self._check(SyntheticSPAMCharacterRB, 'sschirb')
-
-    def test_rank1_rb_noiseless(self):
-        self._check(SyntheticSPAMRank1RB, 'ssr1rb')
-
-
-class TestSyntheticSPAMCharacterFamilyMatchesGateNoise(BaseCase):
-    """Noisy analytic end-to-end check (Phase 6): with a known gate-independent noise
-    channel, SSchiRB/SSR1RB should recover the same per-irrep fidelities as plain
-    SSRB (Phase 5) / the closed-form `f_k = Tr(P_k . Lambda) / (2k+1)` twirl formula
-    -- gate noise is what all three protocols measure; only their SPAM-robustness
-    properties differ (see `TestSyntheticSPAMCharacterFamilySpamRobustness`)."""
-
-    def _check(self, protocol_cls):
-        j = 1.5
-        gamma = 0.05
-        n_circuits = 300
-        max_depth = 15
-        spinj = SpinJ(j)
-        dim = spinj.dim
-        noise = jz_dephasing(spinj, gamma, power=1.0)
-        sim = SU2RBDataSimulator(spinj, noise_channel=noise, shots=None, seed=1)
-        depths = list(range(1, max_depth + 1))
-        design = SU2CharacterRBDesign(j, depths, circuits_per_depth=n_circuits, seed=22)
-        data = sim.run(design)
-        results = protocol_cls().run(data)
-
-        analytic_f = np.array([
-            np.trace(spinj.irrep_stdmx_projectors[k] @ noise).real / (2 * k + 1)
-            for k in range(dim)
-        ])
-        tol = 5.0 * results.decay_stderrs + 1e-3
-        self.assertTrue(np.all(np.abs(results.decays - analytic_f) <= tol),
-                         msg="decays=%s analytic=%s tol=%s" % (results.decays, analytic_f, tol))
-        self.assertAlmostEqual(results.decays[0], 1.0, delta=1e-6)
-
-    def test_character_rb_matches_gate_noise(self):
-        self._check(SyntheticSPAMCharacterRB)
-
-    def test_rank1_rb_matches_gate_noise(self):
-        self._check(SyntheticSPAMRank1RB)
-
-
-class TestSyntheticSPAMCharacterFamilySpamRobustness(BaseCase):
-    """
-    The paper's central SPAM-robustness signature (Phase 6): using the Phase 4
-    SPAM-swap API (`compute_nonspam_compositions`/`probabilities_from_compositions`),
-    perturb the state preps and POVM by small (but not-tiny) random unitary
-    rotations that do not commute with Jz, and check that plain `SyntheticSPAMRB`
-    (which assumes SPAM diagonal in the Jz eigenbasis) acquires a decay-parameter
-    bias far outside its own (very small, since SSRB has zero zero-noise variance)
-    error bars, while `SyntheticSPAMCharacterRB`/`SyntheticSPAMRank1RB` (which are
-    robust to *any* fixed, gate-independent SPAM channel) remain statistically
-    consistent with the true (perturbation-free) per-irrep fidelities within a
-    modest multiple of their own (larger) error bars.
+    The paper's central SPAM-robustness signature, reformulated for the SSR1RB-only
+    strip-down (plan Sec 0 / Sec 3 step 5).
+
+    Every surviving `SU2RBDesign` is hidden-first-gate (Sec 3 step 2 merged the old
+    net-identity ("plain SSRB", `invert_from=0`) circuit convention into it), so its
+    unweighted `diag(M P M^T)[k]` sandwich already averages to (statistically) zero
+    for k > 0 *regardless of SPAM correctness*: a Haar-random hidden first gate
+    integrates any unweighted, nontrivial-irrep contribution to zero by Legendre
+    orthogonality, with or without a SPAM perturbation. (Verified numerically while
+    developing this test: even a large, non-Jz-diagonal SPAM perturbation and tens
+    of thousands of sampled sequences produced no statistically resolvable shift in
+    the unweighted sandwich's mean on hidden-gate-design data -- the signal the
+    rank-1/charcore weighting exists to recover is exactly what a naive unweighted
+    average discards.) So the unweighted foil has to be computed on its own native
+    circuit convention -- net ideal composition equal to the identity -- to show
+    anything at all, let alone a SPAM-induced bias.
+
+    That circuit family no longer has a production class of its own, so it is
+    reconstructed here directly from public `su2tools` primitives
+    (`random_euler_angles`, `composition_inverse`, `SpinJ.unitaries_from_angles`)
+    plus `unitary_to_std_process_mx` -- a few lines of numpy, no production
+    `su2rb.py` code touched, no deleted class revived. On these net-identity
+    sequences, the unweighted `diag(M P M^T)[k]` sandwich matches the true
+    (analytic) per-irrep gate-noise fidelity `f_k**m` under ideal SPAM but acquires
+    a large bias under a fixed, non-Jz-diagonal SPAM perturbation -- the classic
+    "plain SSRB is not SPAM-robust" signature. `SyntheticSPAMRank1RB`, run on the
+    standard (hidden-gate) `SU2RBDesign` pipeline under the *same* perturbation,
+    stays statistically consistent with the true fidelity.
 
     Seeded throughout; j=1.5 keeps the (already fast) 4x4-superoperator composition
     cheap enough to run in a few seconds.
     """
 
-    def test_ssrb_biased_character_variants_unbiased(self):
+    @staticmethod
+    def _sample_net_identity_angles(m, rng):
+        """
+        One `(m+1, 3)` Euler-angle sequence whose net ideal composition (all `m+1`
+        rows) is the identity: rows `0..m-1` are Haar-random, row `m` is the exact
+        composition-inverse of rows `0..m-1`. This is the old, pre-strip-down
+        "plain SSRB" (`invert_from=0`) circuit convention -- unlike every surviving
+        `SU2RBDesign`, there is no "hidden" gate here for the inverting row to
+        leave unaccounted for.
+        """
+        angles = np.zeros((m + 1, 3))
+        a, b, g = random_euler_angles(m, rng=rng)
+        angles[:m, 0], angles[:m, 1], angles[:m, 2] = a, b, g
+        angles[m, :] = composition_inverse(angles[:m, 0], angles[:m, 1], angles[:m, 2])
+        return angles
+
+    def _net_identity_unweighted_mean(self, spinj, noise_superop, M, m, n_circuits, rng, statepreps, povm):
+        """
+        The unweighted `diag(M P M^T)[k]` sandwich (no charcore weighting, no
+        irrep-size scaling -- "what you'd get without the rank-1 weighting"),
+        averaged over `n_circuits` freshly-sampled net-identity sequences
+        (`_sample_net_identity_angles`) at depth `m`, with `noise_superop` applied
+        after *every* gate (there is no hidden gate to skip noise after in this
+        convention).
+
+        Returns
+        -------
+        mean, stderr : numpy array, shape (dim,)
+        """
+        dim = spinj.dim
+        vals = np.zeros((n_circuits, dim))
+        for s in range(n_circuits):
+            angles = self._sample_net_identity_angles(m, rng)
+            Us = spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
+            S = np.eye(dim * dim, dtype=complex)
+            for U in Us:
+                S = noise_superop @ (unitary_to_std_process_mx(U) @ S)
+            evolved = np.einsum('ab,ib->ia', S, statepreps)
+            P = np.real(np.einsum('ek,ik->ie', np.conj(povm), evolved))
+            vals[s, :] = np.einsum('kl,lm,km->k', M, P, M)
+        mean = vals.mean(axis=0)
+        stderr = vals.std(axis=0, ddof=1) / np.sqrt(n_circuits)
+        return mean, stderr
+
+    def test_unweighted_foil_biased_rank1_unbiased(self):
         import scipy.linalg as _sla
 
         j = 1.5
@@ -1293,6 +1196,7 @@ class TestSyntheticSPAMCharacterFamilySpamRobustness(BaseCase):
         max_depth = 10
         spinj = SpinJ(j)
         dim = spinj.dim
+        M = spinj.synthetic_spam_matrix
 
         noise = jz_dephasing(spinj, gamma, power=1.0)
         sim = SU2RBDataSimulator(spinj, noise_channel=noise)
@@ -1314,39 +1218,44 @@ class TestSyntheticSPAMCharacterFamilySpamRobustness(BaseCase):
         perturbed_povm = np.array([
             unitary_to_std_process_mx(U_povm) @ ideal_ops[ell] for ell in range(dim)])
 
-        depths = list(range(1, max_depth + 1))
-        design_ssrb = SU2RBDesign(j, depths, circuits_per_depth=n_circuits, seed=11)
-        design_char = SU2CharacterRBDesign(j, depths, circuits_per_depth=n_circuits, seed=12)
-
-        comp_ssrb = sim.compute_nonspam_compositions(design_ssrb)
-        comp_char = sim.compute_nonspam_compositions(design_char)
-
-        probs_ssrb = sim.probabilities_from_compositions(
-            comp_ssrb, statepreps=perturbed_preps, povm=perturbed_povm)
-        probs_char = sim.probabilities_from_compositions(
-            comp_char, statepreps=perturbed_preps, povm=perturbed_povm)
-
-        data_ssrb = _dataset_from_probs(design_ssrb, probs_ssrb, dim)
-        data_char = _dataset_from_probs(design_char, probs_char, dim)
-
-        results_ssrb = SyntheticSPAMRB().run(data_ssrb)
-        results_chi = SyntheticSPAMCharacterRB().run(data_char)
-        results_r1 = SyntheticSPAMRank1RB().run(data_char)
-
         analytic_f = np.array([
             np.trace(spinj.irrep_stdmx_projectors[k] @ noise).real / (2 * k + 1)
             for k in range(dim)
         ])
 
-        # SSRB: perturbed-SPAM bias is huge relative to its own (tiny) error bars --
-        # a clear, unmistakable bias signature, for every nontrivial irrep.
-        z_ssrb = np.abs(results_ssrb.decays - analytic_f) / results_ssrb.decay_stderrs
-        self.assertTrue(np.all(z_ssrb[1:] > 8.0), msg="SSRB z-scores: %s" % z_ssrb)
+        # --- SyntheticSPAMRank1RB (Legendre/charcore-weighted), on the standard
+        # --- hidden-gate SU2RBDesign pipeline: stays unbiased under the SPAM
+        # --- perturbation. ---
+        depths = list(range(1, max_depth + 1))
+        design = SU2RBDesign(j, depths, circuits_per_depth=n_circuits, seed=11)
+        compositions = sim.compute_nonspam_compositions(design)
+        perturbed_probs = sim.probabilities_from_compositions(
+            compositions, statepreps=perturbed_preps, povm=perturbed_povm)
+        data_perturbed = _dataset_from_probs(design, perturbed_probs, dim)
+        results_r1 = SyntheticSPAMRank1RB().run(data_perturbed)
 
-        # SSchiRB / SSR1RB: perturbed-SPAM decays remain consistent with the true
-        # (perturbation-free) fidelities within a modest multiple of their own
-        # (larger) error bars -- no comparable bias signature.
-        z_chi = np.abs(results_chi.decays - analytic_f) / results_chi.decay_stderrs
         z_r1 = np.abs(results_r1.decays - analytic_f) / results_r1.decay_stderrs
-        self.assertTrue(np.all(z_chi[1:] < 6.0), msg="SSchiRB z-scores: %s" % z_chi)
-        self.assertTrue(np.all(z_r1[1:] < 6.0), msg="SSR1RB z-scores: %s" % z_r1)
+        self.assertTrue(np.all(z_r1[1:] < 6.0), msg="SSR1RB z-scores vs analytic: %s" % z_r1)
+
+        # --- Unweighted foil, on freshly-sampled net-identity sequences (see this
+        # --- class's docstring for why the hidden-gate design's own data can't be
+        # --- reused here): matches the analytic fidelity f_k**m under ideal SPAM,
+        # --- but acquires a large bias under the same SPAM perturbation. Standard
+        # --- RB theory's exponent here is the number of *random* gates `m`, not
+        # --- `m + 1`: the (deterministic) inverting gate's own noise contributes
+        # --- only to the amplitude, not the decay exponent.
+        m = max_depth
+        rng_foil = np.random.default_rng(23)
+        noise_superop = sim._noise_superop
+        mean_ideal, se_ideal = self._net_identity_unweighted_mean(
+            spinj, noise_superop, M, m, n_circuits, rng_foil, ideal_ops, ideal_ops)
+        mean_perturbed, se_perturbed = self._net_identity_unweighted_mean(
+            spinj, noise_superop, M, m, n_circuits, rng_foil, perturbed_preps, perturbed_povm)
+
+        target = analytic_f ** m
+        z_unweighted_ideal = np.abs(mean_ideal - target) / se_ideal
+        self.assertTrue(np.all(z_unweighted_ideal[1:] < 6.0),
+                         msg="unweighted foil (ideal SPAM) z-scores vs analytic: %s" % z_unweighted_ideal)
+        z_unweighted_perturbed = np.abs(mean_perturbed - target) / se_perturbed
+        self.assertTrue(np.all(z_unweighted_perturbed[1:] > 8.0),
+                         msg="unweighted foil (perturbed SPAM) z-scores vs analytic: %s" % z_unweighted_perturbed)
