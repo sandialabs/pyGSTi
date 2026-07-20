@@ -7,6 +7,7 @@ import tempfile
 import warnings
 
 import numpy as np
+from scipy.optimize import OptimizeWarning
 
 from pygsti.circuits.circuit import Circuit
 from pygsti.protocols.su2rb import (
@@ -27,6 +28,7 @@ from pygsti.protocols.protocol import ProtocolData
 from pygsti.data.dataset import DataSet
 from pygsti.tools.su2tools import SpinJ, distance_mod_phase, random_euler_angles, composition_inverse
 from pygsti.tools.optools import unitary_to_std_process_mx
+from pygsti.tools.exceptions import RBFitFailureWarning
 
 from ..util import BaseCase
 
@@ -46,8 +48,8 @@ class TestEulerAngleCircuitHelpers(BaseCase):
             self.assertEqual(layer.name, GATE_NAME)
 
         recovered = euler_angles_from_circuit(c)
-        # The plan asks for agreement to <= 1e-12; empirically (see the Task 3.0
-        # spike notes) the string round trip is bit-exact, so we check that too.
+        # Agreement to <= 1e-12 is required; empirically the string round trip is
+        # bit-exact, so we check that too.
         self.assertTrue(np.allclose(recovered, angles, atol=1e-12))
         self.assertTrue(np.array_equal(recovered, angles))
 
@@ -78,16 +80,11 @@ class TestEulerAngleCircuitHelpers(BaseCase):
         with self.assertRaises(ValueError):
             circuit_from_euler_angles(np.zeros((3, 2)), j=0.5)
 
-    def test_euler_angles_from_circuit_requires_gu_layer(self):
-        # NOTE (plan Sec 3 step 5 / inline fix 6): the plan calls for
-        # `euler_angles_from_circuit` to return a `(0, 3)` array for zero `Gu` layers
-        # instead of raising, but that production change is dispositioned to a later
-        # step and has not landed yet (su2rb.py still raises here as of this test).
-        # This test pins the CURRENT (pre-fix) behavior; when the production fix
-        # lands, replace it with a test asserting the `(0, 3)` empty-shape return.
+    def test_euler_angles_from_circuit_empty_for_no_gu_layers(self):
+        # A circuit with no `Gu` layers returns a `(0, 3)` array rather than raising.
         c = Circuit(['rho0', 'Mdefault'], line_labels=('Q0',))
-        with self.assertRaises(ValueError):
-            euler_angles_from_circuit(c)
+        recovered = euler_angles_from_circuit(c)
+        self.assertEqual(recovered.shape, (0, 3))
 
 
 # ---------------------------------------------------------------------------
@@ -104,9 +101,8 @@ def _net_unitary(spinj, angles):
 
 class _SU2RBDesignChecks:
     """Mixin providing the shared design-level tests, parameterized by spin `j`.
-    `SU2RBDesign` is the only design class now (Sec 3 step 2 merged the old
-    character design into it), so there is no longer a `design_cls`/extra-attrs
-    axis to parameterize over -- just `j`."""
+    `SU2RBDesign` is the only design class, always hidden-first-gate, so there is
+    no `design_cls`/extra-attrs axis to parameterize over -- just `j`."""
 
     j = None
 
@@ -240,11 +236,12 @@ def _net_unitary_from_angles(spinj, angles):
 def _crossval_model(spinj, qudit_label='Q0'):
     """
     Build an ExplicitOpModel over an explicit single-qudit state space (dimension
-    `spinj.dim`, *not* auto-cast to a multi-qubit space -- see the Task 3.0 spike
-    notes' `default_space_for_udim` pitfall) whose `Gu` factory reproduces
-    `spinj.unitaries_from_angles`, and whose `rho{ell}`/`Mdefault` preps/POVM match
-    the SU2RBDesign circuit convention. Used to cross-validate SU2RBDataSimulator's
-    noiseless probabilities against pyGSTi's standard model.probabilities() path.
+    `spinj.dim`, constructed directly rather than via `default_space_for_udim`,
+    which would auto-cast a dimension like 4 or 8 to a multi-qubit space instead of
+    a single qudit) whose `Gu` factory reproduces `spinj.unitaries_from_angles`, and
+    whose `rho{ell}`/`Mdefault` preps/POVM match the SU2RBDesign circuit convention.
+    Used to cross-validate SU2RBDataSimulator's noiseless probabilities against
+    pyGSTi's standard model.probabilities() path.
     """
     from pygsti.baseobjs import ExplicitStateSpace
     from pygsti.baseobjs.basis import BuiltinBasis
@@ -579,11 +576,10 @@ class TestSU2RBDataSimulatorNoisePlacement(BaseCase):
 
 class TestSkipFirstNoiseForRegression(BaseCase):
     """
-    Regression coverage for plan Sec 3 step 4/known-fix 4: `SU2RBDataSimulator` no
-    longer dispatches noise-skipping on an `invert_from` design attribute -- every
-    `SU2RBDesign` is hidden-first-gate, so noise after the first gate is always
-    skipped. A stale edesign-like object still carrying an `invert_from` attribute
-    (e.g. from the pre-strip-down API) should trip the defensive `TypeError` in
+    Regression coverage: `SU2RBDataSimulator` does not dispatch noise-skipping on an
+    `invert_from` design attribute -- every `SU2RBDesign` is hidden-first-gate, so
+    noise after the first gate is always skipped. A stale edesign-like object still
+    carrying an `invert_from` attribute should trip the defensive `TypeError` in
     `_skip_first_noise_for` rather than being silently misinterpreted.
     """
 
@@ -679,18 +675,17 @@ class TestSU2RBDataSimulatorConstruction(BaseCase):
 class TestPredictedZeroNoiseVariance(BaseCase):
     """
     Golden-table tests against the SSR1RB columns of the paper's Tables
-    `variancewithk` and `variancewithj` (6-significant-figure values quoted in the
-    plan / paper LaTeX source), plus the input-validation contract of
-    `predicted_zero_noise_variance(j, k)`. The other variant columns (chiRB, R1RB,
-    SSchiRB) and the `variant`/`ell` parameters they required are gone under the
-    SSR1RB-only strip-down (plan Sec 3 step 3).
+    `variancewithk` and `variancewithj` (6-significant-figure values quoted from the
+    paper's LaTeX source), plus the input-validation contract of
+    `predicted_zero_noise_variance(j, k)`. `predicted_zero_noise_variance` only
+    implements the SSR1RB formula, so there are no other variant columns to test.
     """
 
     def _assert_close_6sf(self, actual, golden):
         # The golden literals themselves are only quoted to 6 significant figures, so
-        # allow a couple of ULPs of rounding slop on top of that (verified against a
-        # from-scratch double-precision recomputation of both paper tables during the
-        # original phase 5 development; see the phase 5 completion notes).
+        # allow a couple of ULPs of rounding slop on top of that (verified against an
+        # independent from-scratch double-precision recomputation of both paper
+        # tables).
         self.assertAlmostEqual(actual, golden, delta=abs(golden) * 2e-5 + 1e-9)
 
     def test_variancewithk_table_j_seven_halves(self):
@@ -888,9 +883,9 @@ class TestSyntheticSPAMRank1RBWeightNormalization(BaseCase):
     Locks the (2k+1)-and-charcore weight normalization scale of
     `SyntheticSPAMRank1RB._per_sequence_irrep_values` to the `su2-rb-conservative`
     branch's normative `character_transform`/`synspam_character_transform` (see
-    `SyntheticSPAMRank1RB`'s docstring) -- the rank-1 half of the former
-    parameterized weight-normalization test (the character-weighted half was
-    dropped along with `SyntheticSPAMCharacterRB`, plan Sec 3 step 5).
+    `SyntheticSPAMRank1RB`'s docstring). Only the rank-1 half is tested here, since
+    `SyntheticSPAMRank1RB` is the only surviving protocol -- there is no
+    character-weighted variant left to test.
 
     Unlike the fit-based end-to-end tests elsewhere in this module -- whose
     `A_k * f_k**x` fit absorbs any constant per-irrep scale error into `A_k` without
@@ -939,7 +934,7 @@ class TestSyntheticSPAMRank1RBWeightNormalization(BaseCase):
         family_mean = X.mean(axis=0)
 
         self.assertTrue(np.allclose(family_mean, reference, atol=1e-12, rtol=0),
-                         msg="family_mean=%s reference=%s" % (family_mean, reference))
+                         msg=f"family_mean={family_mean} reference={reference}")
 
 
 class TestSyntheticSPAMRank1RBNoiseless(BaseCase):
@@ -961,7 +956,7 @@ class TestSyntheticSPAMRank1RBNoiseless(BaseCase):
 
         # f_k consistent with 1 within a generous multiple of its own stderr.
         z = np.abs(results.decays - 1.0) / (results.decay_stderrs + 1e-300)
-        self.assertTrue(np.all(z[1:] < 6.0), msg="z-scores vs 1.0: %s" % z)
+        self.assertTrue(np.all(z[1:] < 6.0), msg=f"z-scores vs 1.0: {z}")
 
         # Order-of-magnitude cross-check against the paper's zero-noise variance
         # formula (predicted_zero_noise_variance), evaluated at the shortest depth.
@@ -972,7 +967,7 @@ class TestSyntheticSPAMRank1RBNoiseless(BaseCase):
             self.assertGreater(empirical, 0.0)
             ratio = empirical / predicted
             self.assertTrue(0.1 < ratio < 10.0,
-                             msg="k=%d predicted=%s empirical=%s ratio=%s" % (k, predicted, empirical, ratio))
+                             msg=f"k={k} predicted={predicted} empirical={empirical} ratio={ratio}")
 
         # Pin the *absolute* paper normalization directly on the raw (pre-fit)
         # per-depth sample means, not just the fitted decays: the A_k*f_k^x fit
@@ -984,7 +979,7 @@ class TestSyntheticSPAMRank1RBNoiseless(BaseCase):
         stderrs = results.per_irrep_stderrs
         z_by_depth = np.abs(means[1:, :] - 1.0) / stderrs[1:, :]
         self.assertTrue(np.all(z_by_depth < 6.0),
-                         msg="per-depth per_irrep_means z-scores vs 1.0: %s" % z_by_depth)
+                         msg=f"per-depth per_irrep_means z-scores vs 1.0: {z_by_depth}")
 
 
 class TestSyntheticSPAMRank1RBMatchesGateNoise(BaseCase):
@@ -1014,7 +1009,7 @@ class TestSyntheticSPAMRank1RBMatchesGateNoise(BaseCase):
         ])
         tol = 5.0 * results.decay_stderrs + 1e-3
         self.assertTrue(np.all(np.abs(results.decays - analytic_f) <= tol),
-                         msg="decays=%s analytic=%s tol=%s" % (results.decays, analytic_f, tol))
+                         msg=f"decays={results.decays} analytic={analytic_f} tol={tol}")
         self.assertAlmostEqual(results.decays[0], 1.0, delta=1e-6)
 
 
@@ -1027,10 +1022,11 @@ class TestSyntheticSPAMRank1RBApi(BaseCase):
         j = 0.5
         spinj = SpinJ(j)
         sim = SU2RBDataSimulator(spinj)
-        # >=3 depths: with exactly 2, the 2-parameter (a, f) fit always has zero
-        # residual degrees of freedom, which scipy.optimize.curve_fit treats as an
-        # indeterminate-covariance case (a warning promoted to a fit failure by this
-        # module -- see test_failed_irrep_fit_warns) regardless of data quality.
+        # >=3 depths: with exactly 2, the 2-parameter (a, f) fit has zero residual
+        # degrees of freedom, so scipy.optimize.curve_fit can't estimate a covariance
+        # and emits an OptimizeWarning (which pytest.ini's filterwarnings policy
+        # turns into an error by default) -- see test_failed_irrep_fit_warns, which
+        # exercises that scenario deliberately.
         design = SU2RBDesign(j, depths=[1, 2, 3], circuits_per_depth=3, seed=1)
         data = sim.run(design)
         with warnings.catch_warnings():
@@ -1095,27 +1091,56 @@ class TestSyntheticSPAMRank1RBApi(BaseCase):
 
     def test_failed_irrep_fit_warns(self):
         # A single-depth design under-determines the 2-parameter (a, f) fit for every
-        # irrep (scipy.optimize.curve_fit cannot estimate a covariance from one data
-        # point), which should surface as a UserWarning naming the failed irreps --
-        # not a silent all-nan `rates`/`rates_covariance` (F mixes every irrep
-        # together, so one failed fit poisons all of them).
+        # irrep: scipy.optimize.curve_fit still finds a parameter estimate from the
+        # single data point, but can't estimate its covariance, and warns
+        # (OptimizeWarning) rather than raising. This is therefore an honest inf
+        # standard error, not a fit failure: success stays True and decays/rates
+        # remain finite; only their uncertainty is unknown. See
+        # test_genuine_irrep_fit_failure_warns_rbfitfailurewarning below for the
+        # (distinct) genuine-failure path this used to be conflated with.
         j = 0.5
         design = SU2RBDesign(j, depths=[1], circuits_per_depth=2, seed=0)
         data = SU2RBDataSimulator(j).run(design)
-        with self.assertWarns(UserWarning) as cm:
+        with self.assertWarns(OptimizeWarning):
             results = SyntheticSPAMRank1RB().run(data)
+        self.assertTrue(np.all(np.isinf(results.decay_stderrs)))
+        self.assertTrue(np.all(np.isfinite(results.decays)))
+        self.assertTrue(np.all(np.isfinite(results.rates)))
+        self.assertTrue(all(fit.success for fit in results.fits))
+
+    def test_genuine_irrep_fit_failure_warns_rbfitfailurewarning(self):
+        # A genuine per-irrep fit failure (as opposed to the merely-unestimable-
+        # covariance case above) should surface as the pyGSTi-native
+        # RBFitFailureWarning, and should poison every entry of
+        # `rates`/`rates_covariance` with nan -- not just the failed irrep's -- since
+        # F mixes all irreps together. Drives `_fit_and_get_rates` directly with a
+        # hand-crafted series (irrep 1 is all-nan, which scipy.optimize.curve_fit
+        # rejects outright with a ValueError) so the genuine-failure branch of
+        # `_fit_irrep_decay` is exercised deterministically.
+        j = 0.5
+        spinj = SpinJ(j)
+        F = spinj.decay_recoupling_matrix
+        x = np.array([2.0, 3.0, 4.0])
+        per_irrep_series = np.array([
+            [1.0, 1.0, 1.0],
+            [np.nan, np.nan, np.nan],
+        ])
+        with self.assertWarns(RBFitFailureWarning) as cm:
+            fits, f, sigma_f, p, cov_p = SyntheticSPAMRank1RB()._fit_and_get_rates(x, per_irrep_series, F)
         self.assertIn('irrep', str(cm.warning))
-        self.assertTrue(np.all(np.isnan(results.rates)))
+        self.assertEqual([fit.success for fit in fits], [True, False])
+        self.assertTrue(np.all(np.isnan(p)))
+        self.assertTrue(np.all(np.isnan(cov_p)))
 
 
 class TestSyntheticSPAMRank1RBSpamRobustness(BaseCase):
     """
-    The paper's central SPAM-robustness signature, reformulated for the SSR1RB-only
-    strip-down (plan Sec 0 / Sec 3 step 5).
+    The paper's central SPAM-robustness signature: `SyntheticSPAMRank1RB` stays
+    unbiased under a SPAM perturbation that would bias an unweighted estimator.
 
-    Every surviving `SU2RBDesign` is hidden-first-gate (Sec 3 step 2 merged the old
-    net-identity ("plain SSRB", `invert_from=0`) circuit convention into it), so its
-    unweighted `diag(M P M^T)[k]` sandwich already averages to (statistically) zero
+    Every `SU2RBDesign` is hidden-first-gate (there is no net-identity, "plain
+    SSRB", `invert_from=0` circuit convention to fall back on), so its unweighted
+    `diag(M P M^T)[k]` sandwich already averages to (statistically) zero
     for k > 0 *regardless of SPAM correctness*: a Haar-random hidden first gate
     integrates any unweighted, nontrivial-irrep contribution to zero by Legendre
     orthogonality, with or without a SPAM perturbation. (Verified numerically while
@@ -1235,7 +1260,7 @@ class TestSyntheticSPAMRank1RBSpamRobustness(BaseCase):
         results_r1 = SyntheticSPAMRank1RB().run(data_perturbed)
 
         z_r1 = np.abs(results_r1.decays - analytic_f) / results_r1.decay_stderrs
-        self.assertTrue(np.all(z_r1[1:] < 6.0), msg="SSR1RB z-scores vs analytic: %s" % z_r1)
+        self.assertTrue(np.all(z_r1[1:] < 6.0), msg=f"SSR1RB z-scores vs analytic: {z_r1}")
 
         # --- Unweighted foil, on freshly-sampled net-identity sequences (see this
         # --- class's docstring for why the hidden-gate design's own data can't be
@@ -1255,7 +1280,7 @@ class TestSyntheticSPAMRank1RBSpamRobustness(BaseCase):
         target = analytic_f ** m
         z_unweighted_ideal = np.abs(mean_ideal - target) / se_ideal
         self.assertTrue(np.all(z_unweighted_ideal[1:] < 6.0),
-                         msg="unweighted foil (ideal SPAM) z-scores vs analytic: %s" % z_unweighted_ideal)
+                         msg=f"unweighted foil (ideal SPAM) z-scores vs analytic: {z_unweighted_ideal}")
         z_unweighted_perturbed = np.abs(mean_perturbed - target) / se_perturbed
         self.assertTrue(np.all(z_unweighted_perturbed[1:] > 8.0),
-                         msg="unweighted foil (perturbed SPAM) z-scores vs analytic: %s" % z_unweighted_perturbed)
+                         msg=f"unweighted foil (perturbed SPAM) z-scores vs analytic: {z_unweighted_perturbed}")

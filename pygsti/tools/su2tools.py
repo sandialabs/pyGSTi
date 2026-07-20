@@ -2,16 +2,13 @@
 Representation-theoretic tools for the special unitary group SU(2), generalized to
 arbitrary spin j.
 
-This module generalizes the spin-7/2-specific tooling that originally lived on the
-`su2-rb-conservative` branch (a hardcoded `Spin72` subclass of a hand-rolled `SU2`
-class) to arbitrary spin via a single `SpinJ` class plus a set of module-level,
+This module provides a single `SpinJ` class plus a set of module-level,
 representation-independent SU(2) group utilities (Haar sampling of Euler angles,
 Euler-angle <-> 2x2-unitary conversions, composition/inversion of Euler-angle
-sequences, and the irrep character functions).
+sequences, and the irrep character functions), for arbitrary spin j.
 
-Conventions (see `active-project/su2-synthetic-spam-rb-plan.md` Section 3 for the
-normative reference card, and the paper "Randomized Benchmarking with Synthetic
-Quantum Circuits" for the equations cited below):
+Conventions (see the paper "Randomized Benchmarking with Synthetic Quantum Circuits"
+for the equations cited below):
 
 - `d = 2j + 1` is the dimension of the spin-j representation; irreps of the "square"
   representation (the one relevant to superoperators, i.e. j (x) j) are labeled by
@@ -31,7 +28,7 @@ representation-independent group utilities; the instance's own representation fo
 last (leftmost factor).
 """
 # ***************************************************************************************************
-# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -42,6 +39,7 @@ last (leftmost factor).
 import functools as _functools
 import math as _math
 from fractions import Fraction as _Fraction
+from typing import List, Optional, Tuple, Union
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -89,11 +87,11 @@ def _validate_spin(j):
     if isinstance(j, _Fraction):
         two_j_frac = 2 * j
         if two_j_frac.denominator != 1:
-            raise ValueError("j = %s is not an integer or half-integer (2*j must be an integer)" % j)
+            raise ValueError(f"j = {j} is not an integer or half-integer (2*j must be an integer)")
         two_j = two_j_frac.numerator
     elif isinstance(j, (int, float)):
         if isinstance(j, float) and not _math.isfinite(j):
-            raise ValueError("j must be finite (got %r)" % j)
+            raise ValueError(f"j must be finite (got {j!r})")
         two_j_val = 2 * j
         two_j = round(two_j_val)
         if two_j_val != two_j:
@@ -101,12 +99,13 @@ def _validate_spin(j):
             # in binary floating point for every valid half-integer j (halving is exact),
             # so there is no legitimate rounding error to tolerate here. Matches the
             # exactness convention used by pygsti.tools.wignersymbols._as_half_integer.
-            raise ValueError("j = %r is not an integer or half-integer (2*j must be an integer)" % j)
+            raise ValueError(f"j = {j!r} is not an integer or half-integer (2*j must be an integer)")
     else:
-        raise TypeError("j must be an int, float, or Fraction, not %s" % type(j).__name__)
+        raise TypeError(f"j must be an int, float, or Fraction, not {type(j).__name__}")
     if two_j < 0:
-        raise ValueError("j must be non-negative (got %s)" % j)
-    return float(two_j) / 2.0, two_j
+        raise ValueError(f"j must be non-negative (got {j})")
+    j_float = float(two_j) / 2.0
+    return j_float, two_j
 
 
 def _spin_generators(j, dim, spins):
@@ -120,9 +119,9 @@ def _spin_generators(j, dim, spins):
     off = _np.empty(dim - 1)
     for i in range(dim - 1):
         m = spins[i]
-        # Standard ladder-operator matrix element: <m-1|J-|m> = sqrt(j(j+1) - m(m-1)).
-        # Jx = (J+ + J-)/2 and Jy = (J+ - J-)/(2i) then have these (real) off-diagonals.
         off[i] = 0.5 * _math.sqrt(j * (j + 1) - m * (m - 1))
+        # ^ Standard ladder-operator matrix element: <m-1|J-|m> = sqrt(j(j+1) - m(m-1)).
+        #   Jx = (J+ + J-)/2 and Jy = (J+ - J-)/(2i) then have these (real) off-diagonals.
     Jx = _np.diag(off, 1) + _np.diag(off, -1)
     Jy = _np.diag(-1j * off, 1) + _np.diag(1j * off, -1)
     return Jx, Jy, Jz
@@ -151,11 +150,11 @@ def _check_su2_generators(Jx, Jy, Jz, tol=1e-10):
         scale = 1.0
 
     diff = bracket(Jx, Jy) - 1j * scale * Jz
-    assert is_zero(diff), '[Jx, Jy] != i*scale*Jz up to tolerance %s' % tol
+    assert is_zero(diff), f'[Jx, Jy] != i*scale*Jz up to tolerance {tol}'
     diff = bracket(Jx, Jz) + 1j * scale * Jy
-    assert is_zero(diff), '[Jx, Jz] != -i*scale*Jy up to tolerance %s' % tol
+    assert is_zero(diff), f'[Jx, Jz] != -i*scale*Jy up to tolerance {tol}'
     diff = bracket(Jy, Jz) - 1j * scale * Jx
-    assert is_zero(diff), '[Jy, Jz] != i*scale*Jx up to tolerance %s' % tol
+    assert is_zero(diff), f'[Jy, Jz] != i*scale*Jx up to tolerance {tol}'
 
 
 def _build_clebsch_gordan_cob(j, dim, spins):
@@ -204,11 +203,10 @@ def _irrep_projectors(block_sizes, cob):
     Since `cob` acts on (vectorized) operators as `new = cob @ old`, the rows of
     `cob` -- not its columns -- are the block's basis vectors expressed in the
     original coordinates; the projector for a block is therefore built from
-    `cob[start:stop, :].conj().T`, whose columns span that block's preimage.  (A
+    `cob[start:stop, :].conj().T`, whose columns span that block's preimage. A
     projector built from `cob`'s columns instead has the right rank/trace but does
     not commute with the representation matrices, so it is not a valid isotypic
-    projector -- this was verified numerically against the branch's hardcoded
-    spin-7/2 arrays.)
+    projector.
     """
     start = 0
     projectors = []
@@ -225,7 +223,8 @@ def _irrep_projectors(block_sizes, cob):
 # Module-level, representation-independent SU(2) group utilities
 # ***************************************************************************************************
 
-def batch_normal_expm_1jscales(eigvecs, eigvals, scales):
+def batch_normal_expm_1jscales(
+        eigvecs: _np.ndarray, eigvals: _np.ndarray, scales: Union[float, _np.ndarray]) -> _np.ndarray:
     """
     Efficiently compute a batch of matrix exponentials of a scaled normal operator.
 
@@ -262,7 +261,7 @@ def batch_normal_expm_1jscales(eigvecs, eigvals, scales):
     return batch_out
 
 
-def distance_mod_phase(U1, U2):
+def distance_mod_phase(U1: _np.ndarray, U2: _np.ndarray) -> float:
     """
     Return `min{ ||U1 - z*U2|| : |z| = 1 }`, the Frobenius-norm distance between
     `U1` and `U2` up to an overall (physically irrelevant) global phase on `U2`.
@@ -270,10 +269,13 @@ def distance_mod_phase(U1, U2):
     scale = _np.vdot(U2, U1)
     scale /= abs(scale)
     delta = U1 - scale * U2
-    return _spl.norm(delta)
+    distance = _spl.norm(delta)
+    return distance
 
 
-def random_euler_angles(size=1, rng=None):
+def random_euler_angles(
+        size: Union[int, Tuple[int, ...]] = 1,
+        rng: Optional[_np.random.Generator] = None) -> Tuple[_np.ndarray, _np.ndarray, _np.ndarray]:
     """
     Sample ZXZ Euler angles for Haar-random elements of SU(2).
 
@@ -300,7 +302,7 @@ def random_euler_angles(size=1, rng=None):
     return alpha, beta, gamma
 
 
-def angles_from_2x2_unitaries(R):
+def angles_from_2x2_unitaries(R: _np.ndarray) -> Tuple[_np.ndarray, _np.ndarray, _np.ndarray]:
     """
     Recover ZXZ Euler angles from a batch of 2x2 (special) unitary matrices.
 
@@ -338,13 +340,14 @@ def angles_from_2x2_unitaries(R):
     return alpha, beta, gamma
 
 
-def angles_from_2x2_unitary(R):
+def angles_from_2x2_unitary(R: _np.ndarray) -> Tuple[float, float, float]:
     """Single-matrix convenience wrapper around `angles_from_2x2_unitaries`."""
     a, b, g = angles_from_2x2_unitaries(R)
-    return a.item(), b.item(), g.item()
+    angles = a.item(), b.item(), g.item()
+    return angles
 
 
-def axis_rotation_angle_from_2x2_unitaries(U):
+def axis_rotation_angle_from_2x2_unitaries(U: _np.ndarray) -> _np.ndarray:
     """
     Return the axis-rotation angle(s) theta in `[0, pi]` implied by a batch of 2x2
     (special) unitary matrices (i.e. `U = exp(-i*theta/2 * n.J)` for some axis `n`).
@@ -361,7 +364,7 @@ def axis_rotation_angle_from_2x2_unitaries(U):
     return theta
 
 
-def axis_rotation_angle_from_euler_angles(abg):
+def axis_rotation_angle_from_euler_angles(abg: _np.ndarray) -> _np.ndarray:
     """
     Return the axis-rotation angle(s) theta in `[0, pi]` implied by ZXZ Euler
     angles `abg = (alpha, beta, gamma)` (each a scalar, or `abg` shape `(3, N)`).
@@ -372,7 +375,7 @@ def axis_rotation_angle_from_euler_angles(abg):
     return theta
 
 
-def composition_asmatrix(angles):
+def composition_asmatrix(angles: _np.ndarray) -> _np.ndarray:
     """
     Return the 2x2 unitary representing the composition of a sequence of ZXZ
     Euler-angle gates.
@@ -401,7 +404,7 @@ def composition_asmatrix(angles):
     return R_composed
 
 
-def composition_inverse(alphas, betas, gammas):
+def composition_inverse(alphas: _np.ndarray, betas: _np.ndarray, gammas: _np.ndarray) -> Tuple[float, float, float]:
     """
     Return the ZXZ Euler angles of the inverse of the composed gate sequence
     `(alphas, betas, gammas)` (see `composition_asmatrix`).
@@ -409,7 +412,8 @@ def composition_inverse(alphas, betas, gammas):
     assert alphas.ndim == betas.ndim == gammas.ndim == 1
     R_composed = composition_asmatrix(_np.column_stack([alphas, betas, gammas]))
     invR = R_composed.T.conj()
-    return angles_from_2x2_unitary(invR)
+    inverse_angles = angles_from_2x2_unitary(invR)
+    return inverse_angles
 
 
 def _theta_from_angles(angles):
@@ -422,7 +426,7 @@ def _theta_from_angles(angles):
     return theta, squeeze
 
 
-def characters_from_euler_angles(irrep_labels, angles):
+def characters_from_euler_angles(irrep_labels: _np.ndarray, angles: _np.ndarray) -> _np.ndarray:
     """
     Evaluate the SU(2) irrep character functions `chi_k(theta) =
     sin((2k+1)*theta/2) / sin(theta/2)` at the axis-rotation angle(s) theta implied
@@ -447,10 +451,11 @@ def characters_from_euler_angles(irrep_labels, angles):
     out = _np.array([
         _np.sin((2 * k + 1) * theta_by_2) / _np.sin(theta_by_2) for k in irrep_labels
     ]).T
-    return out[0] if squeeze else out
+    result = out[0] if squeeze else out
+    return result
 
 
-def charactercores_from_euler_angles(irrep_labels, angles):
+def charactercores_from_euler_angles(irrep_labels: _np.ndarray, angles: _np.ndarray) -> _np.ndarray:
     """
     Evaluate the Legendre-polynomial "character cores" `P_k(cos(beta))` used by the
     rank-1 synthetic-SPAM RB variant, for ZXZ Euler angles `angles = (alpha, beta,
@@ -464,7 +469,8 @@ def charactercores_from_euler_angles(irrep_labels, angles):
     beta = angles2d[1, :]
     irrep_labels = _np.asarray(irrep_labels)
     out = _eval_legendre(irrep_labels[_np.newaxis, :], _np.cos(beta[:, _np.newaxis]))
-    return out[0] if squeeze else out
+    result = out[0] if squeeze else out
+    return result
 
 
 # ***************************************************************************************************
@@ -510,7 +516,7 @@ class SpinJ:
         The dimensions `2k + 1` of those irreps, in the same order as `irrep_labels`.
     """
 
-    def __init__(self, j):
+    def __init__(self, j: Union[int, float, _Fraction]) -> None:
         j_float, two_j = _validate_spin(j)
         dim = two_j + 1
         spins = _np.array([j_float - i for i in range(dim)])
@@ -535,7 +541,7 @@ class SpinJ:
     # -----------------------------------------------------------------
 
     @_functools.cached_property
-    def clebsch_gordan_cob(self):
+    def clebsch_gordan_cob(self) -> _np.ndarray:
         """
         The change-of-basis matrix C, with `C[(J,M),(m1,m2)] = <j m1; j m2 | J M>`.
         Rows are ordered with J ascending `0..2j` and M descending `J..-J` within
@@ -543,10 +549,11 @@ class SpinJ:
         paper's Mathematica-code comment for the historical spin-7/2 version of this
         convention.
         """
-        return _build_clebsch_gordan_cob(self.j, self.dim, self.spins)
+        cob = _build_clebsch_gordan_cob(self.j, self.dim, self.spins)
+        return cob
 
     @_functools.cached_property
-    def superop_stdmx_cob(self):
+    def superop_stdmx_cob(self) -> _np.ndarray:
         """
         The full block-diagonalizer of the standard-basis superoperator
         representation: `C @ kron(expm(i*pi*Jy), I)`.  For a unitary U in this
@@ -556,53 +563,61 @@ class SpinJ:
         the two tensor-factor orderings give the same block structure here).
         """
         expm_i_pi_Jy = self.expm_iJy(_np.pi)[0]
-        return self.clebsch_gordan_cob @ _np.kron(expm_i_pi_Jy, _np.eye(self.dim))
+        cob = self.clebsch_gordan_cob @ _np.kron(expm_i_pi_Jy, _np.eye(self.dim))
+        return cob
 
     @_functools.cached_property
-    def irrep_stdmx_projectors(self):
+    def irrep_stdmx_projectors(self) -> List[_np.ndarray]:
         """
         The list of orthogonal projectors (one per irrep, ordered as in
         `irrep_labels`) onto each isotypic component of the standard-basis
         superoperator representation, expressed in the original (pre-change-of-
         basis) coordinates.
         """
-        return _irrep_projectors(self.irrep_block_sizes, self.superop_stdmx_cob)
+        projectors = _irrep_projectors(self.irrep_block_sizes, self.superop_stdmx_cob)
+        return projectors
 
     @_functools.cached_property
-    def synthetic_spam_matrix(self):
+    def synthetic_spam_matrix(self) -> _np.ndarray:
         """
         The SPAM-synthesis matrix M (paper eq. "Mmaintext"):
         `M[k, idx(ell)] = sqrt((2k+1)/(2j+1)) * <j ell; k 0 | j ell>`, with rows
         `k = 0..2j` and columns `ell` ranging over `spins` (i.e. `j` down to `-j`).
         M is orthogonal (`M @ M.T = I`) for every j.
         """
-        return _build_synthetic_spam_matrix(self.j, self.dim, self.spins)
+        M = _build_synthetic_spam_matrix(self.j, self.dim, self.spins)
+        return M
 
     @_functools.cached_property
-    def decay_recoupling_matrix(self):
+    def decay_recoupling_matrix(self) -> _np.ndarray:
         """
         The decay/rate recoupling matrix F (paper eq. "recoupling", normalized-rates
         convention): `F[k,k'] = (2j+1) * (-1)^(2j+k+k') * {k j j; k' j j}_6j`. F is
         symmetric with an all-ones row/column 0. Per-irrep decay rates `p` are
         recovered from per-irrep decay parameters `f` via `p = solve(F, f)`.
         """
-        return _build_decay_recoupling_matrix(self.j, self.dim)
+        F = _build_decay_recoupling_matrix(self.j, self.dim)
+        return F
 
     # -----------------------------------------------------------------
     # Methods
     # -----------------------------------------------------------------
 
-    def expm_iJx(self, thetas):
+    def expm_iJx(self, thetas: Union[float, _np.ndarray]) -> _np.ndarray:
         """Batch-evaluate `expm(1j * theta * Jx)` for each `theta` in `thetas`."""
         thetas = _np.atleast_1d(thetas)
-        return batch_normal_expm_1jscales(self.VJx, self.eigJx, thetas)
+        result = batch_normal_expm_1jscales(self.VJx, self.eigJx, thetas)
+        return result
 
-    def expm_iJy(self, thetas):
+    def expm_iJy(self, thetas: Union[float, _np.ndarray]) -> _np.ndarray:
         """Batch-evaluate `expm(1j * theta * Jy)` for each `theta` in `thetas`."""
         thetas = _np.atleast_1d(thetas)
-        return batch_normal_expm_1jscales(self.VJy, self.eigJy, thetas)
+        result = batch_normal_expm_1jscales(self.VJy, self.eigJy, thetas)
+        return result
 
-    def unitaries_from_angles(self, alpha, beta, gamma):
+    def unitaries_from_angles(
+            self, alpha: Union[float, _np.ndarray], beta: Union[float, _np.ndarray],
+            gamma: Union[float, _np.ndarray]) -> _np.ndarray:
         """
         Construct spin-j-representation unitaries `exp(i*alpha*Jz) @ exp(i*beta*Jx)
         @ exp(i*gamma*Jz)` from batches of ZXZ Euler angles.
@@ -628,9 +643,10 @@ class SpinJ:
         right = (_np.exp(1j * alpha[:, _np.newaxis] * dJz[_np.newaxis, :]))[:, :, _np.newaxis]
         center = self.expm_iJx(beta)
         left = (_np.exp(1j * gamma[:, _np.newaxis] * dJz[_np.newaxis, :]))[:, _np.newaxis, :]
-        return left * center * right
+        unitaries = left * center * right
+        return unitaries
 
-    def stdmx_twirl(self, A):
+    def stdmx_twirl(self, A: _np.ndarray) -> _np.ndarray:
         """
         Twirl the (Hermitian, standard-basis) superoperator `A` over SU(2), i.e.
         project it onto the space of operators that are scalar on each isotypic
@@ -642,7 +658,7 @@ class SpinJ:
         tA = sum(coeffs[i] * P for i, P in enumerate(projectors))
         return tA
 
-    def all_characters_from_unitary(self, U):
+    def all_characters_from_unitary(self, U: _np.ndarray) -> _np.ndarray:
         """
         Return the irrep characters `chi_k` (k = 0..2j, i.e. one per entry of
         `irrep_labels`) implied by the spin-j-representation unitary `U`, computed
@@ -656,11 +672,13 @@ class SpinJ:
         for b_sz in self.irrep_block_sizes:
             out.append(_np.sum(diag[idx:idx + b_sz]))
             idx += b_sz
-        return _np.array(out).reshape((1, -1))
+        characters = _np.array(out).reshape((1, -1))
+        return characters
 
 
 @_functools.lru_cache(maxsize=1)
 def _fundamental_spinj():
     """The spin-1/2 (fundamental) `SpinJ` instance used by the group-level Euler-angle
     composition utilities (`composition_asmatrix`, `composition_inverse`)."""
-    return SpinJ(_Fraction(1, 2))
+    fundamental = SpinJ(_Fraction(1, 2))
+    return fundamental

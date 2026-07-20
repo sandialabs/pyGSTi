@@ -218,3 +218,27 @@ class MatrixToolsTester(BaseCase):
         self.assertFalse(np.allclose(N @ N.conj().T, N.conj().T @ N))
         with self.assertRaises(ValueError):
             mt.eigendecomposition(N, assume_normal=True)
+
+    def test_eigenvalues_assume_normal_matches_full_eig(self):
+        # Regression test: eigenvalues(assume_normal=True)'s Schur-decomposition path
+        # used to read diag(Z) (the Schur decomposition's unitary factor) instead of
+        # diag(T) (the triangular factor whose diagonal actually holds the
+        # eigenvalues) -- a pre-existing bug on develop, independent of the
+        # assume_hermitian-vs-assume_normal inference fixed in eigendecomposition
+        # above. Use a normal, non-Hermitian matrix so assume_normal=True actually
+        # exercises the Schur path (a Hermitian input would take the eigh path
+        # instead, per eigenvalues' own Hermiticity-first inference).
+        rng = np.random.default_rng(1)
+        diag = np.array([1 + 2j, 3 - 1j, 0.5j])
+        Q = spl.qr(rng.standard_normal((3, 3)) + 1j * rng.standard_normal((3, 3)))[0]
+        M = Q @ np.diag(diag) @ Q.conj().T
+        self.assertFalse(np.allclose(M, M.conj().T))
+
+        actual = mt.eigenvalues(M, assume_normal=True)
+        expected = np.linalg.eigvals(M)
+
+        def sort_key(z):
+            return (round(z.real, 8), round(z.imag, 8))
+
+        self.assertArraysAlmostEqual(
+            np.array(sorted(actual, key=sort_key)), np.array(sorted(expected, key=sort_key)))

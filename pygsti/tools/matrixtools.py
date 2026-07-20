@@ -957,8 +957,8 @@ def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assu
         m /= 2
         return _np.linalg.eigvalsh(m)
     elif assume_normal:
-        temp = _spl.schur(m, output='complex')
-        evals = _np.diag(temp[1])
+        T, _ = _spl.schur(m, output='complex')
+        evals = _np.diag(T)
         return evals
     else:
         return _np.linalg.eigvals(m)
@@ -978,18 +978,22 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
         If True, `m` is (numerically symmetrized and) eigendecomposed with
         `numpy.linalg.eigh`, which is faster and more numerically stable
         than the general-purpose path, and guarantees a unitary `evecs`. If
-        None (the default), this is inferred by testing `m` for Hermiticity
-        (unless `assume_normal` is True, see below).
+        None (the default), this is inferred by testing `m` for Hermiticity,
+        regardless of `assume_normal`: Hermitian matrices are a special case
+        of normal matrices, and the Hermiticity test is much cheaper than the
+        Schur decomposition `assume_normal` would otherwise trigger, so a
+        Hermitian `m` always takes the `eigh` path.
 
     assume_normal : bool, optional
-        If True (and `assume_hermitian` is not True), `m` is assumed to be
-        a normal operator and is eigendecomposed via a complex Schur
-        decomposition, whose triangular factor is verified to be diagonal
-        (up to `tol`) -- i.e., the same approach used by this module's
-        `eign` function. This also guarantees a unitary `evecs`, and is a
-        reasonable middle ground between `assume_hermitian=True` and the
-        fully general (non-unitary `evecs`) path used when both
-        `assume_hermitian` and `assume_normal` are falsy.
+        If True, and `m` is not (found or assumed) to be Hermitian, `m` is
+        assumed to be a normal operator and is eigendecomposed via a complex
+        Schur decomposition, whose triangular factor is verified to be
+        diagonal (up to `tol`) -- i.e., the same approach used by this
+        module's `eign` function. This also guarantees a unitary `evecs`, and
+        is a reasonable middle ground between `assume_hermitian=True` and the
+        fully general (non-unitary `evecs`) path used when neither
+        `assume_hermitian` (whether passed or inferred) nor `assume_normal`
+        holds.
 
     tol : float, optional
         Only used when the `assume_normal` path is taken. The off-diagonal
@@ -1012,7 +1016,7 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
         path was taken).
     """
     if assume_hermitian is None:
-        assume_hermitian = (not assume_normal) and is_hermitian(m)
+        assume_hermitian = is_hermitian(m)
     if assume_hermitian:
         # Make sure it's Hermtian in exact arithmetic. This helps with
         # reproducibility across different implementations of LAPACK.

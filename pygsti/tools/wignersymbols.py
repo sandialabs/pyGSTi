@@ -16,7 +16,7 @@ packages are imported by this module; `sympy` is used only as an oracle in
 the associated unit tests (a testing-only dependency).
 """
 # ***************************************************************************************************
-# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -26,8 +26,11 @@ the associated unit tests (a testing-only dependency).
 
 import math as _math
 from fractions import Fraction as _Fraction
+from typing import Union
 
 __all__ = ['clebsch_gordan', 'wigner_6j']
+
+_HalfInteger = Union[int, float, _Fraction]
 
 
 def _as_half_integer(value, name):
@@ -50,26 +53,30 @@ def _as_half_integer(value, name):
     if isinstance(value, _Fraction):
         frac = value
     elif isinstance(value, bool):
-        # bool is a subclass of int; exclude it explicitly to avoid surprises.
-        raise TypeError("%s must be an int, float, or Fraction, not bool" % name)
+        raise TypeError(f"{name} must be an int, float, or Fraction, not bool")
+        # ^ bool is a subclass of int; exclude it explicitly to avoid surprises.
     elif isinstance(value, int):
         frac = _Fraction(value)
     elif isinstance(value, float):
         if not _math.isfinite(value):
-            raise ValueError("%s must be finite (got %r)" % (name, value))
+            raise ValueError(f"{name} must be finite (got {value!r})")
         two_value = 2 * value
         if two_value != round(two_value):
-            raise ValueError(
-                "%s = %r is not an integer or half-integer (2*%s must be an integer)"
-                % (name, value, name))
+            message = (
+                f"{name} = {value!r} is not an integer or half-integer "
+                f"(2*{name} must be an integer)"
+            )
+            raise ValueError(message)
         frac = _Fraction(round(two_value), 2)
     else:
-        raise TypeError("%s must be an int, float, or Fraction, not %s" % (name, type(value).__name__))
+        raise TypeError(f"{name} must be an int, float, or Fraction, not {type(value).__name__}")
 
     if (2 * frac).denominator != 1:
-        raise ValueError(
-            "%s = %s is not an integer or half-integer (2*%s must be an integer)"
-            % (name, frac, name))
+        message = (
+            f"{name} = {frac} is not an integer or half-integer "
+            f"(2*{name} must be an integer)"
+        )
+        raise ValueError(message)
     return frac
 
 
@@ -90,7 +97,7 @@ def _int_val(fraction_value):
     by construction.
     """
     assert fraction_value.denominator == 1, \
-        "internal error: expected an integer-valued Fraction, got %s" % fraction_value
+        f"internal error: expected an integer-valued Fraction, got {fraction_value}"
     return fraction_value.numerator
 
 
@@ -109,11 +116,14 @@ def _triangle_delta(j1, j2, j3):
     c = _as_nonneg_int(-j1 + j2 + j3)
     if a is None or b is None or c is None:
         return None
-    return _Fraction(_math.factorial(a) * _math.factorial(b) * _math.factorial(c),
-                      _math.factorial(perimeter_term))
+    result = _Fraction(_math.factorial(a) * _math.factorial(b) * _math.factorial(c),
+                        _math.factorial(perimeter_term))
+    return result
 
 
-def clebsch_gordan(j1, m1, j2, m2, j, m):
+def clebsch_gordan(
+        j1: _HalfInteger, m1: _HalfInteger, j2: _HalfInteger,
+        m2: _HalfInteger, j: _HalfInteger, m: _HalfInteger) -> float:
     """
     The Clebsch-Gordan coefficient <j1 m1; j2 m2 | j m>, evaluated exactly
     via Racah's formula (Condon-Shortley phase convention).
@@ -190,10 +200,12 @@ def clebsch_gordan(j1, m1, j2, m2, j, m):
     if squared_value == 0:
         return 0.0
     sign = 1 if total > 0 else -1
-    return sign * _math.sqrt(float(squared_value))
+    result = sign * _math.sqrt(float(squared_value))
+    return result
 
 
-def wigner_6j(j1, j2, j3, j4, j5, j6):
+def wigner_6j(j1: _HalfInteger, j2: _HalfInteger, j3: _HalfInteger,
+              j4: _HalfInteger, j5: _HalfInteger, j6: _HalfInteger) -> float:
     """
     The Wigner 6-j symbol {j1 j2 j3; j4 j5 j6}, evaluated exactly via
     Racah's formula.
@@ -249,4 +261,5 @@ def wigner_6j(j1, j2, j3, j4, j5, j6):
     if squared_value == 0:
         return 0.0
     sign = 1 if total > 0 else -1
-    return sign * _math.sqrt(float(squared_value))
+    result = sign * _math.sqrt(float(squared_value))
+    return result

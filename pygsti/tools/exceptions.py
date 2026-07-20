@@ -186,6 +186,18 @@ class ForwardSimDiagnosticWarning(UserWarning):
 class ClobberingWarning(UserWarning):
     """
     Inform the user that contradictory values have been encountered
-    in some operation, and that we'll adopt some heuristic for 
+    in some operation, and that we'll adopt some heuristic for
     choosing one of the values.
     """
+
+
+class RBFitFailureWarning(UserWarning):
+    """
+    Inform the user that a randomized-benchmarking decay/rate fit failed
+    (e.g. scipy.optimize.curve_fit raised an exception) for one or more
+    of the quantities an RB protocol tried to fit, and that results
+    derived from a shared fit (such as per-irrep rates recovered from a
+    common recoupling matrix) may consequently be entirely NaN rather
+    than just the failed piece.
+    """
+    pass
