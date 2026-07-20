@@ -167,7 +167,8 @@ def batch_tensor(
     Tensor together a sequence of Circuits padding smaller circuits to the length of the largest circuit
     with noisy idles.
     """
-    assert len(circuits) > 0
+    if len(circuits) < 2:
+        raise ValueError("batch_tensor requires at least two circuits to tensor together.")
     if __debug__:
         for num_lines in layer_mappers:
             if Label(()) in layer_mappers[num_lines]:
@@ -184,7 +185,7 @@ def batch_tensor(
             max_cir_len = max(max_cir_len, len(c))
     else:
         total_lines = sum([c.num_lines for c in circuits])
-        max_cir_len = max(*[len(c) for c in circuits])
+        max_cir_len = max([len(c) for c in circuits])
 
     s: Set[int] = set()
     for c, t in zip(circuits, target_lines):

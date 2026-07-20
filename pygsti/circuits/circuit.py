@@ -1347,19 +1347,7 @@ class Circuit(object):
             ret_layer = []
             layer_lbl = self.layertup[i]
 
-            if lines is None:  # Add idles only when lines is None
-                if layer_lbl.sslbls is None:
-                    if not layer_lbl.components:
-                        components = [_Label('I', line) for line in self._line_labels]
-                    else:
-                        components = [layer_lbl]
-                else:
-                    components = list(layer_lbl.components)
-                    for line in self._line_labels:
-                        if line not in layer_lbl.sslbls:
-                            components.append(_Label('I', line))
-            else:
-                components = list(layer_lbl.components)
+            components = list(layer_lbl.components)
 
             for l in components:
                 sslbls = get_sslbls(l)
@@ -2491,7 +2479,7 @@ class Circuit(object):
         assert(not self._static), "Cannot edit a read-only circuit!"
         self.insert_circuit_inplace(circuit, 0)
 
-    def tensor_circuit_inplace(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None):
+    def tensor_circuit_inplace(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None, idle_gate_name: Union[str, _Label]='Gi'):
         """
         The tensor product of this circuit and `circuit`.
 
@@ -2599,17 +2587,27 @@ class Circuit(object):
         # We need to pad with idle gates if the circuits are not the same length.
         if len(self) < len(circuit):
             while ind < len(circuit):
-                new_layers.append(circuit.layer_label(ind))
+                lbl = circuit.layer_label(ind)
+                if lbl.sslbls is not None:
+                    idle_lbls = [_Label(idle_gate_name, line) for line in self._line_labels]
+                    for idle_lbl in idle_lbls:
+                        lbl = lbl.concat(idle_lbl)
+                new_layers.append(lbl)
                 ind += 1
         else:
             while ind < len(self):
-                new_layers.append(self.layer_label(ind))
+                lbl = self.layer_label(ind)
+                if lbl.sslbls is not None:
+                    idle_lbls = [_Label(idle_gate_name, line) for line in circuit._line_labels]
+                    for idle_lbl in idle_lbls:
+                        lbl = lbl.concat(idle_lbl)
+                new_layers.append(lbl)
                 ind += 1
 
         self._labels = new_layers
         self._line_labels = new_line_labels  # essentially just reorders labels if needed
 
-    def tensor_circuit(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None) -> Circuit:
+    def tensor_circuit(self, circuit: Circuit, line_order: Union[None, List[Union[str, int]], Tuple[Union[str, int], ...]]=None, idle_gate_name: Union[str, _Label]='Gi') -> Circuit:
         """
         The tensor product of this circuit and `circuit`, returning a copy.
 
@@ -2634,7 +2632,7 @@ class Circuit(object):
         """
 
         cpy = self.copy(editable=True)
-        cpy.tensor_circuit_inplace(circuit, line_order)
+        cpy.tensor_circuit_inplace(circuit, line_order, idle_gate_name)
         if self._static: cpy.done_editing()
         return cpy
 

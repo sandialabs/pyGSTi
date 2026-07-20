@@ -165,6 +165,16 @@ class CircuitSplittingTester(BaseCase):
                 self.assertIn(qu, qubit_to_lane)
                 self.assertEqual(lane, qubit_to_lane[qu])
 
+    def test_batch_tensor_single_circuit(self):
+        c1 = _Circuit("Gx:0", line_labels=(0,))
+        idle_label = Label(())
+        labels_in_circuits = [Label('Gx', (0,)), idle_label]
+        map_d = {l: l for l in labels_in_circuits}
+        map_d[idle_label] = Label("Gi", 0)
+        layer_mappers = {1: map_d}
+        with self.assertRaises(ValueError):
+            batch_tensor([c1], layer_mappers, target_lines=((0,),))
+
     def test_batch_tensor_diff_lengths(self):
         c1 = _Circuit("Gx:0", line_labels=(0,))
         c2 = _Circuit("Gy:0Gz:0", line_labels=(0,))
@@ -181,9 +191,9 @@ class CircuitSplittingTester(BaseCase):
         expected_c = c1.tensor_circuit(c2.map_state_space_labels({0:1}))
 
         # manually construct the expected circuit
-        self.assertNotEqual(tensored_c, expected_c) # explicit idles.
+        self.assertEqual(tensored_c, expected_c) # now equal due to explicit idle padding
         self.assertEqual(tensored_c[0], expected_c[0])
-        self.assertEqual(tensored_c[1][1], expected_c[1])
+        self.assertEqual(tensored_c[1], expected_c[1])
 
     def test_batch_tensor_reorder(self):
         c1 = _Circuit("Gx:0", line_labels=(0,))

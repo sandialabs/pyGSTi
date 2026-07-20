@@ -1131,6 +1131,31 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(c.line_labels, (0, 1))
         self.assertEqual(c.depth, 3)
 
+    def test_tensor_circuit_tail_padding_with_idles_ok(self):
+        c1 = circuit.Circuit("Gx:0", line_labels=(0,), editable=True)
+        c2 = circuit.Circuit("Gy:1Gy:1Gy:1", line_labels=(1,), editable=True)
+        c1.tensor_circuit_inplace(c2, idle_gate_name='Gi')
+        c1.done_editing()
+        self.assertEqual(c1.depth, 3)
+        self.assertEqual(c1.line_labels, (0, 1))
+        # Layer 0: Gx:0, Gy:1 (concatenated)
+        # Layer 1: Gy:1, Gi:0 (padded with explicit Gi:0)
+        # Layer 2: Gy:1, Gi:0 (padded with explicit Gi:0)
+        self.assertEqual(c1[0], Label([('Gx', 0), ('Gy', 1)]))
+        self.assertEqual(c1[1], Label([('Gi', 0), ('Gy', 1)]))
+        self.assertEqual(c1[2], Label([('Gi', 0), ('Gy', 1)]))
+
+        # Also test with self being longer than incoming circuit
+        c1_long = circuit.Circuit("Gy:1Gy:1Gy:1", line_labels=(1,), editable=True)
+        c2_short = circuit.Circuit("Gx:0", line_labels=(0,), editable=True)
+        c1_long.tensor_circuit_inplace(c2_short, idle_gate_name='Gi')
+        c1_long.done_editing()
+        self.assertEqual(c1_long.depth, 3)
+        self.assertEqual(c1_long.line_labels, (1, 0))
+        self.assertEqual(c1_long[0], Label([('Gx', 0), ('Gy', 1)]))
+        self.assertEqual(c1_long[1], Label([('Gi', 0), ('Gy', 1)]))
+        self.assertEqual(c1_long[2], Label([('Gi', 0), ('Gy', 1)]))
+
     def test_extract_labels_nonstrict_filters_and_line_labels(self):
         # regression test for issue #756: the non-strict membership test was
         # always true (so no filtering happened) and the result's line labels
