@@ -1156,6 +1156,22 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(c1_long[1], Label([('Gi', 0), ('Gy', 1)]))
         self.assertEqual(c1_long[2], Label([('Gi', 0), ('Gy', 1)]))
 
+    def test_tensor_circuit_rejects_placeholder_line_labels(self):
+        # regression test: `self._line_labels == '*'` never matches because
+        # `_line_labels` is stored as the tuple `('*',)`, not the bare string
+        # '*', so this guard against tensoring underspecified circuits was
+        # dead code.
+        c1 = circuit.Circuit([[]])  # placeholder ('*',) line labels
+        self.assertEqual(c1.line_labels, ('*',))
+        c2 = circuit.Circuit("Gy:0", line_labels=(0,))
+        with self.assertRaises(ValueError):
+            c1.tensor_circuit(c2)
+
+        c3 = circuit.Circuit("Gx:0", line_labels=(0,))
+        c4 = circuit.Circuit([[]])  # placeholder ('*',) line labels
+        with self.assertRaises(ValueError):
+            c3.tensor_circuit(c4)
+
     def test_extract_labels_nonstrict_filters_and_line_labels(self):
         # regression test for issue #756: the non-strict membership test was
         # always true (so no filtering happened) and the result's line labels
@@ -1236,14 +1252,16 @@ class CircuitBugfixRegressionTester(BaseCase):
 
     def test_mutation_clears_lanes_cache(self):
         from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
-        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)", editable=True)
+        # The lanes cache is only trusted/populated for static (read-only) circuits.
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)")
         # First build/cache lanes
         q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c)
         compute_subcircuits(c, q2l, l2q, cache_lanes_in_circuit=True)
         self.assertIn("lanes", c.saved_auxinfo)
         self.assertNotEqual(c.saved_auxinfo["lanes"], {})
 
-        # Mutate the circuit
+        # Mutate the circuit via an editable copy
+        c = c.copy(editable=True)
         c.replace_gatename_with_idle_inplace("Gx")
         # finalization (done_editing) must clear lanes cache to {}
         c.done_editing()
@@ -1253,6 +1271,28 @@ class CircuitBugfixRegressionTester(BaseCase):
         q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c)
         compute_subcircuits(c, q2l, l2q, cache_lanes_in_circuit=True)
         self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_editable_circuit_does_not_use_or_populate_lanes_cache(self):
+        # Regression test: editable circuits can be mutated in-place without going
+        # through done_editing()/map_state_space_labels_inplace (the only two places
+        # that invalidate the lanes cache), so the cache must never be trusted for,
+        # or populated on, an editable circuit -- otherwise a subsequent in-place
+        # mutation could cause compute_subcircuits to silently return stale results.
+        from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
+        c = circuit.Circuit("Gx:0Gy:1", line_labels=(0, 1), editable=True)
+        q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c)
+
+        out1 = compute_subcircuits(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertIn(Label('Gx', 0), out1[0])
+        # No cache should have been written since the circuit is editable.
+        self.assertEqual(c.saved_auxinfo.get("lanes", {}), {})
+
+        # Mutate in place (no done_editing() call) and confirm the *fresh* content
+        # is reflected, not stale cached content.
+        c[0] = Label('Gz', 0)
+        out2 = compute_subcircuits(c, q2l, l2q)
+        self.assertIn(Label('Gz', 0), out2[0])
+        self.assertNotIn(Label('Gx', 0), out2[0])
 
     def test_rebuild_lanes_cache_when_empty(self):
         from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
@@ -1269,11 +1309,12 @@ class CircuitBugfixRegressionTester(BaseCase):
 
     def test_map_state_space_labels_clears_lanes_cache(self):
         from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
-        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)", editable=True)
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)")
         q2l, l2q = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c)
         compute_subcircuits(c, q2l, l2q, cache_lanes_in_circuit=True)
         self.assertNotEqual(c.saved_auxinfo["lanes"], {})
 
+        c = c.copy(editable=True)
         c.map_state_space_labels_inplace({0: 10, 1: 11})
         c.done_editing()
         self.assertEqual(c.saved_auxinfo["lanes"], {})

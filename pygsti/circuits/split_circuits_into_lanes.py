@@ -113,7 +113,8 @@ def compute_subcircuits(circuit: Circuit,
     if qubit_to_lanes is None or lane_to_qubits is None:
         qubit_to_lanes, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit)
 
-    if "lanes" in circuit.saved_auxinfo:
+    # The lanes cache is only trustworthy for *static* (read-only) circuits:
+    if circuit._static and "lanes" in circuit.saved_auxinfo:
         # Check if the lane info matches and I can just return that set up.
         if len(lane_to_qubits) == len(circuit.saved_auxinfo["lanes"]):
             # We may have this already in cache.

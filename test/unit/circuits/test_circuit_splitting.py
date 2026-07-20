@@ -107,10 +107,11 @@ class CircuitSplittingTester(BaseCase):
         circuit = build_circuit_with_multiple_qubit_gates_with_designated_lanes(num_qubits, depth, lane_eps, gates_to_num_used)
         qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit)
 
-        self.assertIn("lanes", circuit.saved_auxinfo)
-        self.assertEqual(list(circuit.saved_auxinfo["lanes"].keys()), [(0, 1, 2, 3, 4, 5)])
+        # The lanes cache is populated lazily, so nothing is cached yet.
+        self.assertNotIn("lanes", circuit.saved_auxinfo)
 
         sub_cirs = compute_subcircuits(circuit, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=True)
+        self.assertIn("lanes", circuit.saved_auxinfo)
         self.assertEqual(len(circuit.saved_auxinfo["lanes"].keys()), len(sub_cirs))
 
     def test_subcircuits_split_cache_miss(self):

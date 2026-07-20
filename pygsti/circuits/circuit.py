@@ -598,8 +598,9 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
+        # `saved_auxinfo["lanes"]` is a cache used by pygsti.circuits.split_circuits_into_lanes.
+        # It is populated lazily (see Circuit._cache_tensor_lanes)
         self.saved_auxinfo = {}
-        self.saved_auxinfo["lanes"] = {tuple(line_labels): list(self._labels)}
 
     #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
@@ -1351,7 +1352,9 @@ class Circuit(object):
 
         for i in layers:
             ret_layer = []
-            layer_lbl = self.layertup[i]
+            # Equivalent to `layer_lbl = self.layertup[i]`
+            raw_layer = self._labels[i]
+            layer_lbl = raw_layer if isinstance(raw_layer, _Label) else _Label(raw_layer)
 
             components = list(layer_lbl.components)
 
@@ -2548,9 +2551,9 @@ class Circuit(object):
         if len(overlap) > 0:
             raise ValueError(
                 "The line labels of `circuit` and this Circuit must be distinct, but overlap = %s!" % str(overlap))
-        if self._line_labels == '*':
+        if self._line_labels == ('*',):
             raise ValueError("The line labels of 'self', are underspecified and are currently the placeholder labels.")
-        if circuit._line_labels == '*':
+        if circuit._line_labels == ('*',):
             raise ValueError("The line labels of 'circuit', are underspecified and are currently the placeholder labels.")
 
         all_line_labels = set(self._line_labels + circuit._line_labels)
@@ -2648,23 +2651,42 @@ class Circuit(object):
         Store the tensor lanes in the circuit if appropriate.
         Note that this should only be called in the case that `sub_circuit_list`
         when tensored is equivalent to the current circuit.
+
+        This cache is only ever written to (or read from, see
+        `split_circuits_into_lanes.compute_subcircuits`) when the circuit is
+        static (read-only). Editable circuits can be mutated in-place (e.g.
+        via `__setitem__`, `replace_gatename_inplace`, `tensor_circuit_inplace`,
+        etc.) without going through `done_editing()` or
+        `map_state_space_labels_inplace` -- the only two places that invalidate
+        this cache -- so trusting/populating a cache on an editable circuit
+        could silently return stale results after such a mutation. Restricting
+        the cache to static circuits is safe because a static circuit's
+        `_labels`/`_line_labels` cannot be changed in place (every in-place
+        mutator asserts `not self._static` before touching them).
         """
+        if not self._static or len(self) == 0:
+            return self
 
-        if "lanes" in self.saved_auxinfo and len(self) > 0:
-            if len(self.saved_auxinfo["lanes"]) <= 1:
-                # We will update this because it is now believed that
-                # we are able to conduct the operation in cross talk free lanes.
-                qubits_used = set()
-                for qub_in_lane in lane_to_qubits.values():
-                    qubits_used = qubits_used.union(qub_in_lane)
+        # `saved_auxinfo["lanes"]` is populated lazily: if it hasn't been
+        # computed yet the key may simply be absent (or map to an empty/
+        # trivial single-lane dict), either of which we treat the same way as
+        # "not yet split into lanes".
+        current_lanes = self.saved_auxinfo.get("lanes")
+        if current_lanes is None or len(current_lanes) <= 1:
+            # We will update this because it is now believed that
+            # we are able to conduct the operation in cross talk free lanes.
+            qubits_used = set()
+            for qub_in_lane in lane_to_qubits.values():
+                qubits_used = qubits_used.union(qub_in_lane)
 
-                if len(qubits_used) != self.num_lines:
-                    # Do not update.
-                    return self
+            if len(qubits_used) != self.num_lines:
+                # Do not update.
+                return self
 
-                self.saved_auxinfo["lanes"] = {}  # Reset lanes info
-                for i, qubit_labels in lane_to_qubits.items():
-                    self.saved_auxinfo["lanes"][tuple(sorted(qubit_labels))] = sub_circuit_list[i]
+            new_lanes = {}
+            for i, qubit_labels in lane_to_qubits.items():
+                new_lanes[tuple(sorted(qubit_labels))] = sub_circuit_list[i]
+            self.saved_auxinfo["lanes"] = new_lanes
 
         return self
 
