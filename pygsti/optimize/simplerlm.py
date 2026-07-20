@@ -511,7 +511,7 @@ def simplish_leastsq(
         - `'max_evals'` (default `6`) : maximum number of trial objective evaluations
           performed per line search.
         - `'kappa'` (default `1.0`) : scale factor for the `'guarded'` oversize trigger:
-          a search is triggered when `|dx|^2 > kappa^2 * max(1, |x|^2)`.
+          a search is triggered when `|dx|^2 > kappa^2 * |x|^2`.
 
     Returns
     -------
@@ -707,9 +707,6 @@ def simplish_leastsq(
                 # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
                 ari.jtj_update_regularization(JTJ, pre_reg_data, mu)
 
-                #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
-                #assert(_np.isfinite(minus_JTf).all()), "Non-finite minus_JTf (inner)!" # NaNs tracking
-
                 try:
                     if profiler: profiler.memory_check("simplish_leastsq: before linsolve")
                     tm = _time.time()
@@ -776,9 +773,7 @@ def simplish_leastsq(
                 if ls_mode == 'always':
                     do_linesearch = True
                 elif ls_mode == 'guarded':
-                    do_linesearch = (step_clipped
-                                      or norm_dx > (ls_kappa**2) * max(1.0, norm_x)
-                                      or not _np.isfinite(norm_new_f))
+                    do_linesearch = step_clipped or norm_dx > (ls_kappa**2) * norm_x or not _np.isfinite(norm_new_f)
                 else:  # 'none'
                     do_linesearch = False
 
@@ -897,16 +892,9 @@ def simplish_leastsq(
                         best_x[:] = x[:]
                         best_x_state = (mu, nu, norm_f, f.copy())
 
-                #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
-                #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
-
                 break 
                 # ^ exit inner loop normally ...
             # end of inner loop
-            #
-            # x[:] = best_x[:]
-            # mu, nu, norm_f, f[:] = best_x_state
-            #
         # end of outer loop
         else:
             #if no break stmt hit, then we've exceeded max_iter
