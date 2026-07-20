@@ -574,6 +574,69 @@ class TestSU2RBDataSimulatorNoisePlacement(BaseCase):
             self.assertTrue(np.allclose(actual, expected, atol=1e-10))
 
 
+class TestSU2RBDataSimulatorNoiseFactory(BaseCase):
+    """`noise_channel` also accepts a callable `(alpha, beta, gamma) -> channel`
+    factory, called once per gate with that gate's own Euler angles, for
+    gate-dependent errors."""
+
+    def test_factory_matches_fixed_channel_when_gate_independent(self):
+        j = 1.5
+        spinj = SpinJ(j)
+        N = jz_dephasing(spinj, 0.3, power=1.0)
+
+        def factory(alpha, beta, gamma):
+            return N
+
+        sim_fixed = SU2RBDataSimulator(spinj, noise_channel=N)
+        sim_factory = SU2RBDataSimulator(spinj, noise_channel=factory)
+        self.assertFalse(sim_factory.is_noiseless)
+
+        design = SU2RBDesign(j, depths=[1, 3, 5], circuits_per_depth=3, seed=17)
+        data_fixed = sim_fixed.run(design)
+        data_factory = sim_factory.run(design)
+
+        for circuits_at_depth in design.circuit_lists:
+            for circuit in circuits_at_depth:
+                probs_fixed = _dataset_probs(data_fixed.dataset, circuit, spinj.dim)
+                probs_factory = _dataset_probs(data_factory.dataset, circuit, spinj.dim)
+                self.assertTrue(np.allclose(probs_fixed, probs_factory, atol=1e-12))
+
+    def test_gate_dependent_factory_matches_hand_computed_composition(self):
+        j = 1.5
+        spinj = SpinJ(j)
+
+        def factory(alpha, beta, gamma):
+            return jz_rotation(spinj, 0.05 * beta)
+
+        sim = SU2RBDataSimulator(spinj, noise_channel=factory)
+
+        angles = np.array([[0.3, 0.5, 0.1], [1.2, 0.9, 2.1]])
+        U0, U1 = spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
+        S0 = unitary_to_std_process_mx(U0)
+        S1 = unitary_to_std_process_mx(U1)
+        N0 = unitary_to_std_process_mx(jz_rotation(spinj, 0.05 * angles[0, 1]))
+        N1 = unitary_to_std_process_mx(jz_rotation(spinj, 0.05 * angles[1, 1]))
+
+        # The two per-gate noise channels must differ, or this test would not
+        # actually exercise gate-dependence.
+        self.assertFalse(np.allclose(N0, N1, atol=1e-6))
+
+        expected = N1 @ S1 @ N0 @ S0
+        actual = sim._compose_full(angles, skip_first_noise=False)
+        self.assertTrue(np.allclose(actual, expected, atol=1e-12))
+
+        # The gate-dependent result must differ from the noiseless composition and
+        # from either single fixed-channel composition (i.e. applying one gate's
+        # noise everywhere) -- confirming the factory is actually called per gate
+        # rather than once globally.
+        noiseless = S1 @ S0
+        fixed_n0_everywhere = N0 @ S1 @ N0 @ S0
+        fixed_n1_everywhere = N1 @ S1 @ N1 @ S0
+        self.assertFalse(np.allclose(actual, noiseless, atol=1e-6))
+        self.assertFalse(np.allclose(actual, fixed_n0_everywhere, atol=1e-6))
+        self.assertFalse(np.allclose(actual, fixed_n1_everywhere, atol=1e-6))
+
+
 class TestSkipFirstNoiseForRegression(BaseCase):
     """
     Regression coverage: `SU2RBDataSimulator` does not dispatch noise-skipping on an

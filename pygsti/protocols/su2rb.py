@@ -29,7 +29,7 @@ JSON aux data, rather than recovered by re-parsing the embedded `rho{ell}`/
 import math as _math
 import warnings as _warnings
 from fractions import Fraction as _Fraction
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as _np
 import pandas as _pd
@@ -446,23 +446,28 @@ class SU2RBDataSimulator(_proto.DataSimulator):
 
     Reads the design's `euler_angles` aux data directly -- it never parses circuit
     labels -- and builds the ZXZ-angle unitaries in batch via the instance's
-    `SpinJ`'s precomputed eigendecompositions, inserting a gate-independent noise
-    channel after every gate except the "hidden" first gate (every `SU2RBDesign` uses
-    that hidden-first-gate convention, so noise is always skipped there).
+    `SpinJ`'s precomputed eigendecompositions, inserting a noise channel after every
+    gate except the "hidden" first gate (every `SU2RBDesign` uses that
+    hidden-first-gate convention, so noise is always skipped there).
 
     Parameters
     ----------
     spinj : SpinJ or (int, float, or Fraction)
         The representation to simulate in, or a spin `j` from which one is built.
 
-    noise_channel : None, numpy array, optional
-        The gate-independent noise channel applied after each gate. `None` means no
-        noise (the identity channel). A `(dim, dim)` array is treated as a unitary and
-        converted to a superoperator. A `(dim**2, dim**2)` array is treated as a
-        superoperator directly (acting on row-major-raveled density matrices, i.e. in
-        the same convention as `pygsti.tools.optools.unitary_to_std_process_mx`). Use
-        `jz_dephasing`, `jz_rotation`, and/or `compose_noise_channels` (this module) to
-        build one.
+    noise_channel : None, numpy array, or callable, optional
+        The noise channel applied after each gate. `None` means no noise (the
+        identity channel). A `(dim, dim)` array is treated as a fixed unitary, applied
+        after every gate, and converted to a superoperator. A `(dim**2, dim**2)` array
+        is treated as a fixed superoperator directly (acting on row-major-raveled
+        density matrices, i.e. in the same convention as
+        `pygsti.tools.optools.unitary_to_std_process_mx`), applied after every gate.
+        A callable is treated as a gate-dependent noise factory: it is called once per
+        gate as `noise_channel(alpha, beta, gamma)` with that gate's own Euler angles,
+        and must return a `(dim, dim)` unitary or `(dim**2, dim**2)` superoperator to
+        apply after that gate. Use `jz_dephasing`, `jz_rotation`, and/or
+        `compose_noise_channels` (this module) to build a fixed channel or a factory's
+        per-gate return value.
 
     shots : int, optional
         If `None` (the default), the returned `DataSet` records exact probabilities
@@ -479,7 +484,8 @@ class SU2RBDataSimulator(_proto.DataSimulator):
         `spinj.dim`.
     """
 
-    def __init__(self, spinj: Union[_su2.SpinJ, int, float, _Fraction], noise_channel: Optional[_np.ndarray] = None,
+    def __init__(self, spinj: Union[_su2.SpinJ, int, float, _Fraction],
+                 noise_channel: Optional[Union[_np.ndarray, Callable[[float, float, float], _np.ndarray]]] = None,
                  shots: Optional[int] = None, seed: Optional[int] = None) -> None:
         super(SU2RBDataSimulator, self).__init__()
         if not isinstance(spinj, _su2.SpinJ):
@@ -488,50 +494,64 @@ class SU2RBDataSimulator(_proto.DataSimulator):
         self.dim = spinj.dim
         self.shots = shots
         self.seed = seed
-        self._noise_superop = self._resolve_noise_channel(noise_channel)
+        self._noise_superop, self._noise_factory = self._resolve_noise_channel(noise_channel)
 
     def _resolve_noise_channel(self, noise_channel):
         if noise_channel is None:
-            return None
-        noise_channel = _np.asarray(noise_channel)
+            return None, None
+        if callable(noise_channel):
+            return None, noise_channel
+        return self._channel_to_superop(noise_channel), None
+
+    def _channel_to_superop(self, channel):
+        """Validate and convert one `noise_channel`-shaped array (fixed or per-gate,
+        from a factory's return value) into a `(dim**2, dim**2)` superoperator."""
+        channel = _np.asarray(channel)
         dim = self.dim
         dim2 = dim * dim
-        if noise_channel.shape == (dim, dim):
-            superop = _unitary_to_std_process_mx(noise_channel)
-        elif noise_channel.shape == (dim2, dim2):
-            superop = noise_channel.astype(complex)
+        if channel.shape == (dim, dim):
+            superop = _unitary_to_std_process_mx(channel)
+        elif channel.shape == (dim2, dim2):
+            superop = channel.astype(complex)
         else:
             message = (
-                f"noise_channel must be None, a ({dim}, {dim}) unitary, or a "
-                f"({dim2}, {dim2}) superoperator; got shape {noise_channel.shape}"
+                f"noise_channel must be None, a ({dim}, {dim}) unitary, a "
+                f"({dim2}, {dim2}) superoperator, or a callable returning one of "
+                f"those; got shape {channel.shape}"
             )
             raise ValueError(message)
         return superop
 
     @property
     def is_noiseless(self) -> bool:
-        """True if this simulator's noise channel is the identity (`noise_channel=None`)."""
-        return self._noise_superop is None
+        """True if this simulator applies no noise (`noise_channel=None`)."""
+        return self._noise_superop is None and self._noise_factory is None
 
     # -----------------------------------------------------------------
     # Core composition machinery
     # -----------------------------------------------------------------
 
-    def _compose_full(self, angles, skip_first_noise):
+    def _compose_full(self, angles: _np.ndarray, skip_first_noise: bool) -> _np.ndarray:
         """
         The general (O(depth)) path: compose the `(dim**2, dim**2)` superoperator for
-        the full gate sequence `angles` (shape `(m+1, 3)`), inserting `self.
-        _noise_superop` after every gate except (if `skip_first_noise`) the first.
+        the full gate sequence `angles` (shape `(m+1, 3)`), inserting a noise
+        superoperator after every gate except (if `skip_first_noise`) the first. If
+        `noise_channel` was a fixed array, the same superoperator is inserted after
+        every gate; if it was a callable factory, the factory is called once per gate
+        with that gate's own `(alpha, beta, gamma)` row to get the channel inserted
+        after it.
         """
-        dim = self.dim
-        dim2 = dim * dim
+        dim2 = self.dim * self.dim
         Us = self.spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
         S = _np.eye(dim2, dtype=complex)
         skip_next_noise = skip_first_noise
-        for U in Us:
+        for row, U in zip(angles, Us):
             S = _unitary_to_std_process_mx(U) @ S
-            if not skip_next_noise and self._noise_superop is not None:
-                S = self._noise_superop @ S
+            if not skip_next_noise:
+                if self._noise_factory is not None:
+                    S = self._channel_to_superop(self._noise_factory(row[0], row[1], row[2])) @ S
+                elif self._noise_superop is not None:
+                    S = self._noise_superop @ S
             skip_next_noise = False
         return S
 
@@ -546,8 +566,8 @@ class SU2RBDataSimulator(_proto.DataSimulator):
         superop = _unitary_to_std_process_mx(U0)
         return superop
 
-    def _compose(self, angles, skip_first_noise):
-        if self._noise_superop is None and skip_first_noise:
+    def _compose(self, angles: _np.ndarray, skip_first_noise: bool) -> _np.ndarray:
+        if self.is_noiseless and skip_first_noise:
             return self._compose_shortcut(angles)
         return self._compose_full(angles, skip_first_noise)
 
