@@ -20,9 +20,9 @@ Circuit conventions (see the spike notes for the full rationale):
   same `Gu` layers but differ in their explicit `rho{ell}` prep label (`ell = 0..2j`,
   in `SpinJ.spins` order, i.e. `rho0` prepares `|j>` and `rho{2j}` prepares `|-j>`)
   and a shared `Mdefault` POVM label.
-- `prep_index`, `seq_index`, and `euler_angles` (plus, for the character design,
-  `characters`/`charcores`) are carried as `paired_with_circuit_attrs` JSON aux data
-  rather than being recovered by re-parsing the embedded `rho{ell}`/`Mdefault` labels.
+- `prep_index`, `seq_index`, `euler_angles`, and `charcores` are carried as
+  `paired_with_circuit_attrs` JSON aux data rather than being recovered by
+  re-parsing the embedded `rho{ell}`/`Mdefault` labels.
 """
 # ***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -60,7 +60,6 @@ __all__ = [
     'circuit_from_euler_angles',
     'euler_angles_from_circuit',
     'SU2RBDesign',
-    'SU2CharacterRBDesign',
     'jz_dephasing',
     'jz_rotation',
     'compose_noise_channels',
@@ -156,28 +155,25 @@ def euler_angles_from_circuit(circuit):
     return _np.array(rows, dtype=float)
 
 
-def _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, seed, qudit_label, invert_from):
+def _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, seed, qudit_label):
     """
-    Core RB circuit sampler shared by `SU2RBDesign` and `SU2CharacterRBDesign`.
+    Core RB circuit sampler for `SU2RBDesign`.
 
     Ports `raw_su2_rb_design` from the `su2-rb-conservative` branch: for each depth
     `m`, samples `circuits_per_depth` length-`m` Haar-random Euler-angle sequences and
-    appends an inverting final gate computed from the composition of rows
-    `invert_from..m-1` (so the net ideal composition of all `m+1` rows is the identity
-    when `invert_from == 0`, or the "hidden" first gate when `invert_from == 1`).
-    Each sampled sequence yields `dim` circuits (one per prep).
+    appends an inverting final gate computed from the composition of rows `1..m-1`, so
+    the net ideal composition of all `m+1` rows is the random "hidden" first gate (row
+    0), not the identity. Each sampled sequence yields `dim` circuits (one per prep).
 
     `idealout_lists` entries are `(str(ell),)`, i.e. the prep index of the circuit
-    they're attached to. This is a genuine deterministic ideal outcome when
-    `invert_from == 0` (net composition is the identity, so state `ell` should be
-    recovered), but for `invert_from == 1` (`SU2CharacterRBDesign`) the net
-    composition is the random "hidden" first gate, which generally does *not* fix
-    `ell`, so these entries are placeholders rather than true ideal outcomes -- see
-    `SU2CharacterRBDesign`'s docstring. They are populated uniformly here (rather than
-    being `None` or omitted) only because `BenchmarkingDesign.__init__` requires an
-    `ideal_outs` entry for every circuit; generic idealout-consuming analyses (e.g.
-    anything that computes a "success probability" from `idealout_lists`) should not
-    be silently applied to `SU2CharacterRBDesign` data on this basis.
+    they're attached to. Because the net ideal composition is the random hidden first
+    gate (not the identity), these are placeholders rather than genuine deterministic
+    ideal outcomes -- see `SU2RBDesign`'s docstring. They are populated uniformly here
+    (rather than being `None` or omitted) only because `BenchmarkingDesign.__init__`
+    requires an `ideal_outs` entry for every circuit; generic idealout-consuming
+    analyses (e.g. anything that computes a "success probability" from
+    `idealout_lists`) should not be silently applied to this design's data on that
+    basis.
 
     Returns
     -------
@@ -207,7 +203,7 @@ def _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, seed, qudit
             a, b, g = _su2.random_euler_angles(m, rng=rng)
             angles[:m, 0], angles[:m, 1], angles[:m, 2] = a, b, g
             a_inv, b_inv, g_inv = _su2.composition_inverse(
-                angles[invert_from:m, 0], angles[invert_from:m, 1], angles[invert_from:m, 2])
+                angles[1:m, 0], angles[1:m, 1], angles[1:m, 2])
             angles[m, :] = (a_inv, b_inv, g_inv)
             firstgate_angles_at_seq.append(angles[0, :].copy())
 
@@ -215,8 +211,7 @@ def _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, seed, qudit
             for ell in range(dim):
                 c = circuit_from_euler_angles(angles, j_float, qudit_label, prep_index=ell)
                 circuits_at_depth.append(c)
-                # Placeholder ideal outcome (see this function's docstring): only a
-                # genuine deterministic ideal outcome when invert_from == 0.
+                # Placeholder ideal outcome (see this function's docstring).
                 idealouts_at_depth.append((str(ell),))
                 euler_angles_at_depth.append(angles_as_list)
                 seq_index_at_depth.append(s)
@@ -236,15 +231,27 @@ def _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, seed, qudit
 
 class SU2RBDesign(_vb.BenchmarkingDesign):
     """
-    Experiment design for synthetic SPAM randomized benchmarking (SSRB) of an
-    arbitrary-spin SU(2) system.
+    Experiment design for synthetic SPAM randomized benchmarking of an arbitrary-spin
+    SU(2) system.
 
     For each depth `m` in `depths`, samples `circuits_per_depth` length-`m`
-    Haar-random SU(2) Euler-angle sequences, appends an inverting final gate so that
-    the net ideal composition of the full `m+1`-gate sequence is the identity, and
-    emits `2*j + 1` circuits per sampled sequence -- one per Jz-eigenstate prep,
+    Haar-random SU(2) Euler-angle sequences, appends a final gate that inverts the
+    composition of rows `1..m-1` (not row 0), so the net ideal composition of the full
+    `m+1`-gate sequence is the random "hidden" first gate rather than the identity,
+    and emits `2*j + 1` circuits per sampled sequence -- one per Jz-eigenstate prep,
     sharing the same `Gu` gate layers (see the module docstring for the full circuit
-    convention).
+    convention). Additionally stores, per circuit, the Legendre "character core"
+    `P_k(cos(beta))` of the hidden first gate (`charcores`), for `k = 0..2j`, which
+    `SyntheticSPAMRank1RB` uses to weight its per-irrep estimator.
+
+    Note on `idealout_lists`: because the net ideal composition is the random hidden
+    first gate rather than the identity, `idealout_lists` entries (one
+    `(str(prep_index),)` per circuit) are *not* genuine deterministic ideal outcomes
+    -- they are placeholders required only because `BenchmarkingDesign.__init__`
+    needs some `ideal_outs` value per circuit. `SyntheticSPAMRank1RB` reconstructs
+    probabilities directly from the `euler_angles`/`charcores` aux data, not from
+    `idealout_lists`. Generic RB analyses that infer a "success probability" from
+    `idealout_lists` should not be pointed at this design's data.
 
     Parameters
     ----------
@@ -277,33 +284,10 @@ class SU2RBDesign(_vb.BenchmarkingDesign):
 
     dim : int
         `2*j + 1`, the number of preps (and POVM effects).
-
-    invert_from : int
-        Class attribute; `0` for `SU2RBDesign` (net ideal composition is the
-        identity), overridden to `1` by `SU2CharacterRBDesign`.
     """
-
-    invert_from = 0
 
     def __init__(self, j, depths, circuits_per_depth, seed=None, qudit_label='Q0',
                  descriptor='An SU(2) synthetic SPAM RB experiment'):
-        self._populate(j, depths, circuits_per_depth, seed, qudit_label, descriptor)
-
-    def _populate(self, j, depths, circuits_per_depth, seed, qudit_label, descriptor):
-        """
-        Shared implementation of `__init__`, factored out so that `SU2CharacterRBDesign`
-        can reuse it and then extend the freshly-built `self` with `characters`/
-        `charcores` computed from the (locally-scoped, not stored on `self`) per-sequence
-        first-gate angles that `_sample_su2rb_circuits` returns alongside everything
-        that *does* get stored.
-
-        Returns
-        -------
-        dict
-            The `_sample_su2rb_circuits` return dict (including `firstgate_angles_lists`,
-            which is not otherwise retained on `self` since it is not JSON-serializable
-            and is only needed transiently by `SU2CharacterRBDesign.__init__`).
-        """
         j_float, two_j = _validate_spin(j)
         dim = two_j + 1
         depths = list(depths)
@@ -312,13 +296,12 @@ class SU2RBDesign(_vb.BenchmarkingDesign):
             seed = _np.random.randint(1, 1000000)
         self.seed = seed
 
-        sampled = _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, self.seed,
-                                          qudit_label, self.invert_from)
+        sampled = _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, self.seed, qudit_label)
 
         # Set before calling super().__init__ so that BenchmarkingDesign inserts
         # 'idealout_lists' at the front and registers 'json' auxfile types for all of
         # these (mirrors CliffordRBDesign._init_foundation / BinaryRBDesign._init_foundation).
-        self.paired_with_circuit_attrs = ["euler_angles", "seq_index", "prep_index"]
+        self.paired_with_circuit_attrs = ["euler_angles", "seq_index", "prep_index", "charcores"]
 
         super(SU2RBDesign, self).__init__(depths, sampled['circuit_lists'], sampled['idealout_lists'],
                                            qubit_labels=(qudit_label,), remove_duplicates=False)
@@ -327,68 +310,23 @@ class SU2RBDesign(_vb.BenchmarkingDesign):
         self.seq_index = sampled['seq_index_lists']
         self.prep_index = sampled['prep_index_lists']
 
+        irrep_labels = _np.arange(dim)
+        charcores_lists = []
+        for firstgate_angles_at_seq in sampled['firstgate_angles_lists']:
+            # Shape (3, circuits_per_depth), as required by charactercores_from_euler_angles.
+            angles_arr = _np.array(firstgate_angles_at_seq).T
+            cores = _su2.charactercores_from_euler_angles(irrep_labels, angles_arr)
+            # Broadcast each sampled sequence's (shared) charcore row out to the `dim`
+            # consecutive per-prep circuits generated from it, matching the (seq-major,
+            # prep-minor) circuit ordering produced by _sample_su2rb_circuits.
+            charcores_lists.append(_np.repeat(cores, dim, axis=0).tolist())
+        self.charcores = charcores_lists
+
         self.j = j_float
         self.dim = dim
         self.qudit_label = qudit_label
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
-
-        return sampled
-
-
-class SU2CharacterRBDesign(SU2RBDesign):
-    """
-    Experiment design for the character variants of synthetic SPAM RB (SSchiRB and
-    SSR1RB) of an arbitrary-spin SU(2) system.
-
-    As `SU2RBDesign`, except the final gate only inverts the composition of rows
-    `1..m-1` (not row 0), so the net ideal composition of the full circuit is the
-    "hidden" first gate rather than the identity. Additionally stores, per circuit,
-    the irrep character `chi_k` (`characters`) and Legendre "character core"
-    `P_k(cos(beta))` (`charcores`) of the hidden first gate, for `k = 0..2j` -- these
-    support both SSchiRB (via `characters`) and SSR1RB (via `charcores`) from the same
-    design.
-
-    Note on `idealout_lists`: because the net ideal composition here is the random
-    hidden first gate rather than the identity, `idealout_lists` entries (inherited
-    unchanged from `SU2RBDesign`, one `(str(prep_index),)` per circuit) are *not*
-    genuine deterministic ideal outcomes for this design -- they are placeholders
-    required only because `BenchmarkingDesign.__init__` needs some `ideal_outs` value
-    per circuit. `SyntheticSPAMCharacterRB`/`SyntheticSPAMRank1RB` (Phase 6) reconstruct
-    probabilities directly from the `euler_angles`/`characters`/`charcores` aux data,
-    not from `idealout_lists`. Generic RB analyses that infer a "success probability"
-    from `idealout_lists` should not be pointed at `SU2CharacterRBDesign` data.
-
-    Parameters
-    ----------
-    j, depths, circuits_per_depth, seed, qudit_label, descriptor
-        As `SU2RBDesign`.
-    """
-
-    invert_from = 1
-
-    def __init__(self, j, depths, circuits_per_depth, seed=None, qudit_label='Q0',
-                 descriptor='An SU(2) synthetic SPAM character RB experiment'):
-        sampled = self._populate(j, depths, circuits_per_depth, seed, qudit_label, descriptor)
-
-        irrep_labels = _np.arange(self.dim)
-        characters_lists, charcores_lists = [], []
-        for firstgate_angles_at_seq in sampled['firstgate_angles_lists']:
-            # Shape (3, circuits_per_depth), as required by characters_from_euler_angles.
-            angles_arr = _np.array(firstgate_angles_at_seq).T
-            chars = _su2.characters_from_euler_angles(irrep_labels, angles_arr)
-            cores = _su2.charactercores_from_euler_angles(irrep_labels, angles_arr)
-            # Broadcast each sampled sequence's (shared) character/charcore row out to
-            # the `dim` consecutive per-prep circuits generated from it, matching the
-            # (seq-major, prep-minor) circuit ordering produced by _sample_su2rb_circuits.
-            characters_lists.append(_np.repeat(chars, self.dim, axis=0).tolist())
-            charcores_lists.append(_np.repeat(cores, self.dim, axis=0).tolist())
-
-        self.paired_with_circuit_attrs = self.paired_with_circuit_attrs + ["characters", "charcores"]
-        self.characters = characters_lists
-        self.charcores = charcores_lists
-        self.auxfile_types['characters'] = 'json'
-        self.auxfile_types['charcores'] = 'json'
 
 
 # ***************************************************************************************************
@@ -1022,7 +960,7 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
     arbitrary (fixed, gate-independent) SPAM error, unlike an unweighted `diag(M @ P
     @ M.T)` sandwich, which requires SPAM diagonal in the Jz eigenbasis.
 
-    Requires `SU2CharacterRBDesign` data (raises `TypeError` on `run` otherwise, via
+    Requires `SU2RBDesign` data (raises `TypeError` on `run` otherwise, via
     `_per_sequence_irrep_values`).
 
     Ports `Analysis.fit_and_get_rates` / `fit_and_plot_with_rates_stderrors` and
@@ -1085,7 +1023,7 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
         """
         if not hasattr(edesign, 'charcores'):
             raise TypeError(
-                "SyntheticSPAMRank1RB requires an SU2CharacterRBDesign (with a "
+                "SyntheticSPAMRank1RB requires an SU2RBDesign (with a "
                 "'charcores' aux list); got %s" % type(edesign).__name__)
 
         dim = edesign.dim
@@ -1160,8 +1098,8 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
         Parameters
         ----------
         data : ProtocolData
-            The input data, from an `SU2CharacterRBDesign` and a `DataSet` with
-            matching circuits.
+            The input data, from an `SU2RBDesign` and a `DataSet` with matching
+            circuits.
 
         memlimit : int, optional
             Unused (present for `Protocol` interface compatibility).
