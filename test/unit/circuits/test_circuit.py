@@ -1278,6 +1278,32 @@ class CircuitBugfixRegressionTester(BaseCase):
         c.done_editing()
         self.assertEqual(c.saved_auxinfo["lanes"], {})
 
+    def test_copy_does_not_share_saved_auxinfo(self):
+        from pygsti.circuits.split_circuits_into_lanes import compute_subcircuits, compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit
+        c1 = circuit.Circuit("Gx:0Gy:1", line_labels=(0, 1), editable=True)
+        c1.done_editing()
+
+        c2 = c1.copy(editable=True)
+        self.assertIsNot(c1.saved_auxinfo, c2.saved_auxinfo)
+
+        # Mutate c2 so that it is different from c1
+        c2[0] = Label('Gz', 1)
+        c2.done_editing()
+
+        # Cache lanes for c2
+        q2l_c2, l2q_c2 = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c2)
+        compute_subcircuits(c2, q2l_c2, l2q_c2, cache_lanes_in_circuit=True)
+
+        # Confirm c1's lanes cache did not get contaminated
+        # (It should still be empty or contain the original Gx/Gy representation, NOT Gz)
+        self.assertNotIn((1,), c1.saved_auxinfo.get("lanes", {}))
+
+        # Calling compute_subcircuits on c1 should produce correct results representing Gx/Gy
+        q2l_c1, l2q_c1 = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c1)
+        subs_c1 = compute_subcircuits(c1, q2l_c1, l2q_c1)
+        self.assertIn(Label('Gx', 0), subs_c1[0])
+        self.assertNotIn(Label('Gz', 1), subs_c1[1])
+
     def test_batch_tensor_populates_cache(self):
         from pygsti.circuits.split_circuits_into_lanes import batch_tensor
         c1 = circuit.Circuit("Gx:0", line_labels=(0,))

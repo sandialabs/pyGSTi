@@ -621,7 +621,13 @@ class Circuit(object):
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
-        self.saved_auxinfo = saved_aux if saved_aux else dict()
+        if saved_aux:
+            self.saved_auxinfo = {
+                k: (v.copy() if isinstance(v, dict) else v)
+                for k, v in saved_aux.items()
+            }
+        else:
+            self.saved_auxinfo = {}
         return self
 
     #pickle management functions
