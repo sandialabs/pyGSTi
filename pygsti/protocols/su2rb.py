@@ -66,8 +66,6 @@ __all__ = [
     'compose_noise_channels',
     'SU2RBDataSimulator',
     'predicted_zero_noise_variance',
-    'SyntheticSPAMRB',
-    'SyntheticSPAMCharacterRB',
     'SyntheticSPAMRank1RB',
     'SyntheticSPAMRBResults',
 ]
@@ -959,7 +957,7 @@ def predicted_zero_noise_variance(j, k, variant, ell=None):
 
 
 # ***************************************************************************************************
-# SyntheticSPAMRB
+# SyntheticSPAMRank1RB
 # ***************************************************************************************************
 
 def _decay_model(x, a, f):
@@ -1008,18 +1006,37 @@ def _fit_irrep_decay(x, y, p0=(1.0, 0.9)):
     return a, f, sigma_a, sigma_f, success
 
 
-class SyntheticSPAMRB(_proto.Protocol):
+class SyntheticSPAMRank1RB(_proto.Protocol):
     """
-    The synthetic-SPAM randomized benchmarking (SSRB) protocol for an arbitrary-spin
-    SU(2) system: reconstructs, per depth, the `dim`-by-`dim` [prep, effect]
-    probability matrix for each sampled circuit sequence, applies the SPAM-synthesis
-    sandwich `diag(M P M^T)` per sequence, averages over sequences (with standard
-    errors), fits each irrep's averaged series to `A_k * f_k**x` (`x` = depth + 1, no
-    additive offset), and recovers per-irrep rates `p = solve(F, f)` with propagated
-    covariance `Sigma_p = F^-1 diag(sigma_f**2) F^-T`.
+    The rank-1 ("Legendre-weighted") synthetic-SPAM randomized benchmarking protocol
+    (SSR1RB) for an arbitrary-spin SU(2) system: reconstructs, per depth, the
+    `dim`-by-`dim` [prep, effect] probability matrix for each sampled circuit
+    sequence, weights the per-irrep-`k` `diag(M @ P @ M.T)` sandwich by `(2k+1) *
+    P_k(cos(beta_hidden))` -- the Legendre "character core" of that sequence's hidden
+    first gate (the design's `charcores` aux data) -- averages over sequences (with
+    standard errors), fits each irrep's averaged series to `A_k * f_k**x` (`x` =
+    depth + 1, no additive offset), and recovers per-irrep rates `p = solve(F, f)`
+    with propagated covariance `Sigma_p = F^-1 diag(sigma_f**2) F^-T`.
 
-    Ports `Analysis.fit_and_get_rates` / `fit_and_plot_with_rates_stderrors` from the
-    `su2-rb-conservative` branch (minus the plotting).
+    The rank-1 weighting makes the resulting per-irrep decay estimate robust to
+    arbitrary (fixed, gate-independent) SPAM error, unlike an unweighted `diag(M @ P
+    @ M.T)` sandwich, which requires SPAM diagonal in the Jz eigenbasis.
+
+    Requires `SU2CharacterRBDesign` data (raises `TypeError` on `run` otherwise, via
+    `_per_sequence_irrep_values`).
+
+    Ports `Analysis.fit_and_get_rates` / `fit_and_plot_with_rates_stderrors` and
+    `SU2CharacterRBSim.character_transform` / `synspam_character_transform` from the
+    `su2-rb-conservative` branch (minus the plotting). The latter two are normative
+    for the weight-normalization factors: `character_transform` scales each irrep's
+    contribution by `irrep_sizes[k] = 2k + 1` before averaging over circuit sequences
+    (see that function's `wchars = _chars * irrep_sizes[...]` line), and
+    `synspam_character_transform` then sandwiches the per-irrep-`k` (weighted)
+    transition-probability matrix with `M`'s `k`-th row on both sides (`row_M_k @
+    block @ row_M_k`) -- algebraically identical, for a fixed depth, to averaging
+    `irrep_sizes[k] * charcore[s, k] * (M @ P^(s) @ M.T)[k, k]` over sampled
+    sequences `s`, which is what `_per_sequence_irrep_values` below computes
+    per-sequence (before `run` averages over `s`).
 
     Parameters
     ----------
@@ -1031,12 +1048,8 @@ class SyntheticSPAMRB(_proto.Protocol):
         The name of this protocol.
     """
 
-    #: Which `predicted_zero_noise_variance` variant this protocol's estimator
-    #: corresponds to. Overridden by the character/rank-1 subclasses (Phase 6).
-    _variance_variant = 'ssrb'
-
     def __init__(self, seed=(1.0, 0.9), name=None):
-        super(SyntheticSPAMRB, self).__init__(name)
+        super(SyntheticSPAMRank1RB, self).__init__(name)
         self.seed = tuple(seed)
 
     @staticmethod
@@ -1046,8 +1059,6 @@ class SyntheticSPAMRB(_proto.Protocol):
         measuring effect `l'` given preparation `l`, for the `s`-th sampled circuit
         sequence at depth index `depth_idx`, reconstructed from `ds`'s recorded
         outcome fractions for the `dim` circuits (one per prep) sharing that sequence.
-        Shared by `SyntheticSPAMRB._per_sequence_irrep_values` and the character/
-        rank-1 subclasses' override of the same method.
         """
         dim = edesign.dim
         circuits_per_depth = edesign.circuits_per_depth
@@ -1064,13 +1075,35 @@ class SyntheticSPAMRB(_proto.Protocol):
 
     def _per_sequence_irrep_values(self, edesign, ds, depth_idx, M):
         """
-        Shape `(circuits_per_depth, dim)`: `X[s, k] = diag(M @ P^(s) @ M.T)[k]`, where
+        Shape `(circuits_per_depth, dim)`:
+        `X[s, k] = irrep_sizes[k] * charcores[s, k] * diag(M @ P^(s) @ M.T)[k]`, where
         `P^(s)` is the `dim`-by-`dim` [prep, effect] probability matrix for the `s`-th
-        sampled sequence at depth index `depth_idx` (`_reconstruct_prep_effect_probs`).
+        sampled sequence at depth index `depth_idx` (`_reconstruct_prep_effect_probs`),
+        `charcores` is the design's per-sequence Legendre-character-core aux data
+        (broadcast to each of that sequence's `dim` prep circuits), and
+        `irrep_sizes[k] = 2k + 1`.
         """
+        if not hasattr(edesign, 'charcores'):
+            raise TypeError(
+                "SyntheticSPAMRank1RB requires an SU2CharacterRBDesign (with a "
+                "'charcores' aux list); got %s" % type(edesign).__name__)
+
+        dim = edesign.dim
+        circuits_per_depth = edesign.circuits_per_depth
         P = self._reconstruct_prep_effect_probs(edesign, ds, depth_idx)
-        # X[s,k] = sum_{l,m} M[k,l] P[s,l,m] M[k,m]
-        return _np.einsum('kl,slm,km->sk', M, P, M)
+
+        seq_at_depth = edesign.seq_index[depth_idx]
+        charcores_at_depth = edesign.charcores[depth_idx]
+        W = _np.zeros((circuits_per_depth, dim))
+        for seq_idx, charcore_row in zip(seq_at_depth, charcores_at_depth):
+            # Every one of the `dim` circuits sharing a sampled sequence carries the
+            # same (hidden-first-gate-derived) charcore row, so this repeatedly
+            # overwrites W[seq_idx, :] with an identical value -- harmless.
+            W[seq_idx, :] = charcore_row
+
+        irrep_sizes = 2 * _np.arange(dim) + 1
+        MPM = _np.einsum('kl,slm,km->sk', M, P, M)
+        return irrep_sizes[_np.newaxis, :] * W * MPM
 
     def _fit_and_get_rates(self, x, per_irrep_series, F):
         """
@@ -1110,7 +1143,7 @@ class SyntheticSPAMRB(_proto.Protocol):
             # `p`/`cov_p` with `nan`, not just the failed irrep's. Surface that loudly
             # rather than letting it look like an ordinary (if strange) all-nan result.
             _warnings.warn(
-                "SyntheticSPAMRB: the per-irrep decay fit failed for irrep(s) %s; "
+                "SyntheticSPAMRank1RB: the per-irrep decay fit failed for irrep(s) %s; "
                 "the recovered rates and covariance (which mix all irreps via F) are "
                 "therefore entirely nan, not just the failed irrep(s)." % failed_irreps,
                 UserWarning)
@@ -1127,8 +1160,8 @@ class SyntheticSPAMRB(_proto.Protocol):
         Parameters
         ----------
         data : ProtocolData
-            The input data, from a `SU2RBDesign` (or, for the character/rank-1
-            subclasses, `SU2CharacterRBDesign`) and a `DataSet` with matching circuits.
+            The input data, from an `SU2CharacterRBDesign` and a `DataSet` with
+            matching circuits.
 
         memlimit : int, optional
             Unused (present for `Protocol` interface compatibility).
@@ -1167,107 +1200,16 @@ class SyntheticSPAMRB(_proto.Protocol):
         return SyntheticSPAMRBResults(data, self, depths, means, stderrs, variances, fits, f, sigma_f, p, cov_p)
 
 
-class _SyntheticSPAMCharacterFamilyRB(SyntheticSPAMRB):
-    """
-    Shared implementation of the character-weighted synthetic-SPAM RB variants:
-    `SyntheticSPAMCharacterRB` (SSchiRB) and `SyntheticSPAMRank1RB` (SSR1RB). Both
-    consume `SU2CharacterRBDesign` data and differ only in which of that design's
-    aux lists (`characters` for chi_k, `charcores` for the Legendre P_k) supplies the
-    per-circuit-sequence irrep weight.
-
-    Ports `SU2CharacterRBSim.character_transform` / `synspam_character_transform`
-    from the `su2-rb-conservative` branch, which are normative for the weight
-    normalization factors: `character_transform` scales each irrep's contribution by
-    `irrep_sizes[k] = 2k + 1` before averaging over circuit sequences (see that
-    function's `wchars = _chars * irrep_sizes[...]` line), and
-    `synspam_character_transform` then sandwiches the per-irrep-`k` (weighted)
-    transition-probability matrix with `M`'s `k`-th row on both sides
-    (`row_M_k @ block @ row_M_k`) -- algebraically identical, for a fixed depth, to
-    averaging `irrep_sizes[k] * weight[s, k] * (M @ P^(s) @ M.T)[k, k]` over sampled
-    sequences `s`, which is what `_per_sequence_irrep_values` below computes
-    per-sequence (before `SyntheticSPAMRB.run` averages over `s`).
-    """
-
-    #: Name of the `SU2CharacterRBDesign` aux list supplying the per-circuit-sequence
-    #: irrep weight (`'characters'` for chi_k, `'charcores'` for the rank-1 Legendre
-    #: P_k). Set by the concrete subclasses below.
-    _weight_attr = None
-
-    def _per_sequence_irrep_values(self, edesign, ds, depth_idx, M):
-        """
-        Shape `(circuits_per_depth, dim)`:
-        `X[s, k] = irrep_sizes[k] * weight[s, k] * diag(M @ P^(s) @ M.T)[k]`, where
-        `weight` is this class's `_weight_attr` aux list (`characters` or
-        `charcores`) and `irrep_sizes[k] = 2k + 1`.
-        """
-        if not hasattr(edesign, self._weight_attr):
-            raise TypeError(
-                "%s requires an SU2CharacterRBDesign (with a '%s' aux list); got %s"
-                % (type(self).__name__, self._weight_attr, type(edesign).__name__))
-
-        dim = edesign.dim
-        circuits_per_depth = edesign.circuits_per_depth
-        P = self._reconstruct_prep_effect_probs(edesign, ds, depth_idx)
-
-        seq_at_depth = edesign.seq_index[depth_idx]
-        weight_at_depth = getattr(edesign, self._weight_attr)[depth_idx]
-        W = _np.zeros((circuits_per_depth, dim))
-        for seq_idx, weight_row in zip(seq_at_depth, weight_at_depth):
-            # Every one of the `dim` circuits sharing a sampled sequence carries the
-            # same (hidden-first-gate-derived) weight row, so this repeatedly
-            # overwrites W[seq_idx, :] with an identical value -- harmless.
-            W[seq_idx, :] = weight_row
-
-        irrep_sizes = 2 * _np.arange(dim) + 1
-        MPM = _np.einsum('kl,slm,km->sk', M, P, M)
-        return irrep_sizes[_np.newaxis, :] * W * MPM
-
-
-class SyntheticSPAMCharacterRB(_SyntheticSPAMCharacterFamilyRB):
-    """
-    The character-weighted synthetic-SPAM randomized benchmarking protocol (SSchiRB):
-    as `SyntheticSPAMRB`, except the `M @ P @ M.T` sandwich for irrep `k` is weighted,
-    per sampled circuit sequence, by `(2k+1) * chi_k(theta_hidden)` -- the `SU2CharacterRBDesign`'s
-    `characters` aux data for that sequence's hidden first gate -- before averaging
-    over sequences. This makes the resulting per-irrep decay estimate robust to
-    arbitrary (fixed, gate-independent) SPAM error, unlike plain `SyntheticSPAMRB`,
-    which requires SPAM diagonal in the Jz eigenbasis.
-
-    Requires `SU2CharacterRBDesign` data (raises `TypeError` on `run` otherwise, via
-    `_per_sequence_irrep_values`).
-    """
-
-    _variance_variant = 'sschirb'
-    _weight_attr = 'characters'
-
-
-class SyntheticSPAMRank1RB(_SyntheticSPAMCharacterFamilyRB):
-    """
-    The rank-1 ("Legendre-weighted") synthetic-SPAM randomized benchmarking protocol
-    (SSR1RB): identical to `SyntheticSPAMCharacterRB`, except the per-sequence weight
-    is `(2k+1) * P_k(cos(beta_hidden))` (the Legendre "character core", from the
-    `SU2CharacterRBDesign`'s `charcores` aux data) rather than the irrep character
-    `chi_k`.
-
-    Requires `SU2CharacterRBDesign` data (raises `TypeError` on `run` otherwise, via
-    `_per_sequence_irrep_values`).
-    """
-
-    _variance_variant = 'ssr1rb'
-    _weight_attr = 'charcores'
-
-
 class SyntheticSPAMRBResults(_proto.ProtocolResults):
     """
-    The results of running `SyntheticSPAMRB` (or one of its character/rank-1
-    subclasses) on synthetic-SPAM RB data.
+    The results of running `SyntheticSPAMRank1RB` on synthetic-SPAM RB data.
 
     Parameters
     ----------
     data : ProtocolData
         The data these results were computed from.
 
-    protocol_instance : SyntheticSPAMRB
+    protocol_instance : SyntheticSPAMRank1RB
         The protocol that produced these results.
 
     depths : list of int
@@ -1277,7 +1219,7 @@ class SyntheticSPAMRBResults(_proto.ProtocolResults):
     means, stderrs, variances : numpy array
         Shape `(dim, len(depths))`: the per-irrep, per-depth sample mean, standard
         error, and (sequence-count-unnormalized) sample variance of the per-sequence
-        estimator `X_k` (`SyntheticSPAMRB._per_sequence_irrep_values`).
+        estimator `X_k` (`SyntheticSPAMRank1RB._per_sequence_irrep_values`).
 
     fits : list of rbfit.FitResults
         One per irrep `k = 0..dim-1`.
