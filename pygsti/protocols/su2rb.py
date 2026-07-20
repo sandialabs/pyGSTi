@@ -35,7 +35,6 @@ Circuit conventions (see the spike notes for the full rationale):
 
 import math as _math
 import warnings as _warnings
-from fractions import Fraction as _Fraction
 
 import numpy as _np
 import pandas as _pd
@@ -759,62 +758,22 @@ def _variance_M_entry(j, k, ell):
     return _math.sqrt((2 * k + 1) / (2 * j + 1)) * _wg.clebsch_gordan(j, ell, k, 0, j, ell)
 
 
-def _variance_C(k, kp, rank1):
+def _variance_C(k, kp):
     """
-    `C(k, k')` from Eqs. `normalizedvariance`/`SSvariance`: identically `1` for the
-    character variants, `<k 0; k 0 | k' 0>**2` for the rank-1 variants.
+    `C(k, k') = <k 0; k 0 | k' 0>**2` from Eq. `SSvariance`, the rank-1 synthetic-SPAM
+    variance weight.
     """
-    if rank1:
-        return _wg.clebsch_gordan(k, 0, k, 0, kp, 0) ** 2
-    return 1.0
+    return _wg.clebsch_gordan(k, 0, k, 0, kp, 0) ** 2
 
 
-def _validate_ell(j_float, two_j, ell):
-    """
-    Validate that `ell` is one of `SpinJ(j).spins` (`j, j-1, ..., -j`) and return it
-    as an exact float.
-
-    `wignersymbols.clebsch_gordan` silently returns `0.0` (rather than raising) for an
-    `ell` outside that range, since from its point of view that's just an ordinary
-    `|m| <= j` selection-rule violation -- but here it means `ell` isn't a physically
-    meaningful Jz eigenstate index for this `j` at all, which is a caller error and
-    should be reported as such (rather than surfacing later as a `ZeroDivisionError`
-    from an `M[k, ell]` that's zero for the wrong reason).
-    """
-    if isinstance(ell, bool):
-        raise TypeError("ell must be an int, float, or Fraction, not bool")
-    if isinstance(ell, _Fraction):
-        two_ell_frac = 2 * ell
-        if two_ell_frac.denominator != 1:
-            raise ValueError("ell = %s is not an integer or half-integer (2*ell must be an integer)" % ell)
-        two_ell = two_ell_frac.numerator
-    elif isinstance(ell, (int, float)):
-        if isinstance(ell, float) and not _math.isfinite(ell):
-            raise ValueError("ell must be finite (got %r)" % ell)
-        two_ell_val = 2 * ell
-        two_ell = round(two_ell_val)
-        if two_ell_val != two_ell:
-            raise ValueError("ell = %r is not an integer or half-integer (2*ell must be an integer)" % ell)
-    else:
-        raise TypeError("ell must be an int, float, or Fraction, not %s" % type(ell).__name__)
-
-    if abs(two_ell) > two_j or (two_j - two_ell) % 2 != 0:
-        valid = [j_float - i for i in range(two_j + 1)]
-        raise ValueError("ell=%r is not a valid Jz eigenstate index for j=%s (must be one of %s)"
-                          % (ell, j_float, valid))
-    return two_ell / 2.0
-
-
-_ZERO_NOISE_VARIANCE_VARIANTS = ('ssrb', 'chirb', 'r1rb', 'sschirb', 'ssr1rb')
-
-
-def predicted_zero_noise_variance(j, k, variant, ell=None):
+def predicted_zero_noise_variance(j, k):
     """
     The paper's exact zero-noise (perfect-gate) sampling variance of the irrep-`k`
-    estimator for one of the synthetic RB protocols (Section "Sample Complexity";
-    Eqs. `normalizedvariance` and `SSvariance`). This is a diagnostic for the sample
-    complexity of a protocol -- smaller is better -- and does not depend on gate
-    noise (the paper's variance results are exact only in the zero-noise limit).
+    estimator for the rank-1 synthetic-SPAM randomized benchmarking protocol
+    (SSR1RB; Section "Sample Complexity", Eq. `SSvariance`). This is a diagnostic
+    for the protocol's sample complexity -- smaller is better -- and does not depend
+    on gate noise (the paper's variance result is exact only in the zero-noise
+    limit).
 
     Parameters
     ----------
@@ -824,74 +783,22 @@ def predicted_zero_noise_variance(j, k, variant, ell=None):
     k : int
         The irrep label. Must satisfy `0 <= k <= 2*j`.
 
-    variant : {'ssrb', 'chirb', 'r1rb', 'sschirb', 'ssr1rb'}
-        Which protocol's variance to compute:
-
-        - `'ssrb'`: always `0.0` (synthetic-SPAM RB with no character/rank-1
-          weighting has zero variance in the zero-noise limit; paper text just above
-          Eq. `SSvariance`). `ell` must be `None`.
-        - `'chirb'` / `'r1rb'`: the physical-(:math:`J_z`-eigenstate)-SPAM character /
-          rank-1 variants (Eq. `normalizedvariance`, the mean-normalized variance of
-          the estimator for `f_k = 1`). Requires `ell`.
-        - `'sschirb'` / `'ssr1rb'`: the synthetic-SPAM character / rank-1 variants
-          (Eq. `SSvariance`). `ell` must be `None`.
-
-    ell : int, float, or Fraction, optional
-        The physical-SPAM :math:`J_z` eigenstate index (one of `SpinJ(j).spins`),
-        required by the `'chirb'`/`'r1rb'` variants and disallowed by the others.
-        Raises `ValueError` if not one of `SpinJ(j).spins`.
-
     Returns
     -------
     float
-        `float('inf')` for the `'chirb'`/`'r1rb'` variants if `M[k, ell]` (the
-        zero-noise mean of the underlying estimator) is itself exactly `0` for the
-        given `(j, k, ell)` -- e.g. `j=1, k=1, ell=0` -- since Eq. `normalizedvariance`
-        then divides by zero.
     """
-    variant = variant.lower()
-    if variant not in _ZERO_NOISE_VARIANCE_VARIANTS:
-        raise ValueError("variant must be one of %s; got %r" % (_ZERO_NOISE_VARIANCE_VARIANTS, variant))
     j_float, two_j = _validate_spin(j)
     if not (isinstance(k, (int, _np.integer)) and 0 <= k <= two_j):
         raise ValueError("k must be an integer with 0 <= k <= 2*j=%d; got %r" % (two_j, k))
 
-    if variant == 'ssrb':
-        if ell is not None:
-            raise ValueError("`ell` is not used by the 'ssrb' variant (its variance is always 0.0)")
-        return 0.0
-
-    rank1 = variant in ('r1rb', 'ssr1rb')
-    synthetic_spam = variant in ('sschirb', 'ssr1rb')
-
-    if synthetic_spam:
-        if ell is not None:
-            raise ValueError("`ell` is not used by synthetic-SPAM variants (got variant=%r, ell=%r)"
-                              % (variant, ell))
-        spins = [j_float - i for i in range(two_j + 1)]
-        total = 0.0
-        for kp in range(0, 2 * k + 1):
-            inner = sum(_variance_M_entry(j_float, k, ell_) ** 2 * _variance_M_entry(j_float, kp, ell_)
-                        for ell_ in spins)
-            total += _variance_C(k, kp, rank1) / (2 * kp + 1) * inner ** 2
-        quartic = sum(_variance_M_entry(j_float, k, ell_) ** 4 for ell_ in spins)
-        return (2 * k + 1) ** 2 * total - quartic
-    else:
-        if ell is None:
-            raise ValueError("`ell` (the physical-SPAM Jz eigenstate index) is required for variant=%r"
-                              % variant)
-        ell = _validate_ell(j_float, two_j, ell)
-        m_kl = _variance_M_entry(j_float, k, ell)
-        if m_kl == 0.0:
-            # A genuinely valid ell (e.g. j=1, k=1, ell=0) can still make M[k, ell]
-            # vanish by a Clebsch-Gordan selection rule unrelated to |ell| <= j; Eq.
-            # normalizedvariance's mean-normalized variance is then infinite (the
-            # zero-noise mean <X^k_{ell,ell}> = M[k,ell]**2 is itself 0, so the
-            # normalized variance blows up), not an arithmetic error.
-            return float('inf')
-        total = sum(_variance_C(k, kp, rank1) / (2 * kp + 1) * _variance_M_entry(j_float, kp, ell) ** 2
-                    for kp in range(0, 2 * k + 1))
-        return (2 * k + 1) ** 2 / m_kl ** 4 * total - 1.0
+    spins = [j_float - i for i in range(two_j + 1)]
+    total = 0.0
+    for kp in range(0, 2 * k + 1):
+        inner = sum(_variance_M_entry(j_float, k, ell) ** 2 * _variance_M_entry(j_float, kp, ell)
+                    for ell in spins)
+        total += _variance_C(k, kp) / (2 * kp + 1) * inner ** 2
+    quartic = sum(_variance_M_entry(j_float, k, ell) ** 4 for ell in spins)
+    return (2 * k + 1) ** 2 * total - quartic
 
 
 # ***************************************************************************************************
@@ -1221,13 +1128,12 @@ class SyntheticSPAMRBResults(_proto.ProtocolResults):
 
     def variance_diagnostic(self, depth_index=0):
         """
-        An order-of-magnitude sanity check comparing this protocol's predicted
-        zero-noise `Var(X_k)` (`predicted_zero_noise_variance`, evaluated for
-        `self.protocol._variance_variant`) against the empirical sample variance of
-        the per-sequence irrep estimator at depth `self.depths[depth_index]`. Since the
-        prediction is exact only at zero gate noise, this is a sanity check (expected
-        order-of-magnitude agreement at low noise/short depths), not an exact-agreement
-        test.
+        An order-of-magnitude sanity check comparing SSR1RB's predicted zero-noise
+        `Var(X_k)` (`predicted_zero_noise_variance`) against the empirical sample
+        variance of the per-sequence irrep estimator at depth
+        `self.depths[depth_index]`. Since the prediction is exact only at zero gate
+        noise, this is a sanity check (expected order-of-magnitude agreement at low
+        noise/short depths), not an exact-agreement test.
 
         Parameters
         ----------
@@ -1239,7 +1145,6 @@ class SyntheticSPAMRBResults(_proto.ProtocolResults):
         dict
             Maps irrep label `k` -> `(predicted, empirical)`.
         """
-        variant = self.protocol._variance_variant
-        return {k: (predicted_zero_noise_variance(self.j, k, variant),
+        return {k: (predicted_zero_noise_variance(self.j, k),
                     float(self.per_irrep_variances[k, depth_index]))
                 for k in range(self.dim)}
