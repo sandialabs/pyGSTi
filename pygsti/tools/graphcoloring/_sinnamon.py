@@ -1,9 +1,10 @@
 """
 Sinnamon (2019)'s Euler-Template edge-coloring algorithms: the deterministic
-"Greedy-Euler-Color" (2*deg-1 colors) and the randomized "Random-Euler-Color"
-(deg+1 colors). Both are built on the shared recursive Partition/Recurse/
-Prune/Repair scaffold in `_EulerTemplateEdgeColoring` (Sinnamon 2019, Section
-2.2), differing only in their color budget and Repair step.
+"Greedy-Euler-Color" (using ≤ 2*deg-1 colors in O(m log(deg)) worst-case time)
+and the randomized "Random-Euler-Color" (using ≤ deg+1 colors in O(m*sqrt(n))
+time with high probability). Both are built on the shared recursive
+Partition/Recurse/Prune/Repair scaffold in `_EulerTemplateEdgeColoring`
+(Sinnamon 2019, Section 2.2), differing only in their color budget and Repair step.
 
 Reference:
     C. Sinnamon, "Fast and Simple Edge-Coloring Algorithms," arXiv:1907.03201,

@@ -2,13 +2,23 @@
 Topology detection and closed-form (optimal) edge colorings for the
 canonical topologies produced by `ProcessorSpec(geometry=...)` /
 `QubitGraph.common_graph`: "line", "ring", "grid", "torus". Falls back to
+bipartite-optimal coloring for arbitrary bipartite graphs, and to
 `vizing_edge_coloring` for anything else (see `auto_edge_coloring`).
 """
 import numpy as np
-from typing import List
+import networkx
+from typing import List, Optional, Union
 
 from ._common import Vertex, Edge, NeighborMap, Coloring, order
-from ._vizing import vizing_edge_coloring
+from ._vizing import vizing_edge_coloring, _NewBipartiteEdgeColoring
+
+
+def _is_bipartite(vertices: List[Vertex], edges: List[Edge]) -> bool:
+    """Check if the graph is bipartite using networkx."""
+    G = networkx.Graph()
+    G.add_nodes_from(vertices)
+    G.add_edges_from(edges)
+    return networkx.is_bipartite(G)
 
 
 def detect_topology(vertices: List[Vertex], edges: List[Edge], neighbors: NeighborMap) -> str:
@@ -173,7 +183,8 @@ class _GridTorusEdgeColoring(_ClosedFormEdgeColoring):
 
 
 def auto_edge_coloring(deg: int, vertices: List[Vertex], edges: List[Edge],
-                       neighbors: NeighborMap) -> Coloring:
+                       neighbors: NeighborMap,
+                       seed: Optional[Union[int, np.random.Generator]] = None) -> Coloring:
     """
     Detects whether the input graph matches one of the canonical topologies
     produced by `ProcessorSpec(geometry=...)` / `QubitGraph.common_graph`
@@ -181,19 +192,25 @@ def auto_edge_coloring(deg: int, vertices: List[Vertex], edges: List[Edge],
     cheap closed-form coloring that is always valid and uses the optimal
     number of colors (the true chromatic index) for that topology.
 
-    Falls back to `vizing_edge_coloring` -- a deterministic algorithm that is
+    If not, it checks whether the graph is bipartite; if so, it uses an internal
+    bipartite-optimal randomized coloring (using `seed`) that frequently achieves
+    the optimal `deg` colors in practice.
+
+    Otherwise, it falls back to `vizing_edge_coloring` -- a deterministic algorithm that is
     always valid and complete, using at most deg+1 colors -- for graphs that
     don't match one of these canonical topologies, and for odd-side-length
     tori (where the simple closed-form pattern is not valid; see
     `_GridTorusEdgeColoring` for details).
 
     Parameters:
-    deg (int): The maximum degree of the graph (used only by the fallback).
+    deg (int): The maximum degree of the graph (used only by the fallbacks).
     vertices (list): A list of vertices in the graph, in the same order used
         to originally construct the graph (see `detect_topology`).
     edges (list): A list of edges represented as tuples of vertices.
     neighbors (dict): A dictionary mapping each vertex to its neighboring
         vertices.
+    seed (None, int, or numpy.random.Generator): Seed or generator controlling the
+        randomization of the bipartite fallback. Ignored otherwise.
 
     Returns:
     color_patches (dict): A dictionary mapping each color to a list of edges
@@ -208,5 +225,8 @@ def auto_edge_coloring(deg: int, vertices: List[Vertex], edges: List[Edge],
         s = int(round(np.sqrt(len(vertices))))
         if topology == "grid" or s % 2 == 0:
             return _GridTorusEdgeColoring(vertices, s, topology).color()
+
+    if _is_bipartite(vertices, edges):
+        return _NewBipartiteEdgeColoring(deg, edges, neighbors, seed=seed).color()
 
     return vizing_edge_coloring(deg, vertices, edges, neighbors)

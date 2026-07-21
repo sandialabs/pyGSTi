@@ -1,8 +1,11 @@
 """
-The "Vizing family" of deg+1-edge-coloring algorithms: Misra-Gries, Vizing,
-and the randomized "new_bipartite" variant. All three share one core
-primitive -- a single Vizing-chain recoloring step -- via `_VizingChainState`
-and its `_VizingFamilyEdgeColoring` template subclass.
+The "Vizing family" of deg+1-edge-coloring algorithms: Misra-Gries and Vizing,
+sharing a single core Vizing-chain recoloring primitive. Each produces a proper
+edge coloring using at most deg+1 colors (Vizing's theorem) and runs in O(n*m)
+time (n = |vertices|, m = |edges|) — the standard worst-case time complexity
+for this constructive Vizing-chain/Misra-Gries implementation.
+
+Also includes an internal `_NewBipartiteEdgeColoring` helper subclass.
 
 References:
     V. G. Vizing, "On an estimate of the chromatic class of a p-graph,"
@@ -306,26 +309,4 @@ class _NewBipartiteEdgeColoring(_VizingFamilyEdgeColoring):
         return False
 
 
-def new_bipartite_edge_coloring(
-    deg: int, vertices: List[Vertex], edges: List[Edge], neighbors: NeighborMap,
-    seed: Optional[Union[int, np.random.Generator]] = None
-) -> Coloring:
-    """
-    Randomised (Delta+1)-edge coloring that always returns a complete, valid
-    coloring; see `_NewBipartiteEdgeColoring` for the implementation.
 
-    Args:
-        deg (int): The maximum degree of the graph.
-        vertices (list): A list of vertices in the graph.
-        edges (list): A list of edges represented as tuples of vertices
-            (assumed to be symmetric, i.e., (u,v) and (v,u) are elements).
-        neighbors (dict): A dictionary mapping each vertex to its neighboring vertices.
-        seed (None, int, or numpy.random.Generator): Seed or generator controlling the
-            randomization. Passing the same integer seed yields reproducible results.
-
-    Returns:
-        dict: A dictionary mapping each color to a list of edges colored with that color.
-              Edges are represented as (v1, v2) where v1 < v2.  Every edge in the
-              input appears in exactly one color class (complete coloring).
-    """
-    return _NewBipartiteEdgeColoring(deg, edges, neighbors, seed=seed).color()

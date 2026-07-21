@@ -5,15 +5,13 @@ import time as _time
 import numpy as np
 import pytest
 
-from pygsti.tools.graphcoloring import (
-    switchboard_find_edge_coloring,
-    check_valid_edge_coloring,
-    find_edge_coloring,
-    detect_topology,
+from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
+from pygsti.tools.graphcoloring._common import check_valid_edge_coloring, order
+from pygsti.tools.graphcoloring._topology import detect_topology
+from pygsti.tools.graphcoloring._sinnamon import (
     sinnamon_2d_minus_1_edge_coloring,
     sinnamon_euler_color_edge_coloring,
     _eulerian_partition,
-    order,
 )
 
 from ..util import BaseCase
@@ -33,15 +31,14 @@ skip_in_ci = pytest.mark.skipif(
 
 
 # Curated, generally-recommended algorithms.
-ALGORITHMS = ["new_bipartite", "vizing", "sinnamon", "random_euler_color", "misra_gries"]
+ALGORITHMS = ["vizing", "sinnamon", "random_euler_color", "misra_gries"]
 
 # Every edge-coloring algorithm exposed by the switchboard. This is deliberately
 # the *full* list (not the curated ALGORITHMS above) because the scaling suite's
 # whole point is to characterize which algorithms are usable in which regime --
 # including the ones that are known to be slow, suboptimal, or outright broken on
 # certain graph families.
-ALL_ALGORITHMS = ["new_bipartite", "vizing", "sinnamon", "random_euler_color", "misra_gries",
-                   "moser_tardos", "assadi"]
+ALL_ALGORITHMS = ["vizing", "sinnamon", "random_euler_color", "misra_gries"]
 
 # Deterministic algorithms that always terminate and produce a proper, complete
 # coloring with at most deg+1 colors (Vizing's theorem) on every family tested.
@@ -51,15 +48,12 @@ DETERMINISTIC_EXACT_ALGORITHMS = ["vizing", "misra_gries"]
 # ('sinnamon' -- Sinnamon (2019)'s deterministic Greedy-Euler-Color -- ignores
 # `seed` and is included here only because the reproducibility/validity tests
 # below are written to be seed-agnostic; it is not actually randomized.)
-RANDOMIZED_ALGORITHMS = ["assadi", "moser_tardos", "sinnamon", "random_euler_color", "new_bipartite"]
+RANDOMIZED_ALGORITHMS = ["sinnamon", "random_euler_color"]
 
 # "SPARSE_SAFE" = algorithms that reliably produced a proper & complete coloring
 # on the low-degree (deg<=4) families in this suite, across runs and within the
 # per-algorithm timeout. `vizing` and `misra_gries` qualify (both deterministic,
 # fast, and near-optimal here; both are in fact reliable on *dense* graphs too).
-# moser_tardos and assadi are now correct and terminate, but at the suite's
-# larger low-degree sizes (e.g. the 8x8 grid) they can exceed the timeout, so
-# they are recorded but not asserted on.
 SPARSE_SAFE = ["vizing", "misra_gries"]
 
 # Small enough that even the good algorithms finish comfortably, large enough to
@@ -283,13 +277,6 @@ def _print_table(title, graph, results):
 # Parametrization fixtures
 # ---------------------------------------------------------------------------
 
-# Sparse/mixed graphs the networkx-based ``find_edge_coloring`` handles directly.
-FIND_EDGE_COLORING_GRAPHS = [
-    ("cycle_C10", make_cycle_graph(10)),
-    ("path_P10", make_path_graph(10)),
-    ("high_degree_n10", make_high_degree_graph()),
-]
-
 # Small, sparse graphs on which the fixed randomized algorithms terminate quickly
 # (so their reproducibility tests can run in-process, no timeout guard needed).
 REPRODUCIBILITY_GRAPHS = [
@@ -311,19 +298,6 @@ DENSE_REGRESSION_GRAPHS = [
 # ---------------------------------------------------------------------------
 # Module-level parametrized tests (data-driven).
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("name,graph", FIND_EDGE_COLORING_GRAPHS)
-def test_find_edge_coloring_is_proper_and_complete(name, graph):
-    """find_edge_coloring colors every edge exactly once with no adjacent clash."""
-    vertices, edges, neighbors, deg = graph
-    color_patches = find_edge_coloring(deg, vertices, edges, neighbors)
-    proper, complete, _ncolors = assess_coloring(color_patches, edges)
-    assert proper, f"find_edge_coloring produced an improper coloring on {name}"
-    assert complete, f"find_edge_coloring left an edge uncolored on {name}"
-    # check_valid_edge_coloring raises (or returns False) on an improper coloring.
-    assert check_valid_edge_coloring(color_patches, ret_false_on_error=True), \
-        f"find_edge_coloring failed check_valid_edge_coloring on {name}"
-
-
 @pytest.mark.parametrize("algorithm", RANDOMIZED_ALGORITHMS)
 def test_same_seed_is_reproducible(algorithm):
     """Same integer seed => byte-for-byte identical coloring."""
@@ -585,7 +559,7 @@ class GraphColoringReproducibilityTester(BaseCase):
         (Individual algorithms may coincidentally match on small graphs, so we
         only require that *some* algorithm distinguishes the seeds.)
         """
-        vertices, edges, neighbors, deg = make_grid_graph(4, 4)
+        vertices, edges, neighbors, deg = make_complete_graph(14)
         any_differs = False
         for algorithm in RANDOMIZED_ALGORITHMS:
             a = _canonical_coloring(
@@ -595,17 +569,6 @@ class GraphColoringReproducibilityTester(BaseCase):
             if a != b:
                 any_differs = True
         self.assertTrue(any_differs, "no randomized algorithm distinguished two different seeds")
-
-    def test_find_edge_coloring_is_reproducible(self):
-        """The networkx-based find_edge_coloring is also seedable/reproducible."""
-        vertices, edges, neighbors, deg = make_grid_graph(4, 4)
-        r1 = find_edge_coloring(deg, vertices, edges, neighbors, seed=123)
-        r2 = find_edge_coloring(deg, vertices, edges, neighbors, seed=123)
-        self.assertEqual(
-            _canonical_coloring(r1), _canonical_coloring(r2),
-            "find_edge_coloring not reproducible with a fixed seed")
-        proper, complete, _ncolors = assess_coloring(r1, edges)
-        self.assertTrue(proper and complete)
 
 
 # ---------------------------------------------------------------------------
@@ -753,6 +716,34 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
             self.assertTrue(proper and complete, f"torus s={s} fallback produced an invalid coloring")
             self.assertLessEqual(ncolors, deg + 1, f"torus s={s} fallback used {ncolors} colors (budget {deg + 1})")
 
+    def test_auto_bipartite_fallback_and_reproducibility(self):
+        # A tree like high_degree_hub is bipartite but not canonical, so it goes
+        # to the bipartite fallback in 'auto', which should be seedable/reproducible.
+        vertices, edges, neighbors, deg = make_high_degree_graph()
+        self.assertEqual(detect_topology(vertices, edges, neighbors), "unknown")
+        
+        # Test valid coloring
+        cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=42)
+        proper, complete, ncolors = assess_coloring(cp, edges)
+        self.assertTrue(proper and complete)
+        self.assertLessEqual(ncolors, deg + 1)
+        
+        # Test reproducibility with the same seed
+        r1 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=123)
+        r2 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=123)
+        self.assertEqual(_canonical_coloring(r1), _canonical_coloring(r2))
+
+    def test_auto_non_bipartite_determinism(self):
+        # Genuinely non-bipartite unknown graphs (like complete K6) fall back to
+        # vizing_edge_coloring, which is fully deterministic and ignores seed.
+        vertices, edges, neighbors, deg = make_complete_graph(6)
+        self.assertEqual(detect_topology(vertices, edges, neighbors), "unknown")
+        
+        # Output should be identical regardless of seed
+        r1 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=1)
+        r2 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=999)
+        self.assertEqual(_canonical_coloring(r1), _canonical_coloring(r2))
+
 
 # ---------------------------------------------------------------------------
 # Scaling / algorithm-selection suite.
@@ -779,11 +770,6 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
 #                     including dense complete graphs and grids. It uses a greedy
 #                     simple-case fast path and falls back to a Vizing-chain step
 #                     (the Misra-Gries procedure) for the hard case.
-#   - new_bipartite : randomized, seedable; always proper and complete (uses
-#                     Case 1 direct assignment when a common free color exists,
-#                     and falls back to one Misra-Gries fan/Kempe-chain step
-#                     otherwise). Frequently achieves the bipartite optimum
-#                     (deg colors) on bipartite families due to random ordering.
 #   - sinnamon      : Sinnamon (2019)'s deterministic Greedy-Euler-Color.
 #                     Always terminates, proper+complete, and guaranteed to use
 #                     at most 2*deg-1 colors -- but that budget is itself much
@@ -797,16 +783,6 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
 #                     near-optimal (<= deg+1 colors) on every family tested,
 #                     including dense complete graphs and grids. Fast and the most
 #                     reliable algorithm here -- a good default.
-#   - moser_tardos  : randomized, seedable (numpy Generator via `seed`) and
-#                     reproducible for a fixed seed; always terminates (bounded
-#                     resample budget, then retries and finally raises). Proper+
-#                     complete near-optimal on sparse/moderate graphs; can time
-#                     out on large dense graphs (e.g. K_10).
-#   - assadi        : randomized, seedable and reproducible; always terminates
-#                     (bounded retry budget, then raises). Proper+complete and
-#                     near-optimal on sparse/moderate graphs, but the local-search
-#                     solver is slow at high degree, so it can time out as degree
-#                     grows.
 # ---------------------------------------------------------------------------
 @skip_in_ci
 @pytest.mark.slow
