@@ -43,8 +43,6 @@ def undirected_adjacency_matrix_from_edges(edges: list[tuple], qubit_labels: lis
         adjacency_matrix[qubit_labels.index(edge[1]), qubit_labels.index(edge[0])] = 1
     return adjacency_matrix
 
-# FUTURE TODO: This function assumes only H and S errors. Will need to update if/when
-# code is updated to add in C and A errors.
 def layer_snipper_from_qubit_graph(error_generators: list[tuple], encoder: "StandardCircuitEncoder", adjacency_matrix: _np.ndarray, hops: int) -> list[list[int]]:
     """
     Creates a "snipper" for a QPANN. This snipper will specify that, when predicting the
@@ -60,10 +58,14 @@ def layer_snipper_from_qubit_graph(error_generators: list[tuple], encoder: "Stan
     error_generators : list
         A list of elementary error generators, in the same format as used by QPANNs. Each element of this 
             list is a tuple. The first element of the tuple is a string specifying the error
-            generator type: 'H' or 'S', for Hamiltonian and stochastic errors (currently active
-            and Pauli-correlation errors are not supported). The second element of
-            the tuple is a single-element tuple where that single element is a string for the 
-            Pauli indexing the error (e.g., for 4 qubits, this could be 'XYZI').
+            generator type: 'H', 'S', 'C', or 'A' (Hamiltonian, Stochastic-Pauli, Stochastic
+            Pauli-Correlation, and Active, respectively; see "A Taxonomy of Small Errors",
+            Blume-Kohout et al.). The second element of the tuple is a tuple of Pauli string(s)
+            indexing the error: a single-element tuple for 'H'/'S' (e.g., for 4 qubits, this
+            could be `('XYZI',)`), or a two-element tuple of two DISTINCT Paulis for 'C'/'A'
+            (e.g. `('XIII', 'IIIY')`). `Q` (the qubit set this error generator "acts non-
+            trivially on", referenced above) is the *union* of the qubits acted on by every
+            Pauli in this tuple.
 
     encoder : CircuitEncoder
         The CircuitEncoder whose encoding this snipper will reference. Typically this will be
@@ -101,15 +103,23 @@ def layer_snipper_from_qubit_graph(error_generators: list[tuple], encoder: "Stan
     # Init the list that this function will return, specifying the relevant encoding indices for each error generator in `error_generators`
     encoding_indices = []
     for error_generator in error_generators:
-        # The Pauli that labels the error gen, as a string containing 'I', 'X', 'Y', and 'Z'.
-        pauli_string = error_generator[1][0]
+        # The Pauli(s) that label the error gen, as strings containing 'I', 'X', 'Y', and 'Z'.
+        # This is a 1-tuple for 'H'/'S' error generators, or a 2-tuple of two DISTINCT Paulis
+        # for 'C'/'A' error generators (see "A Taxonomy of Small Errors", Sec. V.C-V.D). In
+        # either case, we take the UNION of the qubits acted on by every Pauli in the tuple,
+        # since (per the same paper, Sec. VIII) the "support"/"weight" of a 'C'/'A' generator
+        # C_{P,Q}/A_{P,Q} is defined as the union of P's and Q's individual qubit supports.
+        pauli_strings = error_generator[1]
         # The following commented-out line is *wrong* but it used to be in the code, so leaving it here 
         # but commented out for now. It is unclear if somehow this was the correct thing to do in older
         # versions of the QPANN code before my (Tim's) rewrite.
         # pauli_string = pauli_string[::-1] # for reverse indexing
         #
-        # The indices of `pauli` that are not equal to 'I' are the qubits that the error acts on
-        qubits_acted_on_by_error = list(_np.where(_np.array(list(pauli_string)) != 'I')[0])
+        # The indices of each `pauli` that are not equal to 'I' are the qubits that PART of the
+        # error acts on; take the union across all Pauli(s) in this error generator's tuple.
+        qubits_acted_on_by_error = sorted(set().union(*[
+            set(_np.where(_np.array(list(pauli_string)) != 'I')[0]) for pauli_string in pauli_strings
+        ]))
         # All the qubits that are within `hops` steps on the graph of the qubits acted on by the error
         relevant_qubits = _np.unique(_np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
         # The encoding indices that encode what is happening to these qubits

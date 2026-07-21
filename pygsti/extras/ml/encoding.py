@@ -403,6 +403,16 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
     """
     from pygsti.processors import QubitProcessorSpec
     assert isinstance(pspec, QubitProcessorSpec)
+    if alpha_representation == 'matrix' and any(eg[0] in ('C', 'A') for eg in error_generators):
+        raise NotImplementedError(
+            "alpha_representation='matrix' (and 'expanded' probability_computation in QPANN) only "
+            "supports 'H'/'S' error generators. Its dense (2**n, 2*4**n)-shaped alpha matrix would "
+            "need to grow to (2**n, 2*4**n + 2*num_pauli_pairs(n)) to accommodate 'C'/'A' generators, "
+            "and num_pauli_pairs(n) grows as O(16**n) -- this is only tractable for very small n. Use "
+            "alpha_representation='concise' instead (the default), which has no such scaling problem "
+            "since it only ever computes alphas for the (few) error generators/indices that actually "
+            "occur in each circuit, regardless of type."
+        )
     indices, signs = error_propagation_tensors(circuits, error_generators, pspec)
     if alpha_representation == 'matrix':
         probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=indices)
@@ -456,7 +466,20 @@ def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list
     propagated_errorgen_layers = error_propagator._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam=False) # list of dicts of error generators
 
     indices = _np.array([[_tools.error_generator_index(err.errorgen_type, err.bel_to_strings()) for err in propagated_errorgen_layers[l]] for  l in range(circuit.depth)])
-    signs = _np.array([[_np.sign(val) for val in propagated_errorgen_layers[l].values()] for l in range(circuit.depth)])
+    # NOTE on the extra `error_generator_canonicalization_sign(...)` factor below (only ever
+    # nontrivial for 'A'-type generators): `err.bel_to_strings()` returns the propagated error
+    # generator's Pauli(s) in whatever order Clifford propagation happened to produce them --
+    # NOT necessarily the canonical (lexicographically sorted) order that `error_generator_index`
+    # uses internally to assign a stable index to a 'C'/'A' pair (regardless of input order).
+    # For 'C'-type generators this canonicalization is "free" (C_{P,Q} = C_{Q,P}, so reindexing
+    # into canonical order changes nothing). But for 'A'-type generators, A_{P,Q} = -A_{Q,P}
+    # (antisymmetric under swapping its two indexing Paulis -- see "A Taxonomy of Small Errors",
+    # Sec. V.D, Eq. 16), so silently reindexing a non-canonically-ordered propagated 'A' label
+    # into its canonical index WITHOUT also flipping the sign of its propagated rate would use
+    # the wrong sign. `error_generator_canonicalization_sign` returns exactly the compensating
+    # +-1 factor needed (and is a no-op, always returning +1, for 'H'/'S'/'C').
+    signs = _np.array([[_np.sign(val) * _tools.error_generator_canonicalization_sign(err.errorgen_type, err.bel_to_strings())
+                        for err, val in propagated_errorgen_layers[l].items()] for l in range(circuit.depth)])
 
     return indices, signs
 
@@ -610,6 +633,17 @@ def dense_alpha_matrix(circuit: _Circuit | _stim.Tableau, num_qubits: int, popul
     first-order impact of each end-of-circuit error generator on each n-bit string. Can
     be used to update an existing partially-populated alpha matrix.
 
+    NOTE: this dense representation only supports 'H'/'S' type error generators (hence its
+    fixed `2 * 4**n`-wide shape, covering exactly the 'H'+'S' index range from
+    `errgentools.error_generator_index`). It is NOT extended to 'C'/'A' generators: unlike the
+    'concise' representation (`first_order_outcome_probabilities_tensors_concise`), which only
+    ever computes alphas for the (few) error generators that actually occur in a given circuit,
+    this dense representation's width would need to grow to include 'C'/'A''s
+    `2*errgentools.num_pauli_pairs(n)`-sized index range, which grows as `O(16**n)` -- making
+    this representation intractable for anything but very small `n`. Use `'concise'` (the
+    default `alpha_representation` in `error_generator_tensors`) for circuits/models involving
+    'C'/'A' error generators.
+
     Parameters
     ----------
     circuit: Circuit or Stim.Tableau
@@ -622,7 +656,8 @@ def dense_alpha_matrix(circuit: _Circuit | _stim.Tableau, num_qubits: int, popul
         If not None, the indices of the error generators for which to compute the alpha tensor for.
         If None, the entire alpha tensor is computed. If a list of integers, this function creates
         an alpha tensor that is zero except for the alphas corresponding to the end-of-circuit 
-        error generators in this list.
+        error generators in this list. All indices must be in the 'H'/'S' range,
+        `[0, 2*4**num_qubits)` -- see the note above.
 
     existing_alpha_matrix : None or numpy.ndarray of shape (2**n, 2 * 4**n), optional
         An existing partially-populated alpha matrix. Note that providing an existing alpha matrix
@@ -636,10 +671,23 @@ def dense_alpha_matrix(circuit: _Circuit | _stim.Tableau, num_qubits: int, popul
     H or S type error generator, using the indexing defined in ml.tools. If an existing alpha matrix
     was provided, only elements corresponding to `populate_for_error_generators` have been changed.
 
+    Raises
+    ------
+    NotImplementedError
+        If `populate_for_error_generators` contains an index outside the 'H'/'S' range
+        `[0, 2*4**num_qubits)` (i.e. a 'C'/'A' index) -- see the note above.
     """
     num_nq_errgens = 2 * 4 ** num_qubits # We include the S_{III} and H_{III..} in our indexing
     nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
     if populate_for_error_generators is None: populate_for_error_generators = list(range(num_nq_errgens))
+    elif any(idx >= num_nq_errgens for idx in populate_for_error_generators):
+        raise NotImplementedError(
+            "dense_alpha_matrix only supports 'H'/'S' type error generators, i.e. indices in "
+            f"[0, {num_nq_errgens}) for num_qubits={num_qubits}, but `populate_for_error_generators` "
+            "contains at least one index outside that range (a 'C'/'A' index). Use the 'concise' "
+            "representation (`first_order_outcome_probabilities_tensors_concise`, the default in "
+            "`error_generator_tensors`) instead, which supports all four error generator types."
+        )
 
     tableau = _get_tableau(circuit)
 
@@ -697,6 +745,10 @@ def dense_alpha_matrix(circuit: _Circuit | _stim.Tableau, num_qubits: int, popul
 def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", indices: _np.ndarray | None = None, prior_error_generators: list | None = None, prior_alphas: _np.ndarray | None = None) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Compute ideal outcome probabilities and dense alpha matrices for a batch of circuits.
+
+    NOTE: only supports 'H'/'S' type error generators -- see `dense_alpha_matrix` (which this
+    function calls internally) for why. Use `first_order_outcome_probabilities_tensors_concise`
+    (the default in `error_generator_tensors`) for circuits/models involving 'C'/'A' generators.
 
     Parameters
     ----------

@@ -46,6 +46,153 @@ class MLSubpackageTester(unittest.TestCase):
         egs_graph = errgentools.up_to_weight_k_error_gens_from_qubit_graph(1, 2, laplacian, 1)
         self.assertTrue(len(egs_graph) > 0)
 
+    def test_errgentools_pauli_pairs(self):
+        # 'C' (Pauli-correlation) and 'A' (active) type error generators are indexed by an
+        # UNORDERED pair of two DISTINCT, non-identity Paulis (see "A Taxonomy of Small Errors",
+        # Blume-Kohout et al., Sec. V.C-V.D), unlike 'H'/'S' which are each indexed by a single
+        # Pauli. This tests the pair-indexing utilities added to support 'C'/'A'.
+
+        # canonical_pauli_pair: sorts into lexicographic order, tracks whether a swap occurred.
+        P, Q, swapped = errgentools.canonical_pauli_pair('ZZ', 'XY')
+        self.assertEqual((P, Q, swapped), ('XY', 'ZZ', True))
+        P, Q, swapped = errgentools.canonical_pauli_pair('XY', 'ZZ')
+        self.assertEqual((P, Q, swapped), ('XY', 'ZZ', False))
+        with self.assertRaises(ValueError):
+            errgentools.canonical_pauli_pair('XY', 'XY')  # P == Q is disallowed
+
+        # error_generator_canonicalization_sign: nontrivial (+-1) ONLY for 'A', since
+        # A_{P,Q} = -A_{Q,P} (antisymmetric), whereas C_{P,Q} = C_{Q,P} (symmetric) and 'H'/'S'
+        # have no ordering ambiguity (single Pauli).
+        self.assertEqual(errgentools.error_generator_canonicalization_sign('C', ('ZZ', 'XY')), 1)
+        self.assertEqual(errgentools.error_generator_canonicalization_sign('A', ('XY', 'ZZ')), 1)
+        self.assertEqual(errgentools.error_generator_canonicalization_sign('A', ('ZZ', 'XY')), -1)
+        self.assertEqual(errgentools.error_generator_canonicalization_sign('H', ('X',)), 1)
+
+        # num_pauli_pairs: matches "A Taxonomy of Small Errors"'s own stated total of 105 for n=2
+        # (Sec. V.G: "There are 105 linearly independent two-qubit Pauli-correlation generators").
+        self.assertEqual(errgentools.num_pauli_pairs(1), 3)
+        self.assertEqual(errgentools.num_pauli_pairs(2), 105)
+
+        # pauli_pair_to_index / index_to_pauli_pair: exhaustive round-trip for small n, order
+        # invariance, and full coverage of [0, num_pauli_pairs(n)) with no duplicates.
+        import itertools
+        for n in [1, 2, 3]:
+            nonident = [errgentools.index_to_paulistring(i, n) for i in range(1, 4**n)]
+            M = errgentools.num_pauli_pairs(n)
+            seen = set()
+            for p1, p2 in itertools.combinations(nonident, 2):
+                idx = errgentools.pauli_pair_to_index(p1, p2, n)
+                self.assertEqual(idx, errgentools.pauli_pair_to_index(p2, p1, n))  # order-invariant
+                self.assertNotIn(idx, seen)
+                seen.add(idx)
+                self.assertEqual(errgentools.index_to_pauli_pair(idx, n), tuple(sorted((p1, p2))))
+            self.assertEqual(seen, set(range(M)))
+
+        # up_to_weight_k_pauli_pairs: cross-validate against a slow/naive reference for small n,k.
+        def naive_pauli_pairs(k, n):
+            nonident = [errgentools.index_to_paulistring(i, n) for i in range(1, 4**n)]
+            pairs = set()
+            for p1, p2 in itertools.combinations(nonident, 2):
+                support = set(i for i, c in enumerate(p1) if c != 'I') | set(i for i, c in enumerate(p2) if c != 'I')
+                if len(support) <= k:
+                    pairs.add(tuple(sorted((p1, p2))))
+            return pairs
+
+        for n in [1, 2, 3]:
+            for k in range(1, n + 1):
+                fast = set(errgentools.up_to_weight_k_pauli_pairs(k, n))
+                self.assertEqual(fast, naive_pauli_pairs(k, n))
+                self.assertTrue(all(p1 < p2 for p1, p2 in fast))  # canonical order
+
+        # up_to_weight_k_pauli_pairs_from_qubit_graph: a weight-1 pair should always be allowed
+        # (single-qubit support is trivially "connected"); a weight-2 pair split across two
+        # UNCONNECTED qubits (no edge, and no path within num_hops) should be excluded, but
+        # included once num_hops is large enough to connect them.
+        n = 3
+        line_laplacian = np.array([[1, -1, 0], [-1, 2, -1], [0, -1, 1]])  # 0-1-2 line graph
+        pairs_hop1 = errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(2, n, line_laplacian, 1)
+        # A pair spanning qubits {0,2} (not adjacent in the line graph) should NOT appear at hops=1.
+        self.assertFalse(any(
+            (set(i for i, c in enumerate(p1) if c != 'I') | set(i for i, c in enumerate(p2) if c != 'I')) == {0, 2}
+            for p1, p2 in pairs_hop1
+        ))
+        pairs_hop2 = errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(2, n, line_laplacian, 2)
+        self.assertTrue(any(
+            (set(i for i, c in enumerate(p1) if c != 'I') | set(i for i, c in enumerate(p2) if c != 'I')) == {0, 2}
+            for p1, p2 in pairs_hop2
+        ))
+
+    def test_errgentools_error_generator_index_ca(self):
+        # 'H'/'S' backward compatibility: exact same index values as before 'C'/'A' were added.
+        self.assertEqual(errgentools.error_generator_index('H', ('IX',)), 1)
+        self.assertEqual(errgentools.error_generator_index('H', ('ZZ',)), 15)
+        self.assertEqual(errgentools.error_generator_index('S', ('IX',)), 17)
+        self.assertEqual(errgentools.index_to_error_gen(1, 2), ('H', ('IX',)))
+        self.assertEqual(errgentools.index_to_error_gen(17, 2), ('S', ('IX',)))
+
+        # 'C'/'A': index is invariant to input order (internally canonicalized), and
+        # index_to_error_gen's round trip always returns the canonical (sorted) order.
+        for typ in ['C', 'A']:
+            idx1 = errgentools.error_generator_index(typ, ('XY', 'ZZ'))
+            idx2 = errgentools.error_generator_index(typ, ('ZZ', 'XY'))
+            self.assertEqual(idx1, idx2)
+            self.assertEqual(errgentools.index_to_error_gen(idx1, 2), (typ, ('XY', 'ZZ')))
+
+        # Full index range [0, num_error_generators(n)) round-trips exactly and without overlap
+        # between the H/S/C/A sub-ranges, for a small n.
+        n = 2
+        total = errgentools.num_error_generators(n)
+        self.assertEqual(total, 2 * 4**n + 2 * errgentools.num_pauli_pairs(n))
+        seen_indices = set()
+        for i in range(total):
+            typ, paulis = errgentools.index_to_error_gen(i, n)
+            self.assertEqual(errgentools.error_generator_index(typ, paulis), i)
+            self.assertNotIn(i, seen_indices)
+            seen_indices.add(i)
+        self.assertEqual(seen_indices, set(range(total)))
+        with self.assertRaises(ValueError):
+            errgentools.index_to_error_gen(total, n)  # one past the end
+
+        # Validity checks: 'C'/'A' with P==Q or an identity Pauli must raise.
+        with self.assertRaises(ValueError):
+            errgentools.error_generator_index('C', ('XY', 'XY'))
+        with self.assertRaises(ValueError):
+            errgentools.error_generator_index('A', ('II', 'XY'))
+        with self.assertRaises(ValueError):
+            errgentools.error_generator_index('Q', ('XY',))  # unknown type
+
+    def test_errgentools_up_to_weight_k_error_gens_ca(self):
+        n = 3
+        laplacian = np.array([[1, -1, 0], [-1, 2, -1], [0, -1, 1]])
+
+        # Mixed H/S/C/A dispatch: correct counts and correct tuple "shape" per type.
+        egs = errgentools.up_to_weight_k_error_gens(2, n, egtypes=['H', 'S', 'C', 'A'])
+        h = [eg for eg in egs if eg[0] == 'H']
+        s = [eg for eg in egs if eg[0] == 'S']
+        c = [eg for eg in egs if eg[0] == 'C']
+        a = [eg for eg in egs if eg[0] == 'A']
+        self.assertEqual(len(h), len(errgentools.up_to_weight_k_paulis(2, n)))
+        self.assertEqual(len(s), len(h))
+        self.assertEqual(len(c), len(errgentools.up_to_weight_k_pauli_pairs(2, n)))
+        self.assertEqual(len(a), len(c))
+        self.assertTrue(all(len(eg[1]) == 1 for eg in h + s))
+        self.assertTrue(all(len(eg[1]) == 2 for eg in c + a))
+
+        # Graph-restricted dispatch, single type ('C' only).
+        egs_c_only = errgentools.up_to_weight_k_error_gens_from_qubit_graph(2, n, laplacian, 1, egtypes=['C'])
+        self.assertTrue(all(eg[0] == 'C' for eg in egs_c_only))
+        self.assertEqual(len(egs_c_only), len(errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(2, n, laplacian, 1)))
+
+        # Backward compatibility: default egtypes=['H','S'] is unaffected by the 'C'/'A' additions.
+        egs_default = errgentools.up_to_weight_k_error_gens(2, n)
+        self.assertTrue(all(eg[0] in ('H', 'S') for eg in egs_default))
+
+        # Unknown types raise a clear error (both dispatch functions).
+        with self.assertRaises(ValueError):
+            errgentools.up_to_weight_k_error_gens(2, n, egtypes=['H', 'Q'])
+        with self.assertRaises(ValueError):
+            errgentools.up_to_weight_k_error_gens_from_qubit_graph(2, n, laplacian, 1, egtypes=['Q'])
+
     def test_encoding(self):
         nonstd_gate_unitaries = {}
         availability = {}
@@ -69,6 +216,111 @@ class MLSubpackageTester(unittest.TestCase):
         paulis = encoding.make_paulis(2, 1)
         self.assertTrue(len(paulis) > 0)
 
+    def test_encoding_active_generator_canonicalization_sign(self):
+        # Regression/correctness test for a subtlety in `circuit_error_propagation_matrices`
+        # specific to 'A'-type (active) error generators: A_{P,Q} = -A_{Q,P} (antisymmetric
+        # under swapping its two indexing Paulis -- see "A Taxonomy of Small Errors", Sec. V.D,
+        # Eq. 16), so if Clifford propagation happens to produce a non-canonically-ordered pair
+        # (Q,P) with Q > P, reindexing it into the canonical index for (P,Q) requires ALSO
+        # flipping the sign of the propagated rate to compensate -- otherwise the wrong sign
+        # would be used. ('C'-type generators need no such correction, since C_{P,Q}=C_{Q,P}.)
+        #
+        # Hand-derived example: propagating A_{X,Y} through a single-qubit "Gzpi2" layer (whose
+        # stim tableau is exactly the S/phase gate: X->Y with sign +1, Y->-X with sign -1) gives
+        # propagated basis labels (Y, X) [i.e. bel_to_strings() = ('Y','X')] with raw propagated
+        # weightmod = sign(X->Y) * sign(Y->-X) = (+1)*(-1) = -1. Since (Y,X) is NOT in canonical
+        # order (X < Y), canonicalizing it to (X,Y) requires an additional sign flip of -1
+        # (A_{Y,X} = -A_{X,Y}). Combined: (-1) * (-1) = +1.
+        pspec = _ProcessorSpec(1, ['Gzpi2', 'Gh'], {}, {}, geometry="line", qubit_labels=[0])
+        # 2-layer circuit: the layer-0 error generator propagates through layer 1 (Gzpi2).
+        circuit = Circuit('[Gh:0][Gzpi2:0]@(0)')
+        indices, signs = encoding.circuit_error_propagation_matrices(circuit, [('A', ('X', 'Y'))])
+        expected_index = errgentools.error_generator_index('A', ('X', 'Y'))
+        self.assertEqual(indices[0, 0], expected_index)
+        self.assertEqual(signs[0, 0], 1)
+
+        # Cross-check against a DIRECT, independent computation of the physical alpha value
+        # (using the RAW, non-canonicalized propagated label) to confirm the canonicalized
+        # index+sign gives the exact same physically-meaningful result -- not just that the
+        # sign bookkeeping is internally self-consistent.
+        from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
+        from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as LSE
+
+        prop = ErrorGeneratorPropagator(None)
+        stim_layers = prop.construct_stim_layers(circuit, drop_first_layer=True)
+        propagation_layers = prop.construct_propagation_layers(stim_layers)
+        lse = LSE('A', [stim.PauliString('X'), stim.PauliString('Y')])
+        raw_propagated, raw_weightmod = lse.propagate_error_gen_tableau(propagation_layers[0], 1.0)
+
+        tableau = circuit.convert_to_stim_tableau()
+        canonical_label = errgentools.index_to_error_gen(indices[0, 0], 1, as_label=True)
+        for bs in ['0', '1']:
+            from pygsti.tools import errgenproptools as ep
+            raw_alpha = raw_weightmod * ep.alpha(raw_propagated, tableau, bs).real
+            canonical_alpha = signs[0, 0] * ep.alpha(canonical_label, tableau, bs).real
+            self.assertAlmostEqual(raw_alpha, canonical_alpha)
+
+        # A parallel 'C'-type check: same propagation math (weightmod), but NO canonicalization
+        # sign correction should ever be applied (C is symmetric under swapping P,Q).
+        indices_c, signs_c = encoding.circuit_error_propagation_matrices(circuit, [('C', ('X', 'Y'))])
+        self.assertEqual(indices_c[0, 0], errgentools.error_generator_index('C', ('X', 'Y')))
+        self.assertEqual(signs_c[0, 0], -1)  # the raw weightmod itself, uncorrected
+
+    def test_encoding_error_generator_tensors_with_ca(self):
+        # End-to-end test of the default ('concise') `error_generator_tensors` pipeline with a
+        # mix of all four error generator types, including weight-2 'C'/'A' pairs whose two
+        # Paulis act on different qubits. Cross-validates every entry of the resulting alpha
+        # tensor against a direct, independent `alpha_coefficient` computation.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [
+            Circuit('[Gxpi2:0][Gcphase:0:1]@(0,1)'),
+            Circuit('[Gypi2:0Gxpi2:1][Gcphase:0:1]@(0,1)'),
+        ]
+        modelled_error_generators = [('H', ('XI',)), ('S', ('IX',)), ('C', ('XI', 'YZ')), ('A', ('XI', 'YZ'))]
+
+        tensors = encoding.error_generator_tensors(circuits, modelled_error_generators, pspec,
+                                                     alpha_representation='concise')
+        probabilities, alphas = tensors['probabilities'], tensors['alphas']
+        indices, signs = tensors['indices'], tensors['signs']
+        nbit_strings = ['00', '01', '10', '11']
+
+        for c_idx, circuit in enumerate(circuits):
+            tableau = circuit.convert_to_stim_tableau()
+            scale = 1 / 2 ** encoding._egptools.random_support(tableau)
+            for l, bs in enumerate(nbit_strings):
+                for layer in range(circuit.depth):
+                    for j in range(len(modelled_error_generators)):
+                        idx = indices[c_idx, layer, j]
+                        sign = signs[c_idx, layer, j]
+                        expected = sign * scale * encoding.alpha_coefficient(idx, 2, tableau, bs)
+                        self.assertAlmostEqual(alphas[c_idx, l, layer, j], expected, places=10)
+
+    def test_encoding_matrix_representation_rejects_ca(self):
+        # The dense ('matrix'/'expanded') alpha representation only supports 'H'/'S' (its fixed
+        # `2*4**n`-wide array would need to grow by `2*num_pauli_pairs(n)` -- which is O(16**n)
+        # -- to accommodate 'C'/'A'; see `dense_alpha_matrix`'s docstring). It should raise a
+        # clear, early `NotImplementedError` if asked to include 'C'/'A' generators, rather than
+        # silently producing wrong results or an opaque IndexError from array overflow.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0][Gcphase:0:1]@(0,1)')]
+
+        with self.assertRaises(NotImplementedError):
+            encoding.error_generator_tensors(circuits, [('C', ('XI', 'YZ'))], pspec, alpha_representation='matrix')
+        with self.assertRaises(NotImplementedError):
+            encoding.error_generator_tensors(circuits, [('A', ('XI', 'YZ'))], pspec, alpha_representation='matrix')
+
+        # 'H'/'S'-only 'matrix' usage must still work (backward compatibility).
+        result = encoding.error_generator_tensors(circuits, [('H', ('XI',)), ('S', ('IZ',))], pspec,
+                                                    alpha_representation='matrix')
+        self.assertEqual(result['alphas'].shape, (1, 4, 2 * 4**2))
+
+        # dense_alpha_matrix itself should also raise directly if given an out-of-range (C/A) index.
+        tableau = circuits[0].convert_to_stim_tableau()
+        with self.assertRaises(NotImplementedError):
+            encoding.dense_alpha_matrix(tableau, 2, populate_for_error_generators=[2 * 4**2])
+
     def test_snippers(self):
         adj = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
         np.testing.assert_array_equal(adj, np.array([[0, 1], [1, 0]]))
@@ -80,6 +332,43 @@ class MLSubpackageTester(unittest.TestCase):
         error_generators = [('H', ('IX',)), ('S', ('ZZ',))]
         snipper = snippers.layer_snipper_from_qubit_graph(error_generators, encoder, adj, 1)
         self.assertEqual(len(snipper), len(error_generators))
+
+    def test_snippers_ca_union_support(self):
+        # For 'C'/'A' error generators (indexed by a pair of two Paulis), the "support" a
+        # snipper should look at is the UNION of the qubits acted on by BOTH Paulis in the pair
+        # (see "A Taxonomy of Small Errors", Sec. VIII: "The support of a generator C_{P,Q} or
+        # A_{P,Q} is the union of the supports of P and Q"), not just the first Pauli's support
+        # (which is all that the pre-'C'/'A' implementation looked at).
+        nonstd_gate_unitaries = {}
+        availability = {}
+        pspec = _ProcessorSpec(4, ['{idle}', 'Gx', 'Gy'], nonstd_gate_unitaries, availability, geometry="line")
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        adj = snippers.undirected_adjacency_matrix_from_edges([(0, 1), (1, 2), (2, 3)], [0, 1, 2, 3])
+
+        # 'IIIX' touches qubit 3 only; 'IYII' touches qubit 1 only. Union support = {1, 3}.
+        error_generators_ca = [('C', ('IIIX', 'IYII'))]
+        snip_ca = snippers.layer_snipper_from_qubit_graph(error_generators_ca, encoder, adj, hops=0)
+        expected = encoder.indices_for_qubits([1, 3])
+        self.assertEqual(snip_ca[0], expected)
+
+        # With hops=1, should pick up neighbors of BOTH qubits 1 and 3 (i.e. also 0, 2 -- the
+        # full line graph), not just neighbors of one of them.
+        snip_ca_hops1 = snippers.layer_snipper_from_qubit_graph(error_generators_ca, encoder, adj, hops=1)
+        expected_hops1 = encoder.indices_for_qubits([0, 1, 2, 3])
+        self.assertEqual(snip_ca_hops1[0], expected_hops1)
+
+        # A same-qubit 'A' pair (both Paulis on qubit 3 only) should behave like a weight-1
+        # single-Pauli generator on that qubit.
+        error_generators_a_1q = [('A', ('IIIX', 'IIIY'))]
+        snip_a_1q = snippers.layer_snipper_from_qubit_graph(error_generators_a_1q, encoder, adj, hops=0)
+        self.assertEqual(snip_a_1q[0], encoder.indices_for_qubits([3]))
+
+        # A mix of H/S (1-tuple) and C/A (2-tuple) generators in the same call should still work
+        # (regression check that the H/S code path is unaffected by the 2-tuple support).
+        mixed = [('H', ('IIIX',)), ('C', ('IIIX', 'IYII'))]
+        snip_mixed = snippers.layer_snipper_from_qubit_graph(mixed, encoder, adj, hops=0)
+        self.assertEqual(snip_mixed[0], encoder.indices_for_qubits([3]))
+        self.assertEqual(snip_mixed[1], encoder.indices_for_qubits([1, 3]))
 
     def test_legacy(self):
         nonstd_gate_unitaries = {}
@@ -167,6 +456,54 @@ class MLSubpackageTester(unittest.TestCase):
 
         # At least one weight should have actually changed, proving gradients flowed through
         # training (not just that .fit() ran without crashing).
+        changed = any(not np.allclose(w0, w1.numpy())
+                      for w0, w1 in zip(initial_weights, model.trainable_variables))
+        self.assertTrue(changed)
+
+    def test_qpann_forward_and_fit_with_ca_generators(self):
+        # Full end-to-end test that the entire pipeline (encoding -> tensors -> QPANN -> forward
+        # pass + training) works correctly with 'C' (Pauli-correlation) and 'A' (active) type
+        # error generators mixed in with 'H'/'S', including weight-2 'C'/'A' pairs whose two
+        # Paulis act on DIFFERENT qubits (exercising the snipper's union-support logic and
+        # encoding's canonicalization-sign logic together, in the full model context).
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [
+            Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1[Gxpi2:1Gypi2:0]@(0,1)'),
+            Circuit('[Gypi2:0][Gcphase:0:1][Gxpi2:1]@(0,1)'),
+            Circuit('[Gxpi2:0Gxpi2:1]Gcphase:0:1@(0,1)'),
+        ]
+        modelled_error_generators = [
+            ('H', ('XI',)), ('S', ('IX',)),
+            ('C', ('XI', 'YZ')), ('A', ('XI', 'YZ')),  # weight-2 pair spanning both qubits
+        ]
+
+        tensors = encoding.error_generator_tensors(circuits, modelled_error_generators, pspec,
+                                                     alpha_representation='concise')
+        probabilities, alphas = tensors['probabilities'], tensors['alphas']
+
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        circuits_tensor = encoding.circuits_to_tensor(circuits, encoder)
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(modelled_error_generators, encoder,
+                                                            adjacency_matrix, hops=1)
+
+        model = qpanns.QPANN(encoder.length, modelled_error_generators, snipper)
+        x = [circuits_tensor, alphas, probabilities]
+
+        # Forward pass.
+        output = model(x)
+        self.assertEqual(tuple(output.shape), (len(circuits), 2 ** pspec.num_qubits))
+        self.assertTrue(np.all(np.isfinite(output.numpy())))
+
+        # 'C'/'A' should be treated as unconstrained/linear (like 'H'), NOT squared (like 'S').
+        self.assertEqual(list(model.stochastic_mask), [False, True, False, False])
+
+        # Train.
+        initial_weights = [w.numpy().copy() for w in model.trainable_variables]
+        self.assertTrue(len(initial_weights) > 0)
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-1), loss='mse')
+        model.fit(x, probabilities + 0.01, epochs=2, verbose=0)
         changed = any(not np.allclose(w0, w1.numpy())
                       for w0, w1 in zip(initial_weights, model.trainable_variables))
         self.assertTrue(changed)
