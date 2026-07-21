@@ -216,6 +216,50 @@ class CircuitSplittingTester(BaseCase):
         self.assertEqual(tensored_c[0][1], Label(("Gy", "Q1")))
         self.assertEqual(tensored_c[0][0], Label(("Gx", "Q0")))
 
+    def test_batch_tensor_reorder_with_multiqubit_gate(self):
+        # Three circuits, one of which contains a 2-qubit gate, tensored together with
+        # non-contiguous/non-default target_lines and a global_line_order that is neither
+        # the default sorted order nor a simple reversal.
+        c1 = _Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1))
+        c2 = _Circuit("Gy:0", line_labels=(0,))
+        c3 = _Circuit("Gz:0", line_labels=(0,))
+
+        circuits = [c1, c2, c3]
+
+        idle_label = Label(())  # empty label is the idle
+        labels_in_circuits = [
+            Label('Gcnot', (0, 1)), Label('Gy', (0,)), Label('Gz', (0,)), idle_label
+        ]
+        map_d = {l: l for l in labels_in_circuits}
+        map_d[idle_label] = Label("Gi", 0)
+        layer_mappers = {1: map_d, 2: map_d}
+
+        # c1 uses two target lines, c2 and c3 each use one.
+        target_lines = (('Q0', 'Q2'), ('Q1',), ('Q3',))
+        # Neither sorted(('Q0','Q1','Q2','Q3')) nor its reverse.
+        global_line_order = ('Q3', 'Q0', 'Q1', 'Q2')
+
+        tensored_c = batch_tensor(
+            circuits, layer_mappers,
+            global_line_order=global_line_order,
+            target_lines=target_lines
+        )
+
+        self.assertEqual(tensored_c.line_labels, global_line_order)
+
+        expected_c = _Circuit(
+            [Label([('Gcnot', 'Q0', 'Q2'), ('Gy', 'Q1'), ('Gz', 'Q3')])],
+            line_labels=['Q3', 'Q0', 'Q1', 'Q2']
+        )
+        self.assertEqual(tensored_c, expected_c)
+
+        # Confirm the 2-qubit gate still acts on its correct (remapped) target lines,
+        # not on some other pair introduced by the reordering.
+        layer = tensored_c[0]
+        cnot_ops = [op for op in layer if op.name == 'Gcnot']
+        self.assertEqual(len(cnot_ops), 1)
+        self.assertEqual(set(cnot_ops[0].qubits), {'Q0', 'Q2'})
+
     def test_batch_tensor_string_labels(self):
         c1 = _Circuit("Gx:0", line_labels=(0,))
         c2 = _Circuit("Gy:0", line_labels=(0,))
