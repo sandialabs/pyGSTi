@@ -976,7 +976,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
                 errorgens.append((_LSE('C', new_bels), 1j*w*ptup1[0]*ptup2[0]))
         else:
-            if ptup[1] != identity:
+            if ptup1[1] != identity:
                 errorgens.append((_LSE('S', [ptup1[1]]), 2*1j*w*ptup1[0]*ptup2[0]))
 
         ptup1 = pauli_product(errorgen_1_bel_0, errorgen_2_bel_1)
@@ -986,7 +986,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
                 new_bels = [ptup1[1], ptup2[1]] if stim_pauli_string_less_than(ptup1[1], ptup2[1]) else [ptup2[1], ptup1[1]]
                 errorgens.append((_LSE('C', new_bels), -1j*w*ptup1[0]*ptup2[0]))
         else:
-            if ptup[1] != identity:
+            if ptup1[1] != identity:
                 errorgens.append((_LSE('S', [ptup1[1]]), -2*1j*w*ptup1[0]*ptup2[0]))
         
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
@@ -8024,7 +8024,7 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
                 sensitivity = 2*phis[running_phi_index].imag
                 running_phi_index+=1
             else: # A1, includes additional term because P and Q anticommuted
-                sensitivities_by_bitstring = 2*(phis[running_phi_index] + phis[running_phi_index+1]).imag
+                sensitivity = 2*(phis[running_phi_index] + phis[running_phi_index+1]).imag
                 running_phi_index+=2
             sensitivities_by_bitstring[i,j] = sensitivity
 
