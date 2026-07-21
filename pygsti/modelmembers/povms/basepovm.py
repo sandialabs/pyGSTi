@@ -177,13 +177,6 @@ class _BasePOVM(_POVM):
             return super(_BasePOVM, self).__setitem__(key, value)
 
         raise NotImplementedError("TODO: fix ability to set POVM effects after initialization")
-        #if key == self.complement_label:
-        #    raise KeyError("Cannot directly assign the complement effect vector!")
-        #value = value.copy() if isinstance(value, _POVMEffect) else \
-        #    _FullPOVMEffect(value)   # EVOTYPE -----------------------------------------???????????????????????????????
-        #_collections.OrderedDict.__setitem__(self, key, value)
-        #self._reset_member_gpindices()
-        #self._rebuild_complement()
 
     def simplify_effects(self, prefix=""):
         """

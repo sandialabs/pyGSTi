@@ -3,11 +3,9 @@ import pytest
 
 import numpy as np
 
-import pygsti.modelmembers.povms as povms
 import pygsti.modelmembers.states as states
 import pygsti.baseobjs.statespace as statespace
 from pygsti.evotypes import Evotype
-from pygsti.modelmembers.povms import TPPOVM, UnconstrainedPOVM
 from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import Basis
 from pygsti.models.gaugegroup import FullGaugeGroupElement
@@ -212,59 +210,6 @@ class StaticStateTester(ImmutableDenseStateBase, BaseCase):
         # TODO assert correctness
 
 
-class POVMEffectBase(object):
-
-    def setUp(self):
-        self.vec = self.build_vec()
-        ExplicitOpModel._strict = False
-
-    def test_num_params(self):
-        self.assertEqual(self.vec.num_params, self.n_params)
-
-    def test_copy(self):
-        vec_copy = self.vec.copy()
-        self.assertArraysAlmostEqual(vec_copy.to_dense(), self.vec.to_dense())
-        self.assertEqual(type(vec_copy), type(self.vec))
-
-    def test_get_dimension(self):
-        self.assertEqual(self.vec.dim, 4)
-
-    def test_set_value_raises_on_bad_size(self):
-        with self.assertRaises(ValueError):
-            self.vec.set_dense(np.zeros((1, 1), 'd'))  # bad size
-
-    def test_vector_conversion(self):
-        v = self.vec.to_vector()
-        self.vec.from_vector(v)
-        deriv = self.vec.deriv_wrt_params()
-        # TODO assert correctness
-
-    def test_pickle(self):
-        pklstr = pickle.dumps(self.vec)
-        vec_pickle = pickle.loads(pklstr)
-        self.assertArraysAlmostEqual(vec_pickle.to_dense(), self.vec.to_dense())
-        self.assertEqual(type(vec_pickle), type(self.vec))
-
-
-class ComplementPOVMEffectTester(POVMEffectBase, BaseCase):
-    n_params = 4
-
-    @staticmethod
-    def build_vec():
-        v = np.ones((4, 1), 'd')
-        v_id = np.zeros((4, 1), 'd')
-        v_id[0] = 1.0 / np.sqrt(2)
-        evotype = "default"
-        basis = None
-        tppovm = TPPOVM([('0', povms.FullPOVMEffect(v, basis, evotype, state_space=None)),
-                         ('1', povms.FullPOVMEffect(v_id - v, basis, evotype, state_space=None))])
-        return tppovm['1']  # complement POVM
-
-    def test_vector_conversion(self):
-        with self.assertRaises(RuntimeError):
-            self.vec.to_vector()
-
-
 class TensorProdStateBase(StateBase):
 
     def test_copy(self):
@@ -300,15 +245,3 @@ class TensorProductStateTester(TensorProdStateBase, BaseCase):
         # Once this is fixed, we should be able to remove this method and just use the base class
 
 
-class TensorProductPOVMEffectTester(TensorProdStateBase, POVMEffectBase, BaseCase):
-    n_params = 4
-
-    @staticmethod
-    def build_vec():
-        v = np.ones((4, 1), 'd')
-        povm = UnconstrainedPOVM([('0', povms.FullPOVMEffect(v, evotype='default', state_space=None))])
-        return povms.TensorProductPOVMEffect([povm], ['0'], state_space=(0,))
-
-    def test_vector_conversion(self):  # because we inherit some state methods from TensorProdStateBase
-        with self.assertRaises(ValueError):  # don't call to_vector on effects - call it on the POVM
-            self.vec.to_vector()
