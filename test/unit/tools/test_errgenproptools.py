@@ -76,7 +76,37 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 print('analytic_commutator_mat=')
                 print_mx(analytic_commutator_mat)
                 raise ValueError()
-                
+
+    def test_errorgen_commutator_S_A_degenerate_case(self):
+        # Regression test for a bug in error_generator_commutator's 'S'-'A' branch: it referenced
+        # an undefined local variable `ptup` (should have been `ptup1`) inside the
+        # `if ptup1[1] == ptup2[1]:` branch (two occurrences), causing an UnboundLocalError. This
+        # branch is only reached when, for single-qubit Paulis P (the S generator's own Pauli) and
+        # the A generator's basis elements Q1,Q2, the (unsigned) products P*Q1 and Q2*P coincide --
+        # which, since unsigned single-qubit Pauli multiplication is abelian and P is invertible,
+        # requires Q1 == Q2. A well-formed A_{Q1,Q2} generator requires Q1 != Q2 (see "A Taxonomy of
+        # Small Errors", Sec. V.D), so this is only reachable for a malformed/degenerate A(Q,Q)
+        # label -- which nothing in LocalStimErrorgenLabel's constructor currently prevents one from
+        # constructing. This test confirms the fix (the typo'd `ptup` -> `ptup1`) so this code path
+        # no longer crashes with an UnboundLocalError.
+        s_label = _LSE('S', [stim.PauliString('Z')])
+        degenerate_a_label = _LSE('A', [stim.PauliString('X'), stim.PauliString('X')])
+        # Should not raise UnboundLocalError.
+        result = _eprop.error_generator_commutator(s_label, degenerate_a_label)
+        self.assertIsInstance(result, list)
+
+        # Also confirm well-formed (non-degenerate) S,A pairs still work correctly (regression
+        # check against the numerical ground truth, since this exact pairing wasn't necessarily
+        # hit by test_errorgen_commutators's 2-qubit complete-basis sweep above).
+        errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(2), default_label_type='local')
+        errorgen_lbl_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_basis.labels, errorgen_basis.elemgen_matrices)}
+        s_lbl = LEEL('S', ('XI',))
+        a_lbl = LEEL('A', ('IX', 'YY'))
+        numeric_commutator = _eprop.error_generator_commutator_numerical(s_lbl, a_lbl, errorgen_lbl_matrix_dict)
+        analytic_commutator = _eprop.error_generator_commutator(_LSE.cast(s_lbl), _LSE.cast(a_lbl))
+        analytic_commutator_mat = _eprop.errorgen_layer_to_matrix(analytic_commutator, 2, errorgen_lbl_matrix_dict)
+        self.assertLess(np.linalg.norm(numeric_commutator - analytic_commutator_mat), 1e-10)
+
     def test_errorgen_composition(self):
         
         #create an error generator basis.
@@ -455,6 +485,39 @@ class ApproxStabilizerMethodTester(BaseCase):
                     print(f'{_eprop.bulk_alpha(errorgen_labels, ckt_tableau, [bitstring])=}')
                     print(f'{_compute_alphas(errorgen_labels, ckt_tableau, bitstring)=}')
                     raise ValueError('Bulk and individually computed alpha values are different.')
+
+    def test_slow_bulk_alpha_weight_1_active_generators(self):
+        # Regression test for a bug in the pure-Python `slow_bulk_alpha` fallback (the function
+        # used whenever the Cython `fasterrgencalc` extension is unavailable -- `bulk_alpha` is
+        # simply aliased to the Cython `fast_bulk_alpha` when it *is* available, which silently
+        # masks this bug in the common case). The "A1" branch (weight-1 'A'-type generators whose
+        # two Paulis anticommute -- i.e. essentially *every* weight-1 A-type generator, since any
+        # two distinct single-qubit Paulis anticommute) assigned to `sensitivities_by_bitstring`
+        # (the function's entire return array) instead of the per-iteration local `sensitivity`,
+        # which was then read on the very next line -- an UnboundLocalError. This test calls
+        # `slow_bulk_alpha` directly (bypassing the Cython alias) to exercise the actual
+        # pure-Python code path, regardless of whether the Cython extension happens to be built
+        # in the current environment.
+        tableau = stim.PauliString('XI').to_tableau()
+        errgen = _LSE('A', [stim.PauliString('X'), stim.PauliString('Y')])
+        bitstrings = ['00', '01', '10', '11']
+        for bitstring in bitstrings:
+            expected = _eprop.alpha(errgen, tableau, bitstring)
+            result = _eprop.slow_bulk_alpha([errgen], tableau, [bitstring])
+            self.assertAlmostEqual(result[0, 0], expected)
+
+        # Also check a weight-2+ random sample from a complete 3-qubit basis, restricted to A-type
+        # generators, for good measure (both anticommuting and commuting P,Q sub-cases).
+        errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local',
+                                                          elementary_errorgen_types=('A',))
+        rng = np.random.default_rng(0)
+        random_errorgens = rng.choice(np.fromiter(errorgen_basis.labels, dtype=object), size=20, replace=False)
+        errorgen_labels = [_LSE.cast(lbl) for lbl in random_errorgens]
+        tableau_3q = stim.Tableau.random(3)
+        for bitstring in [''.join(p) for p in product(['0', '1'], repeat=3)]:
+            expected = [_eprop.alpha(eg, tableau_3q, bitstring) for eg in errorgen_labels]
+            result = _eprop.slow_bulk_alpha(errorgen_labels, tableau_3q, [bitstring])
+            np.testing.assert_allclose(result[0, :], expected, atol=1e-10)
 
     def test_alpha_pauli(self):
         from pygsti.modelpacks import smq2Q_XYCPHASE
