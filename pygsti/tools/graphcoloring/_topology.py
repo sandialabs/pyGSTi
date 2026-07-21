@@ -10,7 +10,7 @@ import networkx
 from typing import List, Optional, Union
 
 from ._common import Vertex, Edge, NeighborMap, Coloring, order
-from ._vizing import vizing_edge_coloring, _NewBipartiteEdgeColoring
+from ._vizing import vizing_edge_coloring, _BipartiteEdgeColoring
 
 
 def _is_bipartite(vertices: List[Vertex], edges: List[Edge]) -> bool:
@@ -227,6 +227,6 @@ def auto_edge_coloring(deg: int, vertices: List[Vertex], edges: List[Edge],
             return _GridTorusEdgeColoring(vertices, s, topology).color()
 
     if _is_bipartite(vertices, edges):
-        return _NewBipartiteEdgeColoring(deg, edges, neighbors, seed=seed).color()
+        return _BipartiteEdgeColoring(deg, edges, neighbors, seed=seed).color()
 
     return vizing_edge_coloring(deg, vertices, edges, neighbors)

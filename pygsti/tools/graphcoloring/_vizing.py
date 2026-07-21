@@ -5,7 +5,7 @@ edge coloring using at most deg+1 colors (Vizing's theorem) and runs in O(n*m)
 time (n = |vertices|, m = |edges|) — the standard worst-case time complexity
 for this constructive Vizing-chain/Misra-Gries implementation.
 
-Also includes an internal `_NewBipartiteEdgeColoring` helper subclass.
+Also includes an internal `_BipartiteEdgeColoring` helper subclass.
 
 References:
     V. G. Vizing, "On an estimate of the chromatic class of a p-graph,"
@@ -276,7 +276,7 @@ def vizing_edge_coloring(
     return _VizingEdgeColoring(deg, edges, neighbors).color()
 
 
-class _NewBipartiteEdgeColoring(_VizingFamilyEdgeColoring):
+class _BipartiteEdgeColoring(_VizingFamilyEdgeColoring):
     """
     Randomised (Delta+1)-edge coloring that always returns a complete, valid
     coloring. Edges are processed in a random order (`_ordered_edges`); for

@@ -8,6 +8,15 @@ from ._vizing import misra_gries_edge_coloring, vizing_edge_coloring
 from ._sinnamon import sinnamon_2d_minus_1_edge_coloring, sinnamon_euler_color_edge_coloring
 
 
+VALID_ALGORITHMS = (
+    "misra_gries",
+    "vizing",
+    "sinnamon",
+    "random_euler_color",
+    "auto",
+)
+
+
 def switchboard_find_edge_coloring(
     algorithm_name: str, deg: int, vertices: List[Vertex], edges: List[Edge],
     neighbors: NeighborMap, seed: Optional[Union[int, np.random.Generator]] = None
@@ -50,4 +59,7 @@ def switchboard_find_edge_coloring(
     elif algorithm_name == "auto":
         return auto_edge_coloring(deg, vertices, edges, neighbors, seed=seed)
     else:
-        raise ValueError(f"Unknown edge coloring algorithm: {algorithm_name}")
+        raise ValueError(
+            f"Unknown edge coloring algorithm: {algorithm_name!r}. "
+            f"Valid options are: {VALID_ALGORITHMS}"
+        )

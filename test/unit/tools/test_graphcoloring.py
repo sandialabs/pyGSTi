@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
+from pygsti.tools.graphcoloring._dispatch import VALID_ALGORITHMS
 from pygsti.tools.graphcoloring._common import check_valid_edge_coloring, order
 from pygsti.tools.graphcoloring._topology import detect_topology
 from pygsti.tools.graphcoloring._sinnamon import (
@@ -30,15 +31,8 @@ skip_in_ci = pytest.mark.skipif(
     reason="benchmark-style scaling test; run locally only (skipped in CI)")
 
 
-# Curated, generally-recommended algorithms.
-ALGORITHMS = ["vizing", "sinnamon", "random_euler_color", "misra_gries"]
-
-# Every edge-coloring algorithm exposed by the switchboard. This is deliberately
-# the *full* list (not the curated ALGORITHMS above) because the scaling suite's
-# whole point is to characterize which algorithms are usable in which regime --
-# including the ones that are known to be slow, suboptimal, or outright broken on
-# certain graph families.
-ALL_ALGORITHMS = ["vizing", "sinnamon", "random_euler_color", "misra_gries"]
+# Every edge-coloring algorithm exposed by the switchboard.
+ALL_ALGORITHMS = list(VALID_ALGORITHMS)
 
 # Deterministic algorithms that always terminate and produce a proper, complete
 # coloring with at most deg+1 colors (Vizing's theorem) on every family tested.
@@ -52,9 +46,10 @@ RANDOMIZED_ALGORITHMS = ["sinnamon", "random_euler_color"]
 
 # "SPARSE_SAFE" = algorithms that reliably produced a proper & complete coloring
 # on the low-degree (deg<=4) families in this suite, across runs and within the
-# per-algorithm timeout. `vizing` and `misra_gries` qualify (both deterministic,
-# fast, and near-optimal here; both are in fact reliable on *dense* graphs too).
-SPARSE_SAFE = ["vizing", "misra_gries"]
+# per-algorithm timeout. `vizing`, `misra_gries`, and `auto` qualify (the latter
+# is deterministic and optimal on standard topologies, and falls back to vizing
+# elsewhere; all are in fact reliable on *dense* graphs too).
+SPARSE_SAFE = ["vizing", "misra_gries", "auto"]
 
 # Small enough that even the good algorithms finish comfortably, large enough to
 # expose the blow-ups. Kept modest so the whole suite runs in a few seconds.
@@ -783,6 +778,10 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
 #                     near-optimal (<= deg+1 colors) on every family tested,
 #                     including dense complete graphs and grids. Fast and the most
 #                     reliable algorithm here -- a good default.
+#   - auto          : the recommended default algorithm. It checks for canonical
+#                     topologies (and applies a fast closed-form optimal coloring),
+#                     then falls back to bipartite-optimal randomized coloring (using
+#                     seed) on bipartite graphs, and to `vizing` otherwise.
 # ---------------------------------------------------------------------------
 @skip_in_ci
 @pytest.mark.slow
