@@ -15,7 +15,7 @@ import time as _time
 import os as _os
 from collections import defaultdict as _defaultdict
 from pathlib import Path as _Path
-from typing import Iterable, Optional, Union
+from typing import Iterable, Literal, Optional, Union
 
 from pygsti.report import merge_helpers as _merge
 from pygsti.report import workspace as _ws
@@ -96,7 +96,7 @@ class Report:
 
     def write_html(self, path: Union[str, _os.PathLike], auto_open: bool=False, link_to: Optional[list]=None,
                    connected: bool=False, build_options: Optional[dict]=None, brevity: int=0,
-                   precision: Optional[Union[int, dict]]=None, resizable: bool=True, autosize: str='initial',
+                   precision: Optional[Union[int, dict]]=None, resizable: bool=True, autosize: Literal['none', 'initial', 'continual']='initial',
                    single_file: bool=False, verbosity: int=0) -> None:
         """
         Write this report to the disk as a collection of HTML documents.

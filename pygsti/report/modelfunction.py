@@ -110,7 +110,7 @@ class ModelFunction(object):
         # do stuff assuming nearby_model is eps away from model
         return self.evaluate(nearby_model)
 
-    def list_dependencies(self) -> list:
+    def list_dependencies(self) -> list[tuple[Literal['gate','prep','povm','instrument'], _Label]]:
         """
         Return the dependencies of this model-function.
 

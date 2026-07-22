@@ -17,6 +17,7 @@ import itertools as _itertools
 import warnings as _warnings
 from functools import lru_cache
 from typing import (
+    Literal,
     Union,
     Optional,
 )
@@ -718,7 +719,7 @@ class Basis(_NicelySerializable):
         return bool(self.dim == state_space.dim)
 
 
-BasisLike = Union[Basis, str]
+BasisLike = Union[Basis, Literal['pp', 'gm', 'std']]
 
 
 class LazyBasis(Basis):

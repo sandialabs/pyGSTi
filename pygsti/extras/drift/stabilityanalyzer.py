@@ -11,7 +11,7 @@
 import copy as _copy
 import itertools as _itertools
 import warnings as _warnings
-from typing import Optional, Union
+from typing import Optional, Union, Literal
 
 import numpy as _np
 
@@ -958,7 +958,7 @@ class StabilityAnalyzer(object):
 
         return pvalue
 
-    def run_instability_detection(self, significance=0.05, freqstest=None, tests: Union[str, tuple, list]='auto',
+    def run_instability_detection(self, significance=0.05, freqstest=None, tests: Union[Literal['auto'], tuple]='auto',
                                   inclass_correction=None,
                                   betweenclass_weighting: Optional[Union[str, dict]]='auto', saveas='default',
                                   default=True, overwrite=False,

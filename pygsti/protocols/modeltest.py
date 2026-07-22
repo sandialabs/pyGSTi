@@ -18,6 +18,8 @@ from typing import Optional, Any, Union, TYPE_CHECKING
 if TYPE_CHECKING:
     from pygsti.models.model import Model as _Model
     from pygsti.protocols.gst import ModelEstimateResults as _ModelEstimateResults
+    from pygsti.protocols.gst import GSTGaugeOptSuite as _GSTGaugeOptSuite_t
+    from pygsti.protocols.gst import GSTBadFitOptions as _GSTBadFitOptions_t
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from pygsti.protocols.estimate import Estimate as _Estimate
@@ -100,8 +102,9 @@ class ModelTest(_proto.Protocol):
         else: raise ValueError("Cannot build a objective-fn builder from '%s'" % str(type(obj)))
 
     def __init__(self, model_to_test: _Model, target_model: Optional[_Model] = None,
-                 gaugeopt_suite: Any = None,
-                 objfn_builder: Any = None, badfit_options: Any = None,
+                 gaugeopt_suite: Optional[Union[str, '_GSTGaugeOptSuite_t']] = None,
+                 objfn_builder: Optional[Union['_objfns.ObjectiveFunctionBuilder', dict, list, tuple]] = None,
+                 badfit_options: Optional['_GSTBadFitOptions_t'] = None,
                  set_trivial_gauge_group: bool = True, verbosity: int = 2, name: Optional[str] = None):
 
         from .gst import GSTBadFitOptions as _GSTBadFitOptions

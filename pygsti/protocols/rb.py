@@ -32,6 +32,7 @@ DefaultFit = Literal['full', 'A-fixed']
 RType = Literal['EI', 'AGI']
 Asymptote = Union[Literal['std'], float]
 Depths = Union[Literal['all'], list[int]]
+SamplerLiterals = Literal['edgegrab', 'pairingQs', 'Qelimination', 'co2Qgates', 'local']
 
 
 class CliffordRBDesign(_vb.BenchmarkingDesign):
@@ -534,7 +535,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth: dict, qubit_labels: _vb.QubitLabels=None,
-                               sampler: Union[str, Callable]='edgegrab', samplerargs: Optional[Union[list, tuple]]=None,
+                               sampler: Union[SamplerLiterals, Callable]='edgegrab', samplerargs: Optional[Union[list, tuple]]=None,
                                addlocal: bool=False,
                                lsargs: Union[list, tuple]=(), randomizeout: bool=False, cliffordtwirl: bool=True,
                                conditionaltwirl: bool=True,
@@ -654,7 +655,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
     def __init__(self, pspec: '_QubitProcessorSpec', clifford_compilations: dict, depths: _vb.DepthList,
                  circuits_per_depth: int, qubit_labels: _vb.QubitLabels=None,
-                 sampler: Union[str, Callable]='edgegrab', samplerargs: Optional[Union[list, tuple]]=None,
+                 sampler: Union[SamplerLiterals, Callable]='edgegrab', samplerargs: Optional[Union[list, tuple]]=None,
                  addlocal: bool=False, lsargs: Union[list, tuple]=(), randomizeout: bool=False,
                  cliffordtwirl: bool=True, conditionaltwirl: bool=True,
                  citerations: int=20, compilerargs: Union[list, tuple]=(), partitioned: bool=False,
@@ -705,7 +706,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
     def _init_foundation(self, depths: _vb.DepthList, circuit_lists: _vb.CircuitLists, ideal_outs: Union[list, tuple],
                          circuits_per_depth: Union[int, list], qubit_labels: _vb.QubitLabels,
-                         sampler: Union[str, Callable], samplerargs: Optional[Union[list, tuple]], addlocal: bool,
+                         sampler: Union[SamplerLiterals, Callable], samplerargs: Optional[Union[list, tuple]], addlocal: bool,
                          lsargs: Union[list, tuple], randomizeout: bool, cliffordtwirl: bool,
                          conditionaltwirl: bool, citerations: int, compilerargs: Union[list, tuple], partitioned: bool,
                          descriptor: str,
@@ -848,7 +849,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth: dict, qubit_labels: _vb.QubitLabels=None,
                                circuit_type: str='clifford',
-                               sampler: Union[str, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.25, ),
+                               sampler: Union[SamplerLiterals, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.25, ),
                                localclifford: bool=True,
                                paulirandomize: bool=True, descriptor: str='A mirror RB experiment',
                                add_default_protocol: bool=False) -> "MirrorRBDesign":
@@ -886,7 +887,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
     def __init__(self, pspec: '_QubitProcessorSpec', depths: _vb.DepthList, circuits_per_depth: int,
                  qubit_labels: _vb.QubitLabels=None, circuit_type: str='clifford',
-                 clifford_compilations: Optional[dict]=None, sampler: Union[str, Callable]='edgegrab',
+                 clifford_compilations: Optional[dict]=None, sampler: Union[SamplerLiterals, Callable]='edgegrab',
                  samplerargs: Union[list, tuple]=(0.25, ),
                  localclifford: bool=True, paulirandomize: bool=True, descriptor: str='A mirror RB experiment',
                  add_default_protocol: bool=False, seed: Optional[int]=None, num_processes: int=1, verbosity: int=1):
@@ -959,7 +960,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
     def _init_foundation(self, depths: _vb.DepthList, circuit_lists: _vb.CircuitLists, ideal_outs: Union[list, tuple],
                          circuits_per_depth: Union[int, list], qubit_labels: _vb.QubitLabels,
-                         circuit_type: str, sampler: Union[str, Callable], samplerargs: Union[list, tuple],
+                         circuit_type: str, sampler: Union[SamplerLiterals, Callable], samplerargs: Union[list, tuple],
                          localclifford: bool, paulirandomize: bool, descriptor: str,
                          add_default_protocol: bool, seed: Optional[int]=None) -> None:
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
@@ -1083,7 +1084,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
         irrelevant.
 
-    layer_sampling: str, optional
+    layer_sampling: {'mixed1q2q', 'alternating1q2q'}, optional
         Determines the structure of the randomly sampled layers of gates:
             1. 'mixed1q2q': Layers contain radomly-sampled two-qubit gates and randomly-sampled 
             single-qubit gates on all remaining qubits. 
@@ -1117,8 +1118,8 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
     """
     def __init__(self, pspec: '_QubitProcessorSpec', clifford_compilations: dict, depths: _vb.DepthList,
-                 circuits_per_depth: int, qubit_labels: _vb.QubitLabels=None, layer_sampling: str='mixed1q2q',
-                 sampler: Union[str, Callable]='edgegrab', samplerargs: Optional[Union[list, tuple]]=None,
+                 circuits_per_depth: int, qubit_labels: _vb.QubitLabels=None, layer_sampling: Literal['mixed1q2q', 'alternating1q2q']='mixed1q2q',
+                 sampler: Union[SamplerLiterals, Callable]='edgegrab', samplerargs: Optional[Union[list, tuple]]=None,
                  addlocal: bool=False, lsargs: Union[list, tuple]=(),
                  descriptor: str='A BiRB experiment',
                  add_default_protocol: bool=False, seed: Optional[int]=None, verbosity: int=1, num_processes: int=1):
@@ -1167,8 +1168,8 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
 
     def _init_foundation(self, depths: _vb.DepthList, circuit_lists: _vb.CircuitLists, measurements: Union[list, tuple],
                          signs: Union[list, tuple], circuits_per_depth: int, qubit_labels: _vb.QubitLabels,
-                         layer_sampling: str,
-                         sampler: Union[str, Callable], samplerargs: Optional[Union[list, tuple]], addlocal: bool,
+                         layer_sampling: Literal['mixed1q2q', 'alternating1q2q'],
+                         sampler: Union[SamplerLiterals, Callable], samplerargs: Optional[Union[list, tuple]], addlocal: bool,
                          lsargs: Union[list, tuple], descriptor: str,
                          add_default_protocol: bool) -> None:
         # Pair these attributes with circuit data so that we serialize/truncate properly
@@ -1601,7 +1602,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         The default key within `fits` to plot when calling :meth:`plot`.
     """
 
-    def __init__(self, data: _proto.ProtocolData, protocol_instance: _proto.Protocol, fits: dict, depths: list[int], defaultfit: DefaultFit):
+    def __init__(self, data: _proto.ProtocolData, protocol_instance: _proto.Protocol, fits: dict, depths: Union[list[int], tuple[int, ...]], defaultfit: DefaultFit):
         """
         Initialize an empty RandomizedBenchmarkingResults object.
         """

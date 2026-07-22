@@ -702,7 +702,7 @@ class TreeRunner(ProtocolRunner):
         protocol should be run.
     """
 
-    def __init__(self, protocol_dict: dict):
+    def __init__(self, protocol_dict: dict[tuple[str, ...], "Protocol"]):
         """
         Create a new TreeRunner object, which runs specific protocols on
         specific data-tree paths.
@@ -1736,9 +1736,10 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         of `sub_designs`.  By default, the union of all the circuits in
         the sub-designs is used.
 
-    qubit_labels : tuple, optional
+    qubit_labels : tuple or "multiple", optional
         The qubits that this experiment design applies to. If None, the line labels
-        of the first circuit is used.
+        of the first circuit is used. The special value "multiple" is used to indicate
+        that different sub-designs act on different qubit labels.
 
     sub_design_dirs : dict, optional
         A dictionary whose values are directory names and keys are sub-edesign
@@ -1832,9 +1833,10 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
             of `sub_designs`.  By default, the union of all the circuits in
             the sub-designs is used.
 
-        qubit_labels : tuple, optional
+        qubit_labels : tuple or "multiple", optional
             The qubits that this experiment design applies to. If None, the line labels
-            of the first circuit is used.
+            of the first circuit is used. The special value "multiple" is used to indicate
+            that different sub-designs act on different qubit labels.
 
         sub_design_dirs : dict, optional
             A dictionary whose values are directory names and keys are sub-edesign
@@ -1963,10 +1965,11 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         these are the circuits of those in `edesigns` tensored together.
         Typically this is left as the default.
 
-    qubit_labels : tuple, optional
+    qubit_labels : tuple or "multiple", optional
         The qubits that this experiment design applies to. If None, the
         concatenated qubit labels of `edesigns` are used (this is usually
-        what you want).
+        what you want). The special value "multiple" is used to indicate
+        that the sub-designs in `edesigns` act on different qubit labels.
 
     category : str, optional
         The category name for the qubit-label-tuples corresponding to the
@@ -2013,10 +2016,11 @@ class SimultaneousExperimentDesign(ExperimentDesign):
             these are the circuits of those in `edesigns` tensored together.
             Typically this is left as the default.
 
-        qubit_labels : tuple, optional
+        qubit_labels : tuple or "multiple", optional
             The qubits that this experiment design applies to. If None, the
             concatenated qubit labels of `edesigns` are used (this is usually
-            what you want).
+            what you want). The special value "multiple" is used to indicate
+            that the sub-designs in `edesigns` act on different qubit labels.
 
         Returns
         -------
@@ -2680,7 +2684,7 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         keys_vals_types = [(k, v, 'category') for k, v in self.tags.items()]
         return self.edesign.setup_nameddict(_NamedDict.create_nested(keys_vals_types, final_dict))
 
-    def to_dataframe(self, pivot_valuename: Optional[str]=None, pivot_value: Optional[str]=None, drop_columns: bool=False):
+    def to_dataframe(self, pivot_valuename: Optional[str]=None, pivot_value: Optional[str]=None, drop_columns: Union[bool, list]=False):
         """
         Create a Pandas dataframe with this data.
 
@@ -2927,7 +2931,7 @@ class ProtocolResults(_MongoSerializable):
                 vals[k] = v
         return vals
 
-    def to_dataframe(self, pivot_valuename: Optional[str]=None, pivot_value: Optional[str]=None, drop_columns: bool=False):
+    def to_dataframe(self, pivot_valuename: Optional[str]=None, pivot_value: Optional[str]=None, drop_columns: Union[bool, list]=False):
         """
         Convert these results into Pandas dataframe.
 
@@ -3424,7 +3428,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         self._addto_bypath_nameddict(nd, path=())
         return nd
 
-    def to_dataframe(self, pivot_valuename: Optional[str]=None, pivot_value: Optional[str]=None, drop_columns: bool=False):
+    def to_dataframe(self, pivot_valuename: Optional[str]=None, pivot_value: Optional[str]=None, drop_columns: Union[bool, list]=False):
         """
         Convert these results into Pandas dataframe.
 
@@ -3692,10 +3696,10 @@ class DataCountsSimulator(DataSimulator):
         value as its *start time*.
     """
 
-    def __init__(self, model: _Model, num_samples: int=1000,
+    def __init__(self, model: _Model, num_samples: Optional[Union[int, list[int]]]=1000,
                  sample_error: Literal['multinomial', 'binomial', 'none', 'clip', 'round']='multinomial',
                  seed: Optional[int]=None, rand_state: Optional[_np.random.RandomState]=None, alias_dict: Optional[dict]=None,
-                 collision_action: Literal['aggregate', 'keepseperate']="aggregate",
+                 collision_action: Literal['aggregate', 'keepseparate']="aggregate",
                  record_zero_counts: bool=True, times: Optional[list]=None):
         super().__init__()
         self.model = model

@@ -36,7 +36,7 @@ def simulate_data(model_or_dataset: Union[_OpModel, _ds.DataSet],
                   sample_error: Literal['binomial', 'multinomial', 'clip', 'round', 'none']="multinomial",
                   seed: Optional[int]=None, rand_state: Optional[_rndm.RandomState]=None,
                   alias_dict: Optional[dict[Any, Any]]=None,
-                  collision_action: Literal['aggregate', 'keepseperate']="aggregate",
+                  collision_action: Literal['aggregate', 'keepseparate']="aggregate",
                   record_zero_counts: bool=True, comm=None, mem_limit: Optional[int]=None,
                   times: Optional[Sequence[Any]]=None) -> _ds.DataSet:
     """
@@ -443,7 +443,7 @@ def _create_merge_dict(indices_to_keep: Sequence[int], outcome_labels: Sequence[
 
 
 def filter_dataset(dataset: _ds.DataSet, sectors_to_keep: Sequence[Any], sindices_to_keep: Optional[Sequence[int]]=None,
-                   new_sectors: Optional[Sequence[Any]]=None, idle: Union[str, _lbl.Label, tuple[Any, ...]]=((),), record_zero_counts: bool=True,
+                   new_sectors: Optional[Sequence[Any]]=None, idle: Optional[Union[str, _lbl.Label, tuple[Any, ...]]]=((),), record_zero_counts: bool=True,
                    filtercircuits: bool=True) -> _ds.DataSet:
     """
     Creates a DataSet that is the restriction of `dataset` to `sectors_to_keep`.
