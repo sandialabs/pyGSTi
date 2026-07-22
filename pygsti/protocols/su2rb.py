@@ -746,17 +746,17 @@ class SU2QuditRB(_proto.Protocol):
 
     Parameters
     ----------
-    seed : (float, float), optional
-        The `(a, f)` seed passed to `scipy.optimize.curve_fit` for each irrep's decay
-        fit.
+    fit_p0 : (float, float), optional
+        The `(a, f)` initial guess passed to `scipy.optimize.curve_fit` for each
+        irrep's decay fit.
 
     name : str, optional
         The name of this protocol.
     """
 
-    def __init__(self, seed: Tuple[float, float] = (1.0, 0.9), name: Optional[str] = None) -> None:
+    def __init__(self, fit_p0: Tuple[float, float] = (1.0, 0.9), name: Optional[str] = None) -> None:
         super(SU2QuditRB, self).__init__(name)
-        self.seed = tuple(seed)
+        self.fit_p0 = tuple(fit_p0)
 
     @staticmethod
     def _reconstruct_prep_effect_probs(edesign, ds, depth_idx):
@@ -835,14 +835,14 @@ class SU2QuditRB(_proto.Protocol):
         sigma_f = _np.zeros(dim)
         failed_irreps = []
         for k in range(dim):
-            a, fk, sigma_a, sigma_fk, success = _fit_irrep_decay(x, per_irrep_series[k, :], p0=self.seed)
+            a, fk, sigma_a, sigma_fk, success = _fit_irrep_decay(x, per_irrep_series[k, :], p0=self.fit_p0)
             f[k], sigma_f[k] = fk, sigma_fk
             if not success:
                 failed_irreps.append(k)
             estimates = {'a': 0.0, 'b': a, 'p': fk}
             variable = {'a': False, 'b': True, 'p': True}
             stds = {'a': 0.0, 'b': sigma_a, 'p': sigma_fk}
-            fits.append(_rbfit.FitResults('synspam-no-offset', list(self.seed), None, success,
+            fits.append(_rbfit.FitResults('synspam-no-offset', list(self.fit_p0), None, success,
                                            estimates, variable, stds=stds))
 
         if failed_irreps:
