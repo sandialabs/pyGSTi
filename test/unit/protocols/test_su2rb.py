@@ -93,9 +93,7 @@ def _net_unitary(spinj, angles):
 
 
 class _SU2RBDesignChecks:
-    """Mixin providing the shared design-level tests, parameterized by spin `j`.
-    `SU2QuditRBDesign` is the only design class, always hidden-first-gate, so there is
-    no `design_cls`/extra-attrs axis to parameterize over -- just `j`."""
+    """Mixin providing the shared design-level tests, parameterized by spin `j`."""
 
     j = None
 
@@ -462,27 +460,28 @@ class TestSU2QuditRBSimulatorShots(BaseCase):
         self.assertTrue(any_different)
 
 
-class TestSU2QuditRBSimulatorShortcut(BaseCase):
+class TestSU2QuditRBSimulatorNoiselessFastPath(BaseCase):
+    """When noiseless, `_compose` short-circuits to the hidden first gate's
+    superoperator; check that this matches the explicit full composition."""
 
-    def test_shortcut_matches_long_path_noiseless(self):
+    def test_fast_path_matches_full_composition(self):
         j = 1.5
         spinj = SpinJ(j)
         sim = SU2QuditRBSimulator(spinj)
         design = SU2QuditRBDesign(j, depths=[1, 4, 6], circuits_per_depth=3, seed=9)
         for depth_idx in range(len(design.depths)):
             for angles in sim._unique_sequences_at_depth(design, depth_idx):
-                S_shortcut = sim._compose(angles)
+                S_fast = sim._compose(angles)
                 S_full = sim._compose_full(angles)
-                self.assertTrue(np.allclose(S_shortcut, S_full, atol=1e-10))
+                self.assertTrue(np.allclose(S_fast, S_full, atol=1e-10))
 
 
 class TestSU2QuditRBSimulatorNoisePlacement(BaseCase):
-    """Pins the noise-insertion order and skip-first-noise semantics of
-    `_compose_full` against an independently hand-built expectation (rather than
-    comparing `_compose`-derived quantities to each other, as the noiseless-shortcut
-    tests above do)."""
+    """Pins the noise-insertion order of `_compose_full` against an independently
+    hand-built expectation: noise is skipped immediately after the first (hidden)
+    gate and applied after every subsequent gate."""
 
-    def test_two_gate_noise_placement_and_skip_semantics(self):
+    def test_two_gate_noise_placement(self):
         spinj = SpinJ(j=1.5)
         N = jz_dephasing(spinj, 0.25, power=1.0)
         sim = SU2QuditRBSimulator(spinj, noise_channel=N)
@@ -493,12 +492,9 @@ class TestSU2QuditRBSimulatorNoisePlacement(BaseCase):
         U0, U1 = spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
         S0 = unitary_to_std_process_mx(U0)
         S1 = unitary_to_std_process_mx(U1)
-        # noise is skipped immediately after the first gate only; it is still applied
-        # after the second (and every subsequent) gate.
-        expected_skip = N @ S1 @ S0
-        actual_skip = sim._compose_full(angles)
-        self.assertTrue(np.allclose(actual_skip, expected_skip, atol=1e-12))
-        return
+        expected = N @ S1 @ S0
+        actual = sim._compose_full(angles)
+        self.assertTrue(np.allclose(actual, expected, atol=1e-12))
 
 
 class TestSU2QuditRBSimulatorNoiseFactory(BaseCase):
@@ -734,10 +730,9 @@ def _dataset_from_probs(edesign, probs_by_depth, dim):
 class TestSU2QuditRBRequiresCharcores(BaseCase):
     """`SU2QuditRB` needs the `charcores` aux data that every `SU2QuditRBDesign`
     provides; an edesign-like object without it should fail loudly (`TypeError`),
-    not silently misbehave. (There is no longer a "plain" design variant lacking
-    `charcores` to use as a foil, so this drives `_per_sequence_irrep_values`
-    directly against a minimal stand-in, the way
-    `TestSU2QuditRBWeightNormalization` below does.)"""
+    not silently misbehave. This drives `_per_sequence_irrep_values` directly
+    against a minimal stand-in, the way `TestSU2QuditRBWeightNormalization`
+    below does."""
 
     def test_rejects_edesign_without_charcores(self):
         class _NoCharcoresEdesign:
@@ -779,22 +774,19 @@ class _FakeSU2RBEdesign:
         self.charcores = [charcores_rows]
 
 
-def _branch_character_transform_single_length(probs_branch, weights, irrep_sizes):
+def _reference_character_transform_single_length(probs, weights, irrep_sizes):
     """
-    Literal pure-numpy transcription of `SU2CharacterRBSim.character_transform`
-    from the `su2-rb-conservative` branch (`su2rbsims.py:582-615`), specialized to a
-    single RB length (so the branch's `num_lens` axis -- irrelevant to the weight
-    normalization being locked down here -- collapses out).
+    Independent reference implementation of the weighted character transform, as a
+    single tensor contraction: average `irrep_sizes[k] * weights[s, k] * P[i, s, e]`
+    over the sequence axis `s`.
 
     Parameters
     ----------
-    probs_branch : numpy array
-        Shape `(num_statepreps, circuits_per_length, num_effects)` -- the branch's
-        `_probs[:, j, :, :]` for a single length `j`.
+    probs : numpy array
+        Shape `(num_statepreps, circuits_per_length, num_effects)`.
 
     weights : numpy array
-        Shape `(circuits_per_length, num_irreps)` -- the branch's `_chars[j, :, :]`
-        (here standing in for either `characters` or, as used below, `charcores`).
+        Shape `(circuits_per_length, num_irreps)` -- per-sequence charcore rows.
 
     irrep_sizes : numpy array
         Shape `(num_irreps,)`.
@@ -802,33 +794,31 @@ def _branch_character_transform_single_length(probs_branch, weights, irrep_sizes
     Returns
     -------
     numpy array
-        Shape `(num_statepreps, num_effects, num_irreps)` -- the branch's
-        `arr[:, :, :, j]`.
+        Shape `(num_statepreps, num_effects, num_irreps)`.
     """
-    circuits_per_length = probs_branch.shape[1]
-    wchars = weights * irrep_sizes[np.newaxis, :]                # branch: wchars = _chars * irrep_sizes[...]
-    permprobs = np.moveaxis(probs_branch, 1, 2)                   # branch: np.moveaxis(probs, (1,2,3), (2,3,1))
-    # branch: P = np.tensordot(currprobs, currchars, axes=1) / circuits_per_length
+    circuits_per_length = probs.shape[1]
+    wchars = weights * irrep_sizes[np.newaxis, :]
+    permprobs = np.moveaxis(probs, 1, 2)
     return np.tensordot(permprobs, wchars, axes=1) / circuits_per_length
 
 
-def _branch_synspam_character_transform_single_length(probs_branch, weights, irrep_sizes, M):
+def _reference_synspam_character_transform_single_length(probs, weights, irrep_sizes, M):
     """
-    Literal pure-numpy transcription of `SU2CharacterRBSim.
-    synspam_character_transform` (`su2rbsims.py:617-657`), specialized to a single
-    RB length (see `_branch_character_transform_single_length`).
+    Independent reference implementation of the synthetic-SPAM character transform:
+    the `M[k, :] @ block_k @ M[k, :]` sandwich of each irrep's weighted-character
+    block (see `_reference_character_transform_single_length`).
 
     Returns
     -------
     numpy array
-        Shape `(num_irreps,)` -- the branch's `synthetic_probs[:, j]`.
+        Shape `(num_irreps,)`.
     """
-    block_full = _branch_character_transform_single_length(probs_branch, weights, irrep_sizes)
+    block_full = _reference_character_transform_single_length(probs, weights, irrep_sizes)
     num_irreps = block_full.shape[2]
     synthetic_probs = np.zeros(num_irreps)
     for k in range(num_irreps):
-        block = block_full[:, :, k]           # branch: block = P[:,:,k]
-        row_M_k = M[k, :]                      # branch: row_M_k = M[k,:]
+        block = block_full[:, :, k]
+        row_M_k = M[k, :]
         synthetic_probs[k] = row_M_k @ block @ row_M_k
     return synthetic_probs
 
@@ -836,21 +826,18 @@ def _branch_synspam_character_transform_single_length(probs_branch, weights, irr
 class TestSU2QuditRBWeightNormalization(BaseCase):
     """
     Locks the (2k+1)-and-charcore weight normalization scale of
-    `SU2QuditRB._per_sequence_irrep_values` to the `su2-rb-conservative`
-    branch's normative `character_transform`/`synspam_character_transform` (see
-    `SU2QuditRB`'s docstring). Only the rank-1 half is tested here, since
-    `SU2QuditRB` is the only surviving protocol -- there is no
-    character-weighted variant left to test.
+    `SU2QuditRB._per_sequence_irrep_values` against an independently written
+    tensor-contraction formulation of the synthetic-SPAM character transform
+    (`_reference_synspam_character_transform_single_length`).
 
     Unlike the fit-based end-to-end tests elsewhere in this module -- whose
     `A_k * f_k**x` fit absorbs any constant per-irrep scale error into `A_k` without
     affecting `f_k`, and whose 0.1-10x variance-ratio sanity check tolerates over a
     3x scale error -- this test compares raw, pre-fit, pre-average per-sequence
-    values directly against a literal transcription of the branch's tensor
-    contraction (`_branch_synspam_character_transform_single_length`), on
-    hand-fabricated (not necessarily physical) probability and weight arrays, at
-    1e-12. A constant per-irrep scale error in the weighting factors would be caught
-    here even though it passes every other test in this module.
+    values directly against the reference contraction, on hand-fabricated (not
+    necessarily physical) probability and weight arrays, at 1e-12. A constant
+    per-irrep scale error in the weighting factors would be caught here even though
+    it passes every other test in this module.
     """
 
     def test_rank1_weighting_matches_branch(self):
@@ -868,15 +855,14 @@ class TestSU2QuditRBWeightNormalization(BaseCase):
         M = rng.normal(size=(dim, dim))  # need not be an actual SpinJ M for this algebraic check
         irrep_sizes = 2 * np.arange(dim) + 1
 
-        # --- Branch reference, from the literal transcription above. ---
-        probs_branch = np.moveaxis(P, 0, 1)  # (s, l, m) -> (l=prep, s=circuit, m=effect)
-        reference = _branch_synspam_character_transform_single_length(probs_branch, weights, irrep_sizes, M)
+        # --- Reference value, from the independent contraction above. ---
+        probs_ref = np.moveaxis(P, 0, 1)  # (s, l, m) -> (l=prep, s=circuit, m=effect)
+        reference = _reference_synspam_character_transform_single_length(probs_ref, weights, irrep_sizes, M)
 
         # --- The actual production code path: build a minimal fake edesign/ds ---
-        # --- exposing exactly what `_per_sequence_irrep_values` reads, and call ---
-        # --- it directly, then average over sequences (matching the branch's ---
-        # --- `/circuits_per_length` normalization, which is baked into ---
-        # --- `_branch_character_transform_single_length` above). ---
+        # --- exposing exactly what `_per_sequence_irrep_values` reads, call it ---
+        # --- directly, then average over sequences (matching the reference's ---
+        # --- `/circuits_per_length` normalization). ---
         circuits = [(s, l) for s in range(circuits_per_depth) for l in range(dim)]
         seq_index = [s for s in range(circuits_per_depth) for l in range(dim)]
         prep_index = [l for s in range(circuits_per_depth) for l in range(dim)]
@@ -895,10 +881,9 @@ class TestSU2QuditRBWeightNormalization(BaseCase):
 class TestSU2QuditRBNoiseless(BaseCase):
     """Noiseless analytic end-to-end check: all f_k should be (statistically)
     consistent with 1, and the empirical per-sequence-estimator variance should be
-    the right order of magnitude relative to `predicted_zero_noise_variance`. Unlike
-    an unweighted, un-hidden-gate SSRB estimator (removed under the R1RB-only
-    strip-down), R1RB has nonzero zero-noise variance, so exact agreement isn't
-    expected at finite circuit counts -- this is a statistical check."""
+    the right order of magnitude relative to `predicted_zero_noise_variance`. R1RB
+    has nonzero zero-noise variance, so exact agreement isn't expected at finite
+    circuit counts -- this is a statistical check."""
 
     def test_rank1_rb_noiseless(self):
         j = 1.5
@@ -970,8 +955,7 @@ class TestSU2QuditRBMatchesGateNoise(BaseCase):
 
 class TestSU2QuditRBApi(BaseCase):
     """Protocol/Results API-surface checks: DataFrame export, isinstance, and the
-    write()/read-from-dir serialization round trip -- retargeted from the former
-    (plain-SSRB) Phase 5 tests at the single surviving protocol/results pair."""
+    write()/read-from-dir serialization round trip."""
 
     def test_rates_dataframe_and_variance_diagnostic(self):
         j = 0.5
@@ -994,8 +978,7 @@ class TestSU2QuditRBApi(BaseCase):
         for col in ('decay_f', 'decay_f_stderr', 'rate_p', 'rate_p_stderr'):
             self.assertIn(col, df.columns)
 
-        # predicted_zero_noise_variance(j, k) is the R1RB rank-1 formula -- unlike
-        # the removed plain-SSRB variant, it is not identically 0 for k > 0.
+        # predicted_zero_noise_variance(j, k) is not identically 0 for k > 0.
         diag = results.variance_diagnostic()
         self.assertEqual(set(diag.keys()), set(range(spinj.dim)))
         for k, (predicted, empirical) in diag.items():
@@ -1093,31 +1076,22 @@ class TestSU2QuditRBSpamRobustness(BaseCase):
     The paper's central SPAM-robustness signature: `SU2QuditRB` stays
     unbiased under a SPAM perturbation that would bias an unweighted estimator.
 
-    Every `SU2QuditRBDesign` is hidden-first-gate (there is no net-identity, "plain
-    SSRB", `invert_from=0` circuit convention to fall back on), so its unweighted
+    Every `SU2QuditRBDesign` is hidden-first-gate, so its unweighted
     `diag(M P M^T)[k]` sandwich already averages to (statistically) zero
     for k > 0 *regardless of SPAM correctness*: a Haar-random hidden first gate
     integrates any unweighted, nontrivial-irrep contribution to zero by Legendre
-    orthogonality, with or without a SPAM perturbation. (Verified numerically while
-    developing this test: even a large, non-Jz-diagonal SPAM perturbation and tens
-    of thousands of sampled sequences produced no statistically resolvable shift in
-    the unweighted sandwich's mean on hidden-gate-design data -- the signal the
-    rank-1/charcore weighting exists to recover is exactly what a naive unweighted
-    average discards.) So the unweighted foil has to be computed on its own native
-    circuit convention -- net ideal composition equal to the identity -- to show
-    anything at all, let alone a SPAM-induced bias.
+    orthogonality, with or without a SPAM perturbation. So the unweighted foil has
+    to be computed on its own native circuit convention -- net ideal composition
+    equal to the identity -- to show anything at all, let alone a SPAM-induced bias.
 
-    That circuit family no longer has a production class of its own, so it is
-    reconstructed here directly from public `su2tools` primitives
+    The net-identity foil is built here directly from public `su2tools` primitives
     (`random_euler_angles`, `composition_inverse`, `SpinJ.unitaries_from_angles`)
-    plus `unitary_to_std_process_mx` -- a few lines of numpy, no production
-    `su2rb.py` code touched, no deleted class revived. On these net-identity
-    sequences, the unweighted `diag(M P M^T)[k]` sandwich matches the true
-    (analytic) per-irrep gate-noise fidelity `f_k**m` under ideal SPAM but acquires
-    a large bias under a fixed, non-Jz-diagonal SPAM perturbation -- the classic
-    "plain SSRB is not SPAM-robust" signature. `SU2QuditRB`, run on the
-    standard (hidden-gate) `SU2QuditRBDesign` pipeline under the *same* perturbation,
-    stays statistically consistent with the true fidelity.
+    plus `unitary_to_std_process_mx`. On these net-identity sequences, the
+    unweighted `diag(M P M^T)[k]` sandwich matches the true (analytic) per-irrep
+    gate-noise fidelity `f_k**m` under ideal SPAM but acquires a large bias under a
+    fixed, non-Jz-diagonal SPAM perturbation. `SU2QuditRB`, run on the standard
+    (hidden-gate) `SU2QuditRBDesign` pipeline under the *same* perturbation, stays
+    statistically consistent with the true fidelity.
 
     Seeded throughout; j=1.5 keeps the (already fast) 4x4-superoperator composition
     cheap enough to run in a few seconds.
@@ -1128,10 +1102,9 @@ class TestSU2QuditRBSpamRobustness(BaseCase):
         """
         One `(m+1, 3)` Euler-angle sequence whose net ideal composition (all `m+1`
         rows) is the identity: rows `0..m-1` are Haar-random, row `m` is the exact
-        composition-inverse of rows `0..m-1`. This is the old, pre-strip-down
-        "plain SSRB" (`invert_from=0`) circuit convention -- unlike every surviving
-        `SU2QuditRBDesign`, there is no "hidden" gate here for the inverting row to
-        leave unaccounted for.
+        composition-inverse of rows `0..m-1`. Unlike `SU2QuditRBDesign`'s convention,
+        there is no hidden gate here -- the inverting row accounts for every
+        preceding row.
         """
         angles = np.zeros((m + 1, 3))
         a, b, g = random_euler_angles(m, rng=rng)

@@ -463,10 +463,9 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
 
         depth_indices : iterable of int, optional
             Which depth indices (into `edesign.depths`) to compute compositions for.
-            If `None` (the default), all depths are computed -- note that the full
-            cache at the paper's scale (10**4 sequences x 12 depths x 64**2 complex
-            doubles) is approximately 4 GB, so pass an explicit subset to bound memory
-            usage for large designs.
+            If `None` (the default), all depths are computed. Each depth's cache holds
+            `circuits_per_depth * dim**4` complex doubles, so pass an explicit subset
+            to bound memory usage for large designs.
 
         Returns
         -------
@@ -619,18 +618,12 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
 def _variance_M_entry(j, k, ell):
     """
     `M[k, ell] = sqrt((2k+1)/(2j+1)) * <j ell; k 0 | j ell>`, the same formula as
-    `SpinJ.synthetic_spam_matrix`, but evaluated directly via `wignersymbols.
-    clebsch_gordan` for *any* non-negative integer `k`, not just `k` in `0..2j`.
-
-    This matters here because the paper's zero-noise variance sums (Eqs.
-    `normalizedvariance`/`SSvariance`) range the inner irrep label `k'` over
-    `0..2*k`, which exceeds `2*j` once `k > j`; `SpinJ.synthetic_spam_matrix` only has
-    rows `0..2j`. The corresponding entries are exactly zero once `k > 2*j`, since the
-    Clebsch-Gordan triangle inequality `|j - k| <= j` then fails and `clebsch_gordan`
-    already returns `0.0` in that case. This direct evaluation is therefore
-    well-defined for every `k >= 0` and agrees with `SpinJ.synthetic_spam_matrix`
-    wherever both are defined; `test_su2rb.py` verifies this against the paper's
-    golden Tables `variancewithk`/`variancewithj`.
+    `SpinJ.synthetic_spam_matrix`, but evaluated directly via
+    `wignersymbols.clebsch_gordan` so it is well-defined for *any* non-negative
+    integer `k`, not just `k` in `0..2j`. That matters because the paper's variance
+    sums (Eqs. `normalizedvariance`/`SSvariance`) range the inner irrep label `k'`
+    over `0..2k`, which exceeds `2j` once `k > j`; entries with `k > 2j` are exactly
+    zero by the Clebsch-Gordan triangle inequality.
     """
     value = _math.sqrt((2 * k + 1) / (2 * j + 1)) * _wg.clebsch_gordan(j, ell, k, 0, j, ell)
     return value
@@ -698,12 +691,10 @@ def _fit_irrep_decay(x, y, p0=(1.0, 0.9)):
     (the per-irrep decay parameter) bounded to `[0, 1]` and `a` (the amplitude)
     unbounded.
 
-    If `curve_fit` cannot estimate a covariance for the fit (e.g. too few depths for
-    the 2-parameter fit), it emits `scipy.optimize.OptimizeWarning` and this function
-    still reports `success=True`, with `sigma_a`/`sigma_f` set to `inf` -- an honest
-    signal that the fit converged but its uncertainty is unknown, rather than a
-    silently-swallowed failure. `success=False` is reserved for genuine fit
-    exceptions (`RuntimeError`, `LinAlgError`, `ValueError`).
+    `success=False` is reserved for genuine fit exceptions (`RuntimeError`,
+    `LinAlgError`, `ValueError`). If `curve_fit` converges but cannot estimate a
+    covariance (e.g. too few depths), it emits `scipy.optimize.OptimizeWarning` and
+    this function reports `success=True` with `sigma_a`/`sigma_f` set to `inf`.
 
     Returns
     -------
@@ -734,31 +725,24 @@ def _fit_irrep_decay(x, y, p0=(1.0, 0.9)):
 class SU2QuditRB(_proto.Protocol):
     """
     The rank-1 ("Legendre-weighted") synthetic-SPAM randomized benchmarking protocol
-    (R1RB) for an arbitrary-spin SU(2) system: reconstructs, per depth, the
-    `dim`-by-`dim` [prep, effect] probability matrix for each sampled circuit
-    sequence, weights the per-irrep-`k` `diag(M @ P @ M.T)` sandwich by `(2k+1) *
-    P_k(cos(beta_hidden))` -- the Legendre "character core" of that sequence's hidden
-    first gate (the design's `charcores` aux data) -- averages over sequences (with
-    standard errors), fits each irrep's averaged series to `A_k * f_k**x` (`x` =
-    depth + 1, no additive offset), and recovers per-irrep rates `p = solve(F, f)`
-    with propagated covariance `Sigma_p = F^-1 diag(sigma_f**2) F^-T`.
+    (R1RB) for an arbitrary-spin SU(2) system, from the paper's "Rotationally
+    Invariant Randomized Benchmarking" section.
 
-    The rank-1 weighting makes the resulting per-irrep decay estimate robust to
-    arbitrary (fixed, gate-independent) SPAM error, unlike an unweighted `diag(M @ P
-    @ M.T)` sandwich, which requires SPAM diagonal in the Jz eigenbasis.
+    For each depth and each sampled circuit sequence, this protocol reconstructs the
+    `dim`-by-`dim` [prep, effect] probability matrix `P` and computes the per-irrep
+    estimator `X_k = (2k+1) * P_k(cos(beta_hidden)) * diag(M @ P @ M.T)[k]`, where
+    `P_k(cos(beta_hidden))` is the Legendre "character core" of the sequence's hidden
+    first gate (the design's `charcores` aux data) and `M` is the SPAM-synthesis
+    matrix (paper eq. `Mmaintext`). It averages `X_k` over sequences (with standard
+    errors), fits each irrep's series to `A_k * f_k**x` (`x` = depth + 1, no additive
+    offset), and recovers per-irrep rates `p = solve(F, f)` with propagated
+    covariance `Sigma_p = F^-1 diag(sigma_f**2) F^-T`.
 
-    Requires `SU2QuditRBDesign` data (raises `TypeError` on `run` otherwise, via
-    `_per_sequence_irrep_values`).
+    The rank-1 weighting makes the decay estimates robust to arbitrary (fixed,
+    gate-independent) SPAM error, unlike an unweighted `diag(M @ P @ M.T)` sandwich,
+    which requires SPAM diagonal in the Jz eigenbasis.
 
-    This implements the R1RB estimator from the paper's "Rotationally Invariant
-    Randomized Benchmarking" section (subsection "Random Variables and Estimators"):
-    `X_{k,m} = sum_{ell,ell'} M[k,ell] * M[k,ell'] * X^k_{ell,ell',m}`, where
-    `X^k_{ell,ell',m}` takes the value `(2k+1) * d^k_00(g)` when the hidden-gate
-    outcome is `ell'` and 0 otherwise, `g` is the hidden first gate, `d^k_00(g)` is
-    the Wigner small-d-matrix element `P_k(cos(beta))` for `beta` the hidden gate's
-    Euler angle (`charactercores_from_euler_angles`), and `M` is the SPAM-synthesis
-    matrix (paper eq. `Mmaintext`). `_per_sequence_irrep_values` computes this
-    per-sequence, before `run` averages over sequences.
+    Requires `SU2QuditRBDesign` data (raises `TypeError` on `run` otherwise).
 
     Parameters
     ----------
