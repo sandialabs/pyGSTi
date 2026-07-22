@@ -12,7 +12,7 @@ Functions which compute named quantities (and their confidence-regions) for Mode
 from __future__ import annotations
 import importlib
 import warnings as _warnings
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, Union
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -37,10 +37,17 @@ from pygsti import SpaceT
 
 if TYPE_CHECKING:
     from pygsti.models.model import Model as _Model
+    from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactoryView as _CRFView
 
 _CVXPY_AVAILABLE = importlib.util.find_spec('cvxpy') is not None
 
 FINITE_DIFF_EPS = 1e-7
+
+# The set of operation-function abbreviations recognized by `evaluate_opfn_by_name`.
+OpFnName = Literal["inf", "sub-inf", "agi", "geni", "trace", "sub-trace", "diamond",
+                   "sub-diamond", "plf-sub-diamond", "plf-diamond", "leak-rate-max",
+                   "leak-rate-min", "seep-rate", "nuinf", "nuagi", "evinf", "evagi",
+                   "evnuinf", "evnuagi", "evdiamond", "evnudiamond", "sub-frob", "frob"]
 
 
 def _null_fn(*arg) -> None:
@@ -69,7 +76,7 @@ def _make_reportable_qty_or_dict(f0: Any, df: Optional[Any]=None, non_markovian_
         return _ReportableQty(f0, df, non_markovian_ebs)
 
 
-def evaluate(model_fn: Optional[_modf.ModelFunction], cri: Optional[Any]=None, verbosity: Optional[int]=0) -> Union[_ReportableQty, dict]:
+def evaluate(model_fn: Optional[_modf.ModelFunction], cri: Optional["_CRFView"]=None, verbosity: Optional[int]=0) -> Union[_ReportableQty, dict]:
     """
     Evaluate a ModelFunction object using confidence region information
 
@@ -2664,8 +2671,9 @@ def info_of_opfn_by_name(name: str) -> tuple:
         raise ValueError("Invalid name: %s" % name)
 
 
-def evaluate_opfn_by_name(name: str, model: _Model, target_model: _Model, op_label_or_string: Union[str, _Circuit, tuple],
-                          confidence_region_info: Any) -> _ReportableQty:
+def evaluate_opfn_by_name(name: OpFnName,
+                          model: _Model, target_model: _Model, op_label_or_string: Union[str, _Circuit, tuple],
+                          confidence_region_info: Optional[_CRFView]) -> _ReportableQty:
     """
     Evaluates that gate-function named by the abbreviation `name`.
 

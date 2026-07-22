@@ -57,7 +57,7 @@ class Cell(object):
     def __setstate__(self, d: dict[str, Any]) -> None:
         self.__dict__.update(d)
 
-    def _render_data(self, fmt: str, spec: dict) -> str:
+    def _render_data(self, fmt: str, spec: dict[Hashable, Any]) -> str:
         '''
         Render self.data as a string
 

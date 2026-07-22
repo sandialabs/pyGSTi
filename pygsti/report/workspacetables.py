@@ -53,6 +53,9 @@ if TYPE_CHECKING:
 AVAILABLE_METRICS = Literal['inf','agi','geni','trace','diamond','nuinf','nuagi','evinf','evagi',
                             'evnuinf','evnuagi','evdiamond','evnudiamond','frob']
 
+# The error-generator parameterization type accepted wherever `gen_type` is used in this module.
+ErrorGeneratorType = Literal["logG-logT", "logTiG", "logGTi"]
+
 
 class BlankTable(WorkspaceTable):
     """
@@ -107,8 +110,8 @@ class SpamTable(WorkspaceTable):
 
     def __init__(self, ws: _Workspace, models: Union[_Model, Sequence[_Model]],
                  titles: Optional[Sequence[str]] = None,
-                 display_as: str = "boxes",
-                 confidence_region_infos: Any = None,
+                 display_as: Literal["numbers", "boxes"] = "boxes",
+                 confidence_region_infos: Optional[Sequence[_CRFView]] = None,
                  include_hs_vec: bool = True) -> None:
         """
         A table of one or more model's SPAM elements.
@@ -1509,7 +1512,7 @@ class ErrgenTable(WorkspaceTable):
 
     def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView] = None,
                  display: Sequence[str] = ("errgen", "H", "S", "CA"), display_as: str = "boxes",
-                 gen_type: str = "logGTi") -> None:
+                 gen_type: ErrorGeneratorType = "logGTi") -> None:
         """
         Create a table listing the error generators obtained by
         comparing a model's gates to a target model.
@@ -1549,7 +1552,7 @@ class ErrgenTable(WorkspaceTable):
                                           display, display_as, gen_type)
 
     def _create(self, model: _Model, target_model: _Model,
-                confidence_region_info: Optional[_CRFView], display: Sequence[str], display_as: str, gen_type: str) -> _ReportTable:
+                confidence_region_info: Optional[_CRFView], display: Sequence[str], display_as: str, gen_type: ErrorGeneratorType) -> _ReportTable:
 
         opLabels = model.primitive_op_labels  # operation labels
         basis = model.basis
@@ -1742,7 +1745,7 @@ class GaugeRobustErrgenTable(WorkspaceTable):
     """
 
     def __init__(self, ws: _Workspace, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView] = None,
-                 gen_type: str = "logGTi") -> None:
+                 gen_type: ErrorGeneratorType = "logGTi") -> None:
         """
         Create a table listing the first-order gauge invariant ("gauge robust")
         linear combinations of standard error generator coefficients for
@@ -1774,7 +1777,7 @@ class GaugeRobustErrgenTable(WorkspaceTable):
                                                      target_model, confidence_region_info,
                                                      gen_type)
 
-    def _create(self, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView], gen_type: str) -> _ReportTable:
+    def _create(self, model: _Model, target_model: _Model, confidence_region_info: Optional[_CRFView], gen_type: ErrorGeneratorType) -> _ReportTable:
         assert(isinstance(model, _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         colHeadings = ['Error rates', 'Value']
@@ -2918,7 +2921,7 @@ class FitComparisonTable(WorkspaceTable):
         accelerate objective function construction.
     """
 
-    def __init__(self, ws: _Workspace, xs: Sequence[Any], circuits_by_x: Sequence[Union[_CircuitList, Sequence[_Circuit]]], model_by_x: Sequence[Optional[_Model]], dataset_by_x: Union[_DataSet, Sequence[_DataSet]], objfn_builder: Union[str, _ObjectiveFunctionBuilder] = 'logl',
+    def __init__(self, ws: _Workspace, xs: Sequence[int], circuits_by_x: Sequence[Union[_CircuitList, Sequence[_Circuit]]], model_by_x: Sequence[Optional[_Model]], dataset_by_x: Union[_DataSet, Sequence[_DataSet]], objfn_builder: Union[Literal["logl", "chi2"], _ObjectiveFunctionBuilder] = 'logl',
                  x_label: str = 'L', np_by_x: Optional[Sequence[int]] = None, comm=None, wildcard: Optional[_WildcardBudget] = None, mdc_stores: Optional[Sequence[Optional[_ModelDatasetCircuitsStore]]] = None) -> None:
         """
         Create a table showing how the chi^2 or log-likelihood changed with
@@ -3059,7 +3062,7 @@ class CircuitTable(WorkspaceTable):
         all the other column headers.
     """
 
-    def __init__(self, ws: _Workspace, circuit_lists: Sequence[Any], titles: Union[str, Sequence[str]], num_cols: int = 1, common_title: Optional[str] = None) -> None:
+    def __init__(self, ws: _Workspace, circuit_lists: Union[Sequence[_Circuit], Sequence[Sequence[_Circuit]]], titles: Union[str, Sequence[str]], num_cols: int = 1, common_title: Optional[str] = None) -> None:
         """
         Creates a table of enumerating one or more sets of circuits.
 
@@ -3087,7 +3090,7 @@ class CircuitTable(WorkspaceTable):
         super(CircuitTable, self).__init__(ws, self._create, circuit_lists, titles,
                                            num_cols, common_title)
 
-    def _create(self, circuit_lists: Sequence[Any], titles: Union[str, Sequence[str]], num_cols: int, common_title: Optional[str]) -> _ReportTable:
+    def _create(self, circuit_lists: Union[Sequence[_Circuit], Sequence[Sequence[_Circuit]]], titles: Union[str, Sequence[str]], num_cols: int, common_title: Optional[str]) -> _ReportTable:
 
         if len(circuit_lists) == 0:
             circuit_lists = [[]]
@@ -3210,7 +3213,8 @@ class GatesSingleMetricTable(WorkspaceTable):
         used to display error intervals.
     """
 
-    def __init__(self, ws: _Workspace, metric: AVAILABLE_METRICS, models: Sequence[Any], target_models: Sequence[Any], titles: Sequence[str],
+    def __init__(self, ws: _Workspace, metric: AVAILABLE_METRICS, models: Union[Sequence[_Model], Sequence[Sequence[_Model]]],
+                 target_models: Union[Sequence[_Model], Sequence[Sequence[_Model]]], titles: Sequence[str],
                  rowtitles: Optional[Sequence[str]] = None, table_title: Optional[str] = None, op_label: Optional[str] = None,
                  confidence_region_info: Optional[_CRFView] = None) -> None:
         """
@@ -3284,7 +3288,7 @@ class GatesSingleMetricTable(WorkspaceTable):
             ws, self._create, metric, models, target_models, titles,
             rowtitles, table_title, op_label, confidence_region_info)
 
-    def _create(self, metric: AVAILABLE_METRICS, models: Sequence[Any], target_models: Sequence[Any], titles: Sequence[str],
+    def _create(self, metric: AVAILABLE_METRICS, models: Union[Sequence[_Model], Sequence[Sequence[_Model]]], target_models: Union[Sequence[_Model], Sequence[Sequence[_Model]]], titles: Sequence[str],
                 rowtitles: Optional[Sequence[str]], table_title: Optional[str], op_label: Optional[str], confidence_region_info: Optional[_CRFView]) -> _ReportTable:
 
         if rowtitles is None:
@@ -3380,8 +3384,8 @@ class StandardErrgenTable(WorkspaceTable):
       and Qutrit (qt).
     """
 
-    def __init__(self, ws: _Workspace, model_dim: int, projection_type: str,
-                 projection_basis: str) -> None:
+    def __init__(self, ws: _Workspace, model_dim: int, projection_type: Literal["hamiltonian", "stochastic"],
+                 projection_basis: Literal['std', 'gm', 'pp', 'qt']) -> None:
         """
         Create a table of the "standard" gate error generators, such as those
         which correspond to Hamiltonian or Stochastic errors.  Each generator
@@ -3722,7 +3726,7 @@ class ProfilerTable(WorkspaceTable):
         What the timer values should be sorted by.
     """
 
-    def __init__(self, ws: _Workspace, profiler: Optional[_Profiler], sort_by: str = "time") -> None:
+    def __init__(self, ws: _Workspace, profiler: Optional[_Profiler], sort_by: Literal["time", "name"] = "time") -> None:
         """
         Create a table of profiler timing information.
 
@@ -3736,7 +3740,7 @@ class ProfilerTable(WorkspaceTable):
         """
         super(ProfilerTable, self).__init__(ws, self._create, profiler, sort_by)
 
-    def _create(self, profiler: Optional[_Profiler], sort_by: str) -> _ReportTable:
+    def _create(self, profiler: Optional[_Profiler], sort_by: Literal["time", "name"]) -> _ReportTable:
 
         colHeadings = ('Label', 'Time (sec)')
         formatters = ('Bold', 'Bold')
