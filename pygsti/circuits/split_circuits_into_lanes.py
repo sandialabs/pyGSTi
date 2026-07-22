@@ -1,4 +1,4 @@
-import numpy as _np
+import networkx as _nx
 
 from typing import Sequence, Dict, Tuple, Optional, Set, Union
 from pygsti.circuits import Circuit as Circuit
@@ -34,120 +34,108 @@ def _map_label_state_space_labels(lbl, sslbl_map):
 
     return lbl.map_state_space_labels(sslbl_map)
 
-def compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit: Circuit) -> tuple[dict[int, int],
-                                                                                             dict[int, tuple[int]]]:
+
+def compute_qubit_lane_mappings_for_circuit(circuit: Circuit) -> tuple[dict[int, int],
+                                                                       dict[int, set[int]]]:
     """
+    Partition `circuit`'s lines ("qubits") into lanes: maximal groups of lines that
+    are connected to each other via multi-line gates, and so cannot be simulated
+    independently of one another.  Lines that never appear together in a multi-line
+    gate end up in different lanes.
+
     Parameters:
     ------------
     circuit: Circuit - the circuit to compute qubit to lanes mapping for
 
     Returns
     --------
-    Dictionary mapping qubit number to lane number in the circuit.
+    A tuple `(qubit_to_lane, lane_to_qubits)`:
+      - `qubit_to_lane` maps each of `circuit`'s line labels to the index of the
+        lane it belongs to.
+      - `lane_to_qubits` maps each lane index to the set of line labels in
+        that lane.
     """
-
-    qubits_to_potentially_entangled_others = {i: set((i,)) for i in circuit.line_labels}
-    num_layers = circuit.num_layers
-    for layer_ind in range(num_layers):
-        layer = circuit.layer(layer_ind)
-        for op in layer:
+    # Build a graph whose nodes are this circuit's lines, with an edge between
+    # any two lines that ever appear together in the same (multi-line) gate.
+    # A lane is then just a connected component of this graph -- every line
+    # starts out in its own singleton component (so that lines untouched by
+    # any multi-line gate still end up in their own lane).
+    graph = _nx.Graph()
+    graph.add_nodes_from(circuit.line_labels)
+    for layer_ind in range(circuit.num_layers):
+        for op in circuit.layer(layer_ind):
             qubits_used = op.qubits
-            for qb in qubits_used:
-                qubits_to_potentially_entangled_others[qb].update(set(qubits_used))
+            graph.add_edges_from(
+                (qubits_used[0], other) for other in qubits_used[1:]
+            )
 
-    lanes = {}
-    lan_num = 0
-    visited: dict[int, int] = {}
+    lane_to_qubits = {
+        lane_num: component
+        for lane_num, component in enumerate(_nx.connected_components(graph))
+    }
+    qubit_to_lane = {
+        qubit: lane_num
+        for lane_num, qubits in lane_to_qubits.items()
+        for qubit in qubits
+    }
 
-    def reachable_nodes(starting_point: int,
-                        graph_qubits_to_neighbors: dict[int, set[int]],
-                        visited: dict[int, set[int]]):
-        """
-        Find which nodes are reachable from this starting point.
-        """
-        if starting_point in visited:
-            return visited[starting_point]
-        else:
-            assert starting_point in graph_qubits_to_neighbors
-            visited[starting_point] = graph_qubits_to_neighbors[starting_point]
-            output = set(visited[starting_point])
-            for child in graph_qubits_to_neighbors[starting_point]:
-                if child != starting_point:
-                    output.update(output, reachable_nodes(child, graph_qubits_to_neighbors, visited))
-            visited[starting_point] = output
-            return output
-
-    available_starting_points = list(sorted(qubits_to_potentially_entangled_others.keys()))
-    while available_starting_points:
-        sp = available_starting_points[0]
-        nodes = reachable_nodes(sp, qubits_to_potentially_entangled_others, visited)
-        for node in nodes:
-            available_starting_points.remove(node)
-        lanes[lan_num] = nodes
-        lan_num += 1
-
-    def compute_qubits_to_lanes(lanes_to_qubits: dict[int, set[int]]) -> dict[int, int]:
-        """
-        Determine a mapping from qubit to the lane it is in for this specific circuit.
-        """
-        out = {}
-        for key, val in lanes_to_qubits.items():
-            for qb in val:
-                out[qb] = key
-        return out
-
-    return compute_qubits_to_lanes(lanes), lanes
+    return qubit_to_lane, lane_to_qubits
 
 
-def compute_subcircuits(circuit: Circuit,
-                        qubit_to_lanes: Optional[dict[int, int]] = None,
-                        lane_to_qubits: Optional[dict[int, tuple[int, ...]]] = None,
-                        cache_lanes_in_circuit: bool = False,
-                        idle_gate_name: Union[str, Label]="Gi") -> list[list[LabelTupTup]]:
+def split_into_tensor_lanes(circuit: Circuit,
+                            qubit_to_lanes: Optional[dict[int, int]] = None,
+                            lane_to_qubits: Optional[dict[int, tuple[int, ...]]] = None,
+                            cache_lanes_in_circuit: bool = False,
+                            idle_gate_name: Union[str, Label] = "Gi") -> list[Circuit]:
     """
-    Split a circuit into multiple subcircuits which do not talk across lanes.
+    Split a circuit into multiple subcircuits ("lanes") which do not talk across lanes.
 
-    Returns a list of those subcircuits in the format of a list of layers.
+    Note: this is distinct from the notion of a "subcircuit" elsewhere in `Circuit`
+    (a repeated block of layers represented by a :class:`CircuitLabel`) -- here,
+    a lane's "subcircuit" is a full-depth `Circuit` restricted to a subset of lines.
+
+    Returns a list of `Circuit` objects, one per lane, indexed to match
+    `lane_to_qubits`.  Each lane's circuit is built by deleting all of the other
+    lanes' lines from a copy of `circuit` (see :meth:`Circuit.delete_lines`),
+    which also validates that no gate actually straddles two different lanes.
     """
 
     if qubit_to_lanes is None or lane_to_qubits is None:
-        qubit_to_lanes, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit)
+        qubit_to_lanes, lane_to_qubits = compute_qubit_lane_mappings_for_circuit(circuit)
 
     # The lanes cache is only trustworthy for *static* (read-only) circuits:
     if circuit._static and "lanes" in circuit.saved_auxinfo:
         # Check if the lane info matches and I can just return that set up.
         if len(lane_to_qubits) == len(circuit.saved_auxinfo["lanes"]):
             # We may have this already in cache.
-
-            lanes_to_gates = [[] for _ in range(len(lane_to_qubits))]
+            lane_circuits = [None] * len(lane_to_qubits)
             for i, key in lane_to_qubits.items():
                 if tuple(sorted(key)) in circuit.saved_auxinfo["lanes"]:
-                    lanes_to_gates[i] = circuit.saved_auxinfo["lanes"][tuple(sorted(key))]
-
+                    lane_circuits[i] = circuit.saved_auxinfo["lanes"][tuple(sorted(key))]
                 else:
                     raise ValueError(f"lbl cache miss: {key} in circuit {circuit}")
-            return lanes_to_gates
+            return lane_circuits
 
-    lanes_to_gates = [[] for _ in range(len(lane_to_qubits))]
-
-    num_layers = circuit.num_layers
-    for layer_ind in range(num_layers):
-        layer = circuit.layer_with_idles(layer_ind, idle_gate_name)
-        lane_groups = [[] for _ in range(len(lane_to_qubits))]
-        for op in layer:
-            qubits_used = op.qubits
-            lane = qubit_to_lanes[qubits_used[0]]
-            lane_groups[lane].append(op)
-
-        for lane, group in enumerate(lane_groups):
-            # Sort the operations in each lane group by their first qubit for deterministic output
-            sorted_group = sorted(group, key=lambda x: x.qubits[0])
-            lanes_to_gates[lane].append(Label(tuple(sorted_group))) # Go through the label factory.
+    lane_circuits: list[Circuit] = [None] * len(lane_to_qubits)
+    for lane, lane_qubits in lane_to_qubits.items():
+        other_qubits = [q for q in circuit.line_labels if q not in lane_qubits]
+        lane_circuit = circuit.copy(editable=True)
+        # delete_lines gives us straddler-detection for free: if a gate spans
+        # this lane and another one, the qubit-to-lane partition computed above
+        # was wrong, and we want that surfaced as an error rather than silently
+        # dropping/mangling the offending gate.
+        lane_circuit.delete_lines(other_qubits, delete_straddlers=False)
+        # Materialize this lane's own implicit idles into explicit
+        # `idle_gate_name` gates, so each lane's layer explicitly lists every
+        # line in that lane (matching the historical behavior of this function).
+        lane_circuit.insert_implicit_idles_inplace(idle_gate_name=idle_gate_name)
+        lane_circuit.done_editing()
+        lane_circuits[lane] = lane_circuit
 
     if cache_lanes_in_circuit:
-        circuit = circuit._cache_tensor_lanes(lanes_to_gates, lane_to_qubits)
+        circuit = circuit._cache_tensor_lanes(lane_circuits, lane_to_qubits)
 
-    return lanes_to_gates
+    return lane_circuits
 
 
 def batch_tensor(
@@ -261,5 +249,5 @@ def batch_tensor(
 
     c = c.reorder_lines(global_line_order)
     c.saved_auxinfo["lanes"] = {}
-    compute_subcircuits(c, cache_lanes_in_circuit=True)
+    split_into_tensor_lanes(c, cache_lanes_in_circuit=True)
     return c

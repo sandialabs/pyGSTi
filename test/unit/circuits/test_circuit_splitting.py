@@ -1,8 +1,8 @@
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label
 from pygsti.circuits.split_circuits_into_lanes import (
-    compute_subcircuits,
-    compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit,
+    split_into_tensor_lanes,
+    compute_qubit_lane_mappings_for_circuit,
     batch_tensor
 )
 import numpy as np
@@ -91,7 +91,7 @@ class CircuitSplittingTester(BaseCase):
         qubits_to_lanes = {0: 0}
         lane_to_qubits = {0: (0,)}
 
-        attempt = compute_subcircuits(original, qubits_to_lanes, lane_to_qubits)
+        attempt = split_into_tensor_lanes(original, qubits_to_lanes, lane_to_qubits)
         self.assertEqual(original, _Circuit(attempt[0], line_labels=[0]))
 
     def test_subcircuits_split_can_be_cached(self):
@@ -105,21 +105,21 @@ class CircuitSplittingTester(BaseCase):
 
         # This is a random circuit so the lanes may not be perfect.
         circuit = build_circuit_with_multiple_qubit_gates_with_designated_lanes(num_qubits, depth, lane_eps, gates_to_num_used)
-        qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit)
+        qubit_to_lane, lane_to_qubits = compute_qubit_lane_mappings_for_circuit(circuit)
 
         # The lanes cache is populated lazily, so nothing is cached yet.
         self.assertNotIn("lanes", circuit.saved_auxinfo)
 
-        sub_cirs = compute_subcircuits(circuit, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=True)
+        sub_cirs = split_into_tensor_lanes(circuit, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=True)
         self.assertIn("lanes", circuit.saved_auxinfo)
         self.assertEqual(len(circuit.saved_auxinfo["lanes"].keys()), len(sub_cirs))
 
     def test_subcircuits_split_cache_miss(self):
         c = _Circuit([('Gx', 0), ('Gy', 1)], line_labels=[0, 1])
-        qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c)
+        qubit_to_lane, lane_to_qubits = compute_qubit_lane_mappings_for_circuit(c)
 
         # Cache the lanes in the circuit.
-        sub_cirs = compute_subcircuits(c, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=True)
+        sub_cirs = split_into_tensor_lanes(c, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=True)
         self.assertIn("lanes", c.saved_auxinfo)
 
         # Create a copy and map state space labels, which will result in cleared lanes cache on done_editing.
@@ -137,7 +137,7 @@ class CircuitSplittingTester(BaseCase):
         # Manually inject a stale key to verify that "lbl cache miss" check works when a mismatching key is present.
         c_mapped.saved_auxinfo["lanes"] = {(0,): None, (1,): None}
         with self.assertRaisesRegex(ValueError, "lbl cache miss"):
-            compute_subcircuits(c_mapped, qubit_to_lane_mapped, lane_to_qubits_mapped)
+            split_into_tensor_lanes(c_mapped, qubit_to_lane_mapped, lane_to_qubits_mapped)
 
     def test_find_qubit_to_lane_splitting(self):
         gates_to_num_used = {"X": 1, "Y": 1, "Z": 1, "CNOT": 2, "CZ": 2}
@@ -152,7 +152,7 @@ class CircuitSplittingTester(BaseCase):
         # This is a random circuit so the lanes may not be perfect.
         circuit = build_circuit_with_multiple_qubit_gates_with_designated_lanes(num_qubits, depth, lane_eps, gates_to_num_used)
 
-        qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(circuit)
+        qubit_to_lane, lane_to_qubits = compute_qubit_lane_mappings_for_circuit(circuit)
 
         self.assertEqual(len(qubit_to_lane), num_qubits)
         self.assertGreaterEqual(len(lane_to_qubits), minimum_num_lanes)
@@ -318,7 +318,7 @@ class CircuitSplittingTester(BaseCase):
             [Label('Gx', 0), Label('Gy', 1), Label('Gz', 2)]
         ], line_labels=[0, 1, 2])
 
-        qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c_interleaved)
+        qubit_to_lane, lane_to_qubits = compute_qubit_lane_mappings_for_circuit(c_interleaved)
 
         # Confirm the lane structure is interleaved.
         # Lane 0 should be {0, 2} and Lane 1 should be {1}.
@@ -326,7 +326,7 @@ class CircuitSplittingTester(BaseCase):
         self.assertEqual(lane_to_qubits[1], {1})
 
         # Compute the subcircuits.
-        sub_cirs = compute_subcircuits(c_interleaved, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=False)
+        sub_cirs = split_into_tensor_lanes(c_interleaved, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=False)
 
         # Expected: Each subcircuit has exactly 2 layers (since the input circuit has 2 layers).
         # The lane-keyed grouping fix ensures that Lane 0's subcircuit second layer is not
@@ -342,7 +342,7 @@ class CircuitSplittingTester(BaseCase):
             [Label('Gx', 0), Label('Gy', 1), Label('Gz', 2)]
         ], line_labels=[0, 1, 2])
 
-        qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c_contiguous)
+        qubit_to_lane, lane_to_qubits = compute_qubit_lane_mappings_for_circuit(c_contiguous)
 
         # Confirm the lane structure is contiguous.
         # Lane 0 should be {0, 1} and Lane 1 should be {2}.
@@ -350,7 +350,7 @@ class CircuitSplittingTester(BaseCase):
         self.assertEqual(lane_to_qubits[1], {2})
 
         # Compute the subcircuits.
-        sub_cirs = compute_subcircuits(c_contiguous, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=False)
+        sub_cirs = split_into_tensor_lanes(c_contiguous, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=False)
 
         # For contiguous lanes, sorting by qubit index works perfectly.
         # So each subcircuit should correctly have exactly 2 layers (depth 2).
@@ -370,13 +370,13 @@ class CircuitSplittingTester(BaseCase):
             [Label('Gcnot', (0, 3))]
         ], line_labels=[0, 1, 2, 3])
 
-        qubit_to_lane, lane_to_qubits = compute_qubit_to_lane_and_lane_to_qubits_mappings_for_circuit(c_deep)
+        qubit_to_lane, lane_to_qubits = compute_qubit_lane_mappings_for_circuit(c_deep)
 
         self.assertEqual(lane_to_qubits[0], {0, 3})
         self.assertEqual(lane_to_qubits[1], {1})
         self.assertEqual(lane_to_qubits[2], {2})
 
-        sub_cirs = compute_subcircuits(c_deep, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=False)
+        sub_cirs = split_into_tensor_lanes(c_deep, qubit_to_lane, lane_to_qubits, cache_lanes_in_circuit=False)
 
         # The subcircuit for every single lane must contain exactly 5 layers (equal to input circuit layers),
         # demonstrating that our fix perfectly preserves the one-layer-per-layer invariant under interleaving.

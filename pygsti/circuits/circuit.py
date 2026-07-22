@@ -2569,10 +2569,11 @@ class Circuit(object):
         else:
             new_line_labels = self._line_labels + circuit._line_labels
 
-        #Add circuit's labels into this circuit
+        #Add circuit's labels into this circuit.
         new_layers = []
         ind = 0
-        while ind < min(self.num_layers, circuit.num_layers):
+        common_len = min(len(self), len(circuit))
+        while ind < common_len:
             lbl = self.layer_label(ind)
             other_lbl = circuit.layer_label(ind)
 
@@ -2584,25 +2585,24 @@ class Circuit(object):
             if isinstance(other_lbl, _LabelStr):
                 other_lbl = _Label(other_lbl.name, circuit.line_labels)
 
-            lbl = lbl.concat(other_lbl)
-            new_layers.append(lbl)
+            new_layers.append(lbl.concat(other_lbl))
             ind += 1
 
-        # We need to pad with idle gates if the circuits are not the same length.
-        if len(self) < len(circuit):
-            while ind < len(circuit):
-                lbl = circuit.layer_label(ind)
+        # One circuit may be longer than the other; walk the remaining layers of
+        # whichever one is longer. If such a layer has *explicit* sslbls we must
+        # also list the other (shorter, now-exhausted) circuit's lines as idling
+        # explicitly, via `idle_gate_name` -- otherwise those lines would be missing
+        # from the layer entirely. If the layer's sslbls are implicit (None, meaning
+        # it already applies contextually to *all* lines) it needs no change: it will
+        # automatically extend to cover the newly-added lines once merged.
+        if len(self) != common_len or len(circuit) != common_len:
+            long_circuit, short_line_labels = (
+                (circuit, self._line_labels) if len(circuit) > common_len else (self, circuit._line_labels)
+            )
+            while ind < len(long_circuit):
+                lbl = long_circuit.layer_label(ind)
                 if lbl.sslbls is not None:
-                    idle_lbls = [_Label(idle_gate_name, line) for line in self._line_labels]
-                    for idle_lbl in idle_lbls:
-                        lbl = lbl.concat(idle_lbl)
-                new_layers.append(lbl)
-                ind += 1
-        else:
-            while ind < len(self):
-                lbl = self.layer_label(ind)
-                if lbl.sslbls is not None:
-                    idle_lbls = [_Label(idle_gate_name, line) for line in circuit._line_labels]
+                    idle_lbls = [_Label(idle_gate_name, line) for line in short_line_labels]
                     for idle_lbl in idle_lbls:
                         lbl = lbl.concat(idle_lbl)
                 new_layers.append(lbl)
@@ -2640,7 +2640,7 @@ class Circuit(object):
         if self._static: cpy.done_editing()
         return cpy
 
-    def _cache_tensor_lanes(self, sub_circuit_list: list[_Label],
+    def _cache_tensor_lanes(self, sub_circuit_list: list[Circuit],
                              lane_to_qubits: dict[int, tuple[int, ...]]) -> Circuit:
         """
         Store the tensor lanes in the circuit if appropriate.
@@ -2648,7 +2648,7 @@ class Circuit(object):
         when tensored is equivalent to the current circuit.
 
         This cache is only ever written to (or read from, see
-        `split_circuits_into_lanes.compute_subcircuits`) when the circuit is
+        `split_circuits_into_lanes.split_into_tensor_lanes`) when the circuit is
         static (read-only). Editable circuits can be mutated in-place (e.g.
         via `__setitem__`, `replace_gatename_inplace`, `tensor_circuit_inplace`,
         etc.) without going through `done_editing()` or
@@ -3633,6 +3633,68 @@ class Circuit(object):
             if line_lbl not in layer_lbl.sslbls:
                 components.append(_Label(idle_gate_name, line_lbl))
         return _Label(components)
+
+    def insert_implicit_idles_inplace(self, layers: Optional[Iterable[int]] = None,
+                                      idle_gate_name: Union[str, _Label] = 'Gi'):
+        """
+        Materialize implicit identity operations as explicit idle gates, in place.
+
+        For each targeted layer, every line that isn't already acted on by that
+        layer's gates has `idle_gate_name` inserted onto it (see
+        :meth:`layer_label_with_idles`).  This is useful whenever a layer must be
+        able to stand on its own with an explicit gate on every line -- for
+        example before tensoring circuits together, so that a padded/idling
+        layer becomes a real gate label instead of an implicit (`sslbls=None`)
+        layer that would otherwise be interpreted as acting on *all* lines once
+        new lines are added.
+
+        Parameters
+        ----------
+        layers : iterable of int, optional
+            The layer indices to materialize idles for.  If `None` (the
+            default), every layer of the circuit is updated.
+
+        idle_gate_name : str or Label, optional
+            The idle gate name to use.  Note that state space (qubit) labels
+            will be added to this name to form a :class:`Label`.
+
+        Returns
+        -------
+        None
+        """
+        assert(not self._static), "Cannot edit a read-only circuit!"
+        if layers is None:
+            layers = range(self.num_layers)
+        for j in layers:
+            padded_lbl = self.layer_label_with_idles(j, idle_gate_name)
+            self._clear_labels([j], self._line_labels)
+            self._labels[j].extend(_label_to_nested_lists_of_simple_labels(padded_lbl, None))
+
+    def insert_implicit_idles(self, layers: Optional[Iterable[int]] = None,
+                              idle_gate_name: Union[str, _Label] = 'Gi') -> Circuit:
+        """
+        Materialize implicit identity operations as explicit idle gates, returning a copy.
+
+        See :meth:`insert_implicit_idles_inplace` for details.
+
+        Parameters
+        ----------
+        layers : iterable of int, optional
+            The layer indices to materialize idles for.  If `None` (the
+            default), every layer of the circuit is updated.
+
+        idle_gate_name : str or Label, optional
+            The idle gate name to use.  Note that state space (qubit) labels
+            will be added to this name to form a :class:`Label`.
+
+        Returns
+        -------
+        Circuit
+        """
+        cpy = self.copy(editable=True)
+        cpy.insert_implicit_idles_inplace(layers, idle_gate_name)
+        if self._static: cpy.done_editing()
+        return cpy
 
     @property
     def num_layers(self):
