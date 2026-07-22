@@ -14,8 +14,6 @@ from pygsti.tools.su2tools import (
     SpinJ,
     angles_from_2x2_unitaries,
     angles_from_2x2_unitary,
-    axis_rotation_angle_from_2x2_unitaries,
-    axis_rotation_angle_from_euler_angles,
     batch_normal_expm_1jscales,
     charactercores_from_euler_angles,
     composition_asmatrix,
@@ -376,21 +374,6 @@ class SU2GroupUtilityTester(BaseCase):
             U_char_actual = fundamental.unitaries_from_angles(*char_angles)[0]
             discrepancy = distance_mod_phase(U_char_actual, U_char_expect)
             self.assertLessEqual(discrepancy, self.RELTOL)
-
-    def test_rotation_axis_angles(self):
-        np.random.seed(0)
-        fundamental = _fundamental_spinj()
-        eas = np.vstack(random_euler_angles(5))
-        Us = fundamental.unitaries_from_angles(*eas)
-        raas_from_eas = axis_rotation_angle_from_euler_angles(eas)
-        raas_from_us = axis_rotation_angle_from_2x2_unitaries(Us)
-        for t_ea, t_u in zip(raas_from_eas, raas_from_us):
-            self.assertGreaterEqual(t_ea, 0.0)
-            self.assertGreaterEqual(t_u, 0.0)
-            self.assertLessEqual(t_ea, np.pi)
-            self.assertLessEqual(t_u, np.pi)
-            self.assertAlmostEqual(t_ea, t_u)
-
 
 class SpinJConstructionTester(BaseCase):
 

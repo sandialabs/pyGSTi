@@ -5,7 +5,8 @@ arbitrary spin j.
 This module provides a single `SpinJ` class plus a set of module-level,
 representation-independent SU(2) group utilities (Haar sampling of Euler angles,
 Euler-angle <-> 2x2-unitary conversions, composition/inversion of Euler-angle
-sequences, and the irrep character functions), for arbitrary spin j.
+sequences, and the Legendre "character cores" used by rank-1 synthetic-SPAM RB),
+along with helpers for building single-qudit `Gu`-layer circuits from Euler angles.
 
 Conventions (see the paper "Randomized Benchmarking with Synthetic Quantum Circuits"
 for the equations cited below):
@@ -41,7 +42,7 @@ from __future__ import annotations
 import functools as _functools
 import math as _math
 from fractions import Fraction as _Fraction
-from typing import List, Optional, Tuple, Union, Callable
+from typing import List, Optional, Tuple, Union
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -59,13 +60,13 @@ __all__ = [
     'random_euler_angles',
     'angles_from_2x2_unitaries',
     'angles_from_2x2_unitary',
-    'axis_rotation_angle_from_2x2_unitaries',
-    'axis_rotation_angle_from_euler_angles',
     'composition_asmatrix',
     'composition_inverse',
     'charactercores_from_euler_angles',
+    'circuit_from_euler_angles',
+    'euler_angles_from_circuit',
     'SpinJ',
-    'GATE_NAME'
+    'GATE_NAME',
 ]
 
 
@@ -351,34 +352,6 @@ def angles_from_2x2_unitary(R: _np.ndarray) -> Tuple[float, float, float]:
     return angles
 
 
-def axis_rotation_angle_from_2x2_unitaries(U: _np.ndarray) -> _np.ndarray:
-    """
-    Return the axis-rotation angle(s) theta in `[0, pi]` implied by a batch of 2x2
-    (special) unitary matrices (i.e. `U = exp(-i*theta/2 * n.J)` for some axis `n`).
-    """
-    if U.ndim == 2:
-        U = U[_np.newaxis, :, :]
-    eigs = _np.linalg.eigvals(U)  # eigs = exp(+-i theta/2)
-    theta = _np.real(2 * _np.log(eigs[:, 0]) / 1j)
-    tr = _np.trace(U, axis1=1, axis2=2)
-    check = tr - 2 * _np.cos(theta / 2)
-    assert _np.all(abs(check) < 1e-10)
-    theta[theta < 0] += 2 * _np.pi
-    theta[theta > _np.pi] = 2 * _np.pi - theta[theta > _np.pi]
-    return theta
-
-
-def axis_rotation_angle_from_euler_angles(abg: _np.ndarray) -> _np.ndarray:
-    """
-    Return the axis-rotation angle(s) theta in `[0, pi]` implied by ZXZ Euler
-    angles `abg = (alpha, beta, gamma)` (each a scalar, or `abg` shape `(3, N)`).
-    """
-    theta_by_2 = _np.atleast_1d(_np.arccos(_np.cos(abg[1] / 2) * _np.cos((abg[0] + abg[2]) / 2)))
-    theta = 2 * theta_by_2
-    theta[theta > _np.pi] = 2 * _np.pi - theta[theta > _np.pi]
-    return theta
-
-
 def composition_asmatrix(angles: _np.ndarray) -> _np.ndarray:
     """
     Return the 2x2 unitary representing the composition of a sequence of ZXZ
@@ -570,7 +543,8 @@ class SpinJ:
         self.irrep_block_sizes = 2 * self.irrep_labels + 1
 
     @staticmethod
-    def cast(j:  Union[SpinJ, SpinSpec_t]) -> SpinJ:
+    def cast(j: SpinJCastable_t) -> SpinJ:
+        """Return `j` unchanged if it is already a `SpinJ`, else construct `SpinJ(j)`."""
         if isinstance(j, SpinJ):
             return j
         return SpinJ(j)
@@ -697,22 +671,9 @@ class SpinJ:
         tA = sum(coeffs[i] * P for i, P in enumerate(projectors))
         return tA
 
-    def all_characters_from_unitary(self, U: _np.ndarray) -> _np.ndarray:
-        """
-        Return the irrep characters `chi_k` (k = 0..2j, i.e. one per entry of
-        `irrep_labels`) implied by the spin-j-representation unitary `U`, computed
-        by block-diagonalizing `U`'s standard-basis superoperator and summing the
-        diagonal of each block.
-        """
-        A = _unitary_to_std_process_mx(U)
-        diag = _np.diag(self.superop_stdmx_cob @ A @ self.superop_stdmx_cob.conj().T).real
-        out = []
-        idx = 0
-        for b_sz in self.irrep_block_sizes:
-            out.append(_np.sum(diag[idx:idx + b_sz]))
-            idx += b_sz
-        characters = _np.array(out).reshape((1, -1))
-        return characters
+
+SpinJCastable_t = Union[SpinJ, SpinSpec_t]
+"""Anything accepted by `SpinJ.cast`."""
 
 
 @_functools.lru_cache(maxsize=1)
@@ -721,12 +682,3 @@ def _fundamental_spinj():
     composition utilities (`composition_asmatrix`, `composition_inverse`)."""
     fundamental = SpinJ(_Fraction(1, 2))
     return fundamental
-
-
-# ***************************************************************************************************
-# Type aliases
-# ***************************************************************************************************
-
-SpinJCastable_t  = Union[SpinJ, SpinSpec_t]
-
-ChannelFactory_t = Callable[[float, float, float], _np.ndarray]

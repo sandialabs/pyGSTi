@@ -622,7 +622,7 @@ class TestSU2QuditRBSimulatorConstruction(BaseCase):
         self.assertTrue(sim_from_j.is_noiseless)
 
     def test_bad_noise_channel_shape_raises(self):
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             SU2QuditRBSimulator(0.5, noise_channel=np.eye(3))
 
     def test_dim_mismatch_with_design_raises(self):

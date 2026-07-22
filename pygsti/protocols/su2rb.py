@@ -67,6 +67,10 @@ __all__ = [
     'SU2QuditRBResults',
 ]
 
+ChannelFactory_t = Callable[[float, float, float], _np.ndarray]
+"""A gate-dependent noise factory: maps a gate's ZXZ Euler angles to the
+`(dim**2, dim**2)` noise superoperator applied after that gate."""
+
 
 def _add_spam_layers_inplace(c: _Circuit, prep_index: int, j: Optional[_su2.SpinSpec_t] = None, finalize=True) -> None:
     if j is not None:
@@ -290,7 +294,7 @@ def jz_rotation(spinj: _su2.SpinJ, theta: float, power: float = 1.0) -> _np.ndar
     Returns
     -------
     numpy array
-        Shape `(dim**2, dim**2)`, a unitary.
+        Shape `(dim**2, dim**2)`, the superoperator of a unitary channel.
     """
     U = _np.diag(_np.exp(1j * theta * (spinj.spins ** power)))
     S = _unitary_to_std_process_mx(U)
@@ -353,7 +357,7 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
     """
 
     def __init__(self, spinj: _su2.SpinJCastable_t,
-                 noise_channel: Union[_su2.ChannelFactory_t, _np.ndarray, None] = None,
+                 noise_channel: Union[ChannelFactory_t, _np.ndarray, None] = None,
                  shots: Optional[int] = None, seed: Optional[int] = None
         ) -> None:
         super(SU2QuditRBSimulator, self).__init__()
@@ -366,9 +370,11 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
         self._noise_factory = None
         if callable(noise_channel):
             self._noise_factory = noise_channel
-        elif hasattr(noise_channel, '__matmul__') and hasattr(noise_channel, 'shape'):
+        elif isinstance(noise_channel, _np.ndarray):
+            dim2 = self.dim ** 2
+            if noise_channel.shape != (dim2, dim2):
+                raise ValueError(f"noise_channel must have shape ({dim2}, {dim2}); got {noise_channel.shape}")
             self._noise_superop = noise_channel
-            assert noise_channel.shape == (self.dim**2, self.dim**2)  # type: ignore
         elif noise_channel is not None:
             raise ValueError(f'Unsupported argument noise_channel={noise_channel}.')
         return
