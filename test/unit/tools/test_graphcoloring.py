@@ -38,11 +38,17 @@ ALL_ALGORITHMS = list(VALID_ALGORITHMS)
 # coloring with at most deg+1 colors (Vizing's theorem) on every family tested.
 DETERMINISTIC_EXACT_ALGORITHMS = ["vizing", "misra_gries"]
 
-# Randomized algorithms that terminate and produce a proper, complete coloring.
-# ('sinnamon' -- Sinnamon (2019)'s deterministic Greedy-Euler-Color -- ignores
-# `seed` and is included here only because the reproducibility/validity tests
-# below are written to be seed-agnostic; it is not actually randomized.)
-RANDOMIZED_ALGORITHMS = ["sinnamon", "random_euler_color"]
+
+# DETERMINISTIC_DP1PP_ALGORITHMS: algorithms that are already deterministic (their
+# output does not vary with the seed) but do not ensure deg+1 colors or better.
+# One may use them if they want a coloring scheme which is faster than one of the
+# minimum coloring deterministic schemes.
+DETERMINISTIC_DP1PP_ALGORITHMS = ["deterministic_euler_color"]
+
+# RANDOMIZED_ALGORITHMS: genuinely randomized algorithms, regardless of their cap
+# on the number of colors returned. Their output can (and generally will) vary
+# with the seed.
+RANDOMIZED_ALGORITHMS = ["random_euler_color"]
 
 # "SPARSE_SAFE" = algorithms that reliably produced a proper & complete coloring
 # on the low-degree (deg<=4) families in this suite, across runs and within the
@@ -291,55 +297,84 @@ DENSE_REGRESSION_GRAPHS = [
 
 
 # ---------------------------------------------------------------------------
-# Module-level parametrized tests (data-driven).
+# Seed-controlled behavior, shared between the deterministic-but-worse and the
+# randomized algorithm groups. Both groups accept a seed and must produce a
+# proper, complete coloring; the split into two subclasses below exists so
+# that each group's intent (deterministic vs. randomized) is documented and
+# tested independently, even though the test bodies are identical.
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("algorithm", RANDOMIZED_ALGORITHMS)
-def test_same_seed_is_reproducible(algorithm):
-    """Same integer seed => byte-for-byte identical coloring."""
-    for name, graph in REPRODUCIBILITY_GRAPHS:
+class _SeedableAlgorithmTesterBase(BaseCase):
+    """Shared seed-behavior tests, parametrized per-subclass via ``ALGORITHMS``."""
+
+    #: Overridden by subclasses with the specific algorithm name(s) to test.
+    ALGORITHMS = []
+
+    def test_same_seed_is_reproducible(self):
+        """Same integer seed => byte-for-byte identical coloring."""
+        for algorithm in self.ALGORITHMS:
+            for name, graph in REPRODUCIBILITY_GRAPHS:
+                vertices, edges, neighbors, deg = graph
+                r1 = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
+                r2 = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
+                self.assertEqual(
+                    _canonical_coloring(r1), _canonical_coloring(r2),
+                    f"{algorithm} not reproducible with a fixed seed on {name}")
+
+    def test_seeded_output_is_proper_and_complete(self):
+        """A seeded run must still be a proper, complete edge coloring."""
+        for algorithm in self.ALGORITHMS:
+            for name, graph in REPRODUCIBILITY_GRAPHS:
+                vertices, edges, neighbors, deg = graph
+                cp = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
+                proper, complete, _ncolors = assess_coloring(cp, edges)
+                self.assertTrue(proper, f"{algorithm} produced an improper coloring on {name}")
+                self.assertTrue(complete, f"{algorithm} left an edge uncolored on {name}")
+                self.assertTrue(
+                    check_valid_edge_coloring(cp, ret_false_on_error=True),
+                    f"{algorithm} failed check_valid_edge_coloring on {name}")
+
+    def test_accepts_generator_object(self):
+        """A numpy.random.Generator may be passed directly as the seed, and two
+        generators created from the same seed reproduce each other."""
+        name, graph = REPRODUCIBILITY_GRAPHS[0]
         vertices, edges, neighbors, deg = graph
-        r1 = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
-        r2 = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
-        assert _canonical_coloring(r1) == _canonical_coloring(r2), \
-            f"{algorithm} not reproducible with a fixed seed on {name}"
+        for algorithm in self.ALGORITHMS:
+            r1 = switchboard_find_edge_coloring(
+                algorithm, deg, vertices, edges, neighbors, seed=np.random.default_rng(7))
+            r2 = switchboard_find_edge_coloring(
+                algorithm, deg, vertices, edges, neighbors, seed=np.random.default_rng(7))
+            self.assertEqual(
+                _canonical_coloring(r1), _canonical_coloring(r2),
+                f"{algorithm} not reproducible from equivalent Generator objects on {name}")
 
-
-@pytest.mark.parametrize("algorithm", RANDOMIZED_ALGORITHMS)
-def test_seeded_output_is_proper_and_complete(algorithm):
-    """A seeded run must still be a proper, complete edge coloring."""
-    for name, graph in REPRODUCIBILITY_GRAPHS:
+    def test_no_seed_still_valid(self):
+        """Omitting the seed still yields a proper, complete coloring."""
+        name, graph = REPRODUCIBILITY_GRAPHS[0]
         vertices, edges, neighbors, deg = graph
-        cp = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
-        proper, complete, _ncolors = assess_coloring(cp, edges)
-        assert proper, f"{algorithm} produced an improper coloring on {name}"
-        assert complete, f"{algorithm} left an edge uncolored on {name}"
-        assert check_valid_edge_coloring(cp, ret_false_on_error=True), \
-            f"{algorithm} failed check_valid_edge_coloring on {name}"
+        for algorithm in self.ALGORITHMS:
+            cp = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors)
+            proper, complete, _ncolors = assess_coloring(cp, edges)
+            self.assertTrue(
+                proper and complete,
+                f"{algorithm} produced an invalid coloring without a seed on {name}")
 
 
-@pytest.mark.parametrize("algorithm", RANDOMIZED_ALGORITHMS)
-def test_accepts_generator_object(algorithm):
-    """A numpy.random.Generator may be passed directly as the seed, and two
-    generators created from the same seed reproduce each other."""
-    name, graph = REPRODUCIBILITY_GRAPHS[0]
-    vertices, edges, neighbors, deg = graph
-    r1 = switchboard_find_edge_coloring(
-        algorithm, deg, vertices, edges, neighbors, seed=np.random.default_rng(7))
-    r2 = switchboard_find_edge_coloring(
-        algorithm, deg, vertices, edges, neighbors, seed=np.random.default_rng(7))
-    assert _canonical_coloring(r1) == _canonical_coloring(r2), \
-        f"{algorithm} not reproducible from equivalent Generator objects on {name}"
+class DeterministicDeltaPlusTwoPlusPlusColorsTester(_SeedableAlgorithmTesterBase):
+    """Seed-behavior tests for deterministic algorithms that do not guarantee
+    deg+1 (or better) colors, i.e. ``DETERMINISTIC_DP1PP_ALGORITHMS``.
+
+    These algorithms accept a seed for a deterministic trajectory, but their
+    output does not actually vary with the seed."""
+
+    ALGORITHMS = DETERMINISTIC_DP1PP_ALGORITHMS
 
 
-@pytest.mark.parametrize("algorithm", RANDOMIZED_ALGORITHMS)
-def test_no_seed_still_valid(algorithm):
-    """Omitting the seed still yields a proper, complete coloring."""
-    name, graph = REPRODUCIBILITY_GRAPHS[0]
-    vertices, edges, neighbors, deg = graph
-    cp = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors)
-    proper, complete, _ncolors = assess_coloring(cp, edges)
-    assert proper and complete, \
-        f"{algorithm} produced an invalid coloring without a seed on {name}"
+class RandomizedAlgorithmsTester(_SeedableAlgorithmTesterBase):
+    """Seed-behavior tests for genuinely randomized algorithms, i.e.
+    ``RANDOMIZED_ALGORITHMS``. Their output can (and generally will) vary
+    with the seed."""
+
+    ALGORITHMS = RANDOMIZED_ALGORITHMS
 
 
 # ---------------------------------------------------------------------------
@@ -552,7 +587,10 @@ class GraphColoringReproducibilityTester(BaseCase):
         This is a soft check: for a sufficiently non-trivial graph at least one
         randomized algorithm must yield distinct output for two different seeds.
         (Individual algorithms may coincidentally match on small graphs, so we
-        only require that *some* algorithm distinguishes the seeds.)
+        only require that *some* algorithm distinguishes the seeds.) Only
+        genuinely randomized algorithms are checked here -- a deterministic
+        algorithm's output does not depend on the seed, so it would trivially
+        (and misleadingly) fail this check.
         """
         vertices, edges, neighbors, deg = make_complete_graph(14)
         any_differs = False

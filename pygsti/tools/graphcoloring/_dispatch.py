@@ -11,7 +11,7 @@ from ._sinnamon import sinnamon_2d_minus_1_edge_coloring, sinnamon_euler_color_e
 VALID_ALGORITHMS = (
     "misra_gries",
     "vizing",
-    "sinnamon",
+    "deterministic_euler_color",
     "random_euler_color",
     "auto",
 )
@@ -26,8 +26,9 @@ def switchboard_find_edge_coloring(
 
     Parameters:
     algorithm_name (str): The name of the algorithm to use ('misra_gries', 'vizing',
-        'sinnamon', 'random_euler_color', 'auto').
-        'sinnamon' is Sinnamon (2019)'s deterministic Greedy-Euler-Color, a
+        'deterministic_euler_color', 'random_euler_color', 'auto').
+
+        'deterministic_euler_color' is Sinnamon (2019)'s deterministic Greedy-Euler-Color, a
         (2*deg-1)-edge-coloring running in O(m log(deg)) time. 'random_euler_color' is
         Sinnamon (2019)'s randomized Random-Euler-Color, a (deg+1)-edge-coloring running
         in O(m*sqrt(n)) time with high probability -- see `sinnamon_2d_minus_1_edge_coloring`
@@ -52,7 +53,7 @@ def switchboard_find_edge_coloring(
         return misra_gries_edge_coloring(deg, vertices, edges, neighbors)
     elif algorithm_name == "vizing":
         return vizing_edge_coloring(deg, vertices, edges, neighbors)
-    elif algorithm_name == "sinnamon":
+    elif algorithm_name == "deterministic_euler_color":
         return sinnamon_2d_minus_1_edge_coloring(deg, vertices, edges, neighbors)
     elif algorithm_name == "random_euler_color":
         return sinnamon_euler_color_edge_coloring(deg, vertices, edges, neighbors, seed=seed)
