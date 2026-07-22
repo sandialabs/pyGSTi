@@ -76,7 +76,7 @@ def _make_reportable_qty_or_dict(f0: Any, df: Optional[Any]=None, non_markovian_
         return _ReportableQty(f0, df, non_markovian_ebs)
 
 
-def evaluate(model_fn: Optional[_modf.ModelFunction], cri: Optional["_CRFView"]=None, verbosity: Optional[int]=0) -> Union[_ReportableQty, dict]:
+def evaluate(model_fn: Optional[_modf.ModelFunction], cri: Optional[_CRFView]=None, verbosity: Optional[int]=0) -> Union[_ReportableQty, dict]:
     """
     Evaluate a ModelFunction object using confidence region information
 

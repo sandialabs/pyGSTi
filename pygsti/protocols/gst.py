@@ -133,7 +133,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
         HasProcessorSpec.__init__(self, processorspec_filename_or_obj)
 
-    def map_qubit_labels(self, mapper: SSLabelMapper) -> "GateSetTomographyDesign":
+    def map_qubit_labels(self, mapper: SSLabelMapper) -> GateSetTomographyDesign:
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
@@ -264,7 +264,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
     def __init__(self, processorspec_filename_or_obj: Union[str, _QuditProcessorSpec], prep_fiducial_list_or_filename: Union[str, list], meas_fiducial_list_or_filename: Union[str, list],
                  germ_list_or_filename: Union[str, list], max_lengths: list, germ_length_limits: Optional[dict]=None, fiducial_pairs: Optional[Union[list, dict]]=None, keep_fraction: float=1,
                  keep_seed: Optional[int]=None, include_lgst: bool=True, nest: bool=True, circuit_rules: Optional[list]=None, op_label_aliases: Optional[dict]=None,
-                 dscheck: Optional["_DataSet"]=None, action_if_missing: Literal["raise", "drop"]="raise", qubit_labels: Optional[Union[list, tuple]]=None, verbosity: int=0,
+                 dscheck: Optional[_DataSet]=None, action_if_missing: Literal["raise", "drop"]="raise", qubit_labels: Optional[Union[list, tuple]]=None, verbosity: int=0,
                  add_default_protocol: bool=False) -> None:
         prep, meas, germs = _load_fiducials_and_germs(
             prep_fiducial_list_or_filename,
@@ -316,7 +316,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
             self.add_default_protocol(StandardGST(name='StdGST'))
 
     def copy_with_maxlengths(self, max_lengths: list, germ_length_limits: Optional[dict]=None,
-                             dscheck: Optional["_DataSet"]=None, action_if_missing: Literal["raise", "drop"]='raise', verbosity: int=0) -> "StandardGSTDesign":
+                             dscheck: Optional[_DataSet]=None, action_if_missing: Literal["raise", "drop"]='raise', verbosity: int=0) -> StandardGSTDesign:
         """
         Copies this GST experiment design to one with the same data except a different set of maximum lengths.
 
@@ -429,7 +429,7 @@ class GSTInitialModel(_NicelySerializable):
     """
 
     @classmethod
-    def cast(cls, obj: Any) -> "GSTInitialModel":
+    def cast(cls, obj: Any) -> GSTInitialModel:
         """
         Cast `obj` to a :class:`GSTInitialModel` object.
 
@@ -461,7 +461,7 @@ class GSTInitialModel(_NicelySerializable):
         self.depolarize_start = depolarize_start
         self.randomize_start = randomize_start
 
-    def retrieve_model(self, edesign: _proto.ExperimentDesign, gaugeopt_target: Optional[_Model], dataset: "_DataSet", comm) -> _Model:
+    def retrieve_model(self, edesign: _proto.ExperimentDesign, gaugeopt_target: Optional[_Model], dataset: _DataSet, comm) -> _Model:
         """
         Retrieve the starting-point :class:`Model` used to seed a long-sequence GST run.
 
@@ -586,7 +586,7 @@ class GSTInitialModel(_NicelySerializable):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state: dict) -> "GSTInitialModel":  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state: dict) -> GSTInitialModel:  # memo holds already de-serialized objects
         model = _Model.from_nice_serialization(state['model']) \
             if (state['model'] is not None) else None
         target_model = _Model.from_nice_serialization(state['target_model']) \
@@ -665,7 +665,7 @@ class GSTBadFitOptions(_NicelySerializable):
     """
 
     @classmethod
-    def cast(cls, obj: Any) -> "GSTBadFitOptions":
+    def cast(cls, obj: Any) -> GSTBadFitOptions:
         """
         Cast `obj` to a :class:`GSTBadFitOptions` object.
 
@@ -687,7 +687,7 @@ class GSTBadFitOptions(_NicelySerializable):
     def __init__(self, threshold: float=DEFAULT_BAD_FIT_THRESHOLD,
                  actions: Sequence[Literal['wildcard', 'wildcard1d', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing']]=(),
                  wildcard_budget_includes_spam: bool=True,
-                 wildcard_L1_weights: Optional[dict[Union[str, "_Label"], float]]=None,
+                 wildcard_L1_weights: Optional[dict[Union[str, _Label], float]]=None,
                  wildcard_primitive_op_labels: Optional[list]=None,
                  wildcard_initial_budget: Optional[Any]=None,
                  wildcard_methods: Sequence[Literal['neldermead', 'barrier', 'cvxpy_noagg']]=('neldermead',),
@@ -742,7 +742,7 @@ class GSTBadFitOptions(_NicelySerializable):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state: dict) -> "GSTBadFitOptions":  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state: dict) -> GSTBadFitOptions:  # memo holds already de-serialized objects
         wildcard = state.get('wildcard', {})
         return cls(state['threshold'], tuple(state['actions']),
                    wildcard.get('budget_includes_spam', True),
@@ -794,7 +794,7 @@ class GSTObjFnBuilders(_NicelySerializable):
 
     # This used to be a class method, but this class has no derived classes.
     @staticmethod
-    def create_from(objective: ObjectiveType='logl', freq_weighted_chi2: bool=False, always_perform_mle: bool=False, only_perform_mle: bool=False) -> "GSTObjFnBuilders":
+    def create_from(objective: ObjectiveType='logl', freq_weighted_chi2: bool=False, always_perform_mle: bool=False, only_perform_mle: bool=False) -> GSTObjFnBuilders:
         """
         Creates a common :class:`GSTObjFnBuilders` object from several arguments.
 
@@ -854,7 +854,7 @@ class GSTObjFnBuilders(_NicelySerializable):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state: dict) -> "GSTObjFnBuilders":
+    def _from_nice_serialization(cls, state: dict) -> GSTObjFnBuilders:
         iteration_builders = [_objfns.ObjectiveFunctionBuilder.from_nice_serialization(b)
                               for b in state['iteration_builders']]
         final_builders = [_objfns.ObjectiveFunctionBuilder.from_nice_serialization(b)
@@ -909,7 +909,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                            "varyValidSpamWt-unreliable2Q", "toggleValidSpam-unreliable2Q")
 
     @classmethod
-    def cast(cls, obj: Any) -> "GSTGaugeOptSuite":
+    def cast(cls, obj: Any) -> GSTGaugeOptSuite:
         if obj is None:
             return cls()  # None -> gaugeopt suite with default args (empty suite)
         elif isinstance(obj, GSTGaugeOptSuite):
@@ -1218,7 +1218,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state: dict) -> "GSTGaugeOptSuite":  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state: dict) -> GSTGaugeOptSuite:  # memo holds already de-serialized objects
         gaugeopt_argument_dicts = {}
         for lbl, serialized_goparams_list in state['gaugeopt_argument_dicts'].items():
             if lbl == 'trivial_gauge_opt':
@@ -1335,7 +1335,7 @@ class GateSetTomography(_proto.Protocol):
             checkpoint: Optional[GateSetTomographyCheckpoint]=None,
             checkpoint_path: Optional[str]=None, disable_checkpointing: bool=False,
             simulator: Optional[ForwardSimulator.Castable]=None,
-            optimizers: Optional[Union[_opt.Optimizer, dict, list[_opt.Optimizer], list[dict]]] = None) -> "ModelEstimateResults":
+            optimizers: Optional[Union[_opt.Optimizer, dict, list[_opt.Optimizer], list[dict]]] = None) -> ModelEstimateResults:
         """
         Run this protocol on `data`.
 
@@ -1652,7 +1652,7 @@ class LinearGateSetTomography(_proto.Protocol):
         else:
             raise ValueError("LGST can only be applied to explicit models with dense operators")
 
-    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None) -> "ModelEstimateResults":
+    def run(self, data: _proto.ProtocolData, memlimit: Optional[int]=None, comm=None) -> ModelEstimateResults:
         """
         Run this protocol on `data`.
 
@@ -2436,7 +2436,7 @@ def _compute_wildcard_budget_1d_model(estimate: _Estimate, mdc_objfn: _objfns.Mo
     return wcm
 
 
-def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: dict[str, _ExplicitOpModel], gaugeopt_suite: GSTGaugeOptSuite) -> "dict[str, dict[Label, float]]":
+def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: dict[str, _ExplicitOpModel], gaugeopt_suite: GSTGaugeOptSuite) -> dict[str, dict[_Label, float]]:
     """
     Compute the reference values the 1D wildcard budget.
 
@@ -3018,7 +3018,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
     #even if this is is exposed differently.
 
     @classmethod
-    def from_dir(cls, dirname: str, name: str, preloaded_data: Optional[_proto.ProtocolData]=None, quick_load: bool=False) -> "ModelEstimateResults":
+    def from_dir(cls, dirname: str, name: str, preloaded_data: Optional[_proto.ProtocolData]=None, quick_load: bool=False) -> ModelEstimateResults:
         """
         Initialize a new ModelEstimateResults object from `dirname` / results / `name`.
 
@@ -3055,7 +3055,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc: dict, mongodb, quick_load: bool=False,
-                                         preloaded_data: Optional[_proto.ProtocolData]=None, load_protocol: bool=True, load_data: bool=True) -> "ModelEstimateResults":
+                                         preloaded_data: Optional[_proto.ProtocolData]=None, load_protocol: bool=True, load_data: bool=True) -> ModelEstimateResults:
         ret = super()._create_obj_from_doc_and_mongodb(doc, mongodb, quick_load, preloaded_data,
                                                        load_protocol, load_data)
         ret.circuit_lists = ret._create_circuit_lists(ret.data.edesign)  # because circuit_lists auxfile_type == 'none'
@@ -3077,7 +3077,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         self.auxfile_types['circuit_lists'] = 'none'  # derived from edesign
         self.auxfile_types['estimates'] = 'dict:dir-serialized-object'
 
-    def _create_circuit_lists(self, edesign: _proto.ExperimentDesign) -> "_collections.OrderedDict":
+    def _create_circuit_lists(self, edesign: _proto.ExperimentDesign) -> _collections.OrderedDict:
         circuit_lists = _collections.OrderedDict()
 
         if isinstance(edesign, _proto.CircuitListsDesign):
@@ -3097,7 +3097,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         return circuit_lists
 
     @property
-    def dataset(self) -> "_DataSet":
+    def dataset(self) -> _DataSet:
         """
         The underlying data set.
         """
@@ -3303,7 +3303,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         test_result = mdltest.run(self.data, simulator=simulator)
         self.add_estimates(test_result, silent_steal=True)
 
-    def view(self, estimate_keys: Union[str, list, tuple], gaugeopt_keys: Optional[Union[str, list]]=None) -> "ModelEstimateResults":
+    def view(self, estimate_keys: Union[str, list, tuple], gaugeopt_keys: Optional[Union[str, list]]=None) -> ModelEstimateResults:
         """
         Creates a shallow copy of this Results object containing only the given estimate.
 
@@ -3335,7 +3335,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
         return view
 
-    def copy(self) -> "ModelEstimateResults":
+    def copy(self) -> ModelEstimateResults:
         """
         Creates a copy of this :class:`ModelEstimateResults` object.
 
@@ -3543,7 +3543,7 @@ class StandardGSTCheckpoint(_proto.ProtocolCheckpoint):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state: dict) -> "StandardGSTCheckpoint":  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state: dict) -> StandardGSTCheckpoint:  # memo holds already de-serialized objects
         modes = state['modes']
         child_types = state['child_types']
         #reinitialize the checkpoint objects for the children

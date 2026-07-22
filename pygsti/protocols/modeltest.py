@@ -78,7 +78,7 @@ class ModelTest(_proto.Protocol):
     """
 
     @classmethod
-    def create_objective_builder(cls, obj: Any) -> '_objfns.ObjectiveFunctionBuilder':
+    def create_objective_builder(cls, obj: Any) -> _objfns.ObjectiveFunctionBuilder:
         """
         Creates objective function builders from `obj` that are commonly used in model tests.
 
@@ -102,9 +102,9 @@ class ModelTest(_proto.Protocol):
         else: raise ValueError("Cannot build a objective-fn builder from '%s'" % str(type(obj)))
 
     def __init__(self, model_to_test: _Model, target_model: Optional[_Model] = None,
-                 gaugeopt_suite: Optional[Union[str, '_GSTGaugeOptSuite_t']] = None,
-                 objfn_builder: Optional[Union['_objfns.ObjectiveFunctionBuilder', dict, list, tuple]] = None,
-                 badfit_options: Optional['_GSTBadFitOptions_t'] = None,
+                 gaugeopt_suite: Optional[Union[str, _GSTGaugeOptSuite_t]] = None,
+                 objfn_builder: Optional[Union[_objfns.ObjectiveFunctionBuilder, dict, list, tuple]] = None,
+                 badfit_options: Optional[_GSTBadFitOptions_t] = None,
                  set_trivial_gauge_group: bool = True, verbosity: int = 2, name: Optional[str] = None):
 
         from .gst import GSTBadFitOptions as _GSTBadFitOptions

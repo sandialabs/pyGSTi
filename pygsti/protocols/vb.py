@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from pygsti.baseobjs.label import SSLabelMapper
     from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
     from pygsti.data.dataset import DataSet as _DataSet
+    from pygsti.data.dataset import _DataSetRow
     from pygsti.data.datacomparator import DataComparator as _DataComparator
 
 # Type aliases for the arguments shared across the by-depth experiment designs.
@@ -34,6 +35,9 @@ QubitLabels = Optional[Union[HomogeneousSeq, Literal['multiple']]]
 # The by-depth summary-statistics protocols accept either an explicit list of
 # depths or the special string 'all'.
 Depths = Union[Literal['all'], list[int]]
+
+# The recognized string values for the `sampler` argument (a `Callable` is also allowed).
+SamplerLiteralT = Literal['edgegrab', 'pairingQs', 'Qelimination', 'co2Qgates', 'local']
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):
@@ -88,7 +92,7 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return ByDepthDesign(self.depths, mapped_circuit_lists, mapped_qubit_labels, remove_duplicates=False)
 
-    def truncate_to_lists(self, list_indices_to_keep: Iterable[int]) -> "ByDepthDesign":
+    def truncate_to_lists(self, list_indices_to_keep: Iterable[int]) -> ByDepthDesign:
         """
         Truncates this experiment design by only keeping a subset of its circuit lists.
 
@@ -107,8 +111,8 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         ret.circuit_lists = [self.circuit_lists[i] for i in list_indices_to_keep]
         return ret
 
-    def merge_with(self, other_edesign: _proto.ExperimentDesign, remove_duplicates: bool=True,
-                   sort_depths: bool=False) -> "ByDepthDesign":
+    def merge_with(self, other_edesign: ByDepthDesign, remove_duplicates: bool=True,
+                   sort_depths: bool=False) -> ByDepthDesign:
         """
         Merge this experiment design with another one and return the result.
 
@@ -223,7 +227,7 @@ class BenchmarkingDesign(ByDepthDesign):
         return BenchmarkingDesign(self.depths, mapped_circuit_lists, list(self.idealout_lists),
                                   mapped_qubit_labels, remove_duplicates=False)
     
-    def truncate_to_lists(self, list_indices_to_keep: Iterable[int]) -> "BenchmarkingDesign":
+    def truncate_to_lists(self, list_indices_to_keep: Iterable[int]) -> BenchmarkingDesign:
         """
         Truncates this experiment design by only keeping a subset of its circuit lists.
 
@@ -268,7 +272,7 @@ class BenchmarkingDesign(ByDepthDesign):
             setattr(self, paired_attr, paired_attr_lists)
         super()._truncate_to_circuits_inplace(circuits_to_keep)
 
-    def _truncate_to_design_inplace(self, other_design: _proto.ExperimentDesign) -> None:
+    def _truncate_to_design_inplace(self, other_design: _proto.CircuitListsDesign) -> None:
         truncated_circuit_lists = []
         paired_attr_lists_list = [getattr(self, paired_attr) for paired_attr in self.paired_with_circuit_attrs]
         truncated_paired_attr_lists_list = [[] for _ in range(len(self.paired_with_circuit_attrs))]
@@ -293,7 +297,7 @@ class BenchmarkingDesign(ByDepthDesign):
     def _truncate_to_available_data_inplace(self, dataset: '_DataSet') -> None:
         self._truncate_to_circuits_inplace(set(dataset.keys()))
 
-    def _merge_data(self, other_edesign: _proto.ExperimentDesign, sort_depths: bool) -> tuple:
+    def _merge_data(self, other_edesign: BenchmarkingDesign, sort_depths: bool) -> tuple:
         assert self.paired_with_circuit_attrs == other_edesign.paired_with_circuit_attrs, \
             "To merge, `paired_with_circuit_attrs` must be equal"
 
@@ -320,8 +324,8 @@ class BenchmarkingDesign(ByDepthDesign):
             depths = sorted(depths)
         return depths, circuits_by_depth, paired_attrs_by_depth
 
-    def merge_with(self, other_edesign: _proto.ExperimentDesign, remove_duplicates: bool=True,
-                   sort_depths: bool=False) -> "BenchmarkingDesign":
+    def merge_with(self, other_edesign: BenchmarkingDesign, remove_duplicates: bool=True,
+                   sort_depths: bool=False) -> BenchmarkingDesign:
         """
         Merge this experiment design with another one and return the result.
 
@@ -428,10 +432,10 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
     """
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth: dict, qubit_labels: QubitLabels=None,
-                               sampler: Union[str, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.125,),
+                               sampler: Union[SamplerLiteralT, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.125,),
                                localclifford: bool=True,
                                paulirandomize: bool=True, fixed_versus_depth: bool=False,
-                               descriptor: str='A random germ mirror circuit experiment') -> "PeriodicMirrorCircuitDesign":
+                               descriptor: str='A random germ mirror circuit experiment') -> PeriodicMirrorCircuitDesign:
         """
         Create a :class:`PeriodicMirrorCircuitDesign` from an existing set of sampled RB circuits.
 
@@ -503,7 +507,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
     def __init__(self, pspec: '_QubitProcessorSpec', depths: DepthList, circuits_per_depth: int,
                  qubit_labels: QubitLabels=None, clifford_compilations: Optional[dict]=None,
-                 sampler: Union[str, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.125,),
+                 sampler: Union[SamplerLiteralT, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.125,),
                  localclifford: bool=True, paulirandomize: bool=True, fixed_versus_depth: bool=False,
                  descriptor: str='A random germ mirror circuit experiment', seed: Optional[int]=None):
 
@@ -533,7 +537,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
     def _init_foundation(self, depths: DepthList, circuit_lists: CircuitLists, ideal_outs: Union[list, tuple],
                          circuits_per_depth: int, qubit_labels: QubitLabels,
-                         sampler: Union[str, Callable], samplerargs: Union[list, tuple], localclifford: bool,
+                         sampler: Union[SamplerLiteralT, Callable], samplerargs: Union[list, tuple], localclifford: bool,
                          paulirandomize: bool, fixed_versus_depth: bool, descriptor: str, seed: Optional[int]=None) -> None:
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
@@ -635,7 +639,7 @@ class SummaryStatistics(_proto.Protocol):
                     energy = -1*energy
             return sign*energy
 
-        def avg_energy(dsrow: Any, measurement: str, sign: int) -> float:
+        def avg_energy(dsrow: _DataSetRow, measurement: str, sign: int) -> float:
             """Computes the result of a Pauli measurement from counts of computational basis measurements
             Parameters
             ----------
@@ -659,11 +663,11 @@ class SummaryStatistics(_proto.Protocol):
                 energy += dsrow.counts[i] * out_eng    
             return energy / dsrow.total
         
-        def success_counts(dsrow: Any, circ: _Circuit, idealout: Any) -> float:
+        def success_counts(dsrow: _DataSetRow, circ: _Circuit, idealout: Any) -> float:
             if dsrow.total == 0: return 0  # shortcut?
             return dsrow.get(tuple(idealout), 0.)
 
-        def hamming_distance_counts(dsrow: Any, circ: _Circuit, idealout: Any) -> _np.ndarray:
+        def hamming_distance_counts(dsrow: _DataSetRow, circ: _Circuit, idealout: Any) -> _np.ndarray:
             nQ = len(circ.line_labels)  # number of qubits
             assert(nQ == len(idealout[-1]))
             hamming_distance_counts = _np.zeros(nQ + 1, float)
@@ -683,12 +687,12 @@ class SummaryStatistics(_proto.Protocol):
                 adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
                 return adjSP
             
-        def _get_energies(icirc: int, circ: _Circuit, dsrow: Any, measurement: str, sign: int) -> dict:
+        def _get_energies(icirc: int, circ: _Circuit, dsrow: _DataSetRow, measurement: str, sign: int) -> dict:
             eng = avg_energy(dsrow, measurement, sign)
             ret = {'energies': eng, 'total_counts': dsrow.total}
             return ret
 
-        def _get_summary_values(icirc: int, circ: _Circuit, dsrow: Any, idealout: Any) -> dict:
+        def _get_summary_values(icirc: int, circ: _Circuit, dsrow: _DataSetRow, idealout: Any) -> dict:
             sc = success_counts(dsrow, circ, idealout)
             tc = dsrow.total
             hdc = hamming_distance_counts(dsrow, circ, idealout)
@@ -724,7 +728,7 @@ class SummaryStatistics(_proto.Protocol):
         -------
         NamedDict
         """
-        def _get_circuit_values(icirc: int, circ: _Circuit, dsrow: Any, idealout: Any) -> dict:
+        def _get_circuit_values(icirc: int, circ: _Circuit, dsrow: _DataSetRow, idealout: Any) -> dict:
             ret = {'two_q_gate_count': circ.two_q_gate_count(),
                    'depth': circ.depth,
                    'idealout': idealout,
@@ -751,7 +755,7 @@ class SummaryStatistics(_proto.Protocol):
         -------
         NamedDict
         """
-        def _get_success_prob(icirc: int, circ: _Circuit, dsrow: Any, idealout: Any) -> dict:
+        def _get_success_prob(icirc: int, circ: _Circuit, dsrow: _DataSetRow, idealout: Any) -> dict:
             #if set(circ.line_labels) != set(qubits):
             #    trimmedcirc = circ.copy(editable=True)
             #    for q in circ.line_labels:
@@ -823,7 +827,7 @@ class SummaryStatistics(_proto.Protocol):
     
         return qty_data
 
-    def _create_depthwidth_dict(self, depths: Union[list, tuple], widths: Union[list, tuple], fillfn: Callable, seriestype: str) -> _tools.NamedDict:
+    def _create_depthwidth_dict(self, depths: Union[list, tuple], widths: Union[list, tuple], fillfn: Callable, seriestype: Literal["float", "int"]) -> _tools.NamedDict:
         """
         Create a nested :class:`NamedDict` with depht and width indices.
 

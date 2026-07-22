@@ -132,8 +132,8 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
     @classmethod
     def from_existing_circuits(cls, data_by_depth: dict, qubit_labels: _vb.QubitLabels=None,
                                randomizeout: bool=False, citerations: int=20, compilerargs: Union[list, tuple]=(),
-                               interleaved_circuit: Optional['_Circuit']=None,
-                               descriptor: str='A Clifford RB experiment', add_default_protocol: bool=False) -> "CliffordRBDesign":
+                               interleaved_circuit: Optional[_Circuit]=None,
+                               descriptor: str='A Clifford RB experiment', add_default_protocol: bool=False) -> CliffordRBDesign:
         """
         Create a :class:`CliffordRBDesign` from an existing set of sampled RB circuits.
 
@@ -221,7 +221,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
 
     def __init__(self, pspec: '_QubitProcessorSpec', clifford_compilations: dict, depths: _vb.DepthList,
                  circuits_per_depth: int, qubit_labels: _vb.QubitLabels=None, randomizeout: bool=False,
-                 interleaved_circuit: Optional['_Circuit']=None, citerations: int=20, compilerargs: Union[list, tuple]=(),
+                 interleaved_circuit: Optional[_Circuit]=None, citerations: int=20, compilerargs: Union[list, tuple]=(),
                  exact_compilation_key: Optional[Hashable]=None,
                  descriptor: str='A Clifford RB experiment', add_default_protocol: bool=False,
                  seed: Optional[int]=None, verbosity: int=1, num_processes: int=1):
@@ -269,7 +269,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                          circuits_per_depth: Union[int, list], qubit_labels: _vb.QubitLabels,
                          randomizeout: bool, citerations: int, compilerargs: Union[list, tuple], descriptor: str,
                          add_default_protocol: bool,
-                         interleaved_circuit: Optional['_Circuit'], native_gate_counts: Optional[list]=None,
+                         interleaved_circuit: Optional[_Circuit], native_gate_counts: Optional[list]=None,
                          exact_compilation_key: Optional[Hashable]=None) -> None:
         self.native_gate_count_lists = native_gate_counts
         if self.native_gate_count_lists is not None:
@@ -540,7 +540,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                                lsargs: Union[list, tuple]=(), randomizeout: bool=False, cliffordtwirl: bool=True,
                                conditionaltwirl: bool=True,
                                citerations: int=20, compilerargs: Union[list, tuple]=(), partitioned: bool=False,
-                               descriptor: str='A DRB experiment', add_default_protocol: bool=False) -> "DirectRBDesign":
+                               descriptor: str='A DRB experiment', add_default_protocol: bool=False) -> DirectRBDesign:
         """
         Create a :class:`DirectRBDesign` from an existing set of sampled RB circuits.
 
@@ -852,7 +852,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                                sampler: Union[SamplerLiterals, Callable]='edgegrab', samplerargs: Union[list, tuple]=(0.25, ),
                                localclifford: bool=True,
                                paulirandomize: bool=True, descriptor: str='A mirror RB experiment',
-                               add_default_protocol: bool=False) -> "MirrorRBDesign":
+                               add_default_protocol: bool=False) -> MirrorRBDesign:
         """
         Create a :class:`MirrorRBDesign` from an existing set of sampled RB circuits.
 
@@ -976,7 +976,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
 
-    def merge_with(self, other_edesign: _proto.ExperimentDesign, sort_depths: bool=False) -> "MirrorRBDesign":
+    def merge_with(self, other_edesign: _proto.ExperimentDesign, sort_depths: bool=False) -> MirrorRBDesign:
         """
         Merge this MRB experiment design with another one and return the result.
 
@@ -1292,7 +1292,7 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
     """
 
     def __init__(self, pspec: '_QubitProcessorSpec', clifford_compilations: dict, depths: _vb.DepthList,
-                 circuits_per_depth: int, interleaved_circuit: '_Circuit', qubit_labels: _vb.QubitLabels=None,
+                 circuits_per_depth: int, interleaved_circuit: _Circuit, qubit_labels: _vb.QubitLabels=None,
                  randomizeout: bool=False,
                  citerations: int=20, compilerargs: Union[list, tuple]=(), exact_compilation_key: Optional[Hashable]=None,
                  descriptor: str='An Interleaved RB experiment', add_default_protocol: bool=False,
@@ -1313,17 +1313,17 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
                               citerations, compilerargs, exact_compilation_key, interleave)
 
     @classmethod
-    def from_existing_designs(cls, crb_subdesign: 'CliffordRBDesign', icrb_subdesign: 'CliffordRBDesign',
-                              circuits_per_depth: int, interleaved_circuit: '_Circuit', randomizeout: bool=False,
+    def from_existing_designs(cls, crb_subdesign: CliffordRBDesign, icrb_subdesign: CliffordRBDesign,
+                              circuits_per_depth: int, interleaved_circuit: _Circuit, randomizeout: bool=False,
                               citerations: int=20, compilerargs: Union[list, tuple]=(),
-                              exact_compilation_key: Optional[Hashable]=None, interleave: bool=False) -> "InterleavedRBDesign":        
+                              exact_compilation_key: Optional[Hashable]=None, interleave: bool=False) -> InterleavedRBDesign:        
         self = cls.__new__(cls)
         self._init_foundation(self, crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout,
                               citerations, compilerargs, exact_compilation_key, interleave)
 
     #helper method for reducing code duplication on different class constructors.
-    def _init_foundation(self, crb_subdesign: 'CliffordRBDesign', icrb_subdesign: 'CliffordRBDesign',
-                              circuits_per_depth: int, interleaved_circuit: '_Circuit', randomizeout: bool,
+    def _init_foundation(self, crb_subdesign: CliffordRBDesign, icrb_subdesign: CliffordRBDesign,
+                              circuits_per_depth: int, interleaved_circuit: _Circuit, randomizeout: bool,
                               citerations: int, compilerargs: Union[list, tuple], exact_compilation_key: Optional[Hashable],
                               interleave: bool) -> None:
         super().__init__({'crb':crb_subdesign, 
