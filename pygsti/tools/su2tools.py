@@ -444,7 +444,7 @@ def circuit_from_euler_angles(angles: _np.ndarray, qudit_label: str = 'Q0') -> _
     if angles.ndim != 2 or angles.shape[1] != 3:
         raise ValueError(f"`angles` must have shape (m+1, 3); got {angles.shape}")
     layers = [_Label(GATE_NAME, qudit_label, args=tuple(float(x) for x in row)) for row in angles]
-    circuit = _Circuit(layers, line_labels=(qudit_label,), editable=True)
+    circuit = _Circuit(layers, line_labels=(qudit_label,))
     return circuit
 
 

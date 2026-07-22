@@ -72,17 +72,16 @@ ChannelFactory_t = Callable[[float, float, float], _np.ndarray]
 `(dim**2, dim**2)` noise superoperator applied after that gate."""
 
 
-def _add_spam_layers_inplace(c: _Circuit, prep_index: int, j: Optional[_su2.SpinSpec_t] = None, finalize=True) -> None:
-    if j is not None:
-        _, two_j = _validate_spin(j)
-        dim = two_j + 1
-        if not (0 <= prep_index < dim):
-            raise ValueError(f"prep_index={prep_index!r} is out of range for j={j} (dim={dim})")
-    c.insert_layer_inplace(_Label(f'rho{prep_index}'), 0)
-    c.insert_layer_inplace(_Label('Mdefault'), len(c))
-    if finalize:
-        c.done_editing()
-    return
+def _r1rb_circuit(angles: _np.ndarray, prep_index: int, qudit_label: str) -> _Circuit:
+    """
+    The full R1RB circuit for one (sequence, prep) pair: a `rho{prep_index}` prep
+    layer, one `Gu` layer per row of `angles`, and an `Mdefault` POVM layer.
+    """
+    layers = [_Label(f'rho{prep_index}')]
+    layers += [_Label(GATE_NAME, qudit_label, args=tuple(float(x) for x in row)) for row in angles]
+    layers += [_Label('Mdefault')]
+    circuit = _Circuit(layers, line_labels=(qudit_label,))
+    return circuit
 
 
 class SU2QuditRBDesign(_vb.BenchmarkingDesign):
@@ -165,17 +164,7 @@ class SU2QuditRBDesign(_vb.BenchmarkingDesign):
         self.euler_angles = sampled['euler_angles_lists']
         self.seq_index    = sampled['seq_index_lists']
         self.prep_index   = sampled['prep_index_lists']
-
-        irrep_labels = _np.arange(dim)
-        charcores_lists = []
-        for firstgate_angles_at_seq in sampled['firstgate_angles_lists']:
-            angles_arr = _np.array(firstgate_angles_at_seq)
-            cores = _su2.charactercores_from_euler_angles(irrep_labels, angles_arr)
-            charcores_lists.append(_np.repeat(cores, dim, axis=0).tolist())
-            # ^ Broadcast each sampled sequence's (shared) charcore row out to the
-            #   `dim` consecutive per-prep circuits generated from it, matching the
-            #   (seq-major, prep-minor) circuit ordering from _sample_su2rb_circuits.
-        self.charcores = charcores_lists
+        self.charcores    = sampled['charcores_lists']
 
         self.j = j_float
         self.dim = dim
@@ -186,14 +175,16 @@ class SU2QuditRBDesign(_vb.BenchmarkingDesign):
     @staticmethod
     def _sample_circuits(dim: int, depths: Sequence[int], circuits_per_depth: int, seed: Any, qudit_label: str):
         """
-        This is the core RB circuit sampler for SU2QuditRBDesign; it returns a 6-key
-        dict holding the member lists of an SU2QuditRBDesign.
+        Core RB circuit sampler for SU2QuditRBDesign; returns a dict holding the
+        per-depth member lists of an SU2QuditRBDesign (circuits, placeholder ideal
+        outcomes, and the euler_angles/seq_index/prep_index/charcores aux data).
         """
         rng = _np.random.default_rng(seed)
+        irrep_labels = _np.arange(dim)
 
         circuit_lists, idealout_lists = [], []
         euler_angles_lists, seq_index_lists, prep_index_lists = [], [], []
-        firstgate_angles_lists = []
+        charcores_lists = []
 
         for m in depths:
             if m < 1:
@@ -201,7 +192,7 @@ class SU2QuditRBDesign(_vb.BenchmarkingDesign):
 
             circuits_at_depth, idealouts_at_depth = [], []
             euler_angles_at_depth, seq_index_at_depth, prep_index_at_depth = [], [], []
-            firstgate_angles_at_seq = []
+            charcores_at_depth = []
 
             for s in range(circuits_per_depth):
                 angles = _np.zeros((m + 1, 3))
@@ -210,28 +201,29 @@ class SU2QuditRBDesign(_vb.BenchmarkingDesign):
                 a_inv, b_inv, g_inv = _su2.composition_inverse(
                     angles[1:m, 0], angles[1:m, 1], angles[1:m, 2])
                 angles[m, :] = (a_inv, b_inv, g_inv)
-                firstgate_angles_at_seq.append(angles[0, :].copy())
 
                 angles_as_list = angles.tolist()
+                charcore_row = _su2.charactercores_from_euler_angles(irrep_labels, angles[:1, :])[0].tolist()
+                # ^ The Legendre character cores P_k(cos(beta)) of the hidden first gate,
+                #   shared by the `dim` per-prep circuits generated from this sequence.
                 for ell in range(dim):
-                    c = circuit_from_euler_angles(angles, qudit_label)
-                    _add_spam_layers_inplace(c, prep_index=ell)
-                    circuits_at_depth.append(c)
+                    circuits_at_depth.append(_r1rb_circuit(angles, ell, qudit_label))
                     idealouts_at_depth.append((str(ell),))
                     euler_angles_at_depth.append(angles_as_list)
                     seq_index_at_depth.append(s)
                     prep_index_at_depth.append(ell)
+                    charcores_at_depth.append(charcore_row)
 
             circuit_lists.append(circuits_at_depth)
             idealout_lists.append(idealouts_at_depth)
             euler_angles_lists.append(euler_angles_at_depth)
             seq_index_lists.append(seq_index_at_depth)
             prep_index_lists.append(prep_index_at_depth)
-            firstgate_angles_lists.append(firstgate_angles_at_seq)
+            charcores_lists.append(charcores_at_depth)
 
         result = dict(circuit_lists=circuit_lists, idealout_lists=idealout_lists,
-                    euler_angles_lists=euler_angles_lists, seq_index_lists=seq_index_lists,
-                    prep_index_lists=prep_index_lists, firstgate_angles_lists=firstgate_angles_lists)
+                      euler_angles_lists=euler_angles_lists, seq_index_lists=seq_index_lists,
+                      prep_index_lists=prep_index_lists, charcores_lists=charcores_lists)
         return result
 
 

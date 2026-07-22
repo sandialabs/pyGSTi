@@ -20,7 +20,7 @@ from pygsti.protocols.su2rb import (
     euler_angles_from_circuit,
     jz_dephasing,
     jz_rotation,
-    _add_spam_layers_inplace
+    _r1rb_circuit
 )
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.data.dataset import DataSet
@@ -41,7 +41,6 @@ class TestEulerAngleCircuitHelpers(BaseCase):
         rng = np.random.default_rng(0)
         angles = rng.uniform(0, 4 * np.pi, size=(5, 3))
         c = circuit_from_euler_angles(angles, qudit_label='Q0')
-        c.done_editing()
         self.assertEqual(len(c), 5)
         for layer in c:
             self.assertEqual(layer.name, GATE_NAME)
@@ -55,8 +54,7 @@ class TestEulerAngleCircuitHelpers(BaseCase):
     def test_round_trip_through_string(self):
         rng = np.random.default_rng(1)
         angles = rng.uniform(0, 4 * np.pi, size=(4, 3))
-        c = circuit_from_euler_angles(angles, qudit_label='Q0')
-        _add_spam_layers_inplace(c, prep_index=1)
+        c = _r1rb_circuit(angles, prep_index=1, qudit_label='Q0')
         s = c.str
         c2 = Circuit(None, stringrep=s, line_labels=c.line_labels)
         self.assertEqual(c, c2)
@@ -65,18 +63,11 @@ class TestEulerAngleCircuitHelpers(BaseCase):
 
     def test_prep_and_povm_labels_embedded(self):
         angles = np.zeros((2, 3))
-        c = circuit_from_euler_angles(angles, qudit_label='Q0')
-        _add_spam_layers_inplace(c, prep_index=2)
+        c = _r1rb_circuit(angles, prep_index=2, qudit_label='Q0')
         names = [layer.name for layer in c]
         self.assertEqual(names[0], 'rho2')
         self.assertEqual(names[-1], 'Mdefault')
         self.assertEqual(names.count(GATE_NAME), 2)
-
-    def test_prep_index_out_of_range_raises(self):
-        angles = np.zeros((1, 3))
-        c = circuit_from_euler_angles(angles, qudit_label='Q0')
-        with self.assertRaises(ValueError):
-            _add_spam_layers_inplace(c, prep_index=2, j=0.5)  # dim=2, valid range 0,1
 
     def test_bad_angle_shape_raises(self):
         with self.assertRaises(ValueError):
