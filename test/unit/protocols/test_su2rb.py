@@ -20,7 +20,6 @@ from pygsti.protocols.su2rb import (
     euler_angles_from_circuit,
     jz_dephasing,
     jz_rotation,
-    compose_noise_channels,
     _add_spam_layers_inplace
 )
 from pygsti.protocols.protocol import ProtocolData
@@ -555,8 +554,8 @@ class TestSU2QuditRBSimulatorNoiseFactory(BaseCase):
         S0 = unitary_to_std_process_mx(U0)
         S1 = unitary_to_std_process_mx(U1)
         S2 = unitary_to_std_process_mx(U2)
-        N1 = unitary_to_std_process_mx(jz_rotation(spinj, 0.05 * angles[1, 1]))
-        N2 = unitary_to_std_process_mx(jz_rotation(spinj, 0.05 * angles[2, 1]))
+        N1 = jz_rotation(spinj, 0.05 * angles[1, 1])
+        N2 = jz_rotation(spinj, 0.05 * angles[2, 1])
 
         # The two per-gate noise channels must differ, or this test would not
         # actually exercise gate-dependence.
@@ -605,30 +604,13 @@ class TestNoiseChannelHelpers(BaseCase):
     def test_jz_rotation_identity_at_zero_theta(self):
         spinj = SpinJ(1.5)
         U = jz_rotation(spinj, 0.0)
-        self.assertEqual(U.shape, (spinj.dim, spinj.dim))
-        self.assertTrue(np.allclose(U, np.eye(spinj.dim)))
+        self.assertEqual(U.shape, (spinj.dim**2, spinj.dim**2))
+        self.assertTrue(np.allclose(U, np.eye(spinj.dim**2)))
 
-    def test_jz_rotation_is_unitary_and_diagonal_in_spins(self):
+    def test_jz_rotation_is_unitary(self):
         spinj = SpinJ(1.5)
         U = jz_rotation(spinj, 0.7, power=2.0)
-        self.assertTrue(np.allclose(U @ U.conj().T, np.eye(spinj.dim)))
-        expected_diag = np.exp(1j * 0.7 * spinj.spins ** 2.0)
-        self.assertTrue(np.allclose(np.diag(U), expected_diag))
-
-    def test_compose_noise_channels_order_and_shapes(self):
-        spinj = SpinJ(0.5)
-        dim = spinj.dim
-        U = jz_rotation(spinj, 0.4)
-        S = jz_dephasing(spinj, 0.1)
-        composed = compose_noise_channels(spinj, U, S)
-        expected = S @ unitary_to_std_process_mx(U)
-        self.assertEqual(composed.shape, (dim ** 2, dim ** 2))
-        self.assertTrue(np.allclose(composed, expected))
-
-    def test_compose_noise_channels_bad_shape_raises(self):
-        spinj = SpinJ(0.5)
-        with self.assertRaises(ValueError):
-            compose_noise_channels(spinj, np.eye(3))
+        self.assertTrue(np.allclose(U @ U.conj().T, np.eye(spinj.dim ** 2)))
 
 
 class TestSU2QuditRBSimulatorConstruction(BaseCase):
@@ -640,7 +622,7 @@ class TestSU2QuditRBSimulatorConstruction(BaseCase):
         self.assertTrue(sim_from_j.is_noiseless)
 
     def test_bad_noise_channel_shape_raises(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             SU2QuditRBSimulator(0.5, noise_channel=np.eye(3))
 
     def test_dim_mismatch_with_design_raises(self):

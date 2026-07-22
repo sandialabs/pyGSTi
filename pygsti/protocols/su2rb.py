@@ -61,7 +61,6 @@ __all__ = [
     'SU2QuditRBDesign',
     'jz_dephasing',
     'jz_rotation',
-    'compose_noise_channels',
     'SU2QuditRBSimulator',
     'predicted_zero_noise_variance',
     'SU2QuditRB',
@@ -84,94 +83,19 @@ def _add_spam_layers_inplace(c: _Circuit, prep_index: int, j: Optional[SpinSpec_
     return
 
 
-def _sample_su2rb_circuits(
-        dim: int, depths: Sequence[int], circuits_per_depth: int, seed: Any, qudit_label: str
-    ):
-    """
-    This is the core RB circuit sampler for SU2QuditRBDesign; it returns a 6-key
-    dict holding the member lists of an SU2QuditRBDesign.
-
-    For each depth `m`, samples `circuits_per_depth` length-`m` Haar-random
-    Euler-angle sequences and appends an inverting final gate computed from the
-    composition of rows `1..m-1`, so the net ideal composition of all `m+1` rows is
-    the random "hidden" first gate (row 0), not the identity. Each sampled sequence
-    yields `dim` circuits (one per prep).
-
-    Notes
-    -----
-    The `idealout_lists` data structure is required by the BenchmarkingDesign parent
-    class of SU2QuditRBDesign. It doesn't have a straightforward interpretation in
-    our setting. We just set a given circuit's entry in `idealout_lists` to a placeholder
-    `(str(ell),)`, where `ell` is the circuit's state prep index.
-    """
-    rng = _np.random.default_rng(seed)
-
-    circuit_lists, idealout_lists = [], []
-    euler_angles_lists, seq_index_lists, prep_index_lists = [], [], []
-    firstgate_angles_lists = []
-
-    for m in depths:
-        if m < 1:
-            raise ValueError(f"SU(2) RB depths must be >= 1 (got {m!r})")
-
-        circuits_at_depth, idealouts_at_depth = [], []
-        euler_angles_at_depth, seq_index_at_depth, prep_index_at_depth = [], [], []
-        firstgate_angles_at_seq = []
-
-        for s in range(circuits_per_depth):
-            angles = _np.zeros((m + 1, 3))
-            a, b, g = _su2.random_euler_angles(m, rng=rng)
-            angles[:m, 0], angles[:m, 1], angles[:m, 2] = a, b, g
-            a_inv, b_inv, g_inv = _su2.composition_inverse(
-                angles[1:m, 0], angles[1:m, 1], angles[1:m, 2])
-            angles[m, :] = (a_inv, b_inv, g_inv)
-            firstgate_angles_at_seq.append(angles[0, :].copy())
-
-            angles_as_list = angles.tolist()
-            for ell in range(dim):
-                c = circuit_from_euler_angles(angles, qudit_label)
-                _add_spam_layers_inplace(c, prep_index=ell)
-                circuits_at_depth.append(c)
-                idealouts_at_depth.append((str(ell),))  # placeholder! See `Notes`.
-                euler_angles_at_depth.append(angles_as_list)
-                seq_index_at_depth.append(s)
-                prep_index_at_depth.append(ell)
-
-        circuit_lists.append(circuits_at_depth)
-        idealout_lists.append(idealouts_at_depth)
-        euler_angles_lists.append(euler_angles_at_depth)
-        seq_index_lists.append(seq_index_at_depth)
-        prep_index_lists.append(prep_index_at_depth)
-        firstgate_angles_lists.append(firstgate_angles_at_seq)
-
-    result = dict(circuit_lists=circuit_lists, idealout_lists=idealout_lists,
-                  euler_angles_lists=euler_angles_lists, seq_index_lists=seq_index_lists,
-                  prep_index_lists=prep_index_lists, firstgate_angles_lists=firstgate_angles_lists)
-    return result
-
-
 class SU2QuditRBDesign(_vb.BenchmarkingDesign):
     """
     Experiment design for "rank-1 synthetic SPAM RB" (R1RB) of an arbitrary-spin SU(2) system.
 
-    For each depth `m` in `depths`, samples `circuits_per_depth` length-`m`
-    Haar-random SU(2) Euler-angle sequences, appends a final gate that inverts the
-    composition of rows `1..m-1` (not row 0), so the net ideal composition of the full
-    `m+1`-gate sequence is the random "hidden" first gate rather than the identity,
-    and emits `2*j + 1` circuits per sampled sequence -- one per Jz-eigenstate prep,
-    sharing the same `Gu` gate layers (see the module docstring for the full circuit
-    convention). Additionally stores, per circuit, the Legendre "character core"
-    `P_k(cos(beta))` of the hidden first gate (`charcores`), for `k = 0..2j`, which
-    `SU2QuditRB` uses to weight its per-irrep estimator.
+    The design generates circuits in batches of size `2j+1`. Circuits within a batch
+    differ only in their state prep, each of which is a distinct Jz-eigenstate.
+    The gate sequence for a batch consists of `m+1` SU(2) elements for some m >= 1;
+    we represent it by an array of shape `(m+1, 3)` whose rows are ZXZ Euler angles.
+    Rows `0..m-1` are Haar-random, while row `m` encodes the inverse of gates `1..m-1`.
 
-    Note on `idealout_lists`: because the net ideal composition is the random hidden
-    first gate rather than the identity, `idealout_lists` entries (one
-    `(str(prep_index),)` per circuit) are *not* genuine deterministic ideal outcomes
-    -- they are placeholders required only because `BenchmarkingDesign.__init__`
-    needs some `ideal_outs` value per circuit. `SU2QuditRB` reconstructs
-    probabilities directly from the `euler_angles`/`charcores` aux data, not from
-    `idealout_lists`. Generic RB analyses that infer a "success probability" from
-    `idealout_lists` should not be pointed at this design's data.
+    Additionally stores, per circuit, the Legendre "character core" `P_k(cos(beta))`
+    of the hidden first gate (`charcores`), for `k = 0..2j`, which `SU2QuditRB` uses
+    to weight its per-irrep estimator.
 
     Parameters
     ----------
@@ -204,6 +128,14 @@ class SU2QuditRBDesign(_vb.BenchmarkingDesign):
 
     dim : int
         `2*j + 1`, the number of preps (and POVM effects).
+
+    Notes
+    -----
+    Because the net ideal composition is the random hidden first gate rather than the identity,
+    `idealout_lists` entries are *not* genuine deterministic ideal outcomes. They are
+    just placeholders required by `BenchmarkingDesign.__init__`, which needs some `ideal_outs`
+    value per circuit. `SU2QuditRB` reconstructs probabilities directly from `euler_angles` and
+    `charcores` aux data, not from `idealout_lists`.
     """
 
     def __init__(self, j: SpinSpec_t, depths: Sequence[int], circuits_per_depth: int,
@@ -217,14 +149,16 @@ class SU2QuditRBDesign(_vb.BenchmarkingDesign):
             seed = _np.random.randint(1, 1000000)
         self.seed = seed
 
-        sampled = _sample_su2rb_circuits(dim, depths, circuits_per_depth, self.seed, qudit_label)
+        sampled = SU2QuditRBDesign._sample_circuits(dim, depths, circuits_per_depth, self.seed, qudit_label)
 
         self.paired_with_circuit_attrs = ["euler_angles", "seq_index", "prep_index", "charcores"]
         # ^ Set before calling super().__init__ so that BenchmarkingDesign inserts 'idealout_lists'
         #   at the front and registers 'json' auxfile types for these members.
 
-        super(SU2QuditRBDesign, self).__init__(depths, sampled['circuit_lists'], sampled['idealout_lists'],
-                                           qubit_labels=(qudit_label,), remove_duplicates=False)
+        super(SU2QuditRBDesign, self).__init__(
+            depths, sampled['circuit_lists'], sampled['idealout_lists'],
+            qubit_labels=(qudit_label,), remove_duplicates=False
+        )
 
         self.euler_angles = sampled['euler_angles_lists']
         self.seq_index    = sampled['seq_index_lists']
@@ -247,6 +181,57 @@ class SU2QuditRBDesign(_vb.BenchmarkingDesign):
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
 
+    @staticmethod
+    def _sample_circuits(dim: int, depths: Sequence[int], circuits_per_depth: int, seed: Any, qudit_label: str):
+        """
+        This is the core RB circuit sampler for SU2QuditRBDesign; it returns a 6-key
+        dict holding the member lists of an SU2QuditRBDesign.
+        """
+        rng = _np.random.default_rng(seed)
+
+        circuit_lists, idealout_lists = [], []
+        euler_angles_lists, seq_index_lists, prep_index_lists = [], [], []
+        firstgate_angles_lists = []
+
+        for m in depths:
+            if m < 1:
+                raise ValueError(f"SU(2) RB depths must be >= 1 (got {m!r})")
+
+            circuits_at_depth, idealouts_at_depth = [], []
+            euler_angles_at_depth, seq_index_at_depth, prep_index_at_depth = [], [], []
+            firstgate_angles_at_seq = []
+
+            for s in range(circuits_per_depth):
+                angles = _np.zeros((m + 1, 3))
+                a, b, g = _su2.random_euler_angles(m, rng=rng)
+                angles[:m, 0], angles[:m, 1], angles[:m, 2] = a, b, g
+                a_inv, b_inv, g_inv = _su2.composition_inverse(
+                    angles[1:m, 0], angles[1:m, 1], angles[1:m, 2])
+                angles[m, :] = (a_inv, b_inv, g_inv)
+                firstgate_angles_at_seq.append(angles[0, :].copy())
+
+                angles_as_list = angles.tolist()
+                for ell in range(dim):
+                    c = circuit_from_euler_angles(angles, qudit_label)
+                    _add_spam_layers_inplace(c, prep_index=ell)
+                    circuits_at_depth.append(c)
+                    idealouts_at_depth.append((str(ell),))
+                    euler_angles_at_depth.append(angles_as_list)
+                    seq_index_at_depth.append(s)
+                    prep_index_at_depth.append(ell)
+
+            circuit_lists.append(circuits_at_depth)
+            idealout_lists.append(idealouts_at_depth)
+            euler_angles_lists.append(euler_angles_at_depth)
+            seq_index_lists.append(seq_index_at_depth)
+            prep_index_lists.append(prep_index_at_depth)
+            firstgate_angles_lists.append(firstgate_angles_at_seq)
+
+        result = dict(circuit_lists=circuit_lists, idealout_lists=idealout_lists,
+                    euler_angles_lists=euler_angles_lists, seq_index_lists=seq_index_lists,
+                    prep_index_lists=prep_index_lists, firstgate_angles_lists=firstgate_angles_lists)
+        return result
+
 
 # ***************************************************************************************************
 # Noise channels for SU2QuditRBSimulator
@@ -254,11 +239,8 @@ class SU2QuditRBDesign(_vb.BenchmarkingDesign):
 
 def jz_dephasing(spinj: _su2.SpinJ, gamma: float, power: float = 1.0) -> _np.ndarray:
     """
-    A gate-independent dephasing noise channel, diagonal in the standard (matrix-unit)
-    basis: `E[ell, ell] = exp(-gamma * |i - j|**power)`, where `ell = i + j*dim` are the
-    row-major-raveled matrix-unit indices of a `dim`-by-`dim` density matrix (`i` is the
-    column index, `j` the row index -- since `|i - j|` is symmetric in the two, this
-    labeling ambiguity doesn't matter).
+    A dephasing noise channel, diagonal in the standard (matrix-unit) basis. It damps
+    element (i, j) of a density matrix by `exp(-gamma * |i - j|**power)`.
 
     Parameters
     ----------
@@ -291,8 +273,9 @@ def jz_dephasing(spinj: _su2.SpinJ, gamma: float, power: float = 1.0) -> _np.nda
 
 def jz_rotation(spinj: _su2.SpinJ, theta: float, power: float = 1.0) -> _np.ndarray:
     """
-    A gate-independent unitary "Z-rotation" noise channel: `U = diag(exp(1j * theta *
-    spins**power))`, in the `spinj.spins`-ordered basis.
+    A unitary "Z-rotation" noise channel: `U = diag(exp(1j * theta * spins**power))`,
+    in the `spinj.spins`-ordered basis for Hilbert space. Returned as a superoperator
+    in the standard (matrix-unit) basis for Hilbert--Schmidt space.
 
     Parameters
     ----------
@@ -309,47 +292,11 @@ def jz_rotation(spinj: _su2.SpinJ, theta: float, power: float = 1.0) -> _np.ndar
     Returns
     -------
     numpy array
-        Shape `(dim, dim)`, a unitary.
+        Shape `(dim**2, dim**2)`, a unitary.
     """
     U = _np.diag(_np.exp(1j * theta * (spinj.spins ** power)))
-    return U
-
-
-def compose_noise_channels(spinj: _su2.SpinJ, *channels: _np.ndarray) -> _np.ndarray:
-    """
-    Compose a sequence of noise channels (each either a `(dim, dim)` unitary or a
-    `(dim**2, dim**2)` superoperator) into a single superoperator, applied in the order
-    given (`channels[0]` first).
-
-    Parameters
-    ----------
-    spinj : SpinJ
-        The representation the channels act on.
-
-    *channels : numpy array
-        Each either shape `(dim, dim)` (a unitary) or `(dim**2, dim**2)` (a
-        superoperator).
-
-    Returns
-    -------
-    numpy array
-        Shape `(dim**2, dim**2)`.
-    """
-    dim = spinj.dim
-    dim2 = dim * dim
-    composed = _np.eye(dim2, dtype=complex)
-    for channel in channels:
-        channel = _np.asarray(channel)
-        if channel.shape == (dim, dim):
-            channel = _unitary_to_std_process_mx(channel)
-        elif channel.shape != (dim2, dim2):
-            message = (
-                f"Each channel must have shape ({dim}, {dim}) or ({dim2}, {dim2}); "
-                f"got {channel.shape}"
-            )
-            raise ValueError(message)
-        composed = channel @ composed
-    return composed
+    S = _unitary_to_std_process_mx(U)
+    return S
 
 
 # ***************************************************************************************************
@@ -371,9 +318,8 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
     noise_channel : None, numpy array, or callable, optional
         The noise channel applied after each gate other than the first.
         
-        Array values indicate a fixed post-gate error. These must be either a
-        `(dim, dim)` unitary or be a `(dim**2, dim**2)` operator that acts on
-        a row-major vectorization of a density matrix.
+        Array values indicate a fixed post-gate error and must be superoperator
+        that acts on a row-major vectorization of a density matrix.
 
         Callable values will be invoked with a given gate's Euler angles as
         `noise_channel(alpha, beta, gamma)`, and must return a valid array in
@@ -404,8 +350,8 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
 
     See also
     --------
-    The `jz_dephasing`, `jz_rotation`, and `compose_noise_channels` functions
-    in this module can be used to build fixed post-gate error channels.
+    This module's `jz_dephasing` and `jz_rotation` functions for simple post-gate
+    error channels.
     """
 
     def __init__(self, spinj: Union[_su2.SpinJ, SpinSpec_t],
@@ -425,26 +371,10 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
             return None, None
         if callable(noise_channel):
             return None, noise_channel
-        return self._channel_to_superop(noise_channel), None
-
-    def _channel_to_superop(self, channel):
-        """Validate and convert one `noise_channel`-shaped array (fixed or per-gate,
-        from a factory's return value) into a `(dim**2, dim**2)` superoperator."""
-        channel = _np.asarray(channel)
-        dim = self.dim
-        dim2 = dim * dim
-        if channel.shape == (dim, dim):
-            superop = _unitary_to_std_process_mx(channel)
-        elif channel.shape == (dim2, dim2):
-            superop = channel.astype(complex)
-        else:
-            message = (
-                f"noise_channel must be None, a ({dim}, {dim}) unitary, a "
-                f"({dim2}, {dim2}) superoperator, or a callable returning one of "
-                f"those; got shape {channel.shape}"
-            )
-            raise ValueError(message)
-        return superop
+        if hasattr(noise_channel, '__matmul__') and hasattr(noise_channel, 'shape'):
+            assert noise_channel.shape == (self.dim**2, self.dim**2)
+            return noise_channel, None
+        raise ValueError(f'Unsupported argument noise_channel={noise_channel}.')
 
     @property
     def is_noiseless(self) -> bool:
@@ -473,7 +403,7 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
             S = _unitary_to_std_process_mx(U) @ S
             if not skip_next_noise:
                 if self._noise_factory is not None:
-                    S = self._channel_to_superop(self._noise_factory(row[0], row[1], row[2])) @ S
+                    S = self._noise_factory(row[0], row[1], row[2]) @ S
                 elif self._noise_superop is not None:
                     S = self._noise_superop @ S
             skip_next_noise = False
@@ -978,6 +908,7 @@ class SU2QuditRB(_proto.Protocol):
         SU2QuditRBResults
         """
         edesign = data.edesign
+        assert isinstance(edesign, SU2QuditRBDesign)
         ds = data.dataset
         j, dim = edesign.j, edesign.dim
         spinj = _su2.SpinJ(j)
@@ -987,8 +918,8 @@ class SU2QuditRB(_proto.Protocol):
         depths = list(edesign.depths)
         num_depths = len(depths)
 
-        means = _np.zeros((dim, num_depths))
-        stderrs = _np.zeros((dim, num_depths))
+        means     = _np.zeros((dim, num_depths))
+        stderrs   = _np.zeros((dim, num_depths))
         variances = _np.zeros((dim, num_depths))
         for depth_idx in range(num_depths):
             X = self._per_sequence_irrep_values(edesign, ds, depth_idx, M)
