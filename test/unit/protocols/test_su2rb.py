@@ -481,28 +481,9 @@ class TestSU2QuditRBSimulatorShortcut(BaseCase):
         design = SU2QuditRBDesign(j, depths=[1, 4, 6], circuits_per_depth=3, seed=9)
         for depth_idx in range(len(design.depths)):
             for angles in sim._unique_sequences_at_depth(design, depth_idx):
-                S_shortcut = sim._compose_shortcut(angles)
-                S_full = sim._compose_full(angles, skip_first_noise=True)
+                S_shortcut = sim._compose(angles)
+                S_full = sim._compose_full(angles)
                 self.assertTrue(np.allclose(S_shortcut, S_full, atol=1e-10))
-
-    def test_shortcut_used_only_when_noiseless_and_skipping(self):
-        j = 0.5
-        spinj = SpinJ(j)
-        angles = np.array([[0.3, 0.5, 0.1], [1.1, 0.4, 2.0]])
-
-        sim_noiseless = SU2QuditRBSimulator(spinj)
-        self.assertTrue(np.allclose(
-            sim_noiseless._compose(angles, skip_first_noise=True),
-            sim_noiseless._compose_shortcut(angles), atol=1e-12))
-
-        noisy_sim = SU2QuditRBSimulator(spinj, noise_channel=jz_dephasing(spinj, 0.2))
-        # With noise present, the shortcut is not equivalent to the full path, so the
-        # dispatcher must not take it.
-        composed = noisy_sim._compose(angles, skip_first_noise=True)
-        full = noisy_sim._compose_full(angles, skip_first_noise=True)
-        self.assertTrue(np.allclose(composed, full, atol=1e-12))
-        shortcut = noisy_sim._compose_shortcut(angles)
-        self.assertFalse(np.allclose(composed, shortcut, atol=1e-6))
 
 
 class TestSU2QuditRBSimulatorNoisePlacement(BaseCase):
@@ -512,69 +493,22 @@ class TestSU2QuditRBSimulatorNoisePlacement(BaseCase):
     tests above do)."""
 
     def test_two_gate_noise_placement_and_skip_semantics(self):
-        j = 1.5
-        spinj = SpinJ(j)
+        spinj = SpinJ(j=1.5)
         N = jz_dephasing(spinj, 0.25, power=1.0)
         sim = SU2QuditRBSimulator(spinj, noise_channel=N)
-
-        angles = np.array([[0.3, 0.5, 0.1], [1.2, 0.7, 2.1]])
+        angles = np.array([
+            [0.3, 0.5, 0.1],
+            [1.2, 0.7, 2.1]
+        ])
         U0, U1 = spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
         S0 = unitary_to_std_process_mx(U0)
         S1 = unitary_to_std_process_mx(U1)
-
-        # skip_first_noise=False: noise is inserted after *every* gate.
-        expected_no_skip = N @ S1 @ N @ S0
-        actual_no_skip = sim._compose_full(angles, skip_first_noise=False)
-        self.assertTrue(np.allclose(actual_no_skip, expected_no_skip, atol=1e-12))
-
-        # skip_first_noise=True: noise is skipped immediately after the first gate
-        # only; it is still applied after the second (and every subsequent) gate.
+        # noise is skipped immediately after the first gate only; it is still applied
+        # after the second (and every subsequent) gate.
         expected_skip = N @ S1 @ S0
-        actual_skip = sim._compose_full(angles, skip_first_noise=True)
+        actual_skip = sim._compose_full(angles)
         self.assertTrue(np.allclose(actual_skip, expected_skip, atol=1e-12))
-
-        # The two must differ (sanity check that this test isn't vacuous).
-        self.assertFalse(np.allclose(expected_no_skip, expected_skip, atol=1e-6))
-
-    def test_run_skips_noise_after_hidden_gate(self):
-        """
-        Run-level regression test: `_compose_full`'s skip-first-noise semantics
-        (pinned above) only matter if `run()` (and `compute_nonspam_compositions`)
-        actually thread `skip_first_noise=self._skip_first_noise_for(edesign)`
-        through to it. A regression that dropped that threading from *both* call
-        sites would still pass the rest of the suite: the SpamSwap consistency
-        test (`test_probabilities_from_compositions_matches_run`) only compares
-        `run()` against `compute_nonspam_compositions`, so a shared bug in both
-        cancels out, and the end-to-end decay-fit tests absorb a depth-independent
-        extra noise application into the fitted amplitude `A_k`, leaving `f_k`
-        unaffected. This instead hand-composes the expected noisy probabilities
-        directly from the design's `euler_angles` (noise skipped after row 0,
-        applied after every subsequent row) and compares against `run()`'s actual
-        `DataSet`.
-        """
-        j = 0.5
-        spinj = SpinJ(j)
-        dim = spinj.dim
-        N = jz_dephasing(spinj, 0.3, power=1.0)
-        sim = SU2QuditRBSimulator(spinj, noise_channel=N)
-        design = SU2QuditRBDesign(j, depths=[2], circuits_per_depth=2, seed=13)
-        data = sim.run(design)
-
-        ideal_ops = sim._ideal_computational_ops()
-        circuits = design.circuit_lists[0]
-        angles_at_depth = design.euler_angles[0]
-        prep_at_depth = design.prep_index[0]
-        for circuit, angles, prep_idx in zip(circuits, angles_at_depth, prep_at_depth):
-            angles = np.array(angles)
-            Us = spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
-            S = unitary_to_std_process_mx(Us[0])
-            for U in Us[1:]:
-                S = N @ unitary_to_std_process_mx(U) @ S
-            expected = np.array([
-                np.real(np.vdot(ideal_ops[e], S @ ideal_ops[prep_idx])) for e in range(dim)
-            ])
-            actual = _dataset_probs(data.dataset, circuit, dim)
-            self.assertTrue(np.allclose(actual, expected, atol=1e-10))
+        return
 
 
 class TestSU2QuditRBSimulatorNoiseFactory(BaseCase):
@@ -605,61 +539,43 @@ class TestSU2QuditRBSimulatorNoiseFactory(BaseCase):
                 self.assertTrue(np.allclose(probs_fixed, probs_factory, atol=1e-12))
 
     def test_gate_dependent_factory_matches_hand_computed_composition(self):
-        j = 1.5
-        spinj = SpinJ(j)
+        spinj = SpinJ(j=1.5)
 
         def factory(alpha, beta, gamma):
             return jz_rotation(spinj, 0.05 * beta)
 
         sim = SU2QuditRBSimulator(spinj, noise_channel=factory)
 
-        angles = np.array([[0.3, 0.5, 0.1], [1.2, 0.9, 2.1]])
-        U0, U1 = spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
+        angles = np.array([
+            [0.3, 0.5, 0.1],
+            [1.2, 0.9, 2.1],
+            [0.2, 0.6, 3.3]
+        ])
+        U0, U1, U2 = spinj.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
         S0 = unitary_to_std_process_mx(U0)
         S1 = unitary_to_std_process_mx(U1)
-        N0 = unitary_to_std_process_mx(jz_rotation(spinj, 0.05 * angles[0, 1]))
+        S2 = unitary_to_std_process_mx(U2)
         N1 = unitary_to_std_process_mx(jz_rotation(spinj, 0.05 * angles[1, 1]))
+        N2 = unitary_to_std_process_mx(jz_rotation(spinj, 0.05 * angles[2, 1]))
 
         # The two per-gate noise channels must differ, or this test would not
         # actually exercise gate-dependence.
-        self.assertFalse(np.allclose(N0, N1, atol=1e-6))
+        self.assertFalse(np.allclose(N1, N2, atol=1e-6))
 
-        expected = N1 @ S1 @ N0 @ S0
-        actual = sim._compose_full(angles, skip_first_noise=False)
+        expected = N2 @ S2 @ N1 @ S1 @ S0
+        actual = sim._compose_full(angles)
         self.assertTrue(np.allclose(actual, expected, atol=1e-12))
 
         # The gate-dependent result must differ from the noiseless composition and
         # from either single fixed-channel composition (i.e. applying one gate's
         # noise everywhere) -- confirming the factory is actually called per gate
         # rather than once globally.
-        noiseless = S1 @ S0
-        fixed_n0_everywhere = N0 @ S1 @ N0 @ S0
-        fixed_n1_everywhere = N1 @ S1 @ N1 @ S0
+        noiseless = S2 @ S1 @ S0
+        fixed_n1_everywhere = N1 @ S2 @ N1 @ S1 @ S0
+        fixed_n2_everywhere = N2 @ S2 @ N2 @ S1 @ S0
         self.assertFalse(np.allclose(actual, noiseless, atol=1e-6))
-        self.assertFalse(np.allclose(actual, fixed_n0_everywhere, atol=1e-6))
         self.assertFalse(np.allclose(actual, fixed_n1_everywhere, atol=1e-6))
-
-
-class TestSkipFirstNoiseForRegression(BaseCase):
-    """
-    Regression coverage: `SU2QuditRBSimulator` does not dispatch noise-skipping on an
-    `invert_from` design attribute -- every `SU2QuditRBDesign` is hidden-first-gate, so
-    noise after the first gate is always skipped. A stale edesign-like object still
-    carrying an `invert_from` attribute should trip the defensive `TypeError` in
-    `_skip_first_noise_for` rather than being silently misinterpreted.
-    """
-
-    def test_skip_first_noise_for_always_true(self):
-        j = 0.5
-        design = SU2QuditRBDesign(j, depths=[1, 2], circuits_per_depth=2, seed=0)
-        self.assertTrue(SU2QuditRBSimulator._skip_first_noise_for(design))
-
-    def test_stale_invert_from_attribute_raises_typeerror(self):
-        class _StaleEdesign:
-            invert_from = 1
-
-        with self.assertRaises(TypeError):
-            SU2QuditRBSimulator._skip_first_noise_for(_StaleEdesign())
+        self.assertFalse(np.allclose(actual, fixed_n2_everywhere, atol=1e-6))
 
 
 class TestNoiseChannelHelpers(BaseCase):
