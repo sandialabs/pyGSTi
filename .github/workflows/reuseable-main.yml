@@ -115,12 +115,38 @@ jobs:
         flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
+    - name: Detect graphcoloring changes
+      # The graphcoloring benchmark/scaling tests are normally skipped in CI (see
+      # skip_in_ci in test/unit/tools/test_graphcoloring.py) since they're slow and
+      # meant for local use. We turn them back on in CI specifically when a change
+      # touches the graphcoloring source or its test file, so regressions there are
+      # still caught automatically. Uses plain git (no third-party action) since
+      # this org's Actions allowlist has blocked other third-party actions before
+      # (see the astral-sh/setup-uv comment above).
+      id: graphcoloring
+      if: ${{ inputs.run-unit-tests == 'true' }}
+      shell: bash
+      run: |
+        BASE_SHA="${{ github.event.pull_request.base.sha || github.event.before }}"
+        if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+          # No usable base ref (e.g. workflow_dispatch, or first push on a new
+          # branch) -- err on the side of running the tests.
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        else
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          if git diff --name-only "$BASE_SHA" HEAD -- pygsti/tools/graphcoloring test/unit/tools/test_graphcoloring.py | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+        fi
     - name: Run unit tests
       if: ${{ inputs.run-unit-tests == 'true' }}
       # bash on every runner (Git Bash on Windows) so $COV_FLAG expands portably.
       shell: bash
       env:
         COV_FLAG: ${{ inputs.run-coverage == 'true' && '--cov=pygsti' || '' }}
+        GRAPHCOLORING_CHANGED: ${{ steps.graphcoloring.outputs.changed }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -n auto --dist loadscope $COV_FLAG --durations=25 test/unit

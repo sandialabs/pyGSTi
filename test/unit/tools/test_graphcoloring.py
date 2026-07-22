@@ -23,12 +23,20 @@ from ..util import BaseCase
 # run locally, so we skip it in CI via this environment-variable ``skipif`` -- the
 # same pattern used elsewhere in the test suite (e.g. the ``PYGSTI_NO_CUSTOMLM_SIGINT``
 # check in test/unit/optimize/test_sigint.py and the ``needs_*`` helpers in
-# test/unit/util.py). This keeps the slow tests local-only without any change to
-# the CI workflow. To run them locally, simply invoke pytest outside of CI (or
-# unset ``CI``); to also exclude them locally, use ``-m "not slow"``.
+# test/unit/util.py). This keeps the slow tests local-only most of the time,
+# without any change to what a developer needs to do locally: simply invoke
+# pytest outside of CI (or unset ``CI``) to run them; to also exclude them
+# locally, use ``-m "not slow"``.
+#
+# However, CI (see .github/workflows/reuseable-main.yml) additionally sets
+# ``GRAPHCOLORING_CHANGED=true`` when a push/PR touches pygsti/tools/graphcoloring/
+# or this test file, so that regressions there are still caught automatically
+# instead of relying solely on local runs.
 skip_in_ci = pytest.mark.skipif(
-    'CI' in os.environ,
-    reason="benchmark-style scaling test; run locally only (skipped in CI)")
+    'CI' in os.environ and os.environ.get('GRAPHCOLORING_CHANGED', '').lower() != 'true',
+    reason="benchmark-style scaling test; run locally only, or in CI when "
+           "pygsti/tools/graphcoloring/ or this test file has changed "
+           "(see GRAPHCOLORING_CHANGED in reuseable-main.yml)")
 
 
 # Every edge-coloring algorithm exposed by the switchboard.
@@ -791,8 +799,9 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
 # run is guarded by a hard wall-clock timeout in a separate process.
 #
 # The suite is marked `slow` and additionally carries `@skip_in_ci`, so it is
-# skipped automatically in CI (where the `CI` env var is set) and is intended to
-# be run locally only:
+# skipped automatically in CI (where the `CI` env var is set) -- except when CI
+# detects a change under pygsti/tools/graphcoloring/ or this test file, in which
+# case it runs there too. Locally it is intended to be run explicitly:
 #   * run everything locally:   pytest test/unit/tools/test_graphcoloring.py
 #   * run just this suite:      pytest -m slow -s test/unit/tools/test_graphcoloring.py
 #   * skip it locally too:      pytest -m "not slow" ...
