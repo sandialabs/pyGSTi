@@ -9,6 +9,7 @@ import warnings
 import numpy as np
 from scipy.optimize import OptimizeWarning
 
+from pygsti.baseobjs.label import Label
 from pygsti.circuits.circuit import Circuit
 from pygsti.protocols.su2rb import (
     SU2RBDesign,
@@ -23,6 +24,7 @@ from pygsti.protocols.su2rb import (
     compose_noise_channels,
     GATE_NAME,
     POVM_NAME,
+    add_spam_layers_inplace
 )
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.data.dataset import DataSet
@@ -42,7 +44,8 @@ class TestEulerAngleCircuitHelpers(BaseCase):
     def test_round_trip_no_prep(self):
         rng = np.random.default_rng(0)
         angles = rng.uniform(0, 4 * np.pi, size=(5, 3))
-        c = circuit_from_euler_angles(angles, j=1.5, qudit_label='Q0')
+        c = circuit_from_euler_angles(angles, qudit_label='Q0')
+        c.done_editing()
         self.assertEqual(len(c), 5)
         for layer in c:
             self.assertEqual(layer.name, GATE_NAME)
@@ -56,7 +59,8 @@ class TestEulerAngleCircuitHelpers(BaseCase):
     def test_round_trip_through_string(self):
         rng = np.random.default_rng(1)
         angles = rng.uniform(0, 4 * np.pi, size=(4, 3))
-        c = circuit_from_euler_angles(angles, j=0.5, qudit_label='Q0', prep_index=1)
+        c = circuit_from_euler_angles(angles, qudit_label='Q0')
+        add_spam_layers_inplace(c, prep_index=1)
         s = c.str
         c2 = Circuit(None, stringrep=s, line_labels=c.line_labels)
         self.assertEqual(c, c2)
@@ -65,7 +69,8 @@ class TestEulerAngleCircuitHelpers(BaseCase):
 
     def test_prep_and_povm_labels_embedded(self):
         angles = np.zeros((2, 3))
-        c = circuit_from_euler_angles(angles, j=1.5, qudit_label='Q0', prep_index=2)
+        c = circuit_from_euler_angles(angles, qudit_label='Q0')
+        add_spam_layers_inplace(c, prep_index=2)
         names = [layer.name for layer in c]
         self.assertEqual(names[0], 'rho2')
         self.assertEqual(names[-1], 'Mdefault')
@@ -73,12 +78,13 @@ class TestEulerAngleCircuitHelpers(BaseCase):
 
     def test_prep_index_out_of_range_raises(self):
         angles = np.zeros((1, 3))
+        c = circuit_from_euler_angles(angles, qudit_label='Q0')
         with self.assertRaises(ValueError):
-            circuit_from_euler_angles(angles, j=0.5, qudit_label='Q0', prep_index=2)  # dim=2, valid range 0,1
+            add_spam_layers_inplace(c, prep_index=2, j=0.5)  # dim=2, valid range 0,1
 
     def test_bad_angle_shape_raises(self):
         with self.assertRaises(ValueError):
-            circuit_from_euler_angles(np.zeros((3, 2)), j=0.5)
+            circuit_from_euler_angles(np.zeros((3, 2)))
 
     def test_euler_angles_from_circuit_empty_for_no_gu_layers(self):
         # A circuit with no `Gu` layers returns a `(0, 3)` array rather than raising.
@@ -202,9 +208,9 @@ class TestSU2RBDesignExtras(BaseCase):
         for depth_idx in range(len(design.depths)):
             for circuit_idx in range(len(design.circuit_lists[depth_idx])):
                 angles = np.array(design.euler_angles[depth_idx][circuit_idx])
-                first_gate_angles = angles[0, :]
+                first_gate_angles = angles[0, :].reshape((1, -1))
                 expected_cores = charactercores_from_euler_angles(irrep_labels, first_gate_angles)
-                actual_cores = np.array(design.charcores[depth_idx][circuit_idx])
+                actual_cores = np.array(design.charcores[depth_idx][circuit_idx]).reshape((1, -1))
                 self.assertTrue(np.allclose(actual_cores, expected_cores, atol=1e-12))
 
     def test_depth_zero_raises(self):

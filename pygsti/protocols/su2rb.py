@@ -63,6 +63,8 @@ __all__ = [
     'SyntheticSPAMRBResults',
 ]
 
+SpinSpec_t = Union[int, float, _Fraction]
+
 GATE_NAME = 'Gu'
 """The name of the single arg-carrying gate label used by SU(2) RB circuits."""
 
@@ -70,13 +72,12 @@ POVM_NAME = 'Mdefault'
 """The name of the (2j+1)-outcome POVM label appended to SU(2) RB circuits."""
 
 
-def _prep_name(prep_index):
+def _prep_name(prep_index: int) -> str:
     """The name of the prep label for the `prep_index`-th Jz eigenstate (`spins[prep_index]`)."""
     return f'rho{prep_index}'
 
 
-def circuit_from_euler_angles(angles: _np.ndarray, j: Union[int, float, _Fraction],
-                               qudit_label: str = 'Q0', prep_index: Optional[int] = None) -> _Circuit:
+def circuit_from_euler_angles(angles: _np.ndarray, qudit_label: str = 'Q0') -> _Circuit:
     """
     Build a `Circuit` of `Gu` gate layers from a sequence of ZXZ Euler angles.
 
@@ -86,18 +87,8 @@ def circuit_from_euler_angles(angles: _np.ndarray, j: Union[int, float, _Fractio
         Shape `(m+1, 3)`. Row `i` gives the ZXZ Euler angles `(alpha, beta, gamma)`
         of the `i`-th layer's `Gu` gate.
 
-    j : int, float, or Fraction
-        The spin (used only to validate `prep_index`, if given).
-
     qudit_label : str, optional
         The line label of the single qudit this circuit acts on.
-
-    prep_index : int, optional
-        If given, an integer in `range(2*j + 1)` selecting one of the `2j+1` Jz
-        eigenstates (`0` is `|j>`, `2*j` is `|-j>`, matching `SpinJ.spins`). When
-        given, the returned circuit is prefixed with an explicit `rho{prep_index}`
-        prep label and suffixed with the shared `Mdefault` POVM label. When `None`
-        (the default), the circuit consists of only the `Gu` gate layers.
 
     Returns
     -------
@@ -106,18 +97,22 @@ def circuit_from_euler_angles(angles: _np.ndarray, j: Union[int, float, _Fractio
     angles = _np.asarray(angles, dtype=float)
     if angles.ndim != 2 or angles.shape[1] != 3:
         raise ValueError(f"`angles` must have shape (m+1, 3); got {angles.shape}")
-    if prep_index is not None:
+    layers = [_Label(GATE_NAME, qudit_label, args=tuple(float(x) for x in row)) for row in angles]
+    circuit = _Circuit(layers, line_labels=(qudit_label,), editable=True)
+    return circuit
+
+
+def add_spam_layers_inplace(c: _Circuit, prep_index: int, j: Optional[SpinSpec_t] = None, finalize=True) -> None:
+    if j is not None:
         _, two_j = _validate_spin(j)
         dim = two_j + 1
         if not (0 <= prep_index < dim):
             raise ValueError(f"prep_index={prep_index!r} is out of range for j={j} (dim={dim})")
-
-    layers = [_Label(GATE_NAME, qudit_label, args=tuple(float(x) for x in row)) for row in angles]
-    if prep_index is not None:
-        layers = [_Label(_prep_name(prep_index))] + layers + [_Label(POVM_NAME)]
-
-    circuit = _Circuit(layers, line_labels=(qudit_label,))
-    return circuit
+    c.insert_layer_inplace(_Label(_prep_name(prep_index)), 0)
+    c.insert_layer_inplace(_Label(POVM_NAME), len(c))
+    if finalize:
+        c.done_editing()
+    return
 
 
 def euler_angles_from_circuit(circuit: _Circuit) -> _np.ndarray:
@@ -125,16 +120,12 @@ def euler_angles_from_circuit(circuit: _Circuit) -> _np.ndarray:
     Recover the `(m+1, 3)` array of ZXZ Euler angles from a `Circuit`'s `Gu` layers.
 
     Any non-`Gu` layers (e.g. explicit `rho{ell}` prep or `Mdefault` POVM layers) are
-    ignored. This makes it the inverse of `circuit_from_euler_angles` specifically
-    when `prep_index` was not given -- in that case `angles` is the only input, so
-    recovering it is a full round trip. When `prep_index` was given, this function
-    still recovers the `Gu`-layer angles, but not the prep choice itself.
+    ignored. This makes it the inverse of `circuit_from_euler_angles`.
 
     Parameters
     ----------
     circuit : Circuit
-        A circuit built by `circuit_from_euler_angles` (or with the same `Gu`-layer
-        convention).
+        A circuit from `circuit_from_euler_angles` (or one with the same `Gu`-layer convention).
 
     Returns
     -------
@@ -152,7 +143,7 @@ def euler_angles_from_circuit(circuit: _Circuit) -> _np.ndarray:
     return angles
 
 
-def _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, seed, qudit_label):
+def _sample_su2rb_circuits(dim, depths, circuits_per_depth, seed, qudit_label):
     """
     Core RB circuit sampler for `SU2RBDesign`.
 
@@ -206,7 +197,8 @@ def _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, seed, qudit
 
             angles_as_list = angles.tolist()
             for ell in range(dim):
-                c = circuit_from_euler_angles(angles, j_float, qudit_label, prep_index=ell)
+                c = circuit_from_euler_angles(angles, qudit_label)
+                add_spam_layers_inplace(c, prep_index=ell)
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((str(ell),))
                 # ^ Placeholder ideal outcome (see this function's docstring).
@@ -295,7 +287,7 @@ class SU2RBDesign(_vb.BenchmarkingDesign):
             seed = _np.random.randint(1, 1000000)
         self.seed = seed
 
-        sampled = _sample_su2rb_circuits(j_float, dim, depths, circuits_per_depth, self.seed, qudit_label)
+        sampled = _sample_su2rb_circuits(dim, depths, circuits_per_depth, self.seed, qudit_label)
 
         self.paired_with_circuit_attrs = ["euler_angles", "seq_index", "prep_index", "charcores"]
         # ^ Set before calling super().__init__ so that BenchmarkingDesign inserts
@@ -313,15 +305,12 @@ class SU2RBDesign(_vb.BenchmarkingDesign):
         irrep_labels = _np.arange(dim)
         charcores_lists = []
         for firstgate_angles_at_seq in sampled['firstgate_angles_lists']:
-            angles_arr = _np.array(firstgate_angles_at_seq).T
-            # ^ Shape (3, circuits_per_depth), as required by
-            #   charactercores_from_euler_angles.
+            angles_arr = _np.array(firstgate_angles_at_seq)
             cores = _su2.charactercores_from_euler_angles(irrep_labels, angles_arr)
             charcores_lists.append(_np.repeat(cores, dim, axis=0).tolist())
             # ^ Broadcast each sampled sequence's (shared) charcore row out to the
             #   `dim` consecutive per-prep circuits generated from it, matching the
-            #   (seq-major, prep-minor) circuit ordering produced by
-            #   _sample_su2rb_circuits.
+            #   (seq-major, prep-minor) circuit ordering from _sample_su2rb_circuits.
         self.charcores = charcores_lists
 
         self.j = j_float

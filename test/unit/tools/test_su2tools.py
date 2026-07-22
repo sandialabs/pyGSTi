@@ -17,7 +17,6 @@ from pygsti.tools.su2tools import (
     axis_rotation_angle_from_2x2_unitaries,
     axis_rotation_angle_from_euler_angles,
     batch_normal_expm_1jscales,
-    characters_from_euler_angles,
     charactercores_from_euler_angles,
     composition_asmatrix,
     composition_inverse,
@@ -579,27 +578,15 @@ class MultiSpinPropertyTester(BaseCase):
             V = unitary_to_std_process_mx(U)
             self.assertLessEqual(la.norm(tA @ V - V @ tA), 1e-9)
 
-    def test_characters_from_euler_angles_matches_all_characters_from_unitary(self):
-        for j in self.SPINS:
-            s = SpinJ(j)
-            np.random.seed(0)
-            aa = np.vstack(random_euler_angles(5))
-            Us = s.unitaries_from_angles(*aa)
-            for i, U in enumerate(Us):
-                expect = s.all_characters_from_unitary(U)
-                actual = characters_from_euler_angles(s.irrep_labels, aa[:, i])
-                discrepancy = la.norm(actual - expect)
-                self.assertLessEqual(discrepancy, s.dim ** 2 * 1e-13)
-
     def test_charactercores_are_legendre_of_cos_beta(self):
         from scipy.special import eval_legendre
         for j in self.SPINS:
             s = SpinJ(j)
             np.random.seed(0)
-            aa = np.vstack(random_euler_angles(5))
+            aa = np.array(random_euler_angles(5)).T
             actual = charactercores_from_euler_angles(s.irrep_labels, aa)
             expect = np.array([
-                [eval_legendre(k, np.cos(aa[1, i])) for k in s.irrep_labels]
-                for i in range(aa.shape[1])
+                [eval_legendre(k, np.cos(aa_i[1])) for k in s.irrep_labels]
+                for aa_i in aa
             ])
             self.assertArraysAlmostEqual(actual, expect, places=12)

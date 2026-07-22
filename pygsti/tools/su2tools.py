@@ -59,7 +59,6 @@ __all__ = [
     'axis_rotation_angle_from_euler_angles',
     'composition_asmatrix',
     'composition_inverse',
-    'characters_from_euler_angles',
     'charactercores_from_euler_angles',
     'SpinJ',
 ]
@@ -426,51 +425,26 @@ def _theta_from_angles(angles):
     return theta, squeeze
 
 
-def characters_from_euler_angles(irrep_labels: _np.ndarray, angles: _np.ndarray) -> _np.ndarray:
+def charactercores_from_euler_angles(irrep_labels: _np.ndarray, angles: _np.ndarray) -> _np.ndarray:
     """
-    Evaluate the SU(2) irrep character functions `chi_k(theta) =
-    sin((2k+1)*theta/2) / sin(theta/2)` at the axis-rotation angle(s) theta implied
-    by ZXZ Euler angles.
-
-    Parameters
-    ----------
-    irrep_labels : array-like of int
-        The irrep labels k at which to evaluate the character function.
+    Evaluate the Legendre-polynomial "character cores" `P_k(cos(beta))` used by the rank-1
+    synthetic-SPAM RB variant, for ZXZ Euler angles `angles = (alpha, beta, gamma)`.
 
     angles : numpy array
-        Shape `(3,)` for a single group element, or `(3, N)` for a batch of N.
+        Shape `(N, 3)` for a batch of N
 
     Returns
     -------
     numpy array
-        Shape `(len(irrep_labels),)` if `angles` was 1-D, else `(N, len(irrep_labels))`.
-    """
-    theta, squeeze = _theta_from_angles(angles)
-    irrep_labels = _np.asarray(irrep_labels)
-    theta_by_2 = theta / 2
-    out = _np.array([
-        _np.sin((2 * k + 1) * theta_by_2) / _np.sin(theta_by_2) for k in irrep_labels
-    ]).T
-    result = out[0] if squeeze else out
-    return result
-
-
-def charactercores_from_euler_angles(irrep_labels: _np.ndarray, angles: _np.ndarray) -> _np.ndarray:
-    """
-    Evaluate the Legendre-polynomial "character cores" `P_k(cos(beta))` used by the
-    rank-1 synthetic-SPAM RB variant, for ZXZ Euler angles `angles = (alpha, beta,
-    gamma)`.
-
-    Parameters and return shape are as in `characters_from_euler_angles`.
+        Shape `(N, len(irrep_labels))`
     """
     angles = _np.asarray(angles)
-    squeeze = angles.ndim == 1
-    angles2d = angles.reshape(3, -1) if squeeze else angles
-    beta = angles2d[1, :]
+    assert angles.ndim == 2
+    assert angles.shape[1] == 3 
+    beta = angles[:, 1]
     irrep_labels = _np.asarray(irrep_labels)
     out = _eval_legendre(irrep_labels[_np.newaxis, :], _np.cos(beta[:, _np.newaxis]))
-    result = out[0] if squeeze else out
-    return result
+    return out
 
 
 # ***************************************************************************************************
