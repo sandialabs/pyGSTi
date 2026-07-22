@@ -16,13 +16,14 @@ import numpy as _np
 
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 from pygsti.baseobjs import basis as _basis
+from pygsti.baseobjs import _compatibility as _compat
 
 from typing import Literal
 
 @lru_cache(maxsize=1)
 def basis_matrices(name_or_basis, dim, sparse=False):
     """
-    Get the elements of the specifed basis-type which spans the density-matrix space given by `dim`.
+    Get the elements of the specified basis-type which spans the density-matrix space given by `dim`.
 
     Parameters
     ----------
@@ -257,7 +258,7 @@ def create_basis_pair(mx, from_basis, to_basis):
 
 def create_basis_for_matrix(mx, basis):
     """
-    Construct a Basis object with type given by `basis` and dimension approprate for transforming `mx`.
+    Construct a Basis object with type given by `basis` and dimension appropriate for transforming `mx`.
 
     Dimension is taken from `mx` (if it's not given by `basis`) that is `sqrt(mx.shape[0])`.
 
@@ -437,7 +438,7 @@ def state_to_stdmx(state_vec):
         A density matrix of shape (d,d), corresponding to the pure state
         given by the length-`d` array, `state_vec`.
     """
-    st_vec = state_vec.view(); st_vec.shape = (len(st_vec), 1)  # column vector
+    st_vec = state_vec.view(); st_vec = _compat.reshape_no_copy(st_vec, (len(st_vec), 1))  # column vector
     dm_mx = _np.kron(_np.conjugate(_np.transpose(st_vec)), st_vec)
     return dm_mx  # density matrix in standard (sigma-z) basis
 
@@ -488,6 +489,10 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     """
     if not isinstance(basis, _basis.Basis):
         basis = _basis.BuiltinBasis(basis, len(v))
+    if not isinstance(v, _np.ndarray):
+        v = v.to_dense()
+        # TODO: track down functions that hit this code path, then change
+        # then so this conversion isn't needed in vec_to_stdmx.
     v = v.ravel()
     ret = _np.zeros(basis.elshape, 'complex')
     if v.ndim > 1:

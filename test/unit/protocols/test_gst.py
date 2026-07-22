@@ -1,8 +1,9 @@
 from pygsti.data import simulate_data
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
-from pygsti.modelpacks import smq1Q_XYI
+from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
-from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction
+from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction, ObjectiveFunctionBuilder
+from pygsti.models.explicitmodel import ExplicitOpModel
 from pygsti.models.gaugegroup import TrivialGaugeGroup
 from pygsti.objectivefns import FreqWeightedChi2Function
 from pygsti.optimize.simplerlm import SimplerLMOptimizer
@@ -13,6 +14,9 @@ from pygsti.protocols.gst import GSTGaugeOptSuite
 from pygsti.tools import two_delta_logl
 from ..util import BaseCase
 import pytest
+import numpy as _np
+import os
+import tempfile
 
 
 class GSTUtilTester(BaseCase):
@@ -64,7 +68,7 @@ class GSTUtilTester(BaseCase):
             GSTGaugeOptSuite("foobar").to_dictionary(model_1Q, verbosity=1)
 
     def test_add_badfit_estimates(self):
-        builder = PoissonPicDeltaLogLFunction.builder()
+        builder = ObjectiveFunctionBuilder(PoissonPicDeltaLogLFunction)
         opt = SimplerLMOptimizer()
         badfit_opts = gst.GSTBadFitOptions(threshold=-10, actions=("robust", "Robust", "robust+", "Robust+",
                                                                    "wildcard", "do nothing"))
@@ -232,7 +236,7 @@ class MapForwardSimulatorWrapper(MapForwardSimulator):
         super(MapForwardSimulatorWrapper, self)._bulk_fill_probs_atom(array_to_fill, layout_atom, resource_alloc)
 
 
-class TestGateSetTomography(BaseProtocolData):
+class GateSetTomographyTester(BaseProtocolData):
     """
     Tests for methods in the GateSetTomography class.
 
@@ -248,10 +252,34 @@ class TestGateSetTomography(BaseProtocolData):
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
         assert twoDLogL <= 1.0  # should be near 0 for perfect data
 
+    def test_optimizer_list_run(self):
+        self.setUpClass()
+    
+        optimizer = {'tol':1e-5}
+
+        proto1 = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST", optimizer=optimizer)
+        results1 = proto1.run(self.gst_data)
+        results2 = proto1.run(self.gst_data, optimizers=optimizer)
+
+        mdl_result1 = results1.estimates["testGST"].models['stdgaugeopt']
+        mdl_result2 = results2.estimates["testGST"].models['stdgaugeopt']
+
+        assert _np.allclose(mdl_result1.to_vector() , mdl_result2.to_vector())
+
+        #Test that we can pass a list of len == 1 or len == edesign.circuit_lists
+        optimizers = [optimizer]*len(self.gst_data.edesign.circuit_lists)
+        results3 = proto1.run(self.gst_data, optimizers=optimizers)
+        results4 = proto1.run(self.gst_data, optimizers=[optimizers[0]])
+        mdl_result3 = results3.estimates["testGST"].models['stdgaugeopt']
+        mdl_result4 = results4.estimates["testGST"].models['stdgaugeopt']
+        assert _np.allclose(mdl_result3.to_vector() , mdl_result1.to_vector())
+        assert _np.allclose(mdl_result4.to_vector() , mdl_result1.to_vector())
+        
+
     def test_run_custom_sim(self, capfd: pytest.LogCaptureFixture):
         self.setUpClass()
         proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST")
-        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper())
+        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper)
         stdout, _ = capfd.readouterr()
         assert MapForwardSimulatorWrapper.Message in stdout
 
@@ -261,17 +289,31 @@ class TestGateSetTomography(BaseProtocolData):
 
         for estimate in results.estimates.values():
             for model in estimate.models.values():
-                assert isinstance(model, MapForwardSimulatorWrapper)
+                assert isinstance(model.sim, MapForwardSimulatorWrapper)
         pass
 
+    def test_run_with_no_gaugeoptsuite(self, capfd: pytest.LogCaptureFixture):
+        self.setUpClass()
+        proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"),
+                                      gaugeopt_suite=None, name="testGST",
+                                      badfit_options={"threshold": -1000, "actions": ("wildcard1d",)},)
+        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper)
+        stdout, _ = capfd.readouterr()
+        assert MapForwardSimulatorWrapper.Message in stdout
+
+        mdl_result = results.estimates["testGST"].models['final iteration estimate']
+        twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
+        assert twoDLogL <= 1.0  # should be near 0 for perfect data
     
     def test_write_and_read_to_dir(self):
         #integration test to at least confirm we are writing and reading
         #to and from the directory serializations.
         proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST")
-        proto.write('../../test_packages/temp_test_files/test_GateSetTomography_serialization')
-        #then read this back in
-        proto_read = gst.GateSetTomography.from_dir('../../test_packages/temp_test_files/test_GateSetTomography_serialization')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            serialization_path = os.path.join(tmpdir, 'test_GateSetTomography_serialization')
+            proto.write(serialization_path)
+            #then read this back in
+            proto_read = gst.GateSetTomography.from_dir(serialization_path)
 
         #spot check some of the values of the protocol objects
         assert all([elem1==elem2 for elem1, elem2 in 
@@ -305,9 +347,11 @@ class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
         #integration test to at least confirm we are writing and reading
         #to and from the directory serializations.
         proto = gst.LinearGateSetTomography(self.mdl_target.copy(), 'stdgaugeopt', name="testGST")
-        proto.write('../../test_packages/temp_test_files/test_LinearGateSetTomography_serialization')
-        #then read this back in
-        proto_read = gst.LinearGateSetTomography.from_dir('../../test_packages/temp_test_files/test_LinearGateSetTomography_serialization')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            serialization_path = os.path.join(tmpdir, 'test_LinearGateSetTomography_serialization')
+            proto.write(serialization_path)
+            #then read this back in
+            proto_read = gst.LinearGateSetTomography.from_dir(serialization_path)
 
         #spot check some of the values of the protocol objects
         assert all([elem1==elem2 for elem1, elem2 in 
@@ -317,7 +361,7 @@ class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
         assert proto_read.name == proto.name
         assert proto_read.badfit_options.actions == proto.badfit_options.actions
 
-class TestStandardGST(BaseProtocolData):
+class StandardGSTTester(BaseProtocolData):
     """
     Tests for methods in the StandardGST class.
 
@@ -355,23 +399,75 @@ class TestStandardGST(BaseProtocolData):
             assert twoDLogL <= 1.0  # should be near 0 for perfect data
         for estimate in results.estimates.values():
             for model in estimate.models.values():
-                assert isinstance(model, MapForwardSimulatorWrapper)
+                assert isinstance(model.sim, MapForwardSimulatorWrapper)
         pass
+    
+    def test_optimizer_list_run(self):
+        self.setUpClass()
+    
+        optimizer = {'tol':1e-5}
+
+        proto1 = gst.StandardGST(modes=["full TP","CPTPLND","Target"])
+        results1 = proto1.run(self.gst_data)
+        results2 = proto1.run(self.gst_data, optimizers=optimizer)
+        #Test that we can pass a list
+        optimizers = [optimizer]*len(self.gst_data.edesign.circuit_lists)
+        results3 = proto1.run(self.gst_data, optimizers=optimizers)
+        results4 = proto1.run(self.gst_data, optimizers=[optimizer])
+
+        for mode in ["full TP","CPTPLND","Target"]:
+            mdl_result1 = results1.estimates[mode].models['stdgaugeopt']
+            mdl_result2 = results2.estimates[mode].models['stdgaugeopt']
+            mdl_result3 = results3.estimates[mode].models['stdgaugeopt']
+            mdl_result4 = results4.estimates[mode].models['stdgaugeopt']
+
+            assert _np.allclose(mdl_result2.to_vector() , mdl_result1.to_vector())
+            assert _np.allclose(mdl_result3.to_vector() , mdl_result1.to_vector())
+            assert _np.allclose(mdl_result4.to_vector() , mdl_result1.to_vector())
+    
 
     def test_write_and_read_to_dir(self):
         #integration test to at least confirm we are writing and reading
         #to and from the directory serializations.
         proto = gst.StandardGST(modes=["full TP","CPTPLND","Target"])
-        proto.write('../../test_packages/temp_test_files/test_StandardGateSetTomography_serialization')
-        #then read this back in
-        proto_read = gst.StandardGST.from_dir('../../test_packages/temp_test_files/test_StandardGateSetTomography_serialization')
+        with tempfile.TemporaryDirectory() as tmpdir:
+            serialization_path = os.path.join(tmpdir, 'test_StandardGateSetTomography_serialization')
+            proto.write(serialization_path)
+            #then read this back in
+            proto_read = gst.StandardGST.from_dir(serialization_path)
 
         #spot check some of the values of the protocol objects
         assert proto_read.gaugeopt_suite.gaugeopt_suite_names == proto.gaugeopt_suite.gaugeopt_suite_names
         assert proto_read.name == proto.name
         assert proto_read.modes == proto.modes
         assert proto_read.badfit_options.actions == proto.badfit_options.actions
-    
+
+
+
+class StandardGST2QInferredTargetTester(BaseCase):
+    """
+    Regression test: StandardGST must be able to infer a target model from
+    the 2-qubit ProcessorSpec attached to the experiment design when the
+    caller does not pass `target_model` explicitly.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.gst_design = smq2Q_XYICNOT.create_gst_experiment_design(max_max_length=1)
+        # This test only exercises target-model inference, so the counts don't need
+        # to come from a simulation; arbitrary fixed counts per circuit suffice.
+        from pygsti.data import DataSet
+        outcome_labels = ['00', '01', '10', '11']
+        ds = DataSet(outcome_labels=outcome_labels)
+        for circuit in cls.gst_design.all_circuits_needing_data:
+            ds.add_count_list(circuit, outcome_labels, [400, 300, 200, 100])
+        ds.done_adding_data()
+        cls.gst_data = ProtocolData(cls.gst_design, ds)
+
+    def test_run_with_inferred_target(self):
+        proto = gst.StandardGST(modes=('Target',))
+        results = proto.run(self.gst_data)
+        self.assertIn('Target', results.estimates)
 
 
 #Unit tests are currently performed in objects/test_results.py - TODO: move these tests here

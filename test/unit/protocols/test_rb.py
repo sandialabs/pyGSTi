@@ -1,9 +1,13 @@
 from ..util import BaseCase
 
+import warnings
 import numpy as _np
+import pytest
 from pathlib import Path
+from scipy.optimize import OptimizeWarning
 
 import pygsti
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from pygsti.protocols import rb as _rb
 from pygsti.processors import CliffordCompilationRules as CCR
 from pygsti.processors import QubitProcessorSpec as QPS
@@ -11,6 +15,24 @@ from pygsti.circuits import Circuit
 from pygsti.baseobjs import Label
 
 FILE_PATH = str(Path(__file__).resolve().parent)
+
+from contextlib import contextmanager
+
+@contextmanager
+def degenerate_bootstrap_ignore_warnings():
+    with warnings.catch_warnings():
+        # Running a bootstrap estimate on a noiseless model
+        # will lead to calling np.std(arr) on empty arrays arr.
+        # This leads to runtime warnings, which we filter out here
+        # in case we're testing with `pytest -W error`.
+        warnings.filterwarnings(action="ignore",
+            message="Degrees of freedom <= 0 for slice", category=RuntimeWarning
+        )
+        warnings.filterwarnings(action='ignore',
+            message="invalid value encountered", category=RuntimeWarning
+        )
+        yield
+
 
 class TestCliffordRBDesign(BaseCase):
 
@@ -70,7 +92,12 @@ class TestCliffordRBDesign(BaseCase):
 
         tmodel = pygsti.models.create_crosstalk_free_model(self.pspec)
 
-        [[self.assertAlmostEqual(c.simulate(tmodel)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(mp_design.circuit_lists, mp_design.idealout_lists)]
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            for cl, bsl in zip(mp_design.circuit_lists, mp_design.idealout_lists):
+                for c, bs in zip(cl, bsl):
+                    self.assertAlmostEqual(c.simulate(tmodel)[bs], 1.)
+        return
 
     def test_deterministic_compilation(self):
         # TODO: Figure out good test for this. Full circuit is a synthetic idle, we need to somehow check the non-inverted
@@ -120,6 +147,7 @@ class TestCliffordRBDesign(BaseCase):
 
         self.assertEqual(crb_design.all_circuits_needing_data, crb_design_read.all_circuits_needing_data)
         self.assertEqual(crb_design.interleaved_circuit, crb_design_read.interleaved_circuit)
+
 
 class TestInterleavedRBDesign(BaseCase):
 
@@ -175,6 +203,7 @@ class TestInterleavedRBDesign(BaseCase):
         self.assertEqual(self.irb_design['icrb'].all_circuits_needing_data, irb_design_read['icrb'].all_circuits_needing_data)
         self.assertEqual(self.irb_design.interleaved_circuit, irb_design_read.interleaved_circuit)
 
+
 class TestDirectRBDesign(BaseCase):
 
     def setUp(self):
@@ -223,7 +252,11 @@ class TestDirectRBDesign(BaseCase):
 
         tmodel = pygsti.models.create_crosstalk_free_model(self.pspec)
 
-        [[self.assertAlmostEqual(c.simulate(tmodel)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(mp_design.circuit_lists, mp_design.idealout_lists)]
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            for cl, bsl in zip(mp_design.circuit_lists, mp_design.idealout_lists):
+                for c, bs in zip(cl, bsl):
+                    self.assertAlmostEqual(c.simulate(tmodel)[bs], 1.)
 
         #Print more debugging info since this test can fail randomly but we can't reproduce this.
         unequal_circuits = []
@@ -256,6 +289,33 @@ class TestDirectRBDesign(BaseCase):
         drb_design_read = _rb.DirectRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_DirectRBDesign_serialization')
 
         self.assertEqual(drb_design.all_circuits_needing_data, drb_design_read.all_circuits_needing_data)
+
+    def test_drb_ring_connectivity(self):
+        # Regression test for stabilizer-state compilation on a restricted (ring) geometry. The
+        # connectivity-adjusted CNOT compiler (COiCAGE) can silently produce incorrect circuits here, so
+        # compile_conditional_symplectic falls back to basic Gaussian elimination when that happens. Since the
+        # bug was silent *wrong output* (not an exception), we guard it by simulating every circuit on a perfect
+        # model and asserting the recorded ideal outcome occurs with probability 1.
+        n_qubits = 4
+        qubit_labels = ['Q0', 'Q1', 'Q2', 'Q3']
+        gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
+        pspec = QPS(n_qubits, gate_names, qubit_labels=qubit_labels, geometry='ring')
+        compilations = {
+            'absolute': CCR.create_standard(pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0),
+            'paulieq': CCR.create_standard(pspec, 'paulieq', ('1Qcliffords', 'allcnots'), verbosity=0)
+        }
+        depths = [0, 1, 2, 4, 8, 16]
+        circuits_per_depth = 10
+        design = _rb.DirectRBDesign(pspec, compilations, depths, circuits_per_depth, qubit_labels=qubit_labels,
+                                    sampler='edgegrab', samplerargs=[0.5], randomizeout=True,
+                                    citerations=20, seed=2021)
+
+        tmodel = pygsti.models.create_crosstalk_free_model(pspec)
+        for cl, bsl in zip(design.circuit_lists, design.idealout_lists):
+            for c, bs in zip(cl, bsl):
+                self.assertAlmostEqual(tmodel.sim.probs(c)[bs], 1.)
+        return
+
 
 class TestMirrorRBDesign(BaseCase):
 
@@ -323,7 +383,13 @@ class TestMirrorRBDesign(BaseCase):
                                         localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
                                         add_default_protocol=False, seed=None, num_processes=1, verbosity=0)
 
-        [[self.assertAlmostEqual(c.simulate(tmodel1)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(design1.circuit_lists, design1.idealout_lists)]
+
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            for cl, bsl in zip(design1.circuit_lists, design1.idealout_lists):
+                for c, bs in zip(cl, bsl):
+                    self.assertAlmostEqual(c.simulate(tmodel1)[bs], 1.)
+        return
 
     def test_nonclifford_design_type1_construction(self):
 
@@ -344,8 +410,12 @@ class TestMirrorRBDesign(BaseCase):
                                        localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
                                        add_default_protocol=False, seed=None, num_processes=1, verbosity=0)
 
-
-        [[self.assertAlmostEqual(c.simulate(tmodel2)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(design2.circuit_lists, design2.idealout_lists)]
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            for cl, bsl in zip(design2.circuit_lists, design2.idealout_lists):
+                for c, bs in zip(cl, bsl):
+                    self.assertAlmostEqual(c.simulate(tmodel2)[bs], 1.)
+        return
 
     def test_nonclifford_design_type2_construction(self):
 
@@ -366,8 +436,12 @@ class TestMirrorRBDesign(BaseCase):
                                        localclifford=True, paulirandomize=True, descriptor='A mirror RB experiment',
                                        add_default_protocol=False, seed=None, num_processes=1, verbosity=0)
 
-
-        [[self.assertAlmostEqual(c.simulate(tmodel3)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(design3.circuit_lists, design3.idealout_lists)]
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=pyGSTiDeprecationWarning)
+            for cl, bsl in zip(design3.circuit_lists, design3.idealout_lists):
+                for c, bs in zip(cl, bsl):
+                    self.assertAlmostEqual(c.simulate(tmodel3)[bs], 1.) 
+        return
 
 
     def test_serialization(self):
@@ -383,6 +457,7 @@ class TestMirrorRBDesign(BaseCase):
         mrb_design_read = _rb.MirrorRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_MirrorRBDesign_serialization')
 
         self.assertEqual(mrb_design.all_circuits_needing_data, mrb_design_read.all_circuits_needing_data)
+
 
 class TestBiRBDesign(BaseCase):
 
@@ -433,6 +508,13 @@ class TestBiRBDesign(BaseCase):
 
         self.assertEqual(birb_design.all_circuits_needing_data, birb_design_read.all_circuits_needing_data)
 
+# RB protocol tests run scipy.optimize.curve_fit on minimal-but-valid
+# fixture data. The covariance matrix on those small fits is often
+# singular, so scipy emits OptimizeWarning. The warning is genuinely
+# useful for users in production but is incidental noise in these
+# fast-running tests; the assertions only check that the fit ran, not
+# that its covariance is meaningful. Suppress at the test class level.
+@pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestBiRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
@@ -474,8 +556,8 @@ class TestBiRBProtocol(BaseCase):
     def test_birb_protocol_ideal(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='energies', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
-
-        result = proto.run(self.data)
+        with degenerate_bootstrap_ignore_warnings():
+            result = proto.run(self.data)
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
 
     def test_birb_protocol_noisy(self):
@@ -485,6 +567,7 @@ class TestBiRBProtocol(BaseCase):
         result = proto.run(self.data_noisy)
 
 
+@pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestCliffordRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
@@ -531,7 +614,8 @@ class TestCliffordRBProtocol(BaseCase):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
 
-        result = proto.run(self.data)
+        with degenerate_bootstrap_ignore_warnings():
+            result = proto.run(self.data)
 
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
 
@@ -545,6 +629,8 @@ class TestCliffordRBProtocol(BaseCase):
 
         result = proto.run(self.data_noisy)
 
+
+@pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestDirectRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
@@ -595,7 +681,9 @@ class TestDirectRBProtocol(BaseCase):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
 
-        result = proto.run(self.data)
+        with degenerate_bootstrap_ignore_warnings():
+            result = proto.run(self.data)
+
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
 
     def test_directrb_protocol_noisy(self):
@@ -604,6 +692,8 @@ class TestDirectRBProtocol(BaseCase):
 
         result = proto.run(self.data_noisy)
 
+
+@pytest.mark.filterwarnings("ignore::scipy.optimize.OptimizeWarning")
 class TestMirrorRBProtocol(BaseCase):
     def setUp(self):
         self.num_qubits = 2
@@ -650,7 +740,9 @@ class TestMirrorRBProtocol(BaseCase):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='adjusted_success_probabilities', defaultfit='A-fixed', rtype='EI',
                  seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
 
-        result = proto.run(self.data)
+        with degenerate_bootstrap_ignore_warnings():
+            result = proto.run(self.data)
+
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
 
     def test_mirrorrb_protocol_noisy(self):
@@ -701,7 +793,9 @@ class TestInterleavedRBProtocol(BaseCase):
         #running with all default settings
         proto = _rb.InterleavedRandomizedBenchmarking()
 
-        result = proto.run(self.data)
+        with degenerate_bootstrap_ignore_warnings():
+            result = proto.run(self.data)
+
         estimated_irb_num = result.for_protocol['InterleavedRandomizedBenchmarking'].irb_numbers['full']
         self.assertTrue(abs(estimated_irb_num) <= 1e-5)
 

@@ -172,7 +172,7 @@ cdef get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool 
         if len(lbls_list) == 0:
             to_exponentiate = _lbl.LabelTupTup( () )
         elif len(lbls_list) > 1:
-            time = max([l.time for l in lbls_list])
+            time = max([lbl.time if hasattr(lbl, 'time') else 0.0 for lbl in lbls_list], default=0.0)
             to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list)) if (time == 0.0) \
                 else _lbl.LabelTupTupWithTime(tuple(lbls_list), time)  # create a layer label - a label of the labels within square brackets
         else:
@@ -259,19 +259,36 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
     sslbls = []
     while i < end and s[i] == u':':
         i += 1
-        last = i; is_int = True
+        last = i
+        is_int = True
         while i < end:
             c = s[i]
             if u'0' <= c <= u'9':
                 i += 1
-            elif u'a' <= c <= u'z' or c == u'_' or c == u'Q':
-                i += 1; is_int = False
+            elif u'a' <= c <= u'z' or c == u'_':
+                # Labels can contain any combination of lowercase letters and underscores.
+                i += 1
+                is_int = False
+            elif c in (u'G', u'M', u'I', u'S'):
+                # These reserved characters (all uppercase letters) indicate that we've already
+                # seen everything there is to see for the most recent/current label.
+                break
+            elif last == i and c in (u'Q', u'T', u'L', u'A', u'D'):
+                # Labels can start with reserved uppercase letters Q, T, and L, per the 
+                # StateSpace documentation. Also added A and D for "auxiliary" or "data" qubits
+                # for interfacing with LoQS/futureproofing for QEC
+                i += 1
+                is_int = False
+            elif last == i and u'A' <= c <= u'Z':
+                msg = f"Invalid target label: {s[last:i + 1]!r}. Labels can't start with uppercase letters other than Q, T, and L."
+                raise ValueError(msg)
             else:
                 break
         if integerize_sslbls and is_int:
-            sslbls.append(int(s[last:i])); last = i
+            sslbls.append(int(s[last:i]))
         else:
-            sslbls.append(sys.intern(s[last:i])); last = i
+            sslbls.append(sys.intern(s[last:i]))
+        last = i
 
     if i < end and s[i] == u'!':
         i += 1

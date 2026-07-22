@@ -337,9 +337,15 @@ def sort_terms_by_effect(terms, detectors, sim=None, show_progress=False):
             #print(eeg[0].basis_element_labels)
             #contribution = dems.compute_contribution(LocalStimErrorgenLabel('S',eeg[0].basis_element_labels), 1, det_pauli, tableau)
             P = eeg.basis_element_labels[0]
-            if not P.commutes(det_pauli): 
-                dets_fired.append('1')
-            else: dets_fired.append('0')
+            if eeg.errorgen_type != 'Cd' and eeg.errorgen_type != 'Ad':
+                if not P.commutes(det_pauli): 
+                    dets_fired.append('1')
+                else: dets_fired.append('0')
+            elif eeg.errorgen_type=='Cd':
+                Q = eeg.basis_element_labels[1]
+                if P.commutes(Q) and P.commutes(det_pauli)==Q.commutes(det_pauli):
+                    dets_fired.append('1')
+                else: dets_fired.append('0')
         det_string = ''.join(dets_fired) 
         #print(eeg[0], det_string)
         sorted_terms[det_string].append(eeg)

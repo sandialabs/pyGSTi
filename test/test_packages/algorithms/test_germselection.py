@@ -134,7 +134,7 @@ class GermSelectionTestCase(AlgorithmTestCase, GermSelectionTestData):
         germs = pygsti.alg.find_germs_breadthfirst(gatesetNeighborhood, superGermSet,
                                            randomize=False, seed=2014, score_func='worst',
                                            threshold=threshold, verbosity=1, op_penalty=1.0,
-                                           mem_limit=2*1024000)
+                                           mem_limit=2*1024000, mode='all-Jac')
         
         print(f'{germs=}')
 

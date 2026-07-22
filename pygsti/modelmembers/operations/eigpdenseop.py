@@ -83,7 +83,10 @@ class EigenvalueParamDenseOp(_DenseOperator):
         #  conjugate pairs.  Find and sort by conjugate pairs.
 
         assert(_np.linalg.norm(_np.imag(matrix)) < IMAG_TOL)  # matrix should be real
-        evals, B = _np.linalg.eig(matrix)  # matrix == B * diag(evals) * Bi
+        evals, B = _np.linalg.eig(matrix)
+        # ^ matrix == B * diag(evals) * Bi
+        #   NOTE: we use eig intentionally. This is not a context when we can
+        #   expect that `matrix` is Hermitian.
         dim = len(evals)
 
         #Sort eigenvalues & eigenvectors by:

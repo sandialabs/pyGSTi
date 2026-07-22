@@ -14,6 +14,7 @@ import numpy as _np
 import scipy as _scipy
 
 from pygsti.optimize.arraysinterface import DistributedArraysInterface as _DistributedArraysInterface
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 
@@ -21,6 +22,9 @@ try:
     from ..tools import fastcalc as _fastcalc
 except ImportError:
     _fastcalc = None
+
+
+CUSTOM_SOLVE_THRESHOLD = 10_000
 
 
 def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
@@ -95,7 +99,7 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
         return
 
     #Just gather everything to one processor and compute there:
-    if comm.size < proc_threshold and a.shape[1] < 10000:
+    if comm.size < proc_threshold and a.shape[1] < CUSTOM_SOLVE_THRESHOLD:
         # We're not exactly sure where scipy is better, but until we speed up / change gaussian-elim
         # alg the scipy alg is much faster for small numbers of procs and so should be used unless
         # A is too large to be gathered to the root proc.
@@ -163,9 +167,12 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
         # Step 1: find the index of the row that is the best pivot.
         # each proc looks for its best pivot (Note: it should not consider rows already pivoted on)
         potential_pivot_indices = all_row_indices[potential_pivot_mask]
-        ibest_global, ibest_local, h, k = _find_pivot(a, b, icol, potential_pivot_indices, my_row_slice,
-                                                      shared_floats, shared_ints, resource_alloc, comm, host_comm,
-                                                      smbuf1, smbuf2, smbuf3, host_index_buf, host_val_buf)
+        ibest_global, ibest_local, h, k = _find_pivot(
+            a, icol, potential_pivot_indices,
+            my_row_slice, shared_floats, shared_ints, resource_alloc,
+            comm, host_comm, smbuf1, smbuf1b, smbuf2,
+            smbuf3, host_index_buf, host_val_buf
+        )
 
         # Step 2: proc that owns best row (holds that row and is root of param-fine comm) broadcasts it
         pivot_row, pivot_b = _broadcast_pivot_row(a, b, ibest_local, h, k, shared_rowb, local_pivot_rowb,
@@ -210,8 +217,12 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
     return
 
 
-def _find_pivot(a, b, icol, potential_pivot_inds, my_row_slice, shared_floats, shared_ints,
-                resource_alloc, comm, host_comm, buf1, buf1b, buf2, buf3, best_host_indices, best_host_vals):
+def _find_pivot(
+        a, icol, potential_pivot_inds,
+        my_row_slice, shared_floats, shared_ints, resource_alloc,
+        comm, host_comm, buf1, buf1b,
+        buf2, buf3, best_host_indices, best_host_vals
+    ):
     
     #print(f'Length potential_pivot_inds {len(potential_pivot_inds)}')
     #print(f'potential_pivot_inds: {potential_pivot_inds}')
@@ -371,7 +382,7 @@ def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, ari, resource_a
     #    #x_values[ii] = xval
 
     # now need to send the x-values we computed locally to the appropriate processor
-    # i.e. *we* need to recive the x-values for x-indices == my_row_slice.
+    # i.e. *we* need to receive the x-values for x-indices == my_row_slice.
     # Algorithm: all procs loop through *global* list of indices by destination processor.
     #    If this proc *is* the destination processor, then (if it isn't also the source)
     #    it needs to receive from the source processor.  If this proc is the source, it
@@ -475,7 +486,7 @@ def _tallskinny_custom_solve(a, b, resource_alloc):
         displacements = _np.concatenate(([0], _np.cumsum(sizes)))
         Rprime = _np.empty(displacements[-1], 'd')
         comm.Gatherv(Ri, [Rprime, sizes, displacements[0:-1], MPI.DOUBLE], root=0)
-        Rprime.shape = (displacements[-1] // nColsPerProc, nColsPerProc)
+        Rprime = _compat.reshape_no_copy(Rprime, (displacements[-1] // nColsPerProc, nColsPerProc))
         Q2, R = _scipy.linalg.qr(Rprime, mode='economic', check_finite=True)
         Q2 = _np.ascontiguousarray(Q2)
         Q2_sizes = _np.array([(s // nColsPerProc) * Q2.shape[1] for s in sizes], 'd')

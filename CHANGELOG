@@ -1,5 +1,76 @@
 # CHANGELOG
 
+## [0.10.1] - 2026-07-06
+
+Bugfix release. The only updates are to pyproject.toml to declare import-time dependencies.
+Thanks to @basnijholt for reporting this bug and creating a PR to fix.
+
+## [0.10.0] - 2026-07-03
+
+Major new features: symbolic error generator propagation (error generator polynomials), Lindblad-parameterized instruments, new GST objective functions, a generalized `pygsti.leakage` subpackage, turn-key MPI/SLURM helpers, and JupyterBook/ReadTheDocs documentation. Supported Python versions are now 3.10-3.13.
+
+### Added
+* Error generator polynomials: symbolic Magnus/Taylor expansions and polynomial probability/expectation corrections, with a new tutorial (#789)
+* Zassenhaus formula (second order) and 20-1000x performance improvements for error generator propagation sensitivities (#687)
+* Effect-then-gate Lindblad parameterization for instruments: `Instrument.from_effects` / `Instrument.from_cptr_superops` (#693)
+* New GST objective types ('tvd', 'normalized-tvd', Lp^p) and black-box penalty functions (#649); iteration-specific optimizers (#690, @juangmendoza19)
+* `pygsti.leakage` subpackage; leakage modeling now inferred from the basis (`Basis.implies_leakage_modeling`), basis-aware report metrics, `U1Group`, `promote_bb_to_bt` (#707); leakage confidence intervals and more robust LAGO (#699)
+* `Protocol.run_mpi()` and `Protocol.stage_slurm()` for MPI-accelerated runs (#724)
+* Germ selection: `gate_penalty` option (#666) and implicit-model support (#668, @enielse)
+* `ImplicitOpModel.to_explicit_model` (#748); unconstrained 'GLNDU' Lindblad coefficient blocks (#755, #801); A/D line-label prefixes (#810, @sserita)
+
+### Fixed
+* GST with penalty terms in objective functions (#528)
+* Numerous `Circuit` bugs (#765, #767, #772, #738); `Polynomial` commutativity bug (#750, #789)
+* Missing `return_basis` support for embedded ops (#592); zero-parameter model derivatives (#796, @yrasool)
+* IBMQ result retrieval with extra bits and preliminary MCM support (#679, @pcwysoc)
+* Wildcard budgets with `gaugeopt_suite=None` (#710, @enielse); cloud noise models with callable ops (#485, @sserita)
+* NumPy 2.x/2.5 compatibility (#703, #792); lazy `cvxpy` import (#803, #807, @basnijholt)
+* Many bugfixes surfaced by the revived notebook regression suite (#788, #821)
+
+### Changed
+* Python 3.10-3.13 supported; 3.9 dropped (#780)
+* Documentation rebuilt as a Jupyter Book on ReadTheDocs (#673, @sserita; #770-#781)
+* Default germ selection mode is now 'compactEVD'; `assume_real` removed and `float_type` inferred from the model basis (#812)
+* Leakage migration: `pygsti.tools.leakage` -> `pygsti.leakage`; `n_leak` retired in favor of basis-driven inference (#707)
+* `Label` modernization: `time` field removed from default subclasses, homogeneous `sslbls` types, round-trippable serialization (#692, #769, @nkoskelo)
+* `LindbladCoefficientBlock` parameterization-by-composition refactor; `coefficient_labels` removed (#701, #755, #801)
+* `errorgen_gate_contributors` moved to `errgenpolytools` (#789); `torch` moved to the opt-in `pytorch` extra (#788)
+* Gauge optimization refactor and fidelity-objective redefinition (#669)
+
+### Developer-Oriented Changes
+* CI time-to-green under 20 minutes (#780); parallel Cython build race fixed (#794); notebook regression in CI (#788)
+* Characterization/regression suites for `LindbladCoefficientBlock` (#750), `Circuit` (#768), `basis.py` (#790), `label.py` (#769)
+* `agent-docs/` orientation docs (#743); test warning burn-down (#739); `scripts/` and dead-code cleanup (#736, #744, #745)
+
+### Expired Deprecations
+* `DenseOperatorInterface` / `DenseStateInterface` / `DenseEffectInterface` removed; use `.to_dense()` / `.set_dense()` (#805)
+
+### Deprecations
+* The `n_leak` key of `construct_standard_report`'s `advanced_options` is deprecated and ignored; leakage metrics are now shown automatically based on each model's basis (#707)
+
+## [0.9.14.3] - 2025-11-25
+
+This is a bugfix release patching the following issues:
+
+* The benchmarking tool formerly named `bsqale` has been renamed to `scarab` (@ndsieki, #685)
+* Bugfix for drift report generation caused by incorrect Plotly syntax. (@liuyichao82 #688)
+* Fix for a ReadTheDocs build failure that caused the documentation generation to fail. (#691)
+
+Development-related change: Pushes to the `bugfix` branch no longer trigger automatic merges into `develop`, and these changes will need to be merged in manually going forward.
+
+## [0.9.14.2] - 2025-11-08
+
+This is a bugfix release patching the following issues:
+
+* Bugfixes for diamond-distance wildcard budget computation in the context of leakage-aware analysis as reported in #652. (#671)
+* Changes to default behavior of leakage-aware gauge optimization suite to address the manner in which relational leakage errors are attributed to each gate. Additional correctness checks/unit tests for leakage GST modeling. (#671)
+* Bugfix for issue reported in #644 where it was found that when gauge-optimizing models with instruments using fidelity or trace distance as cost functions the instrument parameters were being ignored. Note that it was originally reported/thought that this applied to frobenius distance as well, but that turned out not to be true and this was working correctly. (#672)
+* Fix for issue #600, which found the `Model.is_equivalent` method did not work for 'full TP' models. (#657)
+* tqdm added as proper dependency (#653, #656)
+* Shared memory bugs in objective function computation when parallelizing across parameters. (#660, #674) 
+* Fixes a bug in DataSet count retrieval and adds unit tests. (#663)
+
 ## [0.9.14.1] - 2025-08-30
 
 This is a bugfix release patching two issues: 
@@ -29,7 +100,7 @@ In addition to these changes, this release includes a number smaller changes, bu
 * **Mirror Circuit Fidelity Estimation** and scalable algorithmic benchmarks using subcircuit sampling (#628, @ndsieki): This module adds support for the construction and analysis of holistic and application-oriented benchmarks based on a family of techniques called mirror circuit benchmarking. Mirror circuits provide a method for constructing efficient proxy circuits from which one can take essentially any circuit of interest and construct reliable estimates for the fidelity of circuit. Also included with this module is:
     * Initial support for randomized compiling.
     * Support for subcircuit volumetric benchmarking (SVB), a method for constructing fidelity estimates for application circuits at scales larger than existing devices based on the analysis of smaller subcircuits sampled from the full one. This technique will be discussed in greater detail in an upcoming publication.
-    * Initial introduction of B-Sqale (name subject to change), a tool which will eventually enable end-to-end construction of scalable mirror circuit fidelity estimation experiments from an application circuit of interest.
+    * Initial introduction of scarab, a tool which will eventually enable end-to-end construction of scalable mirror circuit fidelity estimation experiments from an application circuit of interest. Please see [https://arxiv.org/abs/2511.02134](https://arxiv.org/abs/2511.02134) for more information.
    * Direct interfaces for conversion to and from qiskit circuits (w/o needing to go through OpenQASM as an intermediary).   
  * **Leakage-aware GST** (#410, #616, @rileyjmurray): pyGSTi's capabilities for modeling leakage and quantifying its impact have been significantly enhance with new capabilities for performing what we're calling leakage aware GST. For more on using these new capabilities in practice please see the new example [notebook](https://github.com/sandialabs/pyGSTi/blob/master/jupyter_notebooks/Examples/Leakage-automagic.ipynb). This includes:
     * New leakage-targeted bases for representing quantum process matrices which naturally delineate between computational space and leakage space dynamics. 

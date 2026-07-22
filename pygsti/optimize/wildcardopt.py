@@ -243,7 +243,7 @@ def _agg_dlogl_deriv(current_probs, objfn, percircuit_budget_deriv, probs_deriv_
     layout = objfn.layout
     num_circuits = len(layout.circuits)
 
-    # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
+    # derivative of firstterms wrt per-circuit wildcard budgets - namely if that budget goes up how to most efficiently
     # reduce firstterms in doing so, this computes how the per-circuit budget should be allocated to probabilities
     # (i.e. how probs should be updated) to achieve this decrease in firstterms
     agg_dlogl_deriv_wrt_percircuit_budgets = _np.zeros(num_circuits, 'd')
@@ -283,7 +283,7 @@ def _agg_dlogl_hessian(current_probs, objfn, percircuit_budget_deriv, probs_deri
     layout = objfn.layout
     num_circuits = len(layout.circuits)
 
-    # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
+    # derivative of firstterms wrt per-circuit wildcard budgets - namely if that budget goes up how to most efficiently
     # reduce firstterms. In doing so, this computes how the per-circuit budget should be allocated to probabilities
     # (i.e. how probs should be updated) to achieve this decrease in firstterms
     #TOL = 1e-6
@@ -584,10 +584,8 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
 
     i = 0
     while i < max_iters:
-
         if fn_with_derivs:
             obj, Dobj, Hobj = fn_with_derivs(x)
-
             #DEBUG - check against finite diff
             #obj_chk = fn(x)
             #Dobj_chk, Hobj_chk = _compute_fd(x, fn)
@@ -597,8 +595,9 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
         else:
             obj = fn(x)
             Dobj, Hobj = _compute_fd(x, fn)
-
-        evalsH, eigvecsH = _np.linalg.eig(Hobj)
+        Hobj += Hobj.T
+        Hobj /= 2
+        evalsH = _np.linalg.eigvalsh(Hobj)
         assert(min(evalsH) >= 0 or abs(min(evalsH) / max(evalsH)) < 1e-8)
         # Note: OK if evalsH has small negative elements, where "small" is relative to positive elements
 

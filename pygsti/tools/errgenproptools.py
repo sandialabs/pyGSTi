@@ -2,7 +2,7 @@
 Tools for the propagation of error generators through circuits.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -727,9 +727,9 @@ def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_orde
     """
     Function for computing the nth-order Zassenhaus formula for a set of error generators.
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
-    for more information on this approxmation.
+    for more information on this approximation.
 
-    Given an exponentiated sum of operators exp(X1+X2+...+Xn) the Zassenhaus formula gives one disentangle this
+    Given an exponentiated sum of operators exp(X1+X2+...+Xn) the Zassenhaus formula allows one to disentangle this
     exponentiated sum into a product of exponentiated operators given by exp(X1)exp(X2)...exp(Xn)\prod_{k=2}^\infty exp(W_k) where
     the W_k's are Lie polynomials (nested commutators) in the operators {X1, ..., Xn}, and the value of k we go up to gives the order of the
     approximation. 
@@ -1338,7 +1338,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     return errorgens
 
 def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=None):
-    """
+    r"""
     Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
     
     Parameters
@@ -7075,7 +7075,7 @@ def zassenhaus_formula_numerical(errorgen_groups: list[dict[_EEL, float]], error
     """
     Function for numerically computing the nth-order Zassenhaus formula for a set of error generators.
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
-    for more information on this approxmation.
+    for more information on this approximation.
 
     Due to the numerical nature of this implementation it is not meant for efficient computation and
     primarily supports testing.
@@ -7187,34 +7187,55 @@ def iterative_error_generator_composition_numerical(errorgen_labels, rates, erro
 
 # -----------First-Order Approximate Error Generator Probabilities and Expectation Values---------------# 
 
-def random_support(tableau, return_support=False):
+def random_support(tableau: Union[stim.Tableau, stim.TableauSimulator], return_support: bool=False):
     """ 
     Compute the number of bits over which the stabilizer state corresponding to this stim tableau
     would have measurement outcomes which are random.
     
     Parameters
     ----------
-    tableau : stim.Tableau
+    tableau : Union[stim.Tableau, stim.TableauSimulator]
         stim.Tableau corresponding to the stabilizer state we want the random support
         for.
     
     return_support : bool, optional (default False)
         If True also returns a list of qubit indices over which the distribution of outcome
         bit strings is random.
+
+    Returns
+    -------
+    num_random : int
+        Number of bit on which stabilize state is random.
+
+    support : list of bool
+        A list of boolean values which can be used as a bitmask
+        and corresponds to the bits found to be random.
     """
     # TODO Test for correctness on support
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(tableau**-1)
+    if isinstance(tableau, stim.Tableau):
+        sim = stim.TableauSimulator()
+        orig_tableau_inverse = tableau**-1
+        sim.set_inverse_tableau(orig_tableau_inverse)
+    elif isinstance(tableau, stim.TableauSimulator):
+        sim = tableau
+        orig_tableau_inverse = sim.current_inverse_tableau()
+    else:
+        raise ValueError(f'Unsupported input type {type(tableau)} for `tableau`. Supported options are stim.Tableau and stim.TableauSimulator')
+    
+    n = sim.num_qubits
+
     num_random = 0
-    support = []
-    for i in range(len(tableau)):
+    support = [False]*n
+    for i in range(n):
         z = sim.peek_z(i)
         if z == 0:
             num_random+=1
-            support.append(i)
+            support[i] = True
             #  For a phase reference, use the smallest state with non-zero amplitude.
         forced_bit = z == -1
         sim.postselect_z(i, desired_value=forced_bit)
+    if isinstance(tableau, stim.TableauSimulator):
+        tableau.set_inverse_tableau(orig_tableau_inverse)
     return (num_random, support) if return_support else num_random
 
 # Courtesy of Gidney 
@@ -7298,6 +7319,40 @@ def slow_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator],
     amplitude : complex
         Amplitude of the desired computational basis state for a given stabilizer state.
     """
+    amplitude = slow_bulk_amplitude_of_state(tableau, [desired_state], only_phase)[0]    
+    return amplitude
+
+def slow_bulk_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_states: Iterable[Union[str, stim.PauliString]], 
+                                 only_phase: bool) -> list[complex]:
+    """
+    Get the amplitudes particular computational basis state fors given
+    stabilizer state.
+
+    Note: This is a pure python implementation of this function. For best performance see the
+    optimized cython implementation tools.fasterrgencalc.fast_bulk_amplitude_of_state.
+
+    Parameters
+    ----------
+    tableau : stim.Tableau or stim.TableauSimulator
+        Stim tableau corresponding to the stabilizer state we wish to extract
+        the amplitude from. If a stim.TableauSimulator it is assumed that this
+        simulator has already had the appropriate inverse tableau value instantiated.
+    
+    desired_states : iterable of str or stim.PauliString
+        If a string, then a series of of 0's and 1's corresponding to the computational basis 
+        state to extract the amplitude for. If a stim.PauliString then the paulis operator which
+        maps the all-zero state to the target computational basis state.
+
+    only_phase : bool
+        If True then on the phase of the complex amplitude is returned. In many cases this phase
+        is the only information required, and for many qubits amplitude of any given state may
+        underflow.        
+        
+    Returns
+    -------
+    amplitude : complex
+        Amplitude of the desired computational basis state for a given stabilizer state.
+    """
     if isinstance(tableau, stim.Tableau):
         sim = stim.TableauSimulator()
         orig_tableau_inverse = tableau**-1
@@ -7310,87 +7365,168 @@ def slow_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimulator],
     
     n = sim.num_qubits
     
-    # convert desired state into a list of bools
-    desired_state = [desired_state[i] == '1' for i in range(n)]
+    num_random, is_random = random_support(sim, return_support=True)
     
-    #  Determine the magnitude of the target state.
-    num_random = 0
-    for q in range(n):
-        desired_bit = desired_state[q]
-        z = sim.peek_z(q)
-        forced_bit = z == -1
-        if z == 0:
-            num_random += 1
-        elif desired_bit != forced_bit: # forced bit is true if the state is |1>, so this is checking whether the bits match.
-            #only put things back the way they were if tableau was a stim.TableauSimulator, otherwise we can avoid the overhead
-            #since sim is local to this function call.
-            if isinstance(tableau, stim.TableauSimulator):
-                tableau.set_inverse_tableau(orig_tableau_inverse)
-            return 0
-        sim.postselect_z(q, desired_value=desired_bit)
     if only_phase:
         magnitude = 1
     else:
         if num_random > 2148:
             raise RuntimeError('Number of random bits is greater than 2148, magnitude of amplitude will underflow!')
         magnitude = 2**-(num_random / 2)
-    #  For a phase reference, use the smallest state with non-zero amplitude.
-    sim.set_inverse_tableau(orig_tableau_inverse)
+    
+    # For a phase reference, use the smallest state with non-zero amplitude.
+    # Initialize to None and instantiate the first time it is needed (only when
+    # the magnitude is non-zero.
+    ref_state = None
+    
+    phase_factors = [1]*len(desired_states)
+    magnitudes = [0]*len(desired_states)
+    for i, desired_state in enumerate(desired_states):        
+        if in_stabilizer_support(sim, desired_state):
+            magnitudes[i] = magnitude
+            if ref_state is None:
+                ref_state = compute_phase_reference(sim)
+        else:
+            continue
+            
+        # convert desired state into a list of bools
+        if isinstance(desired_state, str):
+            desired_state = [desired_state[j] == '1' for j in range(n)]
+        else:
+            desired_state = [desired_state[j] == 1 for j in range(n)]
+            
+        if ref_state == desired_state:
+            continue
+        #  Postselect away states that aren't the desired or reference states.
+        #  Also move the ref state to |00..00> and the desired state to |00..01>.
+        found_difference = False
+        for q in range(n):
+            desired_bit =  desired_state[q]
+            ref_bit = ref_state[q]
+            if desired_bit == ref_bit:
+                if is_random[q]:
+                    sim.postselect_z(q, desired_value=ref_bit)
+                if desired_bit:
+                    sim.x(q)
+            elif not found_difference:
+                found_difference = True
+                if q:
+                    sim.swap(0, q)
+                if ref_bit:
+                    sim.x(0)
+            else:
+                #  Remove difference between target state and ref state at this bit.
+                sim.cnot(0, q)
+                sim.postselect_z(q, desired_value=ref_bit)
+
+        #  The phase difference between |00..00> and |00..01> is what we want.
+        #  Since other states are gone, this is the bloch vector phase of qubit 0.
+        assert found_difference
+        s = str(sim.peek_bloch(0))
+
+        if s == "+X":
+            phase_factors[i] = 1
+        if s == "-X":
+            phase_factors[i] = -1
+        if s == "+Y":
+            phase_factors[i] = 1j
+        if s == "-Y":
+            phase_factors[i] = -1j
+            
+        sim.set_inverse_tableau(orig_tableau_inverse)
+        
+    return _np.fromiter([phase_factor*magnitude for phase_factor, magnitude in zip(phase_factors, magnitudes)], dtype=_np.complex128)
+
+def in_stabilizer_support(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_state: Union[str, stim.PauliString]):
+    """
+    Return whether or not the desired bitstring is in the support of the stabilizer state 
+    corresponding to the input tableau.
+
+    Parameters
+    ----------
+    tableau : stim.Tableau or stim.TableauSimulator
+        Stim tableau corresponding to the stabilizer state we wish to extract
+        the amplitude from. If a stim.TableauSimulator it is assumed that this
+        simulator has already had the appropriate inverse tableau value instantiated.
+    
+    desired_state : str or stim.PauliString
+        If a string, then a series of of 0's and 1's corresponding to the computational basis 
+        state to extract the amplitude for. If a stim.PauliString then the paulis operator which
+        maps the all-zero state to the target computational basis state.
+
+    Return
+    ------
+    success: bool
+        A boolean corresponding to True when the desired state is part of the support, and False otherwise.
+    """
+    if isinstance(tableau, stim.Tableau):
+        sim = stim.TableauSimulator()
+        orig_tableau_inverse = tableau**-1
+        sim.set_inverse_tableau(orig_tableau_inverse)
+    elif isinstance(tableau, stim.TableauSimulator):
+        sim = tableau
+        orig_tableau_inverse = sim.current_inverse_tableau()
+    else:
+        raise ValueError(f'Unsupported input type {type(tableau)} for `tableau`. Supported options are stim.Tableau and stim.TableauSimulator')
+
+    # start by getting the pauli string which maps the all-zeros string to the target bitstring.
+    if isinstance(desired_state, str):
+        initial_pauli_string = stim.PauliString(''.join(['I' if bit=='0' else 'X' for bit in desired_state]))
+    else:
+        initial_pauli_string = desired_state
+    
+    n = sim.num_qubits
+    # map the target state to all zero (if present)
+    sim.do_pauli_string(initial_pauli_string)
+    try:
+        sim.postselect_z(range(n), desired_value=False)
+        success = True
+    except ValueError:
+        sim.set_inverse_tableau(orig_tableau_inverse)
+        success = False
+    if isinstance(tableau, stim.TableauSimulator):
+        sim.set_inverse_tableau(orig_tableau_inverse)
+    return success
+
+def compute_phase_reference(tableau):
+    """ 
+    Compute a canonical state, corresponding to the smallest state with non-zero amplitude, to use
+    as a phase reference in computing the phases of components of this stabilizer state. 
+    
+    Parameters
+    ----------
+    tableau : Union[stim.Tableau, stim.TableauSimulator]
+        stim.Tableau or stim.TableauSimulator corresponding to the stabilizer state we want the random support
+        for.
+        
+    Returns
+    -------
+    ref_state : list[bool]
+        A list of boolean values corresponding to a bitstring for the phase reference.
+    """
+    if isinstance(tableau, stim.Tableau):
+        sim = stim.TableauSimulator()
+        orig_tableau_inverse = tableau**-1
+        sim.set_inverse_tableau(orig_tableau_inverse)
+    elif isinstance(tableau, stim.TableauSimulator):
+        sim = tableau
+        orig_tableau_inverse = sim.current_inverse_tableau()
+    else:
+        raise ValueError(f'Unsupported input type {type(tableau)} for `tableau`. Supported options are stim.Tableau and stim.TableauSimulator')
+    
+    n = sim.num_qubits
+
     ref_state = [False]*n
     for q in range(n):
         z = sim.peek_z(q)
         forced_bit = z == -1
         ref_state[q] = forced_bit
-        sim.postselect_z(q, desired_value=forced_bit)
-    if ref_state == desired_state:
-        #only put things back the way they were if tableau was a stim.TableauSimulator, otherwise we can avoid the overhead
-        #since sim is local to this function call.
-        if isinstance(tableau, stim.TableauSimulator):
-            tableau.set_inverse_tableau(orig_tableau_inverse)
-        return magnitude
-
-    #  Postselect away states that aren't the desired or reference states.
-    #  Also move the ref state to |00..00> and the desired state to |00..01>.
-    sim.set_inverse_tableau(orig_tableau_inverse)
-    found_difference = False
-    for q in range(n):
-        desired_bit =  desired_state[q]
-        ref_bit = ref_state[q]
-        if desired_bit == ref_bit:
-            sim.postselect_z(q, desired_value=ref_bit)
-            if desired_bit:
-                sim.x(q)
-        elif not found_difference:
-            found_difference = True
-            if q:
-                sim.swap(0, q)
-            if ref_bit:
-                sim.x(0)
-        else:
-            #  Remove difference between target state and ref state at this bit.
-            sim.cnot(0, q)
-            sim.postselect_z(q, desired_value=ref_bit)
-
-    #  The phase difference between |00..00> and |00..01> is what we want.
-    #  Since other states are gone, this is the bloch vector phase of qubit 0.
-    assert found_difference
-    s = str(sim.peek_bloch(0))
-    
-    #only put things back the way they were if tableau was a stim.TableauSimulator, otherwise we can avoid the overhead
-    #since sim is local to this function call.
+        if z == 0:
+            sim.postselect_z(q, desired_value=forced_bit)
     if isinstance(tableau, stim.TableauSimulator):
         tableau.set_inverse_tableau(orig_tableau_inverse)
-    
-    if s == "+X":
-        phase_factor = 1
-    if s == "-X":
-        phase_factor = -1
-    if s == "+Y":
-        phase_factor = 1j
-    if s == "-Y":
-        phase_factor = -1j
-    
-    return phase_factor*magnitude
+        
+    return ref_state
 
 #define module-wide constants for pauli-phase updates
 PAULI_PHASES_0 = (1, 1, 1j, 1)
@@ -7663,8 +7799,9 @@ def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
 
     # Cache amplitude_of_state for each unique bitstring.
     cached_amplitudes: dict[str, complex] = {}
-    for bitstr in unique_bitstrings:
-        cached_amplitudes[bitstr] = amplitude_of_state(tableau, bitstr, True)
+    unique_amplitudes = bulk_amplitude_of_state(tableau, unique_bitstrings, True)
+    for bitstr, amp in zip(unique_bitstrings, unique_amplitudes):
+        cached_amplitudes[bitstr] = amp
         
     # (5) Assemble the result for each (P, Q) pair.
     # Retrieve the effective pauli's phase update using the already-computed caches.
@@ -8071,7 +8208,7 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
 
 def alpha_pauli_numerical(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, pauli: stim.PauliString):
     """
-    First-order error generator sensitivity function for pauli expectatons. This implementation calculates
+    First-order error generator sensitivity function for pauli expectations. This implementation calculates
     this quantity numerically, and as such is primarily intended for used as parting of testing
     infrastructure. 
     
@@ -8288,7 +8425,7 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
         raise RuntimeError('Number of random bits is greater than 1074, magnitude of probability scale will underflow!')
     scale = 1/2**(num_random) 
     
-    #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
+    #accumulate the terms across orders (with short circuit logic for order 1 to save time):
     if order == 1:
         combined_taylor_dict = errorgen_dict
     else:
@@ -8349,7 +8486,7 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
         float corresponding to the correction to the expectation value for the
         selected pauli operator induced by the error generator (to specified order).
     """
-    #accumulate the terms accross orders (with short circuit logic for order 1 to save time):
+    #accumulate the terms across orders (with short circuit logic for order 1 to save time):
     if order == 1:
         combined_taylor_dict = errorgen_dict
     else:
@@ -8426,7 +8563,7 @@ def stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_pr
 
 def stabilizer_probability(tableau, desired_bitstring):
     """
-    Calculate the output probability for the specifed output bitstring.
+    Calculate the output probability for the specified output bitstring.
     
     TODO: Should be able to do this more efficiently for many bitstrings
     by looking at the structure of the random support.
@@ -8449,7 +8586,7 @@ def stabilizer_probability(tableau, desired_bitstring):
 
 def stabilizer_pauli_expectation(tableau, pauli):
     """
-    Calculate the output probability for the specifed output bitstring.
+    Calculate the output probability for the specified output bitstring.
       
     Parameters
     ----------
@@ -8488,7 +8625,7 @@ def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring
     
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
-        case this should be a Clifford circuit and convertable to a stim.Tableau.
+        case this should be a Clifford circuit and convertible to a stim.Tableau.
         
     desired_bitstring : str
         String of 0's and 1's corresponding to the output bitstring being measured.
@@ -8535,7 +8672,7 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, orde
     
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
-        case this should be a Clifford circuit and convertable to a stim.Tableau.
+        case this should be a Clifford circuit and convertible to a stim.Tableau.
         
     pauli : str or stim.PauliString
         Pauli operator to compute expectation value for.
@@ -8622,7 +8759,7 @@ def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict, errorgen_p
 def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, truncation_threshold=1e-14):
     """
     Calculate the approximate probability distribution over all bitstrings using a first-order approximation.
-    Note the size of this distribtion scales exponentially in the qubit count, so this is very inefficient for
+    Note the size of this distribution scales exponentially in the qubit count, so this is very inefficient for
     any more than a few qubits.
 
     Parameters
@@ -8633,7 +8770,7 @@ def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, trunca
     
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
-        case this should be a Clifford circuit and convertable to a stim.Tableau.
+        case this should be a Clifford circuit and convertible to a stim.Tableau.
 
     order : int, optional (default 1)
         Order of the correction (i.e. order of the taylor series expansion for
@@ -8764,6 +8901,7 @@ def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagato
 PauliPhaseUpdater = Callable[[str,str,Optional[bool]],tuple[complex,str]]
 PauliPhaseZerosUpdater = Callable[[str,Optional[bool]],tuple[complex,str]]
 AmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,bool], complex]
+BulkAmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator], list[Union[str, stim.PauliString]],bool], _np.ndarray]
 BulkPhiType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,list[Union[str,stim.PauliString]],list[Union[str,stim.PauliString]]], _np.ndarray]
 BulkAlphaType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[str]], _np.ndarray]
 BulkAlphaPauliType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[stim.PauliString]], _np.ndarray]
@@ -8774,6 +8912,7 @@ try:
     pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = _fc.fast_pauli_phase_update_all_zeros
     pauli_phase_update: PauliPhaseUpdater = _fc.fast_pauli_phase_update
     amplitude_of_state: AmplitudeOfStateType = _fc.fast_amplitude_of_state
+    bulk_amplitude_of_state: BulkAmplitudeOfStateType = _fc.fast_bulk_amplitude_of_state
     bulk_phi: BulkPhiType = _fc.fast_bulk_phi
     bulk_alpha: BulkAlphaType = _fc.fast_bulk_alpha
     bulk_alpha_pauli: BulkAlphaPauliType = _fc.fast_bulk_alpha_pauli    
@@ -8786,6 +8925,7 @@ except ImportError:
     pauli_phase_update_all_zeros: PauliPhaseZerosUpdater = slow_pauli_phase_update_all_zeros
     pauli_phase_update: PauliPhaseUpdater = slow_pauli_phase_update
     amplitude_of_state: AmplitudeOfStateType = slow_amplitude_of_state
+    bulk_amplitude_of_state: BulkAmplitudeOfStateType = slow_bulk_amplitude_of_state
     bulk_phi: BulkPhiType = slow_bulk_phi
     bulk_alpha: BulkAlphaType = slow_bulk_alpha
     bulk_alpha_pauli: BulkAlphaPauliType = slow_bulk_alpha_pauli 

@@ -190,7 +190,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
 
             if circ_type == 'cz(theta)+zxzxz':
                 quasi_inv_layer = []
-                #recompile layer taking into acount paulis
+                #recompile layer taking into account paulis
                 for g in layer:
                     if g.name == czrotname:
                         #get the qubits, figure out net pauli on those qubits
