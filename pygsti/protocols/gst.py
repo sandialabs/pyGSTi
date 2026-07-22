@@ -21,7 +21,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
-from typing import Optional, Union, Any, TYPE_CHECKING, Literal
+from typing import Optional, Sequence, Union, Any, TYPE_CHECKING, Literal
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -60,6 +60,7 @@ ObjectiveType = _objfns.ObjectiveFunctionBuilder.ObjectiveType
 
 if TYPE_CHECKING:
     from pygsti.baseobjs.label import SSLabelMapper
+    from pygsti.baseobjs.label import Label as _Label
     from pygsti.data import DataSet as _DataSet
 
 #For results object:
@@ -263,7 +264,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
     def __init__(self, processorspec_filename_or_obj: Union[str, _QuditProcessorSpec], prep_fiducial_list_or_filename: Union[str, list], meas_fiducial_list_or_filename: Union[str, list],
                  germ_list_or_filename: Union[str, list], max_lengths: list, germ_length_limits: Optional[dict]=None, fiducial_pairs: Optional[Union[list, dict]]=None, keep_fraction: float=1,
                  keep_seed: Optional[int]=None, include_lgst: bool=True, nest: bool=True, circuit_rules: Optional[list]=None, op_label_aliases: Optional[dict]=None,
-                 dscheck: Optional[Any]=None, action_if_missing: str="raise", qubit_labels: Optional[Union[list, tuple]]=None, verbosity: int=0,
+                 dscheck: Optional["_DataSet"]=None, action_if_missing: Literal["raise", "drop"]="raise", qubit_labels: Optional[Union[list, tuple]]=None, verbosity: int=0,
                  add_default_protocol: bool=False) -> None:
         prep, meas, germs = _load_fiducials_and_germs(
             prep_fiducial_list_or_filename,
@@ -315,7 +316,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
             self.add_default_protocol(StandardGST(name='StdGST'))
 
     def copy_with_maxlengths(self, max_lengths: list, germ_length_limits: Optional[dict]=None,
-                             dscheck: Optional[Any]=None, action_if_missing: str='raise', verbosity: int=0) -> "StandardGSTDesign":
+                             dscheck: Optional["_DataSet"]=None, action_if_missing: Literal["raise", "drop"]='raise', verbosity: int=0) -> "StandardGSTDesign":
         """
         Copies this GST experiment design to one with the same data except a different set of maximum lengths.
 
@@ -443,7 +444,9 @@ class GSTInitialModel(_NicelySerializable):
         """
         return obj if isinstance(obj, GSTInitialModel) else cls(obj)
 
-    def __init__(self, model: Optional[_Model]=None, target_model: Optional[_Model]=None, starting_point: Optional[str]=None, depolarize_start: float=0, randomize_start: float=0,
+    def __init__(self, model: Optional[_Model]=None, target_model: Optional[_Model]=None,
+                 starting_point: Optional[Literal["target", "User-supplied-Model", "LGST", "LGST-if-possible"]]=None,
+                 depolarize_start: float=0, randomize_start: float=0,
                  lgst_gaugeopt_tol: float=1e-6, contract_start_to_cptp: bool=False) -> None:
         super().__init__()
         self.model = model
@@ -458,7 +461,7 @@ class GSTInitialModel(_NicelySerializable):
         self.depolarize_start = depolarize_start
         self.randomize_start = randomize_start
 
-    def retrieve_model(self, edesign: _proto.ExperimentDesign, gaugeopt_target: Optional[_Model], dataset: Any, comm) -> _Model:
+    def retrieve_model(self, edesign: _proto.ExperimentDesign, gaugeopt_target: Optional[_Model], dataset: "_DataSet", comm) -> _Model:
         """
         Retrieve the starting-point :class:`Model` used to seed a long-sequence GST run.
 
@@ -634,13 +637,14 @@ class GSTBadFitOptions(_NicelySerializable):
         Include a SPAM budget within the wildcard budget used to process
         the `"wildcard"` action.
 
-    wildcard_L1_weights :  np.array, optional
-        An array of weights affecting the L1 penalty term used to select a feasible
+    wildcard_L1_weights : dict, optional
+        A dictionary of weights affecting the L1 penalty term used to select a feasible
         wildcard error vector `w_i` that minimizes `sum_i weight_i* |w_i|` (a weighted
-        L1 norm).  Elements of this array must correspond to those of the wildcard budget
-        being optimized, typically the primitive operations of the estimated model - but
-        to get the order right you should specify `wildcard_primitive_op_labels` to be sure.
-        If `None`, then all weights are assumed to be 1.
+        L1 norm).  Keys are the primitive operation labels (or `'SPAM'`) of the wildcard
+        budget being optimized, typically the primitive operations of the estimated model,
+        and values are the corresponding (float) weights.  If a primitive operation label
+        is not included as a key, its weight is assumed to be 1.  If `None`, then all
+        weights are assumed to be 1.
 
     wildcard_primitive_op_labels: list, optional
         The primitive operation labels used to construct the :class:`PrimitiveOpsWildcardBudget`
@@ -680,11 +684,14 @@ class GSTBadFitOptions(_NicelySerializable):
         else:  # assume obj is a dict of arguments
             return cls(**obj) if obj else cls()  # allow obj to be None => defaults
 
-    def __init__(self, threshold: float=DEFAULT_BAD_FIT_THRESHOLD, actions: Union[list, tuple]=(),
+    def __init__(self, threshold: float=DEFAULT_BAD_FIT_THRESHOLD,
+                 actions: Sequence[Literal['wildcard', 'wildcard1d', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing']]=(),
                  wildcard_budget_includes_spam: bool=True,
-                 wildcard_L1_weights: Optional[dict]=None, wildcard_primitive_op_labels: Optional[list]=None,
-                 wildcard_initial_budget: Optional[Any]=None, wildcard_methods: Union[list, tuple]=('neldermead',),
-                 wildcard_inadmissable_action: str='print') -> None:
+                 wildcard_L1_weights: Optional[dict[Union[str, "_Label"], float]]=None,
+                 wildcard_primitive_op_labels: Optional[list]=None,
+                 wildcard_initial_budget: Optional[Any]=None,
+                 wildcard_methods: Sequence[Literal['neldermead', 'barrier', 'cvxpy_noagg']]=('neldermead',),
+                 wildcard_inadmissable_action: Literal['print', 'raise']='print') -> None:
         super().__init__()
         valid_actions = ('wildcard', 'wildcard1d', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
@@ -726,7 +733,7 @@ class GSTBadFitOptions(_NicelySerializable):
         state.update({'threshold': self.threshold,
                       'actions': self.actions,
                       'wildcard': {'budget_includes_spam': self.wildcard_budget_includes_spam,
-                                   'L1_weights': self.wildcard_L1_weights,  # an array?
+                                   'L1_weights': self.wildcard_L1_weights,  # a dict, see wildcard_L1_weights
                                    'primitive_op_labels': self.wildcard_primitive_op_labels,
                                    'initial_budget': self.wildcard_initial_budget,  # serializable?
                                    'methods': self.wildcard_methods,
@@ -2429,7 +2436,7 @@ def _compute_wildcard_budget_1d_model(estimate: _Estimate, mdc_objfn: _objfns.Mo
     return wcm
 
 
-def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: dict[str, _ExplicitOpModel], gaugeopt_suite: GSTGaugeOptSuite) -> dict[str, Any]:
+def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: dict[str, _ExplicitOpModel], gaugeopt_suite: GSTGaugeOptSuite) -> "dict[str, dict[Label, float]]":
     """
     Compute the reference values the 1D wildcard budget.
 
@@ -2540,7 +2547,7 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
     return dd
 
 
-def _compute_robust_scaling(scale_typ: str, objfn_cache: Any, mdc_objfn: Any) -> dict[Any, Any]:
+def _compute_robust_scaling(scale_typ: Literal['robust', 'robust+', 'Robust', 'Robust+'], objfn_cache: Any, mdc_objfn: Any) -> dict[Any, Any]:
     """
     Get the per-circuit data scaling ("weights") for a given type of robust-data-scaling.
     TODO: update docstring
@@ -3070,7 +3077,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         self.auxfile_types['circuit_lists'] = 'none'  # derived from edesign
         self.auxfile_types['estimates'] = 'dict:dir-serialized-object'
 
-    def _create_circuit_lists(self, edesign: _proto.ExperimentDesign) -> dict:
+    def _create_circuit_lists(self, edesign: _proto.ExperimentDesign) -> "_collections.OrderedDict":
         circuit_lists = _collections.OrderedDict()
 
         if isinstance(edesign, _proto.CircuitListsDesign):
@@ -3442,8 +3449,9 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
         in the implementation of StandardGSTCheckpoint.
     """
 
-    def __init__(self, mdl_list: Optional[list] = None, last_completed_iter: int= -1,
-                 last_completed_circuit_list: Optional[Union[list, _CircuitList]] = None, final_objfn: Optional[Any] = None,
+    def __init__(self, mdl_list: Optional[list[_Model]] = None, last_completed_iter: int= -1,
+                 last_completed_circuit_list: Optional[Union[list[Circuit], _CircuitList]] = None,
+                 final_objfn: Optional[_objfns.ModelDatasetCircuitsStore] = None,
                  name: Optional[str]= None, parent: Optional[_proto.ProtocolCheckpoint] = None) -> None:
         self.mdl_list = mdl_list if mdl_list is not None else []
         self.last_completed_iter = last_completed_iter
@@ -3463,7 +3471,7 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state: dict) -> "GateSetTomographyCheckpoint":  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state: dict) -> GateSetTomographyCheckpoint:  # memo holds already de-serialized objects
         mdl_list = [_Model.from_nice_serialization(mdl) for mdl in state['mdl_list']]
         last_completed_iter = state['last_completed_iter']
         last_completed_circuit_list = [Circuit(ckt_str) for ckt_str in state['last_completed_circuit_list']]
