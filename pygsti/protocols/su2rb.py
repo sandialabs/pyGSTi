@@ -67,10 +67,8 @@ __all__ = [
     'SU2QuditRBResults',
 ]
 
-SpinSpec_t = Union[int, float, _Fraction]
 
-
-def _add_spam_layers_inplace(c: _Circuit, prep_index: int, j: Optional[SpinSpec_t] = None, finalize=True) -> None:
+def _add_spam_layers_inplace(c: _Circuit, prep_index: int, j: Optional[_su2.SpinSpec_t] = None, finalize=True) -> None:
     if j is not None:
         _, two_j = _validate_spin(j)
         dim = two_j + 1
@@ -138,7 +136,7 @@ class SU2QuditRBDesign(_vb.BenchmarkingDesign):
     `charcores` aux data, not from `idealout_lists`.
     """
 
-    def __init__(self, j: SpinSpec_t, depths: Sequence[int], circuits_per_depth: int,
+    def __init__(self, j: _su2.SpinSpec_t, depths: Sequence[int], circuits_per_depth: int,
                  seed: Optional[int] = None, qudit_label: str = 'Q0',
                  descriptor: str = 'An SU(2) R1RB experiment') -> None:
         j_float, two_j = _validate_spin(j)
@@ -354,27 +352,26 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
     error channels.
     """
 
-    def __init__(self, spinj: Union[_su2.SpinJ, SpinSpec_t],
-                 noise_channel: Optional[Union[_np.ndarray, Callable[[float, float, float], _np.ndarray]]] = None,
-                 shots: Optional[int] = None, seed: Optional[int] = None) -> None:
+    def __init__(self, spinj: _su2.SpinJCastable_t,
+                 noise_channel: Union[_su2.ChannelFactory_t, _np.ndarray, None] = None,
+                 shots: Optional[int] = None, seed: Optional[int] = None
+        ) -> None:
         super(SU2QuditRBSimulator, self).__init__()
-        if not isinstance(spinj, _su2.SpinJ):
-            spinj = _su2.SpinJ(spinj)
-        self.spinj = spinj
-        self.dim = spinj.dim
+        self.spinj = _su2.SpinJ.cast(spinj)
+        self.dim   = self.spinj.dim
         self.shots = shots
-        self.seed = seed
-        self._noise_superop, self._noise_factory = self._resolve_noise_channel(noise_channel)
+        self.seed  = seed
 
-    def _resolve_noise_channel(self, noise_channel):
-        if noise_channel is None:
-            return None, None
+        self._noise_superop = None
+        self._noise_factory = None
         if callable(noise_channel):
-            return None, noise_channel
-        if hasattr(noise_channel, '__matmul__') and hasattr(noise_channel, 'shape'):
-            assert noise_channel.shape == (self.dim**2, self.dim**2)
-            return noise_channel, None
-        raise ValueError(f'Unsupported argument noise_channel={noise_channel}.')
+            self._noise_factory = noise_channel
+        elif hasattr(noise_channel, '__matmul__') and hasattr(noise_channel, 'shape'):
+            self._noise_superop = noise_channel
+            assert noise_channel.shape == (self.dim**2, self.dim**2)  # type: ignore
+        elif noise_channel is not None:
+            raise ValueError(f'Unsupported argument noise_channel={noise_channel}.')
+        return
 
     @property
     def is_noiseless(self) -> bool:
@@ -650,7 +647,7 @@ def _variance_C(k, kp):
     return value
 
 
-def predicted_zero_noise_variance(j: SpinSpec_t, k: int) -> float:
+def predicted_zero_noise_variance(j: _su2.SpinSpec_t, k: int) -> float:
     """
     The paper's exact zero-noise (perfect-gate) sampling variance of the irrep-`k`
     estimator for the rank-1 synthetic-SPAM randomized benchmarking protocol

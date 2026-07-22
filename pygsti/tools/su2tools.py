@@ -36,10 +36,12 @@ last (leftmost factor).
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import functools as _functools
 import math as _math
 from fractions import Fraction as _Fraction
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Callable
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -501,10 +503,12 @@ def euler_angles_from_circuit(circuit: _Circuit) -> _np.ndarray:
     return angles
 
 
-
 # ***************************************************************************************************
 # SpinJ
 # ***************************************************************************************************
+
+SpinSpec_t = Union[int, float, _Fraction]
+
 
 class SpinJ:
     """
@@ -545,7 +549,7 @@ class SpinJ:
         The dimensions `2k + 1` of those irreps, in the same order as `irrep_labels`.
     """
 
-    def __init__(self, j: Union[int, float, _Fraction]) -> None:
+    def __init__(self, j: SpinSpec_t) -> None:
         j_float, two_j = _validate_spin(j)
         dim = two_j + 1
         spins = _np.array([j_float - i for i in range(dim)])
@@ -564,6 +568,12 @@ class SpinJ:
         self.eigJy, self.VJy = eigJy, VJy
         self.irrep_labels = _np.arange(dim)
         self.irrep_block_sizes = 2 * self.irrep_labels + 1
+
+    @staticmethod
+    def cast(j:  Union[SpinJ, SpinSpec_t]) -> SpinJ:
+        if isinstance(j, SpinJ):
+            return j
+        return SpinJ(j)
 
     # -----------------------------------------------------------------
     # Cached, more expensive derived quantities.
@@ -711,3 +721,12 @@ def _fundamental_spinj():
     composition utilities (`composition_asmatrix`, `composition_inverse`)."""
     fundamental = SpinJ(_Fraction(1, 2))
     return fundamental
+
+
+# ***************************************************************************************************
+# Type aliases
+# ***************************************************************************************************
+
+SpinJCastable_t  = Union[SpinJ, SpinSpec_t]
+
+ChannelFactory_t = Callable[[float, float, float], _np.ndarray]
