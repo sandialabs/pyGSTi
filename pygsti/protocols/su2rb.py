@@ -1,30 +1,36 @@
-"""
-Synthetic SPAM randomized benchmarking for arbitrary spin (SU(2)) systems.
-
-This module implements the rank-1 (Legendre-weighted) synthetic-SPAM randomized
-benchmarking protocol (SSR1RB) of "Randomized Benchmarking with Synthetic Quantum
-Circuits", within pyGSTi's `Design -> DataSimulator -> Protocol -> Results`
-architecture, for arbitrary spin `j` via `pygsti.tools.su2tools.SpinJ`.
-
-Every circuit uses a single gate name, `'Gu'`, whose three `args` are the ZXZ Euler
-angles `(alpha, beta, gamma)` of one SU(2) group element, on a single qudit line.
-Each sampled `(m+1, 3)` angle sequence (rows `0..m-1` Haar-random, row `m` an
-inverting gate) is turned into `2j+1` circuits, one per Jz-eigenstate preparation
-`rho{ell}` (`ell = 0..2j`, in `SpinJ.spins` order, so `rho0` prepares `|j>` and
-`rho{2j}` prepares `|-j>`), that share the same `Gu` layers and a common `Mdefault`
-POVM label. The numeric metadata needed to analyze a sequence (`prep_index`,
-`seq_index`, `euler_angles`, `charcores`) is carried as `paired_with_circuit_attrs`
-JSON aux data, rather than recovered by re-parsing the embedded `rho{ell}`/
-`Mdefault` labels.
-"""
 # ***************************************************************************************************
-# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+"""
+Efficient randomized benchmarking for arbitrary spin SU(2) systems, following
+pyGSTi's `Design -> DataSimulator -> Protocol -> Results` architecture.
+
+This module implements the *rank-1 synthetic SPAM RB* protocol introduced in
+
+    Randomized Benchmarking with Synthetic Quantum Circuits, by Yale Fan,
+    Riley Murray, Thaddeus D Ladd, Kevin Young and Robin Blume-Kohout.
+    Published in Quantum Science and Technology, 2026.
+
+The protocol generates circuits in batches of size `2j+1`. Circuits within a batch
+differ only in their state prep, each of which is a distinct Jz-eigenstate.
+The gate sequence for a batch consists of `m+1` SU(2) elements for some m >= 0;
+we represent it by an array of shape `(m+1, 3)` whose rows are ZXZ Euler angles.
+Rows `0..m-1` are Haar-random, while row `m` encodes the inverse of gates `1..m-1`.
+
+The numeric metadata needed to run RB analysis on these circuits is carried as
+`paired_with_circuit_attrs` JSON aux data.
+
+Notation
+--------
+We denote the state prep targets as `rho{ell}` for `ell = 0..2j`, so `rho0`
+prepares `|j>` and `rho{2j}` prepares `|-j>`. We denote the ZXZ Euler
+angles of an SU(2) element by `(alpha, beta, gamma)`.
+"""
 
 import math as _math
 import warnings as _warnings
@@ -47,29 +53,22 @@ from pygsti.tools import wignersymbols as _wg
 from pygsti.tools.su2tools import _validate_spin
 from pygsti.tools.optools import unitary_to_std_process_mx as _unitary_to_std_process_mx
 from pygsti.tools.exceptions import RBFitFailureWarning as _RBFitFailureWarning
+from pygsti.tools.su2tools import circuit_from_euler_angles, euler_angles_from_circuit, GATE_NAME
 
 __all__ = [
-    'GATE_NAME',
-    'POVM_NAME',
     'circuit_from_euler_angles',
     'euler_angles_from_circuit',
-    'SU2RBDesign',
+    'SU2QuditRBDesign',
     'jz_dephasing',
     'jz_rotation',
     'compose_noise_channels',
-    'SU2RBDataSimulator',
+    'SU2QuditRBSimulator',
     'predicted_zero_noise_variance',
-    'SyntheticSPAMRank1RB',
-    'SyntheticSPAMRBResults',
+    'SU2QuditRB',
+    'SU2QuditRBResults',
 ]
 
 SpinSpec_t = Union[int, float, _Fraction]
-
-GATE_NAME = 'Gu'
-"""The name of the single arg-carrying gate label used by SU(2) RB circuits."""
-
-POVM_NAME = 'Mdefault'
-"""The name of the (2j+1)-outcome POVM label appended to SU(2) RB circuits."""
 
 
 def _prep_name(prep_index: int) -> str:
@@ -77,75 +76,22 @@ def _prep_name(prep_index: int) -> str:
     return f'rho{prep_index}'
 
 
-def circuit_from_euler_angles(angles: _np.ndarray, qudit_label: str = 'Q0') -> _Circuit:
-    """
-    Build a `Circuit` of `Gu` gate layers from a sequence of ZXZ Euler angles.
-
-    Parameters
-    ----------
-    angles : numpy array
-        Shape `(m+1, 3)`. Row `i` gives the ZXZ Euler angles `(alpha, beta, gamma)`
-        of the `i`-th layer's `Gu` gate.
-
-    qudit_label : str, optional
-        The line label of the single qudit this circuit acts on.
-
-    Returns
-    -------
-    Circuit
-    """
-    angles = _np.asarray(angles, dtype=float)
-    if angles.ndim != 2 or angles.shape[1] != 3:
-        raise ValueError(f"`angles` must have shape (m+1, 3); got {angles.shape}")
-    layers = [_Label(GATE_NAME, qudit_label, args=tuple(float(x) for x in row)) for row in angles]
-    circuit = _Circuit(layers, line_labels=(qudit_label,), editable=True)
-    return circuit
-
-
-def add_spam_layers_inplace(c: _Circuit, prep_index: int, j: Optional[SpinSpec_t] = None, finalize=True) -> None:
+def _add_spam_layers_inplace(c: _Circuit, prep_index: int, j: Optional[SpinSpec_t] = None, finalize=True) -> None:
     if j is not None:
         _, two_j = _validate_spin(j)
         dim = two_j + 1
         if not (0 <= prep_index < dim):
             raise ValueError(f"prep_index={prep_index!r} is out of range for j={j} (dim={dim})")
     c.insert_layer_inplace(_Label(_prep_name(prep_index)), 0)
-    c.insert_layer_inplace(_Label(POVM_NAME), len(c))
+    c.insert_layer_inplace(_Label('Mdefault'), len(c))
     if finalize:
         c.done_editing()
     return
 
 
-def euler_angles_from_circuit(circuit: _Circuit) -> _np.ndarray:
-    """
-    Recover the `(m+1, 3)` array of ZXZ Euler angles from a `Circuit`'s `Gu` layers.
-
-    Any non-`Gu` layers (e.g. explicit `rho{ell}` prep or `Mdefault` POVM layers) are
-    ignored. This makes it the inverse of `circuit_from_euler_angles`.
-
-    Parameters
-    ----------
-    circuit : Circuit
-        A circuit from `circuit_from_euler_angles` (or one with the same `Gu`-layer convention).
-
-    Returns
-    -------
-    numpy array
-        Shape `(m+1, 3)`, or `(0, 3)` if `circuit` has no `Gu` layers.
-    """
-    rows = []
-    for layer in circuit:
-        if layer.name == GATE_NAME:
-            args = layer.args
-            if len(args) != 3:
-                raise ValueError(f"Gate layer {layer} does not carry exactly 3 args")
-            rows.append([float(a) for a in args])
-    angles = _np.array(rows, dtype=float).reshape(-1, 3)
-    return angles
-
-
 def _sample_su2rb_circuits(dim, depths, circuits_per_depth, seed, qudit_label):
     """
-    Core RB circuit sampler for `SU2RBDesign`.
+    Core RB circuit sampler for `SU2QuditRBDesign`.
 
     For each depth `m`, samples `circuits_per_depth` length-`m` Haar-random
     Euler-angle sequences and appends an inverting final gate computed from the
@@ -156,7 +102,7 @@ def _sample_su2rb_circuits(dim, depths, circuits_per_depth, seed, qudit_label):
     `idealout_lists` entries are `(str(ell),)`, i.e. the prep index of the circuit
     they're attached to. Because the net ideal composition is the random hidden
     first gate (not the identity), these are placeholders rather than genuine
-    deterministic ideal outcomes -- see `SU2RBDesign`'s docstring. They are
+    deterministic ideal outcomes -- see `SU2QuditRBDesign`'s docstring. They are
     populated uniformly here (rather than being `None` or omitted) only because
     `BenchmarkingDesign.__init__` requires an `ideal_outs` entry for every circuit;
     generic idealout-consuming analyses (e.g. anything that computes a "success
@@ -198,7 +144,7 @@ def _sample_su2rb_circuits(dim, depths, circuits_per_depth, seed, qudit_label):
             angles_as_list = angles.tolist()
             for ell in range(dim):
                 c = circuit_from_euler_angles(angles, qudit_label)
-                add_spam_layers_inplace(c, prep_index=ell)
+                _add_spam_layers_inplace(c, prep_index=ell)
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((str(ell),))
                 # ^ Placeholder ideal outcome (see this function's docstring).
@@ -219,7 +165,7 @@ def _sample_su2rb_circuits(dim, depths, circuits_per_depth, seed, qudit_label):
     return result
 
 
-class SU2RBDesign(_vb.BenchmarkingDesign):
+class SU2QuditRBDesign(_vb.BenchmarkingDesign):
     """
     Experiment design for synthetic SPAM randomized benchmarking of an arbitrary-spin
     SU(2) system.
@@ -232,13 +178,13 @@ class SU2RBDesign(_vb.BenchmarkingDesign):
     sharing the same `Gu` gate layers (see the module docstring for the full circuit
     convention). Additionally stores, per circuit, the Legendre "character core"
     `P_k(cos(beta))` of the hidden first gate (`charcores`), for `k = 0..2j`, which
-    `SyntheticSPAMRank1RB` uses to weight its per-irrep estimator.
+    `SU2QuditRB` uses to weight its per-irrep estimator.
 
     Note on `idealout_lists`: because the net ideal composition is the random hidden
     first gate rather than the identity, `idealout_lists` entries (one
     `(str(prep_index),)` per circuit) are *not* genuine deterministic ideal outcomes
     -- they are placeholders required only because `BenchmarkingDesign.__init__`
-    needs some `ideal_outs` value per circuit. `SyntheticSPAMRank1RB` reconstructs
+    needs some `ideal_outs` value per circuit. `SU2QuditRB` reconstructs
     probabilities directly from the `euler_angles`/`charcores` aux data, not from
     `idealout_lists`. Generic RB analyses that infer a "success probability" from
     `idealout_lists` should not be pointed at this design's data.
@@ -276,7 +222,7 @@ class SU2RBDesign(_vb.BenchmarkingDesign):
         `2*j + 1`, the number of preps (and POVM effects).
     """
 
-    def __init__(self, j: Union[int, float, _Fraction], depths: Sequence[int], circuits_per_depth: int,
+    def __init__(self, j: SpinSpec_t, depths: Sequence[int], circuits_per_depth: int,
                  seed: Optional[int] = None, qudit_label: str = 'Q0',
                  descriptor: str = 'An SU(2) synthetic SPAM RB experiment') -> None:
         j_float, two_j = _validate_spin(j)
@@ -295,7 +241,7 @@ class SU2RBDesign(_vb.BenchmarkingDesign):
         #   of these (mirrors CliffordRBDesign._init_foundation / BinaryRBDesign.
         #   _init_foundation).
 
-        super(SU2RBDesign, self).__init__(depths, sampled['circuit_lists'], sampled['idealout_lists'],
+        super(SU2QuditRBDesign, self).__init__(depths, sampled['circuit_lists'], sampled['idealout_lists'],
                                            qubit_labels=(qudit_label,), remove_duplicates=False)
 
         self.euler_angles = sampled['euler_angles_lists']
@@ -321,7 +267,7 @@ class SU2RBDesign(_vb.BenchmarkingDesign):
 
 
 # ***************************************************************************************************
-# Noise channels for SU2RBDataSimulator
+# Noise channels for SU2QuditRBSimulator
 # ***************************************************************************************************
 
 def jz_dephasing(spinj: _su2.SpinJ, gamma: float, power: float = 1.0) -> _np.ndarray:
@@ -425,18 +371,18 @@ def compose_noise_channels(spinj: _su2.SpinJ, *channels: _np.ndarray) -> _np.nda
 
 
 # ***************************************************************************************************
-# SU2RBDataSimulator
+# SU2QuditRBSimulator
 # ***************************************************************************************************
 
-class SU2RBDataSimulator(_proto.DataSimulator):
+class SU2QuditRBSimulator(_proto.DataSimulator):
     """
-    Simulates SU(2) synthetic SPAM RB data for `SU2RBDesign` experiment designs,
+    Simulates SU(2) synthetic SPAM RB data for `SU2QuditRBDesign` experiment designs,
     without going through a full pyGSTi `Model`.
 
     Reads the design's `euler_angles` aux data directly -- it never parses circuit
     labels -- and builds the ZXZ-angle unitaries in batch via the instance's
     `SpinJ`'s precomputed eigendecompositions, inserting a noise channel after every
-    gate except the "hidden" first gate (every `SU2RBDesign` uses that
+    gate except the "hidden" first gate (every `SU2QuditRBDesign` uses that
     hidden-first-gate convention, so noise is always skipped there).
 
     Parameters
@@ -476,7 +422,7 @@ class SU2RBDataSimulator(_proto.DataSimulator):
     def __init__(self, spinj: Union[_su2.SpinJ, int, float, _Fraction],
                  noise_channel: Optional[Union[_np.ndarray, Callable[[float, float, float], _np.ndarray]]] = None,
                  shots: Optional[int] = None, seed: Optional[int] = None) -> None:
-        super(SU2RBDataSimulator, self).__init__()
+        super(SU2QuditRBSimulator, self).__init__()
         if not isinstance(spinj, _su2.SpinJ):
             spinj = _su2.SpinJ(spinj)
         self.spinj = spinj
@@ -546,7 +492,7 @@ class SU2RBDataSimulator(_proto.DataSimulator):
 
     def _compose_shortcut(self, angles):
         """
-        The noiseless O(1) shortcut: the composition of a full `SU2RBDesign` gate
+        The noiseless O(1) shortcut: the composition of a full `SU2QuditRBDesign` gate
         sequence (with noise skipped after the hidden first gate) is, in the absence
         of any noise, exactly the hidden first gate's superoperator (the appended
         inverting gate cancels rows `1..m-1`).
@@ -565,13 +511,13 @@ class SU2RBDataSimulator(_proto.DataSimulator):
         if hasattr(edesign, 'invert_from'):
             message = (
                 f"edesign has an 'invert_from' attribute ({type(edesign).__name__!r}), "
-                f"but SU2RBDataSimulator no longer dispatches on it -- every "
-                f"SU2RBDesign is hidden-first-gate and noise is always skipped after "
+                f"but SU2QuditRBSimulator no longer dispatches on it -- every "
+                f"SU2QuditRBDesign is hidden-first-gate and noise is always skipped after "
                 f"the first gate"
             )
             raise TypeError(message)
         return True
-        # ^ Every SU2RBDesign is hidden-first-gate, so noise is always skipped
+        # ^ Every SU2QuditRBDesign is hidden-first-gate, so noise is always skipped
         #   immediately after the first gate; the check above only guards against a
         #   stale caller still relying on the old invert_from dispatch.
 
@@ -609,7 +555,7 @@ class SU2RBDataSimulator(_proto.DataSimulator):
     # Composition cache / SPAM-swap API
     # -----------------------------------------------------------------
 
-    def compute_nonspam_compositions(self, edesign: SU2RBDesign,
+    def compute_nonspam_compositions(self, edesign: SU2QuditRBDesign,
                                       depth_indices: Optional[Sequence[int]] = None) -> Dict[int, _np.ndarray]:
         """
         Compute the composed noisy (non-SPAM) superoperator for each distinct sampled
@@ -621,7 +567,7 @@ class SU2RBDataSimulator(_proto.DataSimulator):
 
         Parameters
         ----------
-        edesign : SU2RBDesign
+        edesign : SU2QuditRBDesign
             The design whose `euler_angles`/`seq_index` aux data to read.
 
         depth_indices : iterable of int, optional
@@ -718,14 +664,14 @@ class SU2RBDataSimulator(_proto.DataSimulator):
         sampled_counts = {ol: int(c) for ol, c in zip(outcome_labels, counts)}
         return sampled_counts
 
-    def run(self, edesign: SU2RBDesign, memlimit: Optional[int] = None,
+    def run(self, edesign: SU2QuditRBDesign, memlimit: Optional[int] = None,
             comm: Optional[Any] = None) -> _proto.ProtocolData:
         """
         Simulate SU(2) synthetic SPAM RB data for `edesign`.
 
         Parameters
         ----------
-        edesign : SU2RBDesign
+        edesign : SU2QuditRBDesign
             The design to simulate. Its `qudit_label` and `j`/`dim` must be consistent
             with this simulator's `spinj`.
 
@@ -811,11 +757,11 @@ def _variance_C(k, kp):
     return value
 
 
-def predicted_zero_noise_variance(j: Union[int, float, _Fraction], k: int) -> float:
+def predicted_zero_noise_variance(j: SpinSpec_t, k: int) -> float:
     """
     The paper's exact zero-noise (perfect-gate) sampling variance of the irrep-`k`
     estimator for the rank-1 synthetic-SPAM randomized benchmarking protocol
-    (SSR1RB; Section "Sample Complexity", Eq. `SSvariance`). This is a diagnostic for
+    (R1RB; Section "Sample Complexity", Eq. `SSvariance`). This is a diagnostic for
     the protocol's sample complexity -- smaller is better; it does not depend on gate
     noise, since the paper's variance result is exact only in the zero-noise limit.
 
@@ -848,7 +794,7 @@ def predicted_zero_noise_variance(j: Union[int, float, _Fraction], k: int) -> fl
 
 
 # ***************************************************************************************************
-# SyntheticSPAMRank1RB
+# SU2QuditRB
 # ***************************************************************************************************
 
 def _decay_model(x, a, f):
@@ -897,10 +843,10 @@ def _fit_irrep_decay(x, y, p0=(1.0, 0.9)):
     return a, f, sigma_a, sigma_f, success
 
 
-class SyntheticSPAMRank1RB(_proto.Protocol):
+class SU2QuditRB(_proto.Protocol):
     """
     The rank-1 ("Legendre-weighted") synthetic-SPAM randomized benchmarking protocol
-    (SSR1RB) for an arbitrary-spin SU(2) system: reconstructs, per depth, the
+    (R1RB) for an arbitrary-spin SU(2) system: reconstructs, per depth, the
     `dim`-by-`dim` [prep, effect] probability matrix for each sampled circuit
     sequence, weights the per-irrep-`k` `diag(M @ P @ M.T)` sandwich by `(2k+1) *
     P_k(cos(beta_hidden))` -- the Legendre "character core" of that sequence's hidden
@@ -913,10 +859,10 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
     arbitrary (fixed, gate-independent) SPAM error, unlike an unweighted `diag(M @ P
     @ M.T)` sandwich, which requires SPAM diagonal in the Jz eigenbasis.
 
-    Requires `SU2RBDesign` data (raises `TypeError` on `run` otherwise, via
+    Requires `SU2QuditRBDesign` data (raises `TypeError` on `run` otherwise, via
     `_per_sequence_irrep_values`).
 
-    This implements the SSR1RB estimator from the paper's "Rotationally Invariant
+    This implements the R1RB estimator from the paper's "Rotationally Invariant
     Randomized Benchmarking" section (subsection "Random Variables and Estimators"):
     `X_{k,m} = sum_{ell,ell'} M[k,ell] * M[k,ell'] * X^k_{ell,ell',m}`, where
     `X^k_{ell,ell',m}` takes the value `(2k+1) * d^k_00(g)` when the hidden-gate
@@ -937,7 +883,7 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
     """
 
     def __init__(self, seed: Tuple[float, float] = (1.0, 0.9), name: Optional[str] = None) -> None:
-        super(SyntheticSPAMRank1RB, self).__init__(name)
+        super(SU2QuditRB, self).__init__(name)
         self.seed = tuple(seed)
 
     @staticmethod
@@ -973,7 +919,7 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
         """
         if not hasattr(edesign, 'charcores'):
             message = (
-                f"SyntheticSPAMRank1RB requires an SU2RBDesign (with a 'charcores' "
+                f"SU2QuditRB requires an SU2QuditRBDesign (with a 'charcores' "
                 f"aux list); got {type(edesign).__name__}"
             )
             raise TypeError(message)
@@ -1029,7 +975,7 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
 
         if failed_irreps:
             message = (
-                f"SyntheticSPAMRank1RB: the per-irrep decay fit failed for irrep(s) "
+                f"SU2QuditRB: the per-irrep decay fit failed for irrep(s) "
                 f"{failed_irreps}; the recovered rates and covariance (which mix all "
                 f"irreps via F) are therefore entirely nan, not just the failed "
                 f"irrep(s)."
@@ -1048,14 +994,14 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
         return fits, f, sigma_f, p, cov_p
 
     def run(self, data: _proto.ProtocolData, memlimit: Optional[int] = None,
-            comm: Optional[Any] = None) -> 'SyntheticSPAMRBResults':
+            comm: Optional[Any] = None) -> 'SU2QuditRBResults':
         """
         Run this protocol on `data`.
 
         Parameters
         ----------
         data : ProtocolData
-            The input data, from an `SU2RBDesign` and a `DataSet` with matching
+            The input data, from an `SU2QuditRBDesign` and a `DataSet` with matching
             circuits.
 
         memlimit : int, optional
@@ -1066,7 +1012,7 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
 
         Returns
         -------
-        SyntheticSPAMRBResults
+        SU2QuditRBResults
         """
         edesign = data.edesign
         ds = data.dataset
@@ -1092,20 +1038,20 @@ class SyntheticSPAMRank1RB(_proto.Protocol):
         x = _np.array(depths, dtype=float) + 1.0
         fits, f, sigma_f, p, cov_p = self._fit_and_get_rates(x, means, F)
 
-        results = SyntheticSPAMRBResults(data, self, depths, means, stderrs, variances, fits, f, sigma_f, p, cov_p)
+        results = SU2QuditRBResults(data, self, depths, means, stderrs, variances, fits, f, sigma_f, p, cov_p)
         return results
 
 
-class SyntheticSPAMRBResults(_proto.ProtocolResults):
+class SU2QuditRBResults(_proto.ProtocolResults):
     """
-    The results of running `SyntheticSPAMRank1RB` on synthetic-SPAM RB data.
+    The results of running `SU2QuditRB` on synthetic-SPAM RB data.
 
     Parameters
     ----------
     data : ProtocolData
         The data these results were computed from.
 
-    protocol_instance : SyntheticSPAMRank1RB
+    protocol_instance : SU2QuditRB
         The protocol that produced these results.
 
     depths : list of int
@@ -1115,7 +1061,7 @@ class SyntheticSPAMRBResults(_proto.ProtocolResults):
     means, stderrs, variances : numpy array
         Shape `(dim, len(depths))`: the per-irrep, per-depth sample mean, standard
         error, and (sequence-count-unnormalized) sample variance of the per-sequence
-        estimator `X_k` (`SyntheticSPAMRank1RB._per_sequence_irrep_values`).
+        estimator `X_k` (`SU2QuditRB._per_sequence_irrep_values`).
 
     fits : list of rbfit.FitResults
         One per irrep `k = 0..dim-1`.
@@ -1136,10 +1082,10 @@ class SyntheticSPAMRBResults(_proto.ProtocolResults):
         `2*j + 1`.
     """
 
-    def __init__(self, data: _proto.ProtocolData, protocol_instance: SyntheticSPAMRank1RB, depths: Sequence[int],
+    def __init__(self, data: _proto.ProtocolData, protocol_instance: SU2QuditRB, depths: Sequence[int],
                  means: _np.ndarray, stderrs: _np.ndarray, variances: _np.ndarray, fits: List[_rbfit.FitResults],
                  f: _np.ndarray, sigma_f: _np.ndarray, p: _np.ndarray, cov_p: _np.ndarray) -> None:
-        super(SyntheticSPAMRBResults, self).__init__(data, protocol_instance)
+        super(SU2QuditRBResults, self).__init__(data, protocol_instance)
         self.j = data.edesign.j
         self.dim = data.edesign.dim
         self.depths = list(depths)
@@ -1182,7 +1128,7 @@ class SyntheticSPAMRBResults(_proto.ProtocolResults):
 
     def variance_diagnostic(self, depth_index: int = 0) -> Dict[int, Tuple[float, float]]:
         """
-        An order-of-magnitude sanity check comparing SSR1RB's predicted zero-noise
+        An order-of-magnitude sanity check comparing R1RB's predicted zero-noise
         `Var(X_k)` (`predicted_zero_noise_variance`) against the empirical sample
         variance of the per-sequence irrep estimator at depth
         `self.depths[depth_index]`. Since the prediction is exact only at zero gate

@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-* Rank-1 (Legendre-weighted) synthetic-SPAM randomized benchmarking (SSR1RB) of "Randomized Benchmarking with Synthetic Quantum Circuits" for arbitrary-spin SU(2)/qudit systems: `SU2RBDesign`, `SU2RBDataSimulator`, `SyntheticSPAMRank1RB`, and the underlying SU(2) representation-theory tools (`pygsti.tools.su2tools.SpinJ`; exact, stdlib-only Clebsch-Gordan/Wigner 6-j symbols in `pygsti.tools.wignersymbols`) (#PLACEHOLDER) <!-- TODO: fill in actual PR number before merge -->
+* Rank-1 (Legendre-weighted) synthetic-SPAM randomized benchmarking (R1RB) of "Randomized Benchmarking with Synthetic Quantum Circuits" for arbitrary-spin SU(2)/qudit systems: `SU2QuditRBDesign`, `SU2QuditRBSimulator`, `SU2QuditRB`, and the underlying SU(2) representation-theory tools (`pygsti.tools.su2tools.SpinJ`; exact, stdlib-only Clebsch-Gordan/Wigner 6-j symbols in `pygsti.tools.wignersymbols`) (#PLACEHOLDER) <!-- TODO: fill in actual PR number before merge -->
 
 ### Fixed
 * `matrixtools.eigendecomposition(assume_normal=True)` now still routes Hermitian inputs to `eigh` (Hermitian matrices are normal, but the Hermiticity check was being skipped whenever the caller passed `assume_normal=True`); also fixed a pre-existing bug where `matrixtools.eigenvalues(assume_normal=True)` read off the Schur unitary factor instead of the triangular factor's diagonal (#PLACEHOLDER) <!-- TODO: fill in actual PR number before merge -->
