@@ -3,7 +3,9 @@ import unittest
 import numpy as np
 import scipy
 
+from pygsti.baseobjs.label import Label
 from pygsti.processors import QubitProcessorSpec
+from pygsti.processors import QuditProcessorSpec
 from pygsti.models import modelconstruction as mc
 from pygsti.circuits import Circuit
 from ..util import BaseCase, with_temp_path
@@ -11,7 +13,7 @@ from ..util import BaseCase, with_temp_path
 
 def save_and_load(obj, pth):
     obj.write(pth + ".json")
-    return QubitProcessorSpec.read(pth + '.json')
+    return obj.__class__.read(pth + '.json')
 
 
 class ProcessorSpecTester(BaseCase):
