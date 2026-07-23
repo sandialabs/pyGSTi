@@ -97,9 +97,17 @@ class MatrixToolsTester(BaseCase):
             mt.real_matrix_log(M, action_if_imaginary="foobar", tol=1e-6)
 
     def test_matrix_log_raise_on_no_real_log(self):
+        import warnings
         a = np.array([[1, 1], [1, 1]])
         with self.assertRaises(AssertionError):
-            mt.real_matrix_log(a)
+            with warnings.catch_warnings():
+                warnings.filterwarnings(action="ignore", 
+                    message="divide by zero encountered in log", category=RuntimeWarning
+                )
+                warnings.filterwarnings(action='ignore',
+                    message='invalid value encountered in dot', category=RuntimeWarning
+                )
+                mt.real_matrix_log(a)
 
     def test_minweight_match(self):
         a = np.array([1, 2, 3, 4], 'd')
