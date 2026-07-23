@@ -442,6 +442,29 @@ class CircuitMethodTester(BaseCase):
         self.c.tensor_circuit_inplace(c2)
         self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
 
+    def test_insert_implicit_idles_inplace_all_layers(self):
+        c = circuit.Circuit([('Gx', 0), Label(())], line_labels=(0, 1), editable=True)
+        c.insert_implicit_idles_inplace(idle_gate_name='Gi')
+        c.done_editing()
+        self.assertEqual(c[0], Label([('Gx', 0), ('Gi', 1)]))
+        self.assertEqual(c[1], Label([('Gi', 0), ('Gi', 1)]))
+
+    def test_insert_implicit_idles_inplace_selected_layers(self):
+        c = circuit.Circuit([('Gx', 0), Label(()), Label(())], line_labels=(0, 1), editable=True)
+        # Only materialize idles on layer 1; layers 0 and 2 should be untouched.
+        c.insert_implicit_idles_inplace(layers=[1], idle_gate_name='Gi')
+        c.done_editing()
+        self.assertEqual(c[0], Label(('Gx', 0)))
+        self.assertEqual(c[1], Label([('Gi', 0), ('Gi', 1)]))
+        self.assertEqual(c[2], Label(()))
+
+    def test_insert_implicit_idles_noninplace_returns_copy(self):
+        c = circuit.Circuit([('Gx', 0)], line_labels=(0, 1))
+        padded = c.insert_implicit_idles(idle_gate_name='Gi')
+        # original circuit is untouched
+        self.assertEqual(c[0], Label(('Gx', 0)))
+        self.assertEqual(padded[0], Label([('Gx', 0), ('Gi', 1)]))
+
     def test_replace_gatename_inplace(self):
         # Test changing a gate name
         self.c.replace_gatename_inplace('Gx', 'Gz')
@@ -1175,6 +1198,47 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(c.line_labels, (0, 1))
         self.assertEqual(c.depth, 3)
 
+    def test_tensor_circuit_tail_padding_with_idles_ok(self):
+        c1 = circuit.Circuit("Gx:0", line_labels=(0,), editable=True)
+        c2 = circuit.Circuit("Gy:1Gy:1Gy:1", line_labels=(1,), editable=True)
+        c1.tensor_circuit_inplace(c2, idle_gate_name='Gi')
+        c1.done_editing()
+        self.assertEqual(c1.depth, 3)
+        self.assertEqual(c1.line_labels, (0, 1))
+        # Layer 0: Gx:0, Gy:1 (concatenated)
+        # Layer 1: Gy:1, Gi:0 (padded with explicit Gi:0)
+        # Layer 2: Gy:1, Gi:0 (padded with explicit Gi:0)
+        self.assertEqual(c1[0], Label([('Gx', 0), ('Gy', 1)]))
+        self.assertEqual(c1[1], Label([('Gi', 0), ('Gy', 1)]))
+        self.assertEqual(c1[2], Label([('Gi', 0), ('Gy', 1)]))
+
+        # Also test with self being longer than incoming circuit
+        c1_long = circuit.Circuit("Gy:1Gy:1Gy:1", line_labels=(1,), editable=True)
+        c2_short = circuit.Circuit("Gx:0", line_labels=(0,), editable=True)
+        c1_long.tensor_circuit_inplace(c2_short, idle_gate_name='Gi')
+        c1_long.done_editing()
+        self.assertEqual(c1_long.depth, 3)
+        self.assertEqual(c1_long.line_labels, (1, 0))
+        self.assertEqual(c1_long[0], Label([('Gx', 0), ('Gy', 1)]))
+        self.assertEqual(c1_long[1], Label([('Gi', 0), ('Gy', 1)]))
+        self.assertEqual(c1_long[2], Label([('Gi', 0), ('Gy', 1)]))
+
+    def test_tensor_circuit_rejects_placeholder_line_labels(self):
+        # regression test: `self._line_labels == '*'` never matches because
+        # `_line_labels` is stored as the tuple `('*',)`, not the bare string
+        # '*', so this guard against tensoring underspecified circuits was
+        # dead code.
+        c1 = circuit.Circuit([[]])  # placeholder ('*',) line labels
+        self.assertEqual(c1.line_labels, ('*',))
+        c2 = circuit.Circuit("Gy:0", line_labels=(0,))
+        with self.assertRaises(ValueError):
+            c1.tensor_circuit(c2)
+
+        c3 = circuit.Circuit("Gx:0", line_labels=(0,))
+        c4 = circuit.Circuit([[]])  # placeholder ('*',) line labels
+        with self.assertRaises(ValueError):
+            c3.tensor_circuit(c4)
+
     def test_extract_labels_nonstrict_filters_and_line_labels(self):
         # regression test for issue #756: the non-strict membership test was
         # always true (so no filtering happened) and the result's line labels
@@ -1252,3 +1316,127 @@ class CircuitBugfixRegressionTester(BaseCase):
         with self.assertWarns(UserWarning) as cm:
             c.replace_gatename_inplace('Gx', 123)
         self.assertIn('new_gatename', str(cm.warning))
+
+    def test_mutation_clears_lanes_cache(self):
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        # The lanes cache is only trusted/populated for static (read-only) circuits.
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)")
+        # First build/cache lanes
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertIn("lanes", c.saved_auxinfo)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+        # Mutate the circuit via an editable copy
+        c = c.copy(editable=True)
+        c.replace_gatename_with_idle_inplace("Gx")
+        # finalization (done_editing) must clear lanes cache to {}
+        c.done_editing()
+        self.assertEqual(c.saved_auxinfo["lanes"], {})
+
+        # Verify that we can successfully compute subcircuits and cache again
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_editable_circuit_does_not_use_or_populate_lanes_cache(self):
+        # Regression test: editable circuits can be mutated in-place without going
+        # through done_editing()/map_state_space_labels_inplace (the only two places
+        # that invalidate the lanes cache), so the cache must never be trusted for,
+        # or populated on, an editable circuit -- otherwise a subsequent in-place
+        # mutation could cause split_into_tensor_lanes to silently return stale results.
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        c = circuit.Circuit("Gx:0Gy:1", line_labels=(0, 1), editable=True)
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+
+        out1 = split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertIn(Label('Gx', 0), out1[0])
+        # No cache should have been written since the circuit is editable.
+        self.assertEqual(c.saved_auxinfo.get("lanes", {}), {})
+
+        # Mutate in place (no done_editing() call) and confirm the *fresh* content
+        # is reflected, not stale cached content.
+        c[0] = Label('Gz', 0)
+        out2 = split_into_tensor_lanes(c, q2l, l2q)
+        self.assertIn(Label('Gz', 0), out2[0])
+        self.assertNotIn(Label('Gx', 0), out2[0])
+
+    def test_rebuild_lanes_cache_when_empty(self):
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)")
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertIn("lanes", c.saved_auxinfo)
+
+        # Manually clear to empty (simulate post-mutation/done_editing empty state)
+        c.saved_auxinfo["lanes"] = {}
+        # split_into_tensor_lanes should notice empty cache, fall back to compute, and successfully cache again
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_map_state_space_labels_clears_lanes_cache(self):
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)")
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+        c = c.copy(editable=True)
+        c.map_state_space_labels_inplace({0: 10, 1: 11})
+        c.done_editing()
+        self.assertEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_copy_does_not_share_saved_auxinfo(self):
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        c1 = circuit.Circuit("Gx:0Gy:1", line_labels=(0, 1), editable=True)
+        c1.done_editing()
+
+        c2 = c1.copy(editable=True)
+        self.assertIsNot(c1.saved_auxinfo, c2.saved_auxinfo)
+
+        # Mutate c2 so that it is different from c1
+        c2[0] = Label('Gz', 1)
+        c2.done_editing()
+
+        # Cache lanes for c2
+        q2l_c2, l2q_c2 = compute_qubit_lane_mappings_for_circuit(c2)
+        split_into_tensor_lanes(c2, q2l_c2, l2q_c2, cache_lanes_in_circuit=True)
+
+        # Confirm c1's lanes cache did not get contaminated
+        # (It should still be empty or contain the original Gx/Gy representation, NOT Gz)
+        self.assertNotIn((1,), c1.saved_auxinfo.get("lanes", {}))
+
+        # Calling split_into_tensor_lanes on c1 should produce correct results representing Gx/Gy
+        q2l_c1, l2q_c1 = compute_qubit_lane_mappings_for_circuit(c1)
+        subs_c1 = split_into_tensor_lanes(c1, q2l_c1, l2q_c1)
+        self.assertIn(Label('Gx', 0), subs_c1[0])
+        self.assertNotIn(Label('Gz', 1), subs_c1[1])
+
+    def test_batch_tensor_populates_cache(self):
+        from pygsti.circuits.split_circuits_into_lanes import batch_tensor
+        c1 = circuit.Circuit("Gx:0", line_labels=(0,))
+        c2 = circuit.Circuit("Gy:0", line_labels=(0,))
+        idle_label = Label(())
+        labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), idle_label]
+        map_d = {l: l for l in labels_in_circuits}
+        map_d[idle_label] = Label("Gi", 0)
+        layer_mappers = {1: map_d, 2: map_d}
+
+        # batch_tensor should return a static circuit with a non-empty, fully populated lanes cache
+        tensored_c = batch_tensor([c1, c2], layer_mappers, target_lines=((0,), (1,)))
+        self.assertIn("lanes", tensored_c.saved_auxinfo)
+        self.assertNotEqual(tensored_c.saved_auxinfo["lanes"], {})
+        # Verify that we can query split_into_tensor_lanes without recomputing or "lbl cache miss"
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(tensored_c)
+        # Should execute successfully using cache
+        split_into_tensor_lanes(tensored_c, q2l, l2q)
+
+        # Ensure that the manually built lanes cache in tensored_c is identical to a freshly computed one
+        c_no_cache = tensored_c.copy()
+        c_no_cache.saved_auxinfo = {}
+        fresh_sub_cirs = split_into_tensor_lanes(c_no_cache, q2l, l2q)
+        # Check matching structures
+        self.assertEqual(len(tensored_c.saved_auxinfo["lanes"]), len(l2q))
+        for lane_idx, key in l2q.items():
+            self.assertEqual(tensored_c.saved_auxinfo["lanes"][tuple(sorted(key))], fresh_sub_cirs[lane_idx])
