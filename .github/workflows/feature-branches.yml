@@ -31,6 +31,12 @@ jobs:
       run-integration-tests: 'true'
       run-extra-tests: 'false' # No integration tests
       run-notebook-tests: 'false' # No notebook tests
+      # Diff HEAD against the PR's actual base branch to decide whether to run the
+      # slow graphcoloring scaling tests. Falls back to 'develop' for plain pushes
+      # with no open PR yet (github.event.pull_request.base.ref is unset then).
+      # See reuseable-main.yml's "Detect graphcoloring net changes" step for why
+      # this can't just rely on github.event.pull_request.base.sha directly.
+      graphcoloring-diff-base: ${{ github.event.pull_request.base.ref || 'develop' }}
 
 
 
