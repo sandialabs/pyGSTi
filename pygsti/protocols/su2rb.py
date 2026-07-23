@@ -34,7 +34,6 @@ angles of an SU(2) element by `(alpha, beta, gamma)`.
 
 import math as _math
 import warnings as _warnings
-from fractions import Fraction as _Fraction
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as _np
@@ -298,10 +297,10 @@ def jz_rotation(spinj: _su2.SpinJ, theta: float, power: float = 1.0) -> _np.ndar
 class SU2QuditRBSimulator(_proto.DataSimulator):
     """
     Simulates data for an SU(2) RB experiment design (more specifically, a design
-    using rank-1 synthetic SPAM RB). 
+    using rank-1 synthetic SPAM RB).
 
     The simulation can be noiseless or use a provided post-gate error channel.
-    
+
     Parameters
     ----------
     spinj : SpinJ or (int, float, or Fraction)
@@ -309,7 +308,7 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
 
     noise_channel : None, numpy array, or callable, optional
         The noise channel applied after each gate other than the first.
-        
+
         Array values indicate a fixed post-gate error and must be superoperator
         that acts on a row-major vectorization of a density matrix.
 
@@ -382,7 +381,7 @@ class SU2QuditRBSimulator(_proto.DataSimulator):
         """
         Explicitly compose the `(dim**2, dim**2)` superoperators for the full gate
         sequence, inserting a noise superoperator after every gate except the first.
-        
+
         If `noise_channel` was a fixed array, the same superoperator is inserted after
         every gate; if it was a callable factory, the factory is called once per gate
         with that gate's own `(alpha, beta, gamma)` row to get the channel inserted
@@ -787,13 +786,6 @@ class SU2QuditRB(_proto.Protocol):
         (broadcast to each of that sequence's `dim` prep circuits), and
         `irrep_sizes[k] = 2k + 1`.
         """
-        if not hasattr(edesign, 'charcores'):
-            message = (
-                f"SU2QuditRB requires an SU2QuditRBDesign (with a 'charcores' "
-                f"aux list); got {type(edesign).__name__}"
-            )
-            raise TypeError(message)
-
         dim = edesign.dim
         circuits_per_depth = edesign.circuits_per_depth
         P = self._reconstruct_prep_effect_probs(edesign, ds, depth_idx)
@@ -885,7 +877,8 @@ class SU2QuditRB(_proto.Protocol):
         SU2QuditRBResults
         """
         edesign = data.edesign
-        assert isinstance(edesign, SU2QuditRBDesign)
+        if not isinstance(edesign, SU2QuditRBDesign):
+            raise TypeError(f"SU2QuditRB requires an SU2QuditRBDesign; got {type(edesign).__name__}")
         ds = data.dataset
         j, dim = edesign.j, edesign.dim
         spinj = _su2.SpinJ(j)

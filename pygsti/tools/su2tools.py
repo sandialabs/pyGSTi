@@ -5,8 +5,7 @@ arbitrary spin j.
 This module provides a single `SpinJ` class plus a set of module-level,
 representation-independent SU(2) group utilities (Haar sampling of Euler angles,
 Euler-angle <-> 2x2-unitary conversions, composition/inversion of Euler-angle
-sequences, and the Legendre "character cores" used by rank-1 synthetic-SPAM RB),
-along with helpers for building single-qudit `Gu`-layer circuits from Euler angles.
+sequences, and the Legendre "character cores" used by rank-1 synthetic-SPAM RB).
 
 Conventions (see the paper "Randomized Benchmarking with Synthetic Quantum Circuits"
 for the equations cited below):
@@ -402,7 +401,7 @@ def charactercores_from_euler_angles(irrep_labels: _np.ndarray, angles: _np.ndar
     """
     angles = _np.asarray(angles)
     assert angles.ndim == 2
-    assert angles.shape[1] == 3 
+    assert angles.shape[1] == 3
     beta = angles[:, 1]
     irrep_labels = _np.asarray(irrep_labels)
     out = _eval_legendre(irrep_labels[_np.newaxis, :], _np.cos(beta[:, _np.newaxis]))

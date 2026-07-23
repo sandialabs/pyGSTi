@@ -9,7 +9,6 @@ import warnings
 import numpy as np
 from scipy.optimize import OptimizeWarning
 
-from pygsti.baseobjs.label import Label
 from pygsti.circuits.circuit import Circuit
 from pygsti.protocols.su2rb import (
     SU2QuditRBDesign,
@@ -20,7 +19,7 @@ from pygsti.protocols.su2rb import (
     jz_dephasing,
     jz_rotation,
 )
-from pygsti.protocols.protocol import ProtocolData
+from pygsti.protocols.protocol import ExperimentDesign, ProtocolData
 from pygsti.data.dataset import DataSet
 from pygsti.tools.su2tools import SpinJ, distance_mod_phase, random_euler_angles, composition_inverse
 from pygsti.tools.optools import unitary_to_std_process_mx
@@ -41,7 +40,7 @@ def _net_unitary(spinj, angles):
     return net
 
 
-class _SU2RBDesignChecks:
+class _SU2QuditRBDesignChecks:
     """Mixin providing the shared design-level tests, parameterized by spin `j`."""
 
     j = None
@@ -133,15 +132,15 @@ class _SU2RBDesignChecks:
         self.assertEqual(design.dim, reloaded.dim)
 
 
-class TestSU2RBDesignHalfInt(_SU2RBDesignChecks, BaseCase):
+class TestSU2QuditRBDesignHalfInt(_SU2QuditRBDesignChecks, BaseCase):
     j = 0.5
 
 
-class TestSU2RBDesignThreeHalves(_SU2RBDesignChecks, BaseCase):
+class TestSU2QuditRBDesignThreeHalves(_SU2QuditRBDesignChecks, BaseCase):
     j = 1.5
 
 
-class TestSU2RBDesignExtras(BaseCase):
+class TestSU2QuditRBDesignExtras(BaseCase):
     """Design-specific checks that don't fit the shared per-j mixin."""
 
     def test_charcores_match_direct_evaluation(self):
@@ -688,23 +687,15 @@ def _dataset_from_probs(edesign, probs_by_depth, dim):
     return ProtocolData(edesign, ds)
 
 
-class TestSU2QuditRBRequiresCharcores(BaseCase):
-    """`SU2QuditRB` needs the `charcores` aux data that every `SU2QuditRBDesign`
-    provides; an edesign-like object without it should fail loudly (`TypeError`),
-    not silently misbehave. This drives `_per_sequence_irrep_values` directly
-    against a minimal stand-in, the way `TestSU2QuditRBWeightNormalization`
-    below does."""
+class TestSU2QuditRBRequiresDesignType(BaseCase):
+    """`SU2QuditRB.run` requires an `SU2QuditRBDesign`; any other design should
+    fail loudly with `TypeError` at the top of `run`, not silently misbehave."""
 
-    def test_rejects_edesign_without_charcores(self):
-        class _NoCharcoresEdesign:
-            dim = 2
-            circuits_per_depth = 1
-            circuit_lists = [[]]
-            seq_index = [[]]
-            prep_index = [[]]
-
+    def test_rejects_non_su2quditrb_design(self):
+        edesign = ExperimentDesign(circuits=[])
+        data = ProtocolData(edesign, None)
         with self.assertRaises(TypeError):
-            SU2QuditRB()._per_sequence_irrep_values(_NoCharcoresEdesign(), {}, 0, np.eye(2))
+            SU2QuditRB().run(data)
 
 
 class _FakeCircuitRow:
@@ -717,7 +708,7 @@ class _FakeCircuitRow:
         self.fractions = fractions
 
 
-class _FakeSU2RBEdesign:
+class _FakeSU2QuditRBEdesign:
     """
     Minimal stand-in for a single-depth `SU2QuditRBDesign`, exposing only the attributes
     `SU2QuditRB._per_sequence_irrep_values` actually reads (`dim`,
@@ -830,7 +821,7 @@ class TestSU2QuditRBWeightNormalization(BaseCase):
         charcores_rows = [weights[s, :].tolist() for s in seq_index]
         ds = {(s, l): _FakeCircuitRow({(str(m),): P[s, l, m] for m in range(dim)})
               for s in range(circuits_per_depth) for l in range(dim)}
-        edesign = _FakeSU2RBEdesign(dim, circuits_per_depth, circuits, seq_index, prep_index, charcores_rows)
+        edesign = _FakeSU2QuditRBEdesign(dim, circuits_per_depth, circuits, seq_index, prep_index, charcores_rows)
 
         X = SU2QuditRB()._per_sequence_irrep_values(edesign, ds, 0, M)
         family_mean = X.mean(axis=0)

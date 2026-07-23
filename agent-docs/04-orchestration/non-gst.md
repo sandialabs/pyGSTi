@@ -78,9 +78,9 @@ Classes a typical user constructs by name when running a non-GST protocol.
 | [`PeriodicMirrorCircuitDesign`](../../pygsti/protocols/vb.py#L328) | vb.py:328 | Periodic mirror-circuit VB design. |
 | [`SummaryStatistics`](../../pygsti/protocols/vb.py#L544) | vb.py:544 | VB-family protocol that computes summary statistics over an experiment. |
 | [`ModelTest`](../../pygsti/protocols/modeltest.py#L30) | modeltest.py:30 | Tests a Model against data without fitting. |
-| [`SU2QuditRBDesign`](../../pygsti/protocols/su2rb.py#L87) | su2rb.py:87 | Synthetic-SPAM RB design for an arbitrary-spin SU(2)/qudit system; always uses the hidden-first-gate convention. |
-| [`SU2QuditRBSimulator`](../../pygsti/protocols/su2rb.py#L300) | su2rb.py:300 | `DataSimulator` that simulates SU(2) RB circuits directly against a `SpinJ` representation (no full `Model`); `noise_channel` may be a fixed superoperator or a per-gate callable factory. |
-| [`SU2QuditRB`](../../pygsti/protocols/su2rb.py#L725) | su2rb.py:725 | Protocol implementing the rank-1 (Legendre-weighted) synthetic-SPAM RB (R1RB): per-irrep decay fits and rate recovery. |
+| [`SU2QuditRBDesign`](../../pygsti/protocols/su2rb.py#L84) | su2rb.py:84 | Synthetic-SPAM RB design for an arbitrary-spin SU(2)/qudit system; always uses the hidden-first-gate convention. |
+| [`SU2QuditRBSimulator`](../../pygsti/protocols/su2rb.py#L297) | su2rb.py:297 | `DataSimulator` that simulates SU(2) RB circuits directly against a `SpinJ` representation (no full `Model`); `noise_channel` may be a fixed superoperator or a per-gate callable factory. |
+| [`SU2QuditRB`](../../pygsti/protocols/su2rb.py#L722) | su2rb.py:722 | Protocol implementing the rank-1 (Legendre-weighted) synthetic-SPAM RB (R1RB): per-irrep decay fits and rate recovery. |
 
 ## Secondary abstractions
 
@@ -101,7 +101,7 @@ Niche design variants, framework-constructed result containers, intermediate abs
 | [`VBDataFrame`](../../pygsti/protocols/vbdataframe.py#L161) | vbdataframe.py:161 | DataFrame container for VB data with plotting helpers. |
 | [`FreeformDataSimulator`](../../pygsti/protocols/freeformsim.py#L21) | freeformsim.py:21 | `DataSimulator` for arbitrary state functions. |
 | [`ModelFreeformSimulator`](../../pygsti/protocols/freeformsim.py#L93) | freeformsim.py:93 | `FreeformDataSimulator` driven by a `Model`. |
-| [`SU2QuditRBResults`](../../pygsti/protocols/su2rb.py#L918) | su2rb.py:918 | Results container for `SU2QuditRB` (`rates_dataframe()`, `variance_diagnostic()`). |
+| [`SU2QuditRBResults`](../../pygsti/protocols/su2rb.py#L909) | su2rb.py:909 | Results container for `SU2QuditRB` (`rates_dataframe()`, `variance_diagnostic()`). |
 
 [`mirror_edesign.py`](../../pygsti/protocols/mirror_edesign.py) and [`scarab.py`](../../pygsti/protocols/scarab.py) contain helper functions only — no top-level classes. `mirror_edesign.py` provides converters (e.g., from Qiskit circuits into mirror-circuit experiment designs); `scarab.py` provides SCARAB benchmarking helpers.
 

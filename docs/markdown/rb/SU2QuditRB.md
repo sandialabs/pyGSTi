@@ -146,7 +146,7 @@ pd.DataFrame({'f_fit': results.decays, 'f_exact': f_exact,
               'p_fit': results.rates, 'p_exact': p_exact})
 ```
 
-The fitted decays land within a few parts in a thousand of the exact twirled-channel eigenvalues, on the scale of the quoted standard errors. (The residual fluctuations come from averaging over finitely many random sequences — even with exact per-circuit probabilities, the rank-1 weights vary from sequence to sequence. More `circuits_per_depth` tightens them.)
+The fitted decays land within a few parts in a thousand of the exact twirled-channel eigenvalues — within a small multiple of the quoted standard errors. (The residual fluctuations come from averaging over finitely many random sequences — even with exact per-circuit probabilities, the rank-1 weights vary from sequence to sequence. More `circuits_per_depth` tightens them.)
 
 ## SPAM robustness
 

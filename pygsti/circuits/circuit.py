@@ -2291,6 +2291,10 @@ class Circuit(object):
         every qubit, but it should not contain more than one gate on
         a qubit.
 
+        Passing j=-1 does not append a layer; it inserts before the
+        current layer at position -1, which means it inserts to the
+        second-to-last position. Pass j=len(self) to append.
+
         Parameters
         ----------
         circuit_layer : Label
