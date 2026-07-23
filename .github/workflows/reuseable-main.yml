@@ -115,31 +115,7 @@ jobs:
         flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
-    - name: Detect graphcoloring changes
-      # The graphcoloring benchmark/scaling tests are normally skipped in CI (see
-      # skip_in_ci in test/unit/tools/test_graphcoloring.py) since they're slow and
-      # meant for local use. We turn them back on in CI specifically when a change
-      # touches the graphcoloring source or its test file, so regressions there are
-      # still caught automatically. Uses plain git (no third-party action) since
-      # this org's Actions allowlist has blocked other third-party actions before
-      # (see the astral-sh/setup-uv comment above).
-      id: graphcoloring
-      if: ${{ inputs.run-unit-tests == 'true' }}
-      shell: bash
-      run: |
-        BASE_SHA="${{ github.event.pull_request.base.sha || github.event.before }}"
-        if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
-          # No usable base ref (e.g. workflow_dispatch, or first push on a new
-          # branch) -- err on the side of running the tests.
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-        else
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          if git diff --name-only "$BASE_SHA" HEAD -- pygsti/tools/graphcoloring test/unit/tools/test_graphcoloring.py | grep -q .; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-        fi
+
     - name: Run unit tests
       if: ${{ inputs.run-unit-tests == 'true' }}
       # bash on every runner (Git Bash on Windows) so $COV_FLAG expands portably.
@@ -152,23 +128,46 @@ jobs:
         # suite) are excluded here and run in their own step below instead, so a
         # slow/flaky run there can't eat into or fail the main unit-test budget.
         python -m pytest -n auto --dist loadscope -m "not slow" $COV_FLAG --durations=25 test/unit
+    - name: Detect graphcoloring net changes in PR
+      # The graphcoloring scaling tests are slow, so only run them when the PR has
+      # a net diff against the base branch in the graphcoloring toolkit or its tests.
+      #
+      # This uses a real git diff, not a "files touched" list, so if a PR changes
+      # graphcoloring and then reverts those changes before merging, this reports
+      # changed=false. We only want to run the scaling tests once.
+      id: graphcoloring
+      if: ${{ inputs.run-unit-tests == 'true' }}
+      shell: bash
+      env:
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        set -euo pipefail
+
+        # This workflow can also be called from non-PR workflows. In that case,
+        # there is no PR net diff, so do not run the slow graphcoloring tests.
+        if [ -z "${PR_BASE_SHA}" ]; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # actions/checkout checks out the PR merge commit for pull_request events.
+        # Fetch the base commit so we can compare the merged PR tree against it.
+        git fetch --no-tags --depth=1 origin "${PR_BASE_SHA}"
+
+        if git diff --quiet "${PR_BASE_SHA}" HEAD -- \
+          pygsti/tools/graphcoloring.py \
+          pygsti/tools/graphcoloring \
+          test/unit/tools/test_graphcoloring.py
+        then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
     - name: Run graphcoloring slow (scaling) tests
-      # Runs the graphcoloring benchmark/scaling suite (@pytest.mark.slow, normally
-      # skipped via skip_in_ci in test/unit/tools/test_graphcoloring.py) in its own
-      # step, only when a change touched the graphcoloring source or its test file.
-      # Kept out of the main "Run unit tests" step (and run serially, without
-      # pytest-xdist) because each test already spawns its own timeout-guarded
-      # subprocess per algorithm; running that under -n auto multiplies concurrent
-      # subprocess load and was a likely source of flaky per-algorithm timeouts on
-      # shared/Windows runners. The dedicated timeout-minutes gives it more room
-      # than sharing the main step's implicit budget.
       if: ${{ inputs.run-unit-tests == 'true' && steps.graphcoloring.outputs.changed == 'true' }}
       timeout-minutes: 30
       shell: bash
       env:
-        # skip_in_ci's skipif in test_graphcoloring.py still checks this even when
-        # the tests are explicitly selected via -m slow below, so it must be set
-        # here too (mirrors the `if:` condition on this step).
         GRAPHCOLORING_CHANGED: ${{ steps.graphcoloring.outputs.changed }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
