@@ -219,39 +219,7 @@ class AlbertFactorizationTester(BaseCase):
             product = matrixmod2.multidot_mod2([L, L.T])
             self.assertArraysEqual(product, d)
 
-    @unittest.expectedFailure
     def test_albert_factor_back_substitution_bug_at_large_n(self):
-        """
-        Known, currently-unfixed bug in `albert_factor`'s back-substitution
-        loop:
-
-            x = _np.array(_np.dot(n, L), dtype='int')
-
-        uses a plain (non-mod-2) `_np.dot` instead of `dot_mod2`. `L` is
-        built up incrementally over `t` iterations, and since intermediate
-        values are never reduced mod 2, entries stop being confined to
-        {0, 1} and can grow essentially unboundedly across iterations,
-        silently corrupting the result for large enough `n` (observed
-        starting around n ~ 90-95; likely due to integer overflow / the
-        algorithm's implicit assumption of binary-valued intermediates being
-        violated).
-
-        This was undetectable before `det_mod2` was fixed to be exact:
-        previously, `albert_factor` essentially never reached this code path
-        for n >~ 40-50, since it would hang/crash earlier (in the
-        `while not proper` loop, via `random_invertable_matrix` or
-        `_check_proper_permutation` relying on the old floating-point
-        `det_mod2`).
-
-        This test is intentionally marked as an expected failure: it
-        documents and reproduces the bug (deterministically, via a fixed
-        `rand_state` seed) without fixing it, per an explicit decision to
-        defer the fix. Once `albert_factor` is fixed (e.g. by changing that
-        `_np.dot(n, L)` call to `dot_mod2(n, L)`), this test should start
-        passing; at that point, remove the `@unittest.expectedFailure`
-        decorator (an unexpected pass will show up as `XPASS` in the
-        meantime as a reminder).
-        """
         n = 100
         rand_state = np.random.RandomState(1001)
         d = matrixmod2.random_symmetric_invertable_matrix(n, rand_state=rand_state)
