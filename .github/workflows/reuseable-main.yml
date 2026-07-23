@@ -36,6 +36,15 @@ on:
         required: false
         type: string
         default: 'false'
+      # Branch to diff HEAD against to decide whether the slow graphcoloring
+      # scaling tests should run (see the "Detect graphcoloring net changes"
+      # step below). Leave unset/empty to always skip that diff check (e.g.
+      # for direct pushes to protected branches, where these tests are never
+      # opted into automatically).
+      graphcoloring-diff-base:
+        required: false
+        type: string
+        default: ''
 
 env:
   SKIP_DEAP: 1
@@ -128,33 +137,42 @@ jobs:
         # suite) are excluded here and run in their own step below instead, so a
         # slow/flaky run there can't eat into or fail the main unit-test budget.
         python -m pytest -n auto --dist loadscope -m "not slow" $COV_FLAG --durations=25 test/unit
-    - name: Detect graphcoloring net changes in PR
-      # The graphcoloring scaling tests are slow, so only run them when the PR has
-      # a net diff against the base branch in the graphcoloring toolkit or its tests.
+    - name: Detect graphcoloring net changes
+      # The graphcoloring scaling tests are slow, so only run them when this branch
+      # has a net diff against `graphcoloring-diff-base` in the graphcoloring
+      # toolkit or its tests.
       #
-      # This uses a real git diff, not a "files touched" list, so if a PR changes
-      # graphcoloring and then reverts those changes before merging, this reports
+      # This is intentionally independent of *how* this run was triggered (push vs.
+      # pull_request): callers that care (currently just feature-branches.yml) pass
+      # graphcoloring-diff-base explicitly, so this works the same whether CI was
+      # kicked off by a push to a branch or by an actual pull_request event -- the
+      # older implementation kept re-deriving the base from
+      # github.event.pull_request.base.sha, which is empty on ordinary push events.
+      # Since same-repo (non-fork) PRs only ever get a push event here (see the
+      # pull_request trigger filter in feature-branches.yml), that meant this step
+      # silently always reported changed=false for those PRs, e.g. #848.
+      #
+      # This uses a real git diff, not a "files touched" list, so if a branch
+      # changes graphcoloring and then reverts those changes, this reports
       # changed=false. We only want to run the scaling tests once.
       id: graphcoloring
       if: ${{ inputs.run-unit-tests == 'true' }}
       shell: bash
       env:
-        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        DIFF_BASE: ${{ inputs.graphcoloring-diff-base }}
       run: |
         set -euo pipefail
 
-        # This workflow can also be called from non-PR workflows. In that case,
-        # there is no PR net diff, so do not run the slow graphcoloring tests.
-        if [ -z "${PR_BASE_SHA}" ]; then
+        # Callers that don't opt in (e.g. direct pushes to develop/beta/master/
+        # bugfix) leave this empty, so never run the slow graphcoloring tests there.
+        if [ -z "${DIFF_BASE}" ]; then
           echo "changed=false" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        # actions/checkout checks out the PR merge commit for pull_request events.
-        # Fetch the base commit so we can compare the merged PR tree against it.
-        git fetch --no-tags --depth=1 origin "${PR_BASE_SHA}"
+        git fetch --no-tags --depth=1 origin "${DIFF_BASE}"
 
-        if git diff --quiet "${PR_BASE_SHA}" HEAD -- \
+        if git diff --quiet "origin/${DIFF_BASE}" HEAD -- \
           pygsti/tools/graphcoloring.py \
           pygsti/tools/graphcoloring \
           test/unit/tools/test_graphcoloring.py
