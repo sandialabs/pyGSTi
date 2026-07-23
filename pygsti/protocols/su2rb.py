@@ -53,11 +53,8 @@ from pygsti.tools import wignersymbols as _wg
 from pygsti.tools.su2tools import _validate_spin
 from pygsti.tools.optools import unitary_to_std_process_mx as _unitary_to_std_process_mx
 from pygsti.tools.exceptions import RBFitFailureWarning as _RBFitFailureWarning
-from pygsti.tools.su2tools import circuit_from_euler_angles, euler_angles_from_circuit, GATE_NAME
 
 __all__ = [
-    'circuit_from_euler_angles',
-    'euler_angles_from_circuit',
     'SU2QuditRBDesign',
     'jz_dephasing',
     'jz_rotation',
@@ -66,6 +63,7 @@ __all__ = [
     'SU2QuditRB',
     'SU2QuditRBResults',
 ]
+
 
 ChannelFactory_t = Callable[[float, float, float], _np.ndarray]
 """A gate-dependent noise factory: maps a gate's ZXZ Euler angles to the
@@ -77,8 +75,8 @@ def _r1rb_circuit(angles: _np.ndarray, prep_index: int, qudit_label: str) -> _Ci
     The full R1RB circuit for one (sequence, prep) pair: a `rho{prep_index}` prep
     layer, one `Gu` layer per row of `angles`, and an `Mdefault` POVM layer.
     """
-    layers = [_Label(f'rho{prep_index}')]
-    layers += [_Label(GATE_NAME, qudit_label, args=tuple(float(x) for x in row)) for row in angles]
+    layers  = [_Label(f'rho{prep_index}')]
+    layers += [_Label('Gu', qudit_label, args=tuple(float(x) for x in row)) for row in angles]
     layers += [_Label('Mdefault')]
     circuit = _Circuit(layers, line_labels=(qudit_label,))
     return circuit

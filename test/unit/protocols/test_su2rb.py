@@ -9,6 +9,7 @@ import warnings
 import numpy as np
 from scipy.optimize import OptimizeWarning
 
+from pygsti.baseobjs.label import Label
 from pygsti.circuits.circuit import Circuit
 from pygsti.protocols.su2rb import (
     SU2QuditRBDesign,
@@ -16,68 +17,16 @@ from pygsti.protocols.su2rb import (
     SU2QuditRB,
     SU2QuditRBResults,
     predicted_zero_noise_variance,
-    circuit_from_euler_angles,
-    euler_angles_from_circuit,
     jz_dephasing,
     jz_rotation,
-    _r1rb_circuit
 )
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.data.dataset import DataSet
-from pygsti.tools.su2tools import SpinJ, distance_mod_phase, random_euler_angles, composition_inverse, GATE_NAME
+from pygsti.tools.su2tools import SpinJ, distance_mod_phase, random_euler_angles, composition_inverse
 from pygsti.tools.optools import unitary_to_std_process_mx
 from pygsti.tools.exceptions import RBFitFailureWarning
 
 from ..util import BaseCase
-
-
-# ---------------------------------------------------------------------------
-# circuit_from_euler_angles / euler_angles_from_circuit
-# ---------------------------------------------------------------------------
-
-class TestEulerAngleCircuitHelpers(BaseCase):
-
-    def test_round_trip_no_prep(self):
-        rng = np.random.default_rng(0)
-        angles = rng.uniform(0, 4 * np.pi, size=(5, 3))
-        c = circuit_from_euler_angles(angles, qudit_label='Q0')
-        self.assertEqual(len(c), 5)
-        for layer in c:
-            self.assertEqual(layer.name, GATE_NAME)
-
-        recovered = euler_angles_from_circuit(c)
-        # Agreement to <= 1e-12 is required; empirically the string round trip is
-        # bit-exact, so we check that too.
-        self.assertTrue(np.allclose(recovered, angles, atol=1e-12))
-        self.assertTrue(np.array_equal(recovered, angles))
-
-    def test_round_trip_through_string(self):
-        rng = np.random.default_rng(1)
-        angles = rng.uniform(0, 4 * np.pi, size=(4, 3))
-        c = _r1rb_circuit(angles, prep_index=1, qudit_label='Q0')
-        s = c.str
-        c2 = Circuit(None, stringrep=s, line_labels=c.line_labels)
-        self.assertEqual(c, c2)
-        recovered = euler_angles_from_circuit(c2)
-        self.assertTrue(np.array_equal(recovered, angles))
-
-    def test_prep_and_povm_labels_embedded(self):
-        angles = np.zeros((2, 3))
-        c = _r1rb_circuit(angles, prep_index=2, qudit_label='Q0')
-        names = [layer.name for layer in c]
-        self.assertEqual(names[0], 'rho2')
-        self.assertEqual(names[-1], 'Mdefault')
-        self.assertEqual(names.count(GATE_NAME), 2)
-
-    def test_bad_angle_shape_raises(self):
-        with self.assertRaises(ValueError):
-            circuit_from_euler_angles(np.zeros((3, 2)))
-
-    def test_euler_angles_from_circuit_empty_for_no_gu_layers(self):
-        # A circuit with no `Gu` layers returns a `(0, 3)` array rather than raising.
-        c = Circuit(['rho0', 'Mdefault'], line_labels=('Q0',))
-        recovered = euler_angles_from_circuit(c)
-        self.assertEqual(recovered.shape, (0, 3))
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +45,18 @@ class _SU2RBDesignChecks:
     """Mixin providing the shared design-level tests, parameterized by spin `j`."""
 
     j = None
+
+    @staticmethod
+    def euler_angles_from_circuit(circuit: Circuit) -> np.ndarray:
+        rows = []
+        for layer in circuit:
+            if layer.name == 'Gu':
+                args = layer.args
+                if len(args) != 3:
+                    raise ValueError(f"Gate layer {layer} does not carry exactly 3 args")
+                rows.append([float(a) for a in args])
+        angles = np.array(rows, dtype=float).reshape(-1, 3)
+        return angles
 
     def test_circuit_counts(self):
         depths = [1, 2, 4]
@@ -118,7 +79,7 @@ class _SU2RBDesignChecks:
             self.assertEqual(len(design.charcores[depth_idx]), n)
             for circuit_idx, c in enumerate(circuits_at_depth):
                 angles = np.array(design.euler_angles[depth_idx][circuit_idx])
-                self.assertTrue(np.array_equal(angles, euler_angles_from_circuit(c)))
+                self.assertTrue(np.array_equal(angles, self.euler_angles_from_circuit(c)))
                 prep_idx = design.prep_index[depth_idx][circuit_idx]
                 names = [layer.name for layer in c]
                 self.assertEqual(names[0], 'rho%d' % prep_idx)
@@ -263,7 +224,7 @@ def _crossval_model(spinj, qudit_label='Q0'):
         alpha, beta, gamma = args
         return spinj.unitaries_from_angles(alpha, beta, gamma)[0]
 
-    model.factories[GATE_NAME] = UnitaryOpFactory(fn, state_space, superop_basis=mx_basis, evotype='densitymx')
+    model.factories['Gu'] = UnitaryOpFactory(fn, state_space, superop_basis=mx_basis, evotype='densitymx')
     return model
 
 

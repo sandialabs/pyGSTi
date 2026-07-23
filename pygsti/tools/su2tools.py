@@ -48,10 +48,7 @@ import numpy as _np
 import scipy.linalg as _spl
 from scipy.special import eval_legendre as _eval_legendre
 
-from pygsti.baseobjs.label import Label as _Label
-from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.tools.matrixtools import eigendecomposition as _eigendecomposition
-from pygsti.tools.optools import unitary_to_std_process_mx as _unitary_to_std_process_mx
 from pygsti.tools.wignersymbols import clebsch_gordan as _clebsch_gordan, wigner_6j as _wigner_6j
 
 __all__ = [
@@ -63,10 +60,7 @@ __all__ = [
     'composition_asmatrix',
     'composition_inverse',
     'charactercores_from_euler_angles',
-    'circuit_from_euler_angles',
-    'euler_angles_from_circuit',
     'SpinJ',
-    'GATE_NAME',
 ]
 
 
@@ -413,67 +407,6 @@ def charactercores_from_euler_angles(irrep_labels: _np.ndarray, angles: _np.ndar
     irrep_labels = _np.asarray(irrep_labels)
     out = _eval_legendre(irrep_labels[_np.newaxis, :], _np.cos(beta[:, _np.newaxis]))
     return out
-
-
-# ***************************************************************************************************
-# Circuit objects
-# ***************************************************************************************************
-
-GATE_NAME = 'Gu'
-"""The name of the single arg-carrying gate label used by SU(2) RB circuits."""
-
-
-def circuit_from_euler_angles(angles: _np.ndarray, qudit_label: str = 'Q0') -> _Circuit:
-    """
-    Build a `Circuit` of `Gu` gate layers from a sequence of ZXZ Euler angles.
-
-    Parameters
-    ----------
-    angles : numpy array
-        Shape `(m+1, 3)`. Row `i` gives the ZXZ Euler angles `(alpha, beta, gamma)`
-        of the `i`-th layer's `Gu` gate.
-
-    qudit_label : str, optional
-        The line label of the single qudit this circuit acts on.
-
-    Returns
-    -------
-    Circuit
-    """
-    angles = _np.asarray(angles, dtype=float)
-    if angles.ndim != 2 or angles.shape[1] != 3:
-        raise ValueError(f"`angles` must have shape (m+1, 3); got {angles.shape}")
-    layers = [_Label(GATE_NAME, qudit_label, args=tuple(float(x) for x in row)) for row in angles]
-    circuit = _Circuit(layers, line_labels=(qudit_label,))
-    return circuit
-
-
-def euler_angles_from_circuit(circuit: _Circuit) -> _np.ndarray:
-    """
-    Recover the `(m+1, 3)` array of ZXZ Euler angles from a `Circuit`'s `Gu` layers.
-
-    Any non-`Gu` layers (e.g. explicit `rho{ell}` prep or `Mdefault` POVM layers) are
-    ignored. This makes it the inverse of `circuit_from_euler_angles`.
-
-    Parameters
-    ----------
-    circuit : Circuit
-        A circuit from `circuit_from_euler_angles` (or one with the same `Gu`-layer convention).
-
-    Returns
-    -------
-    numpy array
-        Shape `(m+1, 3)`, or `(0, 3)` if `circuit` has no `Gu` layers.
-    """
-    rows = []
-    for layer in circuit:
-        if layer.name == GATE_NAME:
-            args = layer.args
-            if len(args) != 3:
-                raise ValueError(f"Gate layer {layer} does not carry exactly 3 args")
-            rows.append([float(a) for a in args])
-    angles = _np.array(rows, dtype=float).reshape(-1, 3)
-    return angles
 
 
 # ***************************************************************************************************
