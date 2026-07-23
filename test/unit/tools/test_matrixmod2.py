@@ -1,5 +1,3 @@
-import unittest
-
 import numpy as np
 import scipy.sparse as sps
 
@@ -219,7 +217,7 @@ class AlbertFactorizationTester(BaseCase):
             product = matrixmod2.multidot_mod2([L, L.T])
             self.assertArraysEqual(product, d)
 
-    def test_albert_factor_back_substitution_bug_at_large_n(self):
+    def test_albert_factor_large_n(self):
         n = 100
         rand_state = np.random.RandomState(1001)
         d = matrixmod2.random_symmetric_invertable_matrix(n, rand_state=rand_state)
