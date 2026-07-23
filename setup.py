@@ -35,8 +35,13 @@ def custom_version(version):
         else:
             node = node_and_date
             date = "CLEAN"
-        
-        local_scheme = node + f'.{version.branch}.' + date
+
+        # PEP 440 only allows alphanumerics and periods in the local version segment,
+        # so characters like the "/" in "feature/xyz" branch names must be replaced.
+        import re
+        branch = re.sub(r'[^a-zA-Z0-9]+', '.', str(version.branch or 'unknown')).strip('.') or 'unknown'
+
+        local_scheme = node + f'.{branch}.' + date
 
     return local_scheme
 
