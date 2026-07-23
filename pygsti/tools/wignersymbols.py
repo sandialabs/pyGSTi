@@ -24,6 +24,7 @@ the associated unit tests (a testing-only dependency).
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import functools as _functools
 import math as _math
 from fractions import Fraction as _Fraction
 from typing import Union
@@ -101,12 +102,17 @@ def _int_val(fraction_value):
     return fraction_value.numerator
 
 
+@_functools.lru_cache(maxsize=None)
 def _triangle_delta(j1, j2, j3):
     """
     Return the Fraction (j1+j2-j3)!(j1-j2+j3)!(-j1+j2+j3)! / (j1+j2+j3+1)!
     (the squared triangle-coefficient `Delta(j1,j2,j3)^2`), or `None` if the
     triangle inequality / integrality conditions on (j1, j2, j3) are not
     satisfied.
+
+    Memoized: the same (j1, j2, j3) triangle recurs many times across the
+    Clebsch-Gordan / 6-j loops that build the SU(2) change-of-basis and
+    recoupling matrices, so caching dominates the cost of these functions.
     """
     perimeter_term = _as_nonneg_int(j1 + j2 + j3 + 1)
     if perimeter_term is None:
@@ -116,8 +122,11 @@ def _triangle_delta(j1, j2, j3):
     c = _as_nonneg_int(-j1 + j2 + j3)
     if a is None or b is None or c is None:
         return None
-    result = _Fraction(_math.factorial(a) * _math.factorial(b) * _math.factorial(c),
-                        _math.factorial(perimeter_term))
+    # Delta^2 = a!b!c!/(a+b+c+1)! = 1 / [(n+1) * comb(n, a) * comb(b+c, b)]
+    # with n = a+b+c. We avoid materializing large (n+1)! numerator 
+    n = a + b + c
+    denom = (n + 1) * _math.comb(n, a) * _math.comb(b + c, b)
+    result = _Fraction(1, denom)
     return result
 
 
