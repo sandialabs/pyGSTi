@@ -2670,18 +2670,16 @@ class Circuit(object):
         if current_lanes is None or len(current_lanes) <= 1:
             # We will update this because it is now believed that
             # we are able to conduct the operation in cross talk free lanes.
-            qubits_used = set()
-            for qub_in_lane in lane_to_qubits.values():
-                qubits_used = qubits_used.union(qub_in_lane)
+            qubits_used = set().union(*lane_to_qubits.values())
 
             if len(qubits_used) != self.num_lines:
                 # Do not update.
                 return self
 
-            new_lanes = {}
-            for i, qubit_labels in lane_to_qubits.items():
-                new_lanes[tuple(sorted(qubit_labels))] = sub_circuit_list[i]
-            self.saved_auxinfo["lanes"] = new_lanes
+            self.saved_auxinfo["lanes"] = {
+                tuple(sorted(qubit_labels)): sub_circuit_list[i]
+                for i, qubit_labels in lane_to_qubits.items()
+            }
 
         return self
 
@@ -3666,9 +3664,7 @@ class Circuit(object):
         if layers is None:
             layers = range(self.num_layers)
         for j in layers:
-            padded_lbl = self.layer_label_with_idles(j, idle_gate_name)
-            self._clear_labels([j], self._line_labels)
-            self._labels[j].extend(_label_to_nested_lists_of_simple_labels(padded_lbl, None))
+            self[j] = self.layer_label_with_idles(j, idle_gate_name)
 
     def insert_implicit_idles(self, layers: Optional[Iterable[int]] = None,
                               idle_gate_name: Union[str, _Label] = 'Gi') -> Circuit:

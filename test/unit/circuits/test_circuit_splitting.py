@@ -196,6 +196,47 @@ class CircuitSplittingTester(BaseCase):
         self.assertEqual(tensored_c[0], expected_c[0])
         self.assertEqual(tensored_c[1], expected_c[1])
 
+    def test_batch_tensor_diff_lengths_first_circuit_longer(self):
+        # Regression test / complement to test_batch_tensor_diff_lengths: here the
+        # -- every circuit is independently padded up to the overall max length,
+        # regardless of its position in `circuits`.
+        c1 = _Circuit("Gy:0Gz:0", line_labels=(0,))
+        c2 = _Circuit("Gx:0", line_labels=(0,))
+
+        idle_label = Label(())  # empty label is the idle
+        labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), Label("Gz", 0), idle_label]
+        map_d = {l: l for l in labels_in_circuits}
+        map_d[idle_label] = Label("Gi", 0)
+        layer_mappers = {1: map_d, 2: map_d}
+
+        tensored_c = batch_tensor([c1, c2], layer_mappers)
+        expected_c = c1.tensor_circuit(c2.map_state_space_labels({0: 1}))
+
+        self.assertEqual(tensored_c, expected_c)
+        self.assertEqual(tensored_c[0], expected_c[0])
+        self.assertEqual(tensored_c[1], expected_c[1])
+
+    def test_batch_tensor_diff_lengths_middle_circuit_longest(self):
+        # Regression test / complement to test_batch_tensor_diff_lengths: here the
+        # -- every circuit is independently padded up to the overall max length,
+        # regardless of its position in `circuits`.
+        c1 = _Circuit("Gx:0", line_labels=(0,))
+        c2 = _Circuit("Gy:0Gy:0Gy:0", line_labels=(0,))
+        c3 = _Circuit("Gz:0Gz:0", line_labels=(0,))
+
+        idle_label = Label(())
+        labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), Label("Gz", 0), idle_label]
+        map_d = {l: l for l in labels_in_circuits}
+        map_d[idle_label] = Label("Gi", 0)
+        layer_mappers = {1: map_d, 2: map_d, 3: map_d}
+
+        tensored_c = batch_tensor([c1, c2, c3], layer_mappers)
+        self.assertEqual(tensored_c.num_layers, 3)
+        self.assertEqual(tensored_c.num_lines, 3)
+        self.assertEqual(tensored_c[0], Label([('Gx', 0), ('Gy', 1), ('Gz', 2)]))
+        self.assertEqual(tensored_c[1], Label([('Gi', 0), ('Gy', 1), ('Gz', 2)]))
+        self.assertEqual(tensored_c[2], Label([('Gi', 0), ('Gy', 1), ('Gi', 2)]))
+
     def test_batch_tensor_reorder(self):
         c1 = _Circuit("Gx:0", line_labels=(0,))
         c2 = _Circuit("Gy:0", line_labels=(0,))

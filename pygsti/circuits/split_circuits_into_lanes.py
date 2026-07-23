@@ -2,37 +2,7 @@ import networkx as _nx
 
 from typing import Sequence, Dict, Tuple, Optional, Set, Union
 from pygsti.circuits import Circuit as Circuit
-from pygsti.baseobjs.label import Label, LabelTup, LabelTupTup
-
-
-def _map_label_state_space_labels(lbl, sslbl_map):
-    """
-    Map the state-space labels inside a Label, including LabelTupTup members.
-
-    This is used after applying a layer_mapper value, so we do not rely on
-    Circuit.map_state_space_labels_inplace to correctly descend into newly
-    created compound/parallel labels.
-    """
-
-    if lbl == Label(()):
-        return lbl
-
-    if isinstance(lbl, LabelTupTup):
-        return Label(tuple(
-            _map_label_state_space_labels(member, sslbl_map)
-            for member in lbl
-        ))
-
-    if isinstance(lbl, LabelTup):
-        return lbl.map_state_space_labels(sslbl_map)
-
-    if isinstance(lbl, tuple):
-        return tuple(
-            _map_label_state_space_labels(member, sslbl_map)
-            for member in lbl
-        )
-
-    return lbl.map_state_space_labels(sslbl_map)
+from pygsti.baseobjs.label import Label
 
 
 def compute_qubit_lane_mappings_for_circuit(circuit: Circuit) -> tuple[dict[int, int],
@@ -82,6 +52,31 @@ def compute_qubit_lane_mappings_for_circuit(circuit: Circuit) -> tuple[dict[int,
     return qubit_to_lane, lane_to_qubits
 
 
+def _lookup_cached_lanes(circuit: Circuit,
+                         lane_to_qubits: dict[int, tuple[int, ...]]) -> Optional[list[Circuit]]:
+    """
+    Return the cached lane circuits for `circuit`, if a matching cache is available.
+
+    The lanes cache is only trustworthy for *static* (read-only) circuits, and only
+    when its size matches the (freshly computed) `lane_to_qubits` partition -- otherwise
+    `None` is returned so the caller falls back to (re)computing the lanes.
+    """
+    if not (circuit._static and "lanes" in circuit.saved_auxinfo):
+        return None
+    cached_lanes = circuit.saved_auxinfo["lanes"]
+    if len(lane_to_qubits) != len(cached_lanes):
+        return None
+
+    # We may have this already in cache.
+    lane_circuits = [None] * len(lane_to_qubits)
+    for i, key in lane_to_qubits.items():
+        sorted_key = tuple(sorted(key))
+        if sorted_key not in cached_lanes:
+            raise ValueError(f"lbl cache miss: {key} in circuit {circuit}")
+        lane_circuits[i] = cached_lanes[sorted_key]
+    return lane_circuits
+
+
 def split_into_tensor_lanes(circuit: Circuit,
                             qubit_to_lanes: Optional[dict[int, int]] = None,
                             lane_to_qubits: Optional[dict[int, tuple[int, ...]]] = None,
@@ -103,18 +98,9 @@ def split_into_tensor_lanes(circuit: Circuit,
     if qubit_to_lanes is None or lane_to_qubits is None:
         qubit_to_lanes, lane_to_qubits = compute_qubit_lane_mappings_for_circuit(circuit)
 
-    # The lanes cache is only trustworthy for *static* (read-only) circuits:
-    if circuit._static and "lanes" in circuit.saved_auxinfo:
-        # Check if the lane info matches and I can just return that set up.
-        if len(lane_to_qubits) == len(circuit.saved_auxinfo["lanes"]):
-            # We may have this already in cache.
-            lane_circuits = [None] * len(lane_to_qubits)
-            for i, key in lane_to_qubits.items():
-                if tuple(sorted(key)) in circuit.saved_auxinfo["lanes"]:
-                    lane_circuits[i] = circuit.saved_auxinfo["lanes"][tuple(sorted(key))]
-                else:
-                    raise ValueError(f"lbl cache miss: {key} in circuit {circuit}")
-            return lane_circuits
+    cached_lane_circuits = _lookup_cached_lanes(circuit, lane_to_qubits)
+    if cached_lane_circuits is not None:
+        return cached_lane_circuits
 
     lane_circuits: list[Circuit] = [None] * len(lane_to_qubits)
     for lane, lane_qubits in lane_to_qubits.items():
@@ -136,6 +122,28 @@ def split_into_tensor_lanes(circuit: Circuit,
         circuit = circuit._cache_tensor_lanes(lane_circuits, lane_to_qubits)
 
     return lane_circuits
+
+
+def _prepare_target_circuit(source: Circuit, target_line_labels: Tuple[Union[int, str], ...],
+                            max_len: int, layer_mappers: Dict[int, Dict]) -> Circuit:
+    """
+    Pad `source` to `max_len` layers, apply the appropriate `layer_mappers` entry to
+    each (local) layer label, and relabel its lines to `target_line_labels`.
+
+    Returns a brand-new `Circuit` (built via the public `Circuit` constructor) with
+    `target_line_labels` as its lines -- `source` itself is left untouched.
+    """
+    padded = source.copy(editable=True)
+    padded._append_idling_layers_inplace(max_len - len(padded))
+    padded.done_editing()
+
+    sslbl_map = dict(zip(padded.line_labels, target_line_labels))
+    mapper = layer_mappers[padded.num_lines]
+    new_layers = [
+        mapper[layer_lbl].map_state_space_labels(sslbl_map)
+        for layer_lbl in padded.layertup
+    ]
+    return Circuit(new_layers, line_labels=target_line_labels, editable=False)
 
 
 def batch_tensor(
@@ -185,66 +193,9 @@ def batch_tensor(
     if global_line_order is None:
         global_line_order = tuple(sorted(list(s)))
 
-    c = circuits[0].copy(editable=True)
-    c._append_idling_layers_inplace(max_cir_len - len(c))
-
-    local_num_lines = c.num_lines
-    local_labels = list(c._labels)
-    sslbl_map = {
-        k: v
-        for k, v in zip(c.line_labels, target_lines[0])
-    }
-
-    # First remap the circuit line labels. We will overwrite the operation labels
-    # immediately afterward, so we do not care how this maps the old local labels.
-    c.map_state_space_labels_inplace(sslbl_map)
-
-    # Now rebuild operation labels from the saved local labels, explicitly mapping
-    # any LabelTupTup members.
-    # Note: Circuit._labels stores layers as raw Python lists internally (e.g.
-    # [] for an empty/idle layer, [Label(...)] for a single-gate layer).
-    # Normalise them to Label objects before the mapper lookup.
-    def _to_label(ell):
-        if isinstance(ell, list):
-            return Label(tuple(ell))
-        return ell
-
-    c._static = False
-    c._labels = [
-        _map_label_state_space_labels(
-            layer_mappers[local_num_lines][_to_label(ell)],
-            sslbl_map,
-        )
-        for ell in local_labels
-    ]
-
-    c.done_editing()
+    c = _prepare_target_circuit(circuits[0], target_lines[0], max_cir_len, layer_mappers)
     for i, c2 in enumerate(circuits[1:]):
-        c2 = c2.copy(editable=True)
-        c2._append_idling_layers_inplace(max_cir_len - len(c2))
-
-        local_num_lines = c2.num_lines
-        local_labels = list(c2._labels)
-        sslbl_map = {
-            k: v
-            for k, v in zip(c2.line_labels, target_lines[i + 1])
-        }
-
-        # Remap line labels first.
-        c2.map_state_space_labels_inplace(sslbl_map)
-
-        # Then rebuild labels from the original local labels, explicitly remapping
-        # LabelTupTup members.
-        c2._static = False
-        c2._labels = [
-            _map_label_state_space_labels(
-                layer_mappers[local_num_lines][_to_label(ell)],
-                sslbl_map,
-            )
-            for ell in local_labels
-        ]
-
-        c2.done_editing()
+        c2 = _prepare_target_circuit(c2, target_lines[i + 1], max_cir_len, layer_mappers)
         c = c.tensor_circuit(c2)
 
     c = c.reorder_lines(global_line_order)
