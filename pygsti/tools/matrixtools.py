@@ -1033,7 +1033,6 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
     return evecs, evals, inv_evecs
 
 
-
 def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
     """
     Construct a *real* logarithm of real matrix `m`.
