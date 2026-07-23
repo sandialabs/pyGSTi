@@ -979,21 +979,13 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
         `numpy.linalg.eigh`, which is faster and more numerically stable
         than the general-purpose path, and guarantees a unitary `evecs`. If
         None (the default), this is inferred by testing `m` for Hermiticity,
-        regardless of `assume_normal`: Hermitian matrices are a special case
-        of normal matrices, and the Hermiticity test is much cheaper than the
-        Schur decomposition `assume_normal` would otherwise trigger, so a
-        Hermitian `m` always takes the `eigh` path.
+        regardless of `assume_normal`.
 
     assume_normal : bool, optional
         If True, and `m` is not (found or assumed) to be Hermitian, `m` is
         assumed to be a normal operator and is eigendecomposed via a complex
         Schur decomposition, whose triangular factor is verified to be
-        diagonal (up to `tol`) -- i.e., the same approach used by this
-        module's `eign` function. This also guarantees a unitary `evecs`, and
-        is a reasonable middle ground between `assume_hermitian=True` and the
-        fully general (non-unitary `evecs`) path used when neither
-        `assume_hermitian` (whether passed or inferred) nor `assume_normal`
-        holds.
+        diagonal (up to `tol`).
 
     tol : float, optional
         Only used when the `assume_normal` path is taken. The off-diagonal
@@ -1011,9 +1003,7 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
         The eigenvalues of `m`.
 
     inv_evecs : numpy array
-        The inverse of `evecs` (equal to `evecs.T.conj()` whenever `evecs`
-        is unitary, i.e. whenever the `assume_hermitian` or `assume_normal`
-        path was taken).
+        The matrix inverse of `evecs`
     """
     if assume_hermitian is None:
         assume_hermitian = is_hermitian(m)
@@ -1027,11 +1017,9 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
         evals, evecs = _np.linalg.eigh(m)
         inv_evecs = evecs.T.conj()
     elif assume_normal:
-        # Same approach as this module's eign(): a complex Schur decomposition,
-        # with the triangular factor checked (rather than assumed) to be diagonal.
-        T, evecs = _spl.schur(m, output='complex')
+        T, evecs     = _spl.schur(m, output='complex')  # type: ignore
         offdiag_norm = _spl.norm(T[_np.triu_indices_from(T, 1)])
-        diag_norm = _spl.norm(_np.diag(T), ord=_np.inf)
+        diag_norm    = _spl.norm(_np.diag(T), ord=_np.inf)
         if offdiag_norm > tol * diag_norm:
             raise ValueError(
                 f'Off-diagonal of triangular factor T from Schur decomposition had norm {offdiag_norm}, '
