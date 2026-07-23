@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## Unreleased
+
+### Fixed
+* `matrixtools.eigendecomposition(assume_normal=True)` now still routes Hermitian inputs to `eigh` (Hermitian matrices are normal, but the Hermiticity check was being skipped whenever the caller passed `assume_normal=True`); also fixed a pre-existing bug where `matrixtools.eigenvalues(assume_normal=True)` read off the Schur unitary factor instead of the triangular factor's diagonal (#856).
+
 ## [0.10.1] - 2026-07-06
 
 Bugfix release. The only updates are to pyproject.toml to declare import-time dependencies.
