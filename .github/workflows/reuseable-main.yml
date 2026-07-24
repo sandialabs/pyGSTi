@@ -173,7 +173,6 @@ jobs:
         git fetch --no-tags --depth=1 origin "${DIFF_BASE}"
 
         if git diff --quiet "origin/${DIFF_BASE}" HEAD -- \
-          pygsti/tools/graphcoloring.py \
           pygsti/tools/graphcoloring \
           test/unit/tools/test_graphcoloring.py
         then
