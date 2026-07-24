@@ -1350,18 +1350,44 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
         ascending order starting at zero.
     """
     assert(len(a) == len(b))
+    default_metric = metricfn is None
     if metricfn is None:
         def metricfn(x, y): return abs(x - y)
 
     D = len(a)
     weightMx = _np.empty((D, D), 'd')
+    a_arr = _np.asarray(a); b_arr = _np.asarray(b)
 
-    if pass_indices_to_metricfn:
-        for i, x in enumerate(a):
-            weightMx[i, :] = _np.ravel(_np.array([metricfn(i, j) for j, y in enumerate(b)]))
-    else:
-        for i, x in enumerate(a):
-            weightMx[i, :] = _np.ravel(_np.array([metricfn(x, y) for j, y in enumerate(b)]))
+    filled = False
+    if D > 0 and default_metric and not pass_indices_to_metricfn:
+        diff = a_arr[:, None] - b_arr[None, :]
+        weightMx[:, :] = _np.hypot(diff.real, diff.imag)
+        filled = True
+    elif D > 0 and not (_np.iscomplexobj(a_arr) or _np.iscomplexobj(b_arr)):
+        # Custom metric on *real* inputs: elementwise real ops give the exact same IEEE
+        # result whether applied to scalars or broadcast arrays (no reductions), so this
+        # is bit-identical to the loop. Complex custom metrics fall back (can't guarantee
+        # bit-identical vectorization). Anything that can't be evaluated on arrays (or
+        # returns the wrong shape/complex) also falls back.
+        try:
+            if pass_indices_to_metricfn:
+                vals = metricfn(_np.arange(D)[:, None], _np.arange(D)[None, :])
+            else:
+                vals = metricfn(a_arr[:, None], b_arr[None, :])
+            vals = _np.asarray(vals)
+            if vals.shape == (D, D) and not _np.iscomplexobj(vals):
+                weightMx[:, :] = vals
+                filled = True
+        except Exception:
+            filled = False
+
+    if not filled:
+        if pass_indices_to_metricfn:
+            for i, x in enumerate(a):
+                weightMx[i, :] = _np.ravel(_np.array([metricfn(i, j) for j, y in enumerate(b)]))
+        else:
+            for i, x in enumerate(a):
+                weightMx[i, :] = _np.ravel(_np.array([metricfn(x, y) for j, y in enumerate(b)]))
 
     a_inds, b_inds = _spo.linear_sum_assignment(weightMx)
     assert(_np.allclose(a_inds, range(D))), "linear_sum_assignment returned unexpected row indices!"
@@ -2581,17 +2607,11 @@ def _zvals_int64_indices_and_signs(zvals_int: int, nqubits: int) -> tuple[_np.nd
     """
     Shared internals of :func:`zvals_int64_to_dense` and :func:`zvals_int64_probability`.
 
-    Computes the sorted (monotonically increasing) indices of the ``2**nqubits`` nonzero
-    elements of the computational-basis effect/state vector described by `zvals_int` and
-    `nqubits`, along with the +1/-1 sign to apply at each of those indices.  The index
-    array depends only on `nqubits` and so is cached (keyed by `nqubits`) and reused across
-    calls; only the (cheap) sign computation is redone per-call, since it depends on
-    `zvals_int`.  Requires `nqubits >= 1` (the `nqubits == 0` special case is handled by
-    the calling functions).
-
-    See :func:`zvals_int64_to_dense` for a description of the indexing/sign-computation
-    scheme (including why the indices come out pre-sorted, and why only the scalar
-    `zvals_int`, rather than the whole index array, needs to be bit-reversed).
+    Computes the indices of the ``2**nqubits`` nonzero elements of the computational-basis
+    effect/state vector described by `zvals_int` and `nqubits`, along with the +1/-1 sign at
+    each index.  The index array depends only on `nqubits` and is cached (keyed by `nqubits`);
+    only the sign computation is redone per-call.  Requires `nqubits >= 1` (the `nqubits == 0`
+    case is handled by the callers).
 
     Parameters
     ----------
@@ -2620,12 +2640,9 @@ def _zvals_int64_indices_and_signs(zvals_int: int, nqubits: int) -> tuple[_np.nd
         r, final_indices = cached
 
     zvals_rev = _reverse_bits_scalar(int(zvals_int), N)
-    # `parities` only ever holds 0s and 1s, so we cast down to int8 immediately (rather
-    # than carrying it around as int64) to shrink this length-2**N temporary array by
-    # 8x.  Callers' final multiplication by `abs_elval` promotes the result to float64
-    # anyway, so there's no precision to lose by keeping `signs` narrow until then.
+    # parities are 0/1; keep as int8 to save memory (promoted to float by abs_elval later).
     parities = int64_parity(r & _np.int64(zvals_rev)).astype(_np.int8)
-    signs = 1 - 2 * parities  # maps {0,1} -> {+1,-1}; stays int8 (see numpy NEP 50)
+    signs = 1 - 2 * parities  # maps {0,1} -> {+1,-1}
 
     return final_indices, signs
 
@@ -2636,13 +2653,8 @@ def zvals_int64_to_dense(
     """
     Fills a dense array with the super-ket representation of a computational basis state.
 
-    This is the vectorized ("fast") version of this function.  The index arrays used
-    internally depend only on `nqubits`, so they are cached (keyed by `nqubits`) and
-    reused across calls to avoid recomputation.  The nonzero indices are additionally
-    computed and visited in *sorted* (monotonically increasing) order, so that the
-    scatter-write into `outvec` is sequential rather than jumping around unpredictably
-    (the naive bit-indexing scheme corresponds to a bit-reversal permutation, which is
-    a textbook-bad memory access pattern once `outvec` no longer fits in cache).
+    The index arrays used internally depend only on `nqubits` and are cached (keyed by
+    `nqubits`) and reused across calls.
 
     Parameters
     ----------
@@ -2672,16 +2684,8 @@ def zvals_int64_to_dense(
     """
     if outvec is None:
         outvec = _np.zeros(4**nqubits, 'd')
-        # `outvec` is guaranteed to be freshly all-zero here, so there is no need to
-        # (redundantly) reset it below.  This matters a lot in practice: `np.zeros`
-        # for a large array is backed by lazily-mapped, copy-on-write OS zero-pages
-        # and so is essentially free, but explicitly writing zeros into it (as
-        # `outvec[:] = 0` does) forces the *entire* O(4**nqubits)-sized array to be
-        # physically paged in and zeroed, even though we only ever touch O(2**nqubits)
-        # of its elements below.  Skipping this avoids that (otherwise dominant) cost.
     elif not trust_outvec_sparsity:
-        # `outvec` was supplied by the caller, so we can't assume it's already zero
-        # (e.g. it may be a reused scratch buffer with leftover data).
+        # caller-supplied outvec may hold leftover data, so reset it.
         outvec[:] = 0
 
     if abs_elval is None:
@@ -2694,18 +2698,8 @@ def zvals_int64_to_dense(
         if outvec.size > 0: outvec[0] = abs_elval
         return outvec
 
-    # The 2**N nonzero elements of the resulting vector are at indices that are
-    # base-4 numbers whose digits are only 0 or 3.  Rather than indexing these via
-    # the "natural" bit order of `finds` (which produces a bit-reversal permutation
-    # of indices), `_zvals_int64_indices_and_signs` indexes via `r = 0..2**N-1`
-    # directly, using order-preserving bit-spreading to get the corresponding
-    # index.  This means `final_indices` comes out already sorted, so the scatter-write
-    # below is sequential rather than jumping around unpredictably (the naive
-    # bit-indexing scheme is a textbook-bad memory access pattern once `outvec` no
-    # longer fits in cache).
     final_indices, signs = _zvals_int64_indices_and_signs(zvals_int, N)
 
-    # Assign the values to the output vector (sequential scatter-write).
     outvec[final_indices] = signs * abs_elval
     return outvec
 
@@ -2715,15 +2709,6 @@ def zvals_int64_probability(
         abs_elval: Optional[float] = None) -> float:
     """
     Compute the inner product of a computational-basis POVM effect with a dense state vector.
-
-    This computes the same result as
-    ``numpy.dot(zvals_int64_to_dense(zvals_int, nqubits), state_data)``, but without ever
-    materializing the full, mostly-zero, length-``4**nqubits`` dense effect vector.  Only
-    the ``2**nqubits`` nonzero elements of the effect (and the corresponding elements of
-    `state_data`) are touched, so this runs in O(2**nqubits) time and memory-traffic rather
-    than O(4**nqubits).  This mirrors the analogous fast, sparse-dot-product C++
-    implementation used by the compiled evotypes (e.g. `EffectCRep_Computational::probability`),
-    but for the pure-Python evotypes.
 
     Parameters
     ----------
