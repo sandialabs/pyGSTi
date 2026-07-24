@@ -175,7 +175,6 @@ _NOISE_CONFIGS = [
 ]
 
 
-@pytest.mark.slow
 class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
     """
     System-integration test for crosstalk-free GST across all four Lindblad
