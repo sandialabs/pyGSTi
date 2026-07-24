@@ -10,11 +10,17 @@ Matrix related utility functions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
 
-from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union, Literal
+from typing import (Protocol, Any, runtime_checkable, TypeVar, Optional, Union, Literal,
+                    Callable, Sequence, TYPE_CHECKING)
+
+if TYPE_CHECKING:
+    from pygsti.baseobjs.basis import Basis
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -30,6 +36,9 @@ try:
 except ImportError:
     _fastcalc = None
 
+# Type alias for functions that accept either a dense numpy array or a scipy sparse matrix.
+MatrixLike = Union[_np.ndarray, _sps.spmatrix]
+
 #EXPM_DEFAULT_TOL = 1e-7
 EXPM_DEFAULT_TOL = 2**-53  # Scipy default
 
@@ -42,7 +51,7 @@ BLAS_FUNCS = {
     }
 }
 
-def gram_matrix(m, adjoint=False):
+def gram_matrix(m: _np.ndarray, adjoint: bool = False) -> _np.ndarray:
     """
     If adjoint=False, then return m.T.conj() @ m, computed in a more efficient way.
 
@@ -221,7 +230,7 @@ def induced_projector(mx: _np.ndarray, tol: float = 1e-12, *, require_real: bool
         )
 
 
-def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
+def is_pos_def(mx: _np.ndarray, tol: float = 1e-9, attempt_cholesky: bool = False) -> bool:
     """
     Test whether mx is a positive-definite matrix.
 
@@ -250,7 +259,7 @@ def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
     return all([ev > -tol for ev in evals])
 
 
-def is_valid_density_mx(mx, tol=1e-9):
+def is_valid_density_mx(mx: _np.ndarray, tol: float = 1e-9) -> bool:
     """
     Test whether mx is a valid density matrix (hermitian, positive-definite, and unit trace).
 
@@ -288,7 +297,7 @@ def pivot_indices_after_deflation(m_fixed: _np.ndarray, m: _np.ndarray) -> _np.n
     return J
 
 
-def nullspace(m, tol=1e-7):
+def nullspace(m: _np.ndarray, tol: float = 1e-7) -> _np.ndarray:
     """
     Compute the nullspace of a matrix.
 
@@ -309,7 +318,7 @@ def nullspace(m, tol=1e-7):
     return vh[rank:].T.conjugate()
 
 
-def nullspace_qr(m, tol=1e-7):
+def nullspace_qr(m: _np.ndarray, tol: float = 1e-7) -> _np.ndarray:
     """
     Compute the nullspace of a matrix using the QR decomposition.
 
@@ -342,7 +351,7 @@ def nullspace_qr(m, tol=1e-7):
     return q[:, rank:]
 
 
-def nice_nullspace(m, tol=1e-7, orthogonalize=False):
+def nice_nullspace(m: _np.ndarray, tol: float = 1e-7, orthogonalize: bool = False) -> _np.ndarray:
     """
     Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
 
@@ -385,7 +394,9 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     return ret
 
 
-def normalize_columns(m, return_norms=False, ord=None):
+def normalize_columns(m: MatrixLike, return_norms: bool = False,
+                      ord: Optional[Union[int, list, _np.ndarray]] = None
+                      ) -> Union[MatrixLike, tuple[MatrixLike, _np.ndarray]]:
     """
     Normalizes the columns of a matrix.
 
@@ -418,7 +429,7 @@ def normalize_columns(m, return_norms=False, ord=None):
     return (normalized_m, norms) if return_norms else normalized_m
 
 
-def column_norms(m, ord=None):
+def column_norms(m: MatrixLike, ord: Optional[Union[int, list, _np.ndarray]] = None) -> _np.ndarray:
     """
     Compute the norms of the columns of a matrix.
 
@@ -450,7 +461,7 @@ def column_norms(m, ord=None):
     return norms
 
 
-def scale_columns(m, scale_values):
+def scale_columns(m: MatrixLike, scale_values: _np.ndarray) -> MatrixLike:
     """
     Scale each column of a matrix by a given value.
 
@@ -482,7 +493,7 @@ def scale_columns(m, scale_values):
         return m * scale_values[None, :]
 
 
-def columns_are_orthogonal(m, tol=1e-7):
+def columns_are_orthogonal(m: _np.ndarray, tol: float = 1e-7) -> bool:
     """
     Checks whether a matrix contains orthogonal columns.
 
@@ -509,7 +520,7 @@ def columns_are_orthogonal(m, tol=1e-7):
     return bool(_np.linalg.norm(check) / check.size < tol)
 
 
-def columns_are_orthonormal(m, tol=1e-7):
+def columns_are_orthonormal(m: _np.ndarray, tol: float = 1e-7) -> bool:
     """
     Checks whether a matrix contains orthogonal columns.
 
@@ -536,7 +547,8 @@ def columns_are_orthonormal(m, tol=1e-7):
     return bool(_np.linalg.norm(check) / check.size < tol)
 
 
-def independent_columns(m, initial_independent_cols=None, tol=1e-7):
+def independent_columns(m: MatrixLike, initial_independent_cols: Optional[MatrixLike] = None,
+                        tol: float = 1e-7) -> list:
     """
     Computes the indices of the linearly-independent columns in a matrix.
 
@@ -604,7 +616,7 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
     return indep_cols
 
 
-def pinv_of_matrix_with_orthogonal_columns(m):
+def pinv_of_matrix_with_orthogonal_columns(m: _np.ndarray) -> _np.ndarray:
     """
     Return the matrix "pinv_m" so m @ pinvm and pinv_m @ m are orthogonal projectors
     onto subspaces of dimension rank(m).
@@ -622,7 +634,7 @@ def pinv_of_matrix_with_orthogonal_columns(m):
     return m_with_scaled_cols.T
 
 
-def matrix_sign(m):
+def matrix_sign(m: _np.ndarray) -> _np.ndarray:
     """
     Compute the matrix s = sign(m). The eigenvectors of s are the same as those of m.
     The eigenvalues of s are +/- 1, corresponding to the signs of m's eigenvalues.
@@ -683,7 +695,7 @@ def matrix_sign(m):
 
 
 
-def print_mx(mx, width=9, prec=4, withbrackets=False):
+def print_mx(mx: _np.ndarray, width: int = 9, prec: int = 4, withbrackets: bool = False) -> None:
     """
     Print matrix in pretty format.
 
@@ -712,7 +724,7 @@ def print_mx(mx, width=9, prec=4, withbrackets=False):
     print(mx_to_string(mx, width, prec, withbrackets))
 
 
-def mx_to_string(m, width=9, prec=4, withbrackets=False):
+def mx_to_string(m: _np.ndarray, width: int = 9, prec: int = 4, withbrackets: bool = False) -> str:
     """
     Generate a "pretty-format" string for a matrix.
 
@@ -757,7 +769,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     return s
 
 
-def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
+def mx_to_string_complex(m: _np.ndarray, real_width: int = 9, im_width: int = 9, prec: int = 4) -> str:
     """
     Generate a "pretty-format" string for a complex-valued matrix.
 
@@ -792,7 +804,7 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     return s
 
 
-def unitary_superoperator_matrix_log(m, mx_basis):
+def unitary_superoperator_matrix_log(m: _np.ndarray, mx_basis: Union[str, Basis]) -> _np.ndarray:
     """
     Construct the logarithm of superoperator matrix `m`.
 
@@ -834,7 +846,7 @@ def unitary_superoperator_matrix_log(m, mx_basis):
     return logM
 
 
-def near_identity_matrix_log(m, tol=1e-8):
+def near_identity_matrix_log(m: _np.ndarray, tol: float = 1e-8) -> _np.ndarray:
     """
     Construct the logarithm of superoperator matrix `m` that is near the identity.
 
@@ -867,7 +879,8 @@ def near_identity_matrix_log(m, tol=1e-8):
     return logM
 
 
-def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
+def approximate_matrix_log(m: _np.ndarray, target_logm: _np.ndarray,
+                           target_weight: float = 10.0, tol: float = 1e-6) -> _np.ndarray:
     """
     Construct an approximate logarithm of superoperator matrix `m` that is real and near the `target_logm`.
 
@@ -945,7 +958,8 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
     return logM
 
 
-def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assume_normal: bool = False):
+def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None,
+                assume_normal: bool = False) -> _np.ndarray:
     if assume_hermitian is None:
         assume_hermitian = is_hermitian(m)
     if assume_hermitian:
@@ -965,7 +979,8 @@ def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assu
 
 
 def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None,
-                        assume_normal: bool = False, tol: float = 1e-12):
+                        assume_normal: bool = False, tol: float = 1e-12
+                        ) -> tuple[_np.ndarray, _np.ndarray, _np.ndarray]:
     """
     Eigendecompose a square matrix as `m = evecs @ diag(evals) @ inv_evecs`.
 
@@ -1034,7 +1049,8 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
 
 
 
-def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
+def real_matrix_log(m: _np.ndarray, action_if_imaginary: Literal["raise", "warn", "ignore"] = "raise",
+                    tol: float = 1e-8) -> _np.ndarray:
     """
     Construct a *real* logarithm of real matrix `m`.
 
@@ -1142,7 +1158,7 @@ def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
 
 ## ------------------------ Erik : Matrix tools that Tim has moved here -----------
 
-def column_basis_vector(i, dim):
+def column_basis_vector(i: int, dim: int) -> _np.ndarray:
     """
     Returns the ith standard basis vector in dimension dim.
 
@@ -1165,7 +1181,7 @@ def column_basis_vector(i, dim):
     return output
 
 
-def vec(matrix_in):
+def vec(matrix_in: _np.ndarray) -> list:
     """
     Stacks the columns of a matrix to return a vector
 
@@ -1180,7 +1196,7 @@ def vec(matrix_in):
     return [b for a in _np.transpose(matrix_in) for b in a]
 
 
-def norm1(m):
+def norm1(m: _np.ndarray) -> float:
     """
     Returns the Schatten 1-norm of a matrix
 
@@ -1200,7 +1216,7 @@ def norm1(m):
 
 # Riley note: I'd like to rewrite this, but I don't want to mess with reproducibility
 # issues. For now I've just made it a teeny bit more efficient.
-def random_hermitian(dim):
+def random_hermitian(dim: int) -> _np.ndarray:
     """
     Generates a random Hermitian matrix
 
@@ -1224,7 +1240,7 @@ def random_hermitian(dim):
     return c / my_norm
 
 
-def norm1to1(operator, num_samples=10000, mx_basis="gm"):
+def norm1to1(operator: _np.ndarray, num_samples: int = 10000, mx_basis: Union[str, Basis] = "gm") -> float:
     """
     The Hermitian 1-to-1 norm of a superoperator represented in the standard basis.
 
@@ -1260,7 +1276,7 @@ def norm1to1(operator, num_samples=10000, mx_basis="gm"):
 ## ------------------------ General utility fns -----------------------------------
 
 
-def complex_compare(a, b):
+def complex_compare(a: complex, b: complex) -> int:
     """
     Comparison function for complex numbers that compares real part, then imaginary part.
 
@@ -1285,7 +1301,7 @@ def complex_compare(a, b):
     else: return 0
 
 
-def prime_factors(n):
+def prime_factors(n: int) -> list:
     """
     GCD algorithm to produce prime factors of `n`
 
@@ -1311,8 +1327,10 @@ def prime_factors(n):
     return factors
 
 
-def minweight_match(a, b, metricfn=None, return_pairs=True,
-                    pass_indices_to_metricfn=False):
+def minweight_match(a: Union[list, _np.ndarray], b: Union[list, _np.ndarray],
+                    metricfn: Optional[Callable] = None, return_pairs: bool = True,
+                    pass_indices_to_metricfn: bool = False
+                    ) -> Union[_np.ndarray, tuple[_np.ndarray, list]]:
     """
     Matches the elements of two vectors, `a` and `b` by minimizing the weight between them.
 
@@ -1401,8 +1419,8 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
         return min_weights
 
 
-def minweight_match_realmxeigs(a, b, metricfn=None,
-                               pass_indices_to_metricfn=False, eps=1e-9):
+def minweight_match_realmxeigs(a: _np.ndarray, b: _np.ndarray, metricfn: Optional[Callable] = None,
+                               pass_indices_to_metricfn: bool = False, eps: float = 1e-9) -> list:
     """
     Matches the elements of `a` and `b`, whose elements are assumed to either real or one-half of a conjugate pair.
 
@@ -1528,7 +1546,7 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
     return sorted(pairs, key=lambda x: x[0])  # sort by a's index
 
 
-def _fas(a, inds, rhs, add=False):
+def _fas(a: _np.ndarray, inds: Sequence, rhs: _np.ndarray, add: bool = False) -> _np.ndarray:
     """
     Fancy Assignment, equivalent to `a[*inds] = rhs` but with
     the elements of inds (allowed to be integers, slices, or
@@ -1634,7 +1652,7 @@ def _fas(a, inds, rhs, add=False):
     return a
 
 
-def _findx_shape(a, inds):
+def _findx_shape(a: _np.ndarray, inds: Sequence) -> list:
     """ Returns the shape of a fancy-indexed array (`a[*inds].shape`) """
     shape = []
     for ii, N in enumerate(a.shape):
@@ -1647,7 +1665,7 @@ def _findx_shape(a, inds):
     return shape
 
 
-def _findx(a, inds, always_copy=False):
+def _findx(a: _np.ndarray, inds: Sequence, always_copy: bool = False) -> _np.ndarray:
     """
     Fancy Indexing, equivalent to `a[*inds].copy()` but with
     the elements of inds (allowed to be integers, slices, or
@@ -1689,7 +1707,7 @@ def _findx(a, inds, always_copy=False):
         return a_inds
 
 
-def safe_norm(a, part=None):
+def safe_norm(a: MatrixLike, part: Optional[Literal['real', 'imag']] = None) -> float:
     """
     Get the frobenius norm of a matrix or vector, `a`, when it is either a dense array or a sparse matrix.
 
@@ -1717,7 +1735,7 @@ def safe_norm(a, part=None):
     # could also use _spsl.norm(A)
 
 
-def safe_onenorm(a):
+def safe_onenorm(a: MatrixLike) -> float:
     """
     Computes the 1-norm of the dense or sparse matrix `a`.
 
@@ -1736,7 +1754,7 @@ def safe_onenorm(a):
         return _np.linalg.norm(a, 1)
 
 
-def csr_sum_indices(csr_matrices):
+def csr_sum_indices(csr_matrices: list) -> tuple[list, _np.ndarray, _np.ndarray, int]:
     """
     Precomputes the indices needed to sum a set of CSR sparse matrices.
 
@@ -1793,7 +1811,7 @@ def csr_sum_indices(csr_matrices):
     return csr_sum_array, indptr, indices, N
 
 
-def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
+def csr_sum(data: _np.ndarray, coeffs: Sequence, csr_mxs: Sequence, csr_sum_indices: Sequence) -> None:
     """
     Accelerated summation of several CSR-format sparse matrices.
 
@@ -1831,7 +1849,7 @@ def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
         data[inds] += coeff * mx.data
 
 
-def csr_sum_flat_indices(csr_matrices):
+def csr_sum_flat_indices(csr_matrices: list) -> tuple:
     """
     Precomputes quantities allowing fast computation of linear combinations of CSR sparse matrices.
 
@@ -1878,7 +1896,8 @@ def csr_sum_flat_indices(csr_matrices):
 
 
 if _fastcalc is None:
-    def csr_sum_flat(data, coeffs, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr):
+    def csr_sum_flat(data: _np.ndarray, coeffs: _np.ndarray, flat_dest_index_array: _np.ndarray,
+                     flat_csr_mx_data: _np.ndarray, mx_nnz_indptr: _np.ndarray) -> None:
         """
         Computation of the summation of several CSR-format sparse matrices.
 
@@ -1920,7 +1939,8 @@ if _fastcalc is None:
             for i in range(mx_nnz_indptr[iMx], mx_nnz_indptr[iMx + 1]):
                 data[flat_dest_index_array[i]] += coeff * flat_csr_mx_data[i]
 else:
-    def csr_sum_flat(data, coeffs, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr):
+    def csr_sum_flat(data: _np.ndarray, coeffs: _np.ndarray, flat_dest_index_array: _np.ndarray,
+                     flat_csr_mx_data: _np.ndarray, mx_nnz_indptr: _np.ndarray) -> None:
         """
         Computes the summation of several CSR-format sparse matrices.
 
@@ -1956,7 +1976,7 @@ else:
         return _fastcalc.fast_csr_sum_flat(data, coeffs_complex, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr)
 
 
-def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
+def expm_multiply_prep(a: _sps.spmatrix, tol: float = EXPM_DEFAULT_TOL) -> tuple:
     """
     Computes "prepared" meta-info about matrix `a`, to be used in `expm_multiply_fast`.
 
@@ -2017,7 +2037,7 @@ def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
 
 
 if _fastcalc is None:
-    def expm_multiply_fast(prep_a, v, tol=EXPM_DEFAULT_TOL):
+    def expm_multiply_fast(prep_a: tuple, v: _np.ndarray, tol: float = EXPM_DEFAULT_TOL) -> _np.ndarray:
         """
         Multiplies `v` by an exponentiated matrix.
 
@@ -2043,7 +2063,7 @@ if _fastcalc is None:
             A, v, mu, m_star, s, tol, eta)  # t == 1.0 always, `balance` not implemented so removed
 
 else:
-    def expm_multiply_fast(prep_a, v, tol=EXPM_DEFAULT_TOL):
+    def expm_multiply_fast(prep_a: tuple, v: _np.ndarray, tol: float = EXPM_DEFAULT_TOL) -> _np.ndarray:
         """
         Multiplies `v` by an exponentiated matrix.
 
@@ -2073,7 +2093,9 @@ else:
                                                           v.copy(), mu, m_star, s, tol, eta)
 
 
-def _custom_expm_multiply_simple_core(a, b, mu, m_star, s, tol, eta):  # t == 1.0 replaced below
+def _custom_expm_multiply_simple_core(a: Union[_np.ndarray, _sps.spmatrix, "_spsl.LinearOperator"],
+                                      b: _np.ndarray, mu: float, m_star: int, s: int,
+                                      tol: float, eta: float) -> _np.ndarray:  # t == 1.0 replaced below
     """
     a helper function.  Note that this (python) version works when a is a LinearOperator
     as well as a SciPy CSR sparse matrix.
@@ -2098,7 +2120,8 @@ def _custom_expm_multiply_simple_core(a, b, mu, m_star, s, tol, eta):  # t == 1.
     return F
 
 
-def expop_multiply_prep(op, a_1_norm=None, tol=EXPM_DEFAULT_TOL):
+def expop_multiply_prep(op: "_spsl.LinearOperator", a_1_norm: Optional[float] = None,
+                        tol: float = EXPM_DEFAULT_TOL) -> tuple:
     """
     Returns "prepared" meta-info about operation op, which is assumed to be traceless (so no shift is needed).
 
@@ -2145,7 +2168,7 @@ def expop_multiply_prep(op, a_1_norm=None, tol=EXPM_DEFAULT_TOL):
     return mu, m_star, s, eta
 
 
-def sparse_equal(a, b, atol=1e-8):
+def sparse_equal(a: _sps.spmatrix, b: _sps.spmatrix, atol: float = 1e-8) -> bool:
     """
     Checks whether two Scipy sparse matrices are (almost) equal.
 
@@ -2187,7 +2210,7 @@ def sparse_equal(a, b, atol=1e-8):
     return _np.allclose(V1, V2, atol=atol)
 
 
-def sparse_onenorm(a):
+def sparse_onenorm(a: _sps.spmatrix) -> float:
     """
     Computes the 1-norm of the scipy sparse matrix `a`.
 
@@ -2204,7 +2227,7 @@ def sparse_onenorm(a):
     # also == return _spsl.norm(a, ord=1) (comparable speed)
 
 
-def ndarray_base(a, verbosity=0):
+def ndarray_base(a: _np.ndarray, verbosity: int = 0) -> _np.ndarray:
     """
     Get the base memory object for numpy array `a`.
 
@@ -2230,7 +2253,7 @@ def ndarray_base(a, verbosity=0):
     return a
 
 
-def to_unitary(scaled_unitary):
+def to_unitary(scaled_unitary: _np.ndarray) -> tuple[float, _np.ndarray]:
     """
     Compute the scaling factor required to turn a scalar multiple of a unitary matrix to a unitary matrix.
 
@@ -2253,7 +2276,7 @@ def to_unitary(scaled_unitary):
     return scale, (scaled_unitary / scale)
 
 
-def sorted_eig(mx):
+def sorted_eig(mx: _np.ndarray) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Similar to `numpy.eig`, but returns sorted output.
 
@@ -2281,7 +2304,7 @@ def sorted_eig(mx):
     return sorted_ev, sorted_U
 
 
-def compute_kite(eigenvalues):
+def compute_kite(eigenvalues: _np.ndarray) -> list:
     """
     Computes the "kite" corresponding to a list of eigenvalues.
 
@@ -2311,7 +2334,8 @@ def compute_kite(eigenvalues):
     return kite
 
 
-def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
+def find_zero_communtant_connection(u: _np.ndarray, u_inv: _np.ndarray, u0: _np.ndarray,
+                                    u0_inv: _np.ndarray, kite: list) -> _np.ndarray:
     """
     Find a matrix `R` such that u_inv R u0 is diagonal AND log(R) has no projection onto the commutant of G0.
 
@@ -2388,7 +2412,7 @@ def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
     return R.real
 
 
-def project_onto_kite(mx, kite):
+def project_onto_kite(mx: _np.ndarray, kite: list) -> _np.ndarray:
     """
     Project `mx` onto `kite`, so `mx` is zero everywhere except on the kite.
 
@@ -2417,7 +2441,7 @@ def project_onto_kite(mx, kite):
     return mx
 
 
-def project_onto_antikite(mx, kite):
+def project_onto_antikite(mx: _np.ndarray, kite: list) -> _np.ndarray:
     """
     Project `mx` onto the complement of `kite`, so `mx` is zero everywhere *on* the kite.
 
@@ -2445,7 +2469,8 @@ def project_onto_antikite(mx, kite):
     return mx
 
 
-def intersection_space(space1, space2, tol=1e-7, use_nice_nullspace=False):
+def intersection_space(space1: _np.ndarray, space2: _np.ndarray, tol: float = 1e-7,
+                       use_nice_nullspace: bool = False) -> _np.ndarray:
     """
     TODO: docstring
     """
@@ -2455,7 +2480,7 @@ def intersection_space(space1, space2, tol=1e-7, use_nice_nullspace=False):
     return _np.dot(space1, nullsp[0:space1.shape[1], :])
 
 
-def union_space(space1, space2, tol=1e-7):
+def union_space(space1: _np.ndarray, space2: _np.ndarray, tol: float = 1e-7) -> _np.ndarray:
     """
     TODO: docstring
     """
@@ -2464,7 +2489,7 @@ def union_space(space1, space2, tol=1e-7):
     return VW[:, indep_cols]
 
 
-def jamiolkowski_angle(hamiltonian_mx):
+def jamiolkowski_angle(hamiltonian_mx: _np.ndarray) -> _np.ndarray:
     """
     TODO: docstring
     """
@@ -2484,7 +2509,7 @@ def jamiolkowski_angle(hamiltonian_mx):
     #return _np.arccos(_np.sqrt(cos_squared_theta))
 
 
-def zvals_to_dense(self, zvals, superket=True):
+def zvals_to_dense(self, zvals: Union[list, _np.ndarray], superket: bool = True) -> _np.ndarray:
     """
     Construct the dense operator or superoperator representation of a computational basis state.
 
@@ -2742,7 +2767,7 @@ def zvals_int64_probability(
     return abs_elval * _np.dot(signs.astype('d'), state_data[final_indices])
 
 
-def sign_fix_qr(q, r, tol=1e-6):
+def sign_fix_qr(q: _np.ndarray, r: _np.ndarray, tol: float = 1e-6) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Change the signs of the columns of Q and rows of R to follow a convention.
 
@@ -2826,14 +2851,14 @@ class IdentityOperator:
         return other
     
     @property
-    def T(self):
+    def T(self) -> "IdentityOperator":
         return self
     
-    def conj(self):
+    def conj(self) -> "IdentityOperator":
         return self
 
 
-def to_operatorlike(obj):
+def to_operatorlike(obj: Any) -> "OperatorLike":
     if obj is None:
         return IdentityOperator()
     elif isinstance(obj, OperatorLike):
