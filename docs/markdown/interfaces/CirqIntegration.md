@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -246,5 +246,3 @@ mdl_estimate = gst_results.estimates['full TP'].models['stdgaugeopt']
 print("2DeltaLogL(estimate, data): ", pygsti.tools.two_delta_logl(mdl_estimate, dataset))
 print("2DeltaLogL(ideal, data): ", pygsti.tools.two_delta_logl(target_model, dataset))
 ```
-
-

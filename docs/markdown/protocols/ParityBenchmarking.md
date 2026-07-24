@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -35,7 +35,6 @@ installed_solvers = cvxpy.installed_solvers()
 SOLVER = 'MOSEK' # prefer MOSEK (commercial solver, free for research) if available.
 if SOLVER not in installed_solvers:
     SOLVER = 'CLARABEL'  # fallback
-
 ```
 
 ## Setup
@@ -403,5 +402,3 @@ test_errorbars({'0000': 0.45, '0111': 0.05, '1111': 0.5}) # weight 3 movement
 ```{code-cell} ipython3
 test_errorbars({'0000': 0.45, '1111': 0.55}) # weight 4 movement 
 ```
-
-

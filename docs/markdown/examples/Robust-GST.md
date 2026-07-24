@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.19.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -252,5 +252,4 @@ print('HTML report will be written to ... ')
 import os
 print(os.getcwd() + '/' + report_dir + '/main.html\n\n')
 report.write_html(report_dir, verbosity=0)
-
 ```

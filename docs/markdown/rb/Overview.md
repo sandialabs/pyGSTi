@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -107,5 +107,3 @@ rAfixstd = results.fits['A-fixed'].stds['r']
 print("r = {0:1.2e} +/- {1:1.2e} (fit with a free asymptote)".format(r, 2*rstd))
 print("r = {0:1.2e} +/- {1:1.2e} (fit with the asymptote fixed to 1/2^n)".format(rAfix, 2*rAfixstd))
 ```
-
-

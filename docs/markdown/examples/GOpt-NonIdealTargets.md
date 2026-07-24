@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -88,4 +88,3 @@ results1.estimates['full TP'].add_gaugeoptimized(results2.estimates['full TP'].g
 mdl_1b = results1.estimates['full TP'].models['using mdl_guess']
 print(mdl_1b.frobeniusdist(mdl_2)) # gs1b is the same as gs2
 ```
-

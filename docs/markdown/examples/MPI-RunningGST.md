@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -72,7 +72,7 @@ Next, we run the script with 3 processors using the `mpiexec` shell command.  In
 
 Note: the `mpiexec` executable should have been installed with your MPI distribution -- if it doesn't exist, try replacing `mpiexec` with `mpirun`.
 
-```{code-cell} bash
+```{code-cell} ipython3
 :tags: [nbval-skip]
 
 !env FI_PROVIDER=sockets mpiexec -n 3 python3 "../../example_files/mpi_example_script.py"
@@ -90,5 +90,3 @@ pygsti.report.construct_standard_report(
 ```
 
 Open the [report](../../example_files/mpi_example_brief/main.html).
-
-
