@@ -180,38 +180,139 @@ def _eliminate_with_pivot_mod2(a, i, j):
     a[:, j:] = _np.bitwise_xor(a[:, j:], _np.dot(col.reshape(-1, 1), pivot_row))
 
 
-def _eliminate_with_pivot_mod2(a, i, j):
+def _eliminate_below_pivot_mod2(a, k):
     """
-    Zeros out column j in every row except row i, mod 2.
+    Zeros out column k in every row below row k, mod 2 (one-sided elimination).
 
-    Given that `a[i, j]` is a nonzero pivot, this XORs row i (restricted to
-    columns j onward) into every other row that has a 1 in column j. This is
-    the shared elimination step used by both `gaussian_elimination_mod2`
-    (which searches for and swaps in a pivot row before calling this) and
-    `_check_proper_permutation` (which uses only the natural diagonal
-    pivot, without any row searching/swapping).
+    Given that `a[k, k]` is a nonzero pivot, this XORs row k (restricted to
+    columns k onward) into every row below row k that has a 1 in column k.
+    Unlike `_eliminate_with_pivot_mod2` (which zeros out column j in *every*
+    other row, both above and below, as needed for full Gauss-Jordan
+    reduction), this only eliminates *below* the pivot. That is what is
+    needed to build a genuine LU decomposition (as opposed to a fully
+    row-reduced form): the entries eliminated here become 0 in `U`, while
+    the eliminated column (before elimination) is recorded by the caller as
+    the corresponding column of `L`.
 
-    Operates in-place on `a[:, j:]`.
+    Operates in-place on `a[k + 1:, k:]`.
 
     Parameters
     ----------
     a : numpy.ndarray
-        Matrix to operate on (modified in-place). Must satisfy `a[i, j] == 1`.
+        Matrix to operate on (modified in-place). Must satisfy `a[k, k] == 1`.
 
-    i : int
-        Pivot row index.
-
-    j : int
-        Pivot column index.
+    k : int
+        Pivot row/column index.
 
     Returns
     -------
     None
     """
-    pivot_row = a[i:i + 1, j:]  # view, not a copy: only read below, before `a` is mutated
-    col = a[:, j].copy()  # must be a copy: mutated in-place on the next line
-    col[i] = 0
-    a[:, j:] = _np.bitwise_xor(a[:, j:], _np.dot(col.reshape(-1, 1), pivot_row))
+    pivot_row = a[k:k + 1, k:]  # view, not a copy: only read below, before `a` is mutated
+    col = a[k + 1:, k].copy()  # must be a copy: mutated in-place on the next line
+    a[k + 1:, k:] = _np.bitwise_xor(a[k + 1:, k:], _np.dot(col.reshape(-1, 1), pivot_row))
+
+
+def _lu_no_pivot_mod2(a: _np.ndarray) -> Tuple[_np.ndarray, _np.ndarray]:
+    """
+    LU decomposition mod 2 of `a`, without pivoting.
+
+    Returns `L` (unit lower triangular) and `U` (upper triangular) such
+    that `dot_mod2(L, U) == a`. This only works if `a` does not require row
+    pivoting to eliminate, i.e., all of its leading principal minors are
+    nonzero mod 2 (equivalently, invertible over GF(2)) -- callers are
+    responsible for ensuring this; if a zero pivot is encountered anyway,
+    this raises `ValueError` rather than silently returning an incorrect
+    factorization.
+
+    Because no pivot search/row-swapping is needed, this costs O(t^3) for a
+    `t x t` matrix, same as a single `gaussian_elimination_mod2` call. Its
+    purpose is to let callers who need to solve several *nested* linear
+    systems against leading (or, after reversing, trailing) principal
+    submatrices of the same fixed matrix do so with a single O(t^3)
+    factorization followed by O(m^2) triangular solves per submatrix,
+    rather than paying a fresh O(m^3) Gaussian elimination for each one.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        Square matrix to decompose. All leading principal minors must be
+        nonzero mod 2.
+
+    Returns
+    -------
+    L : numpy.ndarray
+        Unit lower triangular matrix mod 2.
+
+    U : numpy.ndarray
+        Upper triangular matrix mod 2.
+    """
+    u = _np.array(a, dtype='int').copy()
+    t = u.shape[0]
+    l_mat = _np.eye(t, dtype='int')
+
+    for k in range(t):
+        if u[k, k] == 0:
+            raise ValueError(
+                "_lu_no_pivot_mod2 encountered a zero pivot at index %d; "
+                "the input matrix does not have all leading principal "
+                "minors invertible mod 2, so a pivot-free LU decomposition "
+                "does not exist." % k
+            )
+        if k < t - 1:
+            l_mat[k + 1:, k] = u[k + 1:, k]
+            _eliminate_below_pivot_mod2(u, k)
+
+    return l_mat, u
+
+
+def _forward_substitution_mod2(l_mat: _np.ndarray, b: _np.ndarray) -> _np.ndarray:
+    """
+    Solves `L y = b` mod 2 for `y`, where `L` is unit lower triangular.
+
+    Parameters
+    ----------
+    l_mat : numpy.ndarray
+        Unit lower triangular matrix mod 2.
+
+    b : numpy.ndarray
+        1D right-hand-side vector mod 2.
+
+    Returns
+    -------
+    numpy.ndarray
+        1D solution vector `y` mod 2.
+    """
+    m = l_mat.shape[0]
+    y = _np.zeros(m, dtype='int')
+    for i in range(m):
+        y[i] = (b[i] ^ (_np.dot(l_mat[i, :i], y[:i]) % 2)) % 2
+    return y
+
+
+def _back_substitution_mod2(u_mat: _np.ndarray, y: _np.ndarray) -> _np.ndarray:
+    """
+    Solves `U x = y` mod 2 for `x`, where `U` is upper triangular with a
+    nonzero (i.e. 1) diagonal.
+
+    Parameters
+    ----------
+    u_mat : numpy.ndarray
+        Upper triangular matrix mod 2, with nonzero diagonal entries.
+
+    y : numpy.ndarray
+        1D right-hand-side vector mod 2.
+
+    Returns
+    -------
+    numpy.ndarray
+        1D solution vector `x` mod 2.
+    """
+    m = u_mat.shape[0]
+    x = _np.zeros(m, dtype='int')
+    for i in range(m - 1, -1, -1):
+        x[i] = (y[i] ^ (_np.dot(u_mat[i, i + 1:], x[i + 1:]) % 2)) % 2
+    return x
 
 
 def gaussian_elimination_mod2(a: _np.ndarray) -> _np.ndarray:
@@ -347,14 +448,45 @@ def albert_factor(d: _np.ndarray, failcount: int = 0,
     # Start in lower right
     L = _np.array([[1]])
 
-    for ind in range(t - 2, -1, -1):
-        block = A[ind:, ind:].copy()
-        z = block[0, 1:]
-        B = block[1:, 1:]
-        n = Axb_mod2(B, z).T
-        x = _np.array(dot_mod2(n, L), dtype='int')
-        zer = _np.zeros([t - ind - 1, 1])
-        L = _np.block([[_np.eye(1), x], [zer, L]]).astype('int')
+    if t > 1:
+        # The submatrices B_ind = A[ind+1:, ind+1:], for ind = t-2, ..., 0,
+        # are nested trailing principal submatrices of the fixed matrix
+        # A[1:, 1:] (each one is the previous one plus one more row and
+        # column). Rather than solving a fresh Ax=b system (a full O(m^3)
+        # Gaussian elimination via `Axb_mod2`) for each of the t-1 nested
+        # submatrices -- which costs O(t^4) overall, since it sums O(m^3)
+        # over m = 1, ..., t-1 -- we factor A[1:, 1:] into LU form *once*
+        # (O(t^3)) and reuse truncated blocks of L and U to solve each
+        # nested system via O(m^2) triangular substitutions instead, for a
+        # total of O(t^3).
+        #
+        # Reversing row/column order turns "trailing submatrices of
+        # A[1:, 1:]" into "leading submatrices of the reversed matrix"
+        # (the same trick used in `_check_proper_permutation`), which is
+        # exactly the structure needed for LU-block reuse: the leading
+        # m x m blocks of the LU factors of a matrix are themselves the LU
+        # factors of its leading m x m principal submatrix (valid here
+        # because `A` was constructed so that all of its trailing/leading
+        # principal submatrices are invertible, so no pivoting is needed).
+        r = A[1:, 1:][::-1, ::-1]
+        l_full, u_full = _lu_no_pivot_mod2(r)
+
+        for ind in range(t - 2, -1, -1):
+            m = t - 1 - ind  # size of B_ind = A[ind+1:, ind+1:]
+            z = A[ind, ind + 1:]
+
+            # B_ind is the row/column reversal of the leading m x m
+            # submatrix of `r`. Conjugating by the reversal permutation
+            # turns `B_ind @ x = z` into `r[:m, :m] @ reverse(x) = reverse(z)`.
+            z_rev = z[::-1]
+            y = _forward_substitution_mod2(l_full[:m, :m], z_rev)
+            x_rev = _back_substitution_mod2(u_full[:m, :m], y)
+            x_vec = x_rev[::-1]
+
+            n = x_vec.reshape(1, -1)
+            x = _np.array(dot_mod2(n, L), dtype='int')
+            zer = _np.zeros([m, 1])
+            L = _np.block([[_np.eye(1), x], [zer, L]]).astype('int')
 
     Qinv = inv_mod2(dot_mod2(P, N))
     L = dot_mod2(_np.array(Qinv), L)
@@ -518,12 +650,21 @@ def permute_top(a: _np.ndarray, i: int) -> Tuple[_np.ndarray, _np.ndarray]:
     numpy.ndarray
     """
     t = len(a)
+    # Conjugating by the transposition matrix P (below) only swaps row 0
+    # with row i and column 0 with column i; everything else is left
+    # unchanged. So we apply that directly instead of via two chained
+    # matrix-matrix multiplications (which would cost O(t^3) instead of
+    # O(t)).
+    aa = a.copy()
+    aa[[0, i]] = aa[[i, 0]]
+    aa[:, [0, i]] = aa[:, [i, 0]]
+
     P = _np.eye(t, dtype='int')
     P[0, 0] = 0
     P[i, i] = 0
     P[0, i] = 1
     P[i, 0] = 1
-    return multidot_mod2([P, a, P]), P
+    return aa, P
 
 
 def fix_top(a: _np.ndarray) -> _np.ndarray:
@@ -575,16 +716,41 @@ def proper_permutation(a: _np.ndarray) -> _np.ndarray:
     numpy.ndarray
     """
     t = len(a)
-    Ps = []  # permutation matrices
+    a = _np.array(a, dtype='int').copy()
+
+    # Track the accumulated permutation as an index array instead of
+    # building a full t x t permutation matrix and chaining
+    # `multidot_mod2` calls at each of the t iterations (and again at the
+    # end, over all t of them). `perm_indices[k]` is the original row/column
+    # index of `a` that currently sits at position `k`. Composing an
+    # additional transposition into this array is O(1); doing the
+    # equivalent with full permutation matrices is O(t^3) per step, i.e.
+    # O(t^4) overall.
+    perm_indices = _np.arange(t)
+
     for ind in range(t):
+        # fix_top always returns a single-transposition permutation matrix
+        # (or the identity, if no swap is needed): its first row has a
+        # single 1, at the position it swaps with local index 0. Extract
+        # that swap target directly, and apply it to `a` (and to the
+        # tracked permutation) via a row/column swap rather than by
+        # embedding it into a full t x t block matrix and multiplying it
+        # in.
         perm = fix_top(a[ind:, ind:])
-        zer = _np.zeros([ind, t - ind])
-        full_perm = _np.block([[_np.eye(ind), zer], [zer.T, perm]])
-        a = multidot_mod2([full_perm, a, full_perm.T])
-        Ps += [full_perm]
-#     return Ps
-    return multidot_mod2(list(reversed(Ps)))
-    #return _np.linalg.multi_dot(list(reversed(Ps))) # Should this not be multidot_mod2 ?
+        local_swap = int(_np.argmax(perm[0, :]))
+        j = ind + local_swap
+
+        if j != ind:
+            a[[ind, j], :] = a[[j, ind], :]
+            a[:, [ind, j]] = a[:, [j, ind]]
+            perm_indices[[ind, j]] = perm_indices[[j, ind]]
+
+    # Materialize the accumulated permutation as a dense t x t matrix only
+    # once, from the index array, to preserve this function's documented
+    # return type (an actual permutation matrix).
+    P = _np.zeros((t, t), dtype='int')
+    P[_np.arange(t), perm_indices] = 1
+    return P
 
 
 def _check_proper_permutation(a: _np.ndarray) -> bool:
