@@ -22,4 +22,3 @@ from .gstcircuits import *
 
 from .subcircuit_selection import *
 from .split_circuits_into_lanes import *
-

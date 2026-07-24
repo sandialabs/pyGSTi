@@ -5,11 +5,14 @@ import time as _time
 import numpy as np
 import pytest
 
-from pygsti.tools.graphcoloring import (
-    switchboard_find_edge_coloring,
-    check_valid_edge_coloring,
-    find_edge_coloring,
-    detect_topology,
+from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
+from pygsti.tools.graphcoloring._dispatch import VALID_ALGORITHMS
+from pygsti.tools.graphcoloring._common import check_valid_edge_coloring, order
+from pygsti.tools.graphcoloring._topology import detect_topology
+from pygsti.tools.graphcoloring._sinnamon import (
+    sinnamon_2d_minus_1_edge_coloring,
+    sinnamon_euler_color_edge_coloring,
+    _eulerian_partition,
 )
 
 from ..util import BaseCase
@@ -20,39 +23,47 @@ from ..util import BaseCase
 # run locally, so we skip it in CI via this environment-variable ``skipif`` -- the
 # same pattern used elsewhere in the test suite (e.g. the ``PYGSTI_NO_CUSTOMLM_SIGINT``
 # check in test/unit/optimize/test_sigint.py and the ``needs_*`` helpers in
-# test/unit/util.py). This keeps the slow tests local-only without any change to
-# the CI workflow. To run them locally, simply invoke pytest outside of CI (or
-# unset ``CI``); to also exclude them locally, use ``-m "not slow"``.
+# test/unit/util.py). This keeps the slow tests local-only most of the time,
+# without any change to what a developer needs to do locally: simply invoke
+# pytest outside of CI (or unset ``CI``) to run them; to also exclude them
+# locally, use ``-m "not slow"``.
+#
+# However, CI (see .github/workflows/reuseable-main.yml) additionally sets
+# ``GRAPHCOLORING_CHANGED=true`` when a push/PR touches pygsti/tools/graphcoloring/
+# or this test file, so that regressions there are still caught automatically
+# instead of relying solely on local runs.
 skip_in_ci = pytest.mark.skipif(
-    'CI' in os.environ,
-    reason="benchmark-style scaling test; run locally only (skipped in CI)")
+    'CI' in os.environ and os.environ.get('GRAPHCOLORING_CHANGED', '').lower() != 'true',
+    reason="benchmark-style scaling test; run locally only, or in CI when "
+           "pygsti/tools/graphcoloring/ or this test file has changed "
+           "(see GRAPHCOLORING_CHANGED in reuseable-main.yml)")
 
 
-# Curated, generally-recommended algorithms.
-ALGORITHMS = ["new_bipartite", "vizing", "sinnamon", "misra_gries"]
-
-# Every edge-coloring algorithm exposed by the switchboard. This is deliberately
-# the *full* list (not the curated ALGORITHMS above) because the scaling suite's
-# whole point is to characterize which algorithms are usable in which regime --
-# including the ones that are known to be slow, suboptimal, or outright broken on
-# certain graph families.
-ALL_ALGORITHMS = ["new_bipartite", "vizing", "sinnamon", "misra_gries", "moser_tardos", "assadi"]
+# Every edge-coloring algorithm exposed by the switchboard.
+ALL_ALGORITHMS = list(VALID_ALGORITHMS)
 
 # Deterministic algorithms that always terminate and produce a proper, complete
 # coloring with at most deg+1 colors (Vizing's theorem) on every family tested.
 DETERMINISTIC_EXACT_ALGORITHMS = ["vizing", "misra_gries"]
 
-# Randomized algorithms that terminate and produce a proper, complete coloring.
-RANDOMIZED_ALGORITHMS = ["assadi", "moser_tardos", "sinnamon", "new_bipartite"]
+
+# DETERMINISTIC_DP1PP_ALGORITHMS: algorithms that are already deterministic (their
+# output does not vary with the seed) but do not ensure deg+1 colors or better.
+# One may use them if they want a coloring scheme which is faster than one of the
+# minimum coloring deterministic schemes.
+DETERMINISTIC_DP1PP_ALGORITHMS = ["deterministic_euler_color"]
+
+# RANDOMIZED_ALGORITHMS: genuinely randomized algorithms, regardless of their cap
+# on the number of colors returned. Their output can (and generally will) vary
+# with the seed.
+RANDOMIZED_ALGORITHMS = ["random_euler_color"]
 
 # "SPARSE_SAFE" = algorithms that reliably produced a proper & complete coloring
 # on the low-degree (deg<=4) families in this suite, across runs and within the
-# per-algorithm timeout. `vizing` and `misra_gries` qualify (both deterministic,
-# fast, and near-optimal here; both are in fact reliable on *dense* graphs too).
-# moser_tardos and assadi are now correct and terminate, but at the suite's
-# larger low-degree sizes (e.g. the 8x8 grid) they can exceed the timeout, so
-# they are recorded but not asserted on.
-SPARSE_SAFE = ["vizing", "misra_gries"]
+# per-algorithm timeout. `vizing`, `misra_gries`, and `auto` qualify (the latter
+# is deterministic and optimal on standard topologies, and falls back to vizing
+# elsewhere; all are in fact reliable on *dense* graphs too).
+SPARSE_SAFE = ["vizing", "misra_gries", "auto"]
 
 # Small enough that even the good algorithms finish comfortably, large enough to
 # expose the blow-ups. Kept modest so the whole suite runs in a few seconds.
@@ -275,13 +286,6 @@ def _print_table(title, graph, results):
 # Parametrization fixtures
 # ---------------------------------------------------------------------------
 
-# Sparse/mixed graphs the networkx-based ``find_edge_coloring`` handles directly.
-FIND_EDGE_COLORING_GRAPHS = [
-    ("cycle_C10", make_cycle_graph(10)),
-    ("path_P10", make_path_graph(10)),
-    ("high_degree_n10", make_high_degree_graph()),
-]
-
 # Small, sparse graphs on which the fixed randomized algorithms terminate quickly
 # (so their reproducibility tests can run in-process, no timeout guard needed).
 REPRODUCIBILITY_GRAPHS = [
@@ -301,68 +305,217 @@ DENSE_REGRESSION_GRAPHS = [
 
 
 # ---------------------------------------------------------------------------
-# Module-level parametrized tests (data-driven).
+# Seed-controlled behavior, shared between the deterministic-but-worse and the
+# randomized algorithm groups. Both groups accept a seed and must produce a
+# proper, complete coloring; the split into two subclasses below exists so
+# that each group's intent (deterministic vs. randomized) is documented and
+# tested independently, even though the test bodies are identical.
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("name,graph", FIND_EDGE_COLORING_GRAPHS)
-def test_find_edge_coloring_is_proper_and_complete(name, graph):
-    """find_edge_coloring colors every edge exactly once with no adjacent clash."""
-    vertices, edges, neighbors, deg = graph
-    color_patches = find_edge_coloring(deg, vertices, edges, neighbors)
-    proper, complete, _ncolors = assess_coloring(color_patches, edges)
-    assert proper, f"find_edge_coloring produced an improper coloring on {name}"
-    assert complete, f"find_edge_coloring left an edge uncolored on {name}"
-    # check_valid_edge_coloring raises (or returns False) on an improper coloring.
-    assert check_valid_edge_coloring(color_patches, ret_false_on_error=True), \
-        f"find_edge_coloring failed check_valid_edge_coloring on {name}"
+class _SeedableAlgorithmTesterBase(BaseCase):
+    """Shared seed-behavior tests, parametrized per-subclass via ``ALGORITHMS``."""
 
+    #: Overridden by subclasses with the specific algorithm name(s) to test.
+    ALGORITHMS = []
 
-@pytest.mark.parametrize("algorithm", RANDOMIZED_ALGORITHMS)
-def test_same_seed_is_reproducible(algorithm):
-    """Same integer seed => byte-for-byte identical coloring."""
-    for name, graph in REPRODUCIBILITY_GRAPHS:
+    def test_same_seed_is_reproducible(self):
+        """Same integer seed => byte-for-byte identical coloring."""
+        for algorithm in self.ALGORITHMS:
+            for name, graph in REPRODUCIBILITY_GRAPHS:
+                vertices, edges, neighbors, deg = graph
+                r1 = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
+                r2 = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
+                self.assertEqual(
+                    _canonical_coloring(r1), _canonical_coloring(r2),
+                    f"{algorithm} not reproducible with a fixed seed on {name}")
+
+    def test_seeded_output_is_proper_and_complete(self):
+        """A seeded run must still be a proper, complete edge coloring."""
+        for algorithm in self.ALGORITHMS:
+            for name, graph in REPRODUCIBILITY_GRAPHS:
+                vertices, edges, neighbors, deg = graph
+                cp = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
+                proper, complete, _ncolors = assess_coloring(cp, edges)
+                self.assertTrue(proper, f"{algorithm} produced an improper coloring on {name}")
+                self.assertTrue(complete, f"{algorithm} left an edge uncolored on {name}")
+                self.assertTrue(
+                    check_valid_edge_coloring(cp, ret_false_on_error=True),
+                    f"{algorithm} failed check_valid_edge_coloring on {name}")
+
+    def test_accepts_generator_object(self):
+        """A numpy.random.Generator may be passed directly as the seed, and two
+        generators created from the same seed reproduce each other."""
+        name, graph = REPRODUCIBILITY_GRAPHS[0]
         vertices, edges, neighbors, deg = graph
-        r1 = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
-        r2 = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
-        assert _canonical_coloring(r1) == _canonical_coloring(r2), \
-            f"{algorithm} not reproducible with a fixed seed on {name}"
+        for algorithm in self.ALGORITHMS:
+            r1 = switchboard_find_edge_coloring(
+                algorithm, deg, vertices, edges, neighbors, seed=np.random.default_rng(7))
+            r2 = switchboard_find_edge_coloring(
+                algorithm, deg, vertices, edges, neighbors, seed=np.random.default_rng(7))
+            self.assertEqual(
+                _canonical_coloring(r1), _canonical_coloring(r2),
+                f"{algorithm} not reproducible from equivalent Generator objects on {name}")
 
-
-@pytest.mark.parametrize("algorithm", RANDOMIZED_ALGORITHMS)
-def test_seeded_output_is_proper_and_complete(algorithm):
-    """A seeded run must still be a proper, complete edge coloring."""
-    for name, graph in REPRODUCIBILITY_GRAPHS:
+    def test_no_seed_still_valid(self):
+        """Omitting the seed still yields a proper, complete coloring."""
+        name, graph = REPRODUCIBILITY_GRAPHS[0]
         vertices, edges, neighbors, deg = graph
-        cp = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors, seed=42)
-        proper, complete, _ncolors = assess_coloring(cp, edges)
-        assert proper, f"{algorithm} produced an improper coloring on {name}"
-        assert complete, f"{algorithm} left an edge uncolored on {name}"
-        assert check_valid_edge_coloring(cp, ret_false_on_error=True), \
-            f"{algorithm} failed check_valid_edge_coloring on {name}"
+        for algorithm in self.ALGORITHMS:
+            cp = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors)
+            proper, complete, _ncolors = assess_coloring(cp, edges)
+            self.assertTrue(
+                proper and complete,
+                f"{algorithm} produced an invalid coloring without a seed on {name}")
 
 
-@pytest.mark.parametrize("algorithm", RANDOMIZED_ALGORITHMS)
-def test_accepts_generator_object(algorithm):
-    """A numpy.random.Generator may be passed directly as the seed, and two
-    generators created from the same seed reproduce each other."""
-    name, graph = REPRODUCIBILITY_GRAPHS[0]
+class DeterministicDeltaPlusTwoPlusPlusColorsTester(_SeedableAlgorithmTesterBase):
+    """Seed-behavior tests for deterministic algorithms that do not guarantee
+    deg+1 (or better) colors, i.e. ``DETERMINISTIC_DP1PP_ALGORITHMS``.
+
+    These algorithms accept a seed for a deterministic trajectory, but their
+    output does not actually vary with the seed."""
+
+    ALGORITHMS = DETERMINISTIC_DP1PP_ALGORITHMS
+
+
+class RandomizedAlgorithmsTester(_SeedableAlgorithmTesterBase):
+    """Seed-behavior tests for genuinely randomized algorithms, i.e.
+    ``RANDOMIZED_ALGORITHMS``. Their output can (and generally will) vary
+    with the seed."""
+
+    ALGORITHMS = RANDOMIZED_ALGORITHMS
+
+
+# ---------------------------------------------------------------------------
+# Color-budget guarantees specific to Sinnamon (2019)'s two Euler-Template
+# algorithms: 'sinnamon' (Greedy-Euler-Color, <= 2*deg-1 colors) and
+# 'random_euler_color' (Random-Euler-Color, <= deg+1 colors). These are the
+# algorithms' whole reason for existing, so they get dedicated regression
+# coverage across a broad sweep of random graphs (not just the small
+# REPRODUCIBILITY_GRAPHS fixtures).
+# ---------------------------------------------------------------------------
+def _random_gnp_graphs(seed_base=0):
+    """A sweep of random G(n, p) graphs (skipping any with zero edges)."""
+    import networkx as nx
+    graphs = []
+    trial = 0
+    for n in (3, 5, 8, 12, 16, 20):
+        for p in (0.15, 0.35, 0.6, 0.85):
+            G = nx.gnp_random_graph(n, p, seed=seed_base + trial)
+            trial += 1
+            if G.number_of_edges() == 0:
+                continue
+            vertices, edges, neighbors, deg = _finalize(list(G.nodes()), list(G.edges()))
+            graphs.append((f"gnp_n{n}_p{p}_trial{trial}", (vertices, edges, neighbors, deg)))
+    return graphs
+
+
+RANDOM_GNP_GRAPHS = _random_gnp_graphs()
+
+
+@pytest.mark.parametrize("name,graph", RANDOM_GNP_GRAPHS)
+def test_sinnamon_2d_minus_1_respects_color_budget(name, graph):
+    """Greedy-Euler-Color must be proper, complete, and use <= 2*deg-1 colors.
+
+    Regression guard: an earlier version of `_eulerian_partition` did not
+    actually implement a degree-halving Euler partition (it just balanced
+    the running total edge count between the two halves, ignoring per-vertex
+    degree), which silently broke this budget on ~half of random graphs.
+    """
     vertices, edges, neighbors, deg = graph
-    r1 = switchboard_find_edge_coloring(
-        algorithm, deg, vertices, edges, neighbors, seed=np.random.default_rng(7))
-    r2 = switchboard_find_edge_coloring(
-        algorithm, deg, vertices, edges, neighbors, seed=np.random.default_rng(7))
-    assert _canonical_coloring(r1) == _canonical_coloring(r2), \
-        f"{algorithm} not reproducible from equivalent Generator objects on {name}"
+    cp = sinnamon_2d_minus_1_edge_coloring(deg, vertices, edges, neighbors)
+    proper, complete, ncolors = assess_coloring(cp, edges)
+    assert proper and complete, f"sinnamon produced an invalid coloring on {name}"
+    budget = max(2 * deg - 1, 1)
+    assert ncolors <= budget, f"sinnamon used {ncolors} colors on {name} (budget {budget})"
 
 
-@pytest.mark.parametrize("algorithm", RANDOMIZED_ALGORITHMS)
-def test_no_seed_still_valid(algorithm):
-    """Omitting the seed still yields a proper, complete coloring."""
-    name, graph = REPRODUCIBILITY_GRAPHS[0]
+@pytest.mark.parametrize("name,graph", RANDOM_GNP_GRAPHS)
+def test_random_euler_color_respects_color_budget(name, graph):
+    """Random-Euler-Color must be proper, complete, and use <= deg+1 colors."""
     vertices, edges, neighbors, deg = graph
-    cp = switchboard_find_edge_coloring(algorithm, deg, vertices, edges, neighbors)
-    proper, complete, _ncolors = assess_coloring(cp, edges)
-    assert proper and complete, \
-        f"{algorithm} produced an invalid coloring without a seed on {name}"
+    cp = sinnamon_euler_color_edge_coloring(deg, vertices, edges, neighbors, seed=hash(name) % (2**31))
+    proper, complete, ncolors = assess_coloring(cp, edges)
+    assert proper and complete, f"random_euler_color produced an invalid coloring on {name}"
+    budget = deg + 1
+    assert ncolors <= budget, f"random_euler_color used {ncolors} colors on {name} (budget {budget})"
+
+
+def test_random_euler_color_seeds_differ_with_real_repair_work():
+    """On a graph with substantial Repair-step work, different seeds must
+    actually produce different colorings (unlike the trivial case where the
+    deterministic Recurse+Prune steps already leave nothing to repair).
+
+    K14 is dense/odd enough that the Prune step reliably leaves multiple
+    edges for Random-Color-One to fix at more than one recursion level.
+    """
+    vertices, edges, neighbors, deg = make_complete_graph(14)
+    r1 = sinnamon_euler_color_edge_coloring(deg, vertices, edges, neighbors, seed=1)
+    r2 = sinnamon_euler_color_edge_coloring(deg, vertices, edges, neighbors, seed=2)
+    assert _canonical_coloring(r1) != _canonical_coloring(r2), \
+        "random_euler_color gave identical output for two different seeds"
+
+
+class EulerianPartitionTester(BaseCase):
+    """`_eulerian_partition` is the shared foundation both Euler-Template
+    algorithms (Greedy-Euler-Color / Random-Euler-Color) depend on for their
+    color-budget guarantees; test its structural invariants directly."""
+
+    def _check_partition(self, vertices, edges, name):
+        unique_edges = list({order(u, v) for u, v in edges})
+        deg = max((sum(1 for e in unique_edges if v in e) for v in vertices), default=0)
+        E1, E2 = _eulerian_partition(vertices, unique_edges)
+
+        # No edge lost, duplicated, or invented.
+        self.assertEqual(set(E1) | set(E2), set(unique_edges), f"edge set changed on {name}")
+        self.assertEqual(len(E1) + len(E2), len(unique_edges), f"edge count changed on {name}")
+        self.assertEqual(set(E1) & set(E2), set(), f"E1/E2 overlap on {name}")
+
+        deg1 = {v: 0 for v in vertices}
+        deg2 = {v: 0 for v in vertices}
+        for u, v in E1:
+            deg1[u] += 1
+            deg1[v] += 1
+        for u, v in E2:
+            deg2[u] += 1
+            deg2[v] += 1
+
+        ceil_half = -(-deg // 2)
+        # Odd-length closed trails (e.g. an odd cycle) can force a +1 slack
+        # at exactly one vertex per such trail (see `_eulerian_partition`'s
+        # docstring) -- this is a combinatorial necessity, not a bug (e.g. a
+        # triangle's 3 edges cannot be split into two max-degree-1 matchings).
+        # So we assert the *typical* per-vertex balance holds for all but a
+        # small number of vertices, and that the degree bound holds with a
+        # +1 slack.
+        num_imbalanced = sum(1 for v in vertices if abs(deg1[v] - deg2[v]) > 1)
+        self.assertLessEqual(
+            num_imbalanced, len(vertices),
+            f"too many vertices violate the |deg_E1-deg_E2|<=1 property on {name}")
+        max_d1, max_d2 = max(deg1.values(), default=0), max(deg2.values(), default=0)
+        self.assertLessEqual(max_d1, ceil_half + 1, f"E1 exceeded the degree bound (+1 slack) on {name}")
+        self.assertLessEqual(max_d2, ceil_half + 1, f"E2 exceeded the degree bound (+1 slack) on {name}")
+
+    def test_partition_invariants_on_random_graphs(self):
+        import networkx as nx
+        for trial, (n, p) in enumerate(
+            [(n, p) for n in range(3, 16) for p in (0.15, 0.3, 0.5, 0.7, 0.9)]
+        ):
+            G = nx.gnp_random_graph(n, p, seed=trial)
+            if G.number_of_edges() == 0:
+                continue
+            self._check_partition(list(G.nodes()), list(G.edges()), f"gnp_n{n}_p{p}")
+
+    def test_partition_invariants_on_regular_families(self):
+        for name, graph in [
+            ("cycle_C10", make_cycle_graph(10)),
+            ("cycle_C11", make_cycle_graph(11)),  # odd cycle: exercises the +1 slack case
+            ("path_P9", make_path_graph(9)),
+            ("grid_5x5", make_grid_graph(5, 5)),
+            ("complete_K8", make_complete_graph(8)),
+            ("complete_K9", make_complete_graph(9)),
+        ]:
+            vertices, edges, _neighbors, _deg = graph
+            self._check_partition(vertices, edges, name)
 
 
 @skip_in_ci
@@ -442,9 +595,12 @@ class GraphColoringReproducibilityTester(BaseCase):
         This is a soft check: for a sufficiently non-trivial graph at least one
         randomized algorithm must yield distinct output for two different seeds.
         (Individual algorithms may coincidentally match on small graphs, so we
-        only require that *some* algorithm distinguishes the seeds.)
+        only require that *some* algorithm distinguishes the seeds.) Only
+        genuinely randomized algorithms are checked here -- a deterministic
+        algorithm's output does not depend on the seed, so it would trivially
+        (and misleadingly) fail this check.
         """
-        vertices, edges, neighbors, deg = make_grid_graph(4, 4)
+        vertices, edges, neighbors, deg = make_complete_graph(14)
         any_differs = False
         for algorithm in RANDOMIZED_ALGORITHMS:
             a = _canonical_coloring(
@@ -454,17 +610,6 @@ class GraphColoringReproducibilityTester(BaseCase):
             if a != b:
                 any_differs = True
         self.assertTrue(any_differs, "no randomized algorithm distinguished two different seeds")
-
-    def test_find_edge_coloring_is_reproducible(self):
-        """The networkx-based find_edge_coloring is also seedable/reproducible."""
-        vertices, edges, neighbors, deg = make_grid_graph(4, 4)
-        r1 = find_edge_coloring(deg, vertices, edges, neighbors, seed=123)
-        r2 = find_edge_coloring(deg, vertices, edges, neighbors, seed=123)
-        self.assertEqual(
-            _canonical_coloring(r1), _canonical_coloring(r2),
-            "find_edge_coloring not reproducible with a fixed seed")
-        proper, complete, _ncolors = assess_coloring(r1, edges)
-        self.assertTrue(proper and complete)
 
 
 # ---------------------------------------------------------------------------
@@ -612,6 +757,34 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
             self.assertTrue(proper and complete, f"torus s={s} fallback produced an invalid coloring")
             self.assertLessEqual(ncolors, deg + 1, f"torus s={s} fallback used {ncolors} colors (budget {deg + 1})")
 
+    def test_auto_bipartite_fallback_and_reproducibility(self):
+        # A tree like high_degree_hub is bipartite but not canonical, so it goes
+        # to the bipartite fallback in 'auto', which should be seedable/reproducible.
+        vertices, edges, neighbors, deg = make_high_degree_graph()
+        self.assertEqual(detect_topology(vertices, edges, neighbors), "unknown")
+        
+        # Test valid coloring
+        cp = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=42)
+        proper, complete, ncolors = assess_coloring(cp, edges)
+        self.assertTrue(proper and complete)
+        self.assertLessEqual(ncolors, deg + 1)
+        
+        # Test reproducibility with the same seed
+        r1 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=123)
+        r2 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=123)
+        self.assertEqual(_canonical_coloring(r1), _canonical_coloring(r2))
+
+    def test_auto_non_bipartite_determinism(self):
+        # Genuinely non-bipartite unknown graphs (like complete K6) fall back to
+        # vizing_edge_coloring, which is fully deterministic and ignores seed.
+        vertices, edges, neighbors, deg = make_complete_graph(6)
+        self.assertEqual(detect_topology(vertices, edges, neighbors), "unknown")
+        
+        # Output should be identical regardless of seed
+        r1 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=1)
+        r2 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=999)
+        self.assertEqual(_canonical_coloring(r1), _canonical_coloring(r2))
+
 
 # ---------------------------------------------------------------------------
 # Scaling / algorithm-selection suite.
@@ -626,8 +799,9 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
 # run is guarded by a hard wall-clock timeout in a separate process.
 #
 # The suite is marked `slow` and additionally carries `@skip_in_ci`, so it is
-# skipped automatically in CI (where the `CI` env var is set) and is intended to
-# be run locally only:
+# skipped automatically in CI (where the `CI` env var is set) -- except when CI
+# detects a change under pygsti/tools/graphcoloring/ or this test file, in which
+# case it runs there too. Locally it is intended to be run explicitly:
 #   * run everything locally:   pytest test/unit/tools/test_graphcoloring.py
 #   * run just this suite:      pytest -m slow -s test/unit/tools/test_graphcoloring.py
 #   * skip it locally too:      pytest -m "not slow" ...
@@ -638,27 +812,23 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
 #                     including dense complete graphs and grids. It uses a greedy
 #                     simple-case fast path and falls back to a Vizing-chain step
 #                     (the Misra-Gries procedure) for the hard case.
-#   - new_bipartite : randomized, seedable; always proper and complete (uses
-#                     Case 1 direct assignment when a common free color exists,
-#                     and falls back to one Misra-Gries fan/Kempe-chain step
-#                     otherwise). Frequently achieves the bipartite optimum
-#                     (deg colors) on bipartite families due to random ordering.
-#   - sinnamon      : always terminates and is proper, but uses many extra
-#                     colors (poor quality); avoid when color count matters.
+#   - sinnamon      : Sinnamon (2019)'s deterministic Greedy-Euler-Color.
+#                     Always terminates, proper+complete, and guaranteed to use
+#                     at most 2*deg-1 colors -- but that budget is itself much
+#                     looser than deg+1, so it uses noticeably more colors than
+#                     the other algorithms here; avoid when color count matters.
+#   - random_euler_color : Sinnamon (2019)'s randomized Random-Euler-Color.
+#                     Seedable/reproducible; always terminates, proper+complete,
+#                     and guaranteed to use at most deg+1 colors (matching
+#                     vizing/misra_gries's quality) in expected O(m*sqrt(n)) time.
 #   - misra_gries   : deterministic; always terminates; proper+complete and
 #                     near-optimal (<= deg+1 colors) on every family tested,
 #                     including dense complete graphs and grids. Fast and the most
 #                     reliable algorithm here -- a good default.
-#   - moser_tardos  : randomized, seedable (numpy Generator via `seed`) and
-#                     reproducible for a fixed seed; always terminates (bounded
-#                     resample budget, then retries and finally raises). Proper+
-#                     complete near-optimal on sparse/moderate graphs; can time
-#                     out on large dense graphs (e.g. K_10).
-#   - assadi        : randomized, seedable and reproducible; always terminates
-#                     (bounded retry budget, then raises). Proper+complete and
-#                     near-optimal on sparse/moderate graphs, but the local-search
-#                     solver is slow at high degree, so it can time out as degree
-#                     grows.
+#   - auto          : the recommended default algorithm. It checks for canonical
+#                     topologies (and applies a fast closed-form optimal coloring),
+#                     then falls back to bipartite-optimal randomized coloring (using
+#                     seed) on bipartite graphs, and to `vizing` otherwise.
 # ---------------------------------------------------------------------------
 @skip_in_ci
 @pytest.mark.slow

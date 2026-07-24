@@ -745,6 +745,8 @@ class LabelTup(Label, tuple):
         else:
             return super().concat(other)
 
+        if len(components) == 1:
+            return components[0]
         return LabelTupTup.init(components, warn_on_component_metadata=False)
 
     __hash__ = tuple.__hash__
@@ -1279,6 +1281,8 @@ class LabelTupTup(Label, tuple):
         else:
             return super().concat(other)
 
+        if len(components) == 1:
+            return components[0]
         return LabelTupTup.init(components, warn_on_component_metadata=False)
 
     __hash__ = tuple.__hash__

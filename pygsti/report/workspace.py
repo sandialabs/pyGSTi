@@ -13,6 +13,7 @@ Defines the Workspace class and supporting functionality.
 import collections as _collections
 import inspect as _inspect
 import itertools as _itertools
+import linecache as _linecache
 import os as _os
 import pickle as _pickle
 import random as _random
@@ -273,27 +274,52 @@ class Workspace(object):
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
 
-        # Strip default values out of parameters so that we don't override the true incoming values with defaults
+        # Strip default values out of parameters so that we don't override the true incoming values with
+        # defaults, but keep the annotations so that they appear in the generated function's source/signature.
         newargparams = [p.replace(default=_inspect.Parameter.empty) for p in argsig.parameters.values()][2:]
         newargsig = _inspect.Signature(newargparams)
 
-        signature = str(newargsig)
-        signature = signature[1:-1]  # strip off parenthesis from ends of "(signature)"
+        signature_def = str(newargsig)[1:-1]  # strip off parenthesis from ends of "(signature_def)"
 
+        # For the function call inside the body, construct argument names (without annotations/defaults/separators like '*').
+        call_args = []
+        for p in newargparams:
+            if p.kind == _inspect.Parameter.VAR_POSITIONAL:
+                call_args.append(f"*{p.name}")
+            elif p.kind == _inspect.Parameter.VAR_KEYWORD:
+                call_args.append(f"**{p.name}")
+            elif p.kind == _inspect.Parameter.KEYWORD_ONLY:
+                call_args.append(f"{p.name}={p.name}")
+            else:
+                call_args.append(p.name)
+        signature_call = ", ".join(call_args)
+
+        # 'from __future__ import annotations' makes all annotations in the generated def be treated as
+        # strings, so unresolvable type hints in the signature won't raise NameError when the function is
+        # defined.  The call expression in the body is kept annotation-free so it always compiles.
         if autodisplay:
             factory_func_def = (
-                'def factoryfn(%(signature)s):\n'
-                '    ret = cls(self, %(signature)s); ret.display(); return ret' %
-                {'signature': signature})
+                'from __future__ import annotations\n'
+                'def factoryfn(%(signature_def)s):\n'
+                '    ret = cls(self, %(signature_call)s); ret.display(); return ret' %
+                {'signature_def': signature_def, 'signature_call': signature_call})
         else:
             factory_func_def = (
-                'def factoryfn(%(signature)s):\n'
-                '    return cls(self, %(signature)s)' %
-                {'signature': signature})
+                'from __future__ import annotations\n'
+                'def factoryfn(%(signature_def)s):\n'
+                '    return cls(self, %(signature_call)s)' %
+                {'signature_def': signature_def, 'signature_call': signature_call})
 
         #print("FACTORY FN DEF = \n",new_func)
+        # Register the generated source with linecache under a unique pseudo-filename so that
+        # inspect.getsource(factoryfn) (and debuggers) can display the generated function body.
+        filename = '<factoryfn for %s.%s #%d>' % (cls.__module__, cls.__name__, id(cls))
+        source_lines = [line + '\n' for line in factory_func_def.splitlines()]
+        _linecache.cache[filename] = (len(factory_func_def), None, source_lines, filename)
+
         exec_globals = {'cls': cls, 'self': self}
-        exec(factory_func_def, exec_globals)
+        code = compile(factory_func_def, filename, 'exec')
+        exec(code, exec_globals)
         factoryfn = exec_globals['factoryfn']
 
         #Copy cls.__init__ info over to factory function
@@ -302,6 +328,11 @@ class Workspace(object):
         factoryfn.__module__ = cls.__init__.__module__
         factoryfn.__dict__ = cls.__init__.__dict__
         factoryfn.__defaults__ = cls.__init__.__defaults__
+
+        # Copy annotations directly to factoryfn to preserve them in the signature of the generated function
+        init_annotations = getattr(cls.__init__, '__annotations__', {})
+        factory_annotations = {k: v for k, v in init_annotations.items() if k not in ('self', 'ws')}
+        factoryfn.__annotations__ = factory_annotations
 
         return factoryfn
 
