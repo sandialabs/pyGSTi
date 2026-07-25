@@ -509,6 +509,126 @@ class Protocol(_MongoSerializable):
             print(f"Submit with:  sbatch {script_path}\n")
         return script_path
 
+    def run_live(self, data: 'ProtocolData', *,
+                checkpoint_path: str | _pathlib.Path | None = None,
+                mode: str | None = None,
+                poll_interval: float = 2.0,
+                timeout: float | None = None,
+                python_executable: str | None = None,
+                **run_kwargs) -> 'ProtocolResults | None':
+        """
+        Run this protocol as a spawned (single-process) child job while
+        rendering a live-updating, gauge-invariant progress dashboard in the
+        current Jupyter notebook.
+
+        This is a thin convenience wrapper around
+        :meth:`pygsti.report.livemonitor.LiveGSTMonitor.run`, placed here
+        (alongside :meth:`run_mpi` and :meth:`stage_slurm`) for
+        discoverability. See that class's docstring, and
+        :mod:`pygsti.report.livemetrics`, for a full explanation of what is
+        (and, importantly, is *not*) safe to report while a GST fit is still
+        in progress and hasn't yet been gauge optimized.
+
+        Only :class:`~pygsti.protocols.gst.GateSetTomography` and
+        :class:`~pygsti.protocols.gst.StandardGST` can be monitored this
+        way, since the live view works entirely by polling the specific
+        `mdl_list`/`per_iter_gof`-shaped checkpoint files those two classes
+        write (see :func:`pygsti.report.livemetrics.unwrap_gst_checkpoint_state`).
+        A `TypeError` is raised for other protocols - this notably includes
+        :class:`~pygsti.protocols.gst.LinearGateSetTomography` (a single
+        non-iterative fit with no per-depth progression to report on) and
+        :class:`~pygsti.protocols.modeltest.ModelTest` (which, despite also
+        accepting `checkpoint_path`/`disable_checkpointing` keyword
+        arguments, writes a checkpoint with a different, incompatible
+        schema - it isn't fitting a model at all, so there's no
+        per-iteration model to report gauge-invariant eigenvalues for).
+
+        For a multi-rank (MPI) run, launch the fit yourself via
+        :meth:`run_mpi`/:meth:`stage_slurm` and use
+        :class:`~pygsti.report.livemonitor.LiveGSTMonitor.watch` directly to
+        monitor it, pointed at the same `checkpoint_path` - `run_live`
+        intentionally only spawns a single (non-MPI) child process.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        checkpoint_path : str or Path, keyword-only, optional
+            Where checkpoint files should be written (and watched from).
+            If None, defaults to ``f'./gst_checkpoints/{self.name}'``
+            (chosen uniformly here, rather than deferring to whatever
+            protocol-specific default `self.run` would otherwise pick,
+            since `run_live` needs to know this path up front in order to
+            watch it).
+
+        mode : str, keyword-only, optional
+            For a :class:`~pygsti.protocols.gst.StandardGST` protocol (which
+            fits several named "modes" as child protocols): which mode to
+            monitor. Only needed if more than one GST mode is being run; see
+            :func:`pygsti.report.livemetrics.unwrap_gst_checkpoint_state`.
+
+        poll_interval : float, keyword-only, optional (default 2.0)
+            How many seconds to sleep between successive checks of the
+            checkpoint directory.
+
+        timeout : float, keyword-only, optional
+            If given, stop watching (but do not kill the child process)
+            after this many seconds even if the fit hasn't finished.
+
+        python_executable : str, keyword-only, optional
+            Path to the Python interpreter to use for the child process.
+            Defaults to the interpreter currently running.
+
+        **run_kwargs
+            Extra keyword arguments forwarded to `self.run` in the child
+            process (e.g. `simulator`, `optimizers`). Must not include
+            `checkpoint_path`, `checkpoint`, or `disable_checkpointing`,
+            which `run_live` sets automatically.
+
+        Returns
+        -------
+        ProtocolResults or None
+            The final results of the run, once the child process completes.
+            `None` if `timeout` is reached first (the child process is left
+            running in that case).
+        """
+        # Local imports to avoid a module-load-time circular dependency
+        # (pygsti.protocols.gst imports pygsti.protocols.protocol).
+        from pygsti.protocols.gst import GateSetTomography as _GateSetTomography
+        from pygsti.protocols.gst import StandardGST as _StandardGST
+        from pygsti.report.livemonitor import LiveGSTMonitor as _LiveGSTMonitor
+
+        # Deliberately checked by exact supported classes rather than by
+        # duck-typing on `self.run`'s keyword arguments: e.g. `ModelTest`
+        # and `LinearGateSetTomography` both accept `checkpoint_path`/
+        # `disable_checkpointing` too, but neither writes the
+        # `mdl_list`/`per_iter_gof`-shaped checkpoints that
+        # `pygsti.report.livemetrics` (and hence `LiveGSTMonitor`) expects -
+        # a duck-typed check would silently produce an empty/misleading
+        # dashboard for those, rather than a clear error.
+        if not isinstance(self, (_GateSetTomography, _StandardGST)):
+            raise TypeError(
+                f"run_live() is only supported for GateSetTomography and StandardGST "
+                f"protocols (whose checkpoints record fitted models at each iteration); "
+                f"{type(self).__name__} is not supported.")
+
+        if checkpoint_path is None:
+            checkpoint_path = _pathlib.Path('./gst_checkpoints') / self.name
+        else:
+            checkpoint_path = _pathlib.Path(checkpoint_path)
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+
+        n_iterations = None
+        circuit_lists = getattr(getattr(data, 'edesign', None), 'circuit_lists', None)
+        if circuit_lists is not None:
+            n_iterations = len(circuit_lists)
+
+        monitor = _LiveGSTMonitor(checkpoint_path, mode=mode, poll_interval=poll_interval,
+                                  n_iterations=n_iterations)
+        return monitor.run(self, data, run_kwargs=run_kwargs,
+                           python_executable=python_executable, timeout=timeout)
+
     def write(self, dirname):
         """
         Write this protocol to a directory.

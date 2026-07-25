@@ -84,7 +84,12 @@ multiprocessor = ['mpi4py']
 notebooks = [
     'ipython',
     'notebook',
-    'jupyter_server'
+    'jupyter_server',
+    # Needed for plotly's FigureWidget (used by pygsti.report.livemonitor's
+    # live GST-fit monitoring dashboard) to render in plotly>=6. For older
+    # plotly versions, 'ipywidgets' (already effectively pulled in via
+    # 'notebook') serves the same role instead.
+    'anywidget'
 ]
 # torch is deliberately NOT part of `complete` (or the `testing`/`no_mpi`
 # chains): it is rarely used and its default Linux wheels drag in ~2.5 GB of

@@ -1499,6 +1499,14 @@ class GateSetTomography(_proto.Protocol):
                 checkpoint.mdl_list = mdl_lsgst_list
                 checkpoint.last_completed_iter += 1
                 checkpoint.last_completed_circuit_list = bulk_circuit_lists[i]
+                # Stash a handful of cheap goodness-of-fit scalars for this iteration.
+                # These are derived from quantities already computed as part of the
+                # ordinary fitting process (the objective value at the optimum, and a
+                # dataset-side degrees-of-freedom count), so this adds no additional
+                # forward-simulation cost. This is purely informational (e.g. for
+                # external live-monitoring tools) and is not used for warmstarting.
+                checkpoint.per_iter_gof.append(
+                    _compute_iteration_gof_summary(mdl_iter, opt_iter, mdc_store_iter))
                 # write the updated checkpoint to disk:
                 if resource_alloc.comm_rank == 0:
                     checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
@@ -3472,6 +3480,62 @@ def _add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str,
     return
 
 
+def _compute_iteration_gof_summary(mdl_iter, opt_iter, mdc_store_iter):
+    """
+    Compute a small dictionary of cheap goodness-of-fit scalars for a single
+    completed GST iteration (i.e. a single circuit-list/depth stage).
+
+    This is intended to be called once per completed iteration, immediately
+    after that iteration's optimization finishes. All of the quantities it
+    reports are already computed (or are cheap dataset-side counts) as a
+    byproduct of ordinary GST fitting, so calling this adds no additional
+    forward-simulation cost. It is purely informational (e.g. useful for an
+    external live-monitoring tool to report fit quality as a function of
+    circuit depth) and is never used to affect the fit itself.
+
+    Parameters
+    ----------
+    mdl_iter : Model
+        The model at the end of this iteration.
+
+    opt_iter : OptimizerResult
+        The `OptimizerResult` returned for this iteration by the optimizer.
+
+    mdc_store_iter : ModelDatasetCircuitsStore
+        The model-dataset-circuits store (or objective function, which is a
+        subclass thereof) used for this iteration's fit.
+
+    Returns
+    -------
+    dict
+        A small, JSON-serializable dictionary with keys 'chi2k_distributed_qty',
+        'n_data_params', 'n_model_params', and 'objfn_description'. Any entry
+        that could not be computed (e.g. because of an unusual objective
+        function type) is set to `None` rather than raising, so that a failure
+        here can never interrupt the actual GST fit.
+    """
+    summary = {'chi2k_distributed_qty': None, 'n_data_params': None,
+               'n_model_params': None, 'objfn_description': None}
+    try:
+        chi2k_qty = getattr(opt_iter, 'chi2_k_distributed_qty', None)
+        summary['chi2k_distributed_qty'] = float(chi2k_qty) if chi2k_qty is not None else None
+    except Exception:
+        pass
+    try:
+        summary['n_model_params'] = int(mdl_iter.num_params)
+    except Exception:
+        pass
+    try:
+        summary['n_data_params'] = int(mdc_store_iter.num_data_params())
+    except Exception:
+        pass
+    try:
+        summary['objfn_description'] = str(getattr(mdc_store_iter, 'description', None))
+    except Exception:
+        pass
+    return summary
+
+
 class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
     """
     A class for storing intermediate results associated with running
@@ -3494,6 +3558,18 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
         Not currently serialized or used during the warmstarting, so purely informational and may
         not always be initialized.
 
+    per_iter_gof : list of dict, optional (default None)
+        A list of small dictionaries, one per completed iteration, holding cheap
+        goodness-of-fit scalars (e.g. the chi2/2*deltaLogL value at that iteration's
+        optimum, the number of data and model parameters used to compute a p-value,
+        and the name/description of the objective function used). These values are
+        already computed in the course of ordinary GST fitting (at essentially zero
+        additional forward-simulation cost) and are stashed here purely so that
+        external tools (e.g. a live-monitoring dashboard) can report on fit quality
+        as a function of circuit depth without needing to recompute anything or
+        wait for the run to finish. This list is purely informational: it is not
+        used when warm-starting a run from a checkpoint.
+
     name : str, optional (default None)
         An optional name for the checkpoint. Note this is not necessarily the name used in the
         automatic generation of filenames when written to disk.
@@ -3507,12 +3583,13 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
 
     def __init__(self, mdl_list = None, last_completed_iter = -1, 
                  last_completed_circuit_list = None, final_objfn = None,
-                 name= None, parent = None):
+                 per_iter_gof = None, name= None, parent = None):
 
         self.mdl_list = mdl_list if mdl_list is not None else []
         self.last_completed_iter = last_completed_iter
         self.last_completed_circuit_list = last_completed_circuit_list if last_completed_circuit_list is not None else []
         self.final_objfn = final_objfn
+        self.per_iter_gof = per_iter_gof if per_iter_gof is not None else []
 
         super().__init__(name, parent)
 
@@ -3522,6 +3599,7 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
                       'last_completed_iter': self.last_completed_iter,
                       'last_completed_circuit_list': [ckt.str for ckt in self.last_completed_circuit_list],
                       'final_objfn': self.final_objfn,
+                      'per_iter_gof': self.per_iter_gof,
                       'name': self.name
                       })
         return state
@@ -3532,9 +3610,12 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
         last_completed_iter = state['last_completed_iter']
         last_completed_circuit_list = [Circuit(ckt_str) for ckt_str in state['last_completed_circuit_list']]
         final_objfn = state['final_objfn']
+        # per_iter_gof is a newer, optional field: tolerate loading older checkpoints
+        # (written before this field existed) that won't have this key present.
+        per_iter_gof = state.get('per_iter_gof', [])
         name = state['name']
         return cls(mdl_list, last_completed_iter, last_completed_circuit_list, 
-                   final_objfn, name)
+                   final_objfn, per_iter_gof, name)
     
 
 class StandardGSTCheckpoint(_proto.ProtocolCheckpoint):

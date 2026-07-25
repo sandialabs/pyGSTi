@@ -23,6 +23,7 @@ parts:
         - file: markdown/gst/FiducialAndGermSelection
         - file: markdown/gst/FiducialPairReduction
       - file: markdown/gst/TimeDependent
+      - file: markdown/gst/LiveMonitoring
       - file: markdown/gst/Legacy
         sections:
         - file: markdown/gst/Overview-functionbased
