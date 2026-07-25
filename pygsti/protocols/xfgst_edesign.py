@@ -9,22 +9,27 @@
 
 import numpy as np
 from collections import defaultdict
-from typing import Optional, Union, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 import tqdm as _tqdm
 
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.processors import QubitProcessorSpec
-from pygsti.circuits.circuitlist import CircuitList
+from pygsti.circuits.circuit import Circuit
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label, LabelTup
-import copy
 
 from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
+
+# Type aliases for the graph / stitching data structures used throughout.
+Vertex = Union[int, str]
+Edge = Tuple[Vertex, ...]
+LayerMappers = Dict[int, Dict[Label, Label]]
+CircuitStitcher = Callable[..., List[List[Circuit]]]
 
 __all__ = ['CrosstalkFreeExperimentDesign', 'make_xfgst_design']
 
 
-def find_neighbors(vertices: list, edges: list) -> dict:
+def find_neighbors(vertices: Sequence[Vertex], edges: Sequence[Edge]) -> Dict[Vertex, List[Vertex]]:
     """
     Find the neighbors of each vertex in a graph.
 
@@ -47,7 +52,8 @@ def find_neighbors(vertices: list, edges: list) -> dict:
 
 
 
-def build_layer_mappers(oneq_gstdesign, twoq_gstdesign) -> dict:
+def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign,
+                        twoq_gstdesign: GateSetTomographyDesign) -> LayerMappers:
     """
     Build the ``layer_mappers`` used by ``batch_tensor`` when stitching 1Q and 2Q
     GST circuits together.
@@ -96,7 +102,10 @@ def build_layer_mappers(oneq_gstdesign, twoq_gstdesign) -> dict:
             # This implies that the correction is only for the single noisy idle gate.
             tmp[1-tgt] = Label("Gi", 1-tgt) # Wrap around will set the tmp correctly.
             # However, we still need to ensure that Label("Gi", 1-tgt) is correct.
-            m2q[k2] = tuple(tmp)
+            # Wrap in a Label (yielding a LabelTupTup parallel layer) so that the
+            # mapper value exposes .map_state_space_labels, as _prepare_target_circuit
+            # (via batch_tensor) requires. A bare tuple would raise AttributeError.
+            m2q[k2] = Label(tuple(tmp))
             # We are going to be replacing the 1q gate with a parallelized noisy idle and the gate.
 
     mapper_2q = m2q # Reset here.
@@ -104,118 +113,10 @@ def build_layer_mappers(oneq_gstdesign, twoq_gstdesign) -> dict:
     return {1: mapper_1q, 2: mapper_2q}
 
 
-def stitch_circuits_by_germ_power_only(color_patches: dict, vertices: list,
-                                       oneq_gstdesign, twoq_gstdesign, randgen) -> tuple:
-    """
-    Generate crosstalk-free GST circuits by stitching together 1Q and 2Q GST circuits for 
-    each color patch.
-
-    This function combines 1Q and 2Q GST circuits based on the specified color patches.
-    For each germ power L, it randomizes the order of the 2Q GST circuits and the 1Q GST 
-    circuits for each edge and unused qubit. The circuits are then stitched together to 
-    form the final circuit lists.
-
-    Parameters:
-    color_patches (dict): A dictionary mapping color patches to their corresponding edge sets.
-                          A 'color patch' is a set of similarly colored edges in an edge coloring.
-    vertices (list): A list of vertices in the graph.
-    oneq_gstdesign: A GST edesign containing the 1Q GST circuits.
-    twoq_gstdesign: An GST edesign containing the 2Q GST circuit.
-    randgen: A random number generator from numpy.
-
-    Returns:
-    tuple: A tuple containing:
-        - circuit_lists (list): A list of crosstalk-free GST circuits for each germ power.
-        - aux_info (dict): Auxiliary information mapping circuits to their corresponding edges and vertices.
-    """
-
-    circuit_lists = [[] for _ in twoq_gstdesign.circuit_lists]
-    aux_info = {}
-    layer_mappers = build_layer_mappers(oneq_gstdesign, twoq_gstdesign)
-
-    num_lines = -1
-    global_line_order = None
-    for patch, edge_set in color_patches.items():
-        # This might be broken when edge_set is empty.
-        used_qubits = np.array(edge_set).ravel()
-        unused_qubits = np.setdiff1d(np.array(vertices), used_qubits)
-        assert len(oneq_gstdesign.circuit_lists) == len(twoq_gstdesign.circuit_lists), "Not implemented."
-
-        for L, (oneq_circuits, twoq_circuits) in enumerate(zip(oneq_gstdesign.circuit_lists, twoq_gstdesign.circuit_lists)):   # assumes that they use the same L 
-            oneq_len = len(oneq_circuits)
-            twoq_len = len(twoq_circuits)
-
-            max_len = max(oneq_len, twoq_len)
-            min_len = min(oneq_len, twoq_len)
-            num_batches = int(np.ceil(max_len / min_len))
-
-            if oneq_len > twoq_len:
-                raise NotImplementedError()
-        
-            # 2Q GST circuit list is longer
-            n_edges = len(edge_set)
-            edge_perms = np.tile(np.arange(max_len), (n_edges, 1))
-            edge_perms = randgen.permuted(edge_perms, axis=1) # Note that this will permute the columns independently and not in bulk way.
-
-            node_perms = []
-            node_perms = np.tile(np.arange(min_len), (min_len, num_batches, 1))
-            # truncate to largest size we will need.
-            node_perms =randgen.permuted(node_perms, axis=-1).reshape(min_len, num_batches*min_len)[:, :max_len]
-
-            assert edge_perms.shape == (len(edge_set), max_len)
-            assert node_perms.shape == (min_len, max_len)
-        
-            # Check invariants
-            edge_line_contributions = 2*edge_perms.shape[0] if edge_perms.size > 0 else 0
-            node_line_contributions =   node_perms.shape[0] if node_perms.size > 0 else 0
-            curr_num_lines = edge_line_contributions + node_line_contributions
-            if num_lines < 0:
-                num_lines = curr_num_lines
-                global_line_order = tuple(range(num_lines))
-
-            assert num_lines == curr_num_lines
-            if edge_perms.size > 0 and node_perms.size > 0:
-                assert edge_perms.shape[1] == node_perms.shape[1]
-            
-            # Form the tensor product circuits, over all qubits.
-            for j in range(max_len):
-                tensored_lines  = []
-                circs_to_tensor = []
-                if len(edge_perms):
-                    edge_start = 1
-                    node_start = 0
-                    c = twoq_circuits[edge_perms[0,j]]
-                    tensored_lines.append(edge_set[0])  #This may just pick the same value each time if edge_set does not change.
-                else:
-                    edge_start = 0
-                    node_start = 1
-                    c = oneq_circuits[node_perms[0,j]]
-                    tensored_lines.append((unused_qubits[0],))
-                circs_to_tensor.append(c)
-                for i in range(edge_start, edge_perms.shape[0]):
-                    c2 = twoq_circuits[ edge_perms[i,j] ]
-                    circs_to_tensor.append( c2 )
-                    tensored_lines.append(edge_set[i])
-                for i in range(node_start, node_perms.shape[0]):
-                    c2 = oneq_circuits[ node_perms[i,j] ]
-                    circs_to_tensor.append( c2 )
-                    tensored_lines.append((unused_qubits[i],))
-                c_ten = batch_tensor(circs_to_tensor, layer_mappers, global_line_order, tensored_lines)
-
-
-                # This is just a debugging loop to ensure we have everything labeled.
-                for i in range(c_ten.num_layers):
-                    l0 = set(c_ten.layer(i))
-                    l1 = set(c_ten.layer_with_idles(i))
-                    assert l0 == l1
-
-                circuit_lists[L].append(c_ten)
-                aux_info[c_ten] = {'edges': edge_set, 'vertices': unused_qubits} #YOLO
-
-    return circuit_lists, aux_info
-
-
-def make_xfgst_design(nq_pspec: QubitProcessorSpec, oneq_gstdesign, twoq_gstdesign, seed=0):
+def make_xfgst_design(nq_pspec: QubitProcessorSpec,
+                      oneq_gstdesign: GateSetTomographyDesign,
+                      twoq_gstdesign: GateSetTomographyDesign,
+                      seed: int = 0) -> "CrosstalkFreeExperimentDesign":
     vertices = nq_pspec.qubit_labels
     edges = nq_pspec.compute_2Q_connectivity().edges()
 
@@ -245,24 +146,48 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
     oneq_gstdesign: The design for one-qubit GST circuits.
     twoq_gstdesign: The design for two-qubit GST circuits.
     edge_coloring (dict): A dictionary mapping color patches to their corresponding edge sets.
-    circuit_stitcher (callable): A function to stitch circuits together (default: stitch_circuits_by_germ_power_only).
+    circuit_stitcher (callable): A function to stitch circuits together (default: assign_the_designs_with_mapping).
     seed (int, optional): Seed for random number generation.
+    **stitcher_kwargs: Extra keyword arguments forwarded verbatim to ``circuit_stitcher``.
 
     circuit_lists (list): The generated list of stitched circuits.
     aux_info (dict): Auxiliary information mapping circuits to their corresponding edges and vertices.
     """
-    def __init__(self, processor_spec, oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign: GateSetTomographyDesign, edge_coloring,
-                 circuit_stitcher = None, seed = None, nested: bool=False):
+    def __init__(self, processor_spec: QubitProcessorSpec,
+                 oneq_gstdesign: GateSetTomographyDesign,
+                 twoq_gstdesign: GateSetTomographyDesign,
+                 edge_coloring: Dict[int, List[Edge]],
+                 circuit_stitcher: Optional[CircuitStitcher] = None,
+                 seed: Optional[int] = None,
+                 nested: bool = False,
+                 **stitcher_kwargs: Any):
         """
         Assume that the GST designs have the same Ls.
 
         The default ``circuit_stitcher`` is ``assign_the_designs_with_mapping``,
         which expects the (oneq_circuitlists, twoq_circuitlists, vertices,
-        color_patches, layer_mappers, ...) calling convention used below.
+        color_patches, ...) calling convention used below.
 
-        TODO: Update the init function so that it handles different circuit stitchers better (i.e., by using stitcher_kwargs, etc.)
+        Any ``circuit_stitcher`` is invoked as::
+
+            circuit_stitcher(oneq_gstdesign, twoq_gstdesign, vertices,
+                             color_patches, randgen=..., ensure_containment=nested,
+                             **stitcher_kwargs)
+
+        Extra keyword arguments to ``__init__`` are collected into ``**stitcher_kwargs``
+        and forwarded verbatim, so alternative stitchers can accept their own options
+        without a signature change here. Callers may also override
+        ``randgen``/``ensure_containment`` this way.
+
+        Idle gates are guaranteed to be explicit: ``build_layer_mappers`` maps the
+        empty (implicit-idle) layer label ``Label(())`` onto an explicit idle gate
+        (asserting ``Label(())`` never survives into a mapper's values), and
+        ``batch_tensor`` re-checks that invariant. For the default stitcher we
+        additionally enable its ``debug_check`` (unless the caller overrides it via
+        a ``debug_check`` keyword argument), which asserts
+        ``layer(i) == layer_with_idles(i)`` for every layer of every generated
+        circuit -- i.e. no implicit idles remain.
         """
-        # TODO: make sure idle gates are explicit.
         if circuit_stitcher is None:
             circuit_stitcher = assign_the_designs_with_mapping
         randgen = np.random.default_rng(seed)
@@ -276,10 +201,19 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
         self.color_patches = edge_coloring
         self.circuit_stitcher = circuit_stitcher
 
+        # Base kwargs common to the built-in calling convention; caller-supplied
+        # stitcher_kwargs take precedence so any option can be overridden.
+        kwargs = dict(randgen=randgen, ensure_containment=nested)
+        if circuit_stitcher is assign_the_designs_with_mapping:
+            # Verify explicit idle gates on every generated circuit by default.
+            kwargs['debug_check'] = True
+        kwargs.update(stitcher_kwargs)
+        self.stitcher_kwargs = kwargs
+
         self.circuit_lists = circuit_stitcher(self.oneq_gstdesign,
                                               self.twoq_gstdesign,
                                               self.vertices, self.color_patches,
-                                              randgen=randgen, ensure_containment=nested,
+                                              **kwargs,
                                               )
         # The default stitcher (assign_the_designs_with_mapping) does not produce
         # aux_info; keep the attribute for API compatibility.
@@ -288,7 +222,7 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
         super().__init__(processor_spec, self.circuit_lists,qubit_labels=self.vertices, nested=nested)
 
 
-def ordered_edge_set(edge_set):
+def ordered_edge_set(edge_set: Sequence[Edge]) -> List[Edge]:
     """
     Canonicalize the order of edges, but preserve endpoint orientation.
 
@@ -297,7 +231,8 @@ def ordered_edge_set(edge_set):
     return sorted([tuple(edge) for edge in edge_set])
 
 
-def patch_lines(edge_set, vertices):
+def patch_lines(edge_set: Sequence[Edge],
+                vertices: Sequence[Vertex]) -> Tuple[List[Edge], List[Vertex], List[Edge]]:
     """
     Return the ordered tensor lines for a patch:
       - first the 2Q edge lines
@@ -322,7 +257,8 @@ def patch_lines(edge_set, vertices):
     return edge_set, unused_qubits, tensored_lines
 
 
-def make_line_mapper(source_lines, target_lines):
+def make_line_mapper(source_lines: Sequence[Edge],
+                     target_lines: Sequence[Edge]) -> Dict[Vertex, Vertex]:
     """
     Construct a state-space-label mapper from source tensor lines to target
     tensor lines.
@@ -359,7 +295,9 @@ def make_line_mapper(source_lines, target_lines):
 
     return mapper
 
-def build_patch_infos(vertices, color_patches):
+def build_patch_infos(vertices: Sequence[Vertex],
+                      color_patches: Dict[int, List[Edge]]
+                      ) -> Tuple[List[Dict[str, Any]], Dict[Tuple[int, int], List[Dict[str, Any]]]]:
     vertices = list(vertices)
 
     patch_infos = []
@@ -384,15 +322,16 @@ def build_patch_infos(vertices, color_patches):
     return patch_infos, groups
 
 def assign_the_designs_with_mapping(
-    oneq_gstdesign,
-    twoq_gstdesign,
-    vertices: list[int],
-    color_patches: dict[int, list[tuple[int,int]]],
-    debug_check=False,
-    randgen: Optional=None,
-    ensure_containment: bool=False,
-    _layer_mappers_override=None,
-):
+    oneq_gstdesign: GateSetTomographyDesign,
+    twoq_gstdesign: GateSetTomographyDesign,
+    vertices: Sequence[Vertex],
+    color_patches: Dict[int, List[Edge]],
+    debug_check: bool = False,
+    randgen: Optional[np.random.Generator] = None,
+    ensure_containment: bool = False,
+    _layer_mappers_override: Optional[LayerMappers] = None,
+    **kwargs: Any,
+) -> List[List[Circuit]]:
     """
     Construct crosstalk-free GST circuit lists for each color patch.
 
@@ -436,8 +375,9 @@ def assign_the_designs_with_mapping(
         Each edge is represented as a pair of qubit labels.
 
     debug_check : bool, optional
-        If True, check that the generated tensored circuits contain no implicit idle
-        gates. Default is False.
+        If True, assert for every generated tensored circuit that each layer's
+        contents are unchanged by filling in idles (``layer(i) == layer_with_idles(i)``),
+        i.e. that the circuit contains no implicit idle gates. Default is False.
 
     randgen : numpy.random.Generator, optional
         Random number generator used to randomize circuit assignments across edge
@@ -447,6 +387,16 @@ def assign_the_designs_with_mapping(
         If True, ensure that circuitlists[L+1] contains the exact circuits
         from circuitlists[L]. Containment is enforced patch-wise, so the
     output remains patch-major. Default is False. 
+
+    _layer_mappers_override : LayerMappers, optional
+        If provided, use these layer mappers instead of building them from the
+        two designs via ``build_layer_mappers``. Primarily for testing.
+
+    **kwargs
+        Ignored. Accepted so this stitcher matches the generic
+        ``circuit_stitcher(oneq, twoq, vertices, color_patches, **kwargs)``
+        calling convention used by ``CrosstalkFreeExperimentDesign``, allowing
+        it to be swapped with other stitchers that take extra options.
 
     Returns
     -------
@@ -494,7 +444,7 @@ def assign_the_designs_with_mapping(
         for patch in patch_order
     }
 
-    circuit_lists = [[] for _ in twoq_gstdesign_circuitlists]
+    circuit_lists: List[List[Circuit]] = [[] for _ in twoq_gstdesign_circuitlists]
 
     for L, (oneq_circuits, twoq_circuits) in _tqdm.tqdm(
         enumerate(zip(oneq_gstdesign_circuitlists, twoq_gstdesign_circuitlists)),
@@ -542,7 +492,7 @@ def assign_the_designs_with_mapping(
             for qubit_slot in range(num_unused_qubits):
                 oneq_perms[qubit_slot, :] = randgen.permutation(oneq_base_perm)
 
-            mappers = {}
+            mappers: Dict[int, Optional[Dict[Vertex, Vertex]]] = {}
 
             for info in infos:
                 if info is representative:
@@ -572,10 +522,15 @@ def assign_the_designs_with_mapping(
                 )
 
                 if debug_check:
+                    # Verify every idle gate is explicit: a layer's contents must
+                    # be identical whether or not implicit idles are filled in.
                     for i in range(template_circuit.num_layers):
                         l0 = set(template_circuit.layer(i))
                         l1 = set(template_circuit.layer_with_idles(i))
-                        assert l0 == l1
+                        assert l0 == l1, (
+                            f"Implicit idle gate(s) detected in layer {i}: "
+                            f"layer()={l0} != layer_with_idles()={l1}"
+                        )
 
                 patch_buffers[representative["patch"]].append(
                     template_circuit.copy()
