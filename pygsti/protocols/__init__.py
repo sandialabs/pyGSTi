@@ -20,4 +20,5 @@ from .stability import *
 from .vb import *
 from .vbdataframe import *
 from .mirror_edesign import *
+from .xfgst_edesign import *
 from . import scarab

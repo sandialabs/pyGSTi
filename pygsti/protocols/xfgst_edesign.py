@@ -12,7 +12,7 @@ from collections import defaultdict
 from typing import Optional, Union, TYPE_CHECKING
 import tqdm as _tqdm
 
-from pygsti.protocols import GateSetTomographyDesign
+from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.processors import QubitProcessorSpec
 from pygsti.circuits.circuitlist import CircuitList
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
@@ -20,6 +20,8 @@ from pygsti.baseobjs.label import Label, LabelTup
 import copy
 
 from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
+
+__all__ = ['CrosstalkFreeExperimentDesign', 'make_xfgst_design']
 
 
 def find_neighbors(vertices: list, edges: list) -> dict:
