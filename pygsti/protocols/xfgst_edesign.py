@@ -354,6 +354,15 @@ def assign_the_designs_with_mapping(
     role-based schedules. A representative tensored circuit is constructed once
     for each such group and then mapped onto equivalent patches.
 
+    For each germ power the two CircuitLists need not have the same length.
+    ``max(len(oneq), len(twoq))`` tensored circuits are produced. Every circuit in
+    the longer CircuitList is used exactly once; the shorter CircuitList is expanded
+    to the same length by randomly drawing (with repetition) additional circuits from
+    itself (each of its circuits still appears at least once). Either CircuitList may
+    be the longer one. Note this list-level expansion is distinct from circuit-*depth*
+    equalization: individual sub-circuits that are shallower than their tensor peers
+    are padded with explicit idle layers by ``batch_tensor``.
+
     This function does not deduplicate color patches. For example, if both
     ``[(0, 1), (2, 3)]`` and ``[(1, 0), (3, 2)]`` are supplied, both designs are
     generated, even though they differ only by edge orientation.
@@ -410,10 +419,6 @@ def assign_the_designs_with_mapping(
     AssertionError
         If ``oneq_gstdesign`` and ``twoq_gstdesign`` do not have the same number
         of germ-power groups.
-
-    NotImplementedError
-        If, for any germ-power group, the number of 1Q circuits exceeds the number
-        of 2Q circuits.
     """
     if randgen is None:
         randgen = np.random.default_rng(0)
@@ -454,10 +459,32 @@ def assign_the_designs_with_mapping(
         twoq_len = len(twoq_circuits)
 
         max_len = max(oneq_len, twoq_len)
-        min_len = min(oneq_len, twoq_len)
 
-        if oneq_len > twoq_len:
-            raise NotImplementedError()
+        # Each generated tensored circuit at this germ power draws one 2Q circuit
+        # per edge slot and one 1Q circuit per unused-qubit slot. We produce
+        # ``max_len`` tensored circuits so that every circuit in the *longer* of the
+        # two CircuitLists is used exactly once; the shorter CircuitList is expanded
+        # up to ``max_len`` by randomly drawing (with repetition) additional circuits
+        # from itself. Circuit *depths* are equalized separately: batch_tensor pads
+        # each shorter sub-circuit with explicit idle layers (via the
+        # ``Label(()) -> explicit-idle`` entry in ``layer_mappers``). This works
+        # regardless of which CircuitList is longer.
+        def _schedule(n: int) -> np.ndarray:
+            """A length-``max_len`` index schedule into a CircuitList of size ``n``.
+
+            The ``n`` real indices ``0..n-1`` are always included (each circuit used
+            at least once); if ``n < max_len`` the remaining ``max_len - n`` slots are
+            filled with uniformly random indices drawn (with repetition) from
+            ``0..n-1``, then the whole schedule is shuffled.
+            """
+            if n == max_len:
+                base = np.arange(max_len)
+            else:
+                base = np.concatenate((
+                    np.arange(n),
+                    randgen.integers(0, n, size=max_len - n),
+                ))
+            return randgen.permutation(base)
 
         # Temporary per-patch storage so output ordering remains patch-major.
         patch_buffers = {
@@ -477,12 +504,7 @@ def assign_the_designs_with_mapping(
             )
 
             for edge_slot in range(num_edges):
-                edge_perms[edge_slot, :] = randgen.permutation(max_len)
-
-            oneq_base_perm = np.hstack((
-                randgen.integers(0, min_len, size=max_len - min_len),
-                np.arange(min_len)
-            ))
+                edge_perms[edge_slot, :] = _schedule(twoq_len)
 
             oneq_perms = np.empty(
                 (num_unused_qubits, max_len),
@@ -490,7 +512,7 @@ def assign_the_designs_with_mapping(
             )
 
             for qubit_slot in range(num_unused_qubits):
-                oneq_perms[qubit_slot, :] = randgen.permutation(oneq_base_perm)
+                oneq_perms[qubit_slot, :] = _schedule(oneq_len)
 
             mappers: Dict[int, Optional[Dict[Vertex, Vertex]]] = {}
 
