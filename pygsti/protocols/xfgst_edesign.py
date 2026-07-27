@@ -572,6 +572,21 @@ def assign_the_designs_with_mapping(
                             expected_labels
                         )
 
+                        # Also verify *where* the multi-qubit gates actually landed,
+                        allowed_edges = {tuple(e) for e in info["edge_set"]}
+                        allowed_edges |= {tuple(reversed(e)) for e in allowed_edges}
+                        for i in range(mapped_circuit.num_layers):
+                            for op in mapped_circuit.layer(i):
+                                if len(op.qubits) > 1:
+                                    assert tuple(op.qubits) in allowed_edges, (
+                                        f"Patch {info['patch']!r}: found multi-qubit "
+                                        f"gate {op} on {op.qubits}, which is not one "
+                                        f"of this patch's own edges {info['edge_set']} "
+                                        "(mapper likely applied incorrectly, or the "
+                                        "circuit was never remapped from the "
+                                        "representative patch)."
+                                    )
+
                     patch_buffers[info["patch"]].append(mapped_circuit)
 
         # Preserve patch-major output ordering.

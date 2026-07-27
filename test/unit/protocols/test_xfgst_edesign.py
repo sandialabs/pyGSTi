@@ -173,3 +173,76 @@ class AssignDesignsLengthPairingTester(BaseCase):
             for i in range(c.num_layers):
                 covered = {q for op in c.layer_with_idles(i) for q in op.qubits}
                 self.assertEqual(covered, set(c.line_labels))
+
+
+class MultiplePatchesSameShapeTester(BaseCase):
+    """
+    Two color patches sharing the same shape (here, both have 1 edge and 1 unused
+    qubit) are grouped together and share a randomly-generated "template" circuit;
+    all but the first ("representative") patch in the group must have that template
+    relabeled (via `Circuit.map_state_space_labels`) onto their own lines.
+    """
+
+    def _run(self, oneq_len=4, twoq_len=4, seed=0):
+        oneq_lists = [_make_1q_circuits(oneq_len)]
+        twoq_lists = [_make_2q_circuits(twoq_len)]
+        oneq = _StubDesign(oneq_lists, (0,))
+        twoq = _StubDesign(twoq_lists, (0, 1))
+        mappers = _layer_mappers(oneq_lists, twoq_lists)
+
+        # A 3-qubit line with two color patches, both of shape (1 edge, 1 unused
+        # qubit): patch 0 is edge (0, 1) with qubit 2 left over; patch 1 is edge
+        # (1, 2) with qubit 0 left over. Both patches land in the same `groups`
+        # bucket, which is exactly the scenario the bug above hits.
+        color_patches = {0: [(0, 1)], 1: [(1, 2)]}
+        vertices = [0, 1, 2]
+
+        circuit_lists = assign_the_designs_with_mapping(
+            oneq, twoq, vertices, color_patches,
+            debug_check=True,
+            randgen=np.random.default_rng(seed),
+            _layer_mappers_override=mappers,
+        )
+        generated = circuit_lists[0]
+        self.assertEqual(len(generated), max(oneq_len, twoq_len) * 2)
+        half = len(generated) // 2
+        # Output is patch-major: patch 0's circuits first, then patch 1's.
+        return generated[:half], generated[half:]
+
+    @staticmethod
+    def _cnot_edges(circuit):
+        edges = set()
+        for i in range(circuit.num_layers):
+            for op in circuit.layer(i):
+                if op.name == 'Gcnot':
+                    edges.add(tuple(op.qubits))
+        return edges
+
+    @staticmethod
+    def _gx_qubits(circuit):
+        qubits = set()
+        for i in range(circuit.num_layers):
+            for op in circuit.layer(i):
+                if op.name == 'Gx':
+                    qubits.update(op.qubits)
+        return qubits
+
+    def test_patches_are_relabeled_not_duplicated(self):
+        patch0_circuits, patch1_circuits = self._run()
+        self.assertNotEqual(patch0_circuits, patch1_circuits)
+
+        # Every patch-0 circuit's Gcnot must be on edge (0, 1) only, and every
+        # patch-1 circuit's Gcnot must be on edge (1, 2) only -- never the other
+        # patch's edge.
+        for c in patch0_circuits:
+            self.assertEqual(self._cnot_edges(c), {(0, 1)})
+        for c in patch1_circuits:
+            self.assertEqual(self._cnot_edges(c), {(1, 2)})
+
+        # Patch 0's leftover 1Q circuit belongs to qubit 2; patch 1's belongs to
+        # qubit 0.
+        for c in patch0_circuits:
+            self.assertEqual(self._gx_qubits(c), {2})
+        for c in patch1_circuits:
+            self.assertEqual(self._gx_qubits(c), {0})
+
