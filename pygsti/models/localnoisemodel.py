@@ -13,11 +13,14 @@ Defines the LocalNoiseModel class and supporting functions
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
+from typing import Union
+
 import numpy as _np
 
 from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel, _init_spam_layers
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
+from pygsti.modelmembers.modelmember import ModelMember as _ModelMember
 from pygsti.baseobjs import qubitgraph as _qgraph, statespace as _statespace
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
@@ -403,7 +406,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         return op_coeffs
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Union[str, _Lbl]) -> _ModelMember:
         if 'rho' in key:
             return self.prep_blks['layers'][key]
         if 'Mdefault' in key:

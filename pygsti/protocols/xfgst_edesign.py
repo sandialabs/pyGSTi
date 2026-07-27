@@ -439,10 +439,6 @@ def assign_the_designs_with_mapping(
 
     # Preserve user/color_patches ordering in the final output.
     patch_order = [info["patch"] for info in patch_infos]
-    patch_info_by_name = {
-        info["patch"]: info
-        for info in patch_infos
-    }
 
     previous_patch_buffers = {
         patch: []
@@ -561,8 +557,7 @@ def assign_the_designs_with_mapping(
                 for info in infos[1:]:
                     mapper = mappers[info["patch"]]
 
-                    # mapped_circuit = template_circuit.map_state_space_labels(mapper)
-                    mapped_circuit = template_circuit.copy()
+                    mapped_circuit = template_circuit.map_state_space_labels(mapper)
                     if debug_check:
                         expected_labels = {
                             q

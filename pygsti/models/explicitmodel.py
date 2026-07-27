@@ -249,7 +249,7 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value: Literal['tp', 'unitary'] | _GaugeGroup):
+    def default_gauge_group(self, value: Literal['tp', 'unitary'] | _GaugeGroup) -> None:
         """
         The default gauge group.
         """
