@@ -137,7 +137,7 @@ class ProtectedArrayTester(BaseCase):
             pa1 >>= 1
 
     def test_raises_on_imatmul(self):
-        pa1 = pa.ProtectedArray(np.ones((3,3), 'i'), [0])
+        pa1 = pa.ProtectedArray(np.ones((3,3), 'i'), [0,0])
 
         with self.assertRaises(ValueError):
             pa1 @= pa1

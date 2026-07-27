@@ -11,14 +11,14 @@ Defines the ProtectedArray class
 #***************************************************************************************************
 from __future__ import annotations
 
-from typing import Any, List, NoReturn, Optional, Sequence, Tuple, Union
+from typing import Any, List, NoReturn, Optional, Sequence, TYPE_CHECKING, Tuple, Union
 import copy as _copy
 import numpy as _np
 import numpy.typing as _npt
 from warnings import warn
 
 
-PROTECTEDARRAYERRORSTRING = "**some or all of assignment destination is read-only"
+PROTECTEDARRAYERRORSTRING = "some or all of assignment destination is read-only"
 
 # The atomic index specifiers accepted along a single axis of the array.
 _AxisIndex = Union[int, slice]
@@ -164,46 +164,22 @@ class ProtectedArray(object):
     def __float__(self) -> float: return float(self.base)
     def __complex__(self) -> complex: return complex(self.base)
 
-    # Arithmetic Assignment Operations
-    def __imul__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __iadd__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __itruediv__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __ifloordiv__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __ipow__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __isub__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __imod__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __imatmul__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    # Logical Assignment Operations
-    def __ilshift__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __irshift__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __ior__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __ixor__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
-
-    def __iand__(self, other: Any) -> NoReturn:
-        raise ValueError(PROTECTEDARRAYERRORSTRING)
+    if TYPE_CHECKING:
+        # Arithmetic Assignment Operations
+        def __iadd__(self, other: Any) -> NoReturn: ...
+        def __isub__(self, other: Any) -> NoReturn: ...
+        def __imul__(self, other: Any) -> NoReturn: ...
+        def __itruediv__(self, other: Any) -> NoReturn: ...
+        def __ifloordiv__(self, other: Any) -> NoReturn: ...
+        def __ipow__(self, other: Any) -> NoReturn: ...
+        def __imod__(self, other: Any) -> NoReturn: ...
+        def __imatmul__(self, other: Any) -> NoReturn: ...
+        # Logical Assignment Operations
+        def __ilshift__(self, other: Any) -> NoReturn: ...
+        def __irshift__(self, other: Any) -> NoReturn: ...
+        def __ior__(self, other: Any) -> NoReturn: ...
+        def __ixor__(self, other: Any) -> NoReturn: ...
+        def __iand__(self, other: Any) -> NoReturn: ...
 
     #Pickle plumbing
 
@@ -265,3 +241,21 @@ class ProtectedArray(object):
     #we want.
     def __repr__(self) -> str:
         return _np.array2string(self.base)
+
+
+def _raise_protected_array_error(self: ProtectedArray, other: Any) -> NoReturn:
+    raise ValueError(PROTECTEDARRAYERRORSTRING)
+
+
+# Attach the in-place operators declared under `TYPE_CHECKING` above. Doing
+# this in a loop (rather than 13 separate `def`s) avoids repeating the same
+# one-line method body for each operator.
+for _op_name in (
+    # Arithmetic Assignment Operations
+    '__iadd__', '__isub__', '__imul__', '__itruediv__', '__ifloordiv__',
+    '__ipow__', '__imod__', '__imatmul__',
+    # Logical Assignment Operations
+    '__ilshift__', '__irshift__', '__ior__', '__ixor__', '__iand__',
+):
+    setattr(ProtectedArray, _op_name, _raise_protected_array_error)
+del _op_name
