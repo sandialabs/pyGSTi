@@ -13,6 +13,7 @@ pyGSTi Tools Python Package
 from .basistools import *
 from .chi2fns import *
 from .edesigntools import *
+from .exceptions import *
 from .hypothesis import *
 # Import the most important/useful routines of each module into
 # the package namespace
@@ -25,6 +26,7 @@ from .listtools import *
 from .matrixmod2 import *
 from .matrixtools import *
 from .mpitools import parallel_apply, mpi4py_comm
+from .mpitools import resolve_mpiexec, compute_blas_threads, write_mpi_runner_artifacts, build_slurm_script
 from .mptools import starmap_with_kwargs
 from .nameddict import NamedDict
 from .optools import *

@@ -198,7 +198,7 @@ def adjusted_success_probability(hamming_distance_counts: _np.ndarray) -> float:
     Compute the adjusted success probability `adjSP` of a circuit
     from its Hamming distance counts, according to the formula
 
-    adjSP = \sum_{k=0}^n (-1/2)^k * h_k,
+    adjSP = \\sum_{k=0}^n (-1/2)^k * h_k,
 
     where h_k is the probability of Hamming distance k.
 

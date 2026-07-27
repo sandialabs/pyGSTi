@@ -17,6 +17,8 @@ from pygsti.modelmembers.states.state import State as _State
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.tools import matrixtools as _mt
+
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -132,21 +134,20 @@ class CPTPState(_DenseState):
         if not _np.isclose(trc, 1.0):  # truncate to trace == 1
             density_mx -= _np.identity(dmDim, 'd') / dmDim * (trc - 1.0)
 
-        #push any slightly negative evals of density_mx positive
+        # push any slightly negative evals of density_mx positive
         # so that the Cholesky decomp will work.
-        evals, U = _np.linalg.eig(density_mx)
-        Ui = _np.linalg.inv(U)
+        U, evals, Ui = _mt.eigendecomposition(density_mx, assume_hermitian=True)
 
         assert(truncate or all([ev >= -1e-12 for ev in evals])), \
             "`vec` must correspond to a positive density matrix (truncate == False)!"
 
         pos_evals = evals.clip(1e-16, 1e100)
-        density_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+        density_mx = U @ _np.diag(pos_evals) @ Ui
         try:
             Lmx = _np.linalg.cholesky(density_mx)
         except _np.linalg.LinAlgError:  # Lmx not postitive definite?
             pos_evals = evals.clip(1e-12, 1e100)  # try again with 1e-12
-            density_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+            density_mx =  U @ _np.diag(pos_evals) @ Ui
             Lmx = _np.linalg.cholesky(density_mx)
 
         #check TP condition: that diagonal els of Lmx squared add to 1.0

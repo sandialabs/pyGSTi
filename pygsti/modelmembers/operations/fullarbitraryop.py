@@ -15,6 +15,12 @@ import numpy as _np
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 
+EPSILON_POWER_FOR_COMPLEX_CAST = 0.875
+# ^ Controls threshold at which we explicitly cast complex data to real data, 
+#   versus letting numpy do the cast (which will lead to a ComplexWarning).
+#   The default value of 0.875 means our threshold in double precision is
+#   about 1e-14.
+
 
 class FullArbitraryOp(_DenseOperator):
     """
@@ -64,11 +70,16 @@ class FullArbitraryOp(_DenseOperator):
         -------
         None
         """
-        mx = _LinearOperator.convert_to_matrix(m)
-        if(mx.shape != (self.dim, self.dim)):
+        mx : _np.ndarray = _LinearOperator.convert_to_matrix(m)
+        if (mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim, self.dim))
-        self._ptr[:, :] = _np.array(mx)
+        if not _np.isrealobj(mx) and _np.isrealobj(self._ptr):
+            tol = _np.finfo(self._ptr.dtype).eps ** EPSILON_POWER_FOR_COMPLEX_CAST
+            if _np.all(_np.abs(mx.imag) <= tol):  # type: ignore
+                mx = mx.real                      # type: ignore
+
+        self._ptr[:, :] = mx
         self._ptr_has_changed()
         self.dirty = True
 

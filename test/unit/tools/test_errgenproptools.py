@@ -703,7 +703,7 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
     for i, effect in enumerate(ideal_meas.values()):
         dense_effect = effect.to_dense().copy()
         dense_prep = ideal_prep.to_dense().copy()
-        prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1,len(dense_effect))), eoc_channel, ideal_channel, dense_prep.reshape((len(dense_prep),1))])
+        prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1, -1)), eoc_channel, ideal_channel, dense_prep.reshape((-1, 1))]).item()
     return prob_vec
 
 def pauli_expectation_errorgen_prop(error_propagator, target_model, circuit, pauli, use_bch=False, bch_order=1, truncation_threshold=1e-14):

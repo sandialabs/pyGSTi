@@ -87,7 +87,7 @@ def multikron(a):
 
 # These are useful for making arbitrary matrices and then sticking in the right number of identities:
 def interior_tensor_product(mx, dim_a, dim_b, e=None):
-    """
+    r"""
     `mx` is an operator on two subsystems of dimension dim_a and dim_b
     `mx = sum_i A_i \otimes B_i` where A_i is an operator on subsystem a and B_i is an operator on subsystem b
     Return: sum_i A_i \otimes e \otimes B_i

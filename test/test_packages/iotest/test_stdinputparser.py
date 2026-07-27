@@ -816,7 +816,7 @@ BASIS: pp
         for expand in [False, True]:
             print("Expand = ",expand)
             for s in ["(Gx:0)Gy:1", "(Gx:0)^4Gy:1", "[Gx:0Gy:1]","[Gx:0Gy:1]^2","[Gx:0[Gz:2Gy:1]]Gz:0",
-                      "[Gx:0(Gz:2Gy:1)]Gz:0", "[Gx:0[Gz:2Gy:1]^2]", "[Gx:0([Gz:2Gy:1]^2)]"]:
+                      "[Gx:0(Gz:2Gy:1)]Gz:0", "[Gx:0[(Gz:2Gy:1)^2]]", "[Gx:0([Gz:2Gy:1]^2)]"]:
                 print("FROM ",s,":")
                 c = pygsti.circuits.Circuit(None, stringrep=s, expand_subcircuits=expand)
                 print(c)

@@ -3,6 +3,7 @@ import pytest
 import pickle
 
 from pygsti.baseobjs.label import Label as L
+from pygsti.baseobjs.label import LabelTup, LabelTupTup, CircuitLabel, LabelStr
 
 from pygsti.serialization import jsoncodec
 from pygsti.circuits import Circuit
@@ -49,10 +50,11 @@ class LabelTester(BaseCase):
 
     def test_labels_with_time_and_arguments(self):
         #Label with time and args
-        l = L('Gx', (0, 1), time=1.2, args=('1.4', '1.7'))
+        l = L('Gx', (0, 1), time=1.2, args=('1.4', '1.7')) # LabelTupWithArgs
         self.assertEqual(l.time, 1.2)
         self.assertEqual(l.args, ('1.4', '1.7'))
         self.assertEqual(tuple(l), ('Gx', 4, '1.4', '1.7', 0, 1))
+        self.assertEqual(tuple(l + l.name), ('GxGx', 4, '1.4', '1.7', 0, 1))
 
         l2 = L(('Gx', ';1.4', ';1.7', 0, 1, '!1.25'))
         self.assertEqual(tuple(l2), ('Gx', 4, '1.4', '1.7', 0, 1))
@@ -94,6 +96,71 @@ class LabelTester(BaseCase):
         l = L('GrotX', (0, 1), args=('1.4',), time=0.2)
         self.assertEqual(str(l), "GrotX;1.4:0:1!0.2")  # make sure we do print time when it's nonzero
         self.assertEqual(l.time, 0.2)
+
+    def test_need_to_explicitly_say_its_sorted(self):
+
+        l = L((('Gx', 0),('Ga', 1)))
+        self.assertFalse(l.is_sorted, "We will not check for sorting unless asked. The starting assumption is that the label is not sorted.")
+
+        for label in labels:
+            self.assertTrue(hasattr(label,"is_sorted"), f"label {label} which has type {type(label)} does not have an attribute to check for sorting.")
+            self.assertTrue(hasattr(label,"_is_sorted"), f"label {label} which has type {type(label)} does not have the data member which holds its sorted state.")
+
+            if isinstance(label, (LabelTup, LabelStr)):
+                self.assertTrue(label.is_sorted, f"{type(label)} should be sorted by default since there is only one value in it.")
+            elif isinstance(label, CircuitLabel):
+                self.assertFalse(label.is_sorted, f"{CircuitLabel} can have multiple objects within a single layer so must be checked for sortedness.")
+            elif isinstance(label, LabelTupTup):
+                self.assertFalse(label.is_sorted, f"{LabelTupTup} can have multiple objects within a single layer so must be checked for sortedness.")
+
+        l = l.with_sorted_inner_labels()
+        self.assertTrue(l.is_sorted, f"We just sorted the label {l}!")
+
+    def test_sortedness_respects_order_of_two_qubit_gates(self):
+        label1 = L((("Gx", 1), ("GCnot", 0, 2)))
+        label2 = L((("Gx", 1), ("GCnot", 2, 0)))
+        self.assertNotEqual(label1.with_sorted_inner_labels(), label2.with_sorted_inner_labels())
+        # Note that if one uses this for checking that this random circuit has not already been done before
+        # then there is a possibility that it could return false even if it has been done before.
+        # Consider the case that one assumes a two qubit gate Gii which is a noisy idle gate.
+        # If we assume that there is not a handedness to the noisy idle so that Gii 0, 2 == Gii 2, 0.
+        # then this sorting check will not handle this.
+        # Since a two qubit gate typically has a handedness structure this behavior is desired.
+
+    def test_label_sorting_circuit_labels_recurses_correctly(self):
+
+        label1 = L((("Gx", 1), ("GCnot", 2, 0)))
+
+        cirLabel = CircuitLabel('mycir', [label1,], None, 5, None)
+
+        self.assertEqual(cirLabel.components[0], label1)
+        self.assertEqual(cirLabel.with_sorted_inner_labels().components[0], label1.with_sorted_inner_labels())
+
+        cirLabel2 = CircuitLabel('embedded', [label1, cirLabel, L('Gz', 2)], None, 1, None)
+
+        sorted_c2 = cirLabel2.with_sorted_inner_labels()
+
+        for comp in sorted_c2.components:
+            self.assertTrue(comp.is_sorted)
+
+
+    def test_labeltuptup_sorting_recurses_if_necessary(self):
+
+        inner_label1 = L('Gx', 1)
+        inner_label2 = L('Gz', 2)
+        out_of_order = L((inner_label2, inner_label1))
+
+        in_order = L((inner_label1, inner_label2))
+
+        cirLabelOOO = L((out_of_order,
+                         CircuitLabel('embedded', [out_of_order,], (1,2), 2, None).map_state_space_labels({1: 0, 2: 3}),
+                         out_of_order.map_state_space_labels({1: 4, 2: 5})))
+
+        cirLabelInOrder = L((CircuitLabel('embedded', [in_order,], (1,2), 2, None).map_state_space_labels({1:0, 2:3}),
+                             in_order,
+                             in_order.map_state_space_labels({1:4, 2: 5})))
+        
+        self.assertEqual(cirLabelOOO.with_sorted_inner_labels().components, cirLabelInOrder.components)
 
     def test_label_rep_evalulation(self):
         """ Make sure Label reps evaluate back to the correct Label """

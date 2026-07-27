@@ -1,4 +1,6 @@
 import logging
+
+import pygsti.objectivefns
 mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
 
@@ -109,7 +111,8 @@ class TimeDependentTestCase(BaseTestCase):
         target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
         self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 57)
         
-        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
+        builder = pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.TimeDependentPoissonPicLogLFunction)
+        builders = pygsti.protocols.GSTObjFnBuilders([builder], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                                  objfn_builders=builders,
                                                  optimizer={'maxiter':2,'tol': 1e-4})
@@ -162,7 +165,8 @@ class TimeDependentTestCase(BaseTestCase):
         target_model.operations['Gi',0] = MyTimeDependentIdle(0)  # start assuming no time dependent decay
         target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
 
-        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
+        builder = pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.TimeDependentPoissonPicLogLFunction)
+        builders = pygsti.protocols.GSTObjFnBuilders([builder], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                                  objfn_builders=builders, optimizer={'maxiter':10,'tol': 1e-4})
         data = pygsti.protocols.ProtocolData(edesign, ds)

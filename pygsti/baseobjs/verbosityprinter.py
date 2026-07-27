@@ -291,6 +291,13 @@ class VerbosityPrinter(object):
         self.__dict__.update(state_dict)
         self._comm = None  # initialize to None upon unpickling
 
+    def _indent_string(self, message_level=None, indent_char='  ',  indent_offset=0):
+        if message_level is None:
+            message_level = self.defaultVerbosity
+        num_indents = message_level - 1 + indent_offset + self.extra_indents
+        indent = indent_char * num_indents
+        return indent
+
     # Used once a file has been created - open the file whenever a message needs to be sent (rather than opening it for
     # the entire program)
     def _append_to(self, filename, message):
@@ -339,7 +346,7 @@ class VerbosityPrinter(object):
 
     # special function reserved for logging warnings
 
-    def warning(self, message):
+    def warning(self, message, message_level=None, indent_char='  ', do_indent=True, indent_offset=0):
         """
         Log a warning to the screen/file if verbosity > 1
 
@@ -353,8 +360,13 @@ class VerbosityPrinter(object):
         None
         """
         if self.warnings:
-            self._put('\nWARNING: %s\n' % message, stderr=True)
-            self._record("WARNING", 0, '\nWARNING: %s\n' % message)
+            msg = 'WARNING: %s\n\n' % message
+            if do_indent:
+                indent = self._indent_string(message_level, indent_char, indent_offset)
+                msg = indent + msg
+            msg = '\n' + msg
+            self._put(msg, stderr=True)
+            self._record("WARNING", 0, msg)
 
     def log(self, message, message_level=None, indent_char='  ', show_statustype=False, do_indent=True,
             indent_offset=0, end='\n', flush=True):
@@ -401,8 +413,7 @@ class VerbosityPrinter(object):
         if message_level is None:
             message_level = self.defaultVerbosity
         if message_level <= self.verbosity:
-            indent = (indent_char * (message_level - 1 + indent_offset
-                                     + self.extra_indents)) if do_indent else ''
+            indent = self._indent_string(message_level, indent_char, indent_offset) if do_indent else ''
             # message_level-1 so no indent at verbosity == 1
             statusType = 'Status Level %s:' % message_level if show_statustype else ''
             if end == '\n':

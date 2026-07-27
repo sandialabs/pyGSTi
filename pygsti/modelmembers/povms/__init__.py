@@ -37,6 +37,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 from pygsti.tools import sum_of_negative_choi_eigenvalues_gate
+from pygsti.tools.exceptions import PrepareThyself
 from pygsti.baseobjs import Basis
 
 # Avoid circular import
@@ -557,7 +558,12 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                     )
 
                     if degrees_of_freedom > errgen.num_params:
-                        warnings.warn("POVM has more degrees of freedom than the available number of parameters, representation in this parameterization is not guaranteed")
+                        msg = \
+                        """
+                        POVM has more degrees of freedom than the available number of parameters,
+                        representation in this parameterization is not guaranteed.
+                        """
+                        warnings.warn(msg, PrepareThyself)
                     exp_errgen = _ExpErrorgenOp(errgen)
                     
                     num_errgens = errgen.num_params

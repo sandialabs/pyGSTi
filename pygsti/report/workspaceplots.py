@@ -4234,15 +4234,16 @@ class FitComparisonBarPlot(WorkspacePlot):
         if mdc_stores is None:
             mdc_stores = [None]*len(model_by_x)
 
-        for X, mdl, circuits, dataset, Np, mdc_store in zip(x_names, model_by_x, circuits_by_x, 
-                                                            dataset_by_x, np_by_x, mdc_stores):
+        for X, mdl, circuits, dataset, Np, mdc_store in zip(
+            x_names, model_by_x, circuits_by_x, dataset_by_x, np_by_x, mdc_stores
+        ):
             if circuits is None or mdl is None:
                 Nsig, rating = _np.nan, 5
             else:
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.rated_n_sigma, dataset, mdl,
                                                           circuits, objfn_builder, Np, wildcard,
                                                           return_all=True, comm=comm, mdc_store=mdc_store)
-                #Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
+                # Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
 
             if rating == 5: color = "darkgreen"
             elif rating == 4: color = "lightgreen"

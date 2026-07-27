@@ -1828,7 +1828,8 @@ class WorkspaceOutput(object):
 
             #Create separate files with div contents
             for divContent, divFilenm in zip(div_contents, div_filenames):
-                with open(_os.path.join(str(link_to_files_dir), divFilenm), 'w') as f:
+                filepath = _os.path.join(str(link_to_files_dir), divFilenm)
+                with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(divContent)
         html += "\n</div>\n"  # ends pygsti-wsoutput-group div
 

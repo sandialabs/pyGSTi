@@ -41,7 +41,7 @@ class ExplicitOpModelToolTester(BaseCase):
                                                             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 
         self.gateset_2q = create_explicit_model_from_expressions(
-            [('Q0', 'Q1')], ['GIX', 'GIY', 'GXI', 'GYI', 'GCNOT'],
+            [('Q0', 'Q1')], ['Gix', 'Giy', 'Gxi', 'Gyi', 'Gcnot'],
             ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)"])
 
     def test_randomize_with_unitary(self):

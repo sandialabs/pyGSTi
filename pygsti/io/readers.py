@@ -126,7 +126,7 @@ def read_dataset(filename, cache=False, collision_action="aggregate",
 
             printer.log("Writing cache file (to speed future loads): %s"
                         % cache_filename)
-            ds.save(cache_filename)
+            ds.write_binary(cache_filename)
         else:
             # otherwise must use standard dataset file format
             parser = _stdinput.StdInputParser()

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 import copy as _copy
+import warnings
 
 import numpy as _np
 
@@ -23,8 +24,12 @@ from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING, Union
 
+if TYPE_CHECKING:
+    from pygsti.models.model import Model
+    from pygsti.baseobjs.statespace import StateSpace
+    from pygsti.evotypes.evotype import Evotype
 
 class ModelChild(object):
     """
@@ -41,11 +46,11 @@ class ModelChild(object):
         The parent of this object.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[Model]=None):
         self._parent = parent  # parent Model used to determine how to process
         # a LinearOperator's gpindices when inserted into a Model
 
-    def copy(self, parent=None, memo=None):
+    def copy(self, parent: Optional[Model]=None, memo: Optional[dict]=None):
         """
         Copy this object. Resets parent to None or `parent`.
 
@@ -53,6 +58,9 @@ class ModelChild(object):
         ----------
         parent : Model, optional
             The parent of the new, copied, object.
+
+        memo : Optional dictionary
+            A dictionary to store the id of the parent. Used for memoization.
 
         Returns
         -------
@@ -70,7 +78,7 @@ class ModelChild(object):
         return copyOfMe
 
     @property
-    def parent(self):
+    def parent(self) -> Model:
         """
         Gets the parent of this object.
 
@@ -81,7 +89,7 @@ class ModelChild(object):
         return self._parent
 
     @parent.setter
-    def parent(self, value):
+    def parent(self, value: Model):
         """
         Sets the parent of this object.
 
@@ -137,7 +145,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         The parent model.
     """
 
-    def __init__(self, state_space, evotype, gpindices=None, parent=None):
+    def __init__(self, state_space: StateSpace, evotype: Union[Evotype,str], gpindices=None, parent: Optional[Model]=None):
         """ Initialize a new ModelMember """
         self._state_space = state_space
         self._evotype = evotype
@@ -152,16 +160,16 @@ class ModelMember(ModelChild, _NicelySerializable):
         _NicelySerializable.__init__(self)
 
     @property
-    def state_space(self):
+    def state_space(self) -> StateSpace:
         return self._state_space
 
     @state_space.setter
-    def state_space(self, state_space):
+    def state_space(self, state_space: StateSpace) -> None:
         #assert(self._state_space.is_compatible_with(state_space)), "Cannot change to an incompatible state space!"
         self._update_submember_state_spaces(self._state_space, state_space)
         self._state_space = state_space
 
-    def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):
+    def _update_submember_state_spaces(self, old_parent_state_space: StateSpace, new_parent_state_space: StateSpace) -> None:
         """ Subclasses can override this to perform more intelligent updates.
             This function can also be used to perform any auxiliary tasks, like rebuilding a representation,
             when the object's state space is updated.
@@ -171,18 +179,18 @@ class ModelMember(ModelChild, _NicelySerializable):
                 subm.state_space = new_parent_state_space
 
     @property
-    def evotype(self):
+    def evotype(self) -> Evotype:
         return self._evotype
 
     @property
-    def dirty(self):
+    def dirty(self) -> bool:
         """
         Flag indicating whether this member's local parameters may have been updated without its parent's knowledge.
         """
         return self._dirty
 
     @dirty.setter
-    def dirty(self, value):
+    def dirty(self, value: bool):
         """
         Flag indicating whether this member's local parameters may have been updated without its parent's knowledge.
         """
@@ -219,7 +227,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         return self._paramlbls
 
     @property
-    def parameter_bounds(self):
+    def parameter_bounds(self) -> Optional[_np.ndarray]:
         """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
         if self._param_bounds is not None:
             return self._param_bounds
@@ -252,7 +260,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             self.parent._mark_for_rebuild(self)
 
     @property
-    def parent(self):
+    def parent(self) -> Optional[Model]:
         """
         The parent of this object.
 
@@ -267,14 +275,14 @@ class ModelMember(ModelChild, _NicelySerializable):
         return self._parent
 
     @parent.setter
-    def parent(self, value):
+    def parent(self, value: Model):
         """
         The parent of this object.
         """
         raise ValueError(("Use set_gpindices(...) to set the parent"
                           " of a ModelMember object"))
 
-    def submembers(self):
+    def submembers(self) -> Union[list, tuple]:
         """
         Returns a sequence of any sub-ModelMember objects contained in this one.
 
@@ -292,7 +300,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         """
         return ()
 
-    def relink_parent(self, parent):
+    def relink_parent(self, parent: Model) -> None:
         """
         Sets the parent of this object *without* altering its gpindices.
 
@@ -326,7 +334,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             assert(self._parent is None), "Cannot relink parent: current parent is not None!"
         self._parent = parent
 
-    def unlink_parent(self, force=False):
+    def unlink_parent(self, force: bool=False) -> None:
         """
         Remove the parent-link of this member.
 
@@ -342,17 +350,19 @@ class ModelMember(ModelChild, _NicelySerializable):
             parent still contains references to it.  If `False`, the parent
             is only set to `None` when its parent contains no reference to it.
 
+            Passed through to unlink_parent calls for submembers of this model member.
+
         Returns
         -------
         None
         """
         for subm in self.submembers():
-            subm.unlink_parent()
+            subm.unlink_parent(force)
 
         if (self.parent is not None) and (force or self.parent._obj_refcount(self) == 0):
             self._parent = None
 
-    def set_gpindices(self, gpindices, parent, memo=None):
+    def set_gpindices(self, gpindices, parent: Model, memo: Optional[set]=None):
         """
         Set the parent and indices into the parent's parameter vector that are used by this ModelMember object.
 
@@ -361,7 +371,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         gpindices : slice or integer ndarray
             The indices of this objects parameters in its parent's array.
 
-        parent : Model or ModelMember
+        parent : Model
             The parent whose parameter array gpindices references.
 
         memo : set, optional
@@ -389,9 +399,11 @@ class ModelMember(ModelChild, _NicelySerializable):
                     gpindices, subm_rpindices)
                 subm.set_gpindices(new_subm_gpindices, parent, memo)
 
+        if isinstance(parent, ModelMember):
+            warnings.warn("parent should be a Model and not a ModelMember", DeprecationWarning)
         self._set_only_my_gpindices(gpindices, parent)
 
-    def shift_gpindices(self, above, amount, parent_filter=None, memo=None):
+    def shift_gpindices(self, above: int, amount: int, parent_filter: Optional[Model]=None, memo: Optional[set]=None) -> None:
         """
         Shifts this member's gpindices by the given amount.
 
@@ -438,11 +450,11 @@ class ModelMember(ModelChild, _NicelySerializable):
                 shifted = _np.where(self.gpindices >= above, self.gpindices + amount, self.gpindices)
                 self._set_only_my_gpindices(shifted, self.parent)  # works for integer arrays
 
-    def _set_only_my_gpindices(self, gpindices, parent):
+    def _set_only_my_gpindices(self, gpindices: Union[slice, _np.ndarray], parent: Optional[Model]) -> None:
         self._parent = parent
         self._gpindices = gpindices
 
-    def _collect_parents(self, set_to_fill=None, memo=None):
+    def _collect_parents(self, set_to_fill: Optional[set]=None, memo: Optional[set]=None) -> set[Model]:
         """ Traverse sub-member tree and record all distinct parent Models. Useful for finding
             the "anticipated parent" model when initializing a member with sub-members """
         if set_to_fill is None: set_to_fill = set()
@@ -719,7 +731,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         #  of this member (num_params, etc) should be the same as they are now (with parent=None).
         self.allocate_gpindices(starting_index=0, parent=None)
 
-    def gpindices_as_array(self):
+    def gpindices_as_array(self) -> _np.ndarray:
         """
         Returns gpindices as a `numpy.ndarray` of integers.
 
@@ -738,7 +750,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             return self._gpindices  # it's already an array
 
     @property
-    def num_params(self):
+    def num_params(self) -> int:
         """
         Get the number of independent parameters which specify this object.
 
@@ -748,7 +760,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         """
         return 0  # by default, object has no parameters
 
-    def to_vector(self):
+    def to_vector(self) -> _np.ndarray:
         """
         Get this object's parameters as a 1D array of values.
 
@@ -758,7 +770,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         """
         return _np.array([], 'd')  # no parameters
 
-    def from_vector(self, v, close=False, dirty_value=True):
+    def from_vector(self, v: _np.ndarray, close: Optional[bool]=False, dirty_value: Optional[bool]=True):
         """
         Initialize this object using a vector of parameters.
 
@@ -881,7 +893,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             the same local structure, i.e., not considering parameter values or submembers """
         return True  # default is to have no additional checks for similarity
 
-    def is_similar(self, other, rtol=1e-5, atol=1e-8):
+    def is_similar(self, other, rtol: float=1e-5, atol: float=1e-8):
         """
         Comparator returning whether two ModelMembers are the same type
         and parameterization.
@@ -894,7 +906,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         other: ModelMember
             ModelMember to compare to
         rtol: float
-            Relative tolerance for floating poing comparisons (passed to numpy.isclose)
+            Relative tolerance for floating point comparisons (passed to numpy.isclose)
         atol: float
             Absolute tolerance for floating point comparisons (passed to numpy.isclose)
 
@@ -903,12 +915,15 @@ class ModelMember(ModelChild, _NicelySerializable):
         bool
             True if structure (all but parameter *values*) matches
         """
-        if type(self) != type(other): return False
+        if not isinstance(self, type(other)):
+            return False
         #if str(self.evotype) != str(other.evotype): return False  # allow models of different evotypes to be similar
-        if not self._is_similar(other, rtol, atol): return False
+        if not self._is_similar(other, rtol, atol):
+            return False
 
         # Recursive check on submembers
-        if len(self.submembers()) != len(other.submembers()): return False
+        if len(self.submembers()) != len(other.submembers()):
+            return False
         for sm1, sm2 in zip(self.submembers(), other.submembers()):
             if not sm1.is_similar(sm2): return False
 
@@ -946,7 +961,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         except RuntimeError as e:
             if 'to_vector() should never be called' not in str(e):
                 raise e
-            assert type(self) == type(other)
+            assert isinstance(self, type(other))
             v1 = self.to_dense()
             v2 = other.to_dense()
         if not _np.allclose(v1, v2, rtol=rtol, atol=atol):
@@ -1135,7 +1150,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         return "(contents not available)"
 
 
-def _compose_gpindices(parent_gpindices, child_gpindices):
+def _compose_gpindices(parent_gpindices: Optional[Union[slice, _np.ndarray]], child_gpindices: Optional[Union[slice, _np.ndarray]]):
     """
     Maps `child_gpindices`, which index `parent_gpindices` into a new slice
     or array of indices that is the subset of parent indices.
@@ -1159,7 +1174,7 @@ def _compose_gpindices(parent_gpindices, child_gpindices):
         return parent_gpindices[child_gpindices]
 
 
-def _decompose_gpindices(parent_gpindices, sibling_gpindices):
+def _decompose_gpindices(parent_gpindices: Optional[Union[slice, _np.ndarray]], sibling_gpindices: Optional[Union[slice, _np.ndarray]]):
     """
     Maps `sibling_gpindices`, which index the same space as `parent_gpindices`,
     into a new slice or array of indices that gives the indices into

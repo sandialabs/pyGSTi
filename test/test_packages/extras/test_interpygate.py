@@ -6,6 +6,7 @@ from pygsti.extras import interpygate as interp
 from pygsti.extras.interpygate.process_tomography import run_process_tomography, unvec_square
 from pygsti.tools import change_basis
 from ..testutils import BaseTestCase
+from ...unit.util import needs_csaps
 
 try:
     from mpi4py import MPI
@@ -21,6 +22,7 @@ mpi_workers_per_process = 1
 
 
 class ExampleProcess(interp.PhysicalProcess):
+
     def __init__(self):
         self.Hx = _np.array([[0, 0, 0, 0],
                             [0, 0, 0, 0],
@@ -72,6 +74,7 @@ class ExampleProcess(interp.PhysicalProcess):
 
 
 class ExampleProcess_timedep(interp.PhysicalProcess):
+
     def __init__(self):
         self.Hx = _np.array([[0, 0, 0, 0],
                             [0, 0, 0, 0],
@@ -124,6 +127,7 @@ class ExampleProcess_timedep(interp.PhysicalProcess):
 
 class InterpygateTestCase(BaseTestCase):
 
+    @needs_csaps
     def test_timedep_op(self):
         example_process = ExampleProcess_timedep()
         target_mxs = example_process.create_process_matrices(_np.array([1.0, 0.0, 0.0, 0.0, 0.0]), [[_np.pi / 2]], comm=_comm)
@@ -163,6 +167,7 @@ class InterpygateTestCase(BaseTestCase):
         #print(interp_op.to_dense())
         self.assertArraysAlmostEqual(expected, interp_op.to_dense())
 
+    @needs_csaps
     def test_timedep_factory(self):
         class TargetOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):
@@ -216,6 +221,7 @@ class InterpygateTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(expected, op.to_dense())
         self.assertAlmostEqual(op.aux_info, 1.749)
 
+    @needs_csaps
     def test_timeindep_op(self):
         example_process = ExampleProcess()
         target_mx = example_process.create_process_matrix(_np.array([1.0, 0.0, 0.0, 0.0, 0.0, _np.pi / 2]), comm=_comm)
@@ -254,6 +260,7 @@ class InterpygateTestCase(BaseTestCase):
         #print(interp_op.to_dense())
         self.assertArraysAlmostEqual(expected, interp_op.to_dense())
 
+    @needs_csaps
     def test_timeindep_factory(self):
         class TargetOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):

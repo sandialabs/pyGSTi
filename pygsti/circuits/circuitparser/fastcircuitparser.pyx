@@ -259,19 +259,35 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
     sslbls = []
     while i < end and s[i] == u':':
         i += 1
-        last = i; is_int = True
+        last = i
+        is_int = True
         while i < end:
             c = s[i]
             if u'0' <= c <= u'9':
                 i += 1
-            elif u'a' <= c <= u'z' or c == u'_' or c == u'Q':
-                i += 1; is_int = False
+            elif u'a' <= c <= u'z' or c == u'_':
+                # Labels can contain any combination of lowercase letters and underscores.
+                i += 1
+                is_int = False
+            elif c in (u'G', u'M', u'I', u'S'):
+                # These reserved characters (all uppercase letters) indicate that we've already
+                # seen everything there is to see for the most recent/current label.
+                break
+            elif last == i and c in (u'Q', u'T', u'L'):
+                # Labels can start with reserved uppercase letters Q, T, and L, per the 
+                # StateSpace documentation.
+                i += 1
+                is_int = False
+            elif last == i and u'A' <= c <= u'Z':
+                msg = f"Invalid target label: {s[last:i + 1]!r}. Labels can't start with uppercase letters other than Q, T, and L."
+                raise ValueError(msg)
             else:
                 break
         if integerize_sslbls and is_int:
-            sslbls.append(int(s[last:i])); last = i
+            sslbls.append(int(s[last:i]))
         else:
-            sslbls.append(sys.intern(s[last:i])); last = i
+            sslbls.append(sys.intern(s[last:i]))
+        last = i
 
     if i < end and s[i] == u'!':
         i += 1

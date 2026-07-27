@@ -11,8 +11,6 @@ Tools for general compatibility.
 #***************************************************************************************************
 
 import numbers as _numbers
-import uuid as _uuid
-from contextlib import contextmanager as _contextmanager
 
 
 def isint(x):
@@ -44,26 +42,3 @@ def _numpy14einsumfix():
             return _np.orig_einsum(str(s), *args, **kwargs)
         _np.orig_einsum = _np.einsum
         _np.einsum = fixed_einsum
-
-
-@_contextmanager
-def patched_uuid():
-    """
-    Monkeypatch the uuid module with a fake SafeUUID
-
-    `uuid.SafeUUID` is new in Python 3.7. This is a workaround to
-    allow unpickling objects from >= 3.7 in < 3.7.
-
-    TODO: objects should be serialized correctly and this should be deprecated.
-    """
-    if 'SafeUUID' not in dir(_uuid):
-        class dummy_SafeUUID(object):  # noqa N803
-            def __new__(cls, *args):
-                return _uuid.UUID.__new__(_uuid.UUID, *args)
-        _uuid.SafeUUID = dummy_SafeUUID
-
-        yield  # context block
-
-        _uuid.__delattr__('SafeUUID')
-    else:
-        yield

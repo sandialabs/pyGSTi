@@ -23,9 +23,10 @@ class InstrumentTestCase(BaseTestCase):
         self.povm_ident = self.target_model.povms['Mdefault']['0'] + self.target_model.povms['Mdefault']['1']
 
         self.mdl_target_wTP = self.target_model.copy()
-        self.mdl_target_wTP.instruments['IzTP'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_target_wTP.instruments['Iztp'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
 
         super(InstrumentTestCase, self).setUp()
+
 
     def testFutureFunctionality(self):
         #Test instrument construction with elements whose gpindices are already initialized.
@@ -66,7 +67,7 @@ class InstrumentTestCase(BaseTestCase):
 
         self.assertAlmostEqual(mdl.frobeniusdist(self.mdl_target_wTP),0.0)
 
-        for lbl in ('Iz','IzTP'):
+        for lbl in ('Iz','Iztp'):
             v = mdl.to_vector()
             gates = mdl.instruments[lbl].simplify_operations(prefix="ABC")
             for igate in gates.values():

@@ -24,6 +24,8 @@ from pygsti import baseobjs as _baseobjs
 from pygsti import circuits as _circuits
 
 from pygsti.circuits import circuitconstruction as _gsc
+from pygsti.models import ExplicitOpModel as _ExplicitOpModel
+from pygsti.models import ImplicitOpModel as _ImplicitOpModel
 from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
 from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct
@@ -428,8 +430,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = target_model.copy()
-            gsGerm.set_all_parameterizations("static")
+            gsGerm = _copy_to_static_explicitop_model(target_model)
             germMx = gsGerm.sim.product(germ)
             #give this state space labels equal to the line_labels of 
             gsGerm.operations['Ggerm'] = _EigenvalueParamDenseOp(
@@ -628,8 +629,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
             #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = target_model.copy()
-            gsGerm.set_all_parameterizations("static")
+            gsGerm = _copy_to_static_explicitop_model(target_model)
             germMx = gsGerm.sim.product(germ)
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
@@ -804,8 +804,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             #Create a new model containing static target gates and a
             # special "germ" gate that is parameterized only by it's
             # eigenvalues (and relevant off-diagonal elements)
-            gsGerm = target_model.copy()
-            gsGerm.set_all_parameterizations("static")
+            gsGerm = _copy_to_static_explicitop_model(target_model)
             germMx = gsGerm.sim.product(germ)
             
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
@@ -2071,6 +2070,30 @@ def _make_spam_static(model):
     model_copy._rebuild_paramvec()
     
     return model_copy
+
+
+def _copy_to_static_explicitop_model(mdl):
+    """Create and return an "effective" a copy of `mdl` that is an ExplicitOpModel with static elements.
+
+    If `mdl` is already an ExplicitOpModel it is copied; otherwise (e.g. if
+    `mdl` is an ImplicitOpModel) it is first converted to an ExplicitOpModel
+    via :meth:`ImplicitOpModel.to_explicit_model`.  Either way all of the
+    returned model's parameterizations are then set to 'static'.
+
+    Parameters
+    ----------
+    mdl : Model
+        The model to copy.  Must be an ExplicitOpModel or ImplicitOpModel.
+    Returns
+    -------
+    Model
+        A copy of `mdl` with all elements set to 'static' parameterization.
+    """
+    ret = mdl.copy() if isinstance(mdl, _ExplicitOpModel) else mdl.to_explicit_model()
+    ret.set_all_parameterizations('static')
+    assert ret.num_params == 0
+    return ret
+
     
 #write a helper function for precomputing the jacobian dictionaries from bulk_dprobs
 #which can then be passed into the construction of the compactEVD caches.
@@ -2147,10 +2170,18 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, prep_po
 def _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs= False):
 
     if prep_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(target_model.povms.keys())[0]
-        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        if isinstance(target_model, _ExplicitOpModel):        
+            firstRho = list(target_model.preps.keys())[0]
+            prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
+            firstPOVM = list(target_model.povms.keys())[0]
+            POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        elif isinstance(target_model, _ImplicitOpModel):
+            firstRho = list(target_model.prep_blks['layers'].keys())[0]
+            prep_ssl = [target_model.prep_blks['layers'][firstRho].state_space.state_space_labels]
+            firstPOVM = list(target_model.povm_blks['layers'].keys())[0]
+            POVM_ssl = [target_model.povm_blks['layers'][firstPOVM].state_space.state_space_labels]
+        else:
+            raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
         prep_povm_tuples = [(firstRho, firstPOVM)]
         #I think using the state space labels for firstRho and firstPOVM as the
         #circuit labels should work most of the time (new stricter line_label enforcement means
@@ -2160,11 +2191,24 @@ def _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs= F
     #if not we still need to extract state space labels for all of these to meet new circuit
     #label handling requirements.
     else:
-        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        if isinstance(target_model, _ExplicitOpModel):
+            prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+            POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        elif isinstance(target_model, _ImplicitOpModel):
+            prep_ssl = [target_model.prep_blks['layers'][lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+            POVM_ssl = [target_model.povm_blks['layers'][lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        else:
+            raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
 
     #brief intercession to calculate the number of degrees of freedom for the povm.
-    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
+    if isinstance(target_model, _ExplicitOpModel):
+        num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
+    elif isinstance(target_model, _ImplicitOpModel):
+        num_effects= len(list(target_model.povm_blks['layers'][prep_povm_tuples[0][1]].keys()))
+    else:
+        raise ValueError("Model must be an ExplicitOpModel or ImplicitOpModel")
+    
+    #subtract 1 for the POVM constraint that effects sum to identity.
     dof_per_povm= num_effects-1
 
     prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 

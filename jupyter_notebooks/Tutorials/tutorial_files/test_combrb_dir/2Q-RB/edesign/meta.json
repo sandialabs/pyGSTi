@@ -1,0 +1,62 @@
+{
+    "type": "pygsti.protocols.rb.MirrorRBDesign",
+    "auxfile_types": {
+        "all_circuits_needing_data": "text-circuit-list",
+        "alt_actual_circuits_executed": "text-circuit-list",
+        "default_protocols": "dict:dir-serialized-object",
+        "_dirs": "none",
+        "_vals": "none",
+        "_loaded_from": "none",
+        "circuit_lists": "list:text-circuit-list",
+        "idealout_lists": "json"
+    },
+    "seed": null,
+    "nested": false,
+    "tags": {},
+    "_nameddict_attributes": [
+        [
+            "qubit_labels",
+            "Qubits",
+            "category"
+        ]
+    ],
+    "qubit_labels": [
+        "Q0",
+        "Q1"
+    ],
+    "depths": [
+        0,
+        2,
+        4,
+        8,
+        16,
+        32,
+        64,
+        128
+    ],
+    "paired_with_circuit_attrs": [
+        "idealout_lists"
+    ],
+    "circuits_per_depth": 10,
+    "descriptor": "A mirror RB experiment",
+    "circuit_type": "clifford",
+    "sampler": "edgegrab",
+    "samplerargs": [
+        0.5
+    ],
+    "localclifford": true,
+    "paulirandomize": true,
+    "default_protocols": {
+        "RB": null
+    },
+    "circuit_lists": [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+    ]
+}

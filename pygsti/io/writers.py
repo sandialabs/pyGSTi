@@ -33,6 +33,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.processors import QubitProcessorSpec, QuditProcessorSpec
 from itertools import product
 
+
 def write_empty_dataset(filename, circuits,
                         header_string='## Columns = 1 frequency, count total', num_zero_cols=None,
                         append_weights_column=False):
@@ -321,7 +322,10 @@ def write_model(model, filename, title=None):
     -------
     None
     """
-    _warnings.warn("write_model(...) is unable to write all types of pyGSTi models, and really should NOT be used!")
+    _warnings.warn(
+        "write_model(...) is unable to write all types of pyGSTi models, and really should NOT be used!",
+        _tools.exceptions.pyGSTiDeprecationWarning
+    )
 
     def writeprop(f, lbl, val):
         """ Write (label,val) property to output file """
