@@ -1607,7 +1607,6 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
         return clifford_ops_on_qubits
 
-        ### TODO: do we still need this?
     @lru_cache(maxsize=100)
     def compute_clifford_2Q_connectivity(self):
         """
@@ -1629,12 +1628,19 @@ class QubitProcessorSpec(QuditProcessorSpec):
             if self.gate_num_qubits(gn) == 2 and gn in clifford_gate_names:
                 avail = self.resolved_availability(gn, 'tuple')
                 if len(avail) == 1 and avail[0] is None and gn == '{idle}':
+                    # The global idle's availability isn't expressed as qubit pairs;
+                    # treat it as available on every qubit.
                     avail = [qubit_labels]
-                    # if qubit_labels.size == 2:
-                    #     avail = [qubit_labels]
-                    # else:
-                    #     raise ValueError('Availability of the idle gate has not been set.')
                 for sslbls in avail:
+                    # `gn` being in `clifford_gate_names` only means *some* label with
+                    # this gate name has a registered Clifford symplectic rep --
+                    # `nonstd_gate_symplecticreps` may register that rep for a specific
+                    # embedding (a full Label key) rather than for every site the gate
+                    # is available on. So we still have to check this specific site.
+                    try:
+                        self.clifford_symplectic_rep_of(_Lbl(gn, sslbls))
+                    except (KeyError, TypeError, ValueError):
+                        continue
                     i = qubit_labels.index(sslbls[0])
                     j = qubit_labels.index(sslbls[1])
                     CtwoQ_connectivity[i, j] = True
@@ -1660,10 +1666,6 @@ class QubitProcessorSpec(QuditProcessorSpec):
                 avail = self.resolved_availability(gn, 'tuple')
                 if len(avail) == 1 and avail[0] is None and gn == '{idle}':
                     avail = [qubit_labels]
-                    # if qubit_labels.size == 2:
-                    #     avail = [qubit_labels]
-                    # else:
-                    #     raise ValueError('Availability of the idle gate has not been set.')
                 for sslbls in avail:
                     i = qubit_labels.index(sslbls[0])
                     j = qubit_labels.index(sslbls[1])

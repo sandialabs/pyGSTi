@@ -321,6 +321,32 @@ class ProcessorSpecTester(BaseCase):
         # Check that the nodes are correct
         self.assertEqual(set(computed_graph.node_names), set(qubit_labels))
 
+    def test_compute_clifford_2Q_connectivity_only_counts_validated_sites(self):
+        # Regression test: a 2Q gate name can be in `clifford_gate_names` (i.e. have
+        # *some* registered Clifford symplectic rep) while only being validated as
+        # Clifford on a subset of its availability -- e.g. when
+        # `nonstd_gate_symplecticreps` registers the rep against a specific full
+        # Label rather than against the gate name. `compute_clifford_2Q_connectivity`
+        # must still validate each site individually (via `clifford_symplectic_rep_of`)
+        # rather than marking every availability site of the gate name as connected.
+        identity_srep = (np.eye(4, dtype=int), np.zeros(4, dtype=int))
+        ps = QubitProcessorSpec(
+            num_qubits=3,
+            gate_names=['Gi', 'Gexample'],
+            nonstd_gate_num_qubits={'Gexample': 2},
+            availability={'Gexample': [(0, 1), (1, 2)]},
+            nonstd_gate_symplecticreps={Label('Gexample', (0, 1)): identity_srep},
+            qubit_labels=(0, 1, 2),
+        )
+
+        clifford_ops = ps.compute_clifford_ops_on_qubits()
+        self.assertIn((0, 1), clifford_ops)
+        self.assertNotIn((1, 2), clifford_ops)
+
+        computed_graph = ps.compute_clifford_2Q_connectivity()
+        computed_undirected_edges = {frozenset(edge) for edge in computed_graph.edges()}
+        self.assertEqual(computed_undirected_edges, {frozenset({0, 1})})
+
     def test_gate_num_qubits(self):
         ps = QubitProcessorSpec(2, gate_names=['Gx', 'Gcnot'], geometry='line')
         self.assertEqual(ps.gate_num_qubits('Gx'), 1)
