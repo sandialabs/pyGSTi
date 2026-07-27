@@ -211,9 +211,10 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
                 # These reserved characters (all uppercase letters) indicate that we've already
                 # seen everything there is to see for the most recent/current label.
                 break
-            elif last == i and c in (u'Q', u'T', u'L'):
+            elif last == i and c in (u'Q', u'T', u'L', u'A', u'D'):
                 # Labels can start with reserved uppercase letters Q, T, and L, per the 
-                # StateSpace documentation.
+                # StateSpace documentation. Also added A and D for "auxiliary" or "data" qubits
+                # for interfacing with LoQS/futureproofing for QEC
                 i += 1
                 is_int = False
             elif last == i and u'A' <= c <= u'Z':

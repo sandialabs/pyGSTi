@@ -13,7 +13,6 @@ Defines the ImplicitOpModel class and supporting functionality.
 import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
-import numpy as _np
 
 from pygsti.models import model as _mdl
 from pygsti.modelmembers import operations as _op
@@ -151,55 +150,68 @@ class ImplicitOpModel(_mdl.OpModel):
             fdict.parent = self
             for o in fdict.values(): o.relink_parent(self)
 
-    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
+    def _iter_ops_for_clifford_symplectic_reps(self):
+        for gl in self.primitive_op_labels:
+            yield gl, self.operation_blks['layers'][gl]
+
+    def to_explicit_model(self):
         """
-        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
+        Build an :class:`ExplicitOpModel` equivalent to this implicit model.
 
-        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
-        from the returned dictionary.
+        Each primitive layer member stored in this model's
+        ``prep_blks['layers']``, ``povm_blks['layers']``,
+        ``operation_blks['layers']``, and ``instrument_blks['layers']``
+        dictionaries is copied into the returned model as an explicitly-stored
+        member.  The result therefore reproduces this model's circuit-layer
+        operators for any layer that this model builds by a direct lookup of
+        these primitives -- which is what report generation and other
+        explicit-model-only code paths require.
 
-        Parameters
-        ----------
-        oplabel_filter : iterable, optional
-            A list, tuple, or set of operation labels whose symplectic
-            representations should be returned (if they exist).
+        The members' parameterizations are *preserved*: the actual
+        :class:`ModelMember` objects are copied rather than densified, so a
+        low-weight error-generator (Lindblad), TP, CPTP, etc. operation remains
+        that type in the returned model.  Parameter *sharing* between primitives
+        (such as a single base gate embedded on several qubits in a
+        ``independent_gates=False`` model) is preserved as well, so the returned
+        model should have the same number of parameters as this one.
 
         Returns
         -------
-        dict
-            keys are operation labels and/or just the root names of gates
-            (without any state space indices/labels).  Values are
-            `(symplectic_matrix, phase_vector)` tuples.
+        ExplicitOpModel
+
+        Notes
+        -----
+        This function does not support ImplicitOpModel's with `factories`.
         """
-        gfilter = set(oplabel_filter) if oplabel_filter is not None \
-            else None
+        from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
-        srep_dict = {}
+        factory_labels = ['%s:%s' % (blk_lbl, lbl) for blk_lbl, fdict in self.factories.items()
+                          for lbl in fdict]
+        if factory_labels:
+            raise ValueError(("Cannot convert an implicit model with op-factories to an explicit"
+                              " model: factories generate operations on-demand and have no fixed"
+                              " representation.  Offending factories: %s")
+                             % ", ".join(factory_labels))
 
-        for gl in self.primitive_op_labels:
-            gate = self.operation_blks['layers'][gl]
-            if (gfilter is not None) and (gl not in gfilter): continue
+        ret = _ExplicitOpModel(self.state_space, self.basis,
+                               simulator='auto', evotype=self.evotype)
 
-            if isinstance(gate, _op.EmbeddedOp):
-                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
-                    "EmbeddedClifforGate contains a non-StaticCliffordOp!"
-                lbl = gl.name  # strip state space labels off since this is a
-                # symplectic rep for the *embedded* gate
-                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
-            elif isinstance(gate, _op.StaticCliffordOp):
-                lbl = gl.name
-                srep = (gate.smatrix, gate.svector)
-            else:
-                lbl = srep = None
+        # Copy the actual ModelMember objects (rather than dense arrays) so that
+        # each member's parameterization is retained.  A single shared `memo`
+        # preserves parameter-sharing between primitives (e.g. one base gate
+        # embedded on multiple qubits): a sub-member encountered a second time is
+        # returned from the memo instead of being copied again.
+        memo = {}
+        for lbl, prep in self.prep_blks.get('layers', {}).items():
+            ret.preps[lbl] = prep.copy(ret, memo)
+        for lbl, povm in self.povm_blks.get('layers', {}).items():
+            ret.povms[lbl] = povm.copy(ret, memo)
+        for lbl, op in self.operation_blks.get('layers', {}).items():
+            ret.operations[lbl] = op.copy(ret, memo)
+        for lbl, inst in self.instrument_blks.get('layers', {}).items():
+            ret.instruments[lbl] = inst.copy(ret, memo)
 
-            if srep:
-                if lbl in srep_dict:
-                    assert(srep == srep_dict[lbl]), \
-                        "Inconsistent symplectic reps for %s label!" % lbl
-                else:
-                    srep_dict[lbl] = srep
-
-        return srep_dict
+        return ret
 
     def __str__(self):
         s = ""

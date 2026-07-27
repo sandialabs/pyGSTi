@@ -51,9 +51,9 @@ def create_elementary_errorgen_dual(typ: Literal_HSCA, p: _np.ndarray, q: Option
     error generator `L` on an input density matrix `rho` is given by:
 
     Hamiltonian:  `L(rho) = -1j/(2d^2) * [ p, rho ]`
-    Stochastic:   `L(rho) = 1/(d^2) p * rho * p^\dag`
-    Correlation:  `L(rho) = 1/(2d^2) ( p * rho * q^\dag + q * rho * p^\dag)`
-    Active:       `L(rho) = 1j/(2d^2) ( p * rho * q^\dag - q * rho * p^\dag)`
+    Stochastic:   `L(rho) = 1/(d^2) p * rho * p^\\dag`
+    Correlation:  `L(rho) = 1/(2d^2) ( p * rho * q^\\dag + q * rho * p^\\dag)`
+    Active:       `L(rho) = 1j/(2d^2) ( p * rho * q^\\dag - q * rho * p^\\dag)`
 
     where `d` is the dimension of the Hilbert space, e.g. 2 for a single qubit.  Square
     brackets denotes the commutator and curly brackets the anticommutator.
@@ -263,9 +263,9 @@ def create_elementary_errorgen(typ : Literal_HSCA, p: _np.ndarray,
     error generator `L` on an input density matrix `rho` is given by:
 
     Hamiltonian:  `L(rho) = -1j * [ p, rho ]`
-    Stochastic:   `L(rho) = p * rho * p^\dag - 0.5*{p^\dag p, rho}`
-    Correlation:  `L(rho) = p * rho * q^\dag + q * rho * p^\dag - 0.5 {(p^\dag @ q + q^\dag @ p), rho}`
-    Active:       `L(rho) = 1j( p * rho * q^\dag - q * rho * p^\dag + 0.5 {(p^\dag @ q - q^\dag @ p)), rho} )`
+    Stochastic:   `L(rho) = p * rho * p^\\dag - 0.5*{p^\\dag p, rho}`
+    Correlation:  `L(rho) = p * rho * q^\\dag + q * rho * p^\\dag - 0.5 {(p^\\dag @ q + q^\\dag @ p), rho}`
+    Active:       `L(rho) = 1j( p * rho * q^\\dag - q * rho * p^\\dag + 0.5 {(p^\\dag @ q - q^\\dag @ p)), rho} )`
 
     Square brackets denotes the commutator and curly brackets the anticommutator.
     `L` is returned as a superoperator matrix that acts on vectorized density matrices.

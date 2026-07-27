@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     except ImportError:
         pass
 
-import warnings as _warnings
 from collections import defaultdict as _defaultdict
 import networkx as _nx
 
@@ -31,21 +30,8 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.tools import internalgates as _itgs
-from pygsti.tools.exceptions import MissingDependencyWarning, QiskitInteropWarning
+from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
 
-
-QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE = \
-f"""
-Simple subcircuit selection with a qiskit CouplingMap and/or InstructionDurations object
-is designed for qiskit version 2.1.1, and may not function properly for your qiskit version,
-which is %s.
-"""
-
-QISKIT_MISSING_MESSAGE = \
-"""
-Qiskit is required if using a CouplingMap or InstructionDurations object
-for subcircuit selection, and does not appear to be installed.
-"""
 
 MAX_STARTING_LAYER_ATTEMPTS = 1000
 
@@ -127,13 +113,8 @@ def sample_subcircuits(full_circs: Union[_Circuit, List[_Circuit]],
         A FreeformDesign object containing the sampled subcircuits and auxiliary
         information, including a circuit ID and depth.
     """
-    try:
-        import qiskit
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, QiskitInteropWarning)
-    except:
-        _warnings.warn(QISKIT_MISSING_MESSAGE, MissingDependencyWarning)
-    
+    _check_qiskit_version('sample_subcircuits()', required=False)
+
     if rand_state is None:
         rand_state = _np.random.RandomState()
     
@@ -260,12 +241,7 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
         the number of dangling gates in each subcircuit and the indices of added layers.
     """
 
-    try:
-        import qiskit
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn(QISKIT_VERSION_MISMATCH_MESSAGE_TEMPLATE % qiskit.__version__, QiskitInteropWarning)
-    except:
-        _warnings.warn(QISKIT_MISSING_MESSAGE, MissingDependencyWarning)
+    qiskit = _check_qiskit_version('simple_weighted_subcirc_selection()', required=False)
 
     full_width = len(full_circ.line_labels)
     full_depth = len(full_circ)
@@ -320,13 +296,10 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
         layer_durations = []
 
         if use_qiskit_for_instruction_durations is None:
-            try:
-                if isinstance(instruction_durations, qiskit.transpiler.InstructionDurations):
-                    use_qiskit_for_instruction_durations = True
-                    gate_name_conversions = _itgs.standard_gatenames_qiskit_conversions() 
-                else:
-                    use_qiskit_for_instruction_durations = False
-            except:
+            if qiskit is not None and isinstance(instruction_durations, qiskit.transpiler.InstructionDurations):
+                use_qiskit_for_instruction_durations = True
+                gate_name_conversions = _itgs.standard_gatenames_qiskit_conversions()
+            else:
                 use_qiskit_for_instruction_durations = False
 
 
@@ -360,14 +333,13 @@ def simple_weighted_subcirc_selection(full_circ: _Circuit,
             G.add_edges_from(coupling_map)
             qubit_subset = random_connected_subgraph(G, width, rand_state)
 
-        else: # likely the coupling_map is a CouplingMap instance    
-            try:
-                if not isinstance(coupling_map, qiskit.transpiler.CouplingMap):
-                    raise RuntimeError("If `coupling_map` is not 'all-to-all, 'linear', or a list," \
-                    "it must be a qiskit CouplingMap object.")
-            except:
-                raise ImportError('Qiskit is required when providing a CouplingMap for subcircuit selection,' \
-                'and does not appear to be installed.')
+        else: # likely the coupling_map is a CouplingMap instance
+            if qiskit is None:
+                raise ImportError('Qiskit is required when providing a CouplingMap for subcircuit selection, '
+                                  'and does not appear to be installed.')
+            if not isinstance(coupling_map, qiskit.transpiler.CouplingMap):
+                raise RuntimeError("If `coupling_map` is not 'all-to-all', 'linear', or a list, "
+                                   "it must be a qiskit CouplingMap object.")
 
             edges = []
             for cs in coupling_map:

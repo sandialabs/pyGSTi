@@ -27,7 +27,9 @@ dependencies=[
     'stim',
     'plotly>=3.8.0',
     'pandas',
+    'matplotlib',
     'networkx',
+    'typing_extensions',
     'tqdm>=4.42.0'
 ]
 requires-python='>=3.10'
@@ -63,8 +65,11 @@ evolutionary_optimization = ['deap']
 extensions = ['cython']
 html_reports = ['jinja2', 'MarkupSafe']
 ibmq = [
-    'qiskit>1',
-    'qiskit-ibm-runtime>=0.17.1',
+    # Keep consistent with TESTED_QISKIT_RANGE in pygsti/tools/_qiskit_interop.py.
+    'qiskit>=1.4,<3',
+    # >=0.44 additionally provides ConvertToMidCircuitMeasure (optional; see
+    # pygsti/extras/ibmq/ibmqexperiment.py).
+    'qiskit-ibm-runtime>=0.40',
     'dill'
 ]
 interpygate = ['csaps']
@@ -86,7 +91,7 @@ notebooks = [
 # nvidia-* CUDA wheels. Install it explicitly when needed, e.g.
 # `pip install pygsti[complete,pytorch]`. CI installs `...,pytorch` so the
 # TorchForwardSimulator tests actually run instead of being skipped.
-pytorch = ['torch']
+pytorch = ['torch>=2.4']  # >=2.4 for the torch.mps/torch.xpu device-query namespaces
 report_pdf_figures = ['matplotlib']
 reports = ['pygsti[html_reports,report_pdf_figures]']
 testing_no_cython_mpi = [

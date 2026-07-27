@@ -33,6 +33,7 @@ from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
+from pygsti.leakage import metrics as _lm
 from pygsti import SpaceT
 
 if TYPE_CHECKING:
@@ -1040,15 +1041,14 @@ Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 def leaky_maximum_trace_dist(gate: _np.ndarray, mx_basis: BasisLike) -> float:
     closestUOpMx = _alg.find_closest_unitary_opmx(gate)
     _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
-    n_leak = 1
-    return _tools.subspace_jtracedist(gate, closestUOpMx, mx_basis, n_leak)
+    return _lm.subspace_jtracedist(gate, closestUOpMx, mx_basis)
 
 Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
 
 def diamonddist_to_leakfree_cptp(op: _np.ndarray, ignore: _np.ndarray, mx_basis: BasisLike) -> float:
     import pygsti.tools.sdptools as _sdps
     prob, _, solvers = _sdps.diamond_distance_projection_model(
-        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=False
+        op, mx_basis, leakfree=True, seepfree=False, cptp=True, subspace_diamond=False
     )
     for s in solvers:
         try:
@@ -1063,7 +1063,7 @@ Diamonddist_to_leakfree_cptp = _modf.opsfn_factory(diamonddist_to_leakfree_cptp)
 def subspace_diamonddist_to_leakfree_cptp(op: _np.ndarray, ignore: _np.ndarray, mx_basis: BasisLike) -> float:
     import pygsti.tools.sdptools as _sdps
     prob, _, solvers = _sdps.diamond_distance_projection_model(
-        op, mx_basis, leakfree=True, seepfree=False, n_leak=1, cptp=True, subspace_diamond=True
+        op, mx_basis, leakfree=True, seepfree=False, cptp=True, subspace_diamond=True
     )
     for s in solvers:
         try:
@@ -1090,14 +1090,11 @@ def subspace_diamonddist(op_a: _np.ndarray, op_b: _np.ndarray, basis: BasisLike)
 SubspaceDiamonddist = _modf.opsfn_factory(subspace_diamonddist)
 
 def pergate_leakrate_reduction(op: _np.ndarray, ignore: _np.ndarray, mx_basis: BasisLike, reduction: Callable) -> float:
-    assert op.shape == (9, 9)
-    lfb = _BuiltinBasis('l2p1', 9)
-    op_lfb = _tools.change_basis(op, mx_basis, lfb)
-    elinds = lfb.elindlookup
-    compinds = [elinds[sslbl] for sslbl in ['I','X','Y','Z'] ]
-    leakage_effect_superket = op_lfb[elinds['L'], compinds]
-    leakage_effect = _tools.vec_to_stdmx(leakage_effect_superket, 'pp')
-    leakage_rates = _np.linalg.eigvalsh(leakage_effect)
+    leakage_rates = _lm.gate_leakage_profile(op, mx_basis)[0]
+    if len(leakage_rates) == 0:
+        # No leakage profile (e.g. a basis that doesn't imply leakage modeling); the
+        # reduction (max/min) would raise on an empty sequence, so report NaN instead.
+        return _np.nan
     return reduction(leakage_rates)
 
 def pergate_leakrate_max(op: _np.ndarray, ignore: _np.ndarray, mx_basis: BasisLike) -> float:
@@ -1110,11 +1107,12 @@ PerGateLeakRateMax = _modf.opsfn_factory(pergate_leakrate_max)
 PerGateLeakRateMin = _modf.opsfn_factory(pergate_leakrate_min)
 
 def pergate_seeprate(op: _np.ndarray, ignore: _np.ndarray, mx_basis: BasisLike) -> float:
-    assert op.shape == (9, 9)
-    lfb = _BuiltinBasis('l2p1', 9)
-    op_lfb = _tools.change_basis(op, mx_basis, lfb)
-    elinds = lfb.elindlookup
-    seeprate = op_lfb[elinds['I'], elinds['L']]
+    seepage_rates = _lm.gate_seepage_profile(op, mx_basis)[0]
+    if len(seepage_rates) == 0:
+        # No seepage profile (e.g. a basis that doesn't imply leakage modeling); avoid
+        # max() on an empty sequence and report NaN instead.
+        return _np.nan
+    seeprate = max(seepage_rates)
     return seeprate
 
 PerGateSeepRate = _modf.opsfn_factory(pergate_seeprate)
@@ -1165,36 +1163,12 @@ Angles_btwn_rotn_axes = _modf.modelfn_factory(angles_btwn_rotn_axes)
 # init args == (model)
 
 
-def entanglement_fidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -> float:
-    """
-    Entanglement fidelity between a and b
-
-    Parameters
-    ----------
-    a : numpy.ndarray
-        The first process (transfer) matrix.
-
-    b : numpy.ndarray
-        The second process (transfer) matrix.
-
-    mx_basis : Basis or {'pp', 'gm', 'std'}
-        the basis that `a` and `b` are in.
-
-    Returns
-    -------
-    float
-    """
-    return _tools.entanglement_fidelity(a, b, mx_basis)
-
-
-Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
+Entanglement_fidelity = _modf.opsfn_factory(
+    _tools.entanglement_fidelity
+)
 # init args == (model1, model2, op_label)
 
-def subspace_entanglement_fidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -> float:
-    n_leak = 1
-    return _tools.subspace_entanglement_fidelity(a, b, mx_basis, n_leak)
-
-Subspace_entanglement_fidelity = _modf.opsfn_factory(subspace_entanglement_fidelity)
+Subspace_entanglement_fidelity = _modf.opsfn_factory(_lm.subspace_entanglement_fidelity)
 
 
 def entanglement_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -> float:
@@ -1223,7 +1197,7 @@ Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, op_label)
 
 def leaky_entanglement_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -> float:
-    return 1 - subspace_entanglement_fidelity(a, b, mx_basis)
+    return 1 - _lm.subspace_entanglement_fidelity(a, b, mx_basis)
 
 Leaky_entanglement_infidelity = _modf.opsfn_factory(leaky_entanglement_infidelity)
 
@@ -1293,12 +1267,7 @@ Fro_diff = _modf.opsfn_factory(frobenius_diff)
 # init args == (model1, model2, op_label)
 
 
-def leaky_gate_frob_dist(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -> float:
-    n_leak = 1
-    return _tools.subspace_superop_fro_dist(a, b, mx_basis, n_leak)
-
-
-Leaky_gate_frob_dist = _modf.opsfn_factory(leaky_gate_frob_dist)
+Leaky_gate_frob_dist = _modf.opsfn_factory(_lm.subspace_superop_fro_dist)
 
 
 def jtrace_diff(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -> float:  # assume vary model1, model2 fixed
@@ -1326,11 +1295,8 @@ def jtrace_diff(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -> float:  
 Jt_diff = _modf.opsfn_factory(jtrace_diff)
 # init args == (model1, model2, op_label)
 
-def leaky_jtrace_diff(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -> float:
-    n_leak = 1
-    return _tools.subspace_jtracedist(a, b, mx_basis, n_leak)
 
-Leaky_Jt_diff = _modf.opsfn_factory(leaky_jtrace_diff)
+Leaky_Jt_diff = _modf.opsfn_factory(_lm.subspace_jtracedist)
 
 
 if _CVXPY_AVAILABLE:
@@ -1599,7 +1565,11 @@ Eigenvalue_nonunitary_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_nonun
 
 
 
-def eigenvalue_entanglement_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike, is_tp: Optional[bool]=None, is_unitary: Optional[bool]=None, tol: float=1e-8) -> _np.floating:
+def eigenvalue_entanglement_infidelity(
+        a: _np.ndarray, b: _np.ndarray,
+        mx_basis: BasisLike,  # type: ignore
+        is_tp=None, is_unitary=None, tol=1e-8
+    ) -> _np.floating:
     """
     Eigenvalue entanglement infidelity is the infidelity between certain diagonal matrices that
     contain [see Note 1] the eigenvalues of J(a) and J(b), where J(.) is the Jamiolkowski
@@ -1640,9 +1610,12 @@ def eigenvalue_entanglement_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis:
     
     """
     d2 = a.shape[0]
+    if isinstance(mx_basis, str):
+        mx_basis : _Basis = _Basis.cast(mx_basis, d2) # type: ignore
 
     if is_unitary is None:
         is_unitary = _np.allclose(_np.eye(d2), b @ b.T.conj(), atol=tol, rtol=tol)
+    
     if is_tp is None:
         is_tp = _tools.is_trace_preserving(a, mx_basis, tol) and _tools.is_trace_preserving(b, mx_basis, tol) 
 
@@ -1653,9 +1626,14 @@ def eigenvalue_entanglement_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis:
                                         return_pairs=True)  # just to get pairing
         fid = abs(_np.sum([_np.conjugate(evB[j]) * evA[i] for i, j in pairs])) / d2
     else:
-        Ja = _tools.fast_jamiolkowski_iso_std(a, mx_basis)
-        Jb = _tools.fast_jamiolkowski_iso_std(b, mx_basis)
         from pygsti.tools.optools import eigenvalue_fidelity
+        if mx_basis.implies_leakage_modeling:
+            vec_basis, Ja_vec, Jb_vec = _lm.apply_tensorized_to_teststate(a, b, mx_basis)
+            Ja = _tools.vec_to_stdmx(Ja_vec, vec_basis, keep_complex=True)
+            Jb = _tools.vec_to_stdmx(Jb_vec, vec_basis, keep_complex=True)
+        else:
+            Ja = _tools.fast_jamiolkowski_iso_std(a, mx_basis)
+            Jb = _tools.fast_jamiolkowski_iso_std(b, mx_basis)
         fid = eigenvalue_fidelity(Ja, Jb, gauge_invariant=True)
     return 1.0 - fid
 
@@ -1667,7 +1645,16 @@ Eigenvalue_entanglement_infidelity = _modf.opsfn_factory(eigenvalue_entanglement
 
 def eigenvalue_avg_gate_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -> float:
     """
-    Eigenvalue average gate infidelity between a and b
+    Average gate fidelity (`F_g`) is related to entanglement fidelity
+    (`F_p`), via:
+
+      `F_g = (d * F_p + 1)/(1 + d)`,
+
+    where d is the Hilbert space dimension. This formula, and the
+    definition of AGF, can be found in Phys. Lett. A 303 249-252 (2002).
+
+    This function applies that same formula where F_p is the eigenvalue
+    entanglement fidelity between a and b.
 
     Parameters
     ----------
@@ -1684,9 +1671,11 @@ def eigenvalue_avg_gate_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: Bas
     -------
     float
     """
-    d2 = a.shape[0]; d = int(round(_np.sqrt(d2)))
-    mlPl = eigenvalue_entanglement_infidelity(a, b, mx_basis)
-    return (d2 - mlPl) / float(d * (d + 1))
+    d = round(a.size ** 0.25)
+    infid = eigenvalue_entanglement_infidelity(a, b, mx_basis)
+    F_p = 1 - infid
+    F_g = (d * F_p + 1) / (1 + d)
+    return 1 - F_g
 
 
 Eigenvalue_avg_gate_infidelity = _modf.opsfn_factory(eigenvalue_avg_gate_infidelity)
@@ -2797,7 +2786,7 @@ def instrument_infidelity(a: _np.ndarray, b: _np.ndarray, mx_basis: BasisLike) -
     -------
     float
     """
-    sqrt_component_fidelities = [_np.sqrt(entanglement_fidelity(a[l], b[l], mx_basis))
+    sqrt_component_fidelities = [_np.sqrt(_tools.entanglement_fidelity(a[l], b[l], mx_basis))
                                  for l in a.keys()]
     return 1 - sum(sqrt_component_fidelities)**2
 

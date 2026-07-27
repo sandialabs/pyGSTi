@@ -35,19 +35,27 @@ Kraus-rank-1 terms together when needed.
 """
 from __future__ import annotations
 
+from typing import Tuple, Any, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
 import numpy as _np
 from pygsti.pgtypes import SpaceT
-from pygsti.baseobjs.basis import Basis
+from pygsti.baseobjs.basis import Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers.povms.effect import POVMEffect
 from pygsti.modelmembers.operations.linearop import LinearOperator
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.tools import optools as _ot
 
 from typing import Union
 BasisLike = Union[Basis, str]
 
 
-class RootConjOperator(LinearOperator):
+class RootConjOperator(LinearOperator, _Torchable):
     """
     Represents a linear operator that acts as ρ ↦ E^½ ρ E^½, where E is a
     Hermitian matrix represented by a POVMEffect object.
@@ -143,6 +151,57 @@ class RootConjOperator(LinearOperator):
         out = self._rep.base.copy()
         out.flags.writeable = True
         return out
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
+        """Bake the constants used by :meth:`torch_base` (see there for the degeneracy caveat).
+
+        All free parameters belong to the wrapped effect; the basis element matrices ``B`` and the
+        std<->basis change-of-basis matrices ``toMx`` / ``fromMx`` are constant and are pre-computed
+        here (mirroring :func:`pygsti.tools.optools.rootconj_superop`).
+        """
+        cdtype = _torch.complex128 if real_dtype.itemsize == 8 else _torch.complex64
+        dim = self._state_space.dim
+        # B[i] = self._basis.elements[i]; E = einsum('i,iab->ab', effect_superket, B) == vec_to_stdmx.
+        B = _torch.from_numpy(_np.array(self._basis.elements)).to(dtype=cdtype, device=device)
+        # change_basis(mx_std, 'std', self._basis) == toMx @ mx_std @ fromMx (constant matrices).
+        std_basis = _BuiltinBasis('std', dim)
+        to_np = _np.ascontiguousarray(std_basis.create_transform_matrix(self._basis))
+        toMx  = _torch.from_numpy(to_np).to(dtype=cdtype, device=device)
+        from_np = _np.ascontiguousarray(self._basis.create_transform_matrix('std'))
+        fromMx  = _torch.from_numpy(from_np).to(dtype=cdtype, device=device)
+        return (type(self._effect), self._effect.stateless_data(real_dtype, device), B, toMx, fromMx)
+
+    @staticmethod
+    def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
+        """Differentiable reconstruction of the ρ ↦ E½ ρ E½ superoperator (see :func:`rootconj_superop`).
+
+        .. warning::
+
+            This uses ``torch.linalg.eigh`` on the effect matrix ``E``.  The AD rules for ``eigh``
+            contain ``1 / (λᵢ − λⱼ)`` factors -- in reverse mode (``torch.func.jacrev``) *and* forward
+            mode (``torch.func.jacfwd``) alike -- so the Jacobian from either mode is numerically
+            unstable, and NaN in the exactly-degenerate limit, for effects with (near-)degenerate
+            spectra.  Independently, ``sqrt`` of the clamped eigenvalues has an infinite derivative at
+            an eigenvalue of exactly 0, so boundary spectra also produce NaN Jacobians in both modes --
+            e.g. ideal projective effects (spectrum of 0s and 1s) yield entirely-NaN Jacobians.  Use
+            torch AD for this operator, in either mode, only for effects whose spectra are interior to
+            ``(0, 1)`` and non-degenerate; only the value path has no such restriction.
+
+        Unlike the numpy reference :func:`~pygsti.tools.optools.rootconj_superop` -- which warns
+        when an eigenvalue of ``E`` strays outside ``[0, 1]`` by more than :attr:`EIGTOL_WARNING`
+        and raises a ``ValueError`` past :attr:`EIGTOL_ERROR` -- this path clamps silently at any
+        magnitude of violation.  So under torch-driven optimization it can keep returning
+        (clamped) values in regions where the numpy path would refuse to evaluate.
+        """
+        etype, esd, B, toMx, fromMx = sd
+        v = etype.torch_base(esd, t_param).to(B.dtype)  # whole t_param: params delegate to the effect
+        E = _torch.einsum('i,iab->ab', v, B)            # vec_to_stdmx
+        E = (E + E.mH) / 2                               # match eigendecomposition's Hermitian symmetrize
+        vals, V = _torch.linalg.eigh(E)
+        R = (V * _torch.sqrt(_torch.clamp(vals, 0.0, 1.0)).unsqueeze(0)) @ V.mH
+        # plain (non-conjugate) transpose, matching np.kron(R, R.T); .contiguous() because
+        # torch.kron cannot view the transposed (non-contiguous) operand.
+        return (toMx @ _torch.kron(R, R.transpose(0, 1).contiguous()) @ fromMx).real
 
 
 class SummedOperator(LinearOperator):

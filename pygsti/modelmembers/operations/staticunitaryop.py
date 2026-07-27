@@ -16,9 +16,10 @@ from pygsti.modelmembers.operations.denseop import DenseUnitaryOperator as _Dens
 from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.modelmembers.torchable import StaticTorchable as _StaticTorchable
 
 
-class StaticUnitaryOp(_DenseUnitaryOperator, _NoErrorGeneratorInterface):
+class StaticUnitaryOp(_DenseUnitaryOperator, _NoErrorGeneratorInterface, _StaticTorchable):
     """
     A unitary operation matrix that is completely fixed, or "static" (i.e. that posesses no parameters).
 

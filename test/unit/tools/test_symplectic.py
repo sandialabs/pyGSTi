@@ -122,6 +122,31 @@ class SymplecticBase(object):
         s, p  = symplectic.symplectic_rep_of_clifford_circuit(HZHcirc, srep_dict=srep_custom)
         self.assertArraysAlmostEqual(s, np.eye(4))
         self.assertArraysAlmostEqual(p, np.zeros(4))
+
+    def test_circuit_symplectic_representation_uses_full_labels(self):
+        label0 = Label('Gargp', tuple(range(self.n)), args=(0,))
+        label1 = Label('Gargp', tuple(range(self.n)), args=(1,))
+        srep_dict = {
+            label0: symplectic.symplectic_rep_of_clifford_layer(Label('P', 0), n=self.n),
+            label1: symplectic.symplectic_rep_of_clifford_layer(Label('P', 1), n=self.n),
+        }
+
+        circuit = pygsti.circuits.Circuit([label0, label1], line_labels=tuple(range(self.n)))
+        expected_circuit = pygsti.circuits.Circuit([Label('P', 0), Label('P', 1)],
+                                                  line_labels=tuple(range(self.n)))
+        actual_s, actual_p = symplectic.symplectic_rep_of_clifford_circuit(circuit, srep_dict=srep_dict)
+        expected_s, expected_p = symplectic.symplectic_rep_of_clifford_circuit(expected_circuit)
+
+        self.assertArraysAlmostEqual(actual_s, expected_s)
+        self.assertArraysAlmostEqual(actual_p, expected_p)
+
+        def srep_factory(label):
+            return srep_dict[label]
+
+        actual_s, actual_p = symplectic.symplectic_rep_of_clifford_circuit(
+            circuit, srep_dict={'Gargp': srep_factory})
+        self.assertArraysAlmostEqual(actual_s, expected_s)
+        self.assertArraysAlmostEqual(actual_p, expected_p)
     
     @unittest.skipIf(_fastcalc is None, "Skipping fast compose test since no fastcalc compiled")
     def test_fast_compose_cliffords(self):

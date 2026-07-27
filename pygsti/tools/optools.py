@@ -1197,8 +1197,8 @@ def povm_diamonddist(model, target_model, povmlbl, _premultiplier=None):
     Notes
     -----
     _premultiplier is not in the public API. It's here for the time being
-    to facilitate leakage modeling. When present, it's a projector built
-    from pygsti.tools.leading_dxd_submatrix_basis_vectors.
+    to facilitate leakage modeling. When present, it's a value returned
+    from pygsti.leakage.computational_projector.
     """
     try:
         povm_mx = compute_povm_map(model, povmlbl)
@@ -1258,8 +1258,8 @@ def instrument_diamonddist(a, b, mx_basis, _premultiplier=None):
     Notes
     -----
     _premultiplier is not in the public API. It's here for the time being
-    to facilitate leakage modeling. When present, it's a projector built
-    from pygsti.tools.leading_dxd_submatrix_basis_vectors.
+    to facilitate leakage modeling. When present, it's a value returned
+    from pygsti.leakage.computational_projector.
     """
     #Turn instrument into a CPTP map on qubit + classical space.
     adim = a.state_space.dim

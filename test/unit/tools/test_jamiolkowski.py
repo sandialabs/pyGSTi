@@ -3,7 +3,6 @@ import numpy as np
 import pygsti.tools.basistools as bt
 from pygsti.models.modelconstruction import create_operation
 from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
-from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import statespace
 from pygsti.baseobjs import Basis
 from pygsti.tools import jamiolkowski as j
@@ -12,8 +11,10 @@ from ..util import BaseCase
 
 class JamiolkowskiBasisTester(BaseCase):
     def setUp(self):
-        #Set Model objects to "strict" mode for testing
-        ExplicitOpModel._strict = True
+        # (This test never indexes an ExplicitOpModel, so it does not need
+        # strict mode.  It used to set ``ExplicitOpModel._strict = True`` at the
+        # class level with no tearDown, which leaked into and broke unrelated
+        # tests -- non-deterministically under parallel/xdist execution.)
 
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block
         self.stateSpaceDims = [(4,), (1,)]

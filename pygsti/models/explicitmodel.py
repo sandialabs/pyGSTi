@@ -119,7 +119,13 @@ class ExplicitOpModel(_mdl.OpModel):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    #Whether access to gates & spam vecs via Model indexing is allowed
+    # Whether access to gates & spam vecs via Model indexing is *forbidden*.
+    # This is consulted per-instance (``self._strict``) in ``__getitem__``/
+    # ``__setitem__``; the value here is only the default for instances that
+    # don't set their own.  Set ``some_model._strict = True`` to enable strict
+    # mode on a single model without mutating shared class state -- important
+    # so that tests toggling strict mode stay isolated under parallel/xdist
+    # execution rather than racing on this class attribute.
     _strict = False
 
     def __init__(self, state_space, basis="pp", default_gate_type="full",
@@ -307,7 +313,7 @@ class ExplicitOpModel(_mdl.OpModel):
             appropriate state space for the Model and appropriate type
             given the prefix of the label.
         """
-        if ExplicitOpModel._strict:
+        if self._strict:
             raise KeyError("Strict-mode: invalid key %s" % repr(label))
 
         if not isinstance(label, _Label): label = _Label(label)
@@ -334,7 +340,7 @@ class ExplicitOpModel(_mdl.OpModel):
         label : string
             the gate, state vector, or POVM label.
         """
-        if ExplicitOpModel._strict:
+        if self._strict:
             raise KeyError("Strict-mode: invalid key %s" % label)
 
         if not isinstance(label, _Label): label = _Label(label)
@@ -1520,54 +1526,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #Note: does not alter instruments!
         return kicked_gs
 
-    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
-        """
-        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
-
-        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
-        from the returned dictionary.
-
-        Parameters
-        ----------
-        oplabel_filter : iterable, optional
-            A list, tuple, or set of operation labels whose symplectic
-            representations should be returned (if they exist).
-
-        Returns
-        -------
-        dict
-            keys are operation labels and/or just the root names of gates
-            (without any state space indices/labels).  Values are
-            `(symplectic_matrix, phase_vector)` tuples.
-        """
-        gfilter = set(oplabel_filter) if oplabel_filter is not None \
-            else None
-
-        srep_dict = {}
-
-        for gl, gate in self.operations.items():
-            if (gfilter is not None) and (gl not in gfilter): continue
-
-            if isinstance(gate, _op.EmbeddedOp):
-                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
-                    "EmbeddedClifforGate contains a non-StaticCliffordOp!"
-                lbl = gl.name  # strip state space labels off since this is a
-                # symplectic rep for the *embedded* gate
-                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
-            elif isinstance(gate, _op.StaticCliffordOp):
-                lbl = gl.name
-                srep = (gate.smatrix, gate.svector)
-            else:
-                lbl = srep = None
-
-            if srep:
-                if lbl in srep_dict:
-                    assert(srep == srep_dict[lbl]), \
-                        "Inconsistent symplectic reps for %s label!" % lbl
-                else:
-                    srep_dict[lbl] = srep
-
-        return srep_dict
+    def _iter_ops_for_clifford_symplectic_reps(self):
+        return self.operations.items()
 
     @_deprecated_fn
     def print_info(self):
