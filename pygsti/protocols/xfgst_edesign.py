@@ -160,6 +160,7 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
                  circuit_stitcher: Optional[CircuitStitcher] = None,
                  seed: Optional[int] = None,
                  nested: bool = False,
+                 debug_check: bool = True,
                  **stitcher_kwargs: Any):
         """
         Assume that the GST designs have the same Ls.
@@ -182,11 +183,15 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
         Idle gates are guaranteed to be explicit: ``build_layer_mappers`` maps the
         empty (implicit-idle) layer label ``Label(())`` onto an explicit idle gate
         (asserting ``Label(())`` never survives into a mapper's values), and
-        ``batch_tensor`` re-checks that invariant. For the default stitcher we
-        additionally enable its ``debug_check`` (unless the caller overrides it via
-        a ``debug_check`` keyword argument), which asserts
-        ``layer(i) == layer_with_idles(i)`` for every layer of every generated
-        circuit -- i.e. no implicit idles remain.
+        ``batch_tensor`` re-checks that invariant. When ``debug_check`` is True
+        (the default), this constructor itself verifies the resulting
+        ``circuit_lists`` via :func:`assert_circuit_lists_match_color_patches`
+        -- checking that every generated circuit has no implicit idle gates and
+        is correctly stitched onto its own patch's qubits/edges. This runs
+        regardless of which ``circuit_stitcher`` was used (unlike the previous
+        approach of relying on ``assign_the_designs_with_mapping``'s own
+        ``debug_check`` parameter, which a swapped-in stitcher could silently
+        skip).
         """
         if circuit_stitcher is None:
             circuit_stitcher = assign_the_designs_with_mapping
@@ -204,9 +209,6 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
         # Base kwargs common to the built-in calling convention; caller-supplied
         # stitcher_kwargs take precedence so any option can be overridden.
         kwargs = dict(randgen=randgen, ensure_containment=nested)
-        if circuit_stitcher is assign_the_designs_with_mapping:
-            # Verify explicit idle gates on every generated circuit by default.
-            kwargs['debug_check'] = True
         kwargs.update(stitcher_kwargs)
         self.stitcher_kwargs = kwargs
 
@@ -218,6 +220,13 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
         # The default stitcher (assign_the_designs_with_mapping) does not produce
         # aux_info; keep the attribute for API compatibility.
         self.aux_info = {}
+
+        if debug_check:
+            # Stitcher-agnostic verification of circuit_lists: runs no matter
+            # which circuit_stitcher produced it.
+            assert_circuit_lists_match_color_patches(
+                self.circuit_lists, self.vertices, self.color_patches
+            )
 
         super().__init__(processor_spec, self.circuit_lists,qubit_labels=self.vertices, nested=nested)
 
@@ -321,12 +330,210 @@ def build_patch_infos(vertices: Sequence[Vertex],
 
     return patch_infos, groups
 
+
+def random_index_schedule(n: int, max_len: int, randgen: np.random.Generator) -> np.ndarray:
+    """
+    A length-``max_len`` index schedule into a CircuitList of size ``n``.
+
+    The ``n`` real indices ``0..n-1`` are always included (each circuit used
+    at least once); if ``n < max_len`` the remaining ``max_len - n`` slots are
+    filled with uniformly random indices drawn (with repetition) from
+    ``0..n-1``, then the whole schedule is shuffled.
+
+    Parameters
+    ----------
+    n : int
+        Size of the CircuitList being scheduled into ``max_len`` slots.
+
+    max_len : int
+        Desired length of the returned schedule.
+
+    randgen : numpy.random.Generator
+        Random number generator used to draw the extra indices (when
+        ``n < max_len``) and to shuffle the result.
+
+    Returns
+    -------
+    numpy.ndarray
+        A length-``max_len`` array of indices into ``0..n-1``.
+    """
+    if n == max_len:
+        base = np.arange(max_len)
+    else:
+        base = np.concatenate((
+            np.arange(n),
+            randgen.integers(0, n, size=max_len - n),
+        ))
+    return randgen.permutation(base)
+
+
+def assert_no_implicit_idles(circuit: Circuit) -> None:
+    """
+    Assert that every idle gate in ``circuit`` is explicit.
+
+    For every layer, checks that the layer's contents are unchanged by
+    filling in idles (``layer(i) == layer_with_idles(i)``), i.e. that the
+    circuit contains no implicit idle gates.
+
+    Parameters
+    ----------
+    circuit : Circuit
+        The circuit to check.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    AssertionError
+        If any layer of ``circuit`` contains an implicit idle gate.
+    """
+    for i in range(circuit.num_layers):
+        l0 = set(circuit.layer(i))
+        l1 = set(circuit.layer_with_idles(i))
+        assert l0 == l1, (
+            f"Implicit idle gate(s) detected in layer {i}: "
+            f"layer()={l0} != layer_with_idles()={l1}"
+        )
+
+
+def assert_mapped_circuit_matches_patch(mapped_circuit: Circuit, info: Dict[str, Any]) -> None:
+    """
+    Assert that ``mapped_circuit`` was correctly remapped onto its own patch.
+
+    Checks two things:
+
+    1. ``mapped_circuit``'s line labels are exactly the qubits/edges assigned
+       to this patch (``info["tensored_lines"]``) -- no more, no fewer.
+    2. Every multi-qubit gate in ``mapped_circuit`` lands on one of this
+       patch's own edges (``info["edge_set"]``, in either orientation) --
+       not on some other patch's edge (e.g. the representative patch's edge,
+       which would indicate the mapper was applied incorrectly or never
+       applied at all).
+
+    Parameters
+    ----------
+    mapped_circuit : Circuit
+        The circuit produced by mapping a representative patch's template
+        circuit onto ``info``'s own qubits/edges.
+
+    info : dict
+        One patch's entry from ``build_patch_infos``, containing at least
+        ``"patch"``, ``"tensored_lines"``, and ``"edge_set"``.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    AssertionError
+        If either check fails.
+    """
+    expected_labels = {
+        q
+        for line in info["tensored_lines"]
+        for q in line
+    }
+
+    actual_labels = set(mapped_circuit.line_labels)
+
+    assert actual_labels == expected_labels, (
+        actual_labels,
+        expected_labels
+    )
+
+    # Also verify *where* the multi-qubit gates actually landed,
+    allowed_edges = {tuple(e) for e in info["edge_set"]}
+    allowed_edges |= {tuple(reversed(e)) for e in allowed_edges}
+    for i in range(mapped_circuit.num_layers):
+        for op in mapped_circuit.layer(i):
+            if len(op.qubits) > 1:
+                assert tuple(op.qubits) in allowed_edges, (
+                    f"Patch {info['patch']!r}: found multi-qubit "
+                    f"gate {op} on {op.qubits}, which is not one "
+                    f"of this patch's own edges {info['edge_set']} "
+                    "(mapper likely applied incorrectly, or the "
+                    "circuit was never remapped from the "
+                    "representative patch)."
+                )
+
+
+def assert_circuit_lists_match_color_patches(
+    circuit_lists: List[List[Circuit]],
+    vertices: Sequence[Vertex],
+    color_patches: Dict[int, List[Edge]],
+) -> None:
+    """
+    Assert that ``circuit_lists`` is a well-formed, patch-major stitching of
+    ``color_patches`` onto ``vertices``.
+
+    This is stitcher-agnostic: it validates the *output* of whatever
+    ``circuit_stitcher`` produced ``circuit_lists``, not just the built-in
+    ``assign_the_designs_with_mapping``, so it can (and is, by
+    ``CrosstalkFreeExperimentDesign.__init__``) be run regardless of which
+    stitcher was actually used.
+
+    For every germ-power entry ``circuit_lists[L]``, this re-derives each
+    patch's own tensored lines/edges from ``vertices``/``color_patches`` (the
+    same way ``build_patch_infos`` does) and checks that:
+
+    1. ``circuit_lists[L]`` splits evenly into ``len(color_patches)``
+       contiguous, equal-size, patch-major chunks -- i.e. the output honors
+       the patch-major-ordering contract documented on
+       ``assign_the_designs_with_mapping`` (this is required of *any*
+       ``circuit_stitcher``, not just the built-in one).
+    2. Every circuit has no implicit idle gates
+       (see :func:`assert_no_implicit_idles`).
+    3. Every circuit in a given patch's chunk is correctly stitched onto
+       that patch's own qubits/edges
+       (see :func:`assert_mapped_circuit_matches_patch`).
+
+    Parameters
+    ----------
+    circuit_lists : list[list[Circuit]]
+        The stitched circuit lists to check, e.g. ``self.circuit_lists`` on a
+        ``CrosstalkFreeExperimentDesign``.
+
+    vertices : list[Vertex]
+        Vertices/qubits in the connectivity graph.
+
+    color_patches : dict[int, list[tuple]]
+        Mapping from patch/color identifier to the list of disjoint 2Q edges
+        in that patch, as passed to ``CrosstalkFreeExperimentDesign``.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    AssertionError
+        If any of the checks above fail.
+    """
+    patch_infos, _ = build_patch_infos(vertices, color_patches)
+    num_patches = len(patch_infos)
+
+    for circuit_list in circuit_lists:
+        assert len(circuit_list) % num_patches == 0, (
+            f"Expected {len(circuit_list)} circuits to split evenly into "
+            f"{num_patches} patch-major chunks (one per color patch)."
+        )
+        chunk_size = len(circuit_list) // num_patches
+
+        for patch_idx, info in enumerate(patch_infos):
+            start = patch_idx * chunk_size
+            for circuit in circuit_list[start:start + chunk_size]:
+                assert_no_implicit_idles(circuit)
+                assert_mapped_circuit_matches_patch(circuit, info)
+
+
 def assign_the_designs_with_mapping(
     oneq_gstdesign: GateSetTomographyDesign,
     twoq_gstdesign: GateSetTomographyDesign,
     vertices: Sequence[Vertex],
     color_patches: Dict[int, List[Edge]],
-    debug_check: bool = False,
     randgen: Optional[np.random.Generator] = None,
     ensure_containment: bool = False,
     _layer_mappers_override: Optional[LayerMappers] = None,
@@ -367,6 +574,13 @@ def assign_the_designs_with_mapping(
     ``[(0, 1), (2, 3)]`` and ``[(1, 0), (3, 2)]`` are supplied, both designs are
     generated, even though they differ only by edge orientation.
 
+    This function does not verify its own output (e.g. that no implicit idle
+    gates remain, or that circuits landed on the correct patch). That
+    verification is stitcher-agnostic and lives in
+    :func:`assert_circuit_lists_match_color_patches`, which
+    ``CrosstalkFreeExperimentDesign.__init__`` runs (by default) against
+    whatever this or any other ``circuit_stitcher`` returns.
+
     Parameters
     ----------
     oneq_gstdesign : GateSetTomographyDesign
@@ -382,11 +596,6 @@ def assign_the_designs_with_mapping(
     color_patches : dict[int, list[tuple[int, int]]]
         Mapping from patch/color identifier to the list of disjoint 2Q edges in that patch.
         Each edge is represented as a pair of qubit labels.
-
-    debug_check : bool, optional
-        If True, assert for every generated tensored circuit that each layer's
-        contents are unchanged by filling in idles (``layer(i) == layer_with_idles(i)``),
-        i.e. that the circuit contains no implicit idle gates. Default is False.
 
     randgen : numpy.random.Generator, optional
         Random number generator used to randomize circuit assignments across edge
@@ -465,22 +674,6 @@ def assign_the_designs_with_mapping(
         # each shorter sub-circuit with explicit idle layers (via the
         # ``Label(()) -> explicit-idle`` entry in ``layer_mappers``). This works
         # regardless of which CircuitList is longer.
-        def _schedule(n: int) -> np.ndarray:
-            """A length-``max_len`` index schedule into a CircuitList of size ``n``.
-
-            The ``n`` real indices ``0..n-1`` are always included (each circuit used
-            at least once); if ``n < max_len`` the remaining ``max_len - n`` slots are
-            filled with uniformly random indices drawn (with repetition) from
-            ``0..n-1``, then the whole schedule is shuffled.
-            """
-            if n == max_len:
-                base = np.arange(max_len)
-            else:
-                base = np.concatenate((
-                    np.arange(n),
-                    randgen.integers(0, n, size=max_len - n),
-                ))
-            return randgen.permutation(base)
 
         # Temporary per-patch storage so output ordering remains patch-major.
         patch_buffers = {
@@ -500,7 +693,7 @@ def assign_the_designs_with_mapping(
             )
 
             for edge_slot in range(num_edges):
-                edge_perms[edge_slot, :] = _schedule(twoq_len)
+                edge_perms[edge_slot, :] = random_index_schedule(twoq_len, max_len, randgen)
 
             oneq_perms = np.empty(
                 (num_unused_qubits, max_len),
@@ -508,7 +701,7 @@ def assign_the_designs_with_mapping(
             )
 
             for qubit_slot in range(num_unused_qubits):
-                oneq_perms[qubit_slot, :] = _schedule(oneq_len)
+                oneq_perms[qubit_slot, :] = random_index_schedule(oneq_len, max_len, randgen)
 
             mappers: Dict[int, Optional[Dict[Vertex, Vertex]]] = {}
 
@@ -539,17 +732,6 @@ def assign_the_designs_with_mapping(
                     representative_lines
                 )
 
-                if debug_check:
-                    # Verify every idle gate is explicit: a layer's contents must
-                    # be identical whether or not implicit idles are filled in.
-                    for i in range(template_circuit.num_layers):
-                        l0 = set(template_circuit.layer(i))
-                        l1 = set(template_circuit.layer_with_idles(i))
-                        assert l0 == l1, (
-                            f"Implicit idle gate(s) detected in layer {i}: "
-                            f"layer()={l0} != layer_with_idles()={l1}"
-                        )
-
                 patch_buffers[representative["patch"]].append(
                     template_circuit.copy()
                 )
@@ -558,35 +740,6 @@ def assign_the_designs_with_mapping(
                     mapper = mappers[info["patch"]]
 
                     mapped_circuit = template_circuit.map_state_space_labels(mapper)
-                    if debug_check:
-                        expected_labels = {
-                            q
-                            for line in info["tensored_lines"]
-                            for q in line
-                        }
-
-                        actual_labels = set(mapped_circuit.line_labels)
-
-                        assert actual_labels == expected_labels, (
-                            actual_labels,
-                            expected_labels
-                        )
-
-                        # Also verify *where* the multi-qubit gates actually landed,
-                        allowed_edges = {tuple(e) for e in info["edge_set"]}
-                        allowed_edges |= {tuple(reversed(e)) for e in allowed_edges}
-                        for i in range(mapped_circuit.num_layers):
-                            for op in mapped_circuit.layer(i):
-                                if len(op.qubits) > 1:
-                                    assert tuple(op.qubits) in allowed_edges, (
-                                        f"Patch {info['patch']!r}: found multi-qubit "
-                                        f"gate {op} on {op.qubits}, which is not one "
-                                        f"of this patch's own edges {info['edge_set']} "
-                                        "(mapper likely applied incorrectly, or the "
-                                        "circuit was never remapped from the "
-                                        "representative patch)."
-                                    )
-
                     patch_buffers[info["patch"]].append(mapped_circuit)
 
         # Preserve patch-major output ordering.

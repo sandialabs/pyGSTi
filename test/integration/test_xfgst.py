@@ -90,10 +90,16 @@ def _get_layer_mappers(twoq_gst_design, oneq_gst_design):
 
 
 def _mapped_assignment_stitcher(oneq_gstdesign, twoq_gstdesign, vertices, color_patches,
-                                 randgen=None, ensure_containment=False, debug_check=True):
+                                 randgen=None, ensure_containment=False):
     """
     Adapter so CrosstalkFreeExperimentDesign can call
     assign_the_designs_with_mapping as a circuit_stitcher.
+
+    Note: this stitcher does not itself verify its output (e.g. no implicit
+    idles, correct patch stitching) -- that verification is stitcher-agnostic
+    and is instead performed by ``CrosstalkFreeExperimentDesign.__init__``
+    (via ``debug_check=True``, the default) against whatever circuit_lists
+    this (or any other) stitcher returns.
     """
     layer_mappers = _get_layer_mappers(twoq_gstdesign, oneq_gstdesign)
     return assign_the_designs_with_mapping(
@@ -101,7 +107,6 @@ def _mapped_assignment_stitcher(oneq_gstdesign, twoq_gstdesign, vertices, color_
         twoq_gstdesign=twoq_gstdesign,
         vertices=vertices,
         color_patches=color_patches,
-        debug_check=debug_check,
         randgen=randgen,
         ensure_containment=ensure_containment,
         _layer_mappers_override=layer_mappers,

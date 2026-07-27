@@ -11,7 +11,9 @@ import numpy as np
 
 from pygsti.circuits.circuit import Circuit
 from pygsti.baseobjs.label import Label, LabelTup
-from pygsti.protocols.xfgst_edesign import assign_the_designs_with_mapping
+from pygsti.protocols.xfgst_edesign import (
+    assign_the_designs_with_mapping, assert_circuit_lists_match_color_patches,
+)
 from ..util import BaseCase
 
 
@@ -88,12 +90,18 @@ class AssignDesignsLengthPairingTester(BaseCase):
         color_patches = {0: [(0, 1)]}
         vertices = [0, 1, 2]
 
-        return assign_the_designs_with_mapping(
+        circuit_lists = assign_the_designs_with_mapping(
             oneq, twoq, vertices, color_patches,
-            debug_check=True,
             randgen=np.random.default_rng(seed),
             _layer_mappers_override=mappers,
         )
+        # assign_the_designs_with_mapping no longer verifies its own output;
+        # that's now stitcher-agnostic and lives in
+        # assert_circuit_lists_match_color_patches (normally invoked by
+        # CrosstalkFreeExperimentDesign.__init__). Run it explicitly here
+        # since this test calls the stitcher directly.
+        assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
+        return circuit_lists
 
     def test_oneq_longer_than_twoq(self):
         # A longer 1Q design is a legitimate input --
@@ -199,10 +207,14 @@ class MultiplePatchesSameShapeTester(BaseCase):
 
         circuit_lists = assign_the_designs_with_mapping(
             oneq, twoq, vertices, color_patches,
-            debug_check=True,
             randgen=np.random.default_rng(seed),
             _layer_mappers_override=mappers,
         )
+        # assign_the_designs_with_mapping no longer verifies its own output
+        # (see assert_circuit_lists_match_color_patches); this is exactly the
+        # scenario (two same-shape patches) that the "duplicated representative
+        # patch" bug hit, so exercise the check explicitly here.
+        assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
         generated = circuit_lists[0]
         self.assertEqual(len(generated), max(oneq_len, twoq_len) * 2)
         half = len(generated) // 2
