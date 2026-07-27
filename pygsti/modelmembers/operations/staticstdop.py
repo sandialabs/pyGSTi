@@ -20,9 +20,10 @@ from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import internalgates as _itgs
 from pygsti import SpaceT
+from pygsti.modelmembers.torchable import StaticTorchable as _StaticTorchable
 
 
-class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
+class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface, _StaticTorchable):
     """
     An operation that is completely fixed, or "static" (i.e. that posesses no parameters)
     that can be constructed from "standard" gate names (as defined in pygsti.tools.internalgates).

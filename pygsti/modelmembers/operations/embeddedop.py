@@ -10,6 +10,15 @@ The EmbeddedOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Tuple, Any, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
+
 import itertools as _itertools
 
 import numpy as _np
@@ -17,10 +26,14 @@ import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.modelmembers import modelmember as _modelmember
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
+from pygsti.evotypes.evotype import Evotype as _Evotype
 from pygsti import SpaceT
-class EmbeddedOp(_LinearOperator):
+
+
+class EmbeddedOp(_LinearOperator, _Torchable):
     """
     An operation containing a single lower (or equal) dimensional operation within it.
 
@@ -54,7 +67,11 @@ class EmbeddedOp(_LinearOperator):
         assert(len(self.embedded_op.state_space.sole_tensor_product_block_labels) == len(target_labels)), \
             "Embedded operation's state space has a different number of components than the number of target labels!"
 
-        evotype = operation_to_embed._evotype
+        # Re-derive prefer_dense_reps for our own (parent) state_space instead of
+        # inheriting operation_to_embed's, which can be wrong/huge. See issue #543.
+        evotype = _Evotype.cast(
+            operation_to_embed._evotype.name, state_space=_StateSpace.cast(state_space)
+        )
         rep = self._create_rep_object(evotype, state_space)
 
         self._cached_embedded_errorgen_labels_global = None
@@ -362,6 +379,24 @@ class EmbeddedOp(_LinearOperator):
         if self._rep_type == 'dense': self._update_denserep()
         self.dirty = dirty_value
 
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
+        # The scatter targets (i, j) and sources (gi, gj) are cached, parameter-independent quadruplets
+        # that mirror `to_dense`'s overwrite of `np.identity(dim)`.  `t_bg` is that identity with every
+        # covered (i, j) zeroed out. Parameters are pure pass-through to the embedded op.
+        quads = list(self._iter_matrix_elements('HilbertSchmidt'))
+        i, j, gi, gj = (_torch.tensor(c, dtype=_torch.long, device=device) for c in zip(*quads))
+        bg = _np.identity(self.state_space.dim)
+        bg[[q[0] for q in quads], [q[1] for q in quads]] = 0.0
+        t_bg = _torch.from_numpy(bg).to(dtype=real_dtype, device=device)
+        return (type(self.embedded_op), self.embedded_op.stateless_data(real_dtype, device), t_bg, i, j, gi, gj)
+
+    @staticmethod
+    def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
+        etype, esd, t_bg, i, j, gi, gj = sd
+        A = etype.torch_base(esd, t_param)  # whole t_param: params are pass-through
+        # Destination pairs (i, j) are unique, so this non-accumulating index_put is autograd-safe.
+        return _torch.zeros_like(t_bg).index_put((i, j), A[gi, gj]) + t_bg
+
     def deriv_wrt_params(self, wrt_filter=None):
         """
         The element-wise derivative this operation.
@@ -599,17 +634,27 @@ class EmbeddedOp(_LinearOperator):
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
             `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two. 
+        
+        basis : `Basis` (if return_basis==True)
+            A Basis mapping the basis labels used in the keys of basis-labels of the
+            underlying (pre-embedding) error generator coeffs to basis matrices.
         """
         #*** Note: this function is nearly identical to EmbeddedErrorgen.coefficients() ***
-        coeffs_to_embed = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
-        
+        if return_basis:
+            coeffs_to_embed, basis = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
+        else:
+            coeffs_to_embed = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
+
         if coeffs_to_embed:
             embedded_labels = self.errorgen_coefficient_labels(label_type=label_type, identity_label=identity_label)
             embedded_coeffs = {lbl:val for lbl, val in zip(embedded_labels, coeffs_to_embed.values())}
         else:
             embedded_coeffs = dict()
 
-        return embedded_coeffs
+        if return_basis:
+            return embedded_coeffs, basis
+        else:
+            return embedded_coeffs
 
     def errorgen_coefficient_labels(self, label_type='global', identity_label='I'):
         """

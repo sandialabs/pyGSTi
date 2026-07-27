@@ -91,7 +91,7 @@ design = pygsti.protocols.CliffordRBDesign(pspec, compilations, depths, k, qubit
                                            randomizeout=randomizeout, citerations=citerations)
 pygsti.io.write_empty_protocol_data('../../tutorial_files/test_crb_dir', design, clobber_ok=True)
 
-# -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
+# -- fill in the dataset file in ../../tutorial_files/test_crb_dir/data/dataset.txt --
 simulate_taking_data('../../tutorial_files/test_crb_dir/data/dataset.txt') # REPLACE with actual data-taking
 
 data = pygsti.io.read_data_from_dir('../../tutorial_files/test_crb_dir')
@@ -157,7 +157,7 @@ def simulate_taking_data_irb(data_template_filename):
 ```{code-cell} ipython3
 pygsti.io.write_empty_protocol_data('../../tutorial_files/test_irb_dir', irb_design, clobber_ok=True)
 
-# -- fill in the dataset file in tutorial_files/test_rb_dir/data/dataset.txt --
+# -- fill in the dataset file in ../../tutorial_files/test_irb_dir/data/dataset.txt --
 simulate_taking_data_irb('../../tutorial_files/test_irb_dir/data/dataset.txt') # REPLACE with actual data-taking
 data_irb = pygsti.io.read_data_from_dir('../../tutorial_files/test_irb_dir')
 ```

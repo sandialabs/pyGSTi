@@ -380,7 +380,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         if not normalized_elem_gens:
             def rescale(coeffs):
                 """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
-                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         to be coefficients for the usual un-normalized-Pauli-basis elementary gens.  This
                          is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
                          factor of d2 baked into it.
                 """

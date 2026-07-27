@@ -104,6 +104,8 @@ device = ExperimentalDevice.from_qiskit_backend(backend)
 ```
 
 ```{code-cell} ipython3
+:tags: [nbval-skip]
+
 pspec = device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcnot'])
 ```
 
@@ -113,6 +115,8 @@ Next we create an `ExperimentDesign` that specifies the circuits you want to run
 First we pick the circuit design parameters:
 
 ```{code-cell} ipython3
+:tags: [nbval-skip]
+
 #circuit design parameters
 depths = [0, 2, 4, 16]
 circuits_per_shape = 20
@@ -159,11 +163,15 @@ if 1 in widths: twoQmean[1] = 0 # No two-qubit gates in one-qubit circuits.
 ```
 
 ```{code-cell} ipython3
+:tags: [nbval-skip]
+
 # In order to do Mirror RB, we need some Clifford compilations. See the RB-MirrorRB tutorial for more details.
 compilations = {'absolute': CCR.create_standard(pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0)}
 ```
 
 ```{code-cell} ipython3
+:tags: [nbval-skip]
+
 edesigns_dict = {}
 edesign_index = 1
 for w in widths:

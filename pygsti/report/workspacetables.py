@@ -71,7 +71,7 @@ class SpamTable(WorkspaceTable):
         elements..
 
     titles : list of strs, optional
-        Titles correponding to elements of `models`, e.g. `"Target"`.
+        Titles corresponding to elements of `models`, e.g. `"Target"`.
 
     display_as : {"numbers", "boxes"}, optional
         How to display the SPAM matrices, as either numerical
@@ -101,7 +101,7 @@ class SpamTable(WorkspaceTable):
             elements..
 
         titles : list of strs, optional
-            Titles correponding to elements of `models`, e.g. `"Target"`.
+            Titles corresponding to elements of `models`, e.g. `"Target"`.
 
         display_as : {"numbers", "boxes"}, optional
             How to display the SPAM matrices, as either numerical
@@ -321,7 +321,7 @@ class SpamParametersTable(WorkspaceTable):
         multiple Models are given, they should have the same gates.
 
     titles : list of strs, optional
-        Titles correponding to elements of `models`, e.g. `"Target"`.
+        Titles corresponding to elements of `models`, e.g. `"Target"`.
 
     confidence_region_info : ConfidenceRegion, optional
         If not None, specifies a confidence-region
@@ -340,7 +340,7 @@ class SpamParametersTable(WorkspaceTable):
             multiple Models are given, they should have the same gates.
 
         titles : list of strs, optional
-            Titles correponding to elements of `models`, e.g. `"Target"`.
+            Titles corresponding to elements of `models`, e.g. `"Target"`.
 
         confidence_region_info : ConfidenceRegion, optional
             If not None, specifies a confidence-region
@@ -832,7 +832,7 @@ class GaugeRobustModelTable(WorkspaceTable):
             M0 = _np.dot(U0inv, _np.dot(M, U0))  # M in G0's eigenbasis
             assert(_np.linalg.norm(_tools.project_onto_antikite(M0, kite)) < 1e-8)  # should be block diagonal
             assert(_np.allclose(G, _np.dot(F, _np.dot(M, _np.dot(G0, Finv)))))  # this is desired decomp
-            assert(_np.linalg.norm(M.imag) < 1e-6 and _np.linalg.norm(F.imag) < 1e-6)  # and everthing should be real
+            assert(_np.linalg.norm(M.imag) < 1e-6 and _np.linalg.norm(F.imag) < 1e-6)  # and everything should be real
             return F, M, Finv
 
         table = _ReportTable(colHeadings, formatters, confidence_region_info=confidence_region_info)
@@ -1284,7 +1284,7 @@ class GatesVsTargetTable(WorkspaceTable):
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         tooltips = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
         for disp in display:
-            if disp == "unmodeled" and not wildcard: continue  # skip wildcard column if there is no wilcard info
+            if disp == "unmodeled" and not wildcard: continue  # skip wildcard column if there is no wildcard info
             try:
                 heading, tooltip = _reportables.info_of_opfn_by_name(disp)
             except ValueError:
@@ -1320,8 +1320,12 @@ class GatesVsTargetTable(WorkspaceTable):
                 if target_model is None:
                     qty = _ReportableQty(_np.nan)
                 else:
-                    qty = _reportables.evaluate_opfn_by_name(
-                        disp, model, target_model, gl, confidence_region_info)
+                    try:
+                        qty = _reportables.evaluate_opfn_by_name(
+                            disp, model, target_model, gl, confidence_region_info)
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s op in gates-vs-target table!" % (disp, gl))
+                        qty = _ReportableQty(_np.nan)
                 #tm = _time.time()-tStart #DEBUG
                 #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
                 row_data.append(qty)
@@ -1343,8 +1347,12 @@ class GatesVsTargetTable(WorkspaceTable):
                 if target_model is None:
                     qty = _ReportableQty(_np.nan)
                 else:
-                    qty = _reportables.evaluate_instrumentfn_by_name(
-                        disp, model, target_model, il, confidence_region_info)
+                    try:
+                        qty = _reportables.evaluate_instrumentfn_by_name(
+                            disp, model, target_model, il, confidence_region_info)
+                    except Exception:
+                        _warnings.warn("Error computing %s for %s instrument in gates-vs-target table!" % (disp, il))
+                        qty = _ReportableQty(_np.nan)
                 #tm = _time.time()-tStart #DEBUG
                 #if tm > 0.01: print("DB: Evaluated %s in %gs" % (disp, tm)) #DEBUG
                 row_data.append(qty)
@@ -1462,7 +1470,7 @@ class ErrgenTable(WorkspaceTable):
         used to display error intervals.
 
     display : tuple of {"errgen","H","S","CA"}
-        Specifes which columns to include: the error generator itself
+        Specifies which columns to include: the error generator itself
         and the projections of the generator onto Hamiltoian-type error
         (generators), Stochastic-type errors, and Affine-type errors.
 
@@ -1492,7 +1500,7 @@ class ErrgenTable(WorkspaceTable):
             The models to compare
 
         display : tuple of {"errgen","H","S","CA"}
-            Specifes which columns to include: the error generator itself
+            Specifies which columns to include: the error generator itself
             and the projections of the generator onto Hamiltoian-type error
             (generators), Stochastic-type errors, and Active&Correlation-type errors.
 
@@ -1807,7 +1815,7 @@ class NQubitErrgenTable(WorkspaceTable):
         used to display error intervals.
 
     display : tuple of {"H","S","A"}
-        Specifes which columns to include: Hamiltoian-type,
+        Specifies which columns to include: Hamiltoian-type,
         Pauli-Stochastic-type, and Affine-type rates, respectively.
 
     display_as : {"numbers", "boxes"}, optional
@@ -1839,7 +1847,7 @@ class NQubitErrgenTable(WorkspaceTable):
             used to display error intervals.
 
         display : tuple of {"H","S","A"}
-            Specifes which columns to include: Hamiltoian-type,
+            Specifies which columns to include: Hamiltoian-type,
             Pauli-Stochastic-type, and Affine-type rates, respectively.
 
         display_as : {"numbers", "boxes"}, optional
@@ -2861,7 +2869,7 @@ class FitComparisonTable(WorkspaceTable):
 
     objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
         The objective function to use, or one of the given strings
-        to use a defaut log-likelihood or chi^2 function.
+        to use a default log-likelihood or chi^2 function.
 
     x_label : str, optional
         A label for the 'X' variable which indexes the different models.
@@ -2914,7 +2922,7 @@ class FitComparisonTable(WorkspaceTable):
 
         objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
             The objective function to use, or one of the given strings
-            to use a defaut log-likelihood or chi^2 function.
+            to use a default log-likelihood or chi^2 function.
 
         x_label : str, optional
             A label for the 'X' variable which indexes the different models.
@@ -3443,7 +3451,7 @@ class GaugeOptParamsTable(WorkspaceTable):
     def __init__(self, ws, gaugeopt_args):
         """
         Create a table displaying a list of gauge
-        optimzation parameters.
+        optimization parameters.
 
         Parameters
         ----------

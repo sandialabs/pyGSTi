@@ -9,9 +9,16 @@ The ExpErrorgenOp class and supporting functionality.
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
 
 import math
-from typing import Union
+from typing import Union, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -23,7 +30,9 @@ from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as 
 from pygsti.modelmembers.operations.embeddederrorgen import EmbeddedErrorgen as _EmbeddedErrorGen
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti import SpaceT
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -31,7 +40,7 @@ MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't over
 TODENSE_TRUNCATE = 3e-10  # was 1e-11 and this gave some borderline test failures
 
 
-class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
+class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
     """
     An operation parameterized by the coefficients of an exponentiated sum of Lindblad-like terms.
     TODO: update docstring!
@@ -187,6 +196,17 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             # Construct a dense version from scratch (more time consuming)
             return _spl.expm(self.errorgen.to_dense(on_space))
 
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
+        assert isinstance(self.errorgen, _Torchable)
+        return (type(self.errorgen), self.errorgen.stateless_data(real_dtype, device))
+
+    @staticmethod
+    def torch_base(sd, t_param):
+        """Differentiable process matrix `exp(L)` from the parameter tensor `t_param`."""
+        etype, esd = sd
+        L = etype.torch_base(esd, t_param)
+        return _torch.linalg.matrix_exp(L)
+
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
     def to_sparse(self, on_space: SpaceT='minimal'):
         """
@@ -239,7 +259,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
             #Deriv wrt hamiltonian params
             derrgen = self.errorgen.deriv_wrt_params(None)  # apply filter below; cache *full* deriv
-            derrgen.shape = (d2, d2, -1)  # separate 1st d2**2 dim to (d2,d2)
+            derrgen = _compat.reshape_no_copy(derrgen, (d2, d2, -1))  # separate 1st d2**2 dim to (d2,d2)
             dexpL = _d_exp_x(self.errorgen.to_dense("minimal"), derrgen, self.exp_err_gen)
             derivMx = dexpL.reshape(d2**2, self.num_params)  # [iFlattenedOp,iParam]
 
@@ -312,8 +332,8 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #Deriv wrt other params
             dEdp = self.errorgen.deriv_wrt_params(None)  # filter later, cache *full*
             d2Edp2 = self.errorgen.hessian_wrt_params(None, None)  # hessian
-            dEdp.shape = (d2, d2, nP)  # separate 1st d2**2 dim to (d2,d2)
-            d2Edp2.shape = (d2, d2, nP, nP)  # ditto
+            dEdp = _compat.reshape_no_copy(dEdp, (d2, d2, nP))  # separate 1st d2**2 dim to (d2,d2)
+            d2Edp2 = _compat.reshape_no_copy(d2Edp2, (d2, d2, nP, nP))  # ditto
 
             series, series2 = _d2_exp_series(self.errorgen.to_dense("minimal"), dEdp, d2Edp2)
             term1 = series2

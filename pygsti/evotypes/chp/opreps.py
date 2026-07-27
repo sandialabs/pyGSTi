@@ -50,7 +50,7 @@ class OpRep(_basereps.OpRep):
     def _chp_ops(self, seed_or_state=None):
         return self.base_chp_ops
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         try:
             str_ops = str(self._chp_ops())
         except Exception:

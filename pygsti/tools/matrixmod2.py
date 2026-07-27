@@ -241,7 +241,7 @@ def albert_factor(d, failcount=0, rand_state=None):
     Fields" by Jessie MacWilliams in The American Mathematical Monthly, Vol. 76,
     No. 2 (Feb., 1969), pp. 152-164
 
-    There is generally not a unique albert factorization, and this algorthm is
+    There is generally not a unique albert factorization, and this algorithm is
     randomized. It will general return a different factorizations from multiple
     calls.
 
@@ -512,7 +512,7 @@ def _check_proper_permutation(a):
     """
     Check to see if the matrix has been properly permuted.
 
-    This should be redundent to what is already built into 'fix_top'.
+    This should be redundant to what is already built into 'fix_top'.
 
     Parameters
     ----------

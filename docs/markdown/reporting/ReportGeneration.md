@@ -64,17 +64,18 @@ There are several remarks about these reports worth noting:
 4. To familiarize yourself with the layout of an HTML report, click on the gray **"Help" link** on the black sidebar.
 
 ## Multiple estimates in a single report
-Next, let's analyze the same data two different ways: with and without the TP-constraint (i.e. whether the gates *must* be trace-preserving) and furthermore gauge optmimize each case using several different SPAM-weights.  In each case we'll call `run_long_sequence_gst` with `gauge_opt_params=False`, so that no gauge optimization is done, and then perform several gauge optimizations separately and add these to the `Results` object via its `add_gaugeoptimized` function.
+Next, let's analyze the same data two different ways: with and without the TP-constraint (i.e. whether the gates *must* be trace-preserving) and furthermore gauge optmimize each case using several different SPAM-weights.  In each case we'll call `run_long_sequence_gst` with `gauge_opt_suite_name='none'`, so that no gauge optimization is done, and then perform several gauge optimizations separately and add these to the `Results` object via its `add_gaugeoptimized` function.  We also give each run a distinct `estimate_label` so the two estimates can later live side-by-side in a single `Results` object.
 
 ```{code-cell} ipython3
 #Case1: TP-constrained GST
 tpTarget = target_model.copy()
 tpTarget.set_all_parameterizations("full TP")
 results_tp = pygsti.run_long_sequence_gst(ds, tpTarget, prep_fiducials, meas_fiducials, germs,
-                                      maxLengths, gauge_opt_params=False, verbosity=1)
+                                      maxLengths, gauge_opt_suite_name='none',
+                                      advanced_options={'estimate_label': 'full TP'}, verbosity=1)
 
 #Gauge optimize
-est = results_tp.estimates['GateSetTomography']
+est = results_tp.estimates['full TP']
 mdlFinal = est.models['final iteration estimate']
 mdlTarget = est.models['target']
 for spamWt in [1e-4,1e-2,1.0]:
@@ -87,10 +88,11 @@ for spamWt in [1e-4,1e-2,1.0]:
 fullTarget = target_model.copy()
 fullTarget.set_all_parameterizations("full")
 results_full = pygsti.run_long_sequence_gst(ds, fullTarget, prep_fiducials, meas_fiducials, germs,
-                                           maxLengths, gauge_opt_params=False, verbosity=1)
+                                           maxLengths, gauge_opt_suite_name='none',
+                                           advanced_options={'estimate_label': 'Full'}, verbosity=1)
 
 #Gauge optimize
-est = results_full.estimates['GateSetTomography']
+est = results_full.estimates['Full']
 mdlFinal = est.models['final iteration estimate']
 mdlTarget = est.models['target']
 for spamWt in [1e-4,1e-2,1.0]:
