@@ -14,9 +14,10 @@ import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
+from pygsti.modelmembers.torchable import StaticTorchable as _StaticTorchable
 
 
-class StaticArbitraryOp(_DenseOperator, _NoErrorGeneratorInterface):
+class StaticArbitraryOp(_DenseOperator, _NoErrorGeneratorInterface, _StaticTorchable):
     """
     An operation matrix that is completely fixed, or "static" (i.e. that posesses no parameters).
 

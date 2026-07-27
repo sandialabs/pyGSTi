@@ -117,7 +117,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
         for typ, fidpair, obsOrOutcome, jac_row, _ in obs_rate_specs:
             fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ,
-                                                 fidpair, obsOrOutcome, title={'text': "auto"},
+                                                 fidpair, obsOrOutcome, title="auto",
                                                  mdl_simulator=mdl_simulator)
             intrinsic_reln = ""
             for i, el in enumerate(jac_row):

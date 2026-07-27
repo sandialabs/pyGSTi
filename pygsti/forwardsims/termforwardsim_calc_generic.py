@@ -1,4 +1,4 @@
-"""Defines generic Python-version of map forward simuator calculations"""
+"""Defines generic Python-version of map forward simulator calculations"""
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -57,7 +57,7 @@ def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_p
         A rough memory limit in bytes.
 
     fastmode : bool, optional
-        A switch between a faster, slighty more memory hungry mode of
+        A switch between a faster, slightly more memory hungry mode of
         computation (`fastmode=True`)and a simpler slower one (`=False`).
 
     Returns
@@ -534,7 +534,7 @@ def compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel,
         A rough memory limit in bytes.
 
     fastmode : bool, optional
-        A switch between a faster, slighty more memory hungry mode of
+        A switch between a faster, slightly more memory hungry mode of
         computation (`fastmode=True`)and a simpler slower one (`=False`).
 
     Returns
@@ -567,7 +567,7 @@ def compute_pruned_path_polynomials_given_threshold(threshold, fwdsim, rholabel,
         coeffSaved = [None] * (len(factor_lists) - 1)
 
         def add_path(b, mag, incd):
-            """ Relies on the fact that paths are iterated over in lexographic order, and `incd`
+            """ Relies on the fact that paths are iterated over in lexicographic order, and `incd`
                 tells us which index was just incremented (all indices less than this one are
                 the *same* as the last call). """
             # "non-fast" mode is the only way we know to do this, since we don't know what path will come next (no
@@ -738,7 +738,7 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
         A rough memory limit in bytes.
 
     fastmode : bool, optional
-        A switch between a faster, slighty more memory hungry mode of
+        A switch between a faster, slightly more memory hungry mode of
         computation (`fastmode=True`)and a simpler slower one (`=False`).
 
     pathmagnitude_gap : float, optional
@@ -870,7 +870,7 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
         coeffSaved = [None] * (len(factor_lists) - 1)
 
         def add_path(b, mag, incd):
-            """ Relies on the fact that paths are iterated over in lexographic order, and `incd`
+            """ Relies on the fact that paths are iterated over in lexicographic order, and `incd`
                 tells us which index was just incremented (all indices less than this one are
                 the *same* as the last call). """
             # "non-fast" mode is the only way we know to do this, since we don't know what path will come next (no

@@ -24,7 +24,7 @@ def success_probability_to_polarization(s: float, n: int) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
-    Maps a success probablity `s` for an n-qubit circuit to
+    Maps a success probability `s` for an n-qubit circuit to
     the polarization `s`, defined by `p = (s - 1/2^n)/(1 - 1/2^n)`.
     For large n, the difference between `p` and `s` is negligible
     and the calculation of 2**n is prohibitive, so we impose

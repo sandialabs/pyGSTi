@@ -30,7 +30,7 @@ def compose_terms_with_mag(terms, magnitude):
         A sequence of :class:`RankOneTerm` objects.
 
     magnitude : float
-        The magnitude of the compsed term.
+        The magnitude of the composed term.
 
     Returns
     -------
@@ -227,7 +227,7 @@ class RankOneTerm(object):
 
     A RankOneTerm anticipates its application to "separable" (as defined above)
     states, and can even be used to represent such a separable state or an
-    analagous POVM effect.  This occurs when the first element of `pre_ops` and
+    analogous POVM effect.  This occurs when the first element of `pre_ops` and
     `post_ops` is a preparation or POVM effect vector instead of a gate operation.
 
     Note that operations are stored in *composition (time) order* rather than

@@ -3,7 +3,6 @@ import numpy as np
 import pygsti.tools.basistools as bt
 from pygsti.models.modelconstruction import create_operation
 from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
-from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import statespace
 from pygsti.baseobjs import Basis
 from pygsti.tools import jamiolkowski as j
@@ -12,8 +11,10 @@ from ..util import BaseCase
 
 class JamiolkowskiBasisTester(BaseCase):
     def setUp(self):
-        #Set Model objects to "strict" mode for testing
-        ExplicitOpModel._strict = True
+        # (This test never indexes an ExplicitOpModel, so it does not need
+        # strict mode.  It used to set ``ExplicitOpModel._strict = True`` at the
+        # class level with no tearDown, which leaked into and broke unrelated
+        # tests -- non-deterministically under parallel/xdist execution.)
 
         # density matrix == 3x3 block diagonal matrix: a 2x2 block followed by a 1x1 block
         self.stateSpaceDims = [(4,), (1,)]
@@ -31,13 +32,14 @@ class JamiolkowskiBasisTester(BaseCase):
 
         #Build a test gate   -- old # X(pi,Qhappy)*LX(pi,0,2)
         self.testGate = create_operation("LX(pi,0,2)", self.sslbls, self.stdSmall)
-        self.testGateGM_mx = bt.change_basis(self.testGate, self.stdSmall, self.gmSmall)
-        self.expTestGate_mx = bt.flexible_change_basis(self.testGate, self.stdSmall, self.std)
+        self.testGate_mx = self.testGate.to_dense()
+        self.testGateGM_mx = bt.change_basis(self.testGate_mx, self.stdSmall, self.gmSmall)
+        self.expTestGate_mx = bt.flexible_change_basis(self.testGate_mx, self.stdSmall, self.std)
         self.expTestGateGM_mx = bt.change_basis(self.expTestGate_mx, self.std, self.gm)
 
     def checkBasis(self, cmb):
         #Op with Jamio map on gate in std and gm bases
-        Jmx1 = j.jamiolkowski_iso(self.testGate, op_mx_basis=self.stdSmall,
+        Jmx1 = j.jamiolkowski_iso(self.testGate_mx, op_mx_basis=self.stdSmall,
                                   choi_mx_basis=cmb)
         Jmx2 = j.jamiolkowski_iso(self.testGateGM_mx, op_mx_basis=self.gmSmall,
                                   choi_mx_basis=cmb)
@@ -64,7 +66,7 @@ class JamiolkowskiBasisTester(BaseCase):
         #Reverse transform without specifying stateSpaceDims, then contraction, should yield same result
         revExpTestGate_mx = j.jamiolkowski_iso_inv(Jmx1, choi_mx_basis=cmb, op_mx_basis=self.std)
         self.assertArraysAlmostEqual(bt.resize_std_mx(revExpTestGate_mx, 'contract', self.std, self.stdSmall),
-                                     self.testGate)
+                                     self.testGate_mx)
 
     def test_std_basis(self):
         #mx_dim = sum([ int(np.sqrt(d)) for d in ])

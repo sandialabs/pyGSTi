@@ -1,0 +1,106 @@
+{
+  "args_and_time": {
+    "compilable_layer_indices": "()",
+    "len": 1,
+    "line_labels": "(0,)",
+    "occurrence": "None",
+    "str": "Gx;theta:0!1.5@(0)",
+    "tup": "(Label('Gx',(0,),args=('theta',),time=1.5), '@', 0)"
+  },
+  "compilable_pipe": {
+    "compilable_layer_indices": "(0, 2)",
+    "len": 3,
+    "line_labels": "(0,)",
+    "occurrence": "None",
+    "str": "Gx:0Gy:0|Gz:0@(0)",
+    "tup": "(Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gz', 0)), '@', 0, '__CMPLBL__', 0, 2)"
+  },
+  "compilable_tilde": {
+    "compilable_layer_indices": "(1,)",
+    "len": 3,
+    "line_labels": "(0,)",
+    "occurrence": "None",
+    "str": "Gx:0Gy:0~Gz:0@(0)",
+    "tup": "(Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gz', 0)), '@', 0, '__CMPLBL__', 1)"
+  },
+  "empty": {
+    "compilable_layer_indices": "()",
+    "len": 0,
+    "line_labels": "('*',)",
+    "occurrence": "None",
+    "str": "{}",
+    "tup": "()"
+  },
+  "empty_with_lines": {
+    "compilable_layer_indices": "()",
+    "len": 0,
+    "line_labels": "(0, 1)",
+    "occurrence": "None",
+    "str": "{}@(0,1)",
+    "tup": "('@', 0, 1)"
+  },
+  "explicit_lines": {
+    "compilable_layer_indices": "()",
+    "len": 2,
+    "line_labels": "(0, 1)",
+    "occurrence": "None",
+    "str": "Gx:0Gy:1@(0,1)",
+    "tup": "(Label(('Gx', 0)), Label(('Gy', 1)), '@', 0, 1)"
+  },
+  "idle_layer": {
+    "compilable_layer_indices": "()",
+    "len": 1,
+    "line_labels": "('*',)",
+    "occurrence": "None",
+    "str": "[]",
+    "tup": "(Label(()),)"
+  },
+  "long_periodic": {
+    "compilable_layer_indices": "()",
+    "len": 30,
+    "line_labels": "(0,)",
+    "occurrence": "None",
+    "str": "Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0Gx:0Gy:0@(0)",
+    "tup": "(Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), Label(('Gx', 0)), Label(('Gy', 0)), '@', 0)"
+  },
+  "occurrence": {
+    "compilable_layer_indices": "()",
+    "len": 1,
+    "line_labels": "(0,)",
+    "occurrence": "2",
+    "str": "Gx:0@(0)@2",
+    "tup": "(Label(('Gx', 0)), '@', 0, '@', 2)"
+  },
+  "parallel_layer": {
+    "compilable_layer_indices": "()",
+    "len": 2,
+    "line_labels": "(0, 1)",
+    "occurrence": "None",
+    "str": "[Gx:0Gy:1]Gz:0@(0,1)",
+    "tup": "(Label((Label(('Gx', 0)), Label(('Gy', 1)))), Label(('Gz', 0)), '@', 0, 1)"
+  },
+  "simple_1q": {
+    "compilable_layer_indices": "()",
+    "len": 3,
+    "line_labels": "('*',)",
+    "occurrence": "None",
+    "str": "GxGxGy",
+    "tup": "(Label('Gx'), Label('Gx'), Label('Gy'))"
+  },
+  "string_lines": {
+    "compilable_layer_indices": "()",
+    "len": 2,
+    "line_labels": "('Q0', 'Q1')",
+    "occurrence": "None",
+    "str": "Gx:Q0Gy:Q1@(Q0,Q1)",
+    "tup": "(Label(('Gx', 'Q0')), Label(('Gy', 'Q1')), '@', 'Q0', 'Q1')"
+  },
+  "subcircuit_label": {
+    "compilable_layer_indices": "()",
+    "len": 1,
+    "line_labels": "('*',)",
+    "occurrence": "None",
+    "str": "(GxGy)^2",
+    "tup": "(CircuitLabel('',(Label('Gx'), Label('Gy')),None,2,0.0),)"
+  }
+}

@@ -1,0 +1,7 @@
+# Differential-corpus fingerprint files (circuit_corpus.py). An uncompressed
+# full corpus is ~120 MB, so it must never be committed: ignore every generated
+# fingerprint file, compressed or not, and re-include only the one tracked
+# reference baseline.
+*.jsonl
+*.jsonl.gz
+!circuit_corpus_baseline.jsonl.gz

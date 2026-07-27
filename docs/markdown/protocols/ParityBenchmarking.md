@@ -31,9 +31,11 @@ import pygsti.extras.paritybenchmarking as pb
 # in the same directory as this notebook, and use this line instead of the one above:
 # import disturbancecalc as pb
 
-print(cvxpy.installed_solvers())
-SOLVER='SCS'  # if you see 'MOSEK' as an option below, change this to SOLVER='MOSEK' 
-              # as this is a better (but less widely available) solver
+installed_solvers = cvxpy.installed_solvers()
+SOLVER = 'MOSEK' # prefer MOSEK (commercial solver, free for research) if available.
+if SOLVER not in installed_solvers:
+    SOLVER = 'CLARABEL'  # fallback
+
 ```
 
 ## Setup

@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -47,9 +47,11 @@ Now let's compute error bars on the CPTP estimate, and then get a 95% confidence
 crfact = results.estimates['CPTPLND'].add_confidence_region_factory('stdgaugeopt', 'final')
 crfact.compute_hessian(comm=None, mem_limit=3.0*(1024.0)**3) #optionally use multiple processors & set memlimit
 crfact.project_hessian('intrinsic error')
-
 crf_view = results.estimates['CPTPLND'].confidence_region_factories['stdgaugeopt','final'].view(95)
 ```
+
+NOTE: If we wanted to write a report to disk that included these error bars, now would be the time to do so!
+This example isn't concerned with report generation, so we'll move on.
 
 Finally, we can construct `pygsti.report.ModelFunction` objects that take a function which computes some observable from a model and the extracted view from above to compute error bars on that quantity of interest.
 
@@ -61,7 +63,7 @@ final_model = results.estimates['CPTPLND'].models['stdgaugeopt'].copy()
 
 ```{code-cell} ipython3
 def get_op(model, lbl):
-    return model[lbl]
+    return model[lbl].to_dense()
 get_op_modelfn = modelfn.modelfn_factory(get_op)
 ```
 
@@ -78,7 +80,7 @@ But we can also create model functions that perform more complicated actions, su
 ```{code-cell} ipython3
 # Note that when creating ModelFunctions in this way, the model where you want the quantity evaluated must be the first argument
 def ddist(model, ideal_model, lbl, basis):
-    return rptbl.half_diamond_norm(model[lbl], ideal_model[lbl], basis)
+    return rptbl.half_diamond_norm(model[lbl].to_dense(), ideal_model[lbl].to_dense(), basis)
 ddist_modelfn = modelfn.modelfn_factory(ddist)
 ```
 

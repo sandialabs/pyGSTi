@@ -1,18 +1,11 @@
 import numpy as np
 import scipy
 
-import pytest
-
 import pygsti.models.modelconstruction as mc
 import pygsti.circuits.cloudcircuitconstruction as cc
-import pygsti.modelpacks.stdtarget as stdtarget
-from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XXYYII, std2Q_XYICNOT
 from pygsti.circuits import Circuit
-from pygsti.data import DataSet
 from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 from ..util import BaseCase
-
-
 
 
 class KCoverageTester(BaseCase):
@@ -22,54 +15,6 @@ class KCoverageTester(BaseCase):
         k = 4  # number of "labels" needing distribution
         rows = cc.create_kcoverage_template(n, k, verbosity=2)
         cc._check_kcoverage_template(rows, n, k, verbosity=1)
-
-
-class StdModuleBase(object):
-    def test_upgrade_to_multiq_module(self):
-        newmod = stdtarget.stdmodule_to_smqmodule(self.std)
-        opLabels = list(newmod.target_model().operations.keys())
-        germStrs = newmod.germs
-
-        for gl in opLabels:
-            if gl != "Gi" and gl != ():
-                self.assertGreater(len(gl.sslbls), 0)
-
-        for str in germStrs:
-            for gl in str:
-                if gl != "Gi" and gl != ():
-                    self.assertGreater(len(gl.sslbls), 0)
-
-
-@pytest.mark.filterwarnings("ignore:The function stdmodule_to_smqmodule is deprecated") #Explicitly testing this
-class Std1Q_XYITester(StdModuleBase, BaseCase):
-    std = std1Q_XYI
-
-@pytest.mark.filterwarnings("ignore:The function stdmodule_to_smqmodule is deprecated") #Explicitly testing this
-class Std2Q_XXYYIITester(StdModuleBase, BaseCase):
-    std = std2Q_XXYYII
-
-@pytest.mark.filterwarnings("ignore:The function stdmodule_to_smqmodule is deprecated") #Explicitly testing this
-class Std2Q_XYICNOTTester(StdModuleBase, BaseCase):
-    std = std2Q_XYICNOT
-
-    def test_upgrade_dataset(self):
-        #Test upgrade of 2Q dataset
-        ds = DataSet(outcome_labels=('00', '01', '10', '11'))
-        ds.outcome_labels
-        ds.add_count_dict(('Gix',), {'00': 90, '10': 10})
-        ds.add_count_dict(('Giy',), {'00': 80, '10': 20})
-        ds.add_count_dict(('Gxi',), {'00': 55, '10': 45})
-        ds.add_count_dict(('Gyi',), {'00': 40, '10': 60})
-
-        from pygsti.circuits import Circuit as C
-        ds2 = ds.copy()
-        newmod = stdtarget.stdmodule_to_smqmodule(self.std)
-        newmod.upgrade_dataset(ds2)
-        qlbls = (0, 1)  # qubit labels
-        self.assertEqual(ds2[C((('Gx', 0),), qlbls)].counts, {('00',): 55, ('10',): 45})
-        self.assertEqual(ds2[C((('Gy', 0),), qlbls)].counts, {('00',): 40, ('10',): 60})
-        self.assertEqual(ds2[C((('Gx', 1),), qlbls)].counts, {('00',): 90, ('10',): 10})
-        self.assertEqual(ds2[C((('Gy', 1),), qlbls)].counts, {('00',): 80, ('10',): 20})
 
 
 class NQNoiseConstructionTester(BaseCase):

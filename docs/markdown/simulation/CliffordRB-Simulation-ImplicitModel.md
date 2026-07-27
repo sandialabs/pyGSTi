@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -83,9 +83,9 @@ depol2Q = np.kron(depol1Q,depol1Q)
 As detailed in the [implicit model tutorial](../objects/ImplicitModel), the gate operations of a `LocalNoiseModel` are held in its `.operation_blks['gates']` dictionary.  We'll alter these by assigning new process matrices to each gate.  In this case, it will be just a depolarized version of the original gate.
 
 ```{code-cell} ipython3
-myModel.operation_blks['gates']["Gxpi2"] = np.dot(depol1Q, myModel.operation_blks['gates']["Gxpi2"])
-myModel.operation_blks['gates']["Gypi2"] = np.dot(depol1Q, myModel.operation_blks['gates']["Gypi2"])  
-myModel.operation_blks['gates']["Gcphase"] = np.dot(depol2Q, myModel.operation_blks['gates']["Gcphase"])
+myModel.operation_blks['gates']["Gxpi2"] = np.dot(depol1Q, myModel.operation_blks['gates']["Gxpi2"].to_dense())
+myModel.operation_blks['gates']["Gypi2"] = np.dot(depol1Q, myModel.operation_blks['gates']["Gypi2"].to_dense())
+myModel.operation_blks['gates']["Gcphase"] = np.dot(depol2Q, myModel.operation_blks['gates']["Gcphase"].to_dense())
 ```
 
 Here's what the gates look like now:
@@ -114,5 +114,3 @@ results = pygsti.protocols.RB().run(data)
 %matplotlib inline
 results.plot()
 ```
-
-

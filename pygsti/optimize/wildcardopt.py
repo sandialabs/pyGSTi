@@ -243,7 +243,7 @@ def _agg_dlogl_deriv(current_probs, objfn, percircuit_budget_deriv, probs_deriv_
     layout = objfn.layout
     num_circuits = len(layout.circuits)
 
-    # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
+    # derivative of firstterms wrt per-circuit wildcard budgets - namely if that budget goes up how to most efficiently
     # reduce firstterms in doing so, this computes how the per-circuit budget should be allocated to probabilities
     # (i.e. how probs should be updated) to achieve this decrease in firstterms
     agg_dlogl_deriv_wrt_percircuit_budgets = _np.zeros(num_circuits, 'd')
@@ -283,7 +283,7 @@ def _agg_dlogl_hessian(current_probs, objfn, percircuit_budget_deriv, probs_deri
     layout = objfn.layout
     num_circuits = len(layout.circuits)
 
-    # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
+    # derivative of firstterms wrt per-circuit wildcard budgets - namely if that budget goes up how to most efficiently
     # reduce firstterms. In doing so, this computes how the per-circuit budget should be allocated to probabilities
     # (i.e. how probs should be updated) to achieve this decrease in firstterms
     #TOL = 1e-6
