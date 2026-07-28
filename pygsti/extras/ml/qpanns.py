@@ -237,7 +237,7 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
             'number_of_modelled_error_generators': self.number_of_modelled_error_generators,
             'modelled_error_generators': self.modelled_error_generators,
             'dense_units': self.dense_units,
-            'layer_snipper': self.layer_snipper,
+            'layer_snipper': self.snipper,
             'stochastic_mask': self.stochastic_mask,
             'hamiltonian_mask': self.hamiltonian_mask
         })

@@ -230,6 +230,9 @@ def error_generator_canonicalization_sign(typ: str, paulis: tuple[str, ...]) -> 
         +1, unless `typ == 'A'` and `(paulis[0], paulis[1])` is not already in canonical
         (lexicographically sorted) order, in which case -1.
     """
+    if typ not in ('H', 'S', 'C', 'A'):
+        raise ValueError(f"typ must be one of 'H', 'S', 'C', or 'A', got {typ!r}.")
+
     if typ == 'A':
         _, _, was_swapped = canonical_pauli_pair(paulis[0], paulis[1])
         return -1 if was_swapped else 1
@@ -706,8 +709,8 @@ def up_to_weight_k_paulis_from_qubit_graph(
     is connected under a "within num_hops" connectivity rule derived from the qubit graph.
 
     Convention used throughout this module:
-        qubit i  <->  string position (n - 1 - i)
-    so qubit 0 is the rightmost character in the Pauli string.
+        qubit i  <->  string position i
+    so qubit 0 is the leftmost character in the Pauli string.
 
     Parameters
     ----------
@@ -771,9 +774,9 @@ def up_to_weight_k_paulis_from_qubit_graph(
                 s = base[:]
 
                 # Place each chosen letter at the appropriate *string* index.
-                # Remember: qubit q corresponds to string position (n-1-q).
+                # Remember: qubit q corresponds to string position q.
                 for q, P in zip(support_qubits, letters):
-                    s[n - 1 - q] = P
+                    s[q] = P
 
                 # Convert list-of-chars to a string and store it.
                 paulis.append("".join(s))
@@ -799,8 +802,8 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
     it would require different combinatorics and is left as a possible future extension.)
 
     Convention used throughout this module (matching `up_to_weight_k_paulis_from_qubit_graph`):
-        qubit i  <->  string position (n - 1 - i)
-    so qubit 0 is the rightmost character in each Pauli string.
+        qubit i  <->  string position i
+    so qubit 0 is the leftmost character in each Pauli string.
 
     Parameters
     ----------
@@ -847,7 +850,7 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
             if not _support_is_connected(support_qubits, close):
                 continue
 
-            pairs.extend(_pauli_pairs_for_support(support_qubits, n, reverse_index=True))
+            pairs.extend(_pauli_pairs_for_support(support_qubits, n, reverse_index=False))
 
     return pairs
 

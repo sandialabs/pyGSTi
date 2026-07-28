@@ -567,5 +567,51 @@ class MLSubpackageTester(unittest.TestCase):
                                 for eg in modelled_error_generators if eg[0] == 'H'}
         self.assertFalse(any(i in hamiltonian_indices for i in call_indices))
 
+    def test_regression_prior_axis_fix(self):
+        # Regression test for Fix A: error_propagation_tensors 'prior_*' axis bug
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1[Gxpi2:1Gypi2:0]@(0,1)'),
+                    Circuit('[Gypi2:0][Gcphase:0:1][Gxpi2:1]@(0,1)')]
+        base_gens = [('H', ('XI',)), ('S', ('IX',))]
+        new_gens = [('S', ('ZI',))]
+        full_gens = base_gens + new_gens
+
+        indices_full, signs_full = encoding.error_propagation_tensors(circuits, full_gens, pspec)
+        indices_base, signs_base = encoding.error_propagation_tensors(circuits, base_gens, pspec)
+        indices_inc, signs_inc = encoding.error_propagation_tensors(
+            circuits, new_gens, pspec, prior_error_generators=base_gens,
+            prior_indices=indices_base, prior_signs=signs_base)
+        self.assertTrue(np.array_equal(indices_inc, indices_full))
+        self.assertTrue(np.array_equal(signs_inc, signs_full))
+
+    def test_regression_reversed_indexing_fix(self):
+        # Regression test for Fix B: reversed-qubit-indexing in graph-locality helpers
+        # Star graph Laplacian: center 0 connected to leaves 1,2,3; leaves not connected to each other.
+        L_star = np.array([[3, -1, -1, -1],
+                            [-1, 1, 0, 0],
+                            [-1, 0, 1, 0],
+                            [-1, 0, 0, 1]])
+        out = errgentools.up_to_weight_k_paulis_from_qubit_graph(2, 4, L_star, num_hops=1)
+        supports = set(frozenset(i for i, c in enumerate(s) if c != 'I') for s in out if s.count('I') == 2)
+        # Real edges are {0,1}, {0,2}, {0,3} (star centered on 0).
+        # Pre-fix code wrongly returned {1,3}, {2,3}, {0,3} because L-index 0 mapped to string index 3 (n-1-0).
+        expected = {frozenset({0, 1}), frozenset({0, 2}), frozenset({0, 3})}
+        self.assertEqual(supports, expected)
+
+    def test_regression_layer_snipper_typo_fix(self):
+        # Regression test for Fix C: CircuitToErrorRatesEinSum get_config layer_snipper typo
+        layer = qpanns.CircuitToErrorRatesEinSum(snipper=[[0, 1]], modelled_error_generators=[('H', ('IX',))])
+        config = layer.get_config()
+        self.assertEqual(config['layer_snipper'], [[0, 1]])
+
+    def test_regression_padded_depth_validation_fix(self):
+        # Regression test for Fix D: padded_depth < circuit.depth validation check
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2'], {}, {}, geometry="line", qubit_labels=[0, 1])
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        circuit = Circuit('[Gxpi2:0][Gxpi2:0]@(0,1)')  # depth 2
+        with self.assertRaises(ValueError):
+            encoder(circuit, padded_depth=1)
+
 if __name__ == '__main__':
     unittest.main()

@@ -88,8 +88,9 @@ class CircuitEncoder(object):
         circuit : pygsti.circuits.Circuit
             Circuit to encode.
         padded_depth : int or None, optional
-            If not None, pad/truncate the layer portion to this depth (padding uses
-            `layer_encoding(None)`). If None, uses `circuit.depth`.
+            If not None, pad the layer portion to this depth (padding uses
+            `layer_encoding(None)`). Must be >= `circuit.depth`. If None,
+            uses `circuit.depth`.
 
         Returns
         -------
@@ -97,7 +98,14 @@ class CircuitEncoder(object):
             Array of shape `(encoding_depth, self.length)` where `encoding_depth`
             depends on `padded_depth` and the init/measurement encoding depths.
         """
-        if padded_depth is None: padded_depth = circuit.depth
+        if padded_depth is None:
+            padded_depth = circuit.depth
+        elif padded_depth < circuit.depth:
+            raise ValueError(
+                f"padded_depth ({padded_depth}) is smaller than circuit.depth ({circuit.depth}); "
+                "CircuitEncoder.__call__ pads circuits up to padded_depth, it does not (and cannot) "
+                "truncate a circuit's real layers. Pass padded_depth=None or a value >= circuit.depth."
+            )
         circuit_array: list[Any] = []
         circuit_array += self.initialization_encoding(circuit)
         circuit_array += [self.layer_encoding(circuit.layer(i)) for i in range(circuit.depth)]
@@ -535,8 +543,8 @@ def error_propagation_tensors(circuits: list[_Circuit], error_generators: list, 
 
     if prior_error_generators is not None:
         assert prior_indices is not None and prior_signs is not None
-        indices[:, 0:num_pregs, :] = prior_indices.copy()
-        signs[:, 0:num_pregs, :] = prior_signs.copy()
+        indices[:, :, 0:num_pregs] = prior_indices.copy()
+        signs[:, :, 0:num_pregs] = prior_signs.copy()
        
     for i, circuit in enumerate(circuits):
 
