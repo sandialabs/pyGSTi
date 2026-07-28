@@ -476,10 +476,20 @@ class SpinJ:
 
     @staticmethod
     def cast(j: SpinJCastable_t) -> SpinJ:
-        """Return `j` unchanged if it is already a `SpinJ`, else construct `SpinJ(j)`."""
+        """
+        Return `j` unchanged if it is already a `SpinJ`, else return a memoized `SpinJ(j)`.
+
+        `SpinJ` is immutable (all state fixed at construction; everything else a lazily-
+        computed `cached_property`), so instances are safely shared across callers for the
+        same spin. Going through this memoized factory -- rather than calling `SpinJ(j)`
+        directly -- avoids repeating the Clebsch-Gordan/Wigner-6j-derived cached-property
+        work (`synthetic_spam_matrix`, `decay_recoupling_matrix`, `clebsch_gordan_cob`) on
+        every call for a `j` that has already been seen.
+        """
         if isinstance(j, SpinJ):
             return j
-        return SpinJ(j)
+        _, two_j = _validate_spin(j)
+        return _cached_spinj(two_j)
 
     # -----------------------------------------------------------------
     # Cached, more expensive derived quantities.
@@ -608,9 +618,21 @@ SpinJCastable_t = Union[SpinJ, SpinSpec_t]
 """Anything accepted by `SpinJ.cast`."""
 
 
-@_functools.lru_cache(maxsize=1)
+@_functools.lru_cache(maxsize=None)
+def _cached_spinj(two_j: int) -> SpinJ:
+    """
+    Memoized `SpinJ` factory, keyed on the canonical integer `2*j`.
+
+    Backs `SpinJ.cast`. Reconstructing a `SpinJ` from scratch repeats its Clebsch-Gordan/
+    Wigner-6j-derived cached-property work (`synthetic_spam_matrix`, `decay_recoupling_matrix`,
+    `clebsch_gordan_cob`), which is pure in `j`.`maxsize=None` is safe here since `j` is
+    always a small, low-cardinality value in practice (one or a handful of distinct spins per
+    session), unlike e.g. per-circuit or per-sample caches.
+    """
+    return SpinJ(_Fraction(two_j, 2))
+
+
 def _fundamental_spinj():
     """The spin-1/2 (fundamental) `SpinJ` instance used by the group-level Euler-angle
     composition utilities (`composition_asmatrix`, `composition_inverse`)."""
-    fundamental = SpinJ(_Fraction(1, 2))
-    return fundamental
+    return _cached_spinj(1)

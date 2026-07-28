@@ -881,7 +881,10 @@ class SU2QuditRB(_proto.Protocol):
             raise TypeError(f"SU2QuditRB requires an SU2QuditRBDesign; got {type(edesign).__name__}")
         ds = data.dataset
         j, dim = edesign.j, edesign.dim
-        spinj = _su2.SpinJ(j)
+        spinj = _su2.SpinJ.cast(j)
+        # ^ SpinJ.cast (not SpinJ(j)) so repeated .run() calls at the same j (e.g. bootstrap
+        #   resampling, parameter sweeps) reuse the cached Clebsch-Gordan/Wigner-6j-derived
+        #   M/F matrices instead of rebuilding them from scratch every time.
         M = spinj.synthetic_spam_matrix
         F = spinj.decay_recoupling_matrix
 
