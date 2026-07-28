@@ -32,29 +32,26 @@ except:
     _GenericBackendV2 = None
 
 # Try to load IBM Runtime
-try: 
-    from qiskit_ibm_runtime.transpiler.passes import ConvertToMidCircuitMeasure
+try:
     from qiskit_ibm_runtime import SamplerV2 as _Sampler
     from qiskit_ibm_runtime import Session as _Session
     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
     from qiskit_ibm_runtime import IBMBackend as _IBMBackend
-except:
+except ImportError:
     _Sampler = None
+
+# The ConvertToMidCircuitMeasure pass was added in qiskit-ibm-runtime 0.44, so guard it
+# separately: older runtimes can still submit jobs as long as they don't need the
+# mid-circuit-measurement conversion.
+try:
+    from qiskit_ibm_runtime.transpiler.passes import ConvertToMidCircuitMeasure
+except ImportError:
+    ConvertToMidCircuitMeasure = None
 
 try:
     from qiskit_aer import AerSimulator as _AerSimulator
-except:
+except ImportError:
     _AerSimulator = None
-
-# Tim updated to Qiskit 2.1.0
-# OLD COMMENT FROM STEFAN?
-# # Most recent version of QisKit that this has been tested on:
-# # qiskit.__version__ = '1.1.1'
-# # qiskit_ibm_runtime.__version__ = '0.25.0'
-# # Note that qiskit<1.0 is going EOL in August 2024,
-# # and v1 backends are also being deprecated (we now support only v2)
-# # Also qiskit-ibm-provider is ALSO being deprecated,
-# # so I'm only supporting runtime here
 
 try:
     from bson import json_util as _json_util
@@ -723,6 +720,10 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         # into measure_2, but only if the backend advertises measure_2.
         mcm_pm = None
         if 'measure_2' in ibmq_backend.operation_names and use_ibm_mcm:
+            assert ConvertToMidCircuitMeasure is not None, \
+                ("Converting mid-circuit measurements requires the ConvertToMidCircuitMeasure "
+                 "transpiler pass, which was added in qiskit-ibm-runtime 0.44. Upgrade "
+                 "qiskit-ibm-runtime or set use_ibm_mcm=False.")
             mcm_pm = _PassManager([
                 ConvertToMidCircuitMeasure(
                     target=ibmq_backend.target,

@@ -12,6 +12,7 @@ Symplectic representation utility functions
 #***************************************************************************************************
 import numpy as _np
 import copy as _copy
+from collections.abc import Mapping as _Mapping
 
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.smartcache import smart_cached
@@ -1058,6 +1059,25 @@ def compute_internal_gate_symplectic_representations(gllist=None):
     return srep_dict
 
 
+def _lookup_clifford_srep_for_label(gate_label: _Label, srep_dict: _Mapping, pspec=None):
+    """Resolve the symplectic representation for a full operation label.
+
+    Symplectic representation dictionaries historically used gate names as
+    keys.  Argumented or otherwise label-dependent gates need finer-grained
+    lookup, so exact :class:`Label` keys and label-aware callable values are
+    checked before falling back to the legacy name-based lookup.
+    """
+    if gate_label in srep_dict:
+        srep = srep_dict[gate_label]
+        return srep(gate_label) if callable(srep) else srep
+    if gate_label.name in srep_dict:
+        srep = srep_dict[gate_label.name]
+        return srep(gate_label) if callable(srep) else srep
+    if pspec is not None:
+        return pspec.clifford_symplectic_rep_of(gate_label)
+    raise KeyError("No symplectic representation for Clifford gate label %s" % str(gate_label))
+
+
 def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     """
     Returns the symplectic representation of the composite Clifford implemented by the specified Clifford circuit.
@@ -1111,7 +1131,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         layer = circuit.layer_label(i)
         # future : update so that we don't use this function, because it slower than necessary (possibly much slower).
         layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict,
-                                                            add_internal_sreps=False)
+                                                            add_internal_sreps=False, pspec=pspec)
         #s, p = compose_cliffords(s, p, layer_s, layer_p, do_checks=False)
         if _fastcalc is not None:
             s, p = _fastcalc.fast_compose_cliffords(s, p, layer_s, layer_p)
@@ -1121,7 +1141,8 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     return s, p
 
 
-def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=None, add_internal_sreps=True):
+def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=None, add_internal_sreps=True,
+                                     pspec=None):
     """
     Constructs the symplectic representation of the n-qubit Clifford implemented by a single quantum circuit layer.
 
@@ -1157,6 +1178,11 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         If True, the symplectic reps for internal gates are calculated and added to srep_dict.
         For speed, calculate these reps once, store them in srep_dict, and set this to False.
 
+    pspec : QubitProcessorSpec, optional
+        A processor specification that can supply label-aware symplectic
+        representations when `srep_dict` does not contain a matching exact
+        label or gate name entry.
+
     Returns
     -------
     s : numpy array
@@ -1188,7 +1214,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         layer = _Label(layer)
 
     for sub_lbl in layer.components:
-        matrix, phase = srep_dict[sub_lbl.name]
+        matrix, phase = _lookup_clifford_srep_for_label(sub_lbl, srep_dict, pspec)
         nforgate = sub_lbl.num_qubits
         sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else q_labels
         for ind1, qlabel1 in enumerate(sub_lbl_qubits):

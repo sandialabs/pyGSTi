@@ -662,7 +662,7 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
 
 def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity: Optional[stim.PauliString],
                               truncation_threshold: float = 1e-14) -> dict[_LSE, float]:
-    """
+    r"""
     Helper function for computing the second-order correction term in the
     magnus expansion.
 
@@ -724,7 +724,7 @@ def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity
 
 def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_order: Literal[1,2] = 1, 
                       truncation_threshold: float = 1e-14) -> list[dict[_LSE, float]]:
-    """
+    r"""
     Function for computing the nth-order Zassenhaus formula for a set of error generators.
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
     for more information on this approximation.
