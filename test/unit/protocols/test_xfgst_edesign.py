@@ -12,7 +12,7 @@ import numpy as np
 from pygsti.circuits.circuit import Circuit
 from pygsti.baseobjs.label import Label, LabelTup
 from pygsti.protocols.xfgst_edesign import (
-    assign_the_designs_with_mapping, assert_circuit_lists_match_color_patches,
+    assign_the_designs_with_mapping, assert_circuit_lists_match_color_patches, build_patch_infos,
 )
 from ..util import BaseCase
 
@@ -257,4 +257,95 @@ class MultiplePatchesSameShapeTester(BaseCase):
             self.assertEqual(self._gx_qubits(c), {2})
         for c in patch1_circuits:
             self.assertEqual(self._gx_qubits(c), {0})
+
+
+class EnsureContainmentTester(BaseCase):
+    """
+    With ``ensure_containment=True``, the circuit list for a higher germ-power
+    index must contain every circuit generated for any lower germ-power index,
+    patch-wise: each patch's own chunk at germ power ``L`` must start with the
+    exact same circuits, in the same order, as that patch's chunk at every
+    germ power ``L' < L``.
+    """
+
+    def _run(self, oneq_lens, twoq_lens, color_patches, vertices, seed=0):
+        oneq_lists = [_make_1q_circuits(n) for n in oneq_lens]
+        twoq_lists = [_make_2q_circuits(n) for n in twoq_lens]
+        oneq = _StubDesign(oneq_lists, (0,))
+        twoq = _StubDesign(twoq_lists, (0, 1))
+        mappers = _layer_mappers(oneq_lists, twoq_lists)
+
+        circuit_lists = assign_the_designs_with_mapping(
+            oneq, twoq, vertices, color_patches,
+            randgen=np.random.default_rng(seed),
+            ensure_containment=True,
+            _layer_mappers_override=mappers,
+        )
+        assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
+        return circuit_lists
+
+    def _assert_patchwise_containment(self, circuit_lists, vertices, color_patches):
+        patch_infos, _ = build_patch_infos(vertices, color_patches)
+        num_patches = len(patch_infos)
+
+        chunk_sizes = []
+        for germ_power_list in circuit_lists:
+            self.assertEqual(len(germ_power_list) % num_patches, 0)
+            chunk_sizes.append(len(germ_power_list) // num_patches)
+
+        # Check every pair of germ powers, not just consecutive ones, so
+        # this directly verifies "the higher germ power contains the lower
+        # germ power" rather than relying on that following by induction.
+        for i in range(len(circuit_lists)):
+            for j in range(i + 1, len(circuit_lists)):
+                lower_list, higher_list = circuit_lists[i], circuit_lists[j]
+                lower_chunk_size, higher_chunk_size = chunk_sizes[i], chunk_sizes[j]
+                self.assertGreaterEqual(higher_chunk_size, lower_chunk_size)
+
+                for patch_idx in range(num_patches):
+                    lower_start = patch_idx * lower_chunk_size
+                    lower_chunk = lower_list[lower_start:lower_start + lower_chunk_size]
+
+                    higher_start = patch_idx * higher_chunk_size
+                    higher_chunk = higher_list[higher_start:higher_start + higher_chunk_size]
+
+                    self.assertEqual(
+                        higher_chunk[:lower_chunk_size], lower_chunk,
+                        f"germ-power {j}'s patch {patch_idx} chunk does not "
+                        f"contain germ-power {i}'s patch {patch_idx} chunk "
+                        "as a prefix."
+                    )
+
+    def test_single_patch_containment_across_germ_powers(self):
+        vertices = [0, 1, 2]
+        color_patches = {0: [(0, 1)]}
+        circuit_lists = self._run(
+            oneq_lens=[3, 5], twoq_lens=[3, 5],
+            color_patches=color_patches, vertices=vertices,
+        )
+        self.assertEqual(len(circuit_lists), 2)
+        self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
+
+    def test_multiple_same_shape_patches_containment_across_germ_powers(self):
+        # Two same-shape patches land in the same `groups` bucket and share a
+        # representative template circuit; containment must still hold
+        # independently for each patch's own chunk.
+        vertices = [0, 1, 2]
+        color_patches = {0: [(0, 1)], 1: [(1, 2)]}
+        circuit_lists = self._run(
+            oneq_lens=[3, 6], twoq_lens=[3, 6],
+            color_patches=color_patches, vertices=vertices,
+        )
+        self.assertEqual(len(circuit_lists), 2)
+        self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
+
+    def test_three_germ_powers_containment_holds_for_all_pairs(self):
+        vertices = [0, 1, 2]
+        color_patches = {0: [(0, 1)]}
+        circuit_lists = self._run(
+            oneq_lens=[2, 4, 7], twoq_lens=[2, 4, 7],
+            color_patches=color_patches, vertices=vertices,
+        )
+        self.assertEqual(len(circuit_lists), 3)
+        self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
 

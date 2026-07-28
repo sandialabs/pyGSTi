@@ -529,6 +529,154 @@ def assert_circuit_lists_match_color_patches(
                 assert_mapped_circuit_matches_patch(circuit, info)
 
 
+def build_group_schedules_and_mappers(
+    infos: List[Dict[str, Any]],
+    representative: Dict[str, Any],
+    representative_lines: Sequence[Edge],
+    num_edges: int,
+    num_unused_qubits: int,
+    max_len: int,
+    twoq_len: int,
+    oneq_len: int,
+    randgen: np.random.Generator,
+) -> Tuple[np.ndarray, np.ndarray, Dict[int, Optional[Dict[Vertex, Vertex]]]]:
+    """
+    Build the random circuit-index schedules and line mappers for one
+    patch-shape group (i.e. all patches sharing the same number of 2Q edges
+    and unused qubits).
+
+    Every patch in ``infos`` is stitched from a template circuit built once
+    for ``representative``; the other patches obtain their circuit by
+    applying a line mapper to that template rather than re-tensoring from
+    scratch.
+
+    Parameters
+    ----------
+    infos : list[dict]
+        Patch infos (as produced by :func:`build_patch_infos`) sharing this
+        group's shape. ``infos[0]`` must be ``representative``.
+
+    representative : dict
+        The patch info used as the template patch. Must be ``infos[0]``.
+
+    representative_lines : list
+        ``representative["tensored_lines"]``.
+
+    num_edges : int
+        Number of 2Q edges in this patch shape.
+
+    num_unused_qubits : int
+        Number of unused (1Q) qubits in this patch shape.
+
+    max_len : int
+        Number of tensored circuits to generate for this germ power.
+
+    twoq_len : int
+        Number of available 2Q circuits at this germ power.
+
+    oneq_len : int
+        Number of available 1Q circuits at this germ power.
+
+    randgen : numpy.random.Generator
+        Random number generator used for the index schedules.
+
+    Returns
+    -------
+    edge_perms : numpy.ndarray, shape (num_edges, max_len)
+        Random index schedule selecting which 2Q circuit fills each edge
+        slot, for each of the ``max_len`` tensored circuits to build.
+
+    oneq_perms : numpy.ndarray, shape (num_unused_qubits, max_len)
+        Random index schedule selecting which 1Q circuit fills each
+        unused-qubit slot, for each of the ``max_len`` tensored circuits to
+        build.
+
+    mappers : dict[int, Optional[dict]]
+        Mapping from patch identifier to the line mapper that maps a
+        template circuit built for ``representative`` onto that patch.
+        ``None`` for ``representative`` itself, since it needs no mapping.
+    """
+    edge_perms = np.empty((num_edges, max_len), dtype=np.int64)
+    for edge_slot in range(num_edges):
+        edge_perms[edge_slot, :] = random_index_schedule(twoq_len, max_len, randgen)
+
+    oneq_perms = np.empty((num_unused_qubits, max_len), dtype=np.int64)
+    for qubit_slot in range(num_unused_qubits):
+        oneq_perms[qubit_slot, :] = random_index_schedule(oneq_len, max_len, randgen)
+
+    mappers: Dict[int, Optional[Dict[Vertex, Vertex]]] = {}
+    for info in infos:
+        if info is representative:
+            mappers[info["patch"]] = None
+        else:
+            mappers[info["patch"]] = make_line_mapper(
+                representative_lines,
+                info["tensored_lines"]
+            )
+
+    return edge_perms, oneq_perms, mappers
+
+
+def finalize_patch_buffers(
+    patch_buffers: Dict[int, List[Circuit]],
+    patch_order: List[int],
+    previous_patch_buffers: Dict[int, List[Circuit]],
+    ensure_containment: bool,
+) -> Tuple[List[Circuit], Dict[int, List[Circuit]]]:
+    """
+    Flatten one germ-power's per-patch circuit buffers into patch-major
+    output, optionally enforcing containment with the previous germ power.
+
+    Parameters
+    ----------
+    patch_buffers : dict[int, list[Circuit]]
+        This germ-power's newly generated circuits, keyed by patch
+        identifier.
+
+    patch_order : list[int]
+        Patch identifiers, in the desired output order.
+
+    previous_patch_buffers : dict[int, list[Circuit]]
+        The previous germ-power's per-patch circuits (after any earlier
+        containment merging). Ignored unless ``ensure_containment`` is True.
+
+    ensure_containment : bool
+        If True, prepend ``previous_patch_buffers[patch]`` onto
+        ``patch_buffers[patch]`` for each patch before flattening, so this
+        germ power's output contains every circuit from the previous germ
+        power (patch-wise).
+
+    Returns
+    -------
+    output_circuits : list[Circuit]
+        This germ power's circuits, ordered patch-major according to
+        ``patch_order``.
+
+    next_previous_patch_buffers : dict[int, list[Circuit]]
+        The per-patch buffers to pass back in as ``previous_patch_buffers``
+        for the *next* germ power. Equal to the (possibly merged)
+        ``patch_buffers`` if ``ensure_containment`` is True; otherwise
+        returned unchanged.
+    """
+    if ensure_containment:
+        patch_buffers = {
+            patch: previous_patch_buffers[patch] + patch_buffers[patch]
+            for patch in patch_order
+        }
+
+    output_circuits: List[Circuit] = []
+    for patch in patch_order:
+        output_circuits.extend(patch_buffers[patch])
+
+    if ensure_containment:
+        previous_patch_buffers = {
+            patch: list(patch_buffers[patch])
+            for patch in patch_order
+        }
+
+    return output_circuits, previous_patch_buffers
+
+
 def assign_the_designs_with_mapping(
     oneq_gstdesign: GateSetTomographyDesign,
     twoq_gstdesign: GateSetTomographyDesign,
@@ -687,43 +835,15 @@ def assign_the_designs_with_mapping(
             representative = infos[0]
             representative_lines = representative["tensored_lines"]
 
-            edge_perms = np.empty(
-                (num_edges, max_len),
-                dtype=np.int64
+            edge_perms, oneq_perms, mappers = build_group_schedules_and_mappers(
+                infos, representative, representative_lines,
+                num_edges, num_unused_qubits, max_len,
+                twoq_len, oneq_len, randgen
             )
-
-            for edge_slot in range(num_edges):
-                edge_perms[edge_slot, :] = random_index_schedule(twoq_len, max_len, randgen)
-
-            oneq_perms = np.empty(
-                (num_unused_qubits, max_len),
-                dtype=np.int64
-            )
-
-            for qubit_slot in range(num_unused_qubits):
-                oneq_perms[qubit_slot, :] = random_index_schedule(oneq_len, max_len, randgen)
-
-            mappers: Dict[int, Optional[Dict[Vertex, Vertex]]] = {}
-
-            for info in infos:
-                if info is representative:
-                    mappers[info["patch"]] = None
-                else:
-                    mappers[info["patch"]] = make_line_mapper(
-                        representative_lines,
-                        info["tensored_lines"]
-                    )
 
             for j in range(max_len):
-                circs_to_tensor = []
-
-                for edge_slot in range(num_edges):
-                    circ_idx = edge_perms[edge_slot, j]
-                    circs_to_tensor.append(twoq_circuits[circ_idx])
-
-                for qubit_slot in range(num_unused_qubits):
-                    circ_idx = oneq_perms[qubit_slot, j]
-                    circs_to_tensor.append(oneq_circuits[circ_idx])
+                circs_to_tensor = [twoq_circuits[idx] for idx in edge_perms[:, j]]
+                circs_to_tensor += [oneq_circuits[idx] for idx in oneq_perms[:, j]]
 
                 template_circuit = batch_tensor(
                     circs_to_tensor,
@@ -743,21 +863,8 @@ def assign_the_designs_with_mapping(
                     patch_buffers[info["patch"]].append(mapped_circuit)
 
         # Preserve patch-major output ordering.
-        output_list = circuit_lists[L]
-
-        if ensure_containment:
-            for patch in patch_order:
-                patch_buffers[patch] = (
-                    previous_patch_buffers[patch] + patch_buffers[patch]
-                )
-
-        for patch in patch_order:
-            output_list.extend(patch_buffers[patch])
-
-        if ensure_containment:
-            previous_patch_buffers = {
-                patch: list(patch_buffers[patch])
-                for patch in patch_order
-            }
+        circuit_lists[L], previous_patch_buffers = finalize_patch_buffers(
+            patch_buffers, patch_order, previous_patch_buffers, ensure_containment
+        )
 
     return circuit_lists
