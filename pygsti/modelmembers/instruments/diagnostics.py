@@ -614,8 +614,12 @@ def _scratch_host(effect_superkets, gate_superops, basis,
     ss = _statespace.default_space_for_dim(basis.dim)
     lbl = ('Idiagnose',) + tuple(ss.sole_tensor_product_block_labels)
     mdl = _ExplicitOpModel(ss, basis)
-    mdl[lbl] = _Instrument(_parameterized_instrument(
-        basis, effect_superkets, gate_superops, gate_parameterization, povm_errormap))
+    with _warnings.catch_warnings():
+        # deliberately hosting a possibly-deficient base to measure it: the
+        # construction-time singular-base warning would duplicate our report
+        _warnings.filterwarnings('ignore', message='.*post-measurement gate.*singular.*')
+        mdl[lbl] = _Instrument(_parameterized_instrument(
+            basis, effect_superkets, gate_superops, gate_parameterization, povm_errormap))
     mdl.to_vector()   # force parameter allocation before anything reads gpindices
     return mdl, lbl
 
