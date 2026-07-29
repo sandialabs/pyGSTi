@@ -11,6 +11,7 @@ Tools for the propagation of error generators through circuits.
 #***************************************************************************************************
 from __future__ import annotations
 import warnings
+import sys
 try:
     import stim
 except ImportError:
@@ -1337,7 +1338,53 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
            
     return errorgens
 
-def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=None):
+def _error_generator_composition_hs_or_sh(P, Q, P_from_an_S_error: bool, weight: float=1.0, identity=None):
+    r"""
+    Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
+    
+    Parameters
+    ----------
+
+    P_from_an_S_error: `bool`
+        Did we take P from an S error or was it Q?
+        
+    weight : float, optional (default 1.0)
+        An optional weighting value to apply to the value of the composition.
+    
+    identity : stim.PauliString, optional (default None)
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary, but can allow for reduced 
+        stim.PauliString creation when calling this function many times for
+        improved efficiency.
+
+    Returns
+    -------
+    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s 
+    corresponding to a component of the composition of the two input error generators.
+    The second element is the weight of that term, additionally weighted by the specified
+    value of `weight`.
+    """
+    # I think that P and Q are supposed to be basis elements which are likely stim.PauliStrings?
+    # The type checker will need to check that for me.
+    composed_errorgens = []
+    PQ = pauli_product(P, Q)
+    PQ_ident = (PQ[1] == identity)
+    PQ_eq_Q = (PQ[1]==Q)
+    new_eg_type, new_bels, addl_factor = None, None, None
+    if P.commutes(Q):
+        new_eg_type, new_bels, addl_factor = _ordered_new_bels_A(PQ[1], Q if not P_from_an_S_error else P, PQ_ident, False, PQ_eq_Q)
+    else: # if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
+        new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(PQ[1], Q if not P_from_an_S_error else P, PQ_ident, False, PQ_eq_Q)
+
+    if new_eg_type is not None:
+        rhs = -PQ[0]*addl_factor*weight
+        rhs = rhs*1j if not P.commutes(Q) else rhs
+        composed_errorgens.append((_LSE(new_eg_type, new_bels), rhs))
+    composed_errorgens.append((_LSE('H', [P] if not P_from_an_S_error else [Q]), -weight))
+
+    return composed_errorgens
+
+def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: float=1.0, identity=None):
     r"""
     Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
     
@@ -1392,32 +1439,20 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
         P = errorgen_1_bel_0
         Q = errorgen_2_bel_0
         P_eq_Q = (P==Q)
-        if P.commutes(Q):
-            new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(P, Q, False, False, P_eq_Q)
-            composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_factor*w))
-        else:
+        if not P.commutes(Q):
             PQ = pauli_product(P, Q)
             composed_errorgens.append((_LSE('H', [PQ[1]]), -1j*w*PQ[0]))
-            new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(P, Q, False, False, P_eq_Q)
-            composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_factor*w))
 
+        new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(P, Q, False, False, P_eq_Q)
+        composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_factor*w))
+        return composed_errorgens
+        
     elif errorgen_1_type == 'H' and errorgen_2_type == 'S':
         # H_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_2_bel_0
-        PQ = pauli_product(P, Q)
-        PQ_ident = (PQ[1] == identity)
-        PQ_eq_Q = (PQ[1]==Q)
-        if P.commutes(Q):
-            new_eg_type, new_bels, addl_factor = _ordered_new_bels_A(PQ[1], Q, PQ_ident, False, PQ_eq_Q)
-            if new_eg_type is not None:
-                composed_errorgens.append((_LSE(new_eg_type, new_bels), -PQ[0]*addl_factor*w))
-            composed_errorgens.append((_LSE('H', [P]), -w))   
-        else: # if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
-            new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(PQ[1], Q, PQ_ident, False, PQ_eq_Q)
-            if new_eg_type is not None:
-                composed_errorgens.append((_LSE(new_eg_type, new_bels), -1j*PQ[0]*addl_factor*w))
-            composed_errorgens.append((_LSE('H', [P]), -w))
+        composed_errorgens = _error_generator_composition_hs_or_sh(P, Q, False, weight, identity)
+        return composed_errorgens
 
     elif errorgen_1_type == 'H' and errorgen_2_type == 'C':
         # H_A[C_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
@@ -1659,19 +1694,8 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
         # S_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_2_bel_0
-        PQ = pauli_product(P, Q)
-        PQ_ident = (PQ[1] == identity)
-        PQ_eq_Q = (PQ[1]==Q)
-        if P.commutes(Q):
-            new_eg_type, new_bels, addl_factor = _ordered_new_bels_A(PQ[1], P, PQ_ident, False, PQ_eq_Q)
-            if new_eg_type is not None:
-                composed_errorgens.append((_LSE(new_eg_type, new_bels), -PQ[0]*addl_factor*w))
-            composed_errorgens.append((_LSE('H', [Q]), -w))   
-        else: # if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
-            new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(PQ[1], P, PQ_ident, False, PQ_eq_Q)
-            if new_eg_type is not None:
-                composed_errorgens.append((_LSE(new_eg_type, new_bels), -1j*PQ[0]*addl_factor*w))
-            composed_errorgens.append((_LSE('H', [Q]), -w))
+        composed_errorgens = _error_generator_composition_hs_or_sh(P, Q, True, weight, identity)
+        return composed_errorgens
 
     elif errorgen_1_type == 'S' and errorgen_2_type == 'S':
         # S_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
@@ -8881,11 +8905,18 @@ def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagato
 
 PauliPhaseUpdater = Callable[[str,str,Optional[bool]],tuple[complex,str]]
 PauliPhaseZerosUpdater = Callable[[str,Optional[bool]],tuple[complex,str]]
-AmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,bool], complex]
-BulkAmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator], list[Union[str, stim.PauliString]],bool], _np.ndarray]
-BulkPhiType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,list[Union[str,stim.PauliString]],list[Union[str,stim.PauliString]]], _np.ndarray]
-BulkAlphaType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[str]], _np.ndarray]
-BulkAlphaPauliType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[stim.PauliString]], _np.ndarray]
+if 'stim' in globals() and 'stim' in sys.modules:
+    AmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,bool], complex]
+    BulkAmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator], list[Union[str, stim.PauliString]],bool], _np.ndarray]
+    BulkPhiType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,list[Union[str,stim.PauliString]],list[Union[str,stim.PauliString]]], _np.ndarray]
+    BulkAlphaType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[str]], _np.ndarray]
+    BulkAlphaPauliType = Callable[[Iterable[_LSE],Union[stim.Tableau, stim.TableauSimulator],list[stim.PauliString]], _np.ndarray]
+else:
+    AmplitudeOfStateType = Callable
+    BulkAmplitudeOfStateType = Callable
+    BulkPhiType = Callable
+    BulkAlphaType = Callable
+    BulkAlphaPauliType = Callable
 
 #alias in cython implementations.
 try:
