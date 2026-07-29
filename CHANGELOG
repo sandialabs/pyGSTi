@@ -1,11 +1,12 @@
 # CHANGELOG
 
-## [0.10.2] - 2026-07-23
+## [0.10.2] - 2026-07-30
 
 Bugfix release, plus a line search safeguard for the Levenberg-Marquardt optimizer.
 
 ### Added
 * Enumerative line search guard in the (simpler) Levenberg-Marquardt optimizer, triggered when the norm of the search direction is large relative to the current iterate. This prevents the optimizer from jumping to a wrong basin, which matters especially for models with CPTP-parameterized instruments (#852).
+* `tools.jamiolkowski.jamiolkowski_iso_inv` now accepts cvxpy `Expression` inputs, consistent with its type annotations; adds `tools.basistools.is_cvxpy_expression` as an import-cheap helper (#860).
 
 ### Fixed
 * Deserializing models that use a `TensorProdBasis` (and a similar bug in `leakage/gaugeopt.py`) no longer fails by accessing a non-existent `state_space` field (#842).
