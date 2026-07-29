@@ -1832,6 +1832,217 @@ def _error_generator_composition_cc(A, B, P, Q, weight: float=1.0, identity=None
 
     return composed_errorgens
 
+def _error_generator_composition_aa(A, B, P, Q, weight: float=1.0, identity=None):
+    r"""
+    Returns the composition of two A error generators. I.e. A_{A,B}[A_{P,Q}[\cdot]].
+
+    Structurally this is the mirror image of `_error_generator_composition_cc`; see
+    that function for the general shape. Two things are reflected:
+
+    * the "rich" family is {A,B}=0 with {P,Q}=0, rather than both commuting, and the
+      families in between select APQ/BPQ and PAB/QAB rather than ABP/ABQ and PQB/PQA;
+
+    * in the four pair terms the roles of `_ordered_new_bels_A` and
+      `_ordered_new_bels_C` are exchanged -- they are A terms when their two governing
+      commutation bits agree and C terms when they disagree, the opposite of C,C.
+
+    The two cross terms built from PA/QB and QA/PB are again emitted for every
+    signature, and the Hamiltonian term on ABPQ again appears exactly when an odd
+    number of the four cross relations commute.
+
+    Parameters
+    ----------
+    A, B : stim.PauliString
+        The basis elements of the first (outer) A error generator.
+
+    P, Q : stim.PauliString
+        The basis elements of the second (inner) A error generator.
+
+    weight : float, optional (default 1.0)
+        An optional weighting value to apply to the value of the composition.
+
+    identity : stim.PauliString, optional (default None)
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary, but can allow for reduced
+        stim.PauliString creation when calling this function many times for
+        improved efficiency.
+
+    Returns
+    -------
+    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
+    corresponding to a component of the composition of the two input error generators.
+    The second element is the weight of that term, additionally weighted by the specified
+    value of `weight`.
+    """
+    composed_errorgens = []
+    com_AB = A.commutes(B)
+    com_PQ = P.commutes(Q)
+    com_AP = A.commutes(P)
+    com_AQ = A.commutes(Q)
+    com_BP = B.commutes(P)
+    com_BQ = B.commutes(Q)
+
+    def emit(use_C, pauli_1, pauli_2, ident_1, ident_2, pauli_eq, coeff):
+        ordered_new_bels = _ordered_new_bels_C if use_C else _ordered_new_bels_A
+        new_eg_type, new_bels, addl_factor = ordered_new_bels(pauli_1, pauli_2, ident_1,
+                                                              ident_2, pauli_eq)
+        if new_eg_type is not None:
+            composed_errorgens.append((_LSE(new_eg_type, new_bels), coeff*addl_factor*weight))
+
+    def emit_pair(prod, other, com_1, com_2, a_phase, c_sign):
+        """A when the two governing commutation bits agree, C when they disagree."""
+        same = (com_1 == com_2)
+        emit(not same, prod[1], other, prod[1] == identity, False, prod[1] == other,
+             (a_phase if same else c_sign)*prod[0])
+
+    # The two cross terms, present for every commutation signature. They differ from
+    # one another only by an overall sign.
+    PA = pauli_product(P, A)
+    QA = pauli_product(Q, A)
+    PB = pauli_product(P, B)
+    QB = pauli_product(Q, B)
+    for prod_1, prod_2, com_1, com_2, sign in ((PA, QB, com_AP, com_BQ, -1),
+                                               (QA, PB, com_AQ, com_BP, 1)):
+        same = (com_1 == com_2)
+        if same:
+            lead = 1 if com_1 else -1
+        else:
+            lead = -1j if com_1 else 1j
+        emit(same, prod_1[1], prod_2[1], prod_1[1] == identity, prod_2[1] == identity,
+             prod_1[1] == prod_2[1], sign*lead*prod_1[0]*prod_2[0])
+
+    if not com_AB and not com_PQ:
+        AB = pauli_product(A, B)
+        PQ = pauli_product(P, Q)
+        emit(True, PQ[1], AB[1], False, False, PQ[1] == AB[1], -1*PQ[0]*AB[0])
+        emit_pair(pauli_product(A, PQ[0]*PQ[1]), B, com_AP, com_AQ, 1j, -1)
+        emit_pair(pauli_product(B, PQ[0]*PQ[1]), A, com_BP, com_BQ, -1j, 1)
+        emit_pair(pauli_product(P, AB[0]*AB[1]), Q, com_AP, com_BP, 1j, 1)
+        emit_pair(pauli_product(Q, AB[0]*AB[1]), P, com_AQ, com_BQ, -1j, -1)
+        # The Hamiltonian term survives only for an odd number of commuting cross
+        # relations.
+        if sum((com_AP, com_AQ, com_BP, com_BQ)) % 2 == 1:
+            ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
+            if ABPQ[1] != identity:
+                composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*weight))
+    elif not com_PQ:
+        PQ = pauli_product(P, Q)
+        emit_pair(pauli_product(A, PQ[0]*PQ[1]), B, com_AP, com_AQ, 1j, -1)
+        emit_pair(pauli_product(B, PQ[0]*PQ[1]), A, com_BP, com_BQ, -1j, 1)
+    elif not com_AB:
+        AB = pauli_product(A, B)
+        emit_pair(pauli_product(P, AB[0]*AB[1]), Q, com_AP, com_BP, 1j, 1)
+        emit_pair(pauli_product(Q, AB[0]*AB[1]), P, com_AQ, com_BQ, -1j, -1)
+
+    return composed_errorgens
+
+def _error_generator_composition_ac(A, B, P, Q, weight: float=1.0, identity=None):
+    r"""
+    Returns the composition of an A error generator with a C error generator.
+    I.e. A_{A,B}[C_{P,Q}[\cdot]].
+
+    As with `_error_generator_composition_cc` and `_error_generator_composition_aa`,
+    the original ladder over the six commutation bits collapses to a handful of rules.
+    This block factors more cleanly than those two, because its term groups are
+    independent rather than mutually exclusive:
+
+    * two cross terms built from PA/QB and QA/PB, emitted for every signature;
+    * APQ-B and BPQ-A whenever [P,Q]=0;
+    * PAB-Q and QAB-P whenever {A,B}=0;
+    * PQ-AB and a Hamiltonian term on ABPQ when both of those hold.
+
+    So rather than four disjoint families there are two independent switches. The two
+    groups also disagree about which generator type they produce: the PQ-derived terms
+    (APQ, BPQ) are A terms when their governing bits agree, while the AB-derived terms
+    (PAB, QAB) are C terms in that case.
+
+    Parameters
+    ----------
+    A, B : stim.PauliString
+        The basis elements of the first (outer) A error generator.
+
+    P, Q : stim.PauliString
+        The basis elements of the second (inner) C error generator.
+
+    weight : float, optional (default 1.0)
+        An optional weighting value to apply to the value of the composition.
+
+    identity : stim.PauliString, optional (default None)
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary, but can allow for reduced
+        stim.PauliString creation when calling this function many times for
+        improved efficiency.
+
+    Returns
+    -------
+    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
+    corresponding to a component of the composition of the two input error generators.
+    The second element is the weight of that term, additionally weighted by the specified
+    value of `weight`.
+    """
+    composed_errorgens = []
+    com_AB = A.commutes(B)
+    com_PQ = P.commutes(Q)
+    com_AP = A.commutes(P)
+    com_AQ = A.commutes(Q)
+    com_BP = B.commutes(P)
+    com_BQ = B.commutes(Q)
+
+    def emit(use_C, pauli_1, pauli_2, ident_1, ident_2, pauli_eq, coeff):
+        ordered_new_bels = _ordered_new_bels_C if use_C else _ordered_new_bels_A
+        new_eg_type, new_bels, addl_factor = ordered_new_bels(pauli_1, pauli_2, ident_1,
+                                                              ident_2, pauli_eq)
+        if new_eg_type is not None:
+            composed_errorgens.append((_LSE(new_eg_type, new_bels), coeff*addl_factor*weight))
+
+    def emit_pq_term(prod, other, com_1, com_2, sign):
+        """A when the two governing commutation bits agree, C when they disagree."""
+        same = (com_1 == com_2)
+        emit(not same, prod[1], other, prod[1] == identity, False, prod[1] == other,
+             sign*(1 if same else 1j)*prod[0])
+
+    def emit_ab_term(prod, other, com_1, com_2):
+        """C when the two governing commutation bits agree, A when they disagree."""
+        same = (com_1 == com_2)
+        emit(same, prod[1], other, prod[1] == identity, False, prod[1] == other,
+             (1j if same else -1)*prod[0])
+
+    # The two cross terms, present for every commutation signature.
+    PA = pauli_product(P, A)
+    QA = pauli_product(Q, A)
+    PB = pauli_product(P, B)
+    QB = pauli_product(Q, B)
+    for prod_1, prod_2, com_1, com_2 in ((PA, QB, com_AP, com_BQ),
+                                         (QA, PB, com_AQ, com_BP)):
+        same = (com_1 == com_2)
+        if same:
+            lead = 1 if com_1 else -1
+        else:
+            lead = 1j if com_1 else -1j
+        emit(not same, prod_1[1], prod_2[1], prod_1[1] == identity, prod_2[1] == identity,
+             prod_1[1] == prod_2[1], lead*prod_1[0]*prod_2[0])
+
+    AB = pauli_product(A, B) if not com_AB else None
+    PQ = pauli_product(P, Q) if com_PQ else None
+
+    if PQ is not None and AB is not None:
+        emit(True, PQ[1], AB[1], False, False, PQ[1] == AB[1], -1j*PQ[0]*AB[0])
+    if PQ is not None:
+        emit_pq_term(pauli_product(A, PQ[0]*PQ[1]), B, com_AP, com_AQ, -1)
+        emit_pq_term(pauli_product(B, PQ[0]*PQ[1]), A, com_BP, com_BQ, 1)
+    if AB is not None:
+        emit_ab_term(pauli_product(P, AB[0]*AB[1]), Q, com_AP, com_BP)
+        emit_ab_term(pauli_product(Q, AB[0]*AB[1]), P, com_AQ, com_BQ)
+    if PQ is not None and AB is not None:
+        # The Hamiltonian term survives only for an odd number of commuting cross
+        # relations.
+        if sum((com_AP, com_AQ, com_BP, com_BQ)) % 2 == 1:
+            ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
+            if ABPQ[1] != identity:
+                composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*weight))
+
+    return composed_errorgens
+
 def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: float=1.0, identity=None):
     r"""
     Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
@@ -3010,2010 +3221,25 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'C':
         # A_A,B[C_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
+        # A_{A,B}[C_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        # precompute commutation relations we'll need.
-        com_PQ = P.commutes(Q)
-        com_AP = A.commutes(P)
-        com_AQ = A.commutes(Q)
-        com_BP = B.commutes(P)
-        com_BQ = B.commutes(Q)
+        composed_errorgens = _error_generator_composition_ac(A, B, P, Q, w, identity)
+        return composed_errorgens
 
-        if A.commutes(B):
-            if com_PQ:
-                # precompute some products we'll need.
-                PA = pauli_product(P, A)
-                QA = pauli_product(Q, A)
-                PB = pauli_product(P, B)
-                QB = pauli_product(Q, B)
-                PQ = pauli_product(P, Q)
-                APQ = pauli_product(A, PQ[0]*PQ[1])
-                BPQ = pauli_product(B, PQ[0]*PQ[1])
-                # precompute whether any of these products are identities.
-                PA_ident  = (PA[1] == identity) 
-                QA_ident  = (QA[1] == identity) 
-                PB_ident  = (PB[1] == identity) 
-                QB_ident  = (QB[1] == identity)
-                APQ_ident = (APQ[1] == identity)
-                BPQ_ident = (BPQ[1] == identity)
-                # precompute which of the pairs of products might be equal
-                PA_eq_QB = (PA[1] == QB[1])
-                QA_eq_PB = (QA[1] == PB[1])
-                APQ_eq_B = (APQ[1] == B)
-                BPQ_eq_A = (BPQ[1] == A)
-
-                if com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*BPQ[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*BPQ[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*BPQ[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*BPQ[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*BPQ[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*BPQ[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*BPQ[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*BPQ[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-            else: # [P,Q]!=0
-                # precompute some products we'll need.
-                PA = pauli_product(P, A)
-                QA = pauli_product(Q, A)
-                PB = pauli_product(P, B)
-                QB = pauli_product(Q, B)
-                # precompute whether any of these products are identities.
-                PA_ident  = (PA[1] == identity) 
-                QA_ident  = (QA[1] == identity) 
-                PB_ident  = (PB[1] == identity) 
-                QB_ident  = (QB[1] == identity)
-                # precompute which of the pairs of products might be equal
-                PA_eq_QB = (PA[1] == QB[1])
-                QA_eq_PB = (QA[1] == PB[1])
-
-                if com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-        else: # [A,B] != 0
-            if com_PQ:
-                # precompute some products we'll need.
-                PA = pauli_product(P, A)
-                QA = pauli_product(Q, A)
-                PB = pauli_product(P, B)
-                QB = pauli_product(Q, B)
-                PQ = pauli_product(P, Q)
-                AB = pauli_product(A, B)
-                APQ = pauli_product(A, PQ[0]*PQ[1])
-                BPQ = pauli_product(B, PQ[0]*PQ[1])
-                PAB = pauli_product(P, AB[0]*AB[1])
-                QAB = pauli_product(Q, AB[0]*AB[1])
-                ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
-
-                # precompute whether any of these products are identities.
-                PA_ident  = (PA[1] == identity) 
-                QA_ident  = (QA[1] == identity) 
-                PB_ident  = (PB[1] == identity) 
-                QB_ident  = (QB[1] == identity)
-                APQ_ident = (APQ[1] == identity)
-                BPQ_ident = (BPQ[1] == identity)
-                PAB_ident = (PAB[1] == identity)
-                QAB_ident = (QAB[1] == identity)
-                ABPQ_ident= (ABPQ[1] == identity)
-                # precompute which of the pairs of products might be equal
-                PA_eq_QB = (PA[1] == QB[1])
-                QA_eq_PB = (QA[1] == PB[1])
-                PQ_eq_AB = (PQ[1] == AB[1])
-                APQ_eq_B = (APQ[1] == B)
-                BPQ_eq_A = (BPQ[1] == A)
-                PAB_eq_Q = (PAB[1] == Q)
-                QAB_eq_P = (QAB[1] == P) 
-
-                if com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), 1j*QAB[0]*addl_factor_6*w))
-                elif com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), 1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*w))
-                elif com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(PB[1], QA[1], PB_ident, QA_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*PB[0]*QA[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), 1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), -PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), 1j*QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*w))
-                elif com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), -PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                elif com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*w))
-                elif com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), 1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), 1j*QAB[0]*addl_factor_6*w))
-                elif com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), 1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), -PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                elif com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), -PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), 1j*QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*w))
-                elif not com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), -PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), 1j*QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*w))
-                elif not com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), 1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), -PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                elif not com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), 1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), 1j*QAB[0]*addl_factor_6*w))
-                elif not com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*w))
-                elif not com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), -PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                elif not com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), 1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), -PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), 1j*QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*w))
-                elif not com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), 1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*w))
-                elif not com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -1j*PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), 1j*QAB[0]*addl_factor_6*w))
-            else:
-                # precompute some products we'll need.
-                PA = pauli_product(P, A)
-                QA = pauli_product(Q, A)
-                PB = pauli_product(P, B)
-                QB = pauli_product(Q, B)
-                AB = pauli_product(A, B)
-                PAB = pauli_product(P, AB[0]*AB[1])
-                QAB = pauli_product(Q, AB[0]*AB[1])
-                # precompute whether any of these products are identities.
-                PA_ident  = (PA[1] == identity) 
-                QA_ident  = (QA[1] == identity) 
-                PB_ident  = (PB[1] == identity) 
-                QB_ident  = (QB[1] == identity)
-                PAB_ident = (PAB[1] == identity)
-                QAB_ident = (QAB[1] == identity)
-                # precompute which of the pairs of products might be equal
-                PA_eq_QB = (PA[1] == QB[1])
-                QA_eq_PB = (QA[1] == PB[1])
-                PAB_eq_Q = (PAB[1] == Q)
-                QAB_eq_P = (QAB[1] == P)
-
-                if com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*QAB[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*QAB[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*QAB[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*QAB[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*QAB[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*QAB[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*QAB[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*QAB[0]*addl_factor_3*w))
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'A':
         # A_A,B[A_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
+        # A_{A,B}[A_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        # precompute commutation relations we'll need.
-        com_PQ = P.commutes(Q)
-        com_AP = A.commutes(P)
-        com_AQ = A.commutes(Q)
-        com_BP = B.commutes(P)
-        com_BQ = B.commutes(Q)
-        if A.commutes(B):
-            if com_PQ:
-                # precompute some products we'll need.
-                PA = pauli_product(P, A)
-                QA = pauli_product(Q, A)
-                PB = pauli_product(P, B)
-                QB = pauli_product(Q, B)
-                # precompute whether any of these products are identities.
-                PA_ident  = (PA[1] == identity) 
-                QA_ident  = (QA[1] == identity) 
-                PB_ident  = (PB[1] == identity) 
-                QB_ident  = (QB[1] == identity)
-                # precompute which of the pairs of products might be equal
-                PA_eq_QB = (PA[1] == QB[1])
-                QA_eq_PB = (QA[1] == PB[1])
+        composed_errorgens = _error_generator_composition_aa(A, B, P, Q, w, identity)
+        return composed_errorgens
 
-                if com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                elif com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                elif not com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-            else:
-                # precompute some products we'll need.
-                PA = pauli_product(P, A)
-                QA = pauli_product(Q, A)
-                PB = pauli_product(P, B)
-                QB = pauli_product(Q, B)
-                PQ = pauli_product(P, Q)
-                APQ = pauli_product(A, PQ[0]*PQ[1])
-                BPQ = pauli_product(B, PQ[0]*PQ[1])
-                # precompute whether any of these products are identities.
-                PA_ident  = (PA[1] == identity) 
-                QA_ident  = (QA[1] == identity) 
-                PB_ident  = (PB[1] == identity) 
-                QB_ident  = (QB[1] == identity)
-                APQ_ident = (APQ[1] == identity)
-                BPQ_ident = (BPQ[1] == identity)
-                # precompute which of the pairs of products might be equal
-                PA_eq_QB = (PA[1] == QB[1])
-                QA_eq_PB = (QA[1] == PB[1])
-                APQ_eq_B = (APQ[1] == B)
-                BPQ_eq_A = (BPQ[1] == A)
-
-                if com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*BPQ[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*BPQ[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*BPQ[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*BPQ[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*BPQ[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*BPQ[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*BPQ[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), BPQ[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*APQ[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*BPQ[0]*addl_factor_3*w))
-        else:
-            if com_PQ:
-                # precompute some products we'll need.
-                PA = pauli_product(P, A)
-                QA = pauli_product(Q, A)
-                PB = pauli_product(P, B)
-                QB = pauli_product(Q, B)
-                AB = pauli_product(A, B)
-                PAB = pauli_product(P, AB[0]*AB[1])
-                QAB = pauli_product(Q, AB[0]*AB[1])
-                # precompute whether any of these products are identities.
-                PA_ident  = (PA[1] == identity) 
-                QA_ident  = (QA[1] == identity) 
-                PB_ident  = (PB[1] == identity) 
-                QB_ident  = (QB[1] == identity)
-                PAB_ident = (PAB[1] == identity)
-                QAB_ident = (QAB[1] == identity)
-                # precompute which of the pairs of products might be equal
-                PA_eq_QB = (PA[1] == QB[1])
-                QA_eq_PB = (QA[1] == PB[1])
-                PAB_eq_Q = (PAB[1] == Q)
-                QAB_eq_P = (QAB[1] == P)
-
-                if com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*QAB[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*QAB[0]*addl_factor_3*w))
-                elif com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*QAB[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*QAB[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*QAB[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*QAB[0]*addl_factor_3*w))
-                elif not com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*QAB[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -QAB[0]*addl_factor_3*w))
-                elif not com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), 1j*PAB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -1j*QAB[0]*addl_factor_3*w))
-            else:
-                # precompute some products we'll need.
-                PA = pauli_product(P, A)
-                QA = pauli_product(Q, A)
-                PB = pauli_product(P, B)
-                QB = pauli_product(Q, B)
-                PQ = pauli_product(P, Q)
-                AB = pauli_product(A, B)
-                APQ = pauli_product(A, PQ[0]*PQ[1])
-                BPQ = pauli_product(B, PQ[0]*PQ[1])
-                PAB = pauli_product(P, AB[0]*AB[1])
-                QAB = pauli_product(Q, AB[0]*AB[1])
-                ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
-
-                # precompute whether any of these products are identities.
-                PA_ident  = (PA[1] == identity) 
-                QA_ident  = (QA[1] == identity) 
-                PB_ident  = (PB[1] == identity) 
-                QB_ident  = (QB[1] == identity)
-                APQ_ident = (APQ[1] == identity)
-                BPQ_ident = (BPQ[1] == identity)
-                PAB_ident = (PAB[1] == identity)
-                QAB_ident = (QAB[1] == identity)
-                ABPQ_ident= (ABPQ[1] == identity)
-                # precompute which of the pairs of products might be equal
-                PA_eq_QB = (PA[1] == QB[1])
-                QA_eq_PB = (QA[1] == PB[1])
-                PQ_eq_AB = (PQ[1] == AB[1])
-                APQ_eq_B = (APQ[1] == B)
-                BPQ_eq_A = (BPQ[1] == A)
-                PAB_eq_Q = (PAB[1] == Q)
-                QAB_eq_P = (QAB[1] == P) 
-
-                if com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(PA[1], QB[1], PA_ident, QB_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -PA[0]*QB[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), -1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6),- 1j*QAB[0]*addl_factor_6*w))
-                elif com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*w))
-                elif com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(PB[1], QA[1], PB_ident, QA_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*PB[0]*QA[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -1j*QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*w))
-                elif com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), -1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                elif com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), -1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*w))
-                elif com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -1j*QAB[0]*addl_factor_6*w))
-                elif com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                elif com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), -1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), -1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -1j*QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*w))
-                elif not com_AP and com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), -1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -1j*QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*w))
-                elif not com_AP and com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                elif not com_AP and com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -1j*QAB[0]*addl_factor_6*w))
-                elif not com_AP and com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_C(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), -APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), -1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*w))
-                elif not com_AP and not com_AQ and com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), -1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                elif not com_AP and not com_AQ and com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_A(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_C(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), 1j*QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -1j*QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*w))
-                elif not com_AP and not com_AQ and not com_BP and com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_A(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_C(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_C(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), 1j*QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -QAB[0]*addl_factor_6*w))
-                    if not ABPQ_ident:
-                        composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*w))
-                elif not com_AP and not com_AQ and not com_BP and not com_BQ:
-                    new_eg_type_0, new_bels_0, addl_factor_0 = _ordered_new_bels_C(QB[1], PA[1], QB_ident, PA_ident, PA_eq_QB)
-                    new_eg_type_1, new_bels_1, addl_factor_1 = _ordered_new_bels_C(QA[1], PB[1], QA_ident, PB_ident, QA_eq_PB)
-                    new_eg_type_2, new_bels_2, addl_factor_2 = _ordered_new_bels_C(PQ[1], AB[1], False, False, PQ_eq_AB)
-                    new_eg_type_3, new_bels_3, addl_factor_3 = _ordered_new_bels_A(APQ[1], B, APQ_ident, False, APQ_eq_B)
-                    new_eg_type_4, new_bels_4, addl_factor_4 = _ordered_new_bels_A(BPQ[1], A, BPQ_ident, False, BPQ_eq_A)
-                    new_eg_type_5, new_bels_5, addl_factor_5 = _ordered_new_bels_A(PAB[1], Q, PAB_ident, False, PAB_eq_Q)
-                    new_eg_type_6, new_bels_6, addl_factor_6 = _ordered_new_bels_A(QAB[1], P, QAB_ident, False, QAB_eq_P)
-                    if new_eg_type_0 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_0, new_bels_0), QB[0]*PA[0]*addl_factor_0*w))
-                    if new_eg_type_1 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_1, new_bels_1), -QA[0]*PB[0]*addl_factor_1*w))
-                    if new_eg_type_2 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_2, new_bels_2), -PQ[0]*AB[0]*addl_factor_2*w))
-                    if new_eg_type_3 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_3, new_bels_3), 1j*APQ[0]*addl_factor_3*w))
-                    if new_eg_type_4 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_4, new_bels_4), -1j*BPQ[0]*addl_factor_4*w))
-                    if new_eg_type_5 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_5, new_bels_5), 1j*PAB[0]*addl_factor_5*w))
-                    if new_eg_type_6 is not None:
-                        composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -1j*QAB[0]*addl_factor_6*w))
 
     return composed_errorgens
 
