@@ -1338,6 +1338,100 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
            
     return errorgens
 
+#Shared term emission primitives for the `_error_generator_composition_*` helpers.
+#Every one of those helpers builds its output the same way: pick `_ordered_new_bels_C`
+#or `_ordered_new_bels_A`, call it, and append the result if it is not None. These three
+#functions capture that, layered from most general to most convenient.
+#
+#Note that the accumulator argument is named `composed_errorgens` throughout. The static
+#term-count check in the unit tests (`_composition_block_max_terms`) recognises appends by
+#that receiver name, so renaming it would silently drop the derived bounds to zero.
+
+def _append_composed_errorgen(composed_errorgens, use_C, pauli_1, pauli_2, ident_1, ident_2,
+                              pauli_eq, coeff, weight: float=1.0):
+    r"""
+    Append one composed error generator term, if it is non-vanishing.
+
+    Parameters
+    ----------
+    composed_errorgens : list
+        Accumulator of (`LocalStimErrorgenLabel`, rate) tuples, appended to in place.
+
+    use_C : bool
+        Whether to build the term with `_ordered_new_bels_C` rather than
+        `_ordered_new_bels_A`.
+
+    pauli_1, pauli_2 : stim.PauliString
+        The two basis elements of the new term.
+
+    ident_1, ident_2 : bool
+        Whether the corresponding Pauli is the identity.
+
+    pauli_eq : bool
+        Whether the two Paulis are equal.
+
+    coeff : complex
+        Coefficient for the term, excluding `addl_factor` and `weight`.
+
+    weight : float, optional (default 1.0)
+        An optional weighting value to apply to the value of the composition.
+    """
+    ordered_new_bels = _ordered_new_bels_C if use_C else _ordered_new_bels_A
+    new_eg_type, new_bels, addl_factor = ordered_new_bels(pauli_1, pauli_2, ident_1, ident_2,
+                                                          pauli_eq)
+    if new_eg_type is not None:
+        composed_errorgens.append((_LSE(new_eg_type, new_bels), coeff*addl_factor*weight))
+
+
+def _append_product_pair(composed_errorgens, use_C, prod_1, prod_2, coeff, identity,
+                         weight: float=1.0):
+    r"""
+    Append a term whose two basis elements are both Pauli *products*.
+
+    `prod_1` and `prod_2` are (phase, `stim.PauliString`) pairs as returned by
+    `pauli_product`; both phases are folded into the coefficient, and the identity and
+    equality flags are derived from the products themselves.
+    """
+    _append_composed_errorgen(composed_errorgens, use_C, prod_1[1], prod_2[1],
+                              prod_1[1] == identity, prod_2[1] == identity,
+                              prod_1[1] == prod_2[1], coeff*prod_1[0]*prod_2[0], weight)
+
+
+def _append_conditional_errorgen(composed_errorgens, prod, other, condition, C_if_true,
+                                 coeff_if_true, coeff_if_false, identity, weight: float=1.0):
+    r"""
+    Append a term built from a Pauli product and a bare Pauli, choosing between two forms.
+
+    Most terms in these blocks take one of two shapes depending on a single boolean --
+    for the pair-pair blocks that boolean is whether two commutation bits agree, and for
+    the mixed blocks it is a single commutation bit. `condition` selects between
+    (`C_if_true`, `coeff_if_true`) and its complement, so the caller states the rule
+    rather than encoding it in a function name.
+
+    Parameters
+    ----------
+    prod : tuple
+        (phase, `stim.PauliString`) pair as returned by `pauli_product`.
+
+    other : stim.PauliString
+        The partner basis element. Assumed never to be the identity.
+
+    condition : bool
+        Selects which of the two forms to emit.
+
+    C_if_true : bool
+        Whether `condition` being True means a `_ordered_new_bels_C` term.
+
+    coeff_if_true, coeff_if_false : complex
+        Coefficients for the two forms, excluding the product phase, `addl_factor`
+        and `weight`.
+    """
+    use_C = C_if_true if condition else not C_if_true
+    _append_composed_errorgen(composed_errorgens, use_C, prod[1], other,
+                              prod[1] == identity, False, prod[1] == other,
+                              (coeff_if_true if condition else coeff_if_false)*prod[0], weight)
+
+
 def _error_generator_composition_hs_or_sh(P, Q, P_from_an_S_error: bool, weight: float=1.0, identity=None):
     r"""
     Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
@@ -1367,19 +1461,10 @@ def _error_generator_composition_hs_or_sh(P, Q, P_from_an_S_error: bool, weight:
     # I think that P and Q are supposed to be basis elements which are likely stim.PauliStrings?
     # The type checker will need to check that for me.
     composed_errorgens = []
-    PQ = pauli_product(P, Q)
-    PQ_ident = (PQ[1] == identity)
-    PQ_eq_Q = (PQ[1]==Q)
-    new_eg_type, new_bels, addl_factor = None, None, None
-    if P.commutes(Q):
-        new_eg_type, new_bels, addl_factor = _ordered_new_bels_A(PQ[1], Q if not P_from_an_S_error else P, PQ_ident, False, PQ_eq_Q)
-    else: # if errorgen_1_bel_0 and errorgen_2_bel_0 only multiply to identity they are equal (in which case they commute).
-        new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(PQ[1], Q if not P_from_an_S_error else P, PQ_ident, False, PQ_eq_Q)
-
-    if new_eg_type is not None:
-        rhs = -PQ[0]*addl_factor*weight
-        rhs = rhs*1j if not P.commutes(Q) else rhs
-        composed_errorgens.append((_LSE(new_eg_type, new_bels), rhs))
+    # If P and Q only multiply to the identity they are equal, in which case they commute.
+    _append_conditional_errorgen(composed_errorgens, pauli_product(P, Q),
+                                 Q if not P_from_an_S_error else P, P.commutes(Q),
+                                 False, -1, -1j, identity, weight)
     composed_errorgens.append((_LSE('H', [P] if not P_from_an_S_error else [Q]), -weight))
 
     return composed_errorgens
@@ -1437,20 +1522,14 @@ def _error_generator_composition_hc_or_ch(A, P, Q, H_error_is_first: bool, weigh
 
     # The PA and QA terms are images of one another under P <-> Q.
     for prod, other, com in ((pauli_product(P, A), Q, com_AP), (pauli_product(Q, A), P, com_AQ)):
-        ordered_new_bels = _ordered_new_bels_A if com else _ordered_new_bels_C
-        new_eg_type, new_bels, addl_factor = ordered_new_bels(prod[1], other, prod[1] == identity,
-                                                              False, prod[1] == other)
-        if new_eg_type is not None:
-            phase = -1 if com else anticom_phase
-            composed_errorgens.append((_LSE(new_eg_type, new_bels), phase*prod[0]*addl_factor*weight))
+        _append_conditional_errorgen(composed_errorgens, prod, other, com,
+                                     False, -1, anticom_phase, identity, weight)
 
     if P.commutes(Q):
         PQ = pauli_product(P, Q)
         APQ = pauli_product(A, PQ[0]*PQ[1])
-        new_eg_type, new_bels, addl_factor = _ordered_new_bels_A(PQ[1], A, PQ[1] == identity,
-                                                                 False, PQ[1] == A)
-        if new_eg_type is not None:
-            composed_errorgens.append((_LSE(new_eg_type, new_bels), -1*PQ[0]*addl_factor*weight))
+        _append_composed_errorgen(composed_errorgens, False, PQ[1], A, PQ[1] == identity,
+                                  False, PQ[1] == A, -1*PQ[0], weight)
         # A must relate to P and Q in the same way for this term to survive.
         if com_AP == com_AQ and APQ[1] != identity:
             composed_errorgens.append((_LSE('H', [APQ[1]]), -1*APQ[0]*weight))
@@ -1513,21 +1592,14 @@ def _error_generator_composition_ha_or_ah(A, P, Q, H_error_is_first: bool, weigh
     # sign the A generator's antisymmetry puts on the second of them.
     for prod, other, com, sign in ((pauli_product(P, A), Q, com_AP, 1),
                                    (pauli_product(Q, A), P, com_AQ, -1)):
-        ordered_new_bels = _ordered_new_bels_C if com else _ordered_new_bels_A
-        new_eg_type, new_bels, addl_factor = ordered_new_bels(prod[1], other, prod[1] == identity,
-                                                              False, prod[1] == other)
-        if new_eg_type is not None:
-            phase = 1 if com else anticom_phase
-            composed_errorgens.append((_LSE(new_eg_type, new_bels),
-                                       sign*phase*prod[0]*addl_factor*weight))
+        _append_conditional_errorgen(composed_errorgens, prod, other, com,
+                                     True, sign, sign*anticom_phase, identity, weight)
 
     if not P.commutes(Q):
         PQ = pauli_product(P, Q)
         APQ = pauli_product(A, PQ[0]*PQ[1])
-        new_eg_type, new_bels, addl_factor = _ordered_new_bels_A(PQ[1], A, PQ[1] == identity,
-                                                                 False, PQ[1] == A)
-        if new_eg_type is not None:
-            composed_errorgens.append((_LSE(new_eg_type, new_bels), 1j*PQ[0]*addl_factor*weight))
+        _append_composed_errorgen(composed_errorgens, False, PQ[1], A, PQ[1] == identity,
+                                  False, PQ[1] == A, 1j*PQ[0], weight)
         # A must relate to P and Q in the same way for this term to survive.
         if com_AP == com_AQ and APQ[1] != identity:
             composed_errorgens.append((_LSE('H', [APQ[1]]), 1j*APQ[0]*weight))
@@ -1589,36 +1661,24 @@ def _error_generator_composition_sc_or_cs(A, P, Q, S_error_is_first: bool, weigh
 
     # The sole point of divergence between the two orderings.
     anticom_phase = 1j if S_error_is_first else -1j
-    ordered_new_bels = _ordered_new_bels_C if same else _ordered_new_bels_A
 
     PA = pauli_product(P, A)
     QA = pauli_product(Q, A)
-    PA_eq_QA = (PA[1] == QA[1])
     if not com_PQ:
         # Carried over from the original blocks: PA and QA can't coincide when P and Q
         # anticommute.
-        assert not PA_eq_QA
+        assert PA[1] != QA[1]
 
     lead = (1 if com_AP else -1) if same else (-anticom_phase if com_AP else anticom_phase)
-    new_eg_type, new_bels, addl_factor = ordered_new_bels(PA[1], QA[1], PA[1] == identity,
-                                                          QA[1] == identity, PA_eq_QA)
-    if new_eg_type is not None:
-        composed_errorgens.append((_LSE(new_eg_type, new_bels),
-                                   lead*PA[0]*QA[0]*addl_factor*weight))
+    _append_product_pair(composed_errorgens, same, PA, QA, lead, identity, weight)
 
     if com_PQ:
         PQ = pauli_product(P, Q)
-        APQ = pauli_product(A, PQ[0]*PQ[1])
         # APQ can't equal A, since that would imply P == Q and hence an invalid C term.
-        new_eg_type, new_bels, addl_factor = ordered_new_bels(APQ[1], A, APQ[1] == identity,
-                                                              False, False)
-        if new_eg_type is not None:
-            composed_errorgens.append((_LSE(new_eg_type, new_bels),
-                                       (-1 if same else anticom_phase)*APQ[0]*addl_factor*weight))
+        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), A,
+                                     same, True, -1, anticom_phase, identity, weight)
 
-    new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(P, Q, False, False, False)
-    if new_eg_type is not None:
-        composed_errorgens.append((_LSE(new_eg_type, new_bels), -1*addl_factor*weight))
+    _append_composed_errorgen(composed_errorgens, True, P, Q, False, False, False, -1, weight)
 
     return composed_errorgens
 
@@ -1683,34 +1743,21 @@ def _error_generator_composition_sa_or_as(A, P, Q, S_error_is_first: bool, weigh
 
     PA = pauli_product(P, A)
     QA = pauli_product(Q, A)
-    PA_eq_QA = (PA[1] == QA[1])
     if com_PQ:
         # Carried over from the original blocks: PA and QA can't coincide when P and Q
         # commute.
-        assert not PA_eq_QA
+        assert PA[1] != QA[1]
 
-    ordered_new_bels = _ordered_new_bels_A if same else _ordered_new_bels_C
     lead = (1 if com_AP else -1) if same else (1j if com_AP else -1j)
-    new_eg_type, new_bels, addl_factor = ordered_new_bels(PA[1], QA[1], PA[1] == identity,
-                                                          QA[1] == identity, PA_eq_QA)
-    if new_eg_type is not None:
-        composed_errorgens.append((_LSE(new_eg_type, new_bels),
-                                   flip*lead*PA[0]*QA[0]*addl_factor*weight))
+    _append_product_pair(composed_errorgens, not same, PA, QA, flip*lead, identity, weight)
 
     if not com_PQ:
         PQ = pauli_product(P, Q)
-        APQ = pauli_product(A, PQ[0]*PQ[1])
         # APQ can't equal A, since that would imply P == Q and hence an invalid A term.
-        apq_new_bels = _ordered_new_bels_C if same else _ordered_new_bels_A
-        new_eg_type, new_bels, addl_factor = apq_new_bels(APQ[1], A, APQ[1] == identity,
-                                                          False, False)
-        if new_eg_type is not None:
-            composed_errorgens.append((_LSE(new_eg_type, new_bels),
-                                       flip*(1j if same else 1)*APQ[0]*addl_factor*weight))
+        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), A,
+                                     same, True, flip*1j, flip, identity, weight)
 
-    new_eg_type, new_bels, addl_factor = _ordered_new_bels_A(P, Q, False, False, False)
-    if new_eg_type is not None:
-        composed_errorgens.append((_LSE(new_eg_type, new_bels), -1*addl_factor*weight))
+    _append_composed_errorgen(composed_errorgens, False, P, Q, False, False, False, -1, weight)
 
     return composed_errorgens
 
@@ -1779,19 +1826,6 @@ def _error_generator_composition_cc(A, B, P, Q, weight: float=1.0, identity=None
     com_BP = B.commutes(P)
     com_BQ = B.commutes(Q)
 
-    def emit(use_C, pauli_1, pauli_2, ident_1, ident_2, pauli_eq, coeff):
-        ordered_new_bels = _ordered_new_bels_C if use_C else _ordered_new_bels_A
-        new_eg_type, new_bels, addl_factor = ordered_new_bels(pauli_1, pauli_2, ident_1,
-                                                              ident_2, pauli_eq)
-        if new_eg_type is not None:
-            composed_errorgens.append((_LSE(new_eg_type, new_bels), coeff*addl_factor*weight))
-
-    def emit_pair(prod, other, com_1, com_2, anticom_phase):
-        """C when the two governing commutation bits agree, A when they disagree."""
-        same = (com_1 == com_2)
-        emit(same, prod[1], other, prod[1] == identity, False, prod[1] == other,
-             (-1 if same else anticom_phase)*prod[0])
-
     # The two cross terms, present for every commutation signature.
     PA = pauli_product(P, A)
     QA = pauli_product(Q, A)
@@ -1804,17 +1838,20 @@ def _error_generator_composition_cc(A, B, P, Q, weight: float=1.0, identity=None
             lead = 1 if com_1 else -1
         else:
             lead = -1j if com_1 else 1j
-        emit(same, prod_1[1], prod_2[1], prod_1[1] == identity, prod_2[1] == identity,
-             prod_1[1] == prod_2[1], lead*prod_1[0]*prod_2[0])
+        _append_product_pair(composed_errorgens, same, prod_1, prod_2, lead, identity, weight)
 
     if com_AB and com_PQ:
         AB = pauli_product(A, B)
         PQ = pauli_product(P, Q)
-        emit(True, PQ[1], AB[1], False, False, PQ[1] == AB[1], PQ[0]*AB[0])
-        emit_pair(pauli_product(A, PQ[0]*PQ[1]), B, com_AP, com_AQ, 1j)
-        emit_pair(pauli_product(B, PQ[0]*PQ[1]), A, com_BP, com_BQ, 1j)
-        emit_pair(pauli_product(P, AB[0]*AB[1]), Q, com_AP, com_BP, -1j)
-        emit_pair(pauli_product(Q, AB[0]*AB[1]), P, com_AQ, com_BQ, -1j)
+        _append_product_pair(composed_errorgens, True, PQ, AB, 1, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), B, com_AP == com_AQ,
+                                     True, -1, 1j, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(B, PQ[0]*PQ[1]), A, com_BP == com_BQ,
+                                     True, -1, 1j, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, com_AP == com_BP,
+                                     True, -1, -1j, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(Q, AB[0]*AB[1]), P, com_AQ == com_BQ,
+                                     True, -1, -1j, identity, weight)
         # The Hamiltonian term survives only for an odd number of commuting cross
         # relations.
         if sum((com_AP, com_AQ, com_BP, com_BQ)) % 2 == 1:
@@ -1823,12 +1860,16 @@ def _error_generator_composition_cc(A, B, P, Q, weight: float=1.0, identity=None
                 composed_errorgens.append((_LSE('H', [ABPQ[1]]), 1j*ABPQ[0]*weight))
     elif com_AB:
         AB = pauli_product(A, B)
-        emit_pair(pauli_product(AB[0]*AB[1], P), Q, com_AP, com_BP, 1j)
-        emit_pair(pauli_product(AB[0]*AB[1], Q), P, com_AQ, com_BQ, 1j)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(AB[0]*AB[1], P), Q, com_AP == com_BP,
+                                     True, -1, 1j, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(AB[0]*AB[1], Q), P, com_AQ == com_BQ,
+                                     True, -1, 1j, identity, weight)
     elif com_PQ:
         PQ = pauli_product(P, Q)
-        emit_pair(pauli_product(PQ[0]*PQ[1], B), A, com_BP, com_BQ, -1j)
-        emit_pair(pauli_product(PQ[0]*PQ[1], A), B, com_AP, com_AQ, -1j)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(PQ[0]*PQ[1], B), A, com_BP == com_BQ,
+                                     True, -1, -1j, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(PQ[0]*PQ[1], A), B, com_AP == com_AQ,
+                                     True, -1, -1j, identity, weight)
 
     return composed_errorgens
 
@@ -1882,19 +1923,6 @@ def _error_generator_composition_aa(A, B, P, Q, weight: float=1.0, identity=None
     com_BP = B.commutes(P)
     com_BQ = B.commutes(Q)
 
-    def emit(use_C, pauli_1, pauli_2, ident_1, ident_2, pauli_eq, coeff):
-        ordered_new_bels = _ordered_new_bels_C if use_C else _ordered_new_bels_A
-        new_eg_type, new_bels, addl_factor = ordered_new_bels(pauli_1, pauli_2, ident_1,
-                                                              ident_2, pauli_eq)
-        if new_eg_type is not None:
-            composed_errorgens.append((_LSE(new_eg_type, new_bels), coeff*addl_factor*weight))
-
-    def emit_pair(prod, other, com_1, com_2, a_phase, c_sign):
-        """A when the two governing commutation bits agree, C when they disagree."""
-        same = (com_1 == com_2)
-        emit(not same, prod[1], other, prod[1] == identity, False, prod[1] == other,
-             (a_phase if same else c_sign)*prod[0])
-
     # The two cross terms, present for every commutation signature. They differ from
     # one another only by an overall sign.
     PA = pauli_product(P, A)
@@ -1908,17 +1936,20 @@ def _error_generator_composition_aa(A, B, P, Q, weight: float=1.0, identity=None
             lead = 1 if com_1 else -1
         else:
             lead = -1j if com_1 else 1j
-        emit(same, prod_1[1], prod_2[1], prod_1[1] == identity, prod_2[1] == identity,
-             prod_1[1] == prod_2[1], sign*lead*prod_1[0]*prod_2[0])
+        _append_product_pair(composed_errorgens, same, prod_1, prod_2, sign*lead, identity, weight)
 
     if not com_AB and not com_PQ:
         AB = pauli_product(A, B)
         PQ = pauli_product(P, Q)
-        emit(True, PQ[1], AB[1], False, False, PQ[1] == AB[1], -1*PQ[0]*AB[0])
-        emit_pair(pauli_product(A, PQ[0]*PQ[1]), B, com_AP, com_AQ, 1j, -1)
-        emit_pair(pauli_product(B, PQ[0]*PQ[1]), A, com_BP, com_BQ, -1j, 1)
-        emit_pair(pauli_product(P, AB[0]*AB[1]), Q, com_AP, com_BP, 1j, 1)
-        emit_pair(pauli_product(Q, AB[0]*AB[1]), P, com_AQ, com_BQ, -1j, -1)
+        _append_product_pair(composed_errorgens, True, PQ, AB, -1, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), B, com_AP == com_AQ,
+                                     False, 1j, -1, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(B, PQ[0]*PQ[1]), A, com_BP == com_BQ,
+                                     False, -1j, 1, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, com_AP == com_BP,
+                                     False, 1j, 1, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(Q, AB[0]*AB[1]), P, com_AQ == com_BQ,
+                                     False, -1j, -1, identity, weight)
         # The Hamiltonian term survives only for an odd number of commuting cross
         # relations.
         if sum((com_AP, com_AQ, com_BP, com_BQ)) % 2 == 1:
@@ -1927,12 +1958,16 @@ def _error_generator_composition_aa(A, B, P, Q, weight: float=1.0, identity=None
                 composed_errorgens.append((_LSE('H', [ABPQ[1]]), -1j*ABPQ[0]*weight))
     elif not com_PQ:
         PQ = pauli_product(P, Q)
-        emit_pair(pauli_product(A, PQ[0]*PQ[1]), B, com_AP, com_AQ, 1j, -1)
-        emit_pair(pauli_product(B, PQ[0]*PQ[1]), A, com_BP, com_BQ, -1j, 1)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), B, com_AP == com_AQ,
+                                     False, 1j, -1, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(B, PQ[0]*PQ[1]), A, com_BP == com_BQ,
+                                     False, -1j, 1, identity, weight)
     elif not com_AB:
         AB = pauli_product(A, B)
-        emit_pair(pauli_product(P, AB[0]*AB[1]), Q, com_AP, com_BP, 1j, 1)
-        emit_pair(pauli_product(Q, AB[0]*AB[1]), P, com_AQ, com_BQ, -1j, -1)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, com_AP == com_BP,
+                                     False, 1j, 1, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(Q, AB[0]*AB[1]), P, com_AQ == com_BQ,
+                                     False, -1j, -1, identity, weight)
 
     return composed_errorgens
 
@@ -1988,25 +2023,6 @@ def _error_generator_composition_ac(A, B, P, Q, weight: float=1.0, identity=None
     com_BP = B.commutes(P)
     com_BQ = B.commutes(Q)
 
-    def emit(use_C, pauli_1, pauli_2, ident_1, ident_2, pauli_eq, coeff):
-        ordered_new_bels = _ordered_new_bels_C if use_C else _ordered_new_bels_A
-        new_eg_type, new_bels, addl_factor = ordered_new_bels(pauli_1, pauli_2, ident_1,
-                                                              ident_2, pauli_eq)
-        if new_eg_type is not None:
-            composed_errorgens.append((_LSE(new_eg_type, new_bels), coeff*addl_factor*weight))
-
-    def emit_pq_term(prod, other, com_1, com_2, sign):
-        """A when the two governing commutation bits agree, C when they disagree."""
-        same = (com_1 == com_2)
-        emit(not same, prod[1], other, prod[1] == identity, False, prod[1] == other,
-             sign*(1 if same else 1j)*prod[0])
-
-    def emit_ab_term(prod, other, com_1, com_2):
-        """C when the two governing commutation bits agree, A when they disagree."""
-        same = (com_1 == com_2)
-        emit(same, prod[1], other, prod[1] == identity, False, prod[1] == other,
-             (1j if same else -1)*prod[0])
-
     # The two cross terms, present for every commutation signature.
     PA = pauli_product(P, A)
     QA = pauli_product(Q, A)
@@ -2019,20 +2035,23 @@ def _error_generator_composition_ac(A, B, P, Q, weight: float=1.0, identity=None
             lead = 1 if com_1 else -1
         else:
             lead = 1j if com_1 else -1j
-        emit(not same, prod_1[1], prod_2[1], prod_1[1] == identity, prod_2[1] == identity,
-             prod_1[1] == prod_2[1], lead*prod_1[0]*prod_2[0])
+        _append_product_pair(composed_errorgens, not same, prod_1, prod_2, lead, identity, weight)
 
     AB = pauli_product(A, B) if not com_AB else None
     PQ = pauli_product(P, Q) if com_PQ else None
 
     if PQ is not None and AB is not None:
-        emit(True, PQ[1], AB[1], False, False, PQ[1] == AB[1], -1j*PQ[0]*AB[0])
+        _append_product_pair(composed_errorgens, True, PQ, AB, -1j, identity, weight)
     if PQ is not None:
-        emit_pq_term(pauli_product(A, PQ[0]*PQ[1]), B, com_AP, com_AQ, -1)
-        emit_pq_term(pauli_product(B, PQ[0]*PQ[1]), A, com_BP, com_BQ, 1)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), B, com_AP == com_AQ,
+                                     False, -1, -1*1j, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(B, PQ[0]*PQ[1]), A, com_BP == com_BQ,
+                                     False, 1, 1*1j, identity, weight)
     if AB is not None:
-        emit_ab_term(pauli_product(P, AB[0]*AB[1]), Q, com_AP, com_BP)
-        emit_ab_term(pauli_product(Q, AB[0]*AB[1]), P, com_AQ, com_BQ)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, com_AP == com_BP,
+                                     True, 1j, -1, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(Q, AB[0]*AB[1]), P, com_AQ == com_BQ,
+                                     True, 1j, -1, identity, weight)
     if PQ is not None and AB is not None:
         # The Hamiltonian term survives only for an odd number of commuting cross
         # relations.
@@ -2094,25 +2113,6 @@ def _error_generator_composition_ca(A, B, P, Q, weight: float=1.0, identity=None
     com_BP = B.commutes(P)
     com_BQ = B.commutes(Q)
 
-    def emit(use_C, pauli_1, pauli_2, ident_1, ident_2, pauli_eq, coeff):
-        ordered_new_bels = _ordered_new_bels_C if use_C else _ordered_new_bels_A
-        new_eg_type, new_bels, addl_factor = ordered_new_bels(pauli_1, pauli_2, ident_1,
-                                                              ident_2, pauli_eq)
-        if new_eg_type is not None:
-            composed_errorgens.append((_LSE(new_eg_type, new_bels), coeff*addl_factor*weight))
-
-    def emit_pq_term(prod, other, com_1, com_2):
-        """C when the two governing commutation bits agree, A when they disagree."""
-        same = (com_1 == com_2)
-        emit(same, prod[1], other, prod[1] == identity, False, prod[1] == other,
-             (1j if same else 1)*prod[0])
-
-    def emit_ab_term(prod, other, com_1, com_2, sign):
-        """A when the two governing commutation bits agree, C when they disagree."""
-        same = (com_1 == com_2)
-        emit(not same, prod[1], other, prod[1] == identity, False, prod[1] == other,
-             sign*(1 if same else -1j)*prod[0])
-
     # The two cross terms, present for every commutation signature. They differ from
     # one another only by an overall sign.
     PA = pauli_product(P, A)
@@ -2126,20 +2126,23 @@ def _error_generator_composition_ca(A, B, P, Q, weight: float=1.0, identity=None
             lead = 1 if com_1 else -1
         else:
             lead = 1j if com_1 else -1j
-        emit(not same, prod_1[1], prod_2[1], prod_1[1] == identity, prod_2[1] == identity,
-             prod_1[1] == prod_2[1], sign*lead*prod_1[0]*prod_2[0])
+        _append_product_pair(composed_errorgens, not same, prod_1, prod_2, sign*lead, identity, weight)
 
     AB = pauli_product(A, B) if com_AB else None
     PQ = pauli_product(P, Q) if not com_PQ else None
 
     if PQ is not None and AB is not None:
-        emit(True, PQ[1], AB[1], False, False, PQ[1] == AB[1], -1j*PQ[0]*AB[0])
+        _append_product_pair(composed_errorgens, True, PQ, AB, -1j, identity, weight)
     if PQ is not None:
-        emit_pq_term(pauli_product(A, PQ[0]*PQ[1]), B, com_AP, com_AQ)
-        emit_pq_term(pauli_product(B, PQ[0]*PQ[1]), A, com_BP, com_BQ)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), B, com_AP == com_AQ,
+                                     True, 1j, 1, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(B, PQ[0]*PQ[1]), A, com_BP == com_BQ,
+                                     True, 1j, 1, identity, weight)
     if AB is not None:
-        emit_ab_term(pauli_product(P, AB[0]*AB[1]), Q, com_AP, com_BP, -1)
-        emit_ab_term(pauli_product(Q, AB[0]*AB[1]), P, com_AQ, com_BQ, 1)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, com_AP == com_BP,
+                                     False, -1, -1*-1j, identity, weight)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(Q, AB[0]*AB[1]), P, com_AQ == com_BQ,
+                                     False, 1, 1*-1j, identity, weight)
     if PQ is not None and AB is not None:
         # The Hamiltonian term survives only for an odd number of commuting cross
         # relations.
