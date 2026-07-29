@@ -609,8 +609,11 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
                        "intended (e.g. genuinely rank-deficient members), this "
                        "is informational.")
 
-    inst = _Instrument(_parameterized_instrument(basis, effects, gates,
-                                                 gate_parameterization, povm_errormap))
+    with _warnings.catch_warnings():
+        # any surviving rank deficiency was already reported as a residual flag
+        _warnings.filterwarnings('ignore', message='.*post-measurement gate.*singular.*')
+        inst = _Instrument(_parameterized_instrument(basis, effects, gates,
+                                                     gate_parameterization, povm_errormap))
     if return_report:
         max_shift = max(
             _np.linalg.norm(_np.asarray(m.to_dense('HilbertSchmidt')) - members[lbl])
