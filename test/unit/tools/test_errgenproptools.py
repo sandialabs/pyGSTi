@@ -1075,8 +1075,10 @@ def _composition_block_max_terms():
     the bound unsound.
     """
     tree = ast.parse(open(_eprop.__file__).read())
+    # The public `error_generator_composition` is a thin caching wrapper; the dispatch
+    # chain this walks lives in the uncached implementation behind it.
     fn = next(n for n in tree.body
-              if isinstance(n, ast.FunctionDef) and n.name == 'error_generator_composition')
+              if isinstance(n, ast.FunctionDef) and n.name == '_error_generator_composition_impl')
     module_fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
 
     def is_append(stmt):
@@ -1172,14 +1174,14 @@ def _signature_representatives(num_qubits):
 def _composition_dispatch_block_ranges():
     """
     Return {(type_1, type_2): (first_line, last_line)} for each of the 16 blocks in
-    the `error_generator_composition` elif chain, read from the installed source.
+    the `_error_generator_composition_impl` elif chain, read from the installed source.
 
     Line numbers are absolute so they can be compared directly against the line
     numbers reported by `sys.monitoring` for the function's code object.
     """
     tree = ast.parse(open(_eprop.__file__).read())
     fn = next(n for n in tree.body
-              if isinstance(n, ast.FunctionDef) and n.name == 'error_generator_composition')
+              if isinstance(n, ast.FunctionDef) and n.name == '_error_generator_composition_impl')
     head = "errorgen_1_type == 'H' and errorgen_2_type == 'H'"
     node = next(s for s in fn.body if isinstance(s, ast.If) and head in ast.unparse(s.test))
 
@@ -1280,7 +1282,12 @@ class ErrgenCompositionRegressionTester(BaseCase):
         except ValueError:
             self.skipTest("Could not acquire the sys.monitoring COVERAGE_ID tool slot")
 
-        target_code = _eprop.error_generator_composition.__code__
+        # Monitor the uncached implementation: the public entry point is a caching
+        # wrapper and contains none of the dispatch chain. Clearing the cache is
+        # essential here -- a warm entry from an earlier test would short-circuit the
+        # implementation entirely and the block would look unreached.
+        _eprop.error_generator_composition.cache_clear()
+        target_code = _eprop._error_generator_composition_impl.__code__
         executed_lines = set()
 
         def line_callback(code, line_no):

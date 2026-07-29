@@ -39,7 +39,7 @@ import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
-from functools import reduce
+from functools import reduce, lru_cache
 from itertools import chain, product
 from math import factorial
 
@@ -2190,34 +2190,26 @@ def _error_generator_composition_ca(A: stim.PauliString, B: stim.PauliString, P:
 
     return composed_errorgens
 
-def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: float=1.0,
-                                identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
+def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight,
+                                      identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
     r"""
-    Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
-    
-    Parameters
-    ----------
-    errorgen1 : `LocalStimErrorgenLabel`
-        First error generator.
+    Uncached implementation of `error_generator_composition`; see that function for
+    the parameter and return descriptions.
 
-    errorgen2 : `LocalStimErrorgenLabel`
-        Second error generator
-    
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-    
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
+    Every rate produced here is a product of exact factors -- unit or small-integer
+    coefficients, and stim Pauli signs, which are always one of +-1/+-i -- with `weight`
+    as the *final* multiplication. Consequently
 
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s 
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
+        _error_generator_composition_impl(l1, l2, w, ident)
+            == [(lbl, rate*w) for lbl, rate in
+                _error_generator_composition_impl(l1, l2, 1, ident)]
+
+    holds bit-for-bit, which is what allows `error_generator_composition` to cache a
+    weight-1 result and scale it rather than recomputing. If you add a term here, keep
+    `weight` as the last factor or that equivalence breaks (the failure mode is subtle:
+    re-associating the product flips the sign of zero components, which compares equal
+    numerically but differs under the exact `float.hex()` fingerprinting used by
+    `test/performance/errgencomp_corpus.py`).
     """
 
     composed_errorgens = []
@@ -2248,7 +2240,9 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
         P_eq_Q = (P==Q)
         if not P.commutes(Q):
             PQ = pauli_product(P, Q)
-            composed_errorgens.append((_LSE('H', [PQ[1]]), -1j*w*PQ[0]))
+            # `w` last, as in every other term here, so that the result is exactly
+            # linear in it -- see `_error_generator_composition_impl`.
+            composed_errorgens.append((_LSE('H', [PQ[1]]), -1j*PQ[0]*w))
 
         new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(P, Q, False, False, P_eq_Q)
         composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_factor*w))
@@ -2390,6 +2384,89 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
 
 
     return composed_errorgens
+
+
+@lru_cache(maxsize=None)
+def _identity_pauli_string(num_qubits: int) -> stim.PauliString:
+    """
+    Identity `stim.PauliString` on `num_qubits` qubits.
+
+    Cached because the composition entry point needs one on every call and the set of
+    widths seen in a session is tiny.
+    """
+    return stim.PauliString('I'*num_qubits)
+
+
+@lru_cache(maxsize=None)
+def _error_generator_composition_unweighted(errorgen_1: _LSE, errorgen_2: _LSE) -> _ErrorgenTerms:
+    """
+    `error_generator_composition` at unit weight, memoized on the label pair.
+
+    The cache is unbounded by design. The access pattern it exists to exploit is the
+    one in `error_generator_taylor_expansion`, which walks
+    `product(errorgen_dict.keys(), repeat=k)`; `iterative_error_generator_composition`
+    then composes only the final two entries, so for N labels at order k the same N**2
+    pairs are re-requested N**(k-2) times. That reuse has period N**2, so a bounded LRU
+    smaller than the pair count would cycle and hit essentially never.
+
+    Note this keys on `LocalStimErrorgenLabel` equality, which covers `errorgen_type`
+    and `basis_element_labels` but *not* `circuit_time`. That is sound only because the
+    terms produced here never carry a circuit time; if composition ever starts
+    propagating one, this key becomes wrong.
+    """
+    # An integer unit weight (rather than 1.0) so that cached rates keep the numeric
+    # type the uncached implementation would have produced.
+    return _error_generator_composition_impl(
+        errorgen_1, errorgen_2, 1,
+        _identity_pauli_string(len(errorgen_1.basis_element_labels[0])))
+
+
+def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: float=1.0,
+                                identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
+    r"""
+    Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
+
+    Results are memoized on the `(errorgen_1, errorgen_2)` pair and rescaled by
+    `weight`, which is exact because the composition is linear in `weight`. Use
+    `error_generator_composition.cache_info()` to inspect the hit rate and
+    `error_generator_composition.cache_clear()` to release the memory; the cache is
+    unbounded and grows with the number of distinct label pairs composed.
+
+    Parameters
+    ----------
+    errorgen1 : `LocalStimErrorgenLabel`
+        First error generator.
+
+    errorgen2 : `LocalStimErrorgenLabel`
+        Second error generator
+
+    weight : float, optional (default 1.0)
+        An optional weighting value to apply to the value of the composition.
+
+    identity : stim.PauliString, optional (default None)
+        Deprecated and ignored; retained so existing call sites keep working. The
+        identity is now derived from the basis element label width and cached
+        internally, which is strictly cheaper than threading one through, and it was
+        never able to change the result -- only its own construction cost.
+
+    Returns
+    -------
+    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s 
+    corresponding to a component of the composition of the two input error generators.
+    The second element is the weight of that term, additionally weighted by the specified
+    value of `weight`.
+
+    The returned list and its tuples are freshly built on every call, but the
+    `LocalStimErrorgenLabel` objects inside are shared with the cache. Treat them as
+    immutable, which they already are everywhere in this module.
+    """
+    return [(lbl, rate*weight)
+            for lbl, rate in _error_generator_composition_unweighted(errorgen_1, errorgen_2)]
+
+
+# Expose the cache controls on the public entry point rather than the private helper.
+error_generator_composition.cache_info = _error_generator_composition_unweighted.cache_info
+error_generator_composition.cache_clear = _error_generator_composition_unweighted.cache_clear
 
 # helper function for getting the new (properly ordered) basis element labels, error generator type (A can turn into H with certain index combinations), and additional signs.
 # reduces code repetition in composition code.
