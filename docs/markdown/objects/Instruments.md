@@ -243,5 +243,46 @@ GST results that include instruments can be rendered into an interactive HTML re
 `pygsti.report.construct_standard_report(results, title='MCM GST').write_html(...)`.
 ```
 
-**That's it!**  You have built a physically-motivated instrument, simulated mid-circuit-measurement data, and performed tomography under two parameterizations -- seeing why a completely-positive representation gives instrument estimates you can interpret.
+## Diagnosing and repairing instrument seeds
+
+The effect-then-gate construction has one property that matters enormously in practice: for Lindblad gate parameterizations, the `(effect, gate)` pair recovered from the seed becomes a **frozen static base**.  The fit only composes an invertible error map onto the static gate and a shared error map onto the static effects, so some properties of the seed are *invariants of the entire parameterized family*:
+
+- the static gate's superoperator **rank** caps every reachable member's rank;
+- the base effects' **span** determines which effect directions can ever move (all effects are images of one shared unital map, which cannot move identity components);
+- the base effects' **spectral intervals** contain every reachable effect's spectrum.
+
+An *ideal projective* instrument -- the natural target seed -- fails the first and third of these: its decomposed static gate is singular, and its effect eigenvalues sit exactly at 0 and 1.  Fitting data from a real (full-rank) device out of such a seed fails badly no matter how the optimizer is scheduled or restarted, because the truth is simply outside the chart's reach.  pyGSTi warns at construction time when this happens, and provides data-free diagnostics that decide reachability *in advance*:
+
+```{code-cell} ipython3
+from pygsti.modelmembers.instruments import diagnose_instrument, patch_instrument_seed
+
+report = diagnose_instrument({'p0': Gmz_plus, 'p1': Gmz_minus}, 'pp', warn=False)
+print(report)
+```
+
+Each flag names its repair.  `patch_instrument_seed` applies exactly the repairs whose checks fail (a convex blend of the static gate toward a unitary completion; a displacement of span-deficient effects; an interior offset for boundary-touching spectra) and returns a ready-to-fit parameterized instrument whose base passes every check:
+
+```{code-cell} ipython3
+patched = patch_instrument_seed({'p0': Gmz_plus, 'p1': Gmz_minus}, 'pp')
+print(diagnose_instrument(patched, 'pp', warn=False).verdict)
+```
+
+A patched model (see also `patch_model_instrument_seeds`) can be passed directly to `GateSetTomography` as the `initial_model` for a cold CPTPLND fit.  A flag is not always a bug, though: a measure-and-reset instrument *legitimately* has rank-1 members, and its rank-cap flag is informational -- which is why diagnostics warn rather than raise.
+
+### Warm-starting a CPTPLND fit from a TP estimate
+
+The best-verified route to a high-quality CP-constrained instrument fit is to warm-start it from a `"full TP"` fit: gauge-optimize the TP estimate toward the target, project its instruments onto the CPTP-instrument set (Frobenius norm), and seed the CPTPLND fit with target gates/SPAM plus the projected instruments.  One call runs the whole recipe against an existing estimate and adds the result as a new estimate (gauge-optimized parameterization-preservingly, which is what error-bar computations on CP-constrained estimates need):
+
+```{code-cell} ipython3
+from pygsti.protocols import refit_instruments_cptplnd
+
+new_label = refit_instruments_cptplnd(results, 'full TP', verbosity=1)
+mdl_warm = results.estimates[new_label].models['final iteration estimate']
+inst = mdl_warm.instruments[('Iz', 0)]
+for outcome, member in inst.items():
+    viol = max(0.0, pygsti.tools.sum_of_negative_choi_eigenvalues_gate(member.to_dense(), 'pp'))
+    print(f"member {outcome!s:6s}: CP violation = {viol:.2e}")
+```
+
+**That's it!**  You have built a physically-motivated instrument, simulated mid-circuit-measurement data, performed tomography under two parameterizations -- seeing why a completely-positive representation gives instrument estimates you can interpret -- and learned how to diagnose, repair, and warm-start the seeds that make CP-constrained instrument fits succeed.
 ```
