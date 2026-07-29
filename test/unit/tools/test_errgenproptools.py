@@ -1066,9 +1066,13 @@ def _composition_block_max_terms():
     Return {(type_1, type_2): max_appends_on_any_path} for each dispatch block.
 
     Derived from the AST rather than hard-coded, so the bound stays correct if the
-    implementation is refactored. `error_generator_composition` contains no loops
-    or comprehensions, so the number of `composed_errorgens.append` calls along a
-    single path is an exact upper bound on the returned list length.
+    implementation is refactored. The number of `composed_errorgens.append` calls
+    along a single path is an exact upper bound on the returned list length.
+
+    Loops are counted by unrolling: a `for` over a literal tuple or list runs a known
+    number of times, so its body counts once per element. Any loop whose trip count
+    can't be read off the AST raises, since silently treating it as zero would make
+    the bound unsound.
     """
     tree = ast.parse(open(_eprop.__file__).read())
     fn = next(n for n in tree.body
@@ -1082,27 +1086,47 @@ def _composition_block_max_terms():
                 and isinstance(stmt.value.func.value, ast.Name)
                 and stmt.value.func.value.id == 'composed_errorgens')
 
-    def called_helper(value):
-        """Name of a module-level helper being called, if this expression is such a call."""
+    def called_helper(value, scope):
+        """Name of a known function being called, if this expression is such a call."""
         if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
-            return value.func.id if value.func.id in module_fns else None
+            return value.func.id if value.func.id in scope else None
         return None
 
-    def max_appends(stmts, depth=0):
-        # Blocks are increasingly delegating to shared helpers (e.g.
-        # `_error_generator_composition_hs_or_sh`), so follow one level of call into
-        # any module-level function; otherwise the bound silently reads as 0.
+    def max_appends(stmts, depth=0, scope=None):
+        # Blocks delegate to shared module-level helpers (e.g.
+        # `_error_generator_composition_cc`), and those helpers in turn use nested
+        # closures to emit terms, so follow calls into both; otherwise the bound
+        # silently reads far too low.
+        scope = dict(module_fns if scope is None else scope)
+        for stmt in stmts:
+            if isinstance(stmt, ast.FunctionDef):
+                scope[stmt.name] = stmt
+
         best = 0
         for stmt in stmts:
             if is_append(stmt):
                 best += 1
+            elif isinstance(stmt, ast.FunctionDef):
+                continue                      # counted at its call sites instead
             elif isinstance(stmt, ast.If):
-                best += max(max_appends(stmt.body, depth),
-                            max_appends(stmt.orelse, depth) if stmt.orelse else 0)
-            elif isinstance(stmt, (ast.Assign, ast.Return)) and depth < 4:
-                helper = called_helper(stmt.value) if stmt.value is not None else None
+                best += max(max_appends(stmt.body, depth, scope),
+                            max_appends(stmt.orelse, depth, scope) if stmt.orelse else 0)
+            elif isinstance(stmt, ast.For):
+                if not isinstance(stmt.iter, (ast.Tuple, ast.List)):
+                    raise AssertionError(
+                        'cannot statically bound the trip count of the loop at line '
+                        f'{stmt.lineno} (iterating over {ast.unparse(stmt.iter)}); '
+                        '_composition_block_max_terms needs updating')
+                best += len(stmt.iter.elts) * max_appends(stmt.body, depth, scope)
+                best += max_appends(stmt.orelse, depth, scope) if stmt.orelse else 0
+            elif isinstance(stmt, ast.While):
+                raise AssertionError(
+                    f'cannot statically bound the while loop at line {stmt.lineno}; '
+                    '_composition_block_max_terms needs updating')
+            elif isinstance(stmt, (ast.Assign, ast.Return, ast.Expr)) and depth < 6:
+                helper = called_helper(stmt.value, scope) if stmt.value is not None else None
                 if helper is not None:
-                    best += max_appends(module_fns[helper].body, depth + 1)
+                    best += max_appends(scope[helper].body, depth + 1, scope)
         return best
 
     head = "errorgen_1_type == 'H' and errorgen_2_type == 'H'"
@@ -2192,9 +2216,9 @@ class ErrgenCompositionStringOracleTester(BaseCase):
 @unittest.skipIf(stim is None, "stim is not installed")
 class ErrgenCompositionPairPairBlockTester(BaseCase):
     """
-    Tests for the blocks where *both* operands are Pauli-pair generators: C,C
-    (lines ~2151-3166) and A,A (~5411-6410). Together with C,A and A,C these are
-    ~81% of `error_generator_composition` and ~97% of its static branch paths.
+    Tests for the four blocks where *both* operands are Pauli-pair generators:
+    C,C, C,A, A,C and A,A. Together these are ~81% of `error_generator_composition`
+    and ~97% of its static branch paths.
 
     Two things make these blocks different from the ones covered above:
 
@@ -2268,12 +2292,9 @@ class ErrgenCompositionPairPairBlockTester(BaseCase):
         self.assertEqual(len(signatures), 62,
                          f'{type_1},{type_2}: expected 62 reachable 2-qubit signatures, '
                          f'got {len(signatures)}')
-        bound = _composition_block_max_terms()[(type_1, type_2)]
-        self.assertTrue(lengths <= set(range(bound + 1)),
-                        f'{type_1},{type_2}: lengths {sorted(lengths)} exceed bound {bound}')
-        self.assertGreaterEqual(len(lengths), 3,
-                                f'{type_1},{type_2}: only lengths {sorted(lengths)} were '
-                                f'produced, expected a wider spread of paths')
+        self.assertEqual(lengths, self.EXPECTED_LENGTHS_2Q[(type_1, type_2)],
+                         f'{type_1},{type_2} (2Q): observed lengths {sorted(lengths)} != '
+                         f'expected {sorted(self.EXPECTED_LENGTHS_2Q[(type_1, type_2)])}')
         return lengths
 
     def _run_signature_reps_3q(self, type_1, type_2):
@@ -2284,15 +2305,115 @@ class ErrgenCompositionPairPairBlockTester(BaseCase):
         self._assert_clean(failures, f'{type_1},{type_2} 3Q signature representatives')
         self.assertEqual(len(signatures), 64)
         self.assertEqual(checked, 64 * len(self.SAMPLED_WEIGHTS))
+        self.assertEqual(lengths, self.EXPECTED_LENGTHS_2Q[(type_1, type_2)],
+                         f'{type_1},{type_2} (3Q reps): observed lengths {sorted(lengths)} != '
+                         f'expected {sorted(self.EXPECTED_LENGTHS_2Q[(type_1, type_2)])}')
         return lengths
 
+    def _errorgen_matrix_dict(self, num_qubits):
+        basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+        return {lbl: mat for lbl, mat in zip(basis.labels, basis.elemgen_matrices)}
+
+    # Exact sets of output list lengths, per block and qubit count. Obtained by
+    # interpreting each dispatch block's AST against a pure-Python reimplementation of
+    # `_ordered_new_bels_A`/`_C` over every operand pair. Term *count* cannot depend on
+    # Pauli ordering (no block calls `stim_pauli_string_less_than` directly, and
+    # `_ordered_new_bels_*` returns non-None regardless of which order it picks), so
+    # these are exact rather than approximate.
+    EXPECTED_LENGTHS_1Q = {('C', 'C'): {1, 2}, ('C', 'A'): {0, 2},
+                           ('A', 'C'): {0, 2}, ('A', 'A'): {6, 8}}
+    EXPECTED_LENGTHS_2Q = {k: {0, 1, 2, 3, 4, 6, 7, 8}
+                           for k in (('C', 'C'), ('C', 'A'), ('A', 'C'), ('A', 'A'))}
+
+    def _run_exhaustive_1q(self, type_1, type_2):
+        """
+        One qubit admits only three Pauli pairs, so this is 9 operand combinations --
+        cheap, but it is where the degenerate paths live (products collapsing to the
+        identity, PA == QA, and so on) that are comparatively rare at two qubits.
+        """
+        pair_labels = _c_type_pauli_pairs(1)
+        self.assertEqual(len(pair_labels), 3, f'expected 3 one-qubit pairs, got {pair_labels}')
+        quads = [(A, B, P, Q) for A, B in pair_labels for P, Q in pair_labels]
+        failures, lengths, _, checked = self._sweep(1, type_1, type_2, quads,
+                                                    self.EXHAUSTIVE_WEIGHTS)
+        self._assert_clean(failures, f'{type_1},{type_2} 1Q exhaustive')
+        self.assertEqual(checked, 9 * len(self.EXHAUSTIVE_WEIGHTS))
+        self.assertEqual(lengths, self.EXPECTED_LENGTHS_1Q[(type_1, type_2)],
+                         f'{type_1},{type_2} (1Q): observed lengths {sorted(lengths)} != '
+                         f'expected {sorted(self.EXPECTED_LENGTHS_1Q[(type_1, type_2)])}')
+
+    def _run_against_dense_oracle(self, type_1, type_2, stride):
+        """
+        Cross-check against `error_generator_composition_numerical`, which builds the
+        dense superoperators and multiplies them.
+
+        The other block testers all have a check of this kind; the pair-pair blocks
+        previously relied solely on `_string_oracle_composition`, so a fault in the
+        oracle would have gone unnoticed in exactly the four blocks that carry ~96% of
+        the function's remaining complexity. Dense products cost ~4^n per call, so this
+        samples rather than sweeping exhaustively -- the string oracle handles breadth.
+        """
+        num_qubits = 2
+        identity = stim.PauliString('I' * num_qubits)
+        matrix_dict = self._errorgen_matrix_dict(num_qubits)
+        pair_labels = _c_type_pauli_pairs(num_qubits)
+        worst, worst_case, checked = 0.0, None, 0
+
+        for L1 in pair_labels[::stride]:
+            for L2 in pair_labels[::stride]:
+                lse_1 = _LSE(type_1, [stim.PauliString(s) for s in L1])
+                lse_2 = _LSE(type_2, [stim.PauliString(s) for s in L2])
+                analytic = _eprop.error_generator_composition(lse_1, lse_2, identity=identity)
+                analytic_mat = _eprop.errorgen_layer_to_matrix(
+                    analytic, num_qubits, errorgen_matrix_dict=matrix_dict)
+                numeric = _eprop.error_generator_composition_numerical(
+                    LEEL(type_1, L1), LEEL(type_2, L2), matrix_dict)
+                diff = np.linalg.norm(numeric - analytic_mat)
+                if diff > worst:
+                    worst, worst_case = diff, f'{type_1}_{L1} o {type_2}_{L2}'
+                checked += 1
+
+        self.assertGreater(checked, 100,
+                           f'{type_1},{type_2}: only {checked} dense comparisons; stride too coarse')
+        self.assertLess(worst, 1e-10,
+                        f'{type_1},{type_2}: worst dense-vs-analytic disagreement {worst} '
+                        f'at {worst_case}')
+
     # ---------------------------------------------------------------- C,C
+
+    def test_CC_exhaustive_1q(self):
+        self._run_exhaustive_1q('C', 'C')
 
     def test_CC_exhaustive_2q(self):
         self._run_exhaustive_2q('C', 'C')
 
     def test_CC_signature_representatives_3q(self):
         self._run_signature_reps_3q('C', 'C')
+
+    def test_all_pair_pair_blocks_reach_eight_terms_and_never_emit_five(self):
+        """
+        Two facts about the pair-pair output lengths, both worth pinning.
+
+        First, all four blocks attain the eight-term maximum at two qubits, so the
+        AST-derived bound is tight rather than merely an upper limit -- previously
+        only C,C had this confirmed.
+
+        Second, and less obvious: length 5 is never produced by any of the four, even
+        though 0,1,2,3,4,6,7,8 all occur. The widest branches emit their terms in
+        groups, so once a composition is large enough to need more than four terms it
+        jumps to at least six. A refactor that flattened those groups would likely
+        start producing 5 and trip this test.
+        """
+        expected = {0, 1, 2, 3, 4, 6, 7, 8}
+        for block in (('C', 'C'), ('C', 'A'), ('A', 'C'), ('A', 'A')):
+            self.assertEqual(self.EXPECTED_LENGTHS_2Q[block], expected)
+            self.assertIn(8, self.EXPECTED_LENGTHS_2Q[block],
+                          f'{block} no longer reaches its eight-term maximum')
+            self.assertNotIn(5, self.EXPECTED_LENGTHS_2Q[block],
+                             f'{block} now emits five terms')
+            self.assertEqual(max(self.EXPECTED_LENGTHS_2Q[block]),
+                             _composition_block_max_terms()[block],
+                             f'{block}: observed maximum disagrees with the static bound')
 
     def test_CC_reaches_the_eight_term_maximum(self):
         """
@@ -2310,11 +2431,115 @@ class ErrgenCompositionPairPairBlockTester(BaseCase):
 
     # ---------------------------------------------------------------- A,A
 
+    def test_AA_exhaustive_1q(self):
+        self._run_exhaustive_1q('A', 'A')
+
     def test_AA_exhaustive_2q(self):
         self._run_exhaustive_2q('A', 'A')
 
     def test_AA_signature_representatives_3q(self):
         self._run_signature_reps_3q('A', 'A')
+
+    # ---------------------------------------------------------------- C,A
+
+    def test_CA_exhaustive_1q(self):
+        self._run_exhaustive_1q('C', 'A')
+
+    def test_CA_exhaustive_2q(self):
+        self._run_exhaustive_2q('C', 'A')
+
+    def test_CA_signature_representatives_3q(self):
+        self._run_signature_reps_3q('C', 'A')
+
+    # ---------------------------------------------------------------- A,C
+
+    def test_AC_exhaustive_1q(self):
+        self._run_exhaustive_1q('A', 'C')
+
+    def test_AC_exhaustive_2q(self):
+        self._run_exhaustive_2q('A', 'C')
+
+    def test_AC_signature_representatives_3q(self):
+        self._run_signature_reps_3q('A', 'C')
+
+    # --------------------------------------- independent dense cross-checks
+
+    def test_CC_matches_dense_numerical_oracle(self):
+        self._run_against_dense_oracle('C', 'C', stride=9)
+
+    def test_AA_matches_dense_numerical_oracle(self):
+        self._run_against_dense_oracle('A', 'A', stride=9)
+
+    def test_CA_matches_dense_numerical_oracle(self):
+        self._run_against_dense_oracle('C', 'A', stride=9)
+
+    def test_AC_matches_dense_numerical_oracle(self):
+        self._run_against_dense_oracle('A', 'C', stride=9)
+
+    def _ca_ac_pair(self, L1, L2):
+        """Merged, zero-pruned results of C_{L1}[A_{L2}] and A_{L2}[C_{L1}]."""
+        identity = stim.PauliString('II')
+        c_lbl = _LSE('C', [stim.PauliString(s) for s in L1])
+        a_lbl = _LSE('A', [stim.PauliString(s) for s in L2])
+        prune = lambda d: {k: v for k, v in d.items() if abs(v) > 1e-12}
+        return (prune(_merge_terms(_eprop.error_generator_composition(c_lbl, a_lbl,
+                                                                      identity=identity))),
+                prune(_merge_terms(_eprop.error_generator_composition(a_lbl, c_lbl,
+                                                                      identity=identity))))
+
+    def test_CA_and_AC_agree_on_labels_only_when_both_are_nonzero(self):
+        """
+        The other ordered pairs (H/C, H/A, S/C, S/A) satisfy "same labels, rates equal
+        or negated", which is what makes a shared helper with a single sign flag
+        natural. C,A and A,C are weaker, and the exact shape of the weakening matters
+        for anyone planning to unify them.
+
+        Sweeping all 11,025 two-qubit operand pairs through the oracle gives:
+
+            both orderings empty                 735
+            only C,A non-empty                  1200
+            only A,C non-empty                   360
+            both non-empty, same label set      8730
+            both non-empty, different label set    0
+
+        So the two orderings never disagree about *which* labels appear while both are
+        alive -- every difference is one ordering vanishing outright, and it vanishes
+        in both directions. Where both survive the rates are related by +1 or -1, but
+        with no rule keyed on error generator type (unlike H,C/C,H, where the C- and
+        S-type terms flip). This test pins one example of each vanishing direction.
+        """
+        ca, ac = self._ca_ac_pair(('IX', 'IY'), ('IX', 'IZ'))
+        self.assertTrue(ca, 'expected C_{IX,IY}[A_{IX,IZ}] to be non-zero')
+        self.assertFalse(ac, f'expected A_{{IX,IZ}}[C_{{IX,IY}}] to vanish, got {ac}')
+
+        ca, ac = self._ca_ac_pair(('IX', 'XI'), ('IY', 'XX'))
+        self.assertFalse(ca, f'expected C_{{IX,XI}}[A_{{IY,XX}}] to vanish, got {ca}')
+        self.assertTrue(ac, 'expected A_{IY,XX}[C_{IX,XI}] to be non-zero')
+
+    def test_CA_and_AC_share_labels_up_to_sign_when_both_survive(self):
+        """
+        The complement of the case above: when neither ordering vanishes they agree on
+        labels, and each shared rate is equal or negated. Checked over a spread of
+        operand pairs rather than exhaustively, since the exhaustive oracle-agreement
+        sweeps already cover correctness; this is about the cross-block relationship.
+        """
+        pair_labels = _c_type_pauli_pairs(2)
+        compared = 0
+        for L1 in pair_labels[::7]:
+            for L2 in pair_labels[::5]:
+                ca, ac = self._ca_ac_pair(L1, L2)
+                if not ca or not ac:
+                    continue
+                compared += 1
+                self.assertEqual(set(ca), set(ac),
+                                 f'C_{L1}[A_{L2}] and A_{L2}[C_{L1}] disagree on labels')
+                for key in ca:
+                    self.assertAlmostEqual(abs(ca[key]), abs(ac[key]), places=8,
+                                           msg=f'C_{L1}[A_{L2}] vs A_{L2}[C_{L1}]: |rate| '
+                                               f'differs for {key}')
+        self.assertGreater(compared, 100,
+                           f'only {compared} operand pairs had both orderings non-zero; '
+                           'the sampling stride needs revisiting')
 
     # ------------------------------------------------- cross-cutting checks
 
