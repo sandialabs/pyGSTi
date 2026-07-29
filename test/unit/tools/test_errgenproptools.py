@@ -916,6 +916,235 @@ def _c_type_pauli_pairs(num_qubits):
     return [(p, q) for p, q in product(paulis, repeat=2) if p < q]
 
 
+# ---------------------------------------------------------------------------
+# Matrix-free oracle for the composition of two elementary error generators.
+#
+# `_string_oracle_composition` decomposes a composition onto the elementary error
+# generator basis using nothing but Pauli-string arithmetic, via the "sandwich"
+# representation of a superoperator as a sum of maps  rho -> M rho N  with M, N
+# Pauli strings. Composition is then just (M1,N1) o (M2,N2) = (M1 M2, N2 N1), so
+# an elementary-generator composition needs at most 6*6 = 36 string products.
+#
+# The decomposition is unique and derives only from the definitions of H, S, C and
+# A, never from `error_generator_composition`, so it independently pins every
+# emitted label and rate. Its cost is independent of 4^n (~23 us even at 3 qubits,
+# versus ~180 ms for a dense 64x64 projection onto 4032 dual matrices), which is
+# what makes exhaustive C/A coverage tractable.
+# ---------------------------------------------------------------------------
+
+
+def _sandwich_expansion(errorgen_type, bels, num_qubits):
+    """
+    Expand an elementary error generator as {(M, N): coeff} meaning rho -> M rho N.
+
+        H_P     = -i P rho + i rho P
+        S_P     = P rho P - rho
+        C_{P,Q} = P rho Q + Q rho P - 0.5 ({P,Q} rho + rho {P,Q})
+        A_{P,Q} = i (P rho Q - Q rho P + 0.5 ([P,Q] rho + rho [P,Q]))
+    """
+    identity = 'I' * num_qubits
+    out = {}
+
+    def acc(M, N, coeff):
+        out[(M, N)] = out.get((M, N), 0) + coeff
+
+    if errorgen_type == 'H':
+        P = bels[0]
+        acc(P, identity, -1j)
+        acc(identity, P, 1j)
+    elif errorgen_type == 'S':
+        P = bels[0]
+        acc(P, P, 1)
+        acc(identity, identity, -1)
+    else:
+        P, Q = bels
+        phase_pq, R = _ref_pauli_product(P, Q)
+        phase_qp, _ = _ref_pauli_product(Q, P)
+        if errorgen_type == 'C':
+            acc(P, Q, 1)
+            acc(Q, P, 1)
+            anticomm = -0.5 * (phase_pq + phase_qp)
+            acc(R, identity, anticomm)
+            acc(identity, R, anticomm)
+        elif errorgen_type == 'A':
+            acc(P, Q, 1j)
+            acc(Q, P, -1j)
+            comm = 0.5j * (phase_pq - phase_qp)
+            acc(R, identity, comm)
+            acc(identity, R, comm)
+        else:
+            raise ValueError(f'unknown error generator type {errorgen_type!r}')
+    return {k: v for k, v in out.items() if abs(v) > 1e-15}
+
+
+def _compose_sandwich(first, second, tol=1e-12):
+    """Compose two sandwich expansions: first[second[.]] -> (M1 M2, N2 N1)."""
+    out = {}
+    for (M1, N1), c1 in first.items():
+        for (M2, N2), c2 in second.items():
+            phase_m, M = _ref_pauli_product(M1, M2)
+            phase_n, N = _ref_pauli_product(N2, N1)
+            key = (M, N)
+            out[key] = out.get(key, 0) + c1 * c2 * phase_m * phase_n
+    return {k: v for k, v in out.items() if abs(v) > tol}
+
+
+def _decompose_sandwich(expansion, num_qubits, tol=1e-9):
+    """
+    Invert `_sandwich_expansion` for a whole superoperator.
+
+    The decomposition is read off directly:
+      * (P, P) with P non-identity arises only from S_P.
+      * (P, Q) and (Q, P) with P != Q both non-identity arise only from C_{P,Q}
+        (coefficient 1 each) and A_{P,Q} (coefficients +i and -i), so
+        rate_C = (c_PQ + c_QP)/2 and rate_A = (c_PQ - c_QP)/2i.
+      * (R, identity) picks up -i*rate_H(R) plus the anticommutator/commutator
+        tails of the C and A rates already recovered; subtracting those leaves H.
+    """
+    identity = 'I' * num_qubits
+    rates = {}
+
+    for (M, N), coeff in expansion.items():
+        if M == N and M != identity and abs(coeff) > tol:
+            rates[('S', (M,))] = coeff
+
+    handled = set()
+    for (M, N) in list(expansion):
+        if M == identity or N == identity or M == N:
+            continue
+        key = (M, N) if M < N else (N, M)
+        if key in handled:
+            continue
+        handled.add(key)
+        P, Q = key
+        c_pq = expansion.get((P, Q), 0)
+        c_qp = expansion.get((Q, P), 0)
+        rate_c = (c_pq + c_qp) / 2
+        rate_a = (c_pq - c_qp) / 2j
+        if abs(rate_c) > tol:
+            rates[('C', (P, Q))] = rate_c
+        if abs(rate_a) > tol:
+            rates[('A', (P, Q))] = rate_a
+
+    residual = {}
+    for (M, N), coeff in expansion.items():
+        if N == identity and M != identity:
+            residual[M] = residual.get(M, 0) + coeff
+    for (egtype, bels), rate in list(rates.items()):
+        if egtype in ('C', 'A'):
+            P, Q = bels
+            phase_pq, R = _ref_pauli_product(P, Q)
+            phase_qp, _ = _ref_pauli_product(Q, P)
+            tail = (-0.5 * (phase_pq + phase_qp) * rate if egtype == 'C'
+                    else 0.5j * (phase_pq - phase_qp) * rate)
+            residual[R] = residual.get(R, 0) - tail
+    for R, coeff in residual.items():
+        rate_h = coeff / -1j
+        if abs(rate_h) > tol:
+            rates[('H', (R,))] = rate_h
+
+    return rates
+
+
+def _string_oracle_composition(label_1, label_2, num_qubits, weight=1.0):
+    """
+    Oracle 2: compose two elementary error generators using only Pauli strings.
+
+    `label_1`/`label_2` are (errorgen_type, bel_strings) tuples; returns
+    {LocalElementaryErrorgenLabel: rate} with duplicate labels already summed.
+    """
+    expansion = _compose_sandwich(_sandwich_expansion(*label_1, num_qubits),
+                                  _sandwich_expansion(*label_2, num_qubits))
+    if weight != 1.0:
+        expansion = {k: v * weight for k, v in expansion.items()}
+    return {LEEL(egtype, tuple(bels)): rate
+            for (egtype, bels), rate in _decompose_sandwich(expansion, num_qubits).items()}
+
+
+def _composition_block_max_terms():
+    """
+    Return {(type_1, type_2): max_appends_on_any_path} for each dispatch block.
+
+    Derived from the AST rather than hard-coded, so the bound stays correct if the
+    implementation is refactored. `error_generator_composition` contains no loops
+    or comprehensions, so the number of `composed_errorgens.append` calls along a
+    single path is an exact upper bound on the returned list length.
+    """
+    tree = ast.parse(open(_eprop.__file__).read())
+    fn = next(n for n in tree.body
+              if isinstance(n, ast.FunctionDef) and n.name == 'error_generator_composition')
+    module_fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+
+    def is_append(stmt):
+        return (isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call)
+                and isinstance(stmt.value.func, ast.Attribute)
+                and stmt.value.func.attr == 'append'
+                and isinstance(stmt.value.func.value, ast.Name)
+                and stmt.value.func.value.id == 'composed_errorgens')
+
+    def called_helper(value):
+        """Name of a module-level helper being called, if this expression is such a call."""
+        if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
+            return value.func.id if value.func.id in module_fns else None
+        return None
+
+    def max_appends(stmts, depth=0):
+        # Blocks are increasingly delegating to shared helpers (e.g.
+        # `_error_generator_composition_hs_or_sh`), so follow one level of call into
+        # any module-level function; otherwise the bound silently reads as 0.
+        best = 0
+        for stmt in stmts:
+            if is_append(stmt):
+                best += 1
+            elif isinstance(stmt, ast.If):
+                best += max(max_appends(stmt.body, depth),
+                            max_appends(stmt.orelse, depth) if stmt.orelse else 0)
+            elif isinstance(stmt, (ast.Assign, ast.Return)) and depth < 4:
+                helper = called_helper(stmt.value) if stmt.value is not None else None
+                if helper is not None:
+                    best += max_appends(module_fns[helper].body, depth + 1)
+        return best
+
+    head = "errorgen_1_type == 'H' and errorgen_2_type == 'H'"
+    node = next(s for s in fn.body if isinstance(s, ast.If) and head in ast.unparse(s.test))
+    bounds = {}
+    while node is not None:
+        types = re.findall(r"errorgen_[12]_type == '(\w)'", ast.unparse(node.test))
+        if len(types) == 2:
+            bounds[(types[0], types[1])] = max_appends(node.body)
+        nested = [s for s in node.orelse if isinstance(s, ast.If)]
+        node = nested[0] if (len(node.orelse) == 1 and nested) else None
+    return bounds
+
+
+def _commutation_signature(A, B, P, Q):
+    """
+    The six commutation bits the C/A-vs-C/A blocks branch on.
+
+    These blocks dispatch on [A,B], then [P,Q], then the four cross relations, so
+    this tuple identifies which of the 64 structural sub-cases an input lands in.
+    """
+    return (_ref_pauli_commutes(A, B), _ref_pauli_commutes(P, Q),
+            _ref_pauli_commutes(A, P), _ref_pauli_commutes(A, Q),
+            _ref_pauli_commutes(B, P), _ref_pauli_commutes(B, Q))
+
+
+def _signature_representatives(num_qubits):
+    """
+    One deterministic (A, B, P, Q) representative per reachable commutation
+    signature, found by an in-order scan (all 64 appear within ~4.7k pairs at 3
+    qubits, so this is fast even though the full space is ~3.8M pairs).
+    """
+    pair_labels = _c_type_pauli_pairs(num_qubits)
+    reps = {}
+    for A, B in pair_labels:
+        for P, Q in pair_labels:
+            reps.setdefault(_commutation_signature(A, B, P, Q), (A, B, P, Q))
+        if len(reps) == 64:
+            break
+    return reps
+
+
 def _composition_dispatch_block_ranges():
     """
     Return {(type_1, type_2): (first_line, last_line)} for each of the 16 blocks in
@@ -1304,39 +1533,28 @@ class ErrgenCompositionSSBlockTester(BaseCase):
         self._run_SS(2)
 
 
-class _CompositionProjectionMixin:
+class _CompositionOracleMixin:
     """
     Shared machinery for blocks whose operands are one single-Pauli generator
     (H or S) and one Pauli-pair generator (C or A).
 
     For these blocks there is no compact closed form worth re-deriving by hand, so
-    the oracle is a *dual-basis projection*: the composition is computed as a dense
-    superoperator product and decomposed onto the elementary error generator basis
-    via `elemgen_dual_matrices`. That decomposition is unique and depends only on
-    the basis definitions, never on `error_generator_composition`, so it
-    independently pins every emitted label and rate.
+    the expected result is produced by `_string_oracle_composition`: the two
+    generators are expanded in the Pauli "sandwich" basis, composed with pure
+    string arithmetic, and decomposed back onto the elementary error generator
+    basis. That decomposition is unique and depends only on the generator
+    definitions, never on `error_generator_composition`, so it independently pins
+    every emitted label and rate.
 
-    Because the projection is order- and duplicate-agnostic, ordering and
-    duplication behavior is covered separately by pinned golden cases and
-    structural tests in each concrete test class.
+    The string oracle is used rather than a dense dual-basis projection because its
+    cost is independent of 4^n, which keeps 3-qubit coverage tractable.
+
+    Because the oracle is order- and duplicate-agnostic, ordering and duplication
+    behavior is covered separately by pinned golden cases and structural tests in
+    each concrete test class.
     """
 
     WEIGHTS = (1.0, -2.0, 1j)
-
-    def _basis_data(self, num_qubits):
-        basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
-        mats = {lbl: m for lbl, m in zip(basis.labels, basis.elemgen_matrices)}
-        duals = {lbl: d for lbl, d in zip(basis.labels, basis.elemgen_dual_matrices)}
-        return basis, mats, duals
-
-    def _project(self, matrix, duals):
-        """Decompose a superoperator onto the elementary error generator basis."""
-        out = {}
-        for lbl, dual in duals.items():
-            rate = np.trace(dual.conj().T @ matrix)
-            if abs(rate) > 1e-9:
-                out[lbl] = rate
-        return out
 
     def _assert_dicts_close(self, actual, expected, context):
         for key in set(actual) | set(expected):
@@ -1364,9 +1582,9 @@ class _CompositionProjectionMixin:
             return (pair_lse, single_lse), (pair_leel, single_leel)
         return (single_lse, pair_lse), (single_leel, pair_leel)
 
-    def _run_projection_block(self, num_qubits, single_type, pair_type, pair_first, expected_lengths):
-        """Exhaustively validate one dispatch block against the projection oracle."""
-        _, mats, duals = self._basis_data(num_qubits)
+    def _run_block_against_oracle(self, num_qubits, single_type, pair_type, pair_first,
+                                  expected_lengths):
+        """Exhaustively validate one dispatch block against the string oracle."""
         identity = stim.PauliString('I' * num_qubits)
         observed_lengths = set()
         num_checked = 0
@@ -1376,13 +1594,14 @@ class _CompositionProjectionMixin:
             for P, Q in _c_type_pauli_pairs(num_qubits):
                 (lse_1, lse_2), (leel_1, leel_2) = self._make_operands(
                     single_type, pair_type, pair_first, A, P, Q)
-                base_matrix = mats[leel_1] @ mats[leel_2]
+                key_1 = (leel_1.errorgen_type, tuple(leel_1.basis_element_labels))
+                key_2 = (leel_2.errorgen_type, tuple(leel_2.basis_element_labels))
                 for weight in self.WEIGHTS:
                     actual = _eprop.error_generator_composition(lse_1, lse_2, weight=weight,
                                                                 identity=identity)
                     context = f'{block}: A={A} P={P} Q={Q} (weight={weight}, {num_qubits}Q)'
-                    self._assert_dicts_close(_merge_terms(actual),
-                                             self._project(weight * base_matrix, duals), context)
+                    expected = _string_oracle_composition(key_1, key_2, num_qubits, weight)
+                    self._assert_dicts_close(_merge_terms(actual), expected, context)
                     self._assert_labels_well_formed(actual, context)
                     observed_lengths.add(len(actual))
                     num_checked += 1
@@ -1406,20 +1625,20 @@ class _CompositionProjectionMixin:
 
 
 @unittest.skipIf(stim is None, "stim is not installed")
-class ErrgenCompositionHCCHBlockTester(_CompositionProjectionMixin, BaseCase):
+class ErrgenCompositionHCCHBlockTester(_CompositionOracleMixin, BaseCase):
     """Tests for the H,C and C,H dispatch blocks (lines 1423-1539 and 1919-2034)."""
 
     def test_HC_block_exhaustive_1q(self):
-        self._run_projection_block(1, 'H', 'C', pair_first=False, expected_lengths={2})
+        self._run_block_against_oracle(1, 'H', 'C', pair_first=False, expected_lengths={2})
 
     def test_HC_block_exhaustive_2q(self):
-        self._run_projection_block(2, 'H', 'C', pair_first=False, expected_lengths={0, 2, 3, 4})
+        self._run_block_against_oracle(2, 'H', 'C', pair_first=False, expected_lengths={0, 2, 3, 4})
 
     def test_CH_block_exhaustive_1q(self):
-        self._run_projection_block(1, 'H', 'C', pair_first=True, expected_lengths={2})
+        self._run_block_against_oracle(1, 'H', 'C', pair_first=True, expected_lengths={2})
 
     def test_CH_block_exhaustive_2q(self):
-        self._run_projection_block(2, 'H', 'C', pair_first=True, expected_lengths={0, 2, 3, 4})
+        self._run_block_against_oracle(2, 'H', 'C', pair_first=True, expected_lengths={0, 2, 3, 4})
 
     def test_HC_CH_subcase_coverage(self):
         self._assert_all_subcases_reachable()
@@ -1494,20 +1713,20 @@ class ErrgenCompositionHCCHBlockTester(_CompositionProjectionMixin, BaseCase):
 
 
 @unittest.skipIf(stim is None, "stim is not installed")
-class ErrgenCompositionHAAHBlockTester(_CompositionProjectionMixin, BaseCase):
+class ErrgenCompositionHAAHBlockTester(_CompositionOracleMixin, BaseCase):
     """Tests for the H,A and A,H dispatch blocks (lines 1541-1655 and 4172-4286)."""
 
     def test_HA_block_exhaustive_1q(self):
-        self._run_projection_block(1, 'H', 'A', pair_first=False, expected_lengths={0, 2})
+        self._run_block_against_oracle(1, 'H', 'A', pair_first=False, expected_lengths={0, 2})
 
     def test_HA_block_exhaustive_2q(self):
-        self._run_projection_block(2, 'H', 'A', pair_first=False, expected_lengths={0, 1, 2, 3, 4})
+        self._run_block_against_oracle(2, 'H', 'A', pair_first=False, expected_lengths={0, 1, 2, 3, 4})
 
     def test_AH_block_exhaustive_1q(self):
-        self._run_projection_block(1, 'H', 'A', pair_first=True, expected_lengths={0, 2})
+        self._run_block_against_oracle(1, 'H', 'A', pair_first=True, expected_lengths={0, 2})
 
     def test_AH_block_exhaustive_2q(self):
-        self._run_projection_block(2, 'H', 'A', pair_first=True, expected_lengths={0, 1, 2, 3, 4})
+        self._run_block_against_oracle(2, 'H', 'A', pair_first=True, expected_lengths={0, 1, 2, 3, 4})
 
     def test_HA_AH_subcase_coverage(self):
         self._assert_all_subcases_reachable()
@@ -1583,20 +1802,20 @@ class ErrgenCompositionHAAHBlockTester(_CompositionProjectionMixin, BaseCase):
 
 
 @unittest.skipIf(stim is None, "stim is not installed")
-class ErrgenCompositionSCCSBlockTester(_CompositionProjectionMixin, BaseCase):
+class ErrgenCompositionSCCSBlockTester(_CompositionOracleMixin, BaseCase):
     """Tests for the S,C and C,S dispatch blocks (lines 1688-1799 and 2036-2146)."""
 
     def test_SC_block_exhaustive_1q(self):
-        self._run_projection_block(1, 'S', 'C', pair_first=False, expected_lengths={2})
+        self._run_block_against_oracle(1, 'S', 'C', pair_first=False, expected_lengths={2})
 
     def test_SC_block_exhaustive_2q(self):
-        self._run_projection_block(2, 'S', 'C', pair_first=False, expected_lengths={2, 3})
+        self._run_block_against_oracle(2, 'S', 'C', pair_first=False, expected_lengths={2, 3})
 
     def test_CS_block_exhaustive_1q(self):
-        self._run_projection_block(1, 'S', 'C', pair_first=True, expected_lengths={2})
+        self._run_block_against_oracle(1, 'S', 'C', pair_first=True, expected_lengths={2})
 
     def test_CS_block_exhaustive_2q(self):
-        self._run_projection_block(2, 'S', 'C', pair_first=True, expected_lengths={2, 3})
+        self._run_block_against_oracle(2, 'S', 'C', pair_first=True, expected_lengths={2, 3})
 
     def test_SC_CS_subcase_coverage(self):
         self._assert_all_subcases_reachable()
@@ -1679,20 +1898,20 @@ class ErrgenCompositionSCCSBlockTester(_CompositionProjectionMixin, BaseCase):
 
 
 @unittest.skipIf(stim is None, "stim is not installed")
-class ErrgenCompositionSAASBlockTester(_CompositionProjectionMixin, BaseCase):
+class ErrgenCompositionSAASBlockTester(_CompositionOracleMixin, BaseCase):
     """Tests for the S,A and A,S dispatch blocks (lines 1802-1916 and 4288-4402)."""
 
     def test_SA_block_exhaustive_1q(self):
-        self._run_projection_block(1, 'S', 'A', pair_first=False, expected_lengths={2})
+        self._run_block_against_oracle(1, 'S', 'A', pair_first=False, expected_lengths={2})
 
     def test_SA_block_exhaustive_2q(self):
-        self._run_projection_block(2, 'S', 'A', pair_first=False, expected_lengths={2, 3})
+        self._run_block_against_oracle(2, 'S', 'A', pair_first=False, expected_lengths={2, 3})
 
     def test_AS_block_exhaustive_1q(self):
-        self._run_projection_block(1, 'S', 'A', pair_first=True, expected_lengths={2})
+        self._run_block_against_oracle(1, 'S', 'A', pair_first=True, expected_lengths={2})
 
     def test_AS_block_exhaustive_2q(self):
-        self._run_projection_block(2, 'S', 'A', pair_first=True, expected_lengths={2, 3})
+        self._run_block_against_oracle(2, 'S', 'A', pair_first=True, expected_lengths={2, 3})
 
     def test_SA_AS_subcase_coverage(self):
         self._assert_all_subcases_reachable()
@@ -1819,3 +2038,305 @@ class ErrgenCompositionSAASBlockTester(_CompositionProjectionMixin, BaseCase):
                 seen.update(lbl.errorgen_type for lbl, _ in actual)
         self.assertEqual(seen, {'A'}, f'expected only A-type terms on 1 qubit, saw {seen}')
 
+
+class ErrgenCompositionStringOracleTester(BaseCase):
+    """
+    Regression guard for `_string_oracle_composition` itself.
+
+    The string oracle is the sole verifier for every block whose operands include a
+    C- or A-type generator, so a silent defect in it would make those tests check
+    against a wrong reference while still passing. This pins it against the
+    independently hand-derived closed forms used by the H/S block testers
+    (`_ref_compose_HH` / `_HS` / `_SH` / `_SS`), which are themselves derived from
+    the Lindblad definitions rather than from the sandwich representation.
+
+    Runs at every weight the block testers use, so the oracle's weight scaling --
+    which the closed forms exercise independently -- is covered too. No dense
+    superoperators are involved, so this is fast; it needs no stim.
+    """
+
+    WEIGHTS = (1.0, -2.0, 1j)
+
+    CLOSED_FORMS = ((('H', 'H'), _ref_compose_HH),
+                    (('H', 'S'), _ref_compose_HS),
+                    (('S', 'H'), _ref_compose_SH),
+                    (('S', 'S'), _ref_compose_SS))
+
+    def _expected(self, ref_fn, P, Q, weight):
+        """Closed-form reference as a {LEEL: rate} dict with duplicates summed."""
+        merged = {}
+        for (egtype, bels), rate in ref_fn(P, Q, weight):
+            key = LEEL(egtype, tuple(bels))
+            merged[key] = merged.get(key, 0) + rate
+        return {k: v for k, v in merged.items() if abs(v) > 1e-12}
+
+    def _check(self, num_qubits):
+        checked = 0
+        for P in _non_identity_paulis(num_qubits):
+            for Q in _non_identity_paulis(num_qubits):
+                for (type_1, type_2), ref_fn in self.CLOSED_FORMS:
+                    for weight in self.WEIGHTS:
+                        expected = self._expected(ref_fn, P, Q, weight)
+                        actual = _string_oracle_composition((type_1, (P,)), (type_2, (Q,)),
+                                                            num_qubits, weight)
+                        context = (f'{type_1}_{P} o {type_2}_{Q} '
+                                   f'(weight={weight}, {num_qubits}Q)')
+                        for key in set(actual) | set(expected):
+                            a, e = actual.get(key, 0), expected.get(key, 0)
+                            self.assertAlmostEqual(
+                                a, e, places=10,
+                                msg=f'{context}: rate for {key} was {a} from the string '
+                                    f'oracle, {e} from the closed form')
+                        checked += 1
+        return checked
+
+    def test_string_oracle_matches_closed_forms_1q(self):
+        self.assertEqual(self._check(1), 3 * 3 * 4 * 3)
+
+    def test_string_oracle_matches_closed_forms_2q(self):
+        self.assertEqual(self._check(2), 15 * 15 * 4 * 3)
+
+    # The closed forms above only take H- and S-type *inputs*, so they never
+    # exercise the C or A branches of `_sandwich_expansion` -- the very branches the
+    # C/A block testers depend on. The remaining tests anchor those branches without
+    # needing any dense superoperators.
+
+    def test_sandwich_round_trip_recovers_every_generator(self):
+        """
+        Expanding a single elementary generator and decomposing it again must return
+        that generator with unit rate, for all four types.
+
+        This pins `_sandwich_expansion` and `_decompose_sandwich` as mutual inverses
+        across C and A as well as H and S.
+        """
+        for num_qubits in (1, 2):
+            basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits),
+                                                    default_label_type='local')
+            seen_types = set()
+            for lbl in basis.labels:
+                egtype = lbl.errorgen_type
+                bels = tuple(lbl.basis_element_labels)
+                seen_types.add(egtype)
+                expansion = _sandwich_expansion(egtype, bels, num_qubits)
+                recovered = _decompose_sandwich(expansion, num_qubits)
+                self.assertEqual(set(recovered), {(egtype, bels)},
+                                 f'{num_qubits}Q {lbl}: round trip produced {recovered}')
+                self.assertAlmostEqual(recovered[(egtype, bels)], 1.0, places=12,
+                                       msg=f'{num_qubits}Q {lbl}: rate was not 1')
+            self.assertEqual(seen_types, {'H', 'S', 'C', 'A'})
+
+    def test_sandwich_round_trip_is_linear(self):
+        """A weighted sum of generators must decompose back to the same weights."""
+        num_qubits = 2
+        basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits),
+                                                default_label_type='local')
+        labels = list(basis.labels)
+        chosen = [labels[i] for i in (0, 20, 100, 200)]
+        weights = (2.0, -1.5, 1j, 0.25)
+        combined = {}
+        for lbl, weight in zip(chosen, weights):
+            for key, coeff in _sandwich_expansion(lbl.errorgen_type,
+                                                  tuple(lbl.basis_element_labels),
+                                                  num_qubits).items():
+                combined[key] = combined.get(key, 0) + weight * coeff
+        recovered = _decompose_sandwich(combined, num_qubits)
+        expected = {(lbl.errorgen_type, tuple(lbl.basis_element_labels)): w
+                    for lbl, w in zip(chosen, weights)}
+        self.assertEqual(set(recovered), set(expected))
+        for key, want in expected.items():
+            self.assertAlmostEqual(recovered[key], want, places=12, msg=f'{key}')
+
+    def test_C_expansion_with_repeated_pauli_is_twice_S(self):
+        """
+        C_{P,P} = 2 S_P follows directly from the definition, so it anchors the C
+        branch of the expansion against the S branch (which the closed forms cover).
+        """
+        for num_qubits in (1, 2):
+            for P in _non_identity_paulis(num_qubits):
+                c_exp = _sandwich_expansion('C', (P, P), num_qubits)
+                s_exp = _sandwich_expansion('S', (P,), num_qubits)
+                doubled = {k: 2 * v for k, v in s_exp.items()}
+                self.assertEqual(set(c_exp), set(doubled), f'C_({P},{P}) vs 2*S_{P}')
+                for key in doubled:
+                    self.assertAlmostEqual(c_exp[key], doubled[key], places=12,
+                                           msg=f'C_({P},{P}) vs 2*S_{P} at {key}')
+
+    def test_A_expansion_with_repeated_pauli_vanishes(self):
+        """A_{P,P} = 0 identically, anchoring the antisymmetric branch."""
+        for num_qubits in (1, 2):
+            for P in _non_identity_paulis(num_qubits):
+                self.assertEqual(_sandwich_expansion('A', (P, P), num_qubits), {},
+                                 f'A_({P},{P}) should vanish')
+
+    def test_weight_is_applied_by_the_string_oracle(self):
+        """
+        The block testers call the oracle at several weights, so a dropped or
+        mis-applied weight would corrupt their expectations at every weight but 1.
+        """
+        # distinct Pauli pairs for the two operands: reusing the same pair makes some
+        # of these compositions vanish, leaving nothing to scale.
+        for (type_1, type_2) in (('H', 'C'), ('C', 'H'), ('S', 'A'),
+                                 ('A', 'C'), ('C', 'C'), ('A', 'A')):
+            key_1 = ((type_1, ('IX', 'XI')) if type_1 in ('C', 'A') else (type_1, ('IZ',)))
+            key_2 = ((type_2, ('IY', 'ZZ')) if type_2 in ('C', 'A') else (type_2, ('IZ',)))
+            base = _string_oracle_composition(key_1, key_2, 2)
+            self.assertGreater(len(base), 0, f'{type_1},{type_2} produced nothing to scale')
+            for weight in (2.5, -1.0, 1j):
+                scaled = _string_oracle_composition(key_1, key_2, 2, weight=weight)
+                self.assertEqual(set(scaled), set(base))
+                for key, rate in base.items():
+                    self.assertAlmostEqual(scaled[key], weight * rate, places=10,
+                                           msg=f'{type_1},{type_2} at weight {weight}: {key}')
+
+
+@unittest.skipIf(stim is None, "stim is not installed")
+class ErrgenCompositionPairPairBlockTester(BaseCase):
+    """
+    Tests for the blocks where *both* operands are Pauli-pair generators: C,C
+    (lines ~2151-3166) and A,A (~5411-6410). Together with C,A and A,C these are
+    ~81% of `error_generator_composition` and ~97% of its static branch paths.
+
+    Two things make these blocks different from the ones covered above:
+
+    * They branch on six commutation bits -- [A,B], [P,Q] and the four cross
+      relations -- giving 64 structural sub-cases. 62 are reachable on two qubits;
+      the remaining two require three, so 2-qubit coverage alone leaves a gap.
+    * They can emit up to 8 terms, versus at most 4 elsewhere.
+
+    Correctness is checked against `_string_oracle_composition`. Per-key
+    `assertAlmostEqual` would dominate the runtime at this scale, so discrepancies
+    are accumulated and asserted once.
+    """
+
+    EXHAUSTIVE_WEIGHTS = (1.0, 1j)
+    SAMPLED_WEIGHTS = (1.0, -2.0, 1j)
+    MAX_REPORTED_FAILURES = 10
+
+    def _sweep(self, num_qubits, type_1, type_2, quadruples, weights):
+        """Compare the function against the string oracle over the given inputs."""
+        identity = stim.PauliString('I' * num_qubits)
+        max_terms = _composition_block_max_terms()[(type_1, type_2)]
+        failures, lengths, signatures = [], set(), set()
+        checked = 0
+
+        for A, B, P, Q in quadruples:
+            lse_1 = _LSE(type_1, [stim.PauliString(A), stim.PauliString(B)])
+            lse_2 = _LSE(type_2, [stim.PauliString(P), stim.PauliString(Q)])
+            key_1, key_2 = (type_1, (A, B)), (type_2, (P, Q))
+            signatures.add(_commutation_signature(A, B, P, Q))
+            label = f'{type_1}_({A},{B}) o {type_2}_({P},{Q})'
+
+            for weight in weights:
+                actual = _eprop.error_generator_composition(lse_1, lse_2, weight=weight,
+                                                            identity=identity)
+                expected = _string_oracle_composition(key_1, key_2, num_qubits, weight)
+                merged = _merge_terms(actual)
+                for key in set(merged) | set(expected):
+                    got, want = merged.get(key, 0), expected.get(key, 0)
+                    if abs(got - want) > 1e-8:
+                        failures.append(f'{label} w={weight}: {key} was {got}, oracle says {want}')
+
+                if len(actual) > max_terms:
+                    failures.append(f'{label} w={weight}: {len(actual)} terms exceeds the '
+                                    f'static bound of {max_terms}')
+                for lbl, _ in actual:
+                    bels = lbl.basis_element_labels
+                    if lbl.errorgen_type in ('C', 'A'):
+                        if (len(bels) != 2 or bels[0] == bels[1]
+                                or not _eprop.stim_pauli_string_less_than(bels[0], bels[1])):
+                            failures.append(f'{label} w={weight}: non-canonical label {lbl}')
+                    elif len(bels) != 1:
+                        failures.append(f'{label} w={weight}: malformed label {lbl}')
+
+                lengths.add(len(actual))
+                checked += 1
+
+        return failures, lengths, signatures, checked
+
+    def _assert_clean(self, failures, context):
+        if failures:
+            shown = '\n  '.join(failures[:self.MAX_REPORTED_FAILURES])
+            self.fail(f'{context}: {len(failures)} discrepancies vs the string oracle:\n  {shown}')
+
+    def _run_exhaustive_2q(self, type_1, type_2):
+        pair_labels = _c_type_pauli_pairs(2)
+        quads = ((A, B, P, Q) for A, B in pair_labels for P, Q in pair_labels)
+        failures, lengths, signatures, checked = self._sweep(
+            2, type_1, type_2, quads, self.EXHAUSTIVE_WEIGHTS)
+        self._assert_clean(failures, f'{type_1},{type_2} 2Q exhaustive')
+        self.assertEqual(checked, len(pair_labels) ** 2 * len(self.EXHAUSTIVE_WEIGHTS))
+        self.assertEqual(len(signatures), 62,
+                         f'{type_1},{type_2}: expected 62 reachable 2-qubit signatures, '
+                         f'got {len(signatures)}')
+        bound = _composition_block_max_terms()[(type_1, type_2)]
+        self.assertTrue(lengths <= set(range(bound + 1)),
+                        f'{type_1},{type_2}: lengths {sorted(lengths)} exceed bound {bound}')
+        self.assertGreaterEqual(len(lengths), 3,
+                                f'{type_1},{type_2}: only lengths {sorted(lengths)} were '
+                                f'produced, expected a wider spread of paths')
+        return lengths
+
+    def _run_signature_reps_3q(self, type_1, type_2):
+        reps = _signature_representatives(3)
+        self.assertEqual(len(reps), 64, f'expected all 64 signatures at 3 qubits, got {len(reps)}')
+        failures, lengths, signatures, checked = self._sweep(
+            3, type_1, type_2, list(reps.values()), self.SAMPLED_WEIGHTS)
+        self._assert_clean(failures, f'{type_1},{type_2} 3Q signature representatives')
+        self.assertEqual(len(signatures), 64)
+        self.assertEqual(checked, 64 * len(self.SAMPLED_WEIGHTS))
+        return lengths
+
+    # ---------------------------------------------------------------- C,C
+
+    def test_CC_exhaustive_2q(self):
+        self._run_exhaustive_2q('C', 'C')
+
+    def test_CC_signature_representatives_3q(self):
+        self._run_signature_reps_3q('C', 'C')
+
+    def test_CC_reaches_the_eight_term_maximum(self):
+        """
+        C_{IX,XI}[C_{IX,YI}] lands in the branch that emits all eight terms
+        (com_AB and com_PQ true, com_AP/com_AQ/com_BP true, com_BQ false), with none
+        of the seven `is not None` guards firing and the trailing Hamiltonian term
+        present. This pins the widest path in the function as genuinely reachable.
+        """
+        actual = _eprop.error_generator_composition(
+            _LSE('C', [stim.PauliString('IX'), stim.PauliString('XI')]),
+            _LSE('C', [stim.PauliString('IX'), stim.PauliString('YI')]),
+            identity=stim.PauliString('II'))
+        self.assertEqual(len(actual), 8, f'expected 8 terms, got {actual}')
+        self.assertEqual(_composition_block_max_terms()[('C', 'C')], 8)
+
+    # ---------------------------------------------------------------- A,A
+
+    def test_AA_exhaustive_2q(self):
+        self._run_exhaustive_2q('A', 'A')
+
+    def test_AA_signature_representatives_3q(self):
+        self._run_signature_reps_3q('A', 'A')
+
+    # ------------------------------------------------- cross-cutting checks
+
+    def test_two_signatures_require_three_qubits(self):
+        """
+        Documents why the 3-qubit sweeps above exist: these two sub-cases cannot be
+        reached with two qubits, so 2-qubit coverage alone would leave the
+        corresponding branches of every pair-pair block untested.
+        """
+        two = set(_signature_representatives(2))
+        three = set(_signature_representatives(3))
+        self.assertEqual(len(two), 62)
+        self.assertEqual(len(three), 64)
+        self.assertEqual(three - two,
+                         {(False, True, True, True, True, True),
+                          (True, False, True, True, True, True)})
+
+    def test_pair_pair_blocks_dominate_the_function(self):
+        """Guard the assumption motivating this class; fails loudly if refactoring shifts it."""
+        bounds = _composition_block_max_terms()
+        for block in (('C', 'C'), ('C', 'A'), ('A', 'C'), ('A', 'A')):
+            self.assertEqual(bounds[block], 8, f'{block} no longer emits up to 8 terms')
+        for block, bound in bounds.items():
+            if block not in (('C', 'C'), ('C', 'A'), ('A', 'C'), ('A', 'A')):
+                self.assertLessEqual(bound, 4, f'{block} unexpectedly emits {bound} terms')
