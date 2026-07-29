@@ -11,19 +11,28 @@ Tools for the propagation of error generators through circuits.
 #***************************************************************************************************
 from __future__ import annotations
 import warnings
-import sys
-try:
+from typing import Literal, Optional, Union, Callable, Iterable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Type checkers always resolve the `stim.*` names used in the annotations throughout this
+    # module. At runtime the import is best-effort so that importing this module (e.g. as part
+    # of importing pygsti) does not hard-fail when stim is absent; the `from __future__ import
+    # annotations` above keeps every `stim.*` annotation unevaluated, so an absent stim only
+    # matters when a function is actually called.
     import stim
-except ImportError:
-    msg = "Stim is required for use of the error generator propagation tools module, " \
-          "and it does not appear to be installed. If you intend to use this module please update" \
-          " your environment."
-    warnings.warn(msg)
+else:
+    try:
+        import stim
+    except ImportError:
+        msg = "Stim is required for use of the error generator propagation tools module, " \
+              "and it does not appear to be installed. If you intend to use this module please update" \
+              " your environment."
+        warnings.warn(msg)
 
 import numpy as _np
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL, ElementaryErrorgenLabel as _EEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace
-from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
@@ -33,9 +42,13 @@ from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmv
 from functools import reduce
 from itertools import chain, product
 from math import factorial
-from typing import Literal, Optional, Union, Callable, Iterable
 
-def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
+# A list of (error generator label, rate) pairs, as produced by the commutator and
+# composition routines below. Rates may be complex prior to aggregation.
+_ErrorgenTerms = list[tuple[_LSE, complex]]
+
+def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label: Union[_GEEL, _LEEL],
+                                          num_qubits: int) -> tuple[stim.PauliString, ...]:
     """
     Converts an input `GlobalElementaryErrorgenLabel` to a tuple of stim.PauliString
     objects, padded with an appropriate number of identities.
@@ -98,7 +111,8 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
 
 # ------- Error Generator Math -------------# 
 
-def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_threshold=1e-14):
+def bch_approximation(errgen_layer_1: dict[_LSE, float], errgen_layer_2: dict[_LSE, float],
+                      bch_order: int = 1, truncation_threshold: float = 1e-14) -> dict[_LSE, float]:
     """
     Apply the BCH approximation at the given order to combine the input dictionaries
     of  error generator rates.
@@ -784,7 +798,9 @@ def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_orde
 
 # TODO: Refactor a bunch of the code in this module to use this helper function.
 # define a helper function to do a layerwise commutator accumulating all of the pairwise terms into a single list.
-def _error_generator_layer_pairwise_commutator(errorgen_layer_1, errorgen_layer_2, addl_weight=1.0, identity=None, truncation_threshold=1e-14):
+def _error_generator_layer_pairwise_commutator(errorgen_layer_1: dict[_LSE, float], errorgen_layer_2: dict[_LSE, float],
+                                               addl_weight: float = 1.0, identity: Optional[stim.PauliString] = None,
+                                               truncation_threshold: float = 1e-14) -> _ErrorgenTerms:
     commuted_errgen_list = []
     for error1, error1_val in errorgen_layer_1.items():
         for error2, error2_val in errorgen_layer_2.items():
@@ -799,7 +815,8 @@ def _error_generator_layer_pairwise_commutator(errorgen_layer_1, errorgen_layer_
     return commuted_errgen_list
 
 
-def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0, identity=None):
+def error_generator_commutator(errorgen_1: _LSE, errorgen_2: _LSE, flip_weight: bool = False, weight: float = 1.0,
+                               identity: Optional[stim.PauliString] = None) -> _ErrorgenTerms:
     """
     Returns the commutator of two error generators. I.e. [errorgen_1, errorgen_2].
     
@@ -1347,8 +1364,9 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
 #term-count check in the unit tests (`_composition_block_max_terms`) recognises appends by
 #that receiver name, so renaming it would silently drop the derived bounds to zero.
 
-def _append_composed_errorgen(composed_errorgens, use_C, pauli_1, pauli_2, ident_1, ident_2,
-                              pauli_eq, coeff, weight: float=1.0):
+def _append_composed_errorgen(composed_errorgens: _ErrorgenTerms, use_C: bool, pauli_1: stim.PauliString,
+                              pauli_2: stim.PauliString, ident_1: bool, ident_2: bool,
+                              pauli_eq: bool, coeff: complex, weight: float=1.0) -> None:
     r"""
     Append one composed error generator term, if it is non-vanishing.
 
@@ -1383,8 +1401,9 @@ def _append_composed_errorgen(composed_errorgens, use_C, pauli_1, pauli_2, ident
         composed_errorgens.append((_LSE(new_eg_type, new_bels), coeff*addl_factor*weight))
 
 
-def _append_product_pair(composed_errorgens, use_C, prod_1, prod_2, coeff, identity,
-                         weight: float=1.0):
+def _append_product_pair(composed_errorgens: _ErrorgenTerms, use_C: bool, prod_1: tuple[complex, stim.PauliString],
+                         prod_2: tuple[complex, stim.PauliString], coeff: complex,
+                         identity: Optional[stim.PauliString], weight: float=1.0) -> None:
     r"""
     Append a term whose two basis elements are both Pauli *products*.
 
@@ -1397,8 +1416,10 @@ def _append_product_pair(composed_errorgens, use_C, prod_1, prod_2, coeff, ident
                               prod_1[1] == prod_2[1], coeff*prod_1[0]*prod_2[0], weight)
 
 
-def _append_conditional_errorgen(composed_errorgens, prod, other, condition, C_if_true,
-                                 coeff_if_true, coeff_if_false, identity, weight: float=1.0):
+def _append_conditional_errorgen(composed_errorgens: _ErrorgenTerms, prod: tuple[complex, stim.PauliString],
+                                 other: stim.PauliString, condition: bool, C_if_true: bool,
+                                 coeff_if_true: complex, coeff_if_false: complex,
+                                 identity: Optional[stim.PauliString], weight: float=1.0) -> None:
     r"""
     Append a term built from a Pauli product and a bare Pauli, choosing between two forms.
 
@@ -1432,7 +1453,9 @@ def _append_conditional_errorgen(composed_errorgens, prod, other, condition, C_i
                               (coeff_if_true if condition else coeff_if_false)*prod[0], weight)
 
 
-def _error_generator_composition_hs_or_sh(P, Q, P_from_an_S_error: bool, weight: float=1.0, identity=None):
+def _error_generator_composition_hs_or_sh(P: stim.PauliString, Q: stim.PauliString, P_from_an_S_error: bool,
+                                          weight: float=1.0,
+                                          identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
     
@@ -1458,8 +1481,6 @@ def _error_generator_composition_hs_or_sh(P, Q, P_from_an_S_error: bool, weight:
     The second element is the weight of that term, additionally weighted by the specified
     value of `weight`.
     """
-    # I think that P and Q are supposed to be basis elements which are likely stim.PauliStrings?
-    # The type checker will need to check that for me.
     composed_errorgens = []
     # If P and Q only multiply to the identity they are equal, in which case they commute.
     _append_conditional_errorgen(composed_errorgens, pauli_product(P, Q),
@@ -1469,7 +1490,9 @@ def _error_generator_composition_hs_or_sh(P, Q, P_from_an_S_error: bool, weight:
 
     return composed_errorgens
 
-def _error_generator_composition_hc_or_ch(A, P, Q, H_error_is_first: bool, weight: float=1.0, identity=None):
+def _error_generator_composition_hc_or_ch(A: stim.PauliString, P: stim.PauliString, Q: stim.PauliString,
+                                          H_error_is_first: bool, weight: float=1.0,
+                                          identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an H error generator with a C error generator, in
     either order. I.e. H_A[C_{P,Q}[\cdot]] or C_{P,Q}[H_A[\cdot]].
@@ -1536,7 +1559,9 @@ def _error_generator_composition_hc_or_ch(A, P, Q, H_error_is_first: bool, weigh
 
     return composed_errorgens
 
-def _error_generator_composition_ha_or_ah(A, P, Q, H_error_is_first: bool, weight: float=1.0, identity=None):
+def _error_generator_composition_ha_or_ah(A: stim.PauliString, P: stim.PauliString, Q: stim.PauliString,
+                                          H_error_is_first: bool, weight: float=1.0,
+                                          identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an H error generator with an A error generator, in
     either order. I.e. H_A[A_{P,Q}[\cdot]] or A_{P,Q}[H_A[\cdot]].
@@ -1606,7 +1631,9 @@ def _error_generator_composition_ha_or_ah(A, P, Q, H_error_is_first: bool, weigh
 
     return composed_errorgens
 
-def _error_generator_composition_sc_or_cs(A, P, Q, S_error_is_first: bool, weight: float=1.0, identity=None):
+def _error_generator_composition_sc_or_cs(A: stim.PauliString, P: stim.PauliString, Q: stim.PauliString,
+                                          S_error_is_first: bool, weight: float=1.0,
+                                          identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an S error generator with a C error generator, in
     either order. I.e. S_A[C_{P,Q}[\cdot]] or C_{P,Q}[S_A[\cdot]].
@@ -1682,7 +1709,9 @@ def _error_generator_composition_sc_or_cs(A, P, Q, S_error_is_first: bool, weigh
 
     return composed_errorgens
 
-def _error_generator_composition_sa_or_as(A, P, Q, S_error_is_first: bool, weight: float=1.0, identity=None):
+def _error_generator_composition_sa_or_as(A: stim.PauliString, P: stim.PauliString, Q: stim.PauliString,
+                                          S_error_is_first: bool, weight: float=1.0,
+                                          identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an S error generator with an A error generator, in
     either order. I.e. S_A[A_{P,Q}[\cdot]] or A_{P,Q}[S_A[\cdot]].
@@ -1761,7 +1790,9 @@ def _error_generator_composition_sa_or_as(A, P, Q, S_error_is_first: bool, weigh
 
     return composed_errorgens
 
-def _error_generator_composition_cc(A, B, P, Q, weight: float=1.0, identity=None):
+def _error_generator_composition_cc(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
+                                    Q: stim.PauliString, weight: float=1.0,
+                                    identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of two C error generators. I.e. C_{A,B}[C_{P,Q}[\cdot]].
 
@@ -1873,7 +1904,9 @@ def _error_generator_composition_cc(A, B, P, Q, weight: float=1.0, identity=None
 
     return composed_errorgens
 
-def _error_generator_composition_aa(A, B, P, Q, weight: float=1.0, identity=None):
+def _error_generator_composition_aa(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
+                                    Q: stim.PauliString, weight: float=1.0,
+                                    identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of two A error generators. I.e. A_{A,B}[A_{P,Q}[\cdot]].
 
@@ -1971,7 +2004,9 @@ def _error_generator_composition_aa(A, B, P, Q, weight: float=1.0, identity=None
 
     return composed_errorgens
 
-def _error_generator_composition_ac(A, B, P, Q, weight: float=1.0, identity=None):
+def _error_generator_composition_ac(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
+                                    Q: stim.PauliString, weight: float=1.0,
+                                    identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an A error generator with a C error generator.
     I.e. A_{A,B}[C_{P,Q}[\cdot]].
@@ -2062,7 +2097,9 @@ def _error_generator_composition_ac(A, B, P, Q, weight: float=1.0, identity=None
 
     return composed_errorgens
 
-def _error_generator_composition_ca(A, B, P, Q, weight: float=1.0, identity=None):
+def _error_generator_composition_ca(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
+                                    Q: stim.PauliString, weight: float=1.0,
+                                    identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of a C error generator with an A error generator.
     I.e. C_{A,B}[A_{P,Q}[\cdot]].
@@ -2153,7 +2190,8 @@ def _error_generator_composition_ca(A, B, P, Q, weight: float=1.0, identity=None
 
     return composed_errorgens
 
-def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: float=1.0, identity=None):
+def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: float=1.0,
+                                identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
     
@@ -2273,9 +2311,7 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
         Q = errorgen_2_bel_1
         composed_errorgens = _error_generator_composition_sa_or_as(A, P, Q, True, w, identity)
         return composed_errorgens
-
-            # TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
-    
+  
     elif errorgen_1_type == 'C' and errorgen_2_type == 'H':
         # C_{P,Q}[H_A] P,Q -> errorgen_1_bel_0, errorgen_1_bel_1, A->errorgen_2_bel_0
         P = errorgen_1_bel_0
@@ -2292,9 +2328,6 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
         A = errorgen_2_bel_0
         composed_errorgens = _error_generator_composition_sc_or_cs(A, P, Q, False, w, identity)
         return composed_errorgens
-
-            # TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
-
     elif errorgen_1_type == 'C' and errorgen_2_type == 'C':
         # C_A,B[C_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         # C_{A,B}[C_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
@@ -2334,8 +2367,6 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
         composed_errorgens = _error_generator_composition_sa_or_as(A, P, Q, False, w, identity)
         return composed_errorgens
 
-            # TODO: Cases (2a,2b) and (2c,2d) only differ by the leading sign, can compress this code a bit.
-
     elif errorgen_1_type == 'A' and errorgen_2_type == 'C':
         # A_A,B[C_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         # A_{A,B}[C_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
@@ -2362,7 +2393,9 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
 
 # helper function for getting the new (properly ordered) basis element labels, error generator type (A can turn into H with certain index combinations), and additional signs.
 # reduces code repetition in composition code.
-def _ordered_new_bels_A(pauli1, pauli2, first_pauli_ident, second_pauli_ident, pauli_eq):
+def _ordered_new_bels_A(pauli1: stim.PauliString, pauli2: stim.PauliString, first_pauli_ident: bool,
+                        second_pauli_ident: bool, pauli_eq: bool
+                        ) -> tuple[Optional[str], Optional[list[stim.PauliString]], Optional[int]]:
     """
     Helper function for managing new basis element labels, error generator types and proper basis element label ordering. Returns None
     if both pauli identity flags are True, which signals that the error generator is zero (i.e. should be skipped). Same for is pauli_eq is True.
@@ -2386,7 +2419,9 @@ def _ordered_new_bels_A(pauli1, pauli2, first_pauli_ident, second_pauli_ident, p
             new_bels, addl_factor = ([pauli1, pauli2], 1) if stim_pauli_string_less_than(pauli1, pauli2) else ([pauli2, pauli1], -1)
     return new_eg_type, new_bels, addl_factor
 
-def _ordered_new_bels_C(pauli1, pauli2, first_pauli_ident, second_pauli_ident, pauli_eq):
+def _ordered_new_bels_C(pauli1: stim.PauliString, pauli2: stim.PauliString, first_pauli_ident: bool,
+                        second_pauli_ident: bool, pauli_eq: bool
+                        ) -> tuple[Optional[str], Optional[list[stim.PauliString]], Optional[int]]:
     """
     Helper function for managing new basis element labels, error generator types and proper basis element label ordering. Returns None
     if both pauli identity flags are True, which signals that the error generator is zero (i.e. should be skipped). Same for is pauli_eq is True.
@@ -2404,7 +2439,7 @@ def _ordered_new_bels_C(pauli1, pauli2, first_pauli_ident, second_pauli_ident, p
         new_bels = [pauli1, pauli2] if stim_pauli_string_less_than(pauli1, pauli2) else [pauli2, pauli1]
     return new_eg_type, new_bels, addl_factor
 
-def com(P1, P2):
+def com(P1: stim.PauliString, P2: stim.PauliString) -> Optional[tuple[complex, stim.PauliString]]:
     # P1 and P2 either commute or anticommute.
     if P1.commutes(P2):
         return None
@@ -2414,7 +2449,7 @@ def com(P1, P2):
     # return (sign(P3) * 2 if P1 and P2 anticommute, 0 o.w.,
     #         unsigned P3)
              
-def acom(P1, P2):
+def acom(P1: stim.PauliString, P2: stim.PauliString) -> Optional[tuple[complex, stim.PauliString]]:
     # P1 and P2 either commute or anticommute.
     if P1.commutes(P2):
         P3 = P1*P2
@@ -2425,13 +2460,13 @@ def acom(P1, P2):
     # return (sign(P3) * 2 if P1 and P2 commute, 0 o.w.,
     #         unsigned P3)
 
-def pauli_product(P1, P2):
+def pauli_product(P1: stim.PauliString, P2: stim.PauliString) -> tuple[complex, stim.PauliString]:
     P3 = P1*P2
     return (P3.sign, P3 / P3.sign)
     # return (sign(P3),
     #         unsigned P3)
 
-def stim_pauli_string_less_than(pauli1, pauli2):
+def stim_pauli_string_less_than(pauli1: stim.PauliString, pauli2: stim.PauliString) -> bool:
     """
     Returns true if pauli1 is less than pauli lexicographically.
 
@@ -2525,7 +2560,9 @@ def errorgen_pauli_action(errorgen: _LSE, pauli: stim.PauliString) -> tuple[floa
     
     return ret
 
-def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=None, sslbls=None):
+def errorgen_layer_to_matrix(errorgen_layer: Union[list[tuple[_EEL, float]], tuple[tuple[_EEL, float], ...], dict[_EEL, float]],
+                             num_qubits: int, errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                             sslbls: Optional[Union[list, tuple]] = None) -> _np.ndarray:
     """
     Converts an iterable over error generator coefficients and rates into the corresponding
     dense numpy array representation.
@@ -2630,7 +2667,8 @@ def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=No
     
     return mat
 
-def iterative_error_generator_composition(errorgen_labels, rates):
+def iterative_error_generator_composition(errorgen_labels: tuple[_LSE, ...],
+                                          rates: tuple[float, ...]) -> _ErrorgenTerms:
     """
     Iteratively compute error generator compositions. Each error generator
     composition in general returns a list of multiple new error generators,
@@ -2695,7 +2733,9 @@ def iterative_error_generator_composition(errorgen_labels, rates):
 
 # Helper functions for doing numeric commutators, compositions and BCH.
 
-def error_generator_commutator_numerical(errorgen1, errorgen2, errorgen_matrix_dict=None, num_qubits=None):
+def error_generator_commutator_numerical(errorgen1: _EEL, errorgen2: _EEL,
+                                         errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                                         num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Numerically compute the commutator of the two specified elementary error generators.
 
@@ -2749,7 +2789,9 @@ def error_generator_commutator_numerical(errorgen1, errorgen2, errorgen_matrix_d
                   - errorgen_matrix_dict[_LSE.cast(errorgen2)]@errorgen_matrix_dict[_LSE.cast(errorgen1)]
     return comm
 
-def error_generator_composition_numerical(errorgen1, errorgen2, errorgen_matrix_dict=None, num_qubits=None):
+def error_generator_composition_numerical(errorgen1: _EEL, errorgen2: _EEL,
+                                          errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                                          num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Numerically compute the composition of the two specified elementary error generators.
 
@@ -2801,7 +2843,9 @@ def error_generator_composition_numerical(errorgen1, errorgen2, errorgen_matrix_
             comp = errorgen_matrix_dict[_LSE.cast(errorgen1)]@errorgen_matrix_dict[_LSE.cast(errorgen2)]
     return comp
 
-def bch_numerical(propagated_errorgen_layers, error_propagator, bch_order=1):
+def bch_numerical(propagated_errorgen_layers: list[_np.ndarray],
+                  error_propagator: _epropagator.ErrorGeneratorPropagator,
+                  bch_order: int = 1) -> _np.ndarray:
     """
     Iteratively compute effective error generator layer produced by applying the BCH approximation
     to the list of input error generator matrices. Note this is primarily intended
@@ -2858,7 +2902,7 @@ def bch_numerical(propagated_errorgen_layers, error_propagator, bch_order=1):
         
     return combined_err_layer  
 
-def pairwise_bch_numerical(mat1, mat2, order=1):
+def pairwise_bch_numerical(mat1: _np.ndarray, mat2: _np.ndarray, order: int = 1) -> _np.ndarray:
     """
     Helper function for doing the numerical BCH in a pairwise fashion. Note this function is primarily intended
     for numerical validations as part of testing infrastructure.
@@ -3088,10 +3132,12 @@ def zassenhaus_formula_numerical(errorgen_groups: list[dict[_EEL, float]], error
 
     return zassenhaus_formula_arrays
     
-def _matrix_commutator(mat1, mat2):
+def _matrix_commutator(mat1: _np.ndarray, mat2: _np.ndarray) -> _np.ndarray:
     return mat1@mat2 - mat2@mat1
 
-def iterative_error_generator_composition_numerical(errorgen_labels, rates, errorgen_matrix_dict=None, num_qubits=None):
+def iterative_error_generator_composition_numerical(errorgen_labels: tuple[_LSE, ...], rates: tuple[float, ...],
+                                                    errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                                                    num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Iteratively compute error generator compositions. The function computes a dense representation of this composition
     numerically and is primarily intended as part of testing infrastructure.
@@ -3137,7 +3183,8 @@ def iterative_error_generator_composition_numerical(errorgen_labels, rates, erro
 
 # -----------First-Order Approximate Error Generator Probabilities and Expectation Values---------------# 
 
-def random_support(tableau: Union[stim.Tableau, stim.TableauSimulator], return_support: bool=False):
+def random_support(tableau: Union[stim.Tableau, stim.TableauSimulator],
+                   return_support: bool=False) -> Union[int, tuple[int, list[bool]]]:
     """ 
     Compute the number of bits over which the stabilizer state corresponding to this stim tableau
     would have measurement outcomes which are random.
@@ -3190,7 +3237,7 @@ def random_support(tableau: Union[stim.Tableau, stim.TableauSimulator], return_s
 
 # Courtesy of Gidney 
 # https://quantumcomputing.stackexchange.com/questions/38826/how-do-i-efficiently-compute-the-fidelity-between-two-stabilizer-tableau-states
-def tableau_fidelity(tableau1, tableau2):
+def tableau_fidelity(tableau1: stim.Tableau, tableau2: stim.Tableau) -> float:
     """
     Calculate the fidelity between the stabilizer states corresponding to the given stim
     tableaus. This returns a result in units of probability (so this may be squared
@@ -3219,7 +3266,7 @@ def tableau_fidelity(tableau1, tableau2):
             sim.postselect_z(q, desired_value=False)
     return p
 
-def bitstring_to_tableau(bitstring):
+def bitstring_to_tableau(bitstring: str) -> stim.Tableau:
     """
     Map a computational basis bit string into a corresponding Tableau which maps the all zero
     state into that state.
@@ -3387,7 +3434,8 @@ def slow_bulk_amplitude_of_state(tableau: Union[stim.Tableau, stim.TableauSimula
         
     return _np.fromiter([phase_factor*magnitude for phase_factor, magnitude in zip(phase_factors, magnitudes)], dtype=_np.complex128)
 
-def in_stabilizer_support(tableau: Union[stim.Tableau, stim.TableauSimulator], desired_state: Union[str, stim.PauliString]):
+def in_stabilizer_support(tableau: Union[stim.Tableau, stim.TableauSimulator],
+                          desired_state: Union[str, stim.PauliString]) -> bool:
     """
     Return whether or not the desired bitstring is in the support of the stabilizer state 
     corresponding to the input tableau.
@@ -3438,7 +3486,7 @@ def in_stabilizer_support(tableau: Union[stim.Tableau, stim.TableauSimulator], d
         sim.set_inverse_tableau(orig_tableau_inverse)
     return success
 
-def compute_phase_reference(tableau):
+def compute_phase_reference(tableau: Union[stim.Tableau, stim.TableauSimulator]) -> list[bool]:
     """ 
     Compute a canonical state, corresponding to the smallest state with non-zero amplitude, to use
     as a phase reference in computing the phases of components of this stabilizer state. 
@@ -3775,7 +3823,8 @@ def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     return result_phis
 
 # helper function for numerically computing phi, primarily used for testing.
-def phi_numerical(tableau, desired_bitstring, P, Q):
+def phi_numerical(tableau: stim.Tableau, desired_bitstring: str, P: Union[str, stim.PauliString],
+                  Q: Union[str, stim.PauliString]) -> _np.ndarray:
     """
     This function computes a quantity whose value is used in expression for the sensitivity of probabilities to error generators.
     (This version does this calculation numerically and is primarily intended for testing infrastructure.)
@@ -3980,7 +4029,7 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
 
     return sensitivities_by_bitstring
 
-def alpha_numerical(errorgen, tableau, desired_bitstring):
+def alpha_numerical(errorgen: Union[_LSE, _EEL], tableau: stim.Tableau, desired_bitstring: str) -> float:
     """
     First-order error generator sensitivity function for probability. This implementation calculates
     this quantity numerically, and as such is primarily intended for used as parting of testing
@@ -4137,7 +4186,7 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
                     expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
                     return _real_if_close(1j*4*expectation)
 
-def alpha_pauli_numerical(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, pauli: stim.PauliString):
+def alpha_pauli_numerical(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, pauli: stim.PauliString) -> float:
     """
     First-order error generator sensitivity function for pauli expectations. This implementation calculates
     this quantity numerically, and as such is primarily intended for used as parting of testing
@@ -4321,7 +4370,8 @@ def _bitstring_to_int(bitstring: Union[str, tuple]) -> int:
     else:
         raise ValueError("Input must be either a string or a tuple of '0's and '1's")
 
-def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order = 1, truncation_threshold = 1e-14):
+def stabilizer_probability_correction(errorgen_dict: dict[_LSE, float], tableau: stim.Tableau, desired_bitstring: str,
+                                      order: int = 1, truncation_threshold: float = 1e-14) -> float:
     """
     Compute the kth-order correction to the probability of the specified bit string.
     
@@ -4387,7 +4437,9 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
 # TODO: The implementations for the pauli expectation value correction and probability correction
 # are basically identical modulo some additional scale factors and the alpha function used. Should be able to combine
 # the implementations into one function.
-def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order = 1, truncation_threshold = 1e-14):
+def stabilizer_pauli_expectation_correction(errorgen_dict: dict[_LSE, float], tableau: stim.Tableau,
+                                            pauli: stim.PauliString, order: int = 1,
+                                            truncation_threshold: float = 1e-14) -> float:
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
     
@@ -4444,7 +4496,10 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
 
     return correction
 
-def stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order = 1):
+def stabilizer_pauli_expectation_correction_numerical(errorgen_dict: dict[_EEL, float],
+                                                      errorgen_propagator: _epropagator.ErrorGeneratorPropagator,
+                                                      circuit: _Circuit, pauli: stim.PauliString,
+                                                      order: int = 1) -> float:
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
     
@@ -4492,7 +4547,7 @@ def stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_pr
     expectation_correction = _np.linalg.multi_dot([pauli_vec.conj().T, taylor_expanded_errorgen,stabilizer_state_dmvec]).item()
     return expectation_correction
 
-def stabilizer_probability(tableau, desired_bitstring):
+def stabilizer_probability(tableau: stim.Tableau, desired_bitstring: str) -> float:
     """
     Calculate the output probability for the specified output bitstring.
     
@@ -4515,7 +4570,7 @@ def stabilizer_probability(tableau, desired_bitstring):
     # compute what Gidney calls the tableau fidelity (which in this case gives the probability).
     return tableau_fidelity(tableau, bitstring_to_tableau(desired_bitstring))
 
-def stabilizer_pauli_expectation(tableau, pauli):
+def stabilizer_pauli_expectation(tableau: stim.Tableau, pauli: stim.PauliString) -> float:
     """
     Calculate the output probability for the specified output bitstring.
       
@@ -4544,7 +4599,9 @@ def stabilizer_pauli_expectation(tableau, pauli):
     expectation  = pauli_sign*sim.peek_observable_expectation(unsigned_pauli)
     return expectation
 
-def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring, order=1, truncation_threshold=1e-14):
+def approximate_stabilizer_probability(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
+                                       desired_bitstring: str, order: int = 1,
+                                       truncation_threshold: float = 1e-14) -> float:
     """
     Calculate the approximate probability of a desired bit string using an nth-order taylor series approximation.
     
@@ -4591,7 +4648,9 @@ def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring
     correction = stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order, truncation_threshold)
     return ideal_prob + correction
 
-def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, order=1, truncation_threshold=1e-14):
+def approximate_stabilizer_pauli_expectation(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
+                                             pauli: Union[str, stim.PauliString], order: int = 1,
+                                             truncation_threshold: float = 1e-14) -> float:
     """
     Calculate the approximate probability of a desired bit string using a first-order approximation.
     
@@ -4641,7 +4700,10 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, orde
     correction = stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order, truncation_threshold)
     return ideal_expectation + correction
 
-def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order=1):
+def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict: dict[_EEL, float],
+                                                       errorgen_propagator: _epropagator.ErrorGeneratorPropagator,
+                                                       circuit: _Circuit, pauli: stim.PauliString,
+                                                       order: int = 1) -> float:
     """
     Calculate the approximate probability of a desired bit string using a first-order approximation.
     This function performs the corrections numerically and so it primarily intended for testing
@@ -4687,7 +4749,8 @@ def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict, errorgen_p
     correction = stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order)
     return ideal_expectation + correction
 
-def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, truncation_threshold=1e-14):
+def approximate_stabilizer_probabilities(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
+                                         order: int = 1, truncation_threshold: float = 1e-14) -> _np.ndarray:
     """
     Calculate the approximate probability distribution over all bitstrings using a first-order approximation.
     Note the size of this distribution scales exponentially in the qubit count, so this is very inefficient for
@@ -4735,7 +4798,8 @@ def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, trunca
 
     return probs
 
-def error_generator_taylor_expansion(errorgen_dict, order = 1, truncation_threshold = 1e-14):
+def error_generator_taylor_expansion(errorgen_dict: dict[_LSE, float], order: int = 1,
+                                     truncation_threshold: float = 1e-14) -> list[dict[_LSE, complex]]:
     """
     Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
     error generator dictionary. (Excluding the zeroth-order identity).
@@ -4793,7 +4857,10 @@ def error_generator_taylor_expansion(errorgen_dict, order = 1, truncation_thresh
 
     return taylor_order_terms
 
-def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagator, order = 1, mx_basis = 'pp'):
+def error_generator_taylor_expansion_numerical(errorgen_dict: dict[_EEL, float],
+                                               errorgen_propagator: _epropagator.ErrorGeneratorPropagator,
+                                               order: int = 1,
+                                               mx_basis: Union[str, _Basis] = 'pp') -> _np.ndarray:
     """
     Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
     error generator dictionary. (Excluding the zeroth-order identity). This function computes a dense representation
@@ -4831,7 +4898,7 @@ def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagato
 
 PauliPhaseUpdater = Callable[[str,str,Optional[bool]],tuple[complex,str]]
 PauliPhaseZerosUpdater = Callable[[str,Optional[bool]],tuple[complex,str]]
-if 'stim' in globals() and 'stim' in sys.modules:
+if TYPE_CHECKING:
     AmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,bool], complex]
     BulkAmplitudeOfStateType = Callable[[Union[stim.Tableau, stim.TableauSimulator], list[Union[str, stim.PauliString]],bool], _np.ndarray]
     BulkPhiType = Callable[[Union[stim.Tableau, stim.TableauSimulator],str,list[Union[str,stim.PauliString]],list[Union[str,stim.PauliString]]], _np.ndarray]
