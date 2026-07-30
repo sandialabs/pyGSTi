@@ -10,6 +10,7 @@ Utility functions for working with Basis objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import sys as _sys
 from functools import partial, lru_cache
 
 import numpy as _np
@@ -17,6 +18,30 @@ import numpy as _np
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
 from pygsti.baseobjs import basis as _basis
 from pygsti.baseobjs import _compatibility as _compat
+
+
+def is_cvxpy_expression(obj) -> bool:
+    """
+    Whether `obj` is a CVXPY `Expression`.
+
+    Returns False whenever cvxpy is not installed, and -- more usefully -- whenever
+    cvxpy has simply not been imported yet.  That shortcut is exact rather than
+    heuristic: an `Expression` instance cannot exist unless `cvxpy` is already in
+    `sys.modules`.  It matters because cvxpy is an optional dependency with a
+    multi-second import time, and this predicate is called from hot paths such as
+    :func:`change_basis`.
+
+    Parameters
+    ----------
+    obj : object
+        The object to test.
+
+    Returns
+    -------
+    bool
+    """
+    cvxpy = _sys.modules.get('cvxpy')
+    return cvxpy is not None and isinstance(obj, cvxpy.Expression)
 
 
 @lru_cache(maxsize=1)
@@ -201,6 +226,14 @@ def change_basis(mx, from_basis, to_basis, expect_real=True):
     if not to_basis.real:
         return ret
 
+    if is_cvxpy_expression(ret):
+        # A symbolic expression has no numerically-inspectable imaginary part, so the
+        # `expect_real` check below cannot be performed (and would silently pass, since
+        # `numpy.imag` returns 0 for objects with no `.imag`).  `to_basis.real` says the
+        # result is real for any Hermiticity-preserving input, so project symbolically.
+        import cvxpy as _cp
+        return _cp.real(ret) if ret.is_complex() else ret
+
     if expect_real and _mt.safe_norm(ret, 'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
                          (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
@@ -328,14 +361,17 @@ def resize_std_mx(mx, resize, std_basis_1, std_basis_2):
     #print('{}ing {} to {}'.format(resize, std_basis_1, std_basis_2))
     #print('Dims: ({} to {})'.format(std_basis_1.dim, std_basis_2.dim))
     #Below: use 'exp' in comments for 'expanded dimension'
+    # Note: use `@` rather than `_np.dot` throughout -- `_np.dot` silently produces an
+    # object-dtype array when either operand is a CVXPY Expression (or a scipy sparse
+    # matrix), whereas `@` dispatches to the operand's own `__matmul__`/`__rmatmul__`.
     if resize == 'expand':
         assert std_basis_1.dim < std_basis_2.dim
-        right = _np.dot(mx, std_basis_1.from_elementstd_transform_matrix)  # (exp,dim) (dim,dim) (dim,exp) => exp,exp
-        mid = _np.dot(std_basis_1.to_elementstd_transform_matrix, right)  # want Ai st.   Ai * A = I(dim)
+        right = mx @ std_basis_1.from_elementstd_transform_matrix  # (exp,dim) (dim,dim) (dim,exp) => exp,exp
+        mid = std_basis_1.to_elementstd_transform_matrix @ right  # want Ai st.   Ai * A = I(dim)
     elif resize == 'contract':
         assert std_basis_1.dim > std_basis_2.dim
-        right = _np.dot(mx, std_basis_2.to_elementstd_transform_matrix)  # (dim,dim) (dim,exp) => dim,exp
-        mid = _np.dot(std_basis_2.from_elementstd_transform_matrix, right)  # (dim, exp) (exp, dim) => expdim, exp
+        right = mx @ std_basis_2.to_elementstd_transform_matrix  # (dim,dim) (dim,exp) => dim,exp
+        mid = std_basis_2.from_elementstd_transform_matrix @ right  # (dim, exp) (exp, dim) => expdim, exp
     return mid
 
 

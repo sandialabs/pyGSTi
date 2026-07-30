@@ -100,12 +100,8 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     numpy array or cvxpy Expression
         the Choi matrix, in the desired basis.
     """
-    try:
-        import cvxpy as cp
-        is_cvxpy_expression = isinstance(operation_mx, cp.Expression)
-    except ImportError:
-        is_cvxpy_expression = False
-    
+    is_cvxpy_expression = _bt.is_cvxpy_expression(operation_mx)
+
     if not is_cvxpy_expression:
         operation_mx = _np.asarray(operation_mx)
     op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
@@ -153,6 +149,7 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
             rows.append(BiBj.conj().ravel())
         choiMx_rows.append( _np.array(rows) @ opMxInStdBasis_vec )
     if is_cvxpy_expression:
+        import cvxpy as cp
         choiMx = cp.vstack(choiMx_rows)
     else:
         choiMx = _np.vstack(choiMx_rows)
@@ -174,7 +171,7 @@ def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis:
 
     Parameters
     ----------
-    choi_mx : numpy array
+    choi_mx : numpy array or cvxpy Expression
         the Choi matrix, normalized to have trace == 1, to compute operation matrix for.
 
     choi_mx_basis : Basis object
@@ -193,10 +190,13 @@ def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis:
 
     Returns
     -------
-    numpy array
+    numpy array or cvxpy Expression
         operation matrix in the desired basis.
     """
-    choi_mx = _np.asarray(choi_mx)  # will have "expanded" dimension even if bases are for reduced...
+    is_cvxpy_expression = _bt.is_cvxpy_expression(choi_mx)
+
+    if not is_cvxpy_expression:
+        choi_mx = _np.asarray(choi_mx)  # will have "expanded" dimension even if bases are for reduced...
     N = choi_mx.shape[0]  # dimension of full-basis (expanded) operation matrix
     if not isinstance(choi_mx_basis, _Basis):  # if we're not given a basis, build
         choi_mx_basis = _Basis.cast(choi_mx_basis, N)  # one with the full dimension
@@ -213,11 +213,34 @@ def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis:
     else:
         choiMx_unnorm = choi_mx
 
-    opMxInStdBasis = _np.zeros((N, N), 'complex')  # in matrix unit basis of entire density matrix
-    for i in range(N):
-        for j in range(N):
-            BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
-            opMxInStdBasis += choiMx_unnorm[i, j] * BiBj
+    # Both branches compute the same thing:
+    #     opMxInStdBasis = sum_ij choiMx_unnorm[i, j] * kron(B_i, conj(B_j))
+    # in the matrix unit basis of the entire density matrix.  They are kept separate
+    # because neither formulation is acceptable in the other's role -- see below.
+    if is_cvxpy_expression:
+        # Accumulate one row of `choiMx_unnorm` at a time as an explicit matrix-vector
+        # product.  This keeps the whole computation affine in `choi_mx`, so a CVXPY
+        # Expression flows through it unevaluated (cf. `jamiolkowski_iso`); scaling and
+        # adding `BiBj` in place, as the numeric branch does, cannot work symbolically.
+        # The peak temporary is N**3, the same as the equivalent loop in
+        # `jamiolkowski_iso`.
+        import cvxpy as cp
+        opMx_vec = 0
+        for i in range(N):
+            BiBj_cols = _np.empty((N * N, N), dtype=complex)
+            for j in range(N):
+                BiBj_cols[:, j] = _np.kron(BVec[i], _np.conjugate(BVec[j])).ravel()
+            opMx_vec = opMx_vec + BiBj_cols @ choiMx_unnorm[i, :]
+        opMxInStdBasis = cp.reshape(opMx_vec, (N, N), order='C')
+    else:
+        # Don't route ndarrays through the branch above: its inner product is a BLAS
+        # matvec on operands small enough that thread startup dominates (measured ~9 ms
+        # for a single 256x16 complex matvec, i.e. ~30x slower overall at N=16).
+        opMxInStdBasis = _np.zeros((N, N), 'complex')
+        for i in range(N):
+            for j in range(N):
+                BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
+                opMxInStdBasis += choiMx_unnorm[i, j] * BiBj
 
     if not isinstance(op_mx_basis, _Basis):
         op_mx_basis = _Basis.cast(op_mx_basis, N)  # make sure op_mx_basis is a Basis; we'd like dimension to be N
