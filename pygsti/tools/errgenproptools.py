@@ -2402,7 +2402,10 @@ _COMPOSITION_CACHE_SIZE = 2**20
 @lru_cache(maxsize=_COMPOSITION_CACHE_SIZE)
 def _error_generator_composition_unweighted(errorgen_1: _LSE, errorgen_2: _LSE) -> _ErrorgenTerms:
     """
-    `error_generator_composition` at unit weight, memoized on the label pair.
+    `error_generator_composition` at unit weight and the internally-derived identity,
+    memoized on the label pair. Only used by `error_generator_composition` when the
+    caller does not supply an explicit `identity`; an explicit `identity` bypasses
+    this cache entirely and calls `_error_generator_composition_impl` directly.
 
     The cache is a bounded LRU; see `_COMPOSITION_CACHE_SIZE` for how the capacity is
     chosen relative to the reuse pattern it serves.
@@ -2443,9 +2446,13 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
 
     identity : stim.PauliString, optional (default None)
         An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary: the identity is derived from the
-        basis element label width and cached internally, so supplying one does not
-        change the result.
+        Passing in this kwarg isn't necessary for correctness -- when omitted, the
+        identity is derived from the basis element label width and cached
+        internally -- but if supplied it *is* used for the identity comparisons in
+        the underlying computation, exactly as in the pre-refactor implementation.
+        Note that passing an explicit `identity` bypasses the label-pair memoization
+        cache described above, since the cache only stores results for the
+        internally-derived identity.
 
     Returns
     -------
@@ -2458,6 +2465,8 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
     `LocalStimErrorgenLabel` objects inside are shared with the cache. Treat them as
     immutable, which they already are everywhere in this module.
     """
+    if identity is not None:
+        return _error_generator_composition_impl(errorgen_1, errorgen_2, weight, identity)
     return [(lbl, rate*weight)
             for lbl, rate in _error_generator_composition_unweighted(errorgen_1, errorgen_2)]
 
