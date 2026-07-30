@@ -4,8 +4,8 @@ circuit generation -> noisy data simulation -> GST fitting, for each of the
 four Lindblad error types (H, S, H+S, and H+S+C+A).
 
 This test builds a small (3-qubit line) crosstalk-free experiment design and
-runs it end-to-end for each noise configuration. It takes well under a
-minute to run on typical hardware; the qubit count and germ-power depth
+runs it end-to-end for each noise configuration. It takes roughly three
+minutes to run on typical hardware; the qubit count and germ-power depth
 (`max_max_length`) are deliberately kept small relative to
 `pygsti/protocols/run_xfgst_example.py` (which uses 5 qubits and
 `max_max_length=4`) purely to keep runtime CI-friendly.
@@ -15,102 +15,16 @@ import unittest
 
 import pytest
 
+import numpy as np
+
 import pygsti
-from pygsti.baseobjs.label import Label, LabelTup, LabelTupTup
 from pygsti.data import simulate_data
 from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.gst import GateSetTomography
 from pygsti.protocols.protocol import ProtocolData
-from pygsti.protocols.xfgst_edesign import (
-    CrosstalkFreeExperimentDesign,
-    assign_the_designs_with_mapping,
-)
+from pygsti.protocols.xfgst_edesign import CrosstalkFreeExperimentDesign
 from pygsti.tools import two_delta_logl
-
-
-def _get_layer_mappers(twoq_gst_design, oneq_gst_design):
-    """
-    Build layer mappers for batch_tensor.
-
-    The 2Q mapper converts local 2Q-design labels into either:
-      - primitive 2Q labels, e.g. Gcnot:0:1
-      - LabelTupTup parallel layers of primitive 1Q labels, e.g.
-        (Gi:0, Gypi2:1)
-
-    This avoids requiring a primitive Gii gate in the final target model.
-    """
-    local_twoq_lines = tuple(twoq_gst_design.qubit_labels)
-    local_oneq_lines = tuple(oneq_gst_design.qubit_labels)
-
-    assert local_twoq_lines == (0, 1), local_twoq_lines
-    assert local_oneq_lines == (0,), local_oneq_lines
-
-    local_twoq_idle_label = Label(("Gii",) + local_twoq_lines)
-    local_oneq_idle_label = Label(("Gi",) + local_oneq_lines)
-
-    # A local 2Q idle should become two primitive 1Q idles.
-    local_parallel_twoq_idle = Label((Label("Gi", 0), Label("Gi", 1)))
-    assert isinstance(local_parallel_twoq_idle, LabelTupTup)
-
-    mapper_2q = {
-        Label(()): local_parallel_twoq_idle,
-        local_twoq_idle_label: local_parallel_twoq_idle,
-    }
-    mapper_1q = {
-        Label(()): local_oneq_idle_label,
-        local_oneq_idle_label: local_oneq_idle_label,
-    }
-
-    for cl in oneq_gst_design.circuit_lists:
-        for c in cl:
-            for ell in c._labels:
-                mapper_1q[ell] = local_oneq_idle_label if ell == Label(()) else ell
-
-    for cl in twoq_gst_design.circuit_lists:
-        for c in cl:
-            for ell in c._labels:
-                if ell == Label(()) or ell == local_twoq_idle_label:
-                    mapper_2q[ell] = local_parallel_twoq_idle
-                elif isinstance(ell, LabelTup) and ell.num_qubits == 1:
-                    # e.g. Label("Gypi2", 1) -> (Label("Gi", 0), Label("Gypi2", 1))
-                    tgt = ell.qubits[0]
-                    assert tgt in (0, 1), ell
-                    tmp = [None, None]
-                    tmp[tgt] = ell
-                    tmp[1 - tgt] = Label("Gi", 1 - tgt)
-                    parallel_label = Label(tuple(tmp))
-                    assert isinstance(parallel_label, LabelTupTup)
-                    mapper_2q[ell] = parallel_label
-                else:
-                    # Keep real 2Q gates such as Gcnot:0:1 as primitive labels.
-                    mapper_2q[ell] = ell
-
-    return {1: mapper_1q, 2: mapper_2q}
-
-
-def _mapped_assignment_stitcher(oneq_gstdesign, twoq_gstdesign, vertices, color_patches,
-                                 randgen=None, ensure_containment=False):
-    """
-    Adapter so CrosstalkFreeExperimentDesign can call
-    assign_the_designs_with_mapping as a circuit_stitcher.
-
-    Note: this stitcher does not itself verify its output (e.g. no implicit
-    idles, correct patch stitching) -- that verification is stitcher-agnostic
-    and is instead performed by ``CrosstalkFreeExperimentDesign.__init__``
-    (via ``debug_check=True``, the default) against whatever circuit_lists
-    this (or any other) stitcher returns.
-    """
-    layer_mappers = _get_layer_mappers(twoq_gstdesign, oneq_gstdesign)
-    return assign_the_designs_with_mapping(
-        oneq_gstdesign=oneq_gstdesign,
-        twoq_gstdesign=twoq_gstdesign,
-        vertices=vertices,
-        color_patches=color_patches,
-        randgen=randgen,
-        ensure_containment=ensure_containment,
-        _layer_mappers_override=layer_mappers,
-    )
 
 
 def _build_noise_model(pspec, lindblad_error_coeffs, parameterization):
@@ -140,6 +54,7 @@ _H_NOISE = {
     'Gxpi2': {('H', 'Z'): 0.003},
     'Gypi2': {('H', 'X'): 0.003},
     'Gcnot': {('H', 'ZZ'): 0.005, ('H', 'IZ'): 0.002},
+    'Gii':   {('H', 'ZI'): 0.005, ('H', 'IZ'): 0.005},
 }
 
 # --- S only: Pauli stochastic / dephasing ---
@@ -148,6 +63,8 @@ _S_NOISE = {
     'Gxpi2': {('S', 'X'): 0.001, ('S', 'Z'): 0.001},
     'Gypi2': {('S', 'Y'): 0.001, ('S', 'Z'): 0.001},
     'Gcnot': {('S', 'XX'): 0.001, ('S', 'ZZ'): 0.002},
+    'Gii':   {('S', 'XI'): 0.001, ('S', 'IX'): 0.001, ('S', 'YI'): 0.001,
+              ('S', 'IY'): 0.001, ('S', 'ZI'): 0.002, ('S', 'IZ'): 0.002},
 }
 
 # --- H + S: coherent errors plus stochastic Pauli noise ---
@@ -156,6 +73,8 @@ _HS_NOISE = {
     'Gxpi2': {('H', 'Z'): 0.003, ('S', 'Z'): 0.001},
     'Gypi2': {('H', 'X'): 0.003, ('S', 'Z'): 0.001},
     'Gcnot': {('H', 'ZZ'): 0.005, ('S', 'XX'): 0.001, ('S', 'ZZ'): 0.001},
+    'Gii':   {('H', 'ZI'): 0.005, ('H', 'IZ'): 0.005, ('S', 'XI'): 0.001,
+              ('S', 'IX'): 0.001, ('S', 'ZI'): 0.001, ('S', 'IZ'): 0.001},
 }
 
 # --- H + S + C + A: full Lindblad including correlated and affine terms.
@@ -169,6 +88,9 @@ _HSCA_NOISE = {
     'Gypi2': {('H', 'X'): 0.003, ('S', 'Z'): 0.001, ('C', 'X', 'Y'): 0.0003},
     'Gcnot': {('H', 'ZZ'): 0.005, ('S', 'XX'): 0.001, ('S', 'ZZ'): 0.001,
               ('C', 'XX', 'YY'): 0.0003, ('A', 'XY', 'YX'): 0.0001},
+    'Gii':   {('H', 'ZI'): 0.005, ('H', 'IZ'): 0.005, ('S', 'XI'): 0.001,
+              ('S', 'IX'): 0.001, ('S', 'ZI'): 0.001, ('S', 'IZ'): 0.001,
+              ('C', 'XI', 'YI'): 0.0003, ('A', 'XI', 'YI'): 0.0001},
 }
 
 # Each entry: (config_name, noise_coeffs, parameterization, max acceptable 2*deltaLogL)
@@ -186,7 +108,7 @@ class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
     error types (H, S, H+S, H+S+C+A). Uses a reduced-scale (3-qubit line,
     max_max_length=2) crosstalk-free design so the full test -- which builds
     one experiment design and then runs the noisy-simulate + GST loop for
-    each of 4 noise configurations -- completes in well under a minute.
+    each of 4 noise configurations -- completes in roughly three minutes.
     """
 
     @classmethod
@@ -196,14 +118,22 @@ class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
         line_edges = [(0, 1), (1, 2)]
         oneq_locations = [(q,) for q in qubits]
 
+        # "Gii" is the primitive two-qubit idle. It is required, not optional:
+        # `build_layer_mappers` maps a 2Q lane's implicit-idle layer `Label(())`
+        # onto `Label(('Gii',) + twoq_qubit_labels)`, so any processor spec used
+        # with the crosstalk-free design must make that gate available on every
+        # 2Q edge. It is not one of pyGSTi's standard gate names, hence the
+        # explicit 4x4 identity unitary.
         availability = {
             "Gi": oneq_locations,
             "Gxpi2": oneq_locations,
             "Gypi2": oneq_locations,
             "Gcnot": line_edges,
+            "Gii": line_edges,
         }
         cls.pspec = QubitProcessorSpec(
-            n_qubits, gate_names=["Gi", "Gxpi2", "Gypi2", "Gcnot"],
+            n_qubits, gate_names=["Gi", "Gxpi2", "Gypi2", "Gcnot", "Gii"],
+            nonstd_gate_unitaries={"Gii": np.eye(4)},
             availability=availability, qubit_labels=qubits,
         )
 
@@ -226,7 +156,9 @@ class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
             oneq_gstdesign=oneq_gstdesign,
             twoq_gstdesign=twoq_gstdesign,
             edge_coloring=edge_coloring,
-            circuit_stitcher=_mapped_assignment_stitcher,
+            # circuit_stitcher is deliberately left at its default so this test
+            # exercises the shipped assign_the_designs_with_mapping /
+            # build_layer_mappers path rather than a test-local reimplementation.
             seed=1234,
             nested=False,
         )
