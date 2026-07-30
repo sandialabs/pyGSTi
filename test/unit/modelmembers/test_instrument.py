@@ -1,3 +1,6 @@
+import copy
+import pickle
+
 import numpy as np
 
 import pygsti
@@ -388,6 +391,53 @@ class FromEffectsTester(BaseCase):
     def test_raises_on_non_tp_gate(self):
         with self.assertRaises(ValueError):
             Instrument.from_effects({'p0': (self.E0, 0.9 * np.eye(4)), 'p1': self.E1}, self.basis)
+
+
+class SharedErrorMapCopyTester(BaseCase):
+    """`Instrument.__reduce__` copies each member, and it must do so under a single
+    shared memo: the members of a `from_effects` / `from_cptr_superops` instrument all
+    reference one ComposedPOVM error map, and copying them independently would break
+    that aliasing -- inflating the instrument's parameter count and letting the
+    effects drift apart (i.e. losing joint trace preservation) under re-optimization."""
+
+    def setUp(self):
+        model = std.target_model()
+        self.E0, self.E1, _, _ = z_measurement_projectors(model)
+        self.basis = model.basis
+        self.instrument = Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
+
+    @staticmethod
+    def _errormap(instrument, key):
+        """The shared ComposedPOVM error map behind `instrument[key]`'s effect."""
+        composed_effect = instrument[key].factorops[0].submembers()[0]  # ComposedPOVMEffect
+        return composed_effect.submembers()[0]
+
+    def _assert_shared(self, instrument, msg):
+        self.assertIs(self._errormap(instrument, 'p0'), self._errormap(instrument, 'p1'), msg)
+
+    def test_built_instrument_shares_errormap(self):
+        self._assert_shared(self.instrument, "from_effects should share one error map")
+
+    def test_copy_preserves_shared_errormap(self):
+        self._assert_shared(self.instrument.copy(), "Instrument.copy() duplicated the error map")
+
+    def test_deepcopy_preserves_shared_errormap(self):
+        self._assert_shared(copy.deepcopy(self.instrument), "deepcopy duplicated the error map")
+
+    def test_pickle_preserves_shared_errormap(self):
+        roundtripped = pickle.loads(pickle.dumps(self.instrument))
+        self._assert_shared(roundtripped, "pickle round-trip duplicated the error map")
+
+    def test_copy_preserves_num_params(self):
+        self.assertEqual(self.instrument.copy().num_params, self.instrument.num_params)
+
+    def test_model_copy_preserves_num_params(self):
+        model = pygsti.models.ExplicitOpModel(pygsti.baseobjs.QubitSpace(1), self.basis)
+        model[('Iz', 0)] = self.instrument
+        model.to_vector()
+        self.assertEqual(model.copy().num_params, model.num_params)
+        self._assert_shared(model.copy().instruments[('Iz', 0)],
+                            "ExplicitOpModel.copy() duplicated the error map")
 
 
 class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
