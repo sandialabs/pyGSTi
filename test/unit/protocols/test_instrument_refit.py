@@ -184,15 +184,14 @@ class RefitRegressionTester(BaseCase):
 
         # parameterization-preserving gauge opt added its models: structure is
         # retained (members still carry the effect-then-gate chart rather than
-        # being coerced to a dense/TP form) and predictions are gauge-invariant.
-        # (num_params is NOT compared: transform_composed_model currently
-        # duplicates the shared POVM-errormap parameters -- see
-        # issues/transform-composed-model-duplicates-shared-instrument-params.md)
+        # being coerced to a dense/TP form), the hypothesis class is unchanged
+        # (same free-parameter count), and predictions are gauge-invariant.
         self.assertIn('stdgaugeopt', est.models)
         go_mdl = est.models['stdgaugeopt']
         from pygsti.modelmembers.operations import ComposedOp
         for inst in go_mdl.instruments.values():
             for m in inst.values():
                 self.assertIsInstance(m, ComposedOp)
+        self.assertEqual(go_mdl.num_params, lnd_mdl.num_params)
         go_2dll = pygsti.tools.two_delta_logl(go_mdl, ds, circuits)
         self.assertAlmostEqual(go_2dll, lnd_2dll, delta=1e-4 * max(lnd_2dll, 1.0))

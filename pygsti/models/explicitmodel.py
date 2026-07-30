@@ -1866,7 +1866,12 @@ def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> Ex
     # reverse order. For example, ComposedOp([X,Y,Z]) is applied to
     # a vector v as Z @ Y @ X @ v.
 
-    for key, rho in oldmdl.preps.items():
+    # NOTE: we rebuild from the members of `mdl` (the copy) rather than those of `oldmdl`.
+    # A rebuilt member holds a *reference* to the member it wraps, so wrapping `oldmdl`'s
+    # members would leave the returned model sharing parameterized objects with its input:
+    # calling `from_vector` on either model would then silently mutate the other.
+
+    for key, rho in list(mdl.preps.items()):
         # replace each ComposedState superket `rhoVec` with `invU @ rhoVec`;
         # do this by packing invU into a new ComposedState's error map.
         assert isinstance(rho, ComposedState)
@@ -1874,16 +1879,16 @@ def transform_composed_model(mdl: ExplicitOpModel, s : _GaugeGroupElement) -> Ex
         errmap  = ComposedOp([rho.error_map, invU], state_space=mdl.state_space) # type: ignore
         mdl.preps[key] = ComposedState(static_rho, errmap)
 
-    for key, povm in oldmdl.povms.items():
+    for key, povm in list(mdl.povms.items()):
         # replace each ComposedPOVM `p` with another ComposedPOVM `q`, where
-        # effects `Evec` belonging to `p` are mapped to effects `EVec @ U` 
+        # effects `Evec` belonging to `p` are mapped to effects `EVec @ U`
         # belonging to `q`. Do this by packing U into the error map of `q`.
         assert isinstance(povm, ComposedPOVM)
         static_povm = povm.base_povm
         errmap = ComposedOp([U, povm.error_map], state_space=mdl.state_space) # type: ignore
         mdl.povms[key] = ComposedPOVM(errmap, static_povm, mx_basis=oldmdl.basis)
 
-    for key, op in oldmdl.operations.items():
+    for key, op in list(mdl.operations.items()):
         # replace each operation `G` with `invU @ G @ U`.
         op_s = ComposedOp([U, op, invU])
         mdl.operations[key] = op_s

@@ -357,9 +357,15 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
         dict_to_pickle = self.__dict__.copy()
         dict_to_pickle['_parent'] = None
 
-        #Note: must *copy* elements for pickling/copying
+        #Note: must *copy* elements for pickling/copying.  All the members are copied under a
+        # *single shared* memo so that any submember reachable from more than one member stays
+        # aliased in the copy.  (E.g. the members built by `from_effects` / `from_cptr_superops`
+        # all share one ComposedPOVM error map -- that sharing is what enforces the instrument's
+        # trace preservation, and duplicating it per member would silently inflate the
+        # instrument's parameter count.)
+        memo = {}
         return (Instrument, (None, self.evotype, self.state_space, True,
-                             [(key, gate.copy()) for key, gate in self.items()]),
+                             [(key, gate.copy(memo=memo)) for key, gate in self.items()]),
                 dict_to_pickle)
 
     def __pygsti_reduce__(self) -> tuple:
