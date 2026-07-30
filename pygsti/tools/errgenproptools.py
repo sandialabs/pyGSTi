@@ -15,10 +15,11 @@ from typing import Literal, Optional, Union, Callable, Iterable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Type checkers always resolve the `stim.*` names used in the annotations throughout this
-    # module. At runtime the import is best-effort so that importing this module (e.g. as part
-    # of importing pygsti) does not hard-fail when stim is absent; the `from __future__ import
-    # annotations` above keeps every `stim.*` annotation unevaluated, so an absent stim only
-    # matters when a function is actually called.
+    # module. At runtime the import is best-effort: warning rather than raising lets this module
+    # be imported when stim is absent. The `from __future__ import annotations` above keeps every
+    # `stim.*` annotation unevaluated, so an absent stim only matters when a function is actually
+    # called. Note `pygsti.tools` exposes this module lazily (see `_LAZY_SUBMODULES` there), so a
+    # plain `import pygsti` neither loads this module nor triggers the warning below.
     import stim
 else:
     try:
@@ -2206,10 +2207,7 @@ def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight
 
     holds bit-for-bit, which is what allows `error_generator_composition` to cache a
     weight-1 result and scale it rather than recomputing. If you add a term here, keep
-    `weight` as the last factor or that equivalence breaks (the failure mode is subtle:
-    re-associating the product flips the sign of zero components, which compares equal
-    numerically but differs under the exact `float.hex()` fingerprinting used by
-    `test/performance/errgencomp_corpus.py`).
+    `weight` as the last factor or floating point associativity may bite.
     """
 
     composed_errorgens = []
@@ -2397,17 +2395,25 @@ def _identity_pauli_string(num_qubits: int) -> stim.PauliString:
     return stim.PauliString('I'*num_qubits)
 
 
-@lru_cache(maxsize=None)
+# Capacity of the memoization cache backing `error_generator_composition`. The access
+# pattern the cache exists to exploit is the one in `error_generator_taylor_expansion`,
+# which walks `product(errorgen_dict.keys(), repeat=k)`;
+# `iterative_error_generator_composition` then composes only the final two entries, so
+# for N distinct labels at order k the same N**2 pairs are re-requested N**(k-2) times.
+# That reuse has period N**2, so an LRU smaller than the pair count would cycle and hit
+# essentially never. The cap is therefore sized well above the expected working set:
+# it accommodates N up to 2**10 distinct labels without thrashing, while bounding
+# worst-case memory (entries are short lists of (label, rate) tuples).
+_COMPOSITION_CACHE_SIZE = 2**20
+
+
+@lru_cache(maxsize=_COMPOSITION_CACHE_SIZE)
 def _error_generator_composition_unweighted(errorgen_1: _LSE, errorgen_2: _LSE) -> _ErrorgenTerms:
     """
     `error_generator_composition` at unit weight, memoized on the label pair.
 
-    The cache is unbounded by design. The access pattern it exists to exploit is the
-    one in `error_generator_taylor_expansion`, which walks
-    `product(errorgen_dict.keys(), repeat=k)`; `iterative_error_generator_composition`
-    then composes only the final two entries, so for N labels at order k the same N**2
-    pairs are re-requested N**(k-2) times. That reuse has period N**2, so a bounded LRU
-    smaller than the pair count would cycle and hit essentially never.
+    The cache is a bounded LRU; see `_COMPOSITION_CACHE_SIZE` for how the capacity is
+    chosen relative to the reuse pattern it serves.
 
     Note this keys on `LocalStimErrorgenLabel` equality, which covers `errorgen_type`
     and `basis_element_labels` but *not* `circuit_time`. That is sound only because the
@@ -2427,10 +2433,10 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
     Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
 
     Results are memoized on the `(errorgen_1, errorgen_2)` pair and rescaled by
-    `weight`, which is exact because the composition is linear in `weight`. Use
+    `weight`, which is exact because the composition is linear in `weight`. The cache
+    is a bounded LRU holding up to `_COMPOSITION_CACHE_SIZE` label pairs. Use
     `error_generator_composition.cache_info()` to inspect the hit rate and
-    `error_generator_composition.cache_clear()` to release the memory; the cache is
-    unbounded and grows with the number of distinct label pairs composed.
+    `error_generator_composition.cache_clear()` to release the memory.
 
     Parameters
     ----------
@@ -2444,10 +2450,10 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: floa
         An optional weighting value to apply to the value of the composition.
 
     identity : stim.PauliString, optional (default None)
-        Deprecated and ignored; retained so existing call sites keep working. The
-        identity is now derived from the basis element label width and cached
-        internally, which is strictly cheaper than threading one through, and it was
-        never able to change the result -- only its own construction cost.
+        An optional stim.PauliString to use for comparisons to the identity.
+        Passing in this kwarg isn't necessary: the identity is derived from the
+        basis element label width and cached internally, so supplying one does not
+        change the result.
 
     Returns
     -------
