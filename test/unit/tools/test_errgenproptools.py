@@ -8,6 +8,7 @@ from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis
 from pygsti.algorithms.randomcircuit import create_random_circuit
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as GEEL
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
@@ -2572,3 +2573,303 @@ class ErrgenCompositionPairPairBlockTester(BaseCase):
         for block, bound in bounds.items():
             if block not in (('C', 'C'), ('C', 'A'), ('A', 'C'), ('A', 'A')):
                 self.assertLessEqual(bound, 4, f'{block} unexpectedly emits {bound} terms')
+
+
+@unittest.skipIf(stim is None, "stim is not installed")
+class ErrgenCompositionDeadPathTester(BaseCase):
+    """
+    Pins the composition paths that coverage reports as never taken, by proving they
+    are *unreachable* rather than merely untested.
+
+    A guard that can never fire is not a coverage gap to be closed with a cleverer
+    input; it is either dead code or an invariant worth stating. These tests assert
+    the invariants, so if a future change makes one of these paths live, the test
+    fails and points at the guard rather than leaving it silently uncovered.
+    """
+
+    def test_ABPQ_is_never_the_identity_when_the_parity_guard_passes(self):
+        """
+        All four pair-pair blocks end with
+
+            if sum((com_AP, com_AQ, com_BP, com_BQ)) % 2 == 1:
+                ABPQ = ...
+                if ABPQ[1] != identity:   # <- False branch never taken
+
+        The inner guard is dead, and provably so. Writing x_UV = 1 when U and V
+        anticommute, x is additive in each slot, so x_{A,PQ} = x_AP + x_AQ and
+        x_{B,PQ} = x_BP + x_BQ (mod 2). If ABPQ == I then PQ == AB up to phase, and
+        since x_{A,A} = 0 we get x_{A,PQ} = x_{A,AB} = x_AB, likewise for B. Hence
+
+            x_AP + x_AQ + x_BP + x_BQ = x_AB + x_AB = 0  (mod 2),
+
+        i.e. an *even* number of the four cross relations anticommute, so an even
+        number commute. The outer parity guard therefore excludes ABPQ == I.
+
+        Verified exhaustively here for 1-3 qubits across all four family conditions.
+        """
+        for num_qubits in (1, 2, 3):
+            identity = stim.PauliString('I' * num_qubits)
+            pair_labels = _c_type_pauli_pairs(num_qubits)
+            checked = 0
+            for A, B in pair_labels:
+                sA, sB = stim.PauliString(A), stim.PauliString(B)
+                AB = _eprop.pauli_product(sA, sB)
+                for P, Q in pair_labels:
+                    sP, sQ = stim.PauliString(P), stim.PauliString(Q)
+                    coms = (sA.commutes(sP), sA.commutes(sQ),
+                            sB.commutes(sP), sB.commutes(sQ))
+                    if sum(coms) % 2 != 1:
+                        continue
+                    PQ = _eprop.pauli_product(sP, sQ)
+                    ABPQ = _eprop.pauli_product(AB[0] * AB[1], PQ[0] * PQ[1])
+                    self.assertNotEqual(
+                        ABPQ[1], identity,
+                        f'{num_qubits}Q: A={A} B={B} P={P} Q={Q} has odd commuting parity '
+                        f'but A*B*P*Q == I, so the guard in the pair-pair blocks is live '
+                        f'after all')
+                    checked += 1
+            self.assertGreater(checked, 0,
+                               f'{num_qubits}Q: parity guard never passed; nothing checked')
+
+    def test_ordered_new_bels_A_double_identity_branch_is_unreachable(self):
+        """
+        `_ordered_new_bels_A` returns (None, None, None) for `pauli_eq`, and again for
+        `first_pauli_ident and second_pauli_ident`. The second is unreachable from the
+        composition helpers: both Paulis being the identity makes them equal, so the
+        `pauli_eq` guard fires first.
+
+        (`_ordered_new_bels_C` folds the two identity cases into one test and has no
+        such orphan branch.)
+        """
+        ident = stim.PauliString('II')
+        # Reaching the branch at all requires lying about pauli_eq.
+        self.assertEqual(_eprop._ordered_new_bels_A(ident, ident, True, True, False),
+                         (None, None, None))
+        # ...and with the flags computed honestly, pauli_eq short-circuits first.
+        self.assertEqual(_eprop._ordered_new_bels_A(ident, ident, True, True, True),
+                         (None, None, None))
+
+        # Every call site derives the identity flags and pauli_eq from the same pair of
+        # Paulis, so `ident_1 and ident_2` implies `pauli_eq`.
+        for P in (stim.PauliString('II'), stim.PauliString('XI'), stim.PauliString('IZ')):
+            for Q in (stim.PauliString('II'), stim.PauliString('XI')):
+                ident_1, ident_2, pauli_eq = (P == ident), (Q == ident), (P == Q)
+                if ident_1 and ident_2:
+                    self.assertTrue(pauli_eq,
+                                    'both-identity should imply pauli_eq for every caller')
+
+    def test_impl_builds_its_own_identity_when_not_supplied(self):
+        """
+        `_error_generator_composition_impl` has an `identity is None` fallback that the
+        caching entry point never exercises, since it always passes a cached identity.
+        Call the implementation directly to pin that the fallback agrees.
+        """
+        l1 = _LSE('C', [stim.PauliString('XI'), stim.PauliString('IZ')])
+        l2 = _LSE('A', [stim.PauliString('IX'), stim.PauliString('ZI')])
+        without = _eprop._error_generator_composition_impl(l1, l2, 1, None)
+        with_ident = _eprop._error_generator_composition_impl(l1, l2, 1,
+                                                              stim.PauliString('II'))
+        self.assertEqual(without, with_ident)
+        self.assertTrue(without, 'expected a non-empty composition for this pair')
+
+    def test_impl_returns_empty_for_an_unrecognized_errorgen_type(self):
+        """
+        The trailing `return composed_errorgens` is reachable only for an error
+        generator type outside {H, S, C, A}. Pin the current (silent, empty) behavior
+        so that a future decision to raise instead is a deliberate, visible change.
+        """
+        bogus = _LSE('H', [stim.PauliString('XI')])
+        bogus.errorgen_type = 'Z'   # not a real elementary error generator type
+        good = _LSE('H', [stim.PauliString('IZ')])
+        self.assertEqual(
+            _eprop._error_generator_composition_impl(bogus, good, 1, stim.PauliString('II')),
+            [])
+        self.assertEqual(
+            _eprop._error_generator_composition_impl(good, bogus, 1, stim.PauliString('II')),
+            [])
+
+
+@unittest.skipIf(stim is None, "stim is not installed")
+class ErrgenCompositionOracleHelperTester(BaseCase):
+    """
+    Tests for `errorgen_layer_to_matrix` and `error_generator_composition_numerical`.
+
+    These two are the numerical oracle the composition tests are checked against, yet
+    they were the least covered code on the composition surface (53% and 56%). A fault
+    in either would weaken every dense cross-check in this file while looking like a
+    passing suite, so they deserve direct tests rather than being exercised only
+    incidentally.
+    """
+
+    NQ = 2
+
+    def setUp(self):
+        self.basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(self.NQ),
+                                                     default_label_type='local')
+        self.local_dict = {lbl: mat for lbl, mat
+                           in zip(self.basis.labels, self.basis.elemgen_matrices)}
+        self.sslbls = tuple(range(self.NQ))
+        self.global_dict = {GEEL.cast(lbl, sslbls=self.sslbls): mat
+                            for lbl, mat in self.local_dict.items()}
+        self.lse_dict = {_LSE.cast(lbl): mat for lbl, mat in self.local_dict.items()}
+        self.leel = LEEL('H', ('XI',))
+        self.expected = self.local_dict[self.leel]
+
+    # ------------------------------------------------ errorgen_layer_to_matrix
+
+    def test_layer_to_matrix_empty_layer_is_all_zeros(self):
+        for empty in ([], (), {}):
+            mat = _eprop.errorgen_layer_to_matrix(empty, self.NQ,
+                                                  errorgen_matrix_dict=self.local_dict)
+            self.assertEqual(mat.shape, (4**self.NQ, 4**self.NQ))
+            self.assertEqual(np.linalg.norm(mat), 0.0)
+
+    def test_layer_to_matrix_builds_its_own_basis_when_dict_is_omitted(self):
+        """The `errorgen_matrix_dict is None` path must agree with the explicit dict."""
+        layer = [(self.leel, 1.0)]
+        self.assertLess(np.linalg.norm(_eprop.errorgen_layer_to_matrix(layer, self.NQ)
+                                       - self.expected), 1e-12)
+
+    def test_layer_to_matrix_accepts_list_tuple_and_dict_layers(self):
+        as_list = [(self.leel, 2.0)]
+        for layer in (as_list, tuple(as_list), dict(as_list)):
+            mat = _eprop.errorgen_layer_to_matrix(layer, self.NQ,
+                                                  errorgen_matrix_dict=self.local_dict)
+            self.assertLess(np.linalg.norm(mat - 2.0*self.expected), 1e-12,
+                            f'layer supplied as {type(layer).__name__} disagreed')
+
+    def test_layer_to_matrix_all_label_and_dict_type_combinations(self):
+        """
+        Nine of these combinations are legal: {LSE, LEEL, GEEL} labels crossed with
+        {local, global} dict keys (plus LSE against an LSE-keyed dict). Each is a
+        separate branch and all must produce the same matrix.
+        """
+        lse = _LSE.cast(self.leel)
+        geel = GEEL.cast(self.leel, sslbls=self.sslbls)
+        cases = [
+            ('LSE  / local ', [(lse, 1.0)], self.local_dict, None),
+            ('LSE  / global', [(lse, 1.0)], self.global_dict, None),
+            ('LEEL / local ', [(self.leel, 1.0)], self.local_dict, None),
+            ('LEEL / global', [(self.leel, 1.0)], self.global_dict, self.sslbls),
+            ('GEEL / local ', [(geel, 1.0)], self.local_dict, self.sslbls),
+            ('GEEL / global', [(geel, 1.0)], self.global_dict, self.sslbls),
+        ]
+        for name, layer, matrix_dict, sslbls in cases:
+            mat = _eprop.errorgen_layer_to_matrix(layer, self.NQ,
+                                                  errorgen_matrix_dict=matrix_dict,
+                                                  sslbls=sslbls)
+            self.assertLess(np.linalg.norm(mat - self.expected), 1e-12,
+                            f'{name}: disagreed with the reference matrix')
+
+    def test_layer_to_matrix_requires_sslbls_when_label_kinds_are_mixed(self):
+        """Local labels against a global dict (and vice versa) need `sslbls`."""
+        geel = GEEL.cast(self.leel, sslbls=self.sslbls)
+        with self.assertRaises(ValueError):
+            _eprop.errorgen_layer_to_matrix([(self.leel, 1.0)], self.NQ,
+                                            errorgen_matrix_dict=self.global_dict)
+        with self.assertRaises(ValueError):
+            _eprop.errorgen_layer_to_matrix([(geel, 1.0)], self.NQ,
+                                            errorgen_matrix_dict=self.local_dict)
+
+    def test_layer_to_matrix_rejects_unsupported_dict_key_type(self):
+        """
+        An unsupported `errorgen_matrix_dict` key must raise *with* its message. This
+        previously raised a bare `ValueError()`, discarding the explanation it had just
+        built -- a bug no test caught because the branch was never executed.
+        """
+        bad_dict = {'H(XI)': self.expected}
+        with self.assertRaises(ValueError) as ctx:
+            _eprop.errorgen_layer_to_matrix([(self.leel, 1.0)], self.NQ,
+                                            errorgen_matrix_dict=bad_dict)
+        self.assertIn('is not supported as a key', str(ctx.exception))
+
+    def test_layer_to_matrix_rejects_empty_dict_for_a_nonempty_layer(self):
+        """
+        An empty dict is distinct from `None`: `None` means "build the basis for me",
+        whereas `{}` is an explicit dict with nothing in it and cannot be used.
+        """
+        with self.assertRaises(ValueError) as ctx:
+            _eprop.errorgen_layer_to_matrix([(self.leel, 1.0)], self.NQ,
+                                            errorgen_matrix_dict={})
+        self.assertIn('errorgen_matrix_dict is empty', str(ctx.exception))
+
+    def test_layer_to_matrix_rejects_a_layer_that_is_not_a_list_tuple_or_dict(self):
+        with self.assertRaises(ValueError) as ctx:
+            _eprop.errorgen_layer_to_matrix(iter([(self.leel, 1.0)]), self.NQ,
+                                            errorgen_matrix_dict=self.local_dict)
+        self.assertIn('should be either a list, tuple or dict', str(ctx.exception))
+
+    def test_layer_to_matrix_rejects_unsupported_coefficient_label_type(self):
+        with self.assertRaises(ValueError) as ctx:
+            _eprop.errorgen_layer_to_matrix([('H(XI)', 1.0)], self.NQ,
+                                            errorgen_matrix_dict=self.local_dict)
+        self.assertIn('should be either', str(ctx.exception))
+
+    def test_layer_to_matrix_is_linear_in_the_rates(self):
+        """Guards the accumulation loop, which every dense cross-check depends on."""
+        other = LEEL('S', ('IZ',))
+        combined = _eprop.errorgen_layer_to_matrix(
+            [(self.leel, 1.5), (other, -2.0)], self.NQ,
+            errorgen_matrix_dict=self.local_dict)
+        separate = (1.5*self.local_dict[self.leel] - 2.0*self.local_dict[other])
+        self.assertLess(np.linalg.norm(combined - separate), 1e-12)
+
+    def test_layer_to_matrix_sums_duplicate_labels_rather_than_overwriting(self):
+        """
+        The composition routines return *unmerged* duplicate terms, so the oracle must
+        accumulate them. If it overwrote instead, several block tests would silently
+        compare against the wrong matrix.
+        """
+        mat = _eprop.errorgen_layer_to_matrix([(self.leel, 1.0), (self.leel, 1.0)],
+                                              self.NQ,
+                                              errorgen_matrix_dict=self.local_dict)
+        self.assertLess(np.linalg.norm(mat - 2.0*self.expected), 1e-12)
+
+    # --------------------------------- error_generator_composition_numerical
+
+    def test_composition_numerical_all_label_and_dict_type_combinations(self):
+        l1, l2 = LEEL('H', ('XI',)), LEEL('S', ('IZ',))
+        reference = self.local_dict[l1] @ self.local_dict[l2]
+        cases = [
+            ('LEEL / LEEL-keyed', l1, l2, self.local_dict),
+            ('LSE  / LEEL-keyed', _LSE.cast(l1), _LSE.cast(l2), self.local_dict),
+            ('LSE  / LSE-keyed ', _LSE.cast(l1), _LSE.cast(l2), self.lse_dict),
+            ('LEEL / LSE-keyed ', l1, l2, self.lse_dict),
+        ]
+        for name, a, b, matrix_dict in cases:
+            got = _eprop.error_generator_composition_numerical(a, b, matrix_dict)
+            self.assertLess(np.linalg.norm(got - reference), 1e-12,
+                            f'{name}: disagreed with the reference product')
+
+    def test_composition_numerical_builds_its_own_basis_when_dict_is_omitted(self):
+        l1, l2 = LEEL('H', ('XI',)), LEEL('S', ('IZ',))
+        got = _eprop.error_generator_composition_numerical(l1, l2, None, num_qubits=self.NQ)
+        reference = self.local_dict[l1] @ self.local_dict[l2]
+        self.assertLess(np.linalg.norm(got - reference), 1e-12)
+
+    def test_composition_numerical_rejects_mismatched_or_unsupported_label_types(self):
+        l1 = LEEL('H', ('XI',))
+        with self.assertRaises(AssertionError):
+            _eprop.error_generator_composition_numerical(l1, _LSE.cast(l1), self.local_dict)
+        with self.assertRaises(AssertionError):
+            _eprop.error_generator_composition_numerical('H(XI)', l1, self.local_dict)
+
+    def test_composition_numerical_is_not_symmetric(self):
+        """
+        A sanity check on argument order, which the block tests rely on. H(XI) and
+        H(YI) are chosen because their superoperators genuinely fail to commute; many
+        elementary pairs (e.g. H(XI) with C(IX,IZ)) act on disjoint qubits and would
+        make this check vacuous.
+        """
+        l1, l2 = LEEL('H', ('XI',)), LEEL('H', ('YI',))
+        forward = _eprop.error_generator_composition_numerical(l1, l2, self.local_dict)
+        backward = _eprop.error_generator_composition_numerical(l2, l1, self.local_dict)
+        self.assertGreater(np.linalg.norm(forward - backward), 1e-10)
+
+    # ------------------------------ iterative_error_generator_composition
+
+    def test_iterative_composition_with_a_single_label_is_the_identity(self):
+        """The `len(errorgen_labels) == 1` early return was never exercised."""
+        lbl = _LSE('H', [stim.PauliString('XI')])
+        self.assertEqual(_eprop.iterative_error_generator_composition((lbl,), (2.5,)),
+                         [(lbl, 2.5)])

@@ -2079,10 +2079,11 @@ def _error_generator_composition_ac(A: stim.PauliString, B: stim.PauliString, P:
     if PQ is not None and AB is not None:
         _append_product_pair(composed_errorgens, True, PQ, AB, -1j, identity, weight)
     if PQ is not None:
+        # These two are images of one another under A <-> B, hence the paired signs.
         _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), B, com_AP == com_AQ,
-                                     False, -1, -1*1j, identity, weight)
+                                     False, -1, -1j, identity, weight)
         _append_conditional_errorgen(composed_errorgens, pauli_product(B, PQ[0]*PQ[1]), A, com_BP == com_BQ,
-                                     False, 1, 1*1j, identity, weight)
+                                     False, 1, 1j, identity, weight)
     if AB is not None:
         _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, com_AP == com_BP,
                                      True, 1j, -1, identity, weight)
@@ -2178,9 +2179,9 @@ def _error_generator_composition_ca(A: stim.PauliString, B: stim.PauliString, P:
                                      True, 1j, 1, identity, weight)
     if AB is not None:
         _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, com_AP == com_BP,
-                                     False, -1, -1*-1j, identity, weight)
+                                     False, -1, 1j, identity, weight)
         _append_conditional_errorgen(composed_errorgens, pauli_product(Q, AB[0]*AB[1]), P, com_AQ == com_BQ,
-                                     False, 1, 1*-1j, identity, weight)
+                                     False, 1, -1j, identity, weight)
     if PQ is not None and AB is not None:
         # The Hamiltonian term survives only for an odd number of commuting cross
         # relations.
@@ -2212,16 +2213,14 @@ def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight
 
     composed_errorgens = []
 
-    w = weight
-
     errorgen_1_type = errorgen_1.errorgen_type
     errorgen_2_type = errorgen_2.errorgen_type
 
-    # The first basis element label is always well defined, 
-    # the second we'll define only of the error generator is C or A type.
-    errorgen_1_bel_0 = errorgen_1.basis_element_labels[0] 
-    errorgen_2_bel_0 = errorgen_2.basis_element_labels[0] 
-    
+    # The first basis element label is always well defined,
+    # the second we'll define only if the error generator is C or A type.
+    errorgen_1_bel_0 = errorgen_1.basis_element_labels[0]
+    errorgen_2_bel_0 = errorgen_2.basis_element_labels[0]
+
     if errorgen_1_type == 'C' or errorgen_1_type == 'A':
         errorgen_1_bel_1 = errorgen_1.basis_element_labels[1]
     if errorgen_2_type == 'C' or errorgen_2_type == 'A':
@@ -2238,14 +2237,14 @@ def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight
         P_eq_Q = (P==Q)
         if not P.commutes(Q):
             PQ = pauli_product(P, Q)
-            # `w` last, as in every other term here, so that the result is exactly
-            # linear in it -- see `_error_generator_composition_impl`.
-            composed_errorgens.append((_LSE('H', [PQ[1]]), -1j*PQ[0]*w))
+            # `weight` last, as in every other term here, so that the result is exactly
+            # linear in it -- see this function's docstring.
+            composed_errorgens.append((_LSE('H', [PQ[1]]), -1j*PQ[0]*weight))
 
         new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(P, Q, False, False, P_eq_Q)
-        composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_factor*w))
+        composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_factor*weight))
         return composed_errorgens
-        
+
     elif errorgen_1_type == 'H' and errorgen_2_type == 'S':
         # H_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
         P = errorgen_1_bel_0
@@ -2258,7 +2257,7 @@ def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight
         A = errorgen_1_bel_0
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_hc_or_ch(A, P, Q, True, w, identity)
+        composed_errorgens = _error_generator_composition_hc_or_ch(A, P, Q, True, weight, identity)
         return composed_errorgens
 
     elif errorgen_1_type == 'H' and errorgen_2_type == 'A':
@@ -2266,7 +2265,7 @@ def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight
         A = errorgen_1_bel_0
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_ha_or_ah(A, P, Q, True, w, identity)
+        composed_errorgens = _error_generator_composition_ha_or_ah(A, P, Q, True, weight, identity)
         return composed_errorgens
 
     elif errorgen_1_type == 'S' and errorgen_2_type == 'H':
@@ -2283,104 +2282,97 @@ def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight
         PQ = pauli_product(P, Q)
         PQ_ident = (PQ[1] == identity)
         if not PQ_ident:
-            composed_errorgens.append((_LSE('S', [PQ[1]]), w))
-        composed_errorgens.append((_LSE('S', [P]), -w))
-        composed_errorgens.append((_LSE('S', [Q]),- w))
+            composed_errorgens.append((_LSE('S', [PQ[1]]), weight))
+        composed_errorgens.append((_LSE('S', [P]), -weight))
+        composed_errorgens.append((_LSE('S', [Q]), -weight))
+        return composed_errorgens
 
     elif errorgen_1_type == 'S' and errorgen_2_type == 'C':
         # S_A[C_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         A = errorgen_1_bel_0
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_sc_or_cs(A, P, Q, True, w, identity)
+        composed_errorgens = _error_generator_composition_sc_or_cs(A, P, Q, True, weight, identity)
         return composed_errorgens
 
     elif errorgen_1_type == 'S' and errorgen_2_type == 'A':
-        # S_A[A_P,Q] A-> errorgen_1_bel_0, P->errorgen_2_bel_0, Q -> errorgen_2_bel_1
         # S_A[A_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         A = errorgen_1_bel_0
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_sa_or_as(A, P, Q, True, w, identity)
+        composed_errorgens = _error_generator_composition_sa_or_as(A, P, Q, True, weight, identity)
         return composed_errorgens
-  
+
     elif errorgen_1_type == 'C' and errorgen_2_type == 'H':
         # C_{P,Q}[H_A] P,Q -> errorgen_1_bel_0, errorgen_1_bel_1, A->errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_1_bel_1
         A = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_hc_or_ch(A, P, Q, False, w, identity)
+        composed_errorgens = _error_generator_composition_hc_or_ch(A, P, Q, False, weight, identity)
         return composed_errorgens
 
-    elif errorgen_1_type == 'C' and errorgen_2_type == 'S': # TODO: This differs from S-C by just a few signs. Should be able to combine and significantly compress code.
-        # C_P,Q[S_A] P-> errorgen_1_bel_0, Q -> errorgen_1_bel_1, A->errorgen_2_bel_0
+    elif errorgen_1_type == 'C' and errorgen_2_type == 'S':
         # C_{P,Q}[S_A] P,Q -> errorgen_1_bel_0, errorgen_1_bel_1, A->errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_1_bel_1
         A = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_sc_or_cs(A, P, Q, False, w, identity)
+        composed_errorgens = _error_generator_composition_sc_or_cs(A, P, Q, False, weight, identity)
         return composed_errorgens
+
     elif errorgen_1_type == 'C' and errorgen_2_type == 'C':
-        # C_A,B[C_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         # C_{A,B}[C_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_cc(A, B, P, Q, w, identity)
+        composed_errorgens = _error_generator_composition_cc(A, B, P, Q, weight, identity)
         return composed_errorgens
 
-
     elif errorgen_1_type == 'C' and errorgen_2_type == 'A':
-        # C_A,B[A_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         # C_{A,B}[A_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_ca(A, B, P, Q, w, identity)
+        composed_errorgens = _error_generator_composition_ca(A, B, P, Q, weight, identity)
         return composed_errorgens
-
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'H':
         # A_{P,Q}[H_A] P,Q -> errorgen_1_bel_0, errorgen_1_bel_1, A->errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_1_bel_1
         A = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_ha_or_ah(A, P, Q, False, w, identity)
+        composed_errorgens = _error_generator_composition_ha_or_ah(A, P, Q, False, weight, identity)
         return composed_errorgens
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'S':
-        # A_P,Q[S_A] P->errorgen_1_bel_0, Q->errorgen_1_bel_1, A -> errorgen_2_bel_0
         # A_{P,Q}[S_A] P,Q -> errorgen_1_bel_0, errorgen_1_bel_1, A->errorgen_2_bel_0
         P = errorgen_1_bel_0
         Q = errorgen_1_bel_1
         A = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_sa_or_as(A, P, Q, False, w, identity)
+        composed_errorgens = _error_generator_composition_sa_or_as(A, P, Q, False, weight, identity)
         return composed_errorgens
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'C':
-        # A_A,B[C_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         # A_{A,B}[C_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_ac(A, B, P, Q, w, identity)
+        composed_errorgens = _error_generator_composition_ac(A, B, P, Q, weight, identity)
         return composed_errorgens
 
-
     elif errorgen_1_type == 'A' and errorgen_2_type == 'A':
-        # A_A,B[A_P,Q]: A -> errorgen_1_bel_0, B -> errorgen_1_bel_1, P -> errorgen_2_bel_0, Q -> errorgen_2_bel_1 
         # A_{A,B}[A_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
         A = errorgen_1_bel_0
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_aa(A, B, P, Q, w, identity)
+        composed_errorgens = _error_generator_composition_aa(A, B, P, Q, weight, identity)
         return composed_errorgens
 
-
+    # Every (H, S, C, A) x (H, S, C, A) pair is handled above, so this is reached only for
+    # an unrecognized error generator type.
     return composed_errorgens
 
 
@@ -2703,7 +2695,7 @@ def errorgen_layer_to_matrix(errorgen_layer: Union[list[tuple[_EEL, float]], tup
         else:
             msg = f'Label type {type(first_label)} is not supported as a key for errorgen_matrix_dict.'\
                   + 'Please use either LocalElementaryErrorgenLabel or GlobalElementaryErrorgenLabel.'
-            raise ValueError()
+            raise ValueError(msg)
     else:
         raise ValueError('Non-empty errorgen_layer, but errorgen_matrix_dict is empty. Cannot convert.')
         
