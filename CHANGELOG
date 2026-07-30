@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [0.10.2] - 2026-07-30
+
+Bugfix release, plus a line search safeguard for the Levenberg-Marquardt optimizer.
+
+### Added
+* Enumerative line search guard in the (simpler) Levenberg-Marquardt optimizer, triggered when the norm of the search direction is large relative to the current iterate. This prevents the optimizer from jumping to a wrong basin, which matters especially for models with CPTP-parameterized instruments (#852).
+* `tools.jamiolkowski.jamiolkowski_iso_inv` now accepts cvxpy `Expression` inputs, consistent with its type annotations; adds `tools.basistools.is_cvxpy_expression` as an import-cheap helper (#860).
+
+### Fixed
+* Deserializing models that use a `TensorProdBasis` (and a similar bug in `leakage/gaugeopt.py`) no longer fails by accessing a non-existent `state_space` field (#842).
+* `EmbeddedOp` no longer inherits a wrong dense-representation preference from the operation it embeds (#841, resolves #543).
+* Processor spec serialization now round-trips non-standard instruments. Previously, plain-string instrument names were exploded character-by-character (e.g., 'Iparity' -> 'I:p:a:r:i:t:y'), integer state-space labels were coerced to strings, and compound names came back as unhashable lists; no non-standard instrument survived a round trip correctly. The old on-disk format is still read, with a best-effort repair (#854).
+* `matrixtools.eigendecomposition(assume_normal=True)` now still routes Hermitian inputs to `eigh` (Hermitian matrices are normal, but the Hermiticity check was being skipped whenever the caller passed `assume_normal=True`); also fixed a pre-existing bug where `matrixtools.eigenvalues(assume_normal=True)` read off the Schur unitary factor instead of the triangular factor's diagonal (#856).
+* Building pyGSTi from source on a branch whose name contains "/" (or other characters that PEP 440 forbids in local version segments) no longer produces an invalid version string; branch names are sanitized in our custom setuptools_scm local version scheme (#857).
+
 ## [0.10.1] - 2026-07-06
 
 Bugfix release. The only updates are to pyproject.toml to declare import-time dependencies.
