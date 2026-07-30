@@ -215,15 +215,11 @@ def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis:
 
     # Both branches compute the same thing:
     #     opMxInStdBasis = sum_ij choiMx_unnorm[i, j] * kron(B_i, conj(B_j))
-    # in the matrix unit basis of the entire density matrix.  They are kept separate
-    # because neither formulation is acceptable in the other's role -- see below.
+    # in the matrix unit basis of the entire density matrix.
     if is_cvxpy_expression:
         # Accumulate one row of `choiMx_unnorm` at a time as an explicit matrix-vector
-        # product.  This keeps the whole computation affine in `choi_mx`, so a CVXPY
-        # Expression flows through it unevaluated (cf. `jamiolkowski_iso`); scaling and
-        # adding `BiBj` in place, as the numeric branch does, cannot work symbolically.
-        # The peak temporary is N**3, the same as the equivalent loop in
-        # `jamiolkowski_iso`.
+        # product. This is needed because in-place operations with CVXPY Expressions
+        # aren't allowed.
         import cvxpy as cp
         opMx_vec = 0
         for i in range(N):
@@ -233,9 +229,8 @@ def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis:
             opMx_vec = opMx_vec + BiBj_cols @ choiMx_unnorm[i, :]
         opMxInStdBasis = cp.reshape(opMx_vec, (N, N), order='C')
     else:
-        # Don't route ndarrays through the branch above: its inner product is a BLAS
-        # matvec on operands small enough that thread startup dominates (measured ~9 ms
-        # for a single 256x16 complex matvec, i.e. ~30x slower overall at N=16).
+        # Don't route ndarrays through the branch above: in-place accumulation is
+        # materially faster.
         opMxInStdBasis = _np.zeros((N, N), 'complex')
         for i in range(N):
             for j in range(N):

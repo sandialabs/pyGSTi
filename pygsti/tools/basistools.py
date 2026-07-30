@@ -25,11 +25,8 @@ def is_cvxpy_expression(obj) -> bool:
     Whether `obj` is a CVXPY `Expression`.
 
     Returns False whenever cvxpy is not installed, and -- more usefully -- whenever
-    cvxpy has simply not been imported yet.  That shortcut is exact rather than
-    heuristic: an `Expression` instance cannot exist unless `cvxpy` is already in
-    `sys.modules`.  It matters because cvxpy is an optional dependency with a
-    multi-second import time, and this predicate is called from hot paths such as
-    :func:`change_basis`.
+    cvxpy has simply not been imported yet. This check is preferred since cvxpy 
+    imports can be expensive.
 
     Parameters
     ----------
@@ -217,8 +214,6 @@ def change_basis(mx, from_basis, to_basis, expect_real=True):
 
     isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
     if isMx:
-        # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
-        # with some/all args being sparse:
         ret = toMx @ (mx @ fromMx)
     else:  # isVec
         ret = toMx @ mx
@@ -357,20 +352,14 @@ def resize_std_mx(mx, resize, std_basis_1, std_basis_2):
     if std_basis_1.dim == std_basis_2.dim:
         return change_basis(mx, std_basis_1, std_basis_2)  # don't just 'return mx' here
         # - need to change bases if bases are different (e.g. if one is a Tensorprod of std components)
-
-    #print('{}ing {} to {}'.format(resize, std_basis_1, std_basis_2))
-    #print('Dims: ({} to {})'.format(std_basis_1.dim, std_basis_2.dim))
-    #Below: use 'exp' in comments for 'expanded dimension'
-    # Note: use `@` rather than `_np.dot` throughout -- `_np.dot` silently produces an
-    # object-dtype array when either operand is a CVXPY Expression (or a scipy sparse
-    # matrix), whereas `@` dispatches to the operand's own `__matmul__`/`__rmatmul__`.
+    
     if resize == 'expand':
         assert std_basis_1.dim < std_basis_2.dim
         right = mx @ std_basis_1.from_elementstd_transform_matrix  # (exp,dim) (dim,dim) (dim,exp) => exp,exp
-        mid = std_basis_1.to_elementstd_transform_matrix @ right  # want Ai st.   Ai * A = I(dim)
+        mid = std_basis_1.to_elementstd_transform_matrix @ right   # want Ai st. Ai * A = I(dim)
     elif resize == 'contract':
         assert std_basis_1.dim > std_basis_2.dim
-        right = mx @ std_basis_2.to_elementstd_transform_matrix  # (dim,dim) (dim,exp) => dim,exp
+        right = mx @ std_basis_2.to_elementstd_transform_matrix     # (dim,dim) (dim,exp) => dim,exp
         mid = std_basis_2.from_elementstd_transform_matrix @ right  # (dim, exp) (exp, dim) => expdim, exp
     return mid
 
