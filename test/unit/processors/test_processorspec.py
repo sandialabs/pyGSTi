@@ -463,3 +463,49 @@ class ProcessorSpecTester(BaseCase):
         self.assertArraysEqual(actual_Gh_p, expected_Gh_p)
         self.assertArraysEqual(actual_Gp_s, expected_Gp_s)
         self.assertArraysEqual(actual_Gp_p, expected_Gp_p)
+
+
+class GlobalIdleConnectivityTester(BaseCase):
+    """
+    Cover the ``'{idle}'`` special case in ``compute_2Q_connectivity`` and
+    ``compute_clifford_2Q_connectivity``.
+
+    A global idle is a 2-qubit gate whose availability resolves to ``[None]``
+    rather than to a list of qubit pairs, because it applies to the whole
+    register at once. Both methods special-case that and treat it as available
+    on every qubit; without it, ``qubit_labels.index(None)`` would raise.
+    """
+
+    @staticmethod
+    def _pspec(gate_names):
+        # 2 qubits so that the global idle is a *2-qubit* gate and therefore
+        # reaches the `gate_num_qubits(gn) == 2` branch at all.
+        return QubitProcessorSpec(2, gate_names=gate_names, geometry='line',
+                                  qubit_labels=(0, 1))
+
+    def test_global_idle_availability_resolves_to_none(self):
+        # The precondition the special case exists for; if this ever changes the
+        # tests below would silently stop covering it.
+        pspec = self._pspec(['Gxpi2', 'Gypi2', '{idle}'])
+        self.assertEqual(pspec.gate_num_qubits('{idle}'), 2)
+        self.assertEqual(list(pspec.resolved_availability('{idle}', 'tuple')), [None])
+
+    def test_global_idle_alone_supplies_2Q_connectivity(self):
+        # No genuine 2Q gate here, so the edge can only come from the global idle.
+        pspec = self._pspec(['Gxpi2', 'Gypi2', '{idle}'])
+        self.assertEqual(pspec.compute_2Q_connectivity().edges(), [(0, 1)])
+
+    def test_global_idle_alone_supplies_clifford_2Q_connectivity(self):
+        pspec = self._pspec(['Gxpi2', 'Gypi2', '{idle}'])
+        self.assertEqual(pspec.compute_clifford_2Q_connectivity().edges(), [(0, 1)])
+
+    def test_without_the_global_idle_there_is_no_2Q_connectivity(self):
+        # Same spec minus '{idle}': confirms the edge above is attributable to the
+        # global idle rather than to the 1Q gates or the 'line' geometry.
+        pspec = self._pspec(['Gxpi2', 'Gypi2'])
+        self.assertEqual(pspec.compute_2Q_connectivity().edges(), [])
+        self.assertEqual(pspec.compute_clifford_2Q_connectivity().edges(), [])
+
+    def test_global_idle_coexists_with_a_real_2Q_gate(self):
+        pspec = self._pspec(['Gxpi2', 'Gcnot', '{idle}'])
+        self.assertEqual(set(pspec.compute_2Q_connectivity().edges()), {(0, 1), (1, 0)})
