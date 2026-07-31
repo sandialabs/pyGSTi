@@ -1,15 +1,29 @@
 import unittest
 from typing import Any, cast
 import numpy as np
+import networkx as nx
 import stim
 import tensorflow as tf
 import keras
 
+try:
+    import igraph
+    IGRAPH_IMPORTED = True
+except ImportError:
+    IGRAPH_IMPORTED = False
+
+try:
+    import graph_tool
+    GRAPH_TOOL_IMPORTED = True
+except ImportError:
+    GRAPH_TOOL_IMPORTED = False
+
 import pygsti
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
+from pygsti.baseobjs.qubitgraph import QubitGraph
 from pygsti.circuits import Circuit
 from pygsti.data import DataSet
-from pygsti.extras.ml import errgentools, encoding, snippers, legacy, customlayers, qpanns
+from pygsti.extras.ml import errgentools, encoding, snippers, legacy, customlayers, qpanns, graphtools
 
 class MLSubpackageTester(unittest.TestCase):
     def test_errgentools(self):
@@ -612,6 +626,251 @@ class MLSubpackageTester(unittest.TestCase):
         circuit = Circuit('[Gxpi2:0][Gxpi2:0]@(0,1)')  # depth 2
         with self.assertRaises(ValueError):
             encoder(circuit, padded_depth=1)
+
+
+class GraphToolsTester(unittest.TestCase):
+    # Reference data for a 4-qubit line graph 0-1-2-3, used by several tests below.
+    LINE4_EDGES = [(0, 1), (1, 2), (2, 3)]
+    LINE4_LAPLACIAN = np.array([[1, -1, 0, 0], [-1, 2, -1, 0], [0, -1, 2, -1], [0, 0, -1, 1]])
+    LINE4_ADJACENCY = np.array([[0, 1, 0, 0], [1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0]])
+
+    def test_laplacian_adjacency_round_trip(self):
+        # 3-qubit line: 0-1-2
+        L = np.array([[1, -1, 0], [-1, 2, -1], [0, -1, 1]])
+        A_expected = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])
+        A = graphtools.qubit_graph_adjacency_matrix(L)
+        np.testing.assert_array_equal(A, A_expected)
+        np.testing.assert_array_equal(graphtools.qubit_graph_laplacian(A, input_is='adjacency'), L)
+        np.testing.assert_array_equal(graphtools.qubit_graph_laplacian(L), L)  # auto-detected round trip
+
+        # Star graph on 4 qubits, center 0.
+        L_star = np.array([[3, -1, -1, -1], [-1, 1, 0, 0], [-1, 0, 1, 0], [-1, 0, 0, 1]])
+        A_star_expected = np.array([[0, 1, 1, 1], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]])
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(L_star), A_star_expected)
+
+        # Disconnected graph with an isolated qubit (qubit 2).
+        A_iso = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]])
+        L_iso = graphtools.qubit_graph_laplacian(A_iso, input_is='adjacency')
+        np.testing.assert_array_equal(L_iso, np.array([[1, -1, 0], [-1, 1, 0], [0, 0, 0]]))
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(L_iso), A_iso)
+
+        # Complete graph on 4 qubits.
+        A_complete = np.ones((4, 4), int) - np.eye(4, dtype=int)
+        L_complete = graphtools.qubit_graph_laplacian(A_complete, input_is='adjacency')
+        np.testing.assert_array_equal(L_complete, 3 * np.eye(4, dtype=int) - A_complete)
+
+    def test_input_is_auto_detection(self):
+        # The all-zero (edgeless) matrix is valid under either interpretation.
+        Z = np.zeros((3, 3))
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(Z), np.zeros((3, 3), int))
+
+        # Mixed-sign off-diagonal entries are neither a valid Laplacian nor a valid adjacency
+        # matrix -- ambiguous, so this must raise rather than silently guessing.
+        with self.assertRaises(ValueError):
+            graphtools.qubit_graph_to_networkx(np.array([[0, 1], [-1, 0]]))
+
+        # All off-diagonal entries <= 0, but row sums aren't zero: not a valid Laplacian either.
+        bad = np.array([[0, -1, 0], [-1, 0, 0], [0, 0, 0]])
+        with self.assertRaises(ValueError):
+            graphtools.qubit_graph_to_networkx(bad)
+
+        # An explicit input_is bypasses the auto-detection heuristic entirely.
+        G = graphtools.qubit_graph_to_networkx(bad, input_is='laplacian')
+        self.assertEqual(sorted(G.edges()), [(0, 1)])
+
+    def test_networkx_inputs(self):
+        A_expected = self.LINE4_ADJACENCY[:3, :3]  # 3-qubit line sub-case (0-1-2)
+
+        G_int = nx.Graph()
+        G_int.add_nodes_from([0, 1, 2])
+        G_int.add_edges_from([(0, 1), (1, 2)])
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(G_int), A_expected)
+
+        # A DiGraph with only "forward" edges must still be symmetrized.
+        G_di = nx.DiGraph()
+        G_di.add_nodes_from([0, 1, 2])
+        G_di.add_edges_from([(0, 1), (1, 2)])
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(G_di), A_expected)
+
+        # Non-integer (string) qubit labels: native node order defines position.
+        G_str = nx.Graph()
+        G_str.add_nodes_from(['q0', 'q1', 'q2'])
+        G_str.add_edges_from([('q0', 'q1'), ('q1', 'q2')])
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(G_str), A_expected)
+
+    def test_node_ordering_regression(self):
+        # An nx graph whose insertion order differs from the desired qubit_labels order must
+        # still be reordered correctly (the old bare-matrix API had no such ordering check at
+        # all -- a mismatched matrix would silently produce wrong results).
+        G = nx.Graph()
+        G.add_nodes_from(['Q2', 'Q0', 'Q1'])  # scrambled insertion order
+        G.add_edge('Q0', 'Q1')
+        out = graphtools.qubit_graph_to_networkx(G, qubit_labels=['Q0', 'Q1', 'Q2'])
+        self.assertEqual(list(out.nodes()), ['Q0', 'Q1', 'Q2'])
+        A = graphtools.qubit_graph_adjacency_matrix(G, qubit_labels=['Q0', 'Q1', 'Q2'])
+        np.testing.assert_array_equal(A, np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]]))
+
+        # Positional fallback: a plain-int-labeled graph mapped onto non-integer qubit_labels.
+        G_pos = nx.Graph()
+        G_pos.add_nodes_from([0, 1, 2])
+        G_pos.add_edge(0, 1)
+        out_pos = graphtools.qubit_graph_to_networkx(G_pos, qubit_labels=['Qa', 'Qb', 'Qc'])
+        self.assertEqual(list(out_pos.nodes()), ['Qa', 'Qb', 'Qc'])
+        self.assertEqual(sorted(out_pos.edges()), [('Qa', 'Qb')])
+
+        # An unreconcilable mismatch raises a clear ValueError naming the offending node.
+        with self.assertRaises(ValueError):
+            graphtools.qubit_graph_to_networkx(G, qubit_labels=['Q0', 'Q1'])  # 'Q2' unexplained
+
+    @unittest.skipUnless(IGRAPH_IMPORTED, "igraph not installed")
+    def test_igraph_input(self):
+        g = igraph.Graph(n=4, edges=self.LINE4_EDGES)
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g), self.LINE4_ADJACENCY)
+
+        g_named = igraph.Graph(n=3)
+        g_named.vs['name'] = ['q0', 'q1', 'q2']
+        g_named.add_edges([(0, 1)])
+        out = graphtools.qubit_graph_to_networkx(g_named)
+        self.assertEqual(list(out.nodes()), ['q0', 'q1', 'q2'])
+        self.assertEqual(sorted(out.edges()), [('q0', 'q1')])
+
+        # Directed igraph graph with only one direction present must still be symmetrized.
+        g_dir = igraph.Graph(n=4, edges=self.LINE4_EDGES, directed=True)
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g_dir), self.LINE4_ADJACENCY)
+
+    @unittest.skipUnless(GRAPH_TOOL_IMPORTED, "graph_tool not installed")
+    def test_graph_tool_input(self):
+        g = graph_tool.Graph(directed=False)
+        g.add_vertex(4)
+        g.add_edge_list(self.LINE4_EDGES)
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g), self.LINE4_ADJACENCY)
+
+        g_named = graph_tool.Graph(directed=False)
+        g_named.add_vertex(3)
+        vprop = g_named.new_vertex_property("string")
+        for i, name in enumerate(['q0', 'q1', 'q2']):
+            vprop[g_named.vertex(i)] = name
+        g_named.vertex_properties['name'] = vprop
+        g_named.add_edge(g_named.vertex(0), g_named.vertex(1))
+        out = graphtools.qubit_graph_to_networkx(g_named)
+        self.assertEqual(list(out.nodes()), ['q0', 'q1', 'q2'])
+        self.assertEqual(sorted(out.edges()), [('q0', 'q1')])
+
+        # Directed graph_tool graph with only one direction present must still be symmetrized.
+        g_dir = graph_tool.Graph(directed=True)
+        g_dir.add_vertex(4)
+        g_dir.add_edge_list(self.LINE4_EDGES)
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g_dir), self.LINE4_ADJACENCY)
+
+    def test_qubitgraph_and_processorspec_inputs(self):
+        qg = QubitGraph.common_graph(4, "line", directed=True, qubit_labels=[0, 1, 2, 3])
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(qg), self.LINE4_ADJACENCY)
+
+        pspec = _ProcessorSpec(4, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': self.LINE4_EDGES},
+                                qubit_labels=[0, 1, 2, 3])
+        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(pspec), self.LINE4_ADJACENCY)
+        # pspec.qubit_graph itself is edgeless (no explicit `geometry` given to the constructor);
+        # this checks we used compute_2Q_connectivity() and not the (wrong) edgeless qubit_graph.
+        self.assertEqual(pspec.qubit_graph.edges(), [])
+
+    def test_scipy_sparse_input(self):
+        import scipy.sparse as sp
+        A_sparse = sp.csr_matrix(self.LINE4_ADJACENCY)
+        np.testing.assert_array_equal(
+            graphtools.qubit_graph_adjacency_matrix(A_sparse, input_is='adjacency'), self.LINE4_ADJACENCY)
+        L_sparse = sp.csr_matrix(self.LINE4_LAPLACIAN)
+        np.testing.assert_array_equal(
+            graphtools.qubit_graph_adjacency_matrix(L_sparse, input_is='laplacian'), self.LINE4_ADJACENCY)
+        # Auto-detection also works on a sparse matrix.
+        np.testing.assert_array_equal(
+            graphtools.qubit_graph_adjacency_matrix(L_sparse), self.LINE4_ADJACENCY)
+
+    def test_deprecated_aliases_warn(self):
+        L = np.array([[1, -1], [-1, 1]])
+        with self.assertWarns(DeprecationWarning):
+            egs_old = errgentools.up_to_weight_k_error_gens_from_qubit_graph(
+                1, 2, qubit_graph_laplacian=L, num_hops=1)
+        egs_new = errgentools.up_to_weight_k_error_gens_from_qubit_graph(1, 2, L, 1)
+        self.assertEqual(egs_old, egs_new)
+
+        with self.assertRaises(TypeError):
+            # Both the new and deprecated argument given: ambiguous.
+            errgentools.up_to_weight_k_error_gens_from_qubit_graph(1, 2, L, 1, qubit_graph_laplacian=L)
+        with self.assertRaises(TypeError):
+            # Neither given.
+            errgentools.up_to_weight_k_error_gens_from_qubit_graph(1, 2, num_hops=1)
+
+        adj = np.array([[0, 1], [1, 0]])
+        pspec = _ProcessorSpec(2, ['{idle}', 'Gx', 'Gy'], {}, {}, geometry="line")
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        error_generators = [('H', ('IX',))]
+        with self.assertWarns(DeprecationWarning):
+            snip_old = snippers.layer_snipper_from_qubit_graph(
+                error_generators, encoder, adjacency_matrix=adj, hops=1)
+        snip_new = snippers.layer_snipper_from_qubit_graph(error_generators, encoder, adj, 1)
+        self.assertEqual(snip_old, snip_new)
+
+    def test_isolated_qubit_snipper_fix(self):
+        # Qubit 2 has no edges. Previously, for hops >= 1, an isolated qubit's own index was
+        # incorrectly DROPPED from its own "within hops" list: the old code's local Laplacian
+        # `D - A` has a zero diagonal entry for a degree-0 qubit, so `L**hops` was zero there
+        # too, even though a qubit is trivially "within any number of hops of itself".
+        pspec = _ProcessorSpec(3, ['{idle}', 'Gx', 'Gy'], {}, {}, geometry="line", qubit_labels=[0, 1, 2])
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        adj = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]])  # edge (0,1); qubit 2 isolated
+        error_generators = [('H', ('IIX',))]  # acts on the isolated qubit (2) only
+        for hops in (0, 1, 2):
+            snip = snippers.layer_snipper_from_qubit_graph(error_generators, encoder, adj, hops)
+            expected = encoder.indices_for_qubits([2])
+            self.assertEqual(snip[0], expected, f"failed for hops={hops}")
+
+    def test_all_backends_agree(self):
+        # The same 4-qubit line graph, expressed via a raw Laplacian, a raw adjacency matrix, a
+        # networkx graph, an igraph graph, and a graph_tool graph, must all produce identical
+        # `modelled_error_generators` and identical snippers.
+        qubit_labels = [0, 1, 2, 3]
+        G_nx = graphtools.qubit_graph_from_edges(self.LINE4_EDGES, qubit_labels)
+
+        graph_inputs = {
+            'laplacian': (self.LINE4_LAPLACIAN, 'laplacian'),
+            'adjacency': (self.LINE4_ADJACENCY, 'adjacency'),
+            'networkx': (G_nx, 'auto'),
+        }
+        if IGRAPH_IMPORTED:
+            graph_inputs['igraph'] = (igraph.Graph(n=4, edges=self.LINE4_EDGES), 'auto')
+        if GRAPH_TOOL_IMPORTED:
+            g = graph_tool.Graph(directed=False)
+            g.add_vertex(4)
+            g.add_edge_list(self.LINE4_EDGES)
+            graph_inputs['graph_tool'] = (g, 'auto')
+
+        results = {
+            name: errgentools.up_to_weight_k_error_gens_from_qubit_graph(
+                2, 4, g, 1, egtypes=['H', 'S'], input_is=input_is)
+            for name, (g, input_is) in graph_inputs.items()
+        }
+        reference = results['laplacian']
+        for name, result in results.items():
+            self.assertEqual(result, reference, f"modelled_error_generators mismatch for backend {name!r}")
+
+        pspec = _ProcessorSpec(4, ['{idle}', 'Gx', 'Gy'], {}, {'Gcphase': self.LINE4_EDGES},
+                                qubit_labels=qubit_labels)
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        snip_results = {
+            name: snippers.layer_snipper_from_qubit_graph(reference, encoder, g, 1, input_is=input_is)
+            for name, (g, input_is) in graph_inputs.items()
+        }
+        snip_reference = snip_results['laplacian']
+        for name, result in snip_results.items():
+            self.assertEqual(result, snip_reference, f"snipper mismatch for backend {name!r}")
+
+    def test_qubit_graph_from_edges(self):
+        G = graphtools.qubit_graph_from_edges([(0, 1), (1, 2)], [0, 1, 2, 3])
+        self.assertEqual(list(G.nodes()), [0, 1, 2, 3])  # qubit 3 has no edges but is present
+        self.assertEqual(sorted(G.edges()), [(0, 1), (1, 2)])
+        with self.assertRaises(ValueError):
+            graphtools.qubit_graph_from_edges([(0, 5)], [0, 1, 2, 3])  # 5 isn't a qubit label
+
 
 if __name__ == '__main__':
     unittest.main()

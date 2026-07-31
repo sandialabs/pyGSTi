@@ -25,10 +25,12 @@ import numpy as np
 import itertools as _itertools
 import copy as _copy
 import warnings as _warnings
+from typing import Any
 
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation import localstimerrorgen as _lseg
+from pygsti.extras.ml import graphtools as _graphtools
 
 
 def numberToBase(n: int, b: int) -> list[int]:
@@ -606,51 +608,43 @@ def up_to_weight_k_pauli_pairs(k: int, n: int) -> list[tuple[str, str]]:
     return pairs
 
 
-def _qubit_graph_close_matrix(qubit_graph_laplacian: np.ndarray, n: int, num_hops: int) -> np.ndarray:
+def _qubit_graph_close_matrix(qubit_graph: Any, n: int, num_hops: int,
+                               input_is: str = 'auto') -> np.ndarray:
     """
-    Computes the boolean "within num_hops" adjacency matrix for a qubit connectivity graph,
-    given its Laplacian. Shared helper used by both `up_to_weight_k_paulis_from_qubit_graph` and
+    Computes the boolean "within num_hops" adjacency matrix for a qubit connectivity graph.
+    Shared helper used by both `up_to_weight_k_paulis_from_qubit_graph` and
     `up_to_weight_k_pauli_pairs_from_qubit_graph` to determine which candidate multi-qubit
     supports are "connected" (and hence allowed) under the graph-locality restriction.
 
     Parameters
     ----------
-    qubit_graph_laplacian : numpy.ndarray
-        Laplacian matrix of the qubit connectivity graph, of shape `(n, n)`.
+    qubit_graph : graph-like
+        The qubit connectivity graph, in any of the representations accepted by
+        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` (a networkx/igraph/graph-tool
+        graph, a pygsti `QubitGraph`/`QubitProcessorSpec`, or a raw Laplacian/adjacency matrix).
+        Qubit `i` (matching Pauli-string position `i`) is identified with the `i`-th qubit in
+        `qubit_graph`'s own native node order.
     n : int
         Number of qubits.
     num_hops : int
         Hop distance defining which qubit pairs are considered "close enough."
+    input_is : {'auto', 'laplacian', 'adjacency'}, optional
+        Only consulted when `qubit_graph` is a bare matrix; see `graphtools.qubit_graph_to_networkx`.
 
     Returns
     -------
     numpy.ndarray
         Boolean `(n, n)` matrix; `close[i, j]` is True iff qubits `i` and `j` (`i != j`) are
-        within `num_hops` hops of each other.
+        within `num_hops` hops of each other (true shortest-path graph distance).
     """
-    # Make a private copy to avoid mutating the caller's matrix accidentally.
-    L = np.array(qubit_graph_laplacian, copy=True)
+    qubit_labels = list(range(n))
+    close = _graphtools.within_hops_matrix(qubit_graph, num_hops, qubit_labels=qubit_labels,
+                                            input_is=input_is)
 
-    # Sanity-check dimensions: Laplacian must be n x n.
-    if L.shape != (n, n):
-        raise ValueError("qubit_graph_laplacian must have shape (n, n).")
-
-    # Legacy code used:
-    #   laplace_power = L**num_hops
-    #   nodes are considered "within hops" if laplace_power[i,j] != 0
-    M = np.linalg.matrix_power(L, num_hops)
-
-    # Remove diagonal entries; we don't want to treat i as "connected to itself"
-    # for the purpose of defining edges between *distinct* qubits.
-    np.fill_diagonal(M, 0)
-
-    # Convert to a boolean adjacency: close[i,j] == True means "i and j are within num_hops"
-    # according to the matrix-power criterion above.
-    close = (np.abs(M) > 0)
-
-    # If the underlying graph is undirected, "close" should be symmetric.
-    # This line enforces symmetry just in case numerical issues or input oddities break it.
-    close = np.logical_or(close, close.T)
+    # Sanity-check dimensions: the graph must describe exactly n qubits.
+    if close.shape != (n, n):
+        raise ValueError(  # pragma: no cover - within_hops_matrix already enforces this via qubit_labels
+            f"qubit_graph must describe exactly n={n} qubits (got shape {close.shape}).")
     return close
 
 
@@ -702,7 +696,8 @@ def _support_is_connected(support_qubits: tuple[int, ...], close: np.ndarray) ->
 
 
 def up_to_weight_k_paulis_from_qubit_graph(
-    k: int, n: int, qubit_graph_laplacian: np.ndarray, num_hops: int
+    k: int, n: int, qubit_graph: Any = None, num_hops: int | None = None, *,
+    input_is: str = 'auto', qubit_graph_laplacian: np.ndarray | None = None,
 ) -> list[str]:
     """
     Enumerate Pauli strings of weight 1..k whose *support set* of non-identity qubits
@@ -718,10 +713,22 @@ def up_to_weight_k_paulis_from_qubit_graph(
         Maximum Pauli weight.
     n : int
         Number of qubits (string length).
-    qubit_graph_laplacian : numpy.ndarray
-        Laplacian matrix of the qubit connectivity graph.
+    qubit_graph : graph-like
+        The qubit connectivity graph. Accepts a `networkx.Graph`/`DiGraph`/`MultiGraph`, an
+        `igraph.Graph`, a `graph_tool.Graph`, a `pygsti.baseobjs.QubitGraph`, a
+        `pygsti.processors.QubitProcessorSpec` (its 2-qubit-gate connectivity is used), or a
+        raw graph Laplacian or adjacency matrix (`numpy.ndarray`, nested list/tuple, or
+        `scipy.sparse` matrix; see `input_is`). Qubit `i` (matching Pauli-string position `i`)
+        is identified with the `i`-th qubit in `qubit_graph`'s own native node order. See
+        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        types and exactly how they're interpreted.
     num_hops : int
         Hop distance defining which qubit pairs are considered "close enough."
+    input_is : {'auto', 'laplacian', 'adjacency'}, optional
+        Only consulted when `qubit_graph` is a bare matrix; see
+        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx`.
+    qubit_graph_laplacian : numpy.ndarray, optional
+        Deprecated alias for `qubit_graph`. Specify only one of the two.
 
     Returns
     -------
@@ -735,7 +742,13 @@ def up_to_weight_k_paulis_from_qubit_graph(
       - For w=2, a pair (i,j) is allowed iff i and j are within num_hops hops.
       - For w>2, a support S is allowed iff the induced subgraph on S is connected
         using the "within num_hops" adjacency.
+    "Within num_hops" is determined by true (unweighted) shortest-path graph distance.
     """
+    qubit_graph = _graphtools._resolve_qubit_graph_arg(qubit_graph, qubit_graph_laplacian,
+                                                        'qubit_graph_laplacian')
+    if num_hops is None:
+        raise TypeError("Missing required argument: 'num_hops'.")
+
     # ---- Basic input checks ----
     if not isinstance(k, int) or k < 1:
         raise TypeError("Pauli weight, k, must be an integer > 1.")
@@ -749,7 +762,7 @@ def up_to_weight_k_paulis_from_qubit_graph(
     k = min(k, n)
 
     # ---- Build the "within num_hops" connectivity relation ----
-    close = _qubit_graph_close_matrix(qubit_graph_laplacian, n, num_hops)
+    close = _qubit_graph_close_matrix(qubit_graph, n, num_hops, input_is=input_is)
 
     # ---- Enumerate all valid Pauli strings ----
     base = ['I'] * n            # template for fast construction
@@ -785,7 +798,8 @@ def up_to_weight_k_paulis_from_qubit_graph(
 
 
 def up_to_weight_k_pauli_pairs_from_qubit_graph(
-    k: int, n: int, qubit_graph_laplacian: np.ndarray, num_hops: int
+    k: int, n: int, qubit_graph: Any = None, num_hops: int | None = None, *,
+    input_is: str = 'auto', qubit_graph_laplacian: np.ndarray | None = None,
 ) -> list[tuple[str, str]]:
     """
     Enumerate unordered pairs `(P, Q)` (canonically ordered, `P < Q`) of DISTINCT, non-identity
@@ -811,10 +825,22 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
         Maximum weight (size of `support(P) union support(Q)`).
     n : int
         Number of qubits (string length).
-    qubit_graph_laplacian : numpy.ndarray
-        Laplacian matrix of the qubit connectivity graph.
+    qubit_graph : graph-like
+        The qubit connectivity graph. Accepts a `networkx.Graph`/`DiGraph`/`MultiGraph`, an
+        `igraph.Graph`, a `graph_tool.Graph`, a `pygsti.baseobjs.QubitGraph`, a
+        `pygsti.processors.QubitProcessorSpec` (its 2-qubit-gate connectivity is used), or a
+        raw graph Laplacian or adjacency matrix (`numpy.ndarray`, nested list/tuple, or
+        `scipy.sparse` matrix; see `input_is`). Qubit `i` (matching Pauli-string position `i`)
+        is identified with the `i`-th qubit in `qubit_graph`'s own native node order. See
+        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        types and exactly how they're interpreted.
     num_hops : int
         Hop distance defining which qubit pairs are considered "close enough."
+    input_is : {'auto', 'laplacian', 'adjacency'}, optional
+        Only consulted when `qubit_graph` is a bare matrix; see
+        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx`.
+    qubit_graph_laplacian : numpy.ndarray, optional
+        Deprecated alias for `qubit_graph`. Specify only one of the two.
 
     Returns
     -------
@@ -822,6 +848,11 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
         All valid canonically-ordered `(P, Q)` pairs with union-weight 1..k and connected union
         support.
     """
+    qubit_graph = _graphtools._resolve_qubit_graph_arg(qubit_graph, qubit_graph_laplacian,
+                                                        'qubit_graph_laplacian')
+    if num_hops is None:
+        raise TypeError("Missing required argument: 'num_hops'.")
+
     # ---- Basic input checks ----
     if not isinstance(k, int) or k < 1:
         raise TypeError("Pauli weight, k, must be an integer > 1.")
@@ -834,7 +865,7 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
     k = min(k, n)
 
     # ---- Build the "within num_hops" connectivity relation ----
-    close = _qubit_graph_close_matrix(qubit_graph_laplacian, n, num_hops)
+    close = _qubit_graph_close_matrix(qubit_graph, n, num_hops, input_is=input_is)
 
     # ---- Enumerate all valid Pauli pairs ----
     pairs: list[tuple[str, str]] = []
@@ -881,7 +912,11 @@ def _split_and_validate_egtypes(egtypes: list[str]) -> tuple[list[str], list[str
     return single_pauli_types, pair_types
 
 
-def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int | None, qubit_graph_laplacian: np.ndarray, num_hops: int, egtypes: list[str] = ['H', 'S']) -> list[tuple[str, tuple[str, ...]]]:
+def up_to_weight_k_error_gens_from_qubit_graph(
+    k: int, n: int | None, qubit_graph: Any = None, num_hops: int | None = None,
+    egtypes: list[str] = ['H', 'S'], *,
+    input_is: str = 'auto', qubit_graph_laplacian: np.ndarray | None = None,
+) -> list[tuple[str, tuple[str, ...]]]:
     """Returns a list of all n-qubit error generators up to weight k of the specified
     types (e.g., 'H', 'S', 'C', and/or 'A') whose supports are connected subgraphs of the
     qubit connectivity graph (where connectivity is defined by hop distance on the qubit graph).
@@ -893,8 +928,8 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int | None, qubit_grap
     to the *union* of the two Paulis' supports (i.e. a 'C'/'A' pair is treated as a single
     multi-qubit error whose combined support must be a connected subgraph, exactly like a
     weight-2+ 'H'/'S' Pauli already is). The notion of connectivity is defined by a hop distance:
-    two qubits are considered connected if they are at most `num_hops` apart in the graph
-    represented by `qubit_graph_laplacian`.
+    two qubits are considered connected if they are at most `num_hops` apart (true shortest-path
+    graph distance) in `qubit_graph`.
 
     Once the relevant Pauli operators/pairs are found, the function constructs primitive error
     generators for each one and for each of the specified error generator types in `egtypes`.
@@ -906,11 +941,17 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int | None, qubit_grap
         is, the maximum number of qubits on which the constituent Pauli operator(s) act
         non-trivially (non-identity).
     n : int or None
-        Number of qubits. If None, it is automatically inferred from the size of 
-        `qubit_graph_laplacian` (specifically, `qubit_graph_laplacian.shape[0]`).
-    qubit_graph_laplacian : numpy.ndarray
-        The Laplacian matrix of the qubit connectivity graph. A square matrix of 
-        shape (n, n) representing the graph structure.
+        Number of qubits. If None, it is automatically inferred from `qubit_graph` (its number
+        of nodes/qubits).
+    qubit_graph : graph-like
+        The qubit connectivity graph. Accepts a `networkx.Graph`/`DiGraph`/`MultiGraph`, an
+        `igraph.Graph`, a `graph_tool.Graph`, a `pygsti.baseobjs.QubitGraph`, a
+        `pygsti.processors.QubitProcessorSpec` (its 2-qubit-gate connectivity is used), or a
+        raw graph Laplacian or adjacency matrix (`numpy.ndarray`, nested list/tuple, or
+        `scipy.sparse` matrix; see `input_is`). Qubit `i` (matching Pauli-string position `i`)
+        is identified with the `i`-th qubit in `qubit_graph`'s own native node order. See
+        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        types and exactly how they're interpreted.
     num_hops : int
         The maximum graph hop distance defining allowable connectivity between 
         individual qubits. Supports with a hop distance larger than `num_hops` 
@@ -921,6 +962,11 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int | None, qubit_grap
           * 'S' : Stochastic-Pauli error generators
           * 'C' : Stochastic Pauli-Correlation error generators
           * 'A' : Active error generators
+    input_is : {'auto', 'laplacian', 'adjacency'}, optional
+        Only consulted when `qubit_graph` is a bare matrix; see
+        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx`.
+    qubit_graph_laplacian : numpy.ndarray, optional
+        Deprecated alias for `qubit_graph`. Specify only one of the two.
 
     Returns
     -------
@@ -932,10 +978,14 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int | None, qubit_grap
           * each `pauli_string` (str) is a Pauli representation (e.g. 'IX', 'XY') 
             which (jointly, for 'C'/'A') indexes the error generator on the connected support.
     """
+    qubit_graph = _graphtools._resolve_qubit_graph_arg(qubit_graph, qubit_graph_laplacian,
+                                                        'qubit_graph_laplacian')
+    if num_hops is None:
+        raise TypeError("Missing required argument: 'num_hops'.")
 
-    # 1. Infer the number of qubits from the Laplacian shape if n is not provided (None).
+    # 1. Infer the number of qubits from the graph if n is not provided (None).
     if n is None:
-        n = qubit_graph_laplacian.shape[0]
+        n = _graphtools.qubit_graph_to_networkx(qubit_graph, input_is=input_is).number_of_nodes()
     assert n is not None
 
     single_pauli_types, pair_types = _split_and_validate_egtypes(egtypes)
@@ -945,7 +995,8 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int | None, qubit_grap
     if single_pauli_types:
         # 2a. Retrieve all Pauli strings up to weight k whose supports are connected
         #     subgraphs of the qubit graph (with adjacency defined by <= num_hops).
-        relevant_paulis = up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph_laplacian, num_hops)
+        relevant_paulis = up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph, num_hops,
+                                                                  input_is=input_is)
         for egtype in single_pauli_types:
             # Each error generator is represented as a tuple: (type, (pauli_string,))
             error_generators += [(egtype, (p,)) for p in relevant_paulis]
@@ -953,7 +1004,8 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int | None, qubit_grap
     if pair_types:
         # 2b. Retrieve all Pauli pairs up to union-weight k whose union support is a connected
         #     subgraph of the qubit graph (with adjacency defined by <= num_hops).
-        relevant_pairs = up_to_weight_k_pauli_pairs_from_qubit_graph(k, n, qubit_graph_laplacian, num_hops)
+        relevant_pairs = up_to_weight_k_pauli_pairs_from_qubit_graph(k, n, qubit_graph, num_hops,
+                                                                      input_is=input_is)
         for egtype in pair_types:
             # Each error generator is represented as a tuple: (type, (pauli_string_1, pauli_string_2))
             error_generators += [(egtype, (p1, p2)) for (p1, p2) in relevant_pairs]

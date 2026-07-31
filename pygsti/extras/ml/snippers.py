@@ -14,7 +14,9 @@ per-layer feature vector that should be used as inputs when predicting that gene
 #***************************************************************************************************
 
 import numpy as _np
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
+
+from pygsti.extras.ml import graphtools as _graphtools
 
 if TYPE_CHECKING:
     from pygsti.extras.ml.encoding import StandardCircuitEncoder
@@ -22,6 +24,12 @@ if TYPE_CHECKING:
 def undirected_adjacency_matrix_from_edges(edges: list[tuple], qubit_labels: list) -> _np.ndarray:
     """
     Constructs the undirected adjacency matrix for the graph with nodes given by `qubit_labels` and edges given by `edges.
+
+    See Also
+    --------
+    pygsti.extras.ml.graphtools.qubit_graph_from_edges :
+        Builds a `networkx.Graph` (rather than a bare matrix) from an edge list; the more
+        general entry point if you want to combine this with other graph-library objects.
 
     Parameters
     ----------
@@ -37,21 +45,21 @@ def undirected_adjacency_matrix_from_edges(edges: list[tuple], qubit_labels: lis
         Integer adjacency matrix of shape `(len(qubit_labels), len(qubit_labels))` with
         symmetric entries in {0,1}.
     """
-    adjacency_matrix = _np.zeros((len(qubit_labels), len(qubit_labels)), int)
-    for edge in edges:
-        adjacency_matrix[qubit_labels.index(edge[0]), qubit_labels.index(edge[1])] = 1
-        adjacency_matrix[qubit_labels.index(edge[1]), qubit_labels.index(edge[0])] = 1
-    return adjacency_matrix
+    qubit_labels = list(qubit_labels)
+    graph = _graphtools.qubit_graph_from_edges(edges, qubit_labels)
+    return _graphtools.qubit_graph_adjacency_matrix(graph, qubit_labels=qubit_labels)
 
-def layer_snipper_from_qubit_graph(error_generators: list[tuple], encoder: "StandardCircuitEncoder", adjacency_matrix: _np.ndarray, hops: int) -> list[list[int]]:
+def layer_snipper_from_qubit_graph(
+    error_generators: list[tuple], encoder: "StandardCircuitEncoder", qubit_graph: Any = None,
+    hops: int | None = None, *, input_is: str = 'auto', adjacency_matrix: _np.ndarray | None = None,
+) -> list[list[int]]:
     """
     Creates a "snipper" for a QPANN. This snipper will specify that, when predicting the
     error rate of an error generator G that acts non-trivially on the qubit set Q, the 
     QPANN shoud look at what is occuring on all the qubits within Q and all those qubits
-    within 'hops' steps of that qubit on the graph given by the 'adjacency_matrix'. This
-    adjacency matrix can be the connectivity of the qubits (the qubit pairs for which there
-    are two-qubit gates), but it could also be an adjacency matrix that specifies some other
-    kind of coupling.
+    within 'hops' steps of that qubit on the graph given by 'qubit_graph'. This graph can be
+    the connectivity of the qubits (the qubit pairs for which there are two-qubit gates), but
+    it could also specify some other kind of coupling.
 
     Parameters
     ----------
@@ -71,11 +79,28 @@ def layer_snipper_from_qubit_graph(error_generators: list[tuple], encoder: "Stan
         The CircuitEncoder whose encoding this snipper will reference. Typically this will be
         an instance of a StandardCircuitEncoder, as defined in ml.encoding.py
 
-    adjacency_matrix : numpy.array
-        A numpy array specifying the adjacency matrix of the qubits. 
+    qubit_graph : graph-like
+        The qubit connectivity graph. Accepts a `networkx.Graph`/`DiGraph`/`MultiGraph`, an
+        `igraph.Graph`, a `graph_tool.Graph`, a `pygsti.baseobjs.QubitGraph`, a
+        `pygsti.processors.QubitProcessorSpec` (its 2-qubit-gate connectivity is used), or a
+        raw graph Laplacian or adjacency matrix (`numpy.ndarray`, nested list/tuple, or
+        `scipy.sparse` matrix; see `input_is`). If the graph object carries its own qubit
+        labels (a labeled `networkx`/`igraph`/`graph_tool` graph, a `QubitGraph`, or a
+        `QubitProcessorSpec`), those labels must agree with `encoder.pspec.qubit_labels`
+        (order does not matter in that case); a bare matrix's rows/columns are always
+        positional and are matched to `encoder.pspec.qubit_labels` by position. See
+        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        types and exactly how they're interpreted.
 
     hops : int
-        The number of steps on the adjacency graph to take
+        The number of steps on the qubit graph to take.
+
+    input_is : {'auto', 'laplacian', 'adjacency'}, optional
+        Only consulted when `qubit_graph` is a bare matrix; see
+        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx`.
+
+    adjacency_matrix : numpy.ndarray, optional
+        Deprecated alias for `qubit_graph`. Specify only one of the two.
 
     Returns 
     -------
@@ -87,18 +112,25 @@ def layer_snipper_from_qubit_graph(error_generators: list[tuple], encoder: "Stan
         
     Notes
     -----
-    This function computes a graph Laplacian `L = D - A` and uses `L**hops` to infer which
-    nodes are within `hops` steps (via nonzero entries). This is a heuristic; depending on
-    graph structure, using powers of the adjacency matrix may be more conventional.
+    "Within `hops` steps" is determined by true (unweighted) shortest-path graph distance
+    (computed via breadth-first search). Earlier versions of this function instead computed a
+    graph Laplacian `L = D - A` and used `L**hops` to infer which nodes are within `hops` steps
+    (via nonzero entries); that was a heuristic (and, for an isolated qubit with no edges, an
+    inaccurate one -- it dropped the qubit's own index from its own list for any `hops >= 1`).
     """
-    # Compute the set of qubits that are within `hops` steps on the adjacency graph of each qubit,
-    # by computing the Lapalacian and taking its `hops` power.
-    degree_matrix = _np.diag(_np.sum(adjacency_matrix, axis = 1))
-    laplacian = degree_matrix - adjacency_matrix
-    laplace_power = _np.linalg.matrix_power(laplacian, hops)
+    qubit_graph = _graphtools._resolve_qubit_graph_arg(qubit_graph, adjacency_matrix, 'adjacency_matrix')
+    if hops is None:
+        raise TypeError("Missing required argument: 'hops'.")
+
     from pygsti.processors import QubitProcessorSpec
     assert isinstance(encoder.pspec, QubitProcessorSpec)
-    nodes_within_hops = [list(_np.arange(encoder.pspec.num_qubits)[abs(laplace_power[i, :]) > 0]) for i in range(encoder.pspec.num_qubits)]
+    qubit_labels = list(encoder.pspec.qubit_labels)
+
+    # For each qubit (identified by its position in qubit_labels, matching Pauli-string
+    # position), find the positions of all qubits within `hops` hops of it on `qubit_graph`
+    # (always including the qubit itself, regardless of hops or its degree).
+    nodes_within_hops = _graphtools.qubits_within_hops(
+        qubit_graph, hops, qubit_labels=qubit_labels, include_self=True, input_is=input_is)
     #
     # Init the list that this function will return, specifying the relevant encoding indices for each error generator in `error_generators`
     encoding_indices = []
