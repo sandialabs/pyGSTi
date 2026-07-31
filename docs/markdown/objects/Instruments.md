@@ -291,4 +291,14 @@ for outcome, member in inst.items():
 ```
 
 **That's it!**  You have built a physically-motivated instrument, simulated mid-circuit-measurement data, performed tomography under two parameterizations -- seeing why a completely-positive representation gives instrument estimates you can interpret -- and learned how to diagnose, repair, and warm-start the seeds that make CP-constrained instrument fits succeed.
+
+### Bonus
+
+Heres how you can generate a report, with error bars.
+
+```{code-cell} ipython3
+from pygsti.report import construct_standard_report
+results.add_hessians()
+rep = construct_standard_report(results, confidence_level=95)
+rep.write_html('./inst-report', auto_open=True)
 ```
