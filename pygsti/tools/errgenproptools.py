@@ -846,6 +846,14 @@ def error_generator_commutator(errorgen_1: _LSE, errorgen_2: _LSE, flip_weight: 
     list of `LocalStimErrorgenLabel`s corresponding to the commutator of the two input error generators,
     weighted by the specified value of `weight`.
     """
+    if errorgen_1.errorgen_type == 'H' and errorgen_2.errorgen_type == 'H':
+        w = -weight if flip_weight else weight
+        ptup = com(errorgen_1.basis_element_labels[0], errorgen_2.basis_element_labels[0])
+        if ptup is not None:
+            return [(_LSE('H', [ptup[1]]), -1j * w * ptup[0])]
+        else:
+            return []
+
     # Stochastic error generators always commute with one another (S_P[S_Q[.]] is
     # symmetric under P <-> Q for any two Paulis), so [S_P, S_Q] = 0 identically.
     # Returning early avoids two composition calls and keeps S,S pairs out of the
