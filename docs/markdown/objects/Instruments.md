@@ -211,12 +211,13 @@ gst = StandardGST(modes=('full TP', 'CPTPLND'), target_model=mdl_ideal, verbosit
 results = gst.run(ProtocolData(edesign, ds))
 ```
 
-Both fits recover the data-generating model fairly well. We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
+We compare each gauge-optimized estimate to the data-generating model in Frobenius distance. 
+The TP fit seems to be materially better. (More on this in a moment!)
 
 ```{code-cell} ipython3
 for mode in ('full TP', 'CPTPLND'):
     mdl_go = results.estimates[mode].models['stdgaugeopt']
-    print(f"{mode:8s}: Frobenius distance to target = {mdl_ideal.frobeniusdist(mdl_go):.4f}")
+    print(f"{mode:8s}: Frobenius distance to data-generating model = {mdl_noisy.frobeniusdist(mdl_go):.4f}")
 ```
 
 ## Why a completely-positive parameterization matters
@@ -276,8 +277,13 @@ The best-verified route to a high-quality CP-constrained instrument fit is to wa
 ```{code-cell} ipython3
 from pygsti.protocols import refit_instruments_cptplnd
 
-new_label = refit_instruments_cptplnd(results, 'full TP', verbosity=1)
+new_label = refit_instruments_cptplnd(results, 'full TP', verbosity=0)
 mdl_warm = results.estimates[new_label].models['final iteration estimate']
+
+for mode in ('full TP', 'CPTPLND', new_label):
+    mdl_go = results.estimates[mode].models['stdgaugeopt']
+    print(f"{mode:8s}: Frobenius distance to data-generating model = {mdl_noisy.frobeniusdist(mdl_go):.4f}")
+
 inst = mdl_warm.instruments[('Iz', 0)]
 for outcome, member in inst.items():
     viol = max(0.0, pygsti.tools.sum_of_negative_choi_eigenvalues_gate(member.to_dense(), 'pp'))
