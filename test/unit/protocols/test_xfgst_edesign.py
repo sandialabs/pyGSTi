@@ -15,7 +15,8 @@ from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.xfgst_edesign import (
     CrosstalkFreeExperimentDesign, assert_circuit_lists_match_color_patches,
-    assert_no_implicit_idles, assign_the_designs_with_mapping, build_layer_mappers,
+    assert_mapped_circuit_matches_patch, assert_no_implicit_idles,
+    assign_the_designs_with_mapping, build_layer_mappers,
     build_patch_infos, find_neighbors, make_line_mapper, make_xfgst_design,
 )
 from ..util import BaseCase
@@ -417,9 +418,16 @@ class MakeXfgstDesignTester(BaseCase):
         # make_xfgst_design builds the design with seed=(seed + 1); constructing
         # the design directly with that seed and the same coloring must reproduce
         # it exactly.
+        #
+        # The design is rebuilt here rather than reusing cls.design on purpose:
+        # coverage contexts attribute setUpClass code to whichever test happened
+        # to trigger class setup, so a test that only *reads* cls.design is not
+        # recorded as covering the `seed + 1` expression and is therefore never
+        # selected by the diff-mutation tooling to guard it.
+        design = make_xfgst_design(self.pspec, self.oneq, self.twoq, seed=0)
         direct = CrosstalkFreeExperimentDesign(
-            self.pspec, self.oneq, self.twoq, self.design.color_patches, seed=1)
-        self.assertEqual(direct.circuit_lists, self.design.circuit_lists)
+            self.pspec, self.oneq, self.twoq, design.color_patches, seed=1)
+        self.assertEqual(direct.circuit_lists, design.circuit_lists)
 
     def test_different_seeds_give_different_circuit_assignments(self):
         # Guards the seed actually reaching the stitcher's randgen: on a line the
@@ -427,6 +435,122 @@ class MakeXfgstDesignTester(BaseCase):
         other = make_xfgst_design(self.pspec, self.oneq, self.twoq, seed=7)
         self.assertEqual(other.color_patches, self.design.color_patches)
         self.assertNotEqual(other.circuit_lists, self.design.circuit_lists)
+
+
+class HelperRejectsMalformedInputTester(BaseCase):
+    """
+    Cover the *detection power* of the verification helpers.
+
+    Every other test in this file hands the helpers well-formed data, which
+    only ever proves they accept what they should. That leaves their whole
+    reason for existing -- catching a ``circuit_stitcher`` that silently
+    produces a bad stitching -- unverified: weakening the checks (skipping
+    them, narrowing their conditions, or iterating fewer patches) is invisible
+    when nothing malformed is ever passed in.
+
+    These tests feed the helpers deliberately malformed input and require them
+    to raise, and check that ``debug_check`` really does wire
+    ``assert_circuit_lists_match_color_patches`` into
+    ``CrosstalkFreeExperimentDesign.__init__``.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pspec, cls.qubits, cls.line_edges = _line_pspec(3)
+        cls.oneq, cls.twoq = _make_designs()
+        cls.design = make_xfgst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
+
+    # -- debug_check wiring in CrosstalkFreeExperimentDesign.__init__ ------
+
+    @staticmethod
+    def _malformed_stitcher(oneq_gstdesign, twoq_gstdesign, vertices,
+                            color_patches, **kwargs):
+        """A stitcher returning output that cannot be a valid stitching.
+
+        One circuit cannot split evenly into the two color patches below. The
+        inputs are ignored so the (slow) real stitching is never run.
+        """
+        return [[Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1, 2))]]
+
+    def _build_with_malformed_stitcher(self, **kwargs):
+        return CrosstalkFreeExperimentDesign(
+            self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
+            circuit_stitcher=self._malformed_stitcher, **kwargs)
+
+    def test_malformed_stitcher_output_is_rejected_when_debug_check_true(self):
+        with self.assertRaises(AssertionError) as ctx:
+            self._build_with_malformed_stitcher(debug_check=True)
+        self.assertIn('split evenly', str(ctx.exception))
+
+    def test_debug_check_defaults_to_true(self):
+        # The self-check is the documented safety net for swapped-in stitchers,
+        # so it must be on unless explicitly disabled.
+        with self.assertRaises(AssertionError):
+            self._build_with_malformed_stitcher()
+
+    def test_malformed_stitcher_output_is_accepted_when_debug_check_false(self):
+        design = self._build_with_malformed_stitcher(debug_check=False)
+        # The malformed lists must land unchanged: debug_check switches the
+        # verification off, it does not repair anything.
+        self.assertEqual(
+            [list(cl) for cl in design.circuit_lists],
+            [[Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1, 2))]])
+
+    # -- detection power of the helpers themselves -------------------------
+
+    def test_all_patches_are_verified_not_just_the_first(self):
+        """Corrupting a *later* patch's chunk must still be caught.
+
+        The patch chunks are checked in a loop, so an off-by-one in the slice
+        bounds can leave every patch after the first silently unverified.
+        """
+        color_patches = self.design.color_patches
+        num_patches = len(color_patches)
+        self.assertGreaterEqual(
+            num_patches, 2, msg="need >1 patch for this test to mean anything")
+
+        # Overwrite the second chunk with a copy of the first, so the circuits
+        # sit on patch 0's edge while occupying patch 1's chunk. Total length is
+        # unchanged, so the even-split assertion cannot fire first and mask this.
+        corrupted = []
+        for circuit_list in self.design.circuit_lists:
+            chunk = len(circuit_list) // num_patches
+            corrupted.append(list(circuit_list[:chunk]) + list(circuit_list[:chunk])
+                             + list(circuit_list[2 * chunk:]))
+        self.assertEqual([len(cl) for cl in corrupted],
+                         [len(cl) for cl in self.design.circuit_lists])
+
+        with self.assertRaises(AssertionError) as ctx:
+            assert_circuit_lists_match_color_patches(
+                corrupted, self.design.vertices, color_patches)
+        self.assertIn('Patch 1', str(ctx.exception))
+
+    def test_multiqubit_gate_outside_patch_edges_is_rejected(self):
+        """A 2Q gate on an edge the patch does not own must be caught."""
+        patch_infos, _ = build_patch_infos([0, 1, 2], {0: [(0, 1)]})
+        info = patch_infos[0]
+        expected_labels = {q for line in info['tensored_lines'] for q in line}
+
+        # Gcnot sits on (1, 2); the patch owns only (0, 1). The line labels are
+        # deliberately correct so the earlier line-label assertion passes and
+        # the edge check is what actually fires.
+        bad_circuit = Circuit([Label('Gcnot', (1, 2))],
+                              line_labels=tuple(sorted(expected_labels)))
+        self.assertEqual(set(bad_circuit.line_labels), expected_labels)
+
+        with self.assertRaises(AssertionError) as ctx:
+            assert_mapped_circuit_matches_patch(bad_circuit, info)
+        self.assertIn("not one of this patch's own edges", str(ctx.exception))
+
+    def test_wellformed_input_is_accepted(self):
+        """Control: the helper accepts the un-corrupted design.
+
+        Without this, a helper that raised unconditionally would make every
+        test above pass for the wrong reason.
+        """
+        assert_circuit_lists_match_color_patches(
+            self.design.circuit_lists, self.design.vertices,
+            self.design.color_patches)
 
 
 class FindNeighborsTester(BaseCase):
