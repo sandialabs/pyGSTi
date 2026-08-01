@@ -75,9 +75,12 @@ class EffectRepComputational(EffectRep):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
     def probability(self, state):
-        scratch = _np.empty(self.state_space.dim, 'd')
-        Edense = self.to_dense('HilbertSchmidt', scratch)
-        return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
+        # Use the sparse inner-product routine rather than densifying this (mostly-zero)
+        # effect vector to length 4**nfactors and then taking a full dense dot product;
+        # this avoids O(4**nfactors) work (both the densification and the dot product)
+        # in favor of O(2**nfactors) work, mirroring the analogous fast C++ implementation
+        # used by the compiled evotypes.
+        return _mt.zvals_int64_probability(self.zvals_int, self.nfactors, state.data, self.abs_elval)
 
     def to_dense(self, on_space: SpaceT = 'minimal', outvec=None):
         if on_space not in ('minimal', 'HilbertSchmidt'):
