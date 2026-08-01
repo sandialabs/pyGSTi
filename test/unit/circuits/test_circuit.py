@@ -29,6 +29,7 @@ class CircuitTester(BaseCase):
         self.assertEqual(c.num_lines, 5)
         self.assertEqual(c.line_labels, tuple(range(5)))
 
+
     def test_construct_from_label(self):
         # Test initializing a circuit from a non-empty circuit that is a list
         # containing Label objects. Also test that it can have non-integer line_labels
@@ -324,6 +325,12 @@ class CircuitMethodTester(BaseCase):
         self.c.replace_layer_with_circuit_inplace(self.c.copy(), 1)
         self.assertEqual(self.c.depth, 2 * 5 - 1)
 
+
+
+
+
+
+
     def test_delete_layers(self):
         # Test layer deletion
         layer = [Label('Gx', 'Q1'), ]
@@ -540,6 +547,43 @@ class CircuitMethodTester(BaseCase):
         s = str(self.c)
         self.assertEqual(test_s, s)
 
+    def test_serialize_increases_depth_when_labeltuptup(self):
+        from pygsti.baseobjs.label import Label as L, CircuitLabel
+        labels = [
+            L('Gx', 0),  # a LabelTup
+            L('Gx', (0, 1)),  # a LabelTup
+            L(('Gx', 0, 1)),  # a LabelTup
+            L('Gx'),  # a LabelStr
+            L('Gx', None),  # still a LabelStr
+            L([('Gx', 0), ('Gy', 1)]),  # a LabelTupTup of LabelTup objs
+            L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
+            L([('Gx', 0)]),  # just a LabelTup b/c only one component
+            L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
+            L(L('Gx')),  # Init from another label
+            CircuitLabel('circuit', [("Gx", 1), ("Gz", 2)], None, 1, None)
+        ]
+
+        circs = [circuit.Circuit([lbl], expand_subcircuits=False) for lbl in labels]
+        contain_labeltuptup = [5,6,8]
+
+        for i,circ in enumerate(circs):
+            serial = circ.serialize()
+            with_expansion = circ.serialize(True)
+            if i in contain_labeltuptup:
+                self.assertGreater(serial.num_layers, circ.num_layers)
+            else:
+                self.assertEqual(serial.num_layers, circ.num_layers, f"Test case {i} failed with a label {circ[0].__repr__()}")
+
+            if i not in [len(circs) -1]:
+                self.assertEqual(serial.depth, with_expansion.depth)
+                self.assertEqual(serial.num_layers, with_expansion.num_layers)
+            else:
+                self.assertLess(serial.num_layers, with_expansion.num_layers)
+
+
+
+
+
     def test_compress_depth(self):
         ls = [Label('H', 1), Label('P', 1), Label('P', 1), Label(()), Label('CNOT', (2, 3))]
         ls += [Label('HP', 1), Label('PH', 1), Label('CNOT', (1, 2))]
@@ -556,9 +600,13 @@ class CircuitMethodTester(BaseCase):
     def test_logically_equivalent_circuits_are_equal(self):
         circ1 = circuit.Circuit([[("Gxpi2", 0), ("Gypi2", 1)]])
         circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]], editable=True)
+        from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
 
         self.assertTrue(circ1 == circ2)
-        self.assertTrue(hash(circ1) == hash(circ2))
+
+        circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]], editable=True)
+        with self.assertWarns(ImplicitlyDoneEditingCircuitWarning):
+            self.assertTrue(hash(circ1) == hash(circ2))
 
         circ3 = circuit.Circuit([("Gxpi2", 0), ("Gypi2", 1)])  # initialize circ1 as a new circuit with 2 layers.
         circ4 = circuit.Circuit([("Gypi2", 1), ("Gxpi2", 0)])
