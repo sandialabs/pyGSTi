@@ -1,3 +1,13 @@
+#***************************************************************************************************
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+import itertools
+
 import numpy as np
 
 from pygsti.baseobjs.label import Label
@@ -374,3 +384,87 @@ class ProcessorSpecTester(BaseCase):
         pspec_defaults = save_and_load(pspec_defaults, pth)
         pspec_names = save_and_load(pspec_names, pth)
         pspec_vecs = save_and_load(pspec_vecs, pth)
+
+
+
+    def test_compute_clifford_2Q_connectivity_only_counts_validated_sites(self):
+        # Regression test: a 2Q gate name can be in `clifford_gate_names` (i.e. have
+        # *some* registered Clifford symplectic rep) while only being validated as
+        # Clifford on a subset of its availability -- e.g. when
+        # `nonstd_gate_symplecticreps` registers the rep against a specific full
+        # Label rather than against the gate name. `compute_clifford_2Q_connectivity`
+        # must still validate each site individually (via `clifford_symplectic_rep_of`)
+        # rather than marking every availability site of the gate name as connected.
+        identity_srep = (np.eye(4, dtype=int), np.zeros(4, dtype=int))
+        ps = QubitProcessorSpec(
+            num_qubits=3,
+            gate_names=['Gi', 'Gexample'],
+            nonstd_gate_num_qubits={'Gexample': 2},
+            availability={'Gexample': [(0, 1), (1, 2)]},
+            nonstd_gate_symplecticreps={Label('Gexample', (0, 1)): identity_srep},
+            qubit_labels=(0, 1, 2),
+        )
+
+        clifford_ops = ps.compute_clifford_ops_on_qubits()
+        self.assertIn((0, 1), clifford_ops)
+        self.assertNotIn((1, 2), clifford_ops)
+
+        computed_graph = ps.compute_clifford_2Q_connectivity()
+        computed_undirected_edges = {frozenset(edge) for edge in computed_graph.edges()}
+        self.assertEqual(computed_undirected_edges, {frozenset({0, 1})})
+
+
+
+
+
+
+
+
+
+
+
+
+class GlobalIdleConnectivityTester(BaseCase):
+    """
+    Cover the ``'{idle}'`` special case in ``compute_2Q_connectivity`` and
+    ``compute_clifford_2Q_connectivity``.
+
+    A global idle is a 2-qubit gate whose availability resolves to ``[None]``
+    rather than to a list of qubit pairs, because it applies to the whole
+    register at once. Both methods special-case that and treat it as available
+    on every qubit; without it, ``qubit_labels.index(None)`` would raise.
+    """
+
+    @staticmethod
+    def _pspec(gate_names):
+        # 2 qubits so that the global idle is a *2-qubit* gate and therefore
+        # reaches the `gate_num_qubits(gn) == 2` branch at all.
+        return QubitProcessorSpec(2, gate_names=gate_names, geometry='line',
+                                  qubit_labels=(0, 1))
+
+    def test_global_idle_availability_resolves_to_none(self):
+        # The precondition the special case exists for; if this ever changes the
+        # tests below would silently stop covering it.
+        pspec = self._pspec(['Gxpi2', 'Gypi2', '{idle}'])
+        self.assertEqual(pspec.gate_num_qubits('{idle}'), 2)
+        self.assertEqual(list(pspec.resolved_availability('{idle}', 'tuple')), [None])
+
+    def test_global_idle_alone_supplies_2Q_connectivity(self):
+        # No genuine 2Q gate here, so the edge can only come from the global idle.
+        pspec = self._pspec(['Gxpi2', 'Gypi2', '{idle}'])
+        self.assertEqual(pspec.compute_2Q_connectivity().edges(), [(0, 1)])
+
+    def test_global_idle_alone_supplies_clifford_2Q_connectivity(self):
+        pspec = self._pspec(['Gxpi2', 'Gypi2', '{idle}'])
+        self.assertEqual(pspec.compute_clifford_2Q_connectivity().edges(), [(0, 1)])
+
+    def test_without_the_global_idle_there_is_no_2Q_connectivity(self):
+        # Same spec minus '{idle}': confirms the edge above is attributable to the
+        # global idle rather than to the 1Q gates or the 'line' geometry.
+        pspec = self._pspec(['Gxpi2', 'Gypi2'])
+        self.assertEqual(pspec.compute_2Q_connectivity().edges(), [])
+        self.assertEqual(pspec.compute_clifford_2Q_connectivity().edges(), [])
+
+    def test_global_idle_coexists_with_a_real_2Q_gate(self):
+        pspec = self._pspec(['Gxpi2', 'Gcnot', '{idle}'])
+        self.assertEqual(set(pspec.compute_2Q_connectivity().edges()), {(0, 1), (1, 0)})
