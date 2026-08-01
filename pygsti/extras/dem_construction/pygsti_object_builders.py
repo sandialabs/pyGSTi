@@ -418,18 +418,17 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
                     'X':'Gxpi',
                    'I':'Gi'}
         pygsti_name = gate_dict[gatename]
-        return '[' + ''.join([f'{pygsti_name}:'+str(current_qubit_mapping[int(s)]) for s in stim_layer_string.split(' ')[1:]]) + ']'
+        return '[' + ''.join([f'[{pygsti_name}:'+str(current_qubit_mapping[int(s)])+']' for s in stim_layer_string.split(' ')[1:]]) + ']'
 
     def convert_2q_layer(gatename, stim_layer_string, current_qubit_mapping):
         gate_dict = {'CZ': 'Gcphase', 'CX': 'Gcnot'}
-        cnot_qubits = stim_layer_string.split(' ')[1:] #what????
+        cnot_qubits = stim_layer_string.split(' ')[1:] 
         num_cnots = len(cnot_qubits) // 2
-        pygsti_l_cnot = '['
+        pygsti_l_cnot = ''
         for i in range(num_cnots):
             q1 = str(current_qubit_mapping[int(cnot_qubits[2 * i])])
             q2 = str(current_qubit_mapping[int(cnot_qubits[2 * i + 1])])
-            pygsti_l_cnot +=  f'{gate_dict[gatename]}:'+ q1 + ':' + q2
-        pygsti_l_cnot += ']'
+            pygsti_l_cnot +=  f'[{gate_dict[gatename]}:'+ q1 + ':' + q2 +']'
         return pygsti_l_cnot
 
     def update_qubit_mapping(line, current_qubit_mapping, qubit_labels):
@@ -537,6 +536,8 @@ def stim_to_pygsti_circuit(circuit, qubit_labels, qubit_relabelling_dict=None, s
             pass
         else:
             print(f'instruction not found for {line}') #IF THIS COMES UP, MAYBE BE CONCERNED
+
+        #print()
 
     pyg_c = pygsti.circuits.Circuit(''.join(gate_layers)+'@(' + ','.join([str(q) for q in range(1+max(current_qubit_mapping.values()))]) + ')', editable=True)
     pyg_c.delete_idle_layers_inplace()

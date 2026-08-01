@@ -333,13 +333,16 @@ def sort_terms_by_effect(terms, detectors, sim=None, show_progress=False):
             if j%100==0:
                 print(j)
         for i, det_pauli in enumerate(detectors):
-            #print(i, det_pauli)
-            #print(eeg[0].basis_element_labels)
-            #contribution = dems.compute_contribution(LocalStimErrorgenLabel('S',eeg[0].basis_element_labels), 1, det_pauli, tableau)
             P = eeg.basis_element_labels[0]
-            if not P.commutes(det_pauli): 
-                dets_fired.append('1')
-            else: dets_fired.append('0')
+            if eeg.errorgen_type == 'H' or eeg.errorgen_type == 'S':
+                if not P.commutes(det_pauli): 
+                    dets_fired.append('1')
+                else: dets_fired.append('0')
+            else: #check both. Note that we might want to have different logic for the duals
+                Q = eeg.basis_element_labels[1]
+                if not P.commutes(det_pauli) and not Q.commutes(det_pauli): 
+                    dets_fired.append('1')
+                else: dets_fired.append('0')
         det_string = ''.join(dets_fired) 
         #print(eeg[0], det_string)
         sorted_terms[det_string].append(eeg)
