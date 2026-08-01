@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [0.10.3] - Unreleased
+### Fixed
+* Fixed the trace-preservation check for bases whose first element is the identity.
+
 ## [0.10.2] - 2026-07-30
 
 Bugfix release, plus a line search safeguard for the Levenberg-Marquardt optimizer.
