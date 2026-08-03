@@ -35,7 +35,7 @@ from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, _bel_less_than
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
@@ -1524,12 +1524,13 @@ def _error_generator_composition_aa(A: stim.PauliString, B: stim.PauliString, P:
 
     return composed_errorgens
 
-def _error_generator_composition_ac(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
-                                    Q: stim.PauliString, weight: float=1.0,
-                                    identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
+
+def _error_generator_composition_ac_or_ca(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
+                                          Q: stim.PauliString, C_error_is_first: bool, weight: float=1.0,
+                                          identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
-    Returns the composition of an A error generator with a C error generator.
-    I.e. A_{A,B}[C_{P,Q}[\cdot]].
+    Returns the composition of an A error generator with a C error generator, in
+    either order. I.e. A_{A,B}[C_{P,Q}[\cdot]] or C_{A,B}[A_{P,Q}[\cdot]].
 
     As with `_error_generator_composition_cc` and `_error_generator_composition_aa`,
     the original ladder over the six commutation bits collapses to a handful of rules.
@@ -1537,22 +1538,34 @@ def _error_generator_composition_ac(A: stim.PauliString, B: stim.PauliString, P:
     independent rather than mutually exclusive:
 
     * two cross terms built from PA/QB and QA/PB, emitted for every signature;
-    * APQ-B and BPQ-A whenever [P,Q]=0;
-    * PAB-Q and QAB-P whenever {A,B}=0;
-    * PQ-AB and a Hamiltonian term on ABPQ when both of those hold.
+    * APQ-B and BPQ-A, gated on whether P and Q commute;
+    * PAB-Q and QAB-P, gated on whether A and B commute;
+    * PQ-AB and a Hamiltonian term on ABPQ when both of those gates are open.
 
-    So rather than four disjoint families there are two independent switches. The two
-    groups also disagree about which generator type they produce: the PQ-derived terms
-    (APQ, BPQ) are A terms when their governing bits agree, while the AB-derived terms
-    (PAB, QAB) are C terms in that case.
+    So rather than four disjoint families there are two independent switches. Swapping
+    the operand order reflects the block in three places, and nowhere else:
+
+    * the two PQ/AB gates are negated -- A,C wants [P,Q]=0 and {A,B}=0 while C,A wants
+      {P,Q}=0 and [A,B]=0;
+    * the two groups trade generator types. The PQ-derived terms follow the type of the
+      *first* operand and the AB-derived terms the type of the second, so in A,C the
+      PQ-derived terms are A terms when their governing bits agree and the AB-derived
+      terms are C terms, and in C,A it is the other way round. Whichever group produces
+      C terms carries the same coefficients for both of its members; the other group's
+      two members differ by an overall sign;
+    * the second cross term picks up a relative minus sign.
 
     Parameters
     ----------
     A, B : stim.PauliString
-        The basis elements of the first (outer) A error generator.
+        The basis elements of the first (outer) error generator.
 
     P, Q : stim.PauliString
-        The basis elements of the second (inner) C error generator.
+        The basis elements of the second (inner) error generator.
+
+    C_error_is_first : bool
+        Whether the C error generator is the outer one, i.e. whether we are computing
+        C_{A,B}[A_{P,Q}[.]] rather than A_{A,B}[C_{P,Q}[.]].
 
     weight : float, optional (default 1.0)
         An optional weighting value to apply to the value of the composition.
@@ -1578,107 +1591,11 @@ def _error_generator_composition_ac(A: stim.PauliString, B: stim.PauliString, P:
     com_BP = B.commutes(P)
     com_BQ = B.commutes(Q)
 
-    # The two cross terms, present for every commutation signature.
-    PA = pauli_product(P, A)
-    QA = pauli_product(Q, A)
-    PB = pauli_product(P, B)
-    QB = pauli_product(Q, B)
-    for prod_1, prod_2, com_1, com_2 in ((PA, QB, com_AP, com_BQ),
-                                         (QA, PB, com_AQ, com_BP)):
-        same = (com_1 == com_2)
-        if same:
-            lead = 1 if com_1 else -1
-        else:
-            lead = 1j if com_1 else -1j
-        _append_product_pair(composed_errorgens, not same, prod_1, prod_2, lead, identity, weight)
-
-    AB = pauli_product(A, B) if not com_AB else None
-    PQ = pauli_product(P, Q) if com_PQ else None
-
-    if PQ is not None and AB is not None:
-        _append_product_pair(composed_errorgens, True, PQ, AB, -1j, identity, weight)
-    if PQ is not None:
-        # These two are images of one another under A <-> B, hence the paired signs.
-        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), B, com_AP == com_AQ,
-                                     False, -1, -1j, identity, weight)
-        _append_conditional_errorgen(composed_errorgens, pauli_product(B, PQ[0]*PQ[1]), A, com_BP == com_BQ,
-                                     False, 1, 1j, identity, weight)
-    if AB is not None:
-        _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, com_AP == com_BP,
-                                     True, 1j, -1, identity, weight)
-        _append_conditional_errorgen(composed_errorgens, pauli_product(Q, AB[0]*AB[1]), P, com_AQ == com_BQ,
-                                     True, 1j, -1, identity, weight)
-    if PQ is not None and AB is not None:
-        # The Hamiltonian term survives only for an odd number of commuting cross
-        # relations.
-        if sum((com_AP, com_AQ, com_BP, com_BQ)) % 2 == 1:
-            ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
-            if ABPQ[1] != identity:
-                composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*weight))
-
-    return composed_errorgens
-
-def _error_generator_composition_ca(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
-                                    Q: stim.PauliString, weight: float=1.0,
-                                    identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
-    r"""
-    Returns the composition of a C error generator with an A error generator.
-    I.e. C_{A,B}[A_{P,Q}[\cdot]].
-
-    This is the reflection of `_error_generator_composition_ac`, and shares its
-    structure: rather than four disjoint families there are two independent switches,
-    here negated relative to that function.
-
-    * two cross terms built from PA/QB and QA/PB, emitted for every signature;
-    * APQ-B and BPQ-A whenever {P,Q}=0;
-    * PAB-Q and QAB-P whenever [A,B]=0;
-    * PQ-AB and a Hamiltonian term on ABPQ when both of those hold.
-
-    The generator types are also reflected. In A,C the PQ-derived terms are A terms
-    when their governing bits agree and the AB-derived terms are C terms; here it is
-    the other way round. In both blocks the PQ-derived terms follow the type of the
-    *first* operand and the AB-derived terms the type of the second.
-
-    Parameters
-    ----------
-    A, B : stim.PauliString
-        The basis elements of the first (outer) C error generator.
-
-    P, Q : stim.PauliString
-        The basis elements of the second (inner) A error generator.
-
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
-    """
-    composed_errorgens = []
-    com_AB = A.commutes(B)
-    com_PQ = P.commutes(Q)
-    com_AP = A.commutes(P)
-    com_AQ = A.commutes(Q)
-    com_BP = B.commutes(P)
-    com_BQ = B.commutes(Q)
-
-    # The two cross terms, present for every commutation signature. They differ from
-    # one another only by an overall sign.
-    PA = pauli_product(P, A)
-    QA = pauli_product(Q, A)
-    PB = pauli_product(P, B)
-    QB = pauli_product(Q, B)
-    for prod_1, prod_2, com_1, com_2, sign in ((PA, QB, com_AP, com_BQ, 1),
-                                               (QA, PB, com_AQ, com_BP, -1)):
+    # The two cross terms, present for every commutation signature. Reversing the
+    # operand order flips the sign of the second one relative to the first.
+    cross_sign = -1 if C_error_is_first else 1
+    for prod_1, prod_2, com_1, com_2, sign in ((pauli_product(P, A), pauli_product(Q, B), com_AP, com_BQ, 1),
+                                               (pauli_product(Q, A), pauli_product(P, B), com_AQ, com_BP, cross_sign)):
         same = (com_1 == com_2)
         if same:
             lead = 1 if com_1 else -1
@@ -1686,21 +1603,31 @@ def _error_generator_composition_ca(A: stim.PauliString, B: stim.PauliString, P:
             lead = 1j if com_1 else -1j
         _append_product_pair(composed_errorgens, not same, prod_1, prod_2, sign*lead, identity, weight)
 
-    AB = pauli_product(A, B) if com_AB else None
-    PQ = pauli_product(P, Q) if not com_PQ else None
+    # The two gates, and with them the generator types and coefficients of the groups
+    # they control. See the docstring for how the two orderings relate.
+    PQ = pauli_product(P, Q) if com_PQ != C_error_is_first else None
+    AB = pauli_product(A, B) if com_AB == C_error_is_first else None
+    if C_error_is_first:
+        pq_C_if_true, pq_coeffs = True, ((1j, 1), (1j, 1))
+        ab_C_if_true, ab_coeffs = False, ((-1, 1j), (1, -1j))
+    else:
+        pq_C_if_true, pq_coeffs = False, ((-1, -1j), (1, 1j))
+        ab_C_if_true, ab_coeffs = True, ((1j, -1), (1j, -1))
 
     if PQ is not None and AB is not None:
         _append_product_pair(composed_errorgens, True, PQ, AB, -1j, identity, weight)
     if PQ is not None:
-        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), B, com_AP == com_AQ,
-                                     True, 1j, 1, identity, weight)
-        _append_conditional_errorgen(composed_errorgens, pauli_product(B, PQ[0]*PQ[1]), A, com_BP == com_BQ,
-                                     True, 1j, 1, identity, weight)
+        # APQ-B and BPQ-A are images of one another under A <-> B.
+        for first, other, cond, coeffs in ((A, B, com_AP == com_AQ, pq_coeffs[0]),
+                                           (B, A, com_BP == com_BQ, pq_coeffs[1])):
+            _append_conditional_errorgen(composed_errorgens, pauli_product(first, PQ[0]*PQ[1]), other,
+                                         cond, pq_C_if_true, coeffs[0], coeffs[1], identity, weight)
     if AB is not None:
-        _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, com_AP == com_BP,
-                                     False, -1, 1j, identity, weight)
-        _append_conditional_errorgen(composed_errorgens, pauli_product(Q, AB[0]*AB[1]), P, com_AQ == com_BQ,
-                                     False, 1, -1j, identity, weight)
+        # Likewise PAB-Q and QAB-P are images of one another under P <-> Q.
+        for first, other, cond, coeffs in ((P, Q, com_AP == com_BP, ab_coeffs[0]),
+                                           (Q, P, com_AQ == com_BQ, ab_coeffs[1])):
+            _append_conditional_errorgen(composed_errorgens, pauli_product(first, AB[0]*AB[1]), other,
+                                         cond, ab_C_if_true, coeffs[0], coeffs[1], identity, weight)
     if PQ is not None and AB is not None:
         # The Hamiltonian term survives only for an odd number of commuting cross
         # relations.
@@ -1710,6 +1637,7 @@ def _error_generator_composition_ca(A: stim.PauliString, B: stim.PauliString, P:
                 composed_errorgens.append((_LSE('H', [ABPQ[1]]), ABPQ[0]*weight))
 
     return composed_errorgens
+
 
 def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight,
                                       identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
@@ -1853,7 +1781,7 @@ def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_ca(A, B, P, Q, weight, identity)
+        composed_errorgens = _error_generator_composition_ac_or_ca(A, B, P, Q, True, weight, identity)
         return composed_errorgens
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'H':
@@ -1878,7 +1806,7 @@ def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight
         B = errorgen_1_bel_1
         P = errorgen_2_bel_0
         Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_ac(A, B, P, Q, weight, identity)
+        composed_errorgens = _error_generator_composition_ac_or_ca(A, B, P, Q, False, weight, identity)
         return composed_errorgens
 
     elif errorgen_1_type == 'A' and errorgen_2_type == 'A':
@@ -2076,17 +2004,10 @@ def stim_pauli_string_less_than(pauli1: stim.PauliString, pauli2: stim.PauliStri
     Parameters
     ----------
     pauli1, pauli2 : stim.PauliString
-        Paulis to compare.
+        Paulis to compare. May carry a sign; it is stripped before comparing.
     """
-
-    # remove the signs.
-    unsigned_pauli1 = pauli1/pauli1.sign
-    unsigned_pauli2 = pauli2/pauli2.sign
-
-    unsigned_pauli1_str = str(unsigned_pauli1)[1:].replace('_', 'I')
-    unsigned_pauli2_str = str(unsigned_pauli2)[1:].replace('_', 'I')
-    
-    return unsigned_pauli1_str < unsigned_pauli2_str
+    # Strip the signs, then defer to the single implementation of the ordering convention.
+    return _bel_less_than(pauli1/pauli1.sign, pauli2/pauli2.sign)
 
 def errorgen_pauli_action(errorgen: _LSE, pauli: stim.PauliString) -> tuple[float, stim.PauliString]:
     """
