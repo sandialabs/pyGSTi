@@ -114,21 +114,29 @@ class MatrixToolsTester(BaseCase):
         b = np.array([3.1, 2.1, 4.1, 1.1], 'd')
         expectedPairs = [(0, 3), (1, 1), (2, 0), (3, 2)]  # (i,j) indices into a & b
 
+        # Every matched pair in this fixture differs by exactly 0.1, so the weights
+        # are as diagnostic as the pairs -- assert them, not just the matching.
+        expectedWeights = np.full(len(a), 0.1)
+
         wts = mt.minweight_match(a, b, metricfn=None, return_pairs=False,
                                  pass_indices_to_metricfn=False)
+        self.assertArraysAlmostEqual(wts, expectedWeights)
         wts, pairs = mt.minweight_match(a, b, metricfn=None, return_pairs=True,
                                         pass_indices_to_metricfn=False)
         self.assertEqual(set(pairs), set(expectedPairs))
+        self.assertArraysAlmostEqual(wts, expectedWeights)
 
         def fn(x, y): return abs(x - y)
         wts, pairs = mt.minweight_match(a, b, metricfn=fn, return_pairs=True,
                                         pass_indices_to_metricfn=False)
         self.assertEqual(set(pairs), set(expectedPairs))
+        self.assertArraysAlmostEqual(wts, expectedWeights)
 
         def fn(i, j): return abs(a[i] - b[j])
         wts, pairs = mt.minweight_match(a, b, metricfn=fn, return_pairs=True,
                                         pass_indices_to_metricfn=True)
         self.assertEqual(set(pairs), set(expectedPairs))
+        self.assertArraysAlmostEqual(wts, expectedWeights)
 
     def test_fancy_assignment(self):
         a = np.zeros((4, 4, 4), 'd')
@@ -384,6 +392,10 @@ class MinweightMatchFallbackTester(BaseCase):
     A = np.array([1, 2, 3, 4], 'd')
     B = np.array([3.1, 2.1, 4.1, 1.1], 'd')
     EXPECTED_PAIRS = {(0, 3), (1, 1), (2, 0), (3, 2)}
+    # Each matched pair differs by exactly 0.1.  Asserting the weights and not only
+    # the pairs matters: `linear_sum_assignment` can recover this matching from a
+    # thoroughly wrong cost matrix, so the pairs alone do not pin the computation.
+    EXPECTED_WEIGHTS = np.full(4, 0.1)
 
     def test_metricfn_that_cannot_be_vectorized_falls_back_to_the_loop(self):
         # float() on a 2D array raises, so the vectorized attempt fails and the
@@ -413,6 +425,27 @@ class MinweightMatchFallbackTester(BaseCase):
         weights, pairs = mt.minweight_match(
             a, b, metricfn=by_index, return_pairs=True, pass_indices_to_metricfn=True)
         self.assertEqual(set(pairs), self.EXPECTED_PAIRS)
+        # Neither vectorized branch fires here, so the scalar loop is the *only* thing
+        # that ever writes to the weight matrix.  Checking the values is what proves the
+        # loop ran at all -- and it only works because `minweight_match` zero-initializes
+        # that matrix.  Back when it used `np.empty`, a skipped loop returned the previous
+        # call's recycled buffer, which holds this exact cost matrix (every test in this
+        # class shares one fixture), so the assertion passed on stale memory.
+        self.assertArraysAlmostEqual(weights, self.EXPECTED_WEIGHTS)
+
+    def test_metricfn_returning_the_wrong_shape_falls_back_to_the_loop(self):
+        # A metric that "works" on 2D inputs but returns the wrong shape is the
+        # dangerous case: the shape is broadcastable against the (D, D) weight
+        # matrix, so an unguarded assignment would succeed and silently tile one
+        # row over every row.  The shape check must reject it and use the loop.
+        def first_row_only(x, y):
+            d = np.abs(np.asarray(x) - np.asarray(y))
+            return d[0] if d.ndim == 2 else d
+
+        weights, pairs = mt.minweight_match(
+            self.A, self.B, metricfn=first_row_only, return_pairs=True)
+        self.assertEqual(set(pairs), self.EXPECTED_PAIRS)
+        self.assertArraysAlmostEqual(weights, self.EXPECTED_WEIGHTS)
 
     def test_index_loop_and_value_loop_agree(self):
         def by_value(x, y):
@@ -427,3 +460,50 @@ class MinweightMatchFallbackTester(BaseCase):
             self.A, self.B, metricfn=by_index, return_pairs=False,
             pass_indices_to_metricfn=True)
         self.assertArraysAlmostEqual(by_value_weights, by_index_weights)
+
+
+def _spread_bits_reference(x):
+    """Independent reference: move bit `i` of `x` to bit `2*i` (Morton spreading)."""
+    return sum(((x >> i) & 1) << (2 * i) for i in range(32))
+
+
+class SpreadBitsTester(BaseCase):
+    """
+    Cover ``_spread_bits`` directly.
+
+    Its only caller spreads ``np.arange(2**nqubits)``, so reaching inputs above a
+    few hundred requires an ``nqubits`` whose dense output (a ``4**nqubits``
+    vector) is far too large to allocate in a test.  The shift amounts in the
+    bit-twiddling chain are only wrong for large inputs -- ``x << 8`` first
+    matters at ``x = 128`` and ``x << 16`` at ``x = 32768`` -- so testing the
+    helper directly is the only way to pin them.
+    """
+
+    # Powers of two and their neighbours around each shift step in the chain,
+    # plus the extremes of the documented 32-significant-bit domain.
+    BOUNDARIES = [0, 1, 2, 3, 127, 128, 129, 255, 256, 65535, 65536,
+                  2 ** 15 - 1, 2 ** 15, 2 ** 15 + 1, 2 ** 16, 2 ** 31, 2 ** 32 - 1]
+
+    def test_matches_reference_at_bit_boundaries(self):
+        for x in self.BOUNDARIES:
+            with self.subTest(x=x):
+                self.assertEqual(int(mt._spread_bits(x)), _spread_bits_reference(x))
+
+    def test_matches_reference_on_random_values(self):
+        rng = np.random.default_rng(0)
+        for x in rng.integers(0, 2 ** 32, size=64):
+            x = int(x)
+            with self.subTest(x=x):
+                self.assertEqual(int(mt._spread_bits(x)), _spread_bits_reference(x))
+
+    def test_vectorized_matches_scalar(self):
+        xs = np.array(self.BOUNDARIES[:-1], dtype=np.int64)  # 2**32-1 fits, but keep signed headroom
+        expected = np.array([_spread_bits_reference(int(x)) for x in xs], dtype=np.int64)
+        self.assertArraysEqual(mt._spread_bits(xs), expected)
+
+    def test_is_order_preserving(self):
+        # The docstring promises x1 < x2 implies _spread_bits(x1) < _spread_bits(x2);
+        # the caller relies on it to keep the resulting index array sorted.
+        xs = np.arange(2 ** 12, dtype=np.int64)
+        spread = mt._spread_bits(xs)
+        self.assertTrue(np.all(np.diff(spread) > 0))
