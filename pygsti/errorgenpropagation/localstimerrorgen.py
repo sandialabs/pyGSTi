@@ -18,17 +18,52 @@ from pygsti.tools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen
 
 
+#-----------------------------------------------------------------------------------------
+# Canonical basis element label (BEL) ordering convention.
+#
+# 'C' and 'A' elementary error generators are indexed by a *pair* of basis element labels,
+# and that pair is required to be stored in sorted order everywhere in pyGSTi. Consumers
+# rely on it for dict-key equality (`CompleteElementaryErrorgenBasis.label_index`,
+# `errgenproptools.errorgen_layer_to_matrix`, BCH/Magnus term aggregation) and for sign
+# correctness (`create_elementary_errorgen` is antisymmetric in the pair for 'A').
+#
+# The places that must stay in sync with `_bel_less_than` below are:
+#
+#   Enforcers, string ordering (this comparator):
+#     - `propagate_error_gen_tableau` in this module
+#     - `errgenproptools._ordered_new_bels_C` / `_ordered_new_bels_A`
+#     - `lindbladtools._sort_errorgen_labels`
+#     - `lindbladerrorgen.LindbladErrorgen.from_elementary_errorgens` (sorted bel set)
+#     - `lfh.lfherrorgen.LFHLindbladErrorgen.__init__` (sorted bel set)
+#
+#   Enforcers, 1-qubit-basis *index* ordering (a distinct convention that only coincides
+#   with the string ordering because 'PP'/'pp' label lists are alphabetical -- it diverges
+#   for non-alphabetical bases such as 'qt'):
+#     - `errorgenbasis.CompleteElementaryErrorgenBasis._create_uptriangle_labels_for_support`
+#     - `optools.elementary_errorgens` / `optools.elementary_errorgens_dual`
+#     - `lindbladcoefficients._OtherCoeffBlock._elementary_errorgen_indices_impl`
+#       / `_block_data_indices_impl` / `_OtherUnconstrainedCoeffBlock._init_labels`
+#     - `report.reportables.errorgen_and_projections`
+#
+# Known places that can *break* the ordering (they permute or truncate BELs with no
+# re-sort and no 'A' sign compensation):
+#     - `errorgenlabel.GlobalElementaryErrorgenLabel.__init__(sort=True)` / `sort_sslbls`
+#     - `operations.embeddedop.EmbeddedOp._embed_labels` / `_unembed_coeff_dict_labels`
+#     - `errgenpolytools._truncate_lse_support`
+#-----------------------------------------------------------------------------------------
+
 def _bel_less_than(pauli1, pauli2):
     """
-    Returns True if `pauli1` is lexicographically less than `pauli2`, using the same
-    sign-stripped, identity-as-'I' ordering convention as
-    `pygsti.tools.errgenproptools.stim_pauli_string_less_than`. Duplicated here (rather
-    than imported) to avoid a circular import between this module and
-    `pygsti.tools.errgenproptools`.
+    Returns True if `pauli1` sorts before `pauli2` in the canonical basis element label
+    ordering. Inputs must already be sign-stripped (sign == +1); the public form,
+    `pygsti.tools.errgenproptools.stim_pauli_string_less_than`, strips signs and delegates
+    here so that there is a single implementation of the convention.
+
+    The `_`->`I` substitution is required: `_` is ASCII 95 and would otherwise sort after
+    `X`/`Y`/`Z`, inverting the ordering relative to the `'I'`-padded string convention used
+    by `LocalElementaryErrorgenLabel` and `CompleteElementaryErrorgenBasis`.
     """
-    unsigned_pauli1 = pauli1 / pauli1.sign
-    unsigned_pauli2 = pauli2 / pauli2.sign
-    return str(unsigned_pauli1)[1:].replace('_', 'I') < str(unsigned_pauli2)[1:].replace('_', 'I')
+    return str(pauli1)[1:].replace('_', 'I') < str(pauli2)[1:].replace('_', 'I')
 
 
 #TODO: Split this into a parent class and subclass for markovian and non-markovian
@@ -244,15 +279,11 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
                 temp = temp*temp_sign
                 new_basis_labels.append(temp)
 
-            # 'C' and 'A' type error generators are labeled by a *pair* of basis element
-            # labels which must be kept in canonical (lexicographically sorted) order
-            # throughout pyGSTi (see, e.g., `pygsti.tools.errgenproptools.stim_pauli_string_less_than`
-            # and the `_ordered_new_bels_C`/`_ordered_new_bels_A` helpers in that same module).
-            # The Clifford action applied above can freely permute which of the two propagated
-            # Paulis ends up lexicographically smaller, so we must re-canonicalize the order here.
-            # 'C' is symmetric under exchange (C_{P,Q} = C_{Q,P}), so a swap alone suffices; 'A' is
-            # antisymmetric (A_{P,Q} = -A_{Q,P}), so a swap must also flip the sign of the weight.
-            if len(new_basis_labels) == 2 and not _bel_less_than(new_basis_labels[0], new_basis_labels[1]):
+            # A Clifford can permute which of the two propagated Paulis is lexicographically
+            # smaller, so re-canonicalize. C is symmetric (C_{P,Q} = C_{Q,P}); A is antisymmetric
+            # (A_{P,Q} = -A_{Q,P}) and so a swap must also flip the weight's sign. The labels were
+            # sign-stripped above, so `_bel_less_than` can be called directly.
+            if self.errorgen_type in ('C', 'A') and not _bel_less_than(new_basis_labels[0], new_basis_labels[1]):
                 new_basis_labels = [new_basis_labels[1], new_basis_labels[0]]
                 if self.errorgen_type == 'A':
                     weightmod = -weightmod
