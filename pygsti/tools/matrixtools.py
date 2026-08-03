@@ -1373,7 +1373,7 @@ def minweight_match(a: Union[list, _np.ndarray], b: Union[list, _np.ndarray],
         def metricfn(x, y): return abs(x - y)
 
     D = len(a)
-    weightMx = _np.empty((D, D), 'd')
+    weightMx = _np.zeros((D, D), 'd')  # zeros, not empty: a branch that skips filling this must fail loudly
     a_arr = _np.asarray(a); b_arr = _np.asarray(b)
 
     filled = False
