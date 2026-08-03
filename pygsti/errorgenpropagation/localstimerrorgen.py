@@ -17,6 +17,20 @@ import numpy as _np
 from pygsti.tools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen
 
+
+def _bel_less_than(pauli1, pauli2):
+    """
+    Returns True if `pauli1` is lexicographically less than `pauli2`, using the same
+    sign-stripped, identity-as-'I' ordering convention as
+    `pygsti.tools.errgenproptools.stim_pauli_string_less_than`. Duplicated here (rather
+    than imported) to avoid a circular import between this module and
+    `pygsti.tools.errgenproptools`.
+    """
+    unsigned_pauli1 = pauli1 / pauli1.sign
+    unsigned_pauli2 = pauli2 / pauli2.sign
+    return str(unsigned_pauli1)[1:].replace('_', 'I') < str(unsigned_pauli2)[1:].replace('_', 'I')
+
+
 #TODO: Split this into a parent class and subclass for markovian and non-markovian
 #propagation. There is some overhead in instantiating the NM version of these labels
 #which we can avoid and make markovian applications much more efficient (label instantiation
@@ -229,7 +243,20 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
                 weightmod = temp_sign.real*weightmod
                 temp = temp*temp_sign
                 new_basis_labels.append(temp)
-        
+
+            # 'C' and 'A' type error generators are labeled by a *pair* of basis element
+            # labels which must be kept in canonical (lexicographically sorted) order
+            # throughout pyGSTi (see, e.g., `pygsti.tools.errgenproptools.stim_pauli_string_less_than`
+            # and the `_ordered_new_bels_C`/`_ordered_new_bels_A` helpers in that same module).
+            # The Clifford action applied above can freely permute which of the two propagated
+            # Paulis ends up lexicographically smaller, so we must re-canonicalize the order here.
+            # 'C' is symmetric under exchange (C_{P,Q} = C_{Q,P}), so a swap alone suffices; 'A' is
+            # antisymmetric (A_{P,Q} = -A_{Q,P}), so a swap must also flip the sign of the weight.
+            if len(new_basis_labels) == 2 and not _bel_less_than(new_basis_labels[0], new_basis_labels[1]):
+                new_basis_labels = [new_basis_labels[1], new_basis_labels[0]]
+                if self.errorgen_type == 'A':
+                    weightmod = -weightmod
+
         return (LocalStimErrorgenLabel(self.errorgen_type, new_basis_labels, initial_label=self.initial_label, circuit_time=self.circuit_time), 
                 weightmod*weight)
     

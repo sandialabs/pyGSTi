@@ -13,6 +13,7 @@ from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel 
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
+from pygsti.tools.lindbladtools import create_elementary_errorgen
 from ..util import BaseCase
 from itertools import product, chain
 import random
@@ -226,6 +227,90 @@ class ErrgenCompositionCommutationTester(BaseCase):
                                             if pauli_action is not None else np.zeros((2**len(pauli),2**len(pauli)))
                 pauli_action_numerical = _eprop.errorgen_pauli_action_numerical(eglbl, pauli)
                 assert np.linalg.norm(pauli_action_dense-pauli_action_numerical) < 1e-14, f'Numerical and analytical results differ, {eglbl=}, {pauli=}'
+
+    def test_CA_label_ordering_preserved_by_tableau_propagation(self):
+        """
+        Regression test for a real bug in `LocalStimErrorgenLabel.propagate_error_gen_tableau`.
+
+        Elementary error generator labels of type 'C' and 'A' are indexed by a pair of basis
+        element labels (P, Q), and every code path that *constructs* such a label elsewhere in
+        pygsti (e.g. `optools.elementary_errorgens`, `CompleteElementaryErrorgenBasis`,
+        `LindbladCoefficientBlock`, or the `_ordered_new_bels_C`/`_ordered_new_bels_A` helpers in
+        `errgenproptools.py`) takes care to always store (P, Q) in canonical, lexicographically
+        sorted order (per `stim_pauli_string_less_than`).
+
+        `propagate_error_gen_tableau` applies a Clifford tableau to each of the two basis element
+        labels independently and repackaged them in their original positional order, with no
+        re-sort afterward. Since a generic Clifford has no reason to preserve the relative
+        lexicographic order of the two transformed Paulis (e.g. a SWAP gate applied to a 'C'/'A'
+        generator supported on `(IX, XI)` produces `(XI, IX)`, which is out of order), the
+        propagated label can end up violating the canonical-ordering convention used everywhere
+        else in the codebase. Concretely, this causes:
+
+          1. For 'A' (antisymmetric, A_{P,Q} = -A_{Q,P}): if the sign isn't corrected to compensate
+             for the implicit reordering, the propagated label represents the *negated* physical
+             error generator.
+
+          2. For both 'C' and 'A': `errorgen_layer_to_matrix` (and any other code that looks up a
+             propagated label directly against a canonically-keyed matrix/rate dictionary, e.g. one
+             built from `CompleteElementaryErrorgenBasis`) raises a `KeyError`, since the
+             out-of-order label doesn't match any canonical dictionary key.
+        """
+        num_qubits = 2
+        basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(basis.labels, basis.elemgen_matrices)}
+
+        # SWAP is an entirely ordinary Clifford gate that can appear in any circuit; applying it
+        # to a 'C'/'A' generator supported on qubits 0 and 1 will swap which of the two basis
+        # element labels is lexicographically smaller.
+        swap_tableau = stim.Tableau.from_named_gate('SWAP')
+
+        P, Q = stim.PauliString('+IX'), stim.PauliString('+XI')
+        self.assertTrue(_eprop.stim_pauli_string_less_than(P, Q))  # confirms (P, Q) starts in canonical order
+
+        for eg_type in ('C', 'A'):
+            lbl = _LSE(eg_type, (P, Q))
+            propagated_lbl, weight = lbl.propagate_error_gen_tableau(swap_tableau, 1.0)
+            new_P, new_Q = propagated_lbl.basis_element_labels
+
+            # The propagated label must still be in canonical order.
+            self.assertTrue(_eprop.stim_pauli_string_less_than(new_P, new_Q),
+                             f'{eg_type}-type propagated label {propagated_lbl} is not in canonical order.')
+
+            # And it must be usable directly against a canonically-keyed matrix dictionary
+            # (the standard way such dictionaries are built throughout pygsti) without raising
+            # a KeyError.
+            propagated_mat = _eprop.errorgen_layer_to_matrix({propagated_lbl: weight}, num_qubits,
+                                                              errorgen_matrix_dict=errorgen_matrix_dict)
+            self.assertGreater(np.linalg.norm(propagated_mat), 0)
+
+            # Independently verify that re-canonicalizing the label's basis element label order
+            # (with the accompanying sign correction for 'A') did not change the physical
+            # error generator represented. We do this by directly applying the tableau to each
+            # of the two *original* Pauli operators (extracting/accumulating their signs), and
+            # building the resulting elementary error generator directly from those *unsorted*
+            # transformed Paulis via `create_elementary_errorgen` -- i.e. reproducing by hand
+            # exactly what the ideal Clifford action of this layer should produce, without going
+            # anywhere near the canonicalization (sort + sign-flip) logic under test. Both this and
+            # the propagated-label reconstruction below are built via `create_elementary_errorgen`
+            # directly (rather than through `errorgen_matrix_dict`, which uses a different internal
+            # tensor-ordering convention) so that they are directly, unambiguously comparable.
+            def _apply_tableau(pauli):
+                transformed = swap_tableau(pauli)
+                sign = transformed.sign
+                return transformed * sign, sign.real
+
+            raw_P, sign_P = _apply_tableau(P)
+            raw_Q, sign_Q = _apply_tableau(Q)
+            raw_weight = sign_P * sign_Q
+            expected_mat = raw_weight * create_elementary_errorgen(eg_type, raw_P.to_unitary_matrix(endian='big'),
+                                                                     raw_Q.to_unitary_matrix(endian='big'))
+            reconstructed_mat = weight * create_elementary_errorgen(eg_type, new_P.to_unitary_matrix(endian='big'),
+                                                                      new_Q.to_unitary_matrix(endian='big'))
+
+            self.assertTrue(np.allclose(reconstructed_mat, expected_mat, atol=1e-10),
+                             f'{eg_type}-type propagated error generator does not match the expected '
+                             'result of directly applying the tableau to the original basis element labels.')
 
     def test_zassenhaus_formula(self):
         first_order_zassenhaus_numerical = _eprop.zassenhaus_formula_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, zassenhaus_order=1)
