@@ -2073,7 +2073,8 @@ def _make_spam_static(model):
 
 
 def _copy_to_static_explicitop_model(mdl):
-    """
+    """Create and return an "effective" a copy of `mdl` that is an ExplicitOpModel with static elements.
+
     If `mdl` is already an ExplicitOpModel it is copied; otherwise (e.g. if
     `mdl` is an ImplicitOpModel) it is first converted to an ExplicitOpModel
     via :meth:`ImplicitOpModel.to_explicit_model`.  Either way all of the

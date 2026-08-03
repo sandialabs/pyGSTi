@@ -56,9 +56,19 @@ class ComposedPOVM(_POVM):
             errormap : _LinearOperator, povm: Optional[_POVM]=None, mx_basis: Optional[_BasisLike]=None
         ):
         self.error_map = errormap
-        state_space = errormap.state_space
-        evotype : _Evotype = errormap._evotype  # type: ignore
-    
+        state_space = self.error_map.state_space
+
+        #if mx_basis is None:
+        #    if (isinstance(errormap, (_op.ExpErrorgenOp, _op.IdentityPlusErrorgenOp))
+        #        and isinstance(errormap.errorgen, _op.LindbladErrorgen)):
+         #       mx_basis = errormap.errorgen.matrix_basis
+         #   else:
+         #       raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
+         #                        % str(type(errormap)))
+
+        #self.matrix_basis = _Basis.cast(mx_basis, state_space)
+        evotype = self.error_map._evotype
+
         if povm is None:
             povm = _ComputationalBasisPOVM(state_space.num_qubits, evotype)
         elif isinstance(povm, ComposedPOVM):

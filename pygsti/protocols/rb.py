@@ -1154,6 +1154,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         defaultfit = 'A-fixed'
         self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
 
+#TODO:MCMCBDesign class
 
 class InterleavedRBDesign(_proto.CombinedExperimentDesign):
     """

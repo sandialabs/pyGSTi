@@ -333,9 +333,6 @@ def sort_terms_by_effect(terms, detectors, sim=None, show_progress=False):
             if j%100==0:
                 print(j)
         for i, det_pauli in enumerate(detectors):
-            #print(i, det_pauli)
-            #print(eeg[0].basis_element_labels)
-            #contribution = dems.compute_contribution(LocalStimErrorgenLabel('S',eeg[0].basis_element_labels), 1, det_pauli, tableau)
             P = eeg.basis_element_labels[0]
             if eeg.errorgen_type != 'Cd' and eeg.errorgen_type != 'Ad':
                 if not P.commutes(det_pauli): 

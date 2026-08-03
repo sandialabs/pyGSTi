@@ -1115,3 +1115,267 @@ class SummaryStatisticsResults(_proto.ProtocolResults):
                 "SummaryStatisticsResults.statistics dict should be populated with NamedDicts, not %s" % str(type(v))
             stats[k] = v
         return stats
+
+###These functions will go into whatever protocol/summary stats classes are made for CB
+###Possibly add into ByDepthSummaryStatistics
+def avg_energy_sign_mod(cd, measurement, sign, tbs, measured_qs, toggled_qs):
+    energy = 0
+    total = sum(cd.values())
+    for i,count in cd.items():
+        if len(i)>1:
+            #is this right tbs
+            if len(toggled_qs)>0:
+                #print(i)
+                mcm_results = [0 if b=='p0' else 1 for b in i[:-1]]
+                counted_mcm_results = [1 if q in toggled_qs else 0 for q in measured_qs]*(len(mcm_results)//len(measured_qs))
+                mcm_tbs = [0 if tbs[j]=='0' else 1 for j in range(len(mcm_results))]
+                #print(mcm_tbs, counted_mcm_results)
+                mcm_adjusted_results = np.dot(np.logical_xor(mcm_results, mcm_tbs), counted_mcm_results)
+                this_sign = (-1)**(mcm_adjusted_results%2)
+                #print(tbs, mcm_results, mcm_tbs, mcm_adjusted_results, this_sign)
+            else:
+                this_sign=1
+        else:
+            this_sign=1
+        #there's no need to use odd depths
+        #but if you do, and you're toggling the MCM Pauli, you need to change the final measured Pauli
+        # if len(i)%2==0 and measurement[0] == 'Z':
+        #     measurement[0]='I'
+        #     #this_sign*=-1
+        # if measurement[0]=='I' and len(i)%2==0:
+        #     measurement[0]='Z'
+
+        out_eng = outcome_energy(i[-1],measurement,sign, tbs[-len(measurement):])*this_sign
+        energy += count * out_eng    
+    return energy / total
+
+def compute_eigenvalue_decays(data_by_pauli, cs_by_pauli, signs_by_pauli, tbs_by_pauli):
+    energies_by_pauli = {}
+    circuit_energies_by_pauli = {}
+    for pauli, ds_by_d in data_by_pauli.items():
+        circuits = cs_by_pauli[pauli]
+        signs = signs_by_pauli[pauli]
+        tbs = tbs_by_pauli[pauli]
+        energies = []
+        #transform into z type Pauli
+        meas_pauli = [p if p in ['I', 'Z'] else 'Z' for p in pauli]
+        circuit_energies_by_pauli[pauli] = []
+        avg_energies = []
+        for clist, signlist, ds in zip(circuits, signs, ds_by_d):
+            circuit_energies = []
+            
+            for c, sign in zip(clist,signlist):
+                dsrow = ds[c]
+                cd = ignore_mcm_results(dsrow.to_dict())
+                energy = avg_energy(cd, meas_pauli, sign)
+                circuit_energies.append(energy)
+            avg_energies.append(np.mean(circuit_energies))
+            circuit_energies_by_pauli[pauli].append(circuit_energies)
+        energies_by_pauli[pauli] = avg_energies
+            
+    return energies_by_pauli, circuit_energies_by_pauli
+
+def compute_off_diag_decays(data_by_pauli, cs_by_pauli, signs_by_pauli, tbs_by_pauli):
+    #compute pauli measurement results, use MCM results
+    energies_by_pauli = {}
+    circuit_energies_by_pauli = {}
+    for pauli, ds_by_d in data_by_pauli.items():
+        circuits = cs_by_pauli[pauli]
+        signs = signs_by_pauli[pauli]
+        energies = []
+        #transform into z type Pauli
+        circuit_energies_by_pauli[pauli] = []
+        meas_pauli = [p if p in ['I', 'Z'] else 'Z' for p in pauli]
+        avg_energies = []
+        for clist, signlist, ds in zip(circuits, signs, ds_by_d):
+            circuit_energies = []
+            
+            for c, sign in zip(clist,signlist):
+                meas_pauli = [p if p in ['I', 'Z'] else 'Z' for p in pauli]
+                dsrow = ds[c]
+                cd = ignore_mcm_results(dsrow.to_dict())
+                energy = avg_energy_sign_mod(dsrow.to_dict(), meas_pauli, sign)
+                circuit_energies.append(energy)
+            avg_energies.append(np.mean(circuit_energies))
+            circuit_energies_by_pauli[pauli].append(circuit_energies)
+        energies_by_pauli[pauli] = avg_energies
+    return energies_by_pauli, circuit_energies_by_pauli
+
+
+
+
+#BDB = ByDepthBenchmark
+#VBGrid = VolumetricBenchmarkGrid
+#VBResults = VolumetricBenchmarkingResults  # shorthand
+
+#Add something like this?
+#class PassStabilityTest(_proto.Protocol):
+#    pass
+
+# Commented out as we are not using this currently. todo: revive or delete this in the future.
+# class VolumetricBenchmarkGrid(Benchmark):
+#     """ A protocol that creates an entire depth vs. width grid of volumetric benchmark values """
+
+#     def __init__(self, depths='all', widths='all', datatype='success_probabilities',
+#                  paths='all', statistic='mean', aggregate=True, rescaler='auto',
+#                  dscomparator=None, name=None):
+
+#         super().__init__(name)
+#         self.postproc = VolumetricBenchmarkGridPP(depths, widths, datatype, paths, statistic, aggregate, self.name)
+#         self.dscomparator = dscomparator
+#         self.rescaler = rescaler
+
+#         self.auxfile_types['postproc'] = 'protocolobj'
+#         self.auxfile_types['dscomparator'] = 'pickle'
+#         self.auxfile_types['rescaler'] = 'reset'  # punt for now - fix later
+
+#     def run(self, data, memlimit=None, comm=None):
+#         #Since we know that VolumetricBenchmark protocol objects Create a single results just fill
+#         # in data under the result object's 'volumetric_benchmarks' and 'failure_counts'
+#         # keys, and these are indexed by width and depth (even though each VolumetricBenchmark
+#         # only contains data for a single width), we can just "merge" the VB results of all
+#         # the underlying by-depth datas, so long as they're all for different widths.
+
+#         #Then run resulting data normally, giving a results object
+#         # with "top level" dicts correpsonding to different paths
+#         VB = ByDepthBenchmark(self.postproc.depths, self.postproc.datatype, self.postproc.statistic,
+#                               self.rescaler, self.dscomparator, name=self.name)
+#         separate_results = _proto.SimpleRunner(VB).run(data, memlimit, comm)
+#         pp_results = self.postproc.run(separate_results, memlimit, comm)
+#         pp_results.protocol = self
+#         return pp_results
+
+
+# Commented out as we are not using this currently. todo: revive this in the future.
+# class VolumetricBenchmark(_proto.ProtocolPostProcessor):
+#     """ A postprocesor that constructs a volumetric benchmark from existing results. """
+
+#     def __init__(self, depths='all', widths='all', datatype='polarization',
+#                  statistic='mean', paths='all', edesigntype=None, aggregate=True,
+#                  name=None):
+
+#         super().__init__(name)
+#         self.depths = depths
+#         self.widths = widths
+#         self.datatype = datatype
+#         self.paths = paths if paths == 'all' else sorted(paths)  # need to ensure paths are grouped by common prefix
+#         self.statistic = statistic
+#         self.aggregate = aggregate
+#         self.edesigntype = edesigntype
+
+#     def run(self, results, memlimit=None, comm=None):
+#         data = results.data
+#         paths = results.get_tree_paths() if self.paths == 'all' else self.paths
+#         #Note: above won't work if given just a results object - needs a dir
+
+#         #Process results
+#         #Merge/flatten the data from different paths into one depth vs width grid
+#         passnames = list(data.passes.keys()) if data.is_multipass() else [None]
+#         passresults = []
+#         for passname in passnames:
+#             vb = _tools.NamedDict('Depth', 'int', None, None)
+#             fails = _tools.NamedDict('Depth', 'int', None, None)
+#             path_for_gridloc = {}
+#             for path in paths:
+#                 #TODO: need to be able to filter based on widths... - maybe replace .update calls
+#                 # with something more complicated when width != 'all'
+#                 #print("Aggregating path = ", path)  #TODO - show progress something like this later?
+
+#                 #Traverse path to get to root of VB data
+#                 root = results
+#                 for key in path:
+#                     root = root[key]
+#                 root = root.for_protocol.get(self.name, None)
+#                 if root is None: continue
+
+#                 if passname:  # then we expect final Results are MultiPassResults
+#                     root = root.passes[passname]  # now root should be a BenchmarkingResults
+#                 assert(isinstance(root, VolumetricBenchmarkingResults))
+#                 if self.edesigntype is None:
+#                     assert(isinstance(root.data.edesign, ByDepthDesign)), \
+#                         "All paths must lead to by-depth exp. design, not %s!" % str(type(root.data.edesign))
+#                 else:
+#                     if not isinstance(root.data.edsign, self.edesigntype):
+#                         continue
+
+#                 #Get the list of depths we'll extract from this (`root`) sub-results
+#                 depths = root.data.edesign.depths if (self.depths == 'all') else \
+#                     filter(lambda d: d in self.depths, root.data.edesign.depths)
+#                 width = len(root.data.edesign.qubit_labels)  # sub-results contains only a single width
+#                 if self.widths != 'all' and width not in self.widths: continue  # skip this one
+
+#                 for depth in depths:
+#                     if depth not in vb:  # and depth not in fails
+#                         vb[depth] = _tools.NamedDict('Width', 'int', 'Value', 'float')
+#                         fails[depth] = _tools.NamedDict('Width', 'int', 'Value', None)
+#                         path_for_gridloc[depth] = {}  # just used for meaningful error message
+
+#                     if width in path_for_gridloc[depth]:
+#                         raise ValueError(("Paths %s and %s both give data for depth=%d, width=%d!  Set the `paths`"
+#                                           " argument of this VolumetricBenchmarkGrid to avoid this.") %
+#                                          (str(path_for_gridloc[depth][width]), str(path), depth, width))
+
+#                     vb[depth][width] = root.volumetric_benchmarks[depth][width]
+#                     fails[depth][width] = root.failure_counts[depth][width]
+#                     path_for_gridloc[depth][width] = path
+
+#             if self.statistic in ('minmin', 'maxmax') and not self.aggregate:
+#                 self._update_vb_minmin_maxmax(vb)   # aggregate now since we won't aggregate over passes
+
+#             #Create Results
+#             results = VolumetricBenchmarkingResults(data, self)
+#             results.volumetric_benchmarks = vb
+#             results.failure_counts = fails
+#             passresults.append(results)
+
+#         agg_fn = _get_statistic_function(self.statistic)
+
+#         if self.aggregate and len(passnames) > 1:  # aggregate pass data into a single set of qty dicts
+#             agg_vb = _tools.NamedDict('Depth', 'int', None, None)
+#             agg_fails = _tools.NamedDict('Depth', 'int', None, None)
+#             template = passresults[0].volumetric_benchmarks  # to get widths and depths
+
+#             for depth, template_by_width_data in template.items():
+#                 agg_vb[depth] = _tools.NamedDict('Width', 'int', 'Value', 'float')
+#                 agg_fails[depth] = _tools.NamedDict('Width', 'int', 'Value', None)
+
+#                 for width in template_by_width_data.keys():
+#                     # ppd = "per pass data"
+#                     vb_ppd = [r.volumetric_benchmarks[depth][width] for r in passresults]
+#                     fail_ppd = [r.failure_counts[depth][width] for r in passresults]
+
+#                     successcount = 0
+#                     failcount = 0
+#                     for (successcountpass, failcountpass) in fail_ppd:
+#                         successcount += successcountpass
+#                         failcount += failcountpass
+#                     agg_fails[depth][width] = (successcount, failcount)
+
+#                     if self.statistic == 'dist':
+#                         agg_vb[depth][width] = [item for sublist in vb_ppd for item in sublist]
+#                     else:
+#                         agg_vb[depth][width] = agg_fn(vb_ppd)
+
+#             aggregated_results = VolumetricBenchmarkingResults(data, self)
+#             aggregated_results.volumetric_benchmarks = agg_vb
+#             aggregated_results.failure_counts = agg_fails
+
+#             if self.statistic in ('minmin', 'maxmax'):
+#                 self._update_vb_minmin_maxmax(aggregated_results.qtys['volumetric_benchmarks'])
+#             return aggregated_results  # replace per-pass results with aggregated results
+#         elif len(passnames) > 1:
+#             multipass_results = _proto.MultiPassResults(data, self)
+#             multipass_results.passes.update({passname: r for passname, r in zip(passnames, passresults)})
+#             return multipass_results
+#         else:
+#             return passresults[0]
+
+#     def _update_vb_minmin_maxmax(self, vb):
+#         for d in vb.keys():
+#             for w in vb[d].keys():
+#                 for d2 in vb.keys():
+#                     for w2 in vb[d2].keys():
+#                         if self.statistic == 'minmin' and d2 <= d and w2 <= w and vb[d2][w2] < vb[d][w]:
+#                             vb[d][w] = vb[d2][w2]
+#                         if self.statistic == 'maxmax' and d2 >= d and w2 >= w and vb[d2][w2] > vb[d][w]:
+#                             vb[d][w] = vb[d2][w2]
