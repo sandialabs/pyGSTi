@@ -25,6 +25,7 @@ import numpy as np
 import itertools as _itertools
 import copy as _copy
 import warnings as _warnings
+import stim as _stim
 from typing import Any
 
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
@@ -111,16 +112,80 @@ def index_to_paulistring(i: int, num_qubits: int) -> str:
     return ''.join([i_to_p[i] for i in padded_numberToBase4(i, num_qubits)])
  
 
-def paulistring_to_index(ps: str | list | tuple, num_qubits: int) -> int:
+_VALID_PAULI_LETTERS = frozenset('IXYZ')
+_STIM_INT_TO_PAULI_LETTER = {0: 'I', 1: 'X', 2: 'Y', 3: 'Z'}
+
+
+def _validate_pauli_string(ps: str | list | tuple | _stim.PauliString, argname: str = 'ps') -> str:
     """
-    Maps an n-qubit Pauli operator (represented as a string, list or tuple of elements from
-    {'I', 'X', 'Y', 'Z'}) to an integer.  It uses the most conventional mapping, whereby, e.g.,
-    if `num_qubits` is 2, then 'II' -> 0, and 'IX' -> 1, and 'ZZ' -> 15.
+    Validates that `ps` is a valid Pauli string/operator, i.e. that every element of `ps` is one
+    of 'I', 'X', 'Y', or 'Z' (upper or lower case). This is used internally by every public
+    function in this module that accepts a raw Pauli string (or a list/tuple of single-character
+    Paulis, or a `stim.PauliString`) as input, so that invalid input (e.g. `'IIXC'`, which
+    contains the invalid character 'C') is rejected immediately with a clear error, rather than
+    failing later with a confusing `KeyError` or silently producing an incorrect result.
 
     Parameters
     ----------
-    ps : str or list or tuple
-        Pauli operator representation over {'I','X','Y','Z'} of length `num_qubits`.
+    ps : str or list or tuple or stim.PauliString
+        Candidate Pauli string; a list/tuple of single-character Pauli labels (e.g.
+        `['I', 'X', 'Y']`); or a `stim.PauliString` (e.g. `stim.PauliString('IXY')`). For a
+        `stim.PauliString`, only its per-qubit Pauli content is used to build the returned
+        string -- any overall sign it carries (e.g. the '-' in `stim.PauliString('-XYZ')`, or an
+        'i'/'-i' phase) is ignored, since it is always well-formed (guaranteed by `stim` itself
+        to only ever contain 'I'/'X'/'Y'/'Z' per qubit) and, for the purposes of the Pauli
+        *labels* P/Q indexed by this module's functions, is not itself part of the label. This
+        matches the convention already used elsewhere in pyGSTi for converting basis-element-
+        label `stim.PauliString`s to plain strings -- see
+        `pygsti.errorgenpropagation.localstimerrorgen.LocalStimErrorgenLabel.bel_to_strings`.
+    argname : str, optional
+        Name of the argument being validated (e.g. `'p1'`, `'paulis[0]'`), used only to make the
+        printed/raised error message more informative.
+
+    Returns
+    -------
+    str
+        `ps`, converted (if necessary) to a single, upper-case string, e.g. `('i', 'x')`,
+        `'ix'`, and `stim.PauliString('IX')` all become `'IX'`. Callers should use this
+        normalized return value in place of the original `ps`, so that lower-case/`stim`
+        input is handled correctly by the rest of the function (which otherwise assumes
+        upper-case 'I'/'X'/'Y'/'Z' plain strings).
+
+    Raises
+    ------
+    ValueError
+        If `ps` contains any character that is not one of 'I', 'X', 'Y', 'Z' (case-insensitive).
+        An error message describing the offending character(s) is printed before the exception
+        is raised. (A `stim.PauliString` can never trigger this, since `stim` itself guarantees
+        its contents are always well-formed.)
+    """
+    if isinstance(ps, _stim.PauliString):
+        s = ''.join(_STIM_INT_TO_PAULI_LETTER[int(letter)] for letter in ps)
+    else:
+        s = ''.join(ps) if isinstance(ps, (list, tuple)) else str(ps)
+    bad_chars = sorted({c for c in s if c.upper() not in _VALID_PAULI_LETTERS})
+    if bad_chars:
+        msg = (f"Invalid Pauli string {argname}={s!r}: contains invalid character(s) "
+               f"{bad_chars}. A Pauli string may only contain 'I', 'X', 'Y', or 'Z' "
+               f"(upper or lower case).")
+        print(f"ERROR: {msg}")
+        raise ValueError(msg)
+    return s.upper()
+
+
+def paulistring_to_index(ps: str | list | tuple | _stim.PauliString, num_qubits: int) -> int:
+    """
+    Maps an n-qubit Pauli operator (represented as a string, list or tuple of elements from
+    {'I', 'X', 'Y', 'Z'}, or as a `stim.PauliString`) to an integer.  It uses the most
+    conventional mapping, whereby, e.g., if `num_qubits` is 2, then 'II' -> 0, and 'IX' -> 1,
+    and 'ZZ' -> 15.
+
+    Parameters
+    ----------
+    ps : str or list or tuple or stim.PauliString
+        Pauli operator representation over {'I','X','Y','Z'} (upper or lower case) of length
+        `num_qubits`. May also be given as a `stim.PauliString` (any overall sign is ignored --
+        see `_validate_pauli_string`).
     num_qubits : int
         Number of qubits \(n\).
 
@@ -128,6 +193,12 @@ def paulistring_to_index(ps: str | list | tuple, num_qubits: int) -> int:
     -------
     int
         Integer index in `[0, 4**num_qubits)`.
+
+    Raises
+    ------
+    ValueError
+        If `ps` contains any character other than 'I', 'X', 'Y', 'Z' (case-insensitive), e.g.
+        `'IIXC'`. An error message is printed before the exception is raised.
 
     Notes
     -----
@@ -137,6 +208,7 @@ def paulistring_to_index(ps: str | list | tuple, num_qubits: int) -> int:
       * 'IX' -> 1
       * 'ZZ' -> 15
     """
+    ps = _validate_pauli_string(ps, 'ps')
     idx = 0
     p_to_i = {'I': 0, 'X': 1, 'Y': 2, 'Z': 3}
     for i in range(num_qubits):
@@ -164,7 +236,7 @@ def paulistring_to_index(ps: str | list | tuple, num_qubits: int) -> int:
 # subtlety does not apply to 'C' (no sign correction is ever needed for 'C').
 
 
-def canonical_pauli_pair(p1: str, p2: str) -> tuple[str, str, bool]:
+def canonical_pauli_pair(p1: str | _stim.PauliString, p2: str | _stim.PauliString) -> tuple[str, str, bool]:
     """
     Returns the canonical (lexicographically sorted) ordering of the unordered pair `{p1, p2}`,
     which is the ordering convention used by `pauli_pair_to_index`/`error_generator_index` for
@@ -172,10 +244,12 @@ def canonical_pauli_pair(p1: str, p2: str) -> tuple[str, str, bool]:
 
     Parameters
     ----------
-    p1, p2 : str
-        Two DISTINCT n-qubit Pauli strings (over {'I','X','Y','Z'}) indexing a 'C' or 'A' type
-        error generator. Identity-checking (i.e. that neither is the all-identity string) is
-        *not* performed here; that is the caller's responsibility (see `error_generator_index`).
+    p1, p2 : str or stim.PauliString
+        Two DISTINCT n-qubit Pauli strings (over {'I','X','Y','Z'}), each optionally given as a
+        `stim.PauliString` instead (any overall sign is ignored -- see `_validate_pauli_string`).
+        Indexes a 'C' or 'A' type error generator. Identity-checking (i.e. that neither is the
+        all-identity string) is *not* performed here; that is the caller's responsibility (see
+        `error_generator_index`).
 
     Returns
     -------
@@ -190,8 +264,12 @@ def canonical_pauli_pair(p1: str, p2: str) -> tuple[str, str, bool]:
     ------
     ValueError
         If `p1 == p2` (a 'C' or 'A' type error generator must be indexed by two *distinct*
-        Paulis; see "A Taxonomy of Small Errors" Sec. V.C-V.D).
+        Paulis; see "A Taxonomy of Small Errors" Sec. V.C-V.D); or if `p1` or `p2` contains any
+        character other than 'I', 'X', 'Y', 'Z' (case-insensitive). In the latter case, an error
+        message is printed before the exception is raised.
     """
+    p1 = _validate_pauli_string(p1, 'p1')
+    p2 = _validate_pauli_string(p2, 'p2')
     if p1 == p2:
         raise ValueError(
             "'C' and 'A' type error generators must be indexed by two DISTINCT Paulis! "
@@ -203,7 +281,7 @@ def canonical_pauli_pair(p1: str, p2: str) -> tuple[str, str, bool]:
         return p2, p1, True
 
 
-def error_generator_canonicalization_sign(typ: str, paulis: tuple[str, ...]) -> int:
+def error_generator_canonicalization_sign(typ: str, paulis: tuple[str | _stim.PauliString, ...]) -> int:
     """
     Returns the sign correction (+1 or -1) that must be applied when canonicalizing the given
     error generator label's Pauli(s) into the canonical ordering used internally by
@@ -224,16 +302,26 @@ def error_generator_canonicalization_sign(typ: str, paulis: tuple[str, ...]) -> 
         The Pauli(s) indexing the error generator, as actually given/observed (e.g. as returned
         by `LocalStimErrorgenLabel.bel_to_strings()` for a propagated error generator) -- NOT
         necessarily already in canonical order. For 'H'/'S' this is a 1-tuple; for 'C'/'A' this
-        is a 2-tuple `(p1, p2)`.
+        is a 2-tuple `(p1, p2)`. Each entry may be a plain string or a `stim.PauliString` (any
+        overall sign on a `stim.PauliString` entry is ignored -- see `_validate_pauli_string`).
 
     Returns
     -------
     int
         +1, unless `typ == 'A'` and `(paulis[0], paulis[1])` is not already in canonical
         (lexicographically sorted) order, in which case -1.
+
+    Raises
+    ------
+    ValueError
+        If any entry of `paulis` contains a character other than 'I', 'X', 'Y', 'Z'
+        (case-insensitive); an error message is printed before the exception is raised.
     """
     if typ not in ('H', 'S', 'C', 'A'):
         raise ValueError(f"typ must be one of 'H', 'S', 'C', or 'A', got {typ!r}.")
+
+    for idx, p in enumerate(paulis):
+        _validate_pauli_string(p, f'paulis[{idx}]')
 
     if typ == 'A':
         _, _, was_swapped = canonical_pauli_pair(paulis[0], paulis[1])
@@ -279,7 +367,7 @@ def num_pauli_pairs(n: int) -> int:
     return k * (k - 1) // 2
 
 
-def pauli_pair_to_index(p1: str, p2: str, n: int) -> int:
+def pauli_pair_to_index(p1: str | _stim.PauliString, p2: str | _stim.PauliString, n: int) -> int:
     """
     Maps an unordered pair `{p1, p2}` of two DISTINCT, non-identity n-qubit Pauli strings to a
     unique integer index in `[0, num_pauli_pairs(n))`. This is the pair-indexing analog of
@@ -288,9 +376,10 @@ def pauli_pair_to_index(p1: str, p2: str, n: int) -> int:
 
     Parameters
     ----------
-    p1, p2 : str
-        Two DISTINCT, non-identity n-qubit Pauli strings. Order does not matter (the pair is
-        first canonicalized via `canonical_pauli_pair`).
+    p1, p2 : str or stim.PauliString
+        Two DISTINCT, non-identity n-qubit Pauli strings, each optionally given as a
+        `stim.PauliString` instead (any overall sign is ignored -- see `_validate_pauli_string`).
+        Order does not matter (the pair is first canonicalized via `canonical_pauli_pair`).
     n : int
         Number of qubits.
 
@@ -298,6 +387,12 @@ def pauli_pair_to_index(p1: str, p2: str, n: int) -> int:
     -------
     int
         Integer index in `[0, num_pauli_pairs(n))`.
+
+    Raises
+    ------
+    ValueError
+        If `p1` or `p2` contains any character other than 'I', 'X', 'Y', 'Z' (case-insensitive);
+        an error message is printed before the exception is raised.
 
     Notes
     -----
@@ -308,6 +403,8 @@ def pauli_pair_to_index(p1: str, p2: str, n: int) -> int:
     `rank(a,b) = a*(K-1) - a*(a-1)//2 + (b-a-1)`, which ranges over `[0, K*(K-1)/2)` as
     `(a,b)` ranges over all pairs with `0 <= a < b < K`.
     """
+    p1 = _validate_pauli_string(p1, 'p1')
+    p2 = _validate_pauli_string(p2, 'p2')
     P, Q, _ = canonical_pauli_pair(p1, p2)
     identity = 'I' * n
     if P == identity or Q == identity:
@@ -1051,7 +1148,7 @@ def up_to_weight_k_error_gens(k: int, n: int, egtypes: list[str] = ['H', 'S']) -
     return error_generators
 
 
-def error_generator_index(typ: str, paulis: tuple[str, ...]) -> int:
+def error_generator_index(typ: str, paulis: tuple[str | _stim.PauliString, ...]) -> int:
     """A function that *defines* an indexing of the primitive error generators, covering all
     four types in the "Taxonomy of Small Errors" (Blume-Kohout et al.) classification: 'H'
     (Hamiltonian), 'S' (Stochastic-Pauli), 'C' (Stochastic Pauli-Correlation), and 'A' (Active).
@@ -1069,7 +1166,9 @@ def error_generator_index(typ: str, paulis: tuple[str, ...]) -> int:
         labels the error. For 'C'/'A': a two-element tuple `(p1, p2)` of two DISTINCT,
         non-identity Pauli strings (order does not matter -- see `canonical_pauli_pair`; the
         pair is canonicalized internally before indexing). In all cases, each Pauli string's
-        length implicitly defines the number of qubits the error gen acts on.
+        length implicitly defines the number of qubits the error gen acts on. Each entry may be
+        a plain string or a `stim.PauliString` (any overall sign on a `stim.PauliString` entry
+        is ignored -- see `_validate_pauli_string`).
 
     Returns
     -------
@@ -1083,8 +1182,10 @@ def error_generator_index(typ: str, paulis: tuple[str, ...]) -> int:
     Raises
     ------
     ValueError
-        If `typ` is not one of 'H', 'S', 'C', 'A'; or, for 'C'/'A', if `paulis` does not
-        contain two distinct, non-identity Paulis.
+        If `typ` is not one of 'H', 'S', 'C', 'A'; if `paulis` contains a character other than
+        'I', 'X', 'Y', 'Z' (case-insensitive; an error message is printed before the exception
+        is raised in this case); or, for 'C'/'A', if `paulis` does not contain two distinct,
+        non-identity Paulis.
 
     Notes
     -----
@@ -1095,7 +1196,7 @@ def error_generator_index(typ: str, paulis: tuple[str, ...]) -> int:
     `error_generator_canonicalization_sign` for that.
     """
     assert isinstance(paulis, tuple)
-    p1 = paulis[0]
+    p1 = _validate_pauli_string(paulis[0], 'paulis[0]')
     n = len(p1)
     if typ == 'H':
         return paulistring_to_index(p1, n)
@@ -1107,7 +1208,7 @@ def error_generator_index(typ: str, paulis: tuple[str, ...]) -> int:
                 f"'{typ}' error generators must be indexed by a 2-tuple of two distinct Paulis; "
                 f"got a {len(paulis)}-tuple."
             )
-        p2 = paulis[1]
+        p2 = _validate_pauli_string(paulis[1], 'paulis[1]')
         if len(p2) != n:
             raise ValueError("Both Paulis in a 'C'/'A' pair must act on the same number of qubits!")
         pair_idx = pauli_pair_to_index(p1, p2, n)  # validates p1 != p2 and both non-identity
