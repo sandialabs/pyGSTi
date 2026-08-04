@@ -128,7 +128,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
         """
         Receives the matrices describing the individual gauge action of each operation within the gate set, and massages
         them into appropriate from to be fed into construct_fogi_quantities() which finds FOGI quantities for the corresponding
-        gate set. Aditionally, gauge space vectors are computed, and gauge directions that "correspond" to FOGI quantities are 
+        gate set. Additionally, gauge space vectors are computed, and gauge directions that "correspond" to FOGI quantities are 
         identified. With all of this, a FOGIStore object is created and returned.
 
         Parameters
@@ -676,7 +676,7 @@ class FirstOrderGaugeInvariantStore(_NicelySerializable):
 
         target : tuple or "all"
             A tuple of state space (qubit) labels to restrict to, e.g., `('Q0','Q1')`.
-            Note that includeing multiple labels selects only those quantities that
+            Note that including multiple labels selects only those quantities that
             target *all* the labels. The special `"all"` value includes quantities
             on all targets (no restriction).
 

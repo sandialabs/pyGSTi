@@ -22,11 +22,12 @@ from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.tools import unitary_to_superop, change_basis
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
-A = _np.matrix([[1, 0, 0, 0],
+A = _np.array([[1, 0, 0, 0],
                 #               [0,0,0,1],
                 [0, 1. / _np.sqrt(2), 1. / _np.sqrt(2), 0],
                 [0, 1. / _np.sqrt(2), -1. / _np.sqrt(2), 0],
                 [0, 0, 0, 1], ])
+invA = A.T.conj()
 
 X = _np.array([[0, 1], [1, 0]])
 Y = _np.array([[0, -1j], [1j, 0]])
@@ -122,7 +123,7 @@ def to_qutrit_space(input_mat):
     numpy.ndarray
     """
     input_mat = _np.array(input_mat)
-    return _remove_from_matrix(A * input_mat * _np.linalg.inv(A), [2], [2])
+    return _remove_from_matrix(A @ input_mat @ A.T.conj(), [2], [2])
 #    return (A * input_mat * A**-1)[:3,:3]#Comment out above line and uncomment this line if you want the state space
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 
@@ -281,16 +282,16 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     E1final = change_basis(_np.reshape(E1, (9, 1)), "std", basis)
     E2final = change_basis(_np.reshape(E2, (9, 1)), "std", basis)
 
-    state_space = _statespace.ExplicitStateSpace(['QT'], [3])
+    state_space = _statespace.ExplicitStateSpace(['T0'], [3])
     qutritMDL = _ExplicitOpModel(state_space, _Basis.cast(basis, 9), evotype=evotype)
     qutritMDL.preps['rho0'] = _TPState(rho0final, evotype=evotype)
     qutritMDL.povms['Mdefault'] = _TPPOVM([('0bright', E0final),
                                            ('1bright', E1final),
                                            ('2bright', E2final)], evotype=evotype)
-    qutritMDL.operations['Gi', 'QT'] = _FullTPOp(arrType(gateISOfinal), basis, evotype, state_space)
-    qutritMDL.operations['Gx', 'QT'] = _FullTPOp(arrType(gateXSOfinal), basis, evotype, state_space)
-    qutritMDL.operations['Gy', 'QT'] = _FullTPOp(arrType(gateYSOfinal), basis, evotype, state_space)
-    qutritMDL.operations['Gm', 'QT'] = _FullTPOp(arrType(gateMSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gi', 'T0'] = _FullTPOp(arrType(gateISOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gx', 'T0'] = _FullTPOp(arrType(gateXSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gy', 'T0'] = _FullTPOp(arrType(gateYSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gm', 'T0'] = _FullTPOp(arrType(gateMSOfinal), basis, evotype, state_space)
     qutritMDL.default_gauge_group = _TPGaugeGroup(state_space, qutritMDL.basis, evotype)
 
     return qutritMDL

@@ -32,7 +32,7 @@ class ElementaryErrorgenBasis(_NicelySerializable):
     def label_indices(self, labels, ok_if_missing=False):
         """ 
         Return a list of indices into this basis's label list
-        for the specifed list of `ElementaryErrorgenLabels`.
+        for the specified list of `ElementaryErrorgenLabels`.
 
         Parameters
         ----------
@@ -63,6 +63,7 @@ def _all_elements_same_type(lst):
             return False
     return True
 
+
 class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
     This basis object contains the information  necessary for building, 
@@ -77,7 +78,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         Parameters
         ----------
         state_space : `StateSpace`
-            An object describing the struture of the entire state space upon which the elements
+            An object describing the structure of the entire state space upon which the elements
             of this error generator basis act.
 
         labels : list or tuple of `ElementaryErrorgenLabel`
@@ -329,6 +330,7 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         difference_state_space = self.state_space
         return ExplicitElementaryErrorgenBasis(difference_state_space, sorted(difference_labels, key=lambda label: label.__str__()), self._basis_1q)
 
+
 class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
     This basis object contains the information  necessary for building, 
@@ -397,7 +399,6 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             cnt += _np.prod(right_lengths) - start_at
 
         return cnt
-
 
     @classmethod
     def _create_ordered_labels(cls, type_str, basis_1q, state_space,
@@ -520,7 +521,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             `ElementaryErrorgenLabels` in `labels`.
 
         state_space : `StateSpace`
-            An object describing the struture of the entire state space upon which the elements
+            An object describing the structure of the entire state space upon which the elements
             of this error generator basis act.
 
         elementary_errorgen_types : tuple of str, optional (default ('H', 'S', 'C', 'A'))
@@ -612,7 +613,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         #                      [(ntriv,ntriv), (ntriv,triv)] or   (XX,XI)
         #                      [(ntriv,ntriv), (ntriv,ntriv)] or   (XX,XX) -- k^4 elements (up to k^(2n) in general)
         #    e.g. for 3 qubit: (IIX,XXI)  # start with weight-1's on left
-        #                      (IIX,XXX)  #   loop over filling in the (at least 1) nontrivial left-index with trival
+        #                      (IIX,XXX)  #   loop over filling in the (at least 1) nontrivial left-index with trivial
         #                      (IXI,XIX)  #                                                     & nontrivial on right
         #                      (IXI,XXX)
         #                      ...

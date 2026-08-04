@@ -173,7 +173,7 @@ class Estimate(_MongoSerializable):
         self.profiler = parameters.get('profiler', None)
         self._final_mdc_store = parameters.get('final_mdc_store', None)
         self._final_objfn_cache = parameters.get('final_objfn_cache', None)
-        self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+        self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder(_objfns.PoissonPicDeltaLogLFunction))
         self._final_objfn = parameters.get('final_objfn', None)
         self._per_iter_mdc_store = parameters.get('per_iter_mdc_store', None)
 
@@ -480,6 +480,33 @@ class Estimate(_MongoSerializable):
         if ky in self.confidence_region_factories:
             _warnings.warn("Confidence region factory for %s already exists - overwriting!" % str(ky))
 
+        fie = 'final iteration estimate'
+        if model_label != fie and fie in self.models and circuits_label == 'final':
+            mdl_fie = self.models[fie]
+            mdl     = self.models[model_label]
+            if mdl_fie.num_params != mdl.num_params:
+                if mdl.num_params > mdl_fie.num_params:
+                    quantity = 'more'
+                    danger   = ('extremely', 'Extreme caution')
+                else:
+                    quantity = 'fewer'
+                    danger   = ('', 'Caution')
+                msg = \
+                f"""
+                The model labeled '{model_label}' has {quantity} parameters than the
+                model labeled 'final iteration estimate'. By convention, the latter
+                model is the final model from GST model fitting for which optimization
+                was performed. This makes it {danger[0]} unlikely that the former model
+                is actually optimal (e.g., in the sense of log-likelihood) among its
+                entire hypothesis class. Suboptimality of '{model_label}' within its
+                hypothesis class invalidates most statistical assumptions required to
+                compute confidence regions.
+                
+                {danger[1]} should be used when interpeting confidence regions for
+                model '{model_label}'.
+                """
+                _warnings.warn(msg, UserWarning)
+
         new_crf = _ConfidenceRegionFactory(self, model_label, circuits_label)
         self.confidence_region_factories[ky] = new_crf
         return new_crf
@@ -653,7 +680,7 @@ class Estimate(_MongoSerializable):
         This function rescales the actual data contained in this Estimate's
         parent :class:`ModelEstimteResults` object according to the estimate's
         "weights" parameter.  The scaled data set is returned, along with
-        (optionall) a list-of-lists of matrices containing the scaling values
+        (optional) a list-of-lists of matrices containing the scaling values
         which can be easily plotted via a `ColorBoxPlot`.
 
         Parameters
@@ -671,7 +698,7 @@ class Estimate(_MongoSerializable):
             scale values (see above).
         """
         p = self.parent
-        gss = _PlaquetteGridCircuitStructure.cast(p.circuit_lists['final'])  # FUTURE: overrideable?
+        gss = _PlaquetteGridCircuitStructure.cast(p.circuit_lists['final'])  # FUTURE: overridable?
         weights = self.circuit_weights
 
         if weights is not None:
@@ -837,8 +864,10 @@ class Estimate(_MongoSerializable):
         mdl_dof = mdl.num_modeltest_params
 
         k = max(ds_dof - mdl_dof, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
-        if ds_dof <= mdl_dof: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1."
-                                             % (ds_dof, mdl_dof))
+        if ds_dof <= mdl_dof:
+            msg = "Max-model params (%d) <= model params (%d)!  Using k == 1." % (ds_dof, mdl_dof)
+            _warnings.warn( msg, _tools.exceptions.OverparameterizationWarning)
+
         return (fitqty - k) / _np.sqrt(2 * k)
 
     def view(self, gaugeopt_keys, parent=None):

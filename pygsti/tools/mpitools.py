@@ -10,6 +10,8 @@ Functions for working with MPI processor distributions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import itertools as _itertools
 import warnings as _warnings
 
@@ -54,7 +56,7 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         A dictionary mapping the elements of `indices` to integer ranks, such
         that `owners[el]` gives the rank of the processor responsible for
         communicating that element's results to the other processors.  Note that
-        in the case when `allow_split_comm=True` and multiple procesors have
+        in the case when `allow_split_comm=True` and multiple processors have
         computed the results for a given element, only a single (the first)
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
@@ -143,7 +145,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
         A dictionary mapping the elements of `indices` to integer ranks, such
         that `owners[el]` gives the rank of the processor responsible for
         communicating that element's results to the other processors.  Note that
-        in the case when `allow_split_comm=True` and multiple procesors have
+        in the case when `allow_split_comm=True` and multiple processors have
         computed the results for a given element, only a single (the first)
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
@@ -392,7 +394,7 @@ def gather_slices(slices, slice_owners, ar_to_fill,
         `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentially like
         passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
@@ -555,7 +557,7 @@ def gather_slices_by_owner(current_slices, ar_to_fill, ar_to_fill_inds,
         `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentially like
         passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
@@ -672,7 +674,7 @@ def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
         `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentially like
         passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
@@ -780,7 +782,7 @@ def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
 
 def distribute_for_dot(a_shape, b_shape, comm):
     """
-    Prepares for one or muliple distributed dot products given the dimensions to be dotted.
+    Prepares for one or multiple distributed dot products given the dimensions to be dotted.
 
     The returned values should be passed as `loc_slices` to :func:`mpidot`.
 
@@ -875,7 +877,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         same type of array (size, and whether it's shared or not) as this
         function would have created if `out` were `None`.
 
-    out_shm : multiprocessing.shared_memory.SharedMemory, optinal
+    out_shm : multiprocessing.shared_memory.SharedMemory, optional
         The shared memory object corresponding to `out` when it uses
         shared memory.
 
@@ -911,7 +913,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
 
     rshape = (_slct.length(loc_row_slice), _slct.length(loc_col_slice))
     loc_result_flat = _np.empty(rshape[0] * rshape[1], a.dtype)
-    loc_result = loc_result_flat.view(); loc_result.shape = rshape
+    loc_result = loc_result_flat.view(); loc_result = _compat.reshape_no_copy(loc_result, rshape)
     loc_result[:, :] = _np.dot(a[loc_row_slice, :], b[:, loc_col_slice])
 
     # broadcast_com defines the group of processors this processor communicates with.
@@ -928,7 +930,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         cur_shape = (_slct.length(cur_row_slice), _slct.length(cur_col_slice))
         buf = loc_result_flat if (broadcast_comm.rank == r) else _np.empty(cur_shape[0] * cur_shape[1], a.dtype)
         broadcast_comm.Bcast(buf, root=r)
-        if broadcast_comm.rank != r: buf.shape = cur_shape
+        if broadcast_comm.rank != r: buf = _compat.reshape_no_copy(buf, cur_shape)
         else: buf = loc_result  # already of correct shape
         result[cur_row_slice, cur_col_slice] = buf
     comm.barrier()  # wait for all ranks to finish writing to result
@@ -987,7 +989,7 @@ def sum_across_procs(x, comm):
     Parameters
     ----------
     x : object
-        Local value - the current processor's contrubution to the sum.
+        Local value - the current processor's contribution to the sum.
 
     comm : mpi4py.MPI.Comm
         MPI communicator
@@ -1086,3 +1088,311 @@ def closest_divisor(a, b):
     for test in range(b, 0, -1):
         if a % test == 0: return test
     assert(False), "Should never get here - a %% 1 == 0 always! (a=%s, b=%s)" % (str(a), str(b))
+
+
+# ---------------------------------------------------------------------------
+# Subprocess MPI launching helpers  (used by Protocol.run_mpi / stage_slurm)
+# ---------------------------------------------------------------------------
+
+def resolve_mpiexec(mpiexec: str) -> str:
+    """
+    Return the resolved absolute path to an MPI launcher executable.
+
+    If mpiexec is 'auto', then we search for common launchers on PATH,
+    and we print and return the first one we find.
+
+    Parameters
+    ----------
+    mpiexec : str
+        Either ``'auto'`` or the name / path of a specific launcher.
+
+        * ``'auto'``: searches ``PATH`` for ``mpiexec``, ``mpirun``, and
+          ``mpiexec.hydra`` in that order; returns the path of the first
+          one found.
+        * Any other value: verifies that the name is findable on ``PATH``
+          via :func:`shutil.which` and returns the resolved path.
+
+    Returns
+    -------
+    str
+        Absolute path to the launcher executable.
+
+    Raises
+    ------
+    FileNotFoundError
+        If ``'auto'`` is given and no launcher is found, or if an
+        explicit name is given but cannot be located on ``PATH``.
+    """
+    import shutil as _shutil
+    if mpiexec == 'auto':
+        for _candidate in ('mpiexec', 'mpirun', 'mpiexec.hydra'):
+            _found = _shutil.which(_candidate)
+            if _found is not None:
+                print(f"resolve_mpiexec: using MPI launcher '{_candidate}' at {_found}\n")
+                return _found
+        msg  = "resolve_mpiexec: could not find an MPI launcher on PATH. "
+        msg += "Tried: mpiexec, mpirun, mpiexec.hydra. "
+        msg += "Install an MPI distribution or pass mpiexec=<path> explicitly."
+        raise FileNotFoundError(msg)
+    else:
+        _found = _shutil.which(mpiexec)
+        if _found is None:
+            msg = f"resolve_mpiexec: the specified MPI launcher '{mpiexec}' was not found on PATH. "
+            msg += "Check the value of the mpiexec= argument."
+            raise FileNotFoundError(msg)
+        return _found
+
+
+def compute_blas_threads(num_ranks: int, blas_threads_per_rank: int) -> int:
+    """
+    Return the number of BLAS threads that should be assigned to each
+    MPI rank on the current node, assuming num_ranks in total.
+
+    Parameters
+    ----------
+    num_ranks : int
+        Total number of MPI ranks launched on this node.
+
+    blas_threads_per_rank : int
+        Desired thread count.  When non-zero, returned as-is.
+        When ``0``, the value is auto-detected as
+        ``max(1, num_physical_cpus // num_ranks)``.
+
+    Returns
+    -------
+    int
+        Thread count per rank (always >= 1).
+
+    Notes
+    -----
+    Auto-detection uses :func:`psutil.cpu_count(logical=False)` when
+    *psutil* is available, falling back to :func:`os.cpu_count`.  The
+    result is measured on the machine where this function is called, which
+    may differ from remote HPC compute nodes.  Pass an explicit
+    *blas_threads_per_rank* when targeting a different machine.
+    """
+    if blas_threads_per_rank != 0:
+        return blas_threads_per_rank
+    import os as _os
+    num_cpus = _os.cpu_count()
+    num_cpus = num_cpus if num_cpus is not None else 1  # os.cpu_count can return None
+    try: 
+        # prefer to override with psutil when available
+        import psutil as _psutil
+        temp = _psutil.cpu_count(logical=False)
+        num_cpus = temp if temp is not None else num_cpus
+    except ImportError:
+        pass
+    return max(1, num_cpus // num_ranks)
+
+
+RUN_KWARGS_PICKLE_MSG = """
+    This function is writing a pickle file, volatile_run_kwargs.pkl, to a
+    persistent directory. That pickle file holds the `run_kwargs` dict,
+    possibly after adding default values for some keyword arguments.
+
+    DO NOT rely on this pickled file for long-term storage.
+"""
+
+
+def write_mpi_runner_artifacts(
+        protocol_obj, run_kwargs: dict, artifact_dir, artifacts_persistent: bool
+    ) -> str:
+    """
+    Serialize a protocol run into a self-contained directory for MPI workers.
+
+    Writes three files into *artifact_dir*:
+
+    * ``protocol/`` — the serialized protocol (via ``protocol_obj.write``).
+
+    * ``volatile_run_kwargs.pkl`` — pickled keyword arguments for ``protocol.run``.
+        The "volatile" prefix indicates that this file's contents shouldn't be
+        treated as portable or long-lived.
+
+    * ``mpi_runner.py`` — a stand-alone Python script that each MPI worker
+      executes. The script 
+        (1) reads the data, protocol, and kwargs from disk, then
+        (2) calls ``protocol.run(data, comm=MPI.COMM_WORLD, **kwargs)``, and
+        (3) has rank 0 write the results back to *data_dir*.
+
+    Parameters
+    ----------
+    protocol_obj : Protocol
+        The protocol to serialize.  Must implement a ``write(dirname)`` method.
+
+    run_kwargs : dict
+        Keyword arguments forwarded to ``protocol.run``.  Modified **in place**:
+        ``disable_checkpointing`` defaults to ``True`` if not already set.
+
+    artifact_dir : path-like
+        Directory in which to write the three artifacts.  Must already exist,
+        and must eventually contain serialization of a ``ProtocolData`` object
+        Embedded verbatim into the runner script.
+
+    arifacts_persistent: bool
+        A flag indicating if the arifact_dir should be assumed persistent or
+        not. If the directory is NOT persistent then we disable checkpointing,
+        which would only slow us down. If a directory IS persistent then we
+        log a warning about serializing with pickle.
+
+    Returns
+    -------
+    str
+        Absolute path to ``mpi_runner.py``.
+
+    Notes
+    -----
+    See RUN_KWARGS_PICKLE_MSG for a warning about this function's behavior when
+    artifact_dir is persistent.
+    """
+    import pathlib as _pathlib
+    import pickle as _pickle
+
+    artifact_dir = _pathlib.Path(artifact_dir)
+
+    # Write protocol so workers can restore it with the correct subclass.
+    protocol_dir = str(artifact_dir / 'protocol')
+    protocol_obj.write(protocol_dir)
+
+    # Pickle run_kwargs so arbitrary objects (checkpoints, simulators, etc.) pass through.
+    # Disable checkpointing by default — checkpoint files written to a subprocess CWD
+    # are useless, and the auto-generated checkpoint path can fail for non-trivial mode names.
+    if artifacts_persistent:
+        _warnings.warn(RUN_KWARGS_PICKLE_MSG, UserWarning)
+    else:
+        run_kwargs.setdefault('disable_checkpointing', True)
+    
+    kwargs_path = artifact_dir / 'volatile_run_kwargs.pkl'
+    with open(kwargs_path, 'wb') as _f:
+        _pickle.dump(run_kwargs, _f)
+
+    # Generate runner script; only path strings are inlined.
+    runner_path = str(artifact_dir / 'mpi_runner.py')
+    runner_script = (
+        "import pickle\n"
+        "import pygsti\n"
+        "from mpi4py import MPI\n"
+        "comm = MPI.COMM_WORLD\n"
+        f"data = pygsti.io.read_data_from_dir({str(artifact_dir)!r})\n"
+        f"protocol = pygsti.io.read_protocol_from_dir({protocol_dir!r})\n"
+        f"with open({str(kwargs_path)!r}, 'rb') as _f:\n"
+        "    _kwargs = pickle.load(_f)\n"
+        "results = protocol.run(data, comm=comm, **_kwargs)\n"
+        "if comm.Get_rank() == 0:\n"
+        f"    results.write({str(artifact_dir)!r}, data_already_written=True)\n"
+        "results = None  # free shared memory before MPI teardown\n"
+    )
+    with open(runner_path, 'w') as _f:
+        _f.write(runner_script)
+
+    return runner_path
+
+
+def build_slurm_script(*, job_name: str, nodes: int, ntasks_per_node: int,
+                       cpus_per_task: int, time: 'str | None', partition: 'str | None',
+                       output: 'str | None', error: 'str | None',
+                       ranks_per_host: 'int | None', num_ranks: int,
+                       runner_path: str, script_path: str) -> str:
+    """Build and return the text of a SLURM batch script.
+
+    The returned string is suitable for writing directly to a ``.sbatch``
+    file and submitting with ``sbatch``.  The script uses ``srun`` as the
+    MPI launcher (SLURM-native; inherits the job allocation automatically).
+
+    Parameters
+    ----------
+    job_name : str
+        Value for ``#SBATCH --job-name``.
+    nodes : int
+        Value for ``#SBATCH --nodes``.
+    ntasks_per_node : int
+        Value for ``#SBATCH --ntasks-per-node``.
+    cpus_per_task : int
+        Value for ``#SBATCH --cpus-per-task``.  Also used for the BLAS
+        thread environment variable exports.
+    time : str or None
+        Walltime limit (e.g. ``'4:00:00'``).  ``None`` emits a
+        ``FILL_IN`` placeholder.
+    partition : str or None
+        SLURM partition name.  ``None`` emits a ``FILL_IN`` placeholder.
+    output : str or None
+        Path for SLURM stdout log.  ``None`` defaults to
+        ``slurm-%j.out`` in the same directory as *script_path*.
+    error : str or None
+        Path for SLURM stderr log.  ``None`` defaults to
+        ``slurm-%j.err`` in the same directory as *script_path*.
+    ranks_per_host : int or None
+        Used to set a suggested ``PYGSTI_MAX_HOST_PROCS`` comment in the
+        script.  ``None`` uses ``num_ranks // nodes`` as the suggestion.
+    num_ranks : int
+        Total number of MPI ranks (used only when *ranks_per_host* is
+        ``None`` to compute the suggestion).
+    runner_path : str
+        Path to the ``mpi_runner.py`` script (embedded in the ``srun``
+        invocation).
+    script_path : str
+        Destination path for the ``.sbatch`` file (embedded in the
+        header comment).
+
+    Returns
+    -------
+    str
+        Complete text of the batch script, ending with a newline.
+    """
+    import pathlib as _pathlib
+
+    def _directive(flag, value):
+        if value is None:
+            return f"#SBATCH {flag}=FILL_IN  # <-- edit before submitting"
+        return f"#SBATCH {flag}={value}"
+
+    script_dir = _pathlib.Path(script_path).parent
+    if output is None:
+        output = str(script_dir / 'slurm-%j.out')
+    if error is None:
+        error = str(script_dir / 'slurm-%j.err')
+
+    # Suggest a sensible value for PYGSTI_MAX_HOST_PROCS in the comment.
+    max_host_procs = ranks_per_host if ranks_per_host is not None else (num_ranks // nodes)
+
+    lines = [
+        "#!/bin/bash",
+        "#",
+        "# SLURM batch script generated by pyGSTi",
+        f"# Protocol: {job_name}",
+        "#",
+        f"# Submit with:  sbatch {script_path}",
+        "#",
+        f"#SBATCH --job-name={job_name}",
+        f"#SBATCH --nodes={nodes}",
+        f"#SBATCH --ntasks-per-node={ntasks_per_node}",
+        f"#SBATCH --cpus-per-task={cpus_per_task}",
+        _directive("--time", time),
+        _directive("--partition", partition),
+        f"#SBATCH --output={output}",
+        f"#SBATCH --error={error}",
+        "#",
+        "# --- Common optional directives (uncomment and edit as needed) ---",
+        "# #SBATCH --account=<project_account>    # charge to a specific allocation",
+        "# #SBATCH --qos=<quality_of_service>     # QoS tier (e.g. \"premium\", \"debug\")",
+        "# #SBATCH --constraint=<node_feature>    # require specific hardware (e.g. \"gpu\", \"knl\")",
+        "# #SBATCH --exclusive                    # reserve entire nodes (no sharing)",
+        "# #SBATCH --mem=0                        # use all available memory per node",
+        "# #SBATCH --mail-user=<your@email.edu>",
+        "# #SBATCH --mail-type=BEGIN,END,FAIL",
+        "# ----------------------------------------------------------------",
+        "",
+        f"# BLAS thread count per MPI rank (matches --cpus-per-task={cpus_per_task} above)",
+        f"export OMP_NUM_THREADS={cpus_per_task}",
+        f"export OPENBLAS_NUM_THREADS={cpus_per_task}",
+        f"export MKL_NUM_THREADS={cpus_per_task}",
+        f"export NUMEXPR_NUM_THREADS={cpus_per_task}",
+        f"export BLIS_NUM_THREADS={cpus_per_task}",
+        "",
+        "# Uncomment to override pyGSTi's shared-memory host grouping",
+        "# (ranks per shared-memory group; useful for multi-socket nodes):",
+        f"# export PYGSTI_MAX_HOST_PROCS={max_host_procs}",
+        "",
+        f"srun python {runner_path}",
+    ]
+    return "\n".join(lines) + "\n"

@@ -13,7 +13,8 @@ Matrix related utility functions
 import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
-import typing as _typing
+
+from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union, Literal
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -22,6 +23,7 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
 from pygsti.tools.basistools import change_basis
+from pygsti.baseobjs import _compatibility as _compat
 
 try:
     from . import fastcalc as _fastcalc
@@ -65,7 +67,7 @@ def gram_matrix(m, adjoint=False):
     return out
 
 
-def is_hermitian(mx, tol=1e-9):
+def is_hermitian(mx: _np.ndarray, tol: float=1e-9) -> bool:
     """
     Test whether mx is a hermitian matrix.
 
@@ -86,7 +88,137 @@ def is_hermitian(mx, tol=1e-9):
     if m != n:
         return False
     else:
-        return _np.all(_np.abs(mx - mx.T.conj()) <= tol)
+        return bool(_np.all(_np.abs(mx - mx.T.conj()) <= tol))
+
+
+def assert_hermitian(mat : _np.ndarray, tol: Union[float,_np.floating]) -> None:
+    hermiticity_error = _np.abs(mat - mat.T.conj())
+    if _np.any(hermiticity_error > tol):
+        message = f"""
+            Input matrix 'mat' is not Hermitian, up to tolerance {tol}.
+            The absolute values of entries in (mat - mat^H) are \n{hermiticity_error}. 
+        """
+        raise ValueError(message)
+
+
+def is_projector(mx: _np.ndarray, tol: float = 1e-12) -> bool:
+    """
+    Test whether mx is an orthogonal projector, i.e. Hermitian and idempotent.
+
+    Parameters
+    ----------
+    mx : numpy array
+        Matrix to test.
+
+    tol : float, optional
+        Tolerance for the Hermiticity and idempotency checks. The idempotency
+        check compares mx @ mx to mx with absolute and relative tolerances of
+        ``sqrt(mx.size) * tol``. We use a stringent default tolerance since
+        projectors tend to be computed to high accuracy. Passing ``tol=np.inf``
+        skips all checks and returns True.
+
+    Returns
+    -------
+    bool
+        True if mx is (numerically) an orthogonal projector, otherwise False.
+    """
+    if tol == _np.inf:
+        return True
+    if not is_hermitian(mx, tol):
+        return False
+    mx2 = mx @ mx
+    tol = _np.sqrt(mx.size) * tol
+    return _np.allclose(mx, mx2, atol=tol, rtol=tol)
+
+
+def assert_projector(mx: _np.ndarray, tol: float = 1e-12) -> None:
+    """
+    Raise a ValueError if mx is not an orthogonal projector, per :func:`is_projector`.
+
+    Parameters
+    ----------
+    mx : numpy array
+        Matrix to test.
+
+    tol : float, optional
+        Tolerance, forwarded to :func:`is_projector`.
+
+    Returns
+    -------
+    None
+    """
+    if not is_projector(mx, tol):
+        message = f"""
+            Input matrix 'mx' is not a projector, up to tolerance {tol}.
+            The absolute values of entries in (mx^2 - mx) are \n{_np.abs(mx @ mx - mx)}.
+        """
+        raise ValueError(message)
+
+
+def induced_projector(mx: _np.ndarray, tol: float = 1e-12, *, require_real: bool = False) -> _np.ndarray:
+    """
+    Return the orthogonal projector onto range(mx), for mx proportional to a projector.
+
+    The input must be Hermitian with exactly two distinct eigenvalue magnitudes, zero
+    and some c > 0 (i.e., mx = c*P for an orthogonal projector P). We eigendecompose
+    mx, rescale so its largest-magnitude eigenvalue is 1, verify that the rescaled
+    spectrum consists of zeros and ones, and rebuild P from the eigenvectors. The
+    result is an exact orthogonal projector up to rounding error, even when mx itself
+    is only approximately proportional to one.
+
+    Parameters
+    ----------
+    mx : numpy array
+        The matrix to convert. Must be Hermitian and proportional to an orthogonal
+        projector, up to `tol`.
+
+    tol : float, optional
+        Tolerance for the Hermiticity, realness, and spectrum checks.
+
+    require_real : bool, optional
+        If True, additionally require that mx is real up to `tol`.
+
+    Returns
+    -------
+    numpy array
+        The orthogonal projector onto range(mx).
+
+    Raises
+    ------
+    ValueError
+        If mx is not real (when `require_real` is True), not Hermitian, or not
+        proportional to an orthogonal projector.
+    """
+    if require_real and not _np.allclose(mx, mx.conj(), atol=tol, rtol=tol):
+        raise ValueError(
+            f"Input matrix has a nonzero imaginary part (up to tolerance {tol}) "
+            f"but require_real=True was passed."
+        )
+
+    if not is_hermitian(mx, tol):
+        raise ValueError(f"Input matrix is not Hermitian, up to tolerance {tol}.")
+
+    evecs, evals, inv_evecs = eigendecomposition(mx, assume_hermitian=True)
+    scale = _np.linalg.norm(evals, ord=_np.inf)
+    if scale > 0:
+        evals = evals / scale
+    evals_round = _np.round(evals)
+
+    if not _np.allclose(evals, evals_round, atol=tol, rtol=tol):
+        raise ValueError(
+            f"Input matrix is not proportional to an orthogonal projector: after "
+            f"rescaling by the largest eigenvalue magnitude, its spectrum is not "
+            f"within tolerance {tol} of integers."
+        )
+
+    if set(evals_round).issubset({0.0, 1.0}):
+        return (evecs * evals_round[None, :]) @ inv_evecs
+    else:
+        raise ValueError(
+            f"Input matrix is not proportional to an orthogonal projector: after "
+            f"rescaling by the largest eigenvalue magnitude, its spectrum contains "
+            f"values other than 0 and 1 (got {sorted(set(evals_round))})."
+        )
 
 
 def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
@@ -137,6 +269,23 @@ def is_valid_density_mx(mx, tol=1e-9):
     """
     # is_pos_def includes a check that the matrix is Hermitian.
     return abs(_np.trace(mx) - 1.0) < tol and is_pos_def(mx, tol)
+
+
+def pivot_indices_after_deflation(m_fixed: _np.ndarray, m: _np.ndarray) -> _np.ndarray:
+    """ 
+    m_fixed and m have the same number of rows.
+
+    Returns an index vector J of columns of m, chosen by QRCP
+    after projecting out the contributions from m_fixed.
+    """
+    # type declarations to make linters (relatively) happy
+    Q : _np.ndarray
+    J : _np.ndarray
+    Q  = _spl.qr(m_fixed, mode='economic')[0]           # type: ignore
+    M  = m.copy()
+    M -= Q @ (Q.T.conj() @ M)
+    J  = _spl.qr(M, mode='economic', pivoting=True)[2]  # type: ignore
+    return J
 
 
 def nullspace(m, tol=1e-7):
@@ -546,7 +695,7 @@ def print_mx(mx, width=9, prec=4, withbrackets=False):
     mx : numpy array
         the matrix (2-D array) to print.
 
-    width : int, opitonal
+    width : int, optional
         the width (in characters) of each printed element
 
     prec : int optional
@@ -575,7 +724,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     m : numpy.ndarray
         array to print.
 
-    width : int, opitonal
+    width : int, optional
         the width (in characters) of each converted element
 
     prec : int optional
@@ -588,7 +737,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     Returns
     -------
     string
-        matrix m as a pretty formated string.
+        matrix m as a pretty formatted string.
     """
     if m.size == 0: return ""
     s = ""; tol = 10**(-prec)
@@ -617,10 +766,10 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     m : numpy array
         array to format.
 
-    real_width : int, opitonal
+    real_width : int, optional
         the width (in characters) of the real part of each element.
 
-    im_width : int, opitonal
+    im_width : int, optional
         the width (in characters) of the imaginary part of each element.
 
     prec : int optional
@@ -629,7 +778,7 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     Returns
     -------
     string
-        matrix m as a pretty formated string.
+        matrix m as a pretty formatted string.
     """
     if len(m.shape) == 1: m = m[None, :]  # so it works w/vectors too
     s = ""; tol = 10**(-prec)
@@ -738,12 +887,12 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
         The target logarithm
 
     target_weight : float
-        A weighting factor used to blance the exactness-of-log term
+        A weighting factor used to balance the exactness-of-log term
         with the closeness-to-target term in the optimized objective
         function.  This value multiplies the latter term.
 
     tol : float, optional
-        Optimzer tolerance.
+        Optimizer tolerance.
 
     Returns
     -------
@@ -794,6 +943,94 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
         #      _np.linalg.norm(logM-target_logm)**2)
 
     return logM
+
+
+def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assume_normal: bool = False):
+    if assume_hermitian is None:
+        assume_hermitian = is_hermitian(m)
+    if assume_hermitian:
+        # Make sure it's Hermtian in exact arithmetic. This helps with
+        # reproducibility across different implementations of LAPACK.
+        if not m.flags.writeable:
+            m = m.copy()
+        m += m.T.conj()
+        m /= 2
+        return _np.linalg.eigvalsh(m)
+    elif assume_normal:
+        T, _ = _spl.schur(m, output='complex')
+        evals = _np.diag(T)
+        return evals
+    else:
+        return _np.linalg.eigvals(m)
+
+
+def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None,
+                        assume_normal: bool = False, tol: float = 1e-12):
+    """
+    Eigendecompose a square matrix as `m = evecs @ diag(evals) @ inv_evecs`.
+
+    Parameters
+    ----------
+    m : numpy array
+        The matrix to eigendecompose.
+
+    assume_hermitian : bool, optional
+        If True, `m` is (numerically symmetrized and) eigendecomposed with
+        `numpy.linalg.eigh`, which is faster and more numerically stable
+        than the general-purpose path, and guarantees a unitary `evecs`. If
+        None (the default), this is inferred by testing `m` for Hermiticity,
+        regardless of `assume_normal`.
+
+    assume_normal : bool, optional
+        If True, and `m` is not (found or assumed) to be Hermitian, `m` is
+        assumed to be a normal operator and is eigendecomposed via a complex
+        Schur decomposition, whose triangular factor is verified to be
+        diagonal (up to `tol`).
+
+    tol : float, optional
+        Only used when the `assume_normal` path is taken. The off-diagonal
+        norm of the Schur triangular factor is compared against `tol` times
+        the norm of its diagonal; a `ValueError` is raised if the
+        off-diagonal contribution is too large for `m` to be considered
+        normal.
+
+    Returns
+    -------
+    evecs : numpy array
+        The eigenvectors of `m`, as columns.
+
+    evals : numpy array
+        The eigenvalues of `m`.
+
+    inv_evecs : numpy array
+        The matrix inverse of `evecs`
+    """
+    if assume_hermitian is None:
+        assume_hermitian = is_hermitian(m)
+    if assume_hermitian:
+        # Make sure it's Hermtian in exact arithmetic. This helps with
+        # reproducibility across different implementations of LAPACK.
+        if not m.flags.writeable:
+            m = m.copy()
+        m += m.T.conj()
+        m /= 2
+        evals, evecs = _np.linalg.eigh(m)
+        inv_evecs = evecs.T.conj()
+    elif assume_normal:
+        T, evecs     = _spl.schur(m, output='complex')  # type: ignore
+        offdiag_norm = _spl.norm(T[_np.triu_indices_from(T, 1)])
+        diag_norm    = _spl.norm(_np.diag(T), ord=_np.inf)
+        if offdiag_norm > tol * diag_norm:
+            raise ValueError(
+                f'Off-diagonal of triangular factor T from Schur decomposition had norm {offdiag_norm}, '
+                f'which exceeds relative tolerance of {tol * diag_norm}.'
+            )
+        evals = _np.diag(T)
+        inv_evecs = evecs.T.conj()
+    else:
+        evals, evecs = _np.linalg.eig(m)
+        inv_evecs = _np.linalg.inv(evecs)
+    return evecs, evals, inv_evecs
 
 
 def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
@@ -1242,7 +1479,7 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
             raise ValueError(("Vectors `a` and `b` don't have the same conjugate-pair structure, "
                               " and so they cannot be matched in a way the preserves this structure."))
     #Note: problem with this approach is that we might convert a
-    # real-pair -> conj-pair sub-optimally (i.e. there might be muliple
+    # real-pair -> conj-pair sub-optimally (i.e. there might be multiple
     # such conversions and we just choose one at random).
 
     _, pairs1 = minweight_match(a[a_real], b[b_real], metricfn, True,
@@ -1268,7 +1505,7 @@ def _fas(a, inds, rhs, add=False):
     """
     Fancy Assignment, equivalent to `a[*inds] = rhs` but with
     the elements of inds (allowed to be integers, slices, or
-    integer arrays) always specifing a generalize-slice along
+    integer arrays) always specifying a generalize-slice along
     the given dimension.  This avoids some weird numpy indexing
     rules that make using square brackets a pain.
     """
@@ -1387,7 +1624,7 @@ def _findx(a, inds, always_copy=False):
     """
     Fancy Indexing, equivalent to `a[*inds].copy()` but with
     the elements of inds (allowed to be integers, slices, or
-    integer arrays) always specifing a generalize-slice along
+    integer arrays) always specifying a generalize-slice along
     the given dimension.  This avoids some weird numpy indexing
     rules that make using square brackets a pain.
     """
@@ -1416,7 +1653,7 @@ def _findx(a, inds, always_copy=False):
         if len(indx_tups) > 0:  # b/c a[()] just returns the entire array!
             inds = tuple(zip(*indx_tups))  # un-zips to one list per dim
             a_inds = a[inds].copy()  # a 1D array of flattened "fancy" a[inds]
-            a_inds.shape = a_inds_shape  # reshape
+            a_inds = _compat.reshape_no_copy(a_inds, a_inds_shape)  # reshape
         else:
             a_inds = _np.zeros(a_inds_shape, a.dtype)  # has zero elements
             assert(a_inds.size == 0)
@@ -2368,7 +2605,7 @@ def sign_fix_qr(q, r, tol=1e-6):
 
     Flips the signs of Q-columns and R-rows from a QR decomposition so that the
     largest absolute element in each Q-column is positive.  This is an arbitrary
-    but consisten convention that resolves sign-ambiguity in the output of a QR
+    but consistent convention that resolves sign-ambiguity in the output of a QR
     decomposition.
 
     Parameters
@@ -2397,8 +2634,25 @@ def sign_fix_qr(q, r, tol=1e-6):
     return qq, rr
 
 
-def is_operatorlike(obj: _typing.Any) -> bool:
-    return hasattr(obj, '__matmul__') and hasattr(obj, '__rmatmul__') and hasattr(obj, 'T') and hasattr(obj, 'conj')
+# a TypeVar to allow methods to return "self"
+_T = TypeVar("_T", bound="OperatorLike")
+
+
+@runtime_checkable
+class OperatorLike(Protocol[_T]): # type: ignore
+
+    @property
+    def T(self) -> _T:
+        ...
+
+    def __matmul__(self, other: Any) -> Any:
+        ...
+
+    def __rmatmul__(self, other: Any) -> Any:
+        ...
+
+    def conj(self) -> _T:
+        ...
 
 
 class IdentityOperator:
@@ -2422,10 +2676,10 @@ class IdentityOperator:
     #   has __array_priority__ of 10). 
     #
 
-    def __matmul__(self, other: _typing.Any) -> _typing.Any:
+    def __matmul__(self, other: Any) -> Any:
         return other
     
-    def __rmatmul__(self, other: _typing.Any) -> _typing.Any:
+    def __rmatmul__(self, other: Any) -> Any:
         return other
     
     @property
@@ -2434,3 +2688,12 @@ class IdentityOperator:
     
     def conj(self):
         return self
+
+
+def to_operatorlike(obj):
+    if obj is None:
+        return IdentityOperator()
+    elif isinstance(obj, OperatorLike):
+        return obj
+    else:
+        raise ValueError()

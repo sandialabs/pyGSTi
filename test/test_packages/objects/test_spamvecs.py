@@ -19,19 +19,20 @@ class SPAMVecTestCase(BaseTestCase):
     def test_cptp_state(self):
         vec = states.CPTPState([1 / np.sqrt(2), 0, 0, 1 / np.sqrt(2) - 0.1], "pp")
         print(vec)
-        print(vec.base.shape)
+        print(vec.to_dense().shape)
 
 
         v = vec.to_vector()
         vec.from_vector(v)
         print(v)
-        print(vec)
+        print(vec.to_dense())
 
-        vec_std = pygsti.change_basis(vec, "pp", "std")
+        vec_std = pygsti.change_basis(vec.to_dense(), "pp", "std")
         print(vec_std)
 
         def analyze(spamvec):
-            stdmx = pygsti.vec_to_stdmx(spamvec, "pp")
+            sv = spamvec.to_dense('minimal') if hasattr(spamvec, 'to_dense') else spamvec
+            stdmx = pygsti.vec_to_stdmx(sv, "pp")
             evals = np.linalg.eigvals(stdmx)
             #print(evals)
             assert( np.all(evals > -1e-10) )
@@ -91,28 +92,14 @@ class SPAMVecTestCase(BaseTestCase):
         model.from_vector(v)
 
         #print(Ec.num_params) #not implemented for complement vecs - only for POVM
-        identity = np.array([[np.sqrt(2)], [0], [0], [0]],'d')
+        identity = np.array([np.sqrt(2), 0, 0, 0], 'd')
         print("TEST1")
-        print(E0)
-        print(Ec)
-        print(E0 + Ec)
-        self.assertArraysAlmostEqual(E0+Ec, identity)
+        print(E0.to_dense())
+        print(Ec.to_dense())
+        print(E0.to_dense() + Ec.to_dense())
+        self.assertArraysAlmostEqual(E0.to_dense() + Ec.to_dense(), identity)
 
         #TODO: add back if/when we can set parts of a POVM directly...
-        #print("TEST2")
-        #model.effects['E0'] = [1/np.sqrt(2), 0, 0.4, 0.6]
-        #print(model.effects['E0'])
-        #print(model.effects['E1'])
-        #print(model.effects['E0'] + model.effects['E1'])
-        #self.assertArraysAlmostEqual(model.effects['E0'] + model.effects['E1'], identity)
-        #
-        #print("TEST3")
-        #model.effects['E0'][0,0] = 1.0 #uses dirty processing
-        #model._update_paramvec(model.effects['E0'])
-        #print(model.effects['E0'])
-        #print(model.effects['E1'])
-        #print(model.effects['E0'] + model.effects['E1'])
-        #self.assertArraysAlmostEqual(model.effects['E0'] + model.effects['E1'], identity)
 
     def test_povms(self):
         model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(

@@ -33,6 +33,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.processors import QubitProcessorSpec, QuditProcessorSpec
 from itertools import product
 
+
 def write_empty_dataset(filename, circuits,
                         header_string='## Columns = 1 frequency, count total', num_zero_cols=None,
                         append_weights_column=False):
@@ -321,7 +322,10 @@ def write_model(model, filename, title=None):
     -------
     None
     """
-    _warnings.warn("write_model(...) is unable to write all types of pyGSTi models, and really should NOT be used!")
+    _warnings.warn(
+        "write_model(...) is unable to write all types of pyGSTi models, and really should NOT be used!",
+        _tools.exceptions.pyGSTiDeprecationWarning
+    )
 
     def writeprop(f, lbl, val):
         """ Write (label,val) property to output file """
@@ -621,7 +625,7 @@ def fill_in_empty_dataset_with_fake_data(dataset_filename, model, num_samples, s
         What type of sample error is included in the counts.  Can be:
 
         - "none"  - no sample error: counts are floating point numbers such
-          that the exact probabilty can be found by the ratio of count / total.
+          that the exact probability can be found by the ratio of count / total.
         - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
           counts are always positive.
         - "round" - same as "clip", except counts are rounded to the nearest

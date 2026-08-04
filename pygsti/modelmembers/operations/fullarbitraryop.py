@@ -10,13 +10,29 @@ The FullArbitraryOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
+
 import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.torchable import Torchable as _Torchable
+
+EPSILON_POWER_FOR_COMPLEX_CAST = 0.875
+# ^ Controls threshold at which we explicitly cast complex data to real data, 
+#   versus letting numpy do the cast (which will lead to a ComplexWarning).
+#   The default value of 0.875 means our threshold in double precision is
+#   about 1e-14.
 
 
-class FullArbitraryOp(_DenseOperator):
+class FullArbitraryOp(_DenseOperator, _Torchable):
     """
     An operation matrix that is fully parameterized.
 
@@ -64,11 +80,16 @@ class FullArbitraryOp(_DenseOperator):
         -------
         None
         """
-        mx = _LinearOperator.convert_to_matrix(m)
-        if(mx.shape != (self.dim, self.dim)):
+        mx : _np.ndarray = _LinearOperator.convert_to_matrix(m)
+        if (mx.shape != (self.dim, self.dim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
                              % (self.dim, self.dim))
-        self._ptr[:, :] = _np.array(mx)
+        if not _np.isrealobj(mx) and _np.isrealobj(self._ptr):
+            tol = _np.finfo(self._ptr.dtype).eps ** EPSILON_POWER_FOR_COMPLEX_CAST
+            if _np.all(_np.abs(mx.imag) <= tol):  # type: ignore
+                mx = mx.real                      # type: ignore
+
+        self._ptr[:, :] = mx
         self._ptr_has_changed()
         self.dirty = True
 
@@ -82,7 +103,7 @@ class FullArbitraryOp(_DenseOperator):
         int
             the number of independent parameters.
         """
-        return self.size
+        return self._ptr.size
 
     def to_vector(self):
         """
@@ -124,6 +145,21 @@ class FullArbitraryOp(_DenseOperator):
         self._ptr[:, :] = v.reshape((self.dim, self.dim))
         self._ptr_has_changed()
         self.dirty = dirty_value
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[int]:
+        # to_vector() returns self._ptr.flatten(), which the Torch forward simulator casts to a real
+        # dtype -- silently discarding any imaginary part.  FullArbitraryOp permits a complex _ptr
+        # (see EPSILON_POWER_FOR_COMPLEX_CAST), so guard that this op is real-valued.  Whether an
+        # ndarray holds real or complex data is fixed by its dtype and can't change without
+        # reallocating the array, so this check isn't meaningfully stateful.
+        assert _np.isrealobj(self._ptr), \
+            "The Torch forward simulator does not support a complex-valued FullArbitraryOp."
+        return (self.dim,)
+
+    @staticmethod
+    def torch_base(sd: Tuple[int], t_param: _torch.Tensor) -> _torch.Tensor:
+        dim, = sd
+        return t_param.reshape((dim, dim))
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
