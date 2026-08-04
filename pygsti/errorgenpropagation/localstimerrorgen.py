@@ -63,7 +63,16 @@ def _bel_less_than(pauli1, pauli2):
     `X`/`Y`/`Z`, inverting the ordering relative to the `'I'`-padded string convention used
     by `LocalElementaryErrorgenLabel` and `CompleteElementaryErrorgenBasis`.
     """
-    return str(pauli1)[1:].replace('_', 'I') < str(pauli2)[1:].replace('_', 'I')
+    if pauli1 == pauli2:
+        return False
+    if len(pauli1) < 20:
+        return str(pauli1)[1:].replace('_', 'I') < str(pauli2)[1:].replace('_', 'I')
+    else:
+        diff_indices = (pauli1 * pauli2).pauli_indices()
+        if not diff_indices:
+            return False
+        diff_idx = diff_indices[0]
+        return pauli1[diff_idx] < pauli2[diff_idx]
 
 
 #TODO: Split this into a parent class and subclass for markovian and non-markovian

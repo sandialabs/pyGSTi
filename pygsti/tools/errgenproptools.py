@@ -816,6 +816,30 @@ def _error_generator_layer_pairwise_commutator(errorgen_layer_1: dict[_LSE, floa
     return commuted_errgen_list
 
 
+_COMMUTATOR_CACHE_SIZE = 2**20
+
+@lru_cache(maxsize=_COMMUTATOR_CACHE_SIZE)
+def _error_generator_commutator_canonical_unweighted(errorgen_1: _LSE, errorgen_2: _LSE) -> _ErrorgenTerms:
+    return _error_generator_commutator_impl(errorgen_1, errorgen_2, None)
+
+
+def _error_generator_commutator_impl(errorgen_1: _LSE, errorgen_2: _LSE,
+                                     identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    if identity is None:
+        identity = _identity_pauli_string(len(errorgen_1.basis_element_labels[0]))
+
+    terms1 = _error_generator_composition_impl(errorgen_1, errorgen_2, 1, identity)
+    terms2 = _error_generator_composition_impl(errorgen_2, errorgen_1, -1, identity)
+
+    aggregated = {}
+    for lbl, rate in terms1:
+        aggregated[lbl] = aggregated.get(lbl, 0j) + rate
+    for lbl, rate in terms2:
+        aggregated[lbl] = aggregated.get(lbl, 0j) + rate
+
+    return [(lbl, rate) for lbl, rate in aggregated.items() if rate != 0]
+
+
 def error_generator_commutator(errorgen_1: _LSE, errorgen_2: _LSE, flip_weight: bool = False, weight: float = 1.0,
                                identity: Optional[stim.PauliString] = None) -> _ErrorgenTerms:
     """
@@ -846,7 +870,11 @@ def error_generator_commutator(errorgen_1: _LSE, errorgen_2: _LSE, flip_weight: 
     list of `LocalStimErrorgenLabel`s corresponding to the commutator of the two input error generators,
     weighted by the specified value of `weight`.
     """
-    if errorgen_1.errorgen_type == 'H' and errorgen_2.errorgen_type == 'H':
+    t1, t2 = errorgen_1.errorgen_type, errorgen_2.errorgen_type
+    if t1 == 'S' and t2 == 'S':
+        return []
+
+    if t1 == 'H' and t2 == 'H':
         w = -weight if flip_weight else weight
         ptup = com(errorgen_1.basis_element_labels[0], errorgen_2.basis_element_labels[0])
         if ptup is not None:
@@ -854,26 +882,32 @@ def error_generator_commutator(errorgen_1: _LSE, errorgen_2: _LSE, flip_weight: 
         else:
             return []
 
-    # Stochastic error generators always commute with one another (S_P[S_Q[.]] is
-    # symmetric under P <-> Q for any two Paulis), so [S_P, S_Q] = 0 identically.
-    # Returning early avoids two composition calls and keeps S,S pairs out of the
-    # composition memoization cache.
-    if errorgen_1.errorgen_type == 'S' and errorgen_2.errorgen_type == 'S':
-        return []
-
     if flip_weight:
         w = -weight
     else:
         w = weight
 
-    terms1 = error_generator_composition(errorgen_1, errorgen_2, weight=w, identity=identity)
-    terms2 = error_generator_composition(errorgen_2, errorgen_1, weight=-w, identity=identity)
+    k1 = (errorgen_1.errorgen_type, errorgen_1._hashable_string_rep)
+    k2 = (errorgen_2.errorgen_type, errorgen_2._hashable_string_rep)
+    if k1 == k2:
+        return []
+    flip = k1 > k2
+    if flip:
+        base = _error_generator_commutator_canonical_unweighted(errorgen_2, errorgen_1)
+        s = -w
+    else:
+        base = _error_generator_commutator_canonical_unweighted(errorgen_1, errorgen_2)
+        s = w
 
-    aggregated = {}
-    for lbl, rate in terms1 + terms2:
-        aggregated[lbl] = aggregated.get(lbl, 0j) + rate
+    if s == 1:
+        return list(base)
+    if s == -1:
+        return [(lbl, -rate) for lbl, rate in base]
+    return [(lbl, rate * s) for lbl, rate in base]
 
-    return [(lbl, rate) for lbl, rate in aggregated.items() if rate != 0]
+
+error_generator_commutator.cache_info = _error_generator_commutator_canonical_unweighted.cache_info
+error_generator_commutator.cache_clear = _error_generator_commutator_canonical_unweighted.cache_clear
 
 #Shared term emission primitives for the `_error_generator_composition_*` helpers.
 #Every one of those helpers builds its output the same way: pick `_ordered_new_bels_C`
@@ -1947,7 +1981,7 @@ def _ordered_new_bels_A(pauli1: stim.PauliString, pauli2: stim.PauliString, firs
             addl_factor = -1
         else:
             new_eg_type = 'A'
-            new_bels, addl_factor = ([pauli1, pauli2], 1) if stim_pauli_string_less_than(pauli1, pauli2) else ([pauli2, pauli1], -1)
+            new_bels, addl_factor = ([pauli1, pauli2], 1) if _bel_less_than(pauli1, pauli2) else ([pauli2, pauli1], -1)
     return new_eg_type, new_bels, addl_factor
 
 def _ordered_new_bels_C(pauli1: stim.PauliString, pauli2: stim.PauliString, first_pauli_ident: bool,
@@ -1967,7 +2001,7 @@ def _ordered_new_bels_C(pauli1: stim.PauliString, pauli2: stim.PauliString, firs
     else:
         new_eg_type = 'C'
         addl_factor = 1
-        new_bels = [pauli1, pauli2] if stim_pauli_string_less_than(pauli1, pauli2) else [pauli2, pauli1]
+        new_bels = [pauli1, pauli2] if _bel_less_than(pauli1, pauli2) else [pauli2, pauli1]
     return new_eg_type, new_bels, addl_factor
 
 def com(P1: stim.PauliString, P2: stim.PauliString) -> Optional[tuple[complex, stim.PauliString]]:
@@ -1993,7 +2027,12 @@ def acom(P1: stim.PauliString, P2: stim.PauliString) -> Optional[tuple[complex, 
 
 def pauli_product(P1: stim.PauliString, P2: stim.PauliString) -> tuple[complex, stim.PauliString]:
     P3 = P1*P2
-    return (P3.sign, P3 / P3.sign)
+    s = P3.sign
+    if s == 1:
+        return ((1+0j), P3)
+    if s == -1:
+        return ((-1+0j), -P3)
+    return (s, P3 / s)
     # return (sign(P3),
     #         unsigned P3)
 
@@ -2006,8 +2045,16 @@ def stim_pauli_string_less_than(pauli1: stim.PauliString, pauli2: stim.PauliStri
     pauli1, pauli2 : stim.PauliString
         Paulis to compare. May carry a sign; it is stripped before comparing.
     """
-    # Strip the signs, then defer to the single implementation of the ordering convention.
-    return _bel_less_than(pauli1/pauli1.sign, pauli2/pauli2.sign)
+    if pauli1 == pauli2:
+        return False
+    if len(pauli1) < 20:
+        return _bel_less_than(pauli1/pauli1.sign, pauli2/pauli2.sign)
+    else:
+        diff_indices = (pauli1 * pauli2).pauli_indices()
+        if not diff_indices:
+            return False
+        diff_idx = diff_indices[0]
+        return pauli1[diff_idx] < pauli2[diff_idx]
 
 def errorgen_pauli_action(errorgen: _LSE, pauli: stim.PauliString) -> tuple[float, stim.PauliString]:
     """
