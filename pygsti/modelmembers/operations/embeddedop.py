@@ -19,7 +19,10 @@ from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOpe
 from pygsti.modelmembers import modelmember as _modelmember
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
+from pygsti.evotypes.evotype import Evotype as _Evotype
 from pygsti import SpaceT
+
+
 class EmbeddedOp(_LinearOperator):
     """
     An operation containing a single lower (or equal) dimensional operation within it.
@@ -54,7 +57,11 @@ class EmbeddedOp(_LinearOperator):
         assert(len(self.embedded_op.state_space.sole_tensor_product_block_labels) == len(target_labels)), \
             "Embedded operation's state space has a different number of components than the number of target labels!"
 
-        evotype = operation_to_embed._evotype
+        # Re-derive prefer_dense_reps for our own (parent) state_space instead of
+        # inheriting operation_to_embed's, which can be wrong/huge. See issue #543.
+        evotype = _Evotype.cast(
+            operation_to_embed._evotype.name, state_space=_StateSpace.cast(state_space)
+        )
         rep = self._create_rep_object(evotype, state_space)
 
         self._cached_embedded_errorgen_labels_global = None
@@ -599,17 +606,27 @@ class EmbeddedOp(_LinearOperator):
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
             `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two. 
+        
+        basis : `Basis` (if return_basis==True)
+            A Basis mapping the basis labels used in the keys of basis-labels of the
+            underlying (pre-embedding) error generator coeffs to basis matrices.
         """
         #*** Note: this function is nearly identical to EmbeddedErrorgen.coefficients() ***
-        coeffs_to_embed = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
-        
+        if return_basis:
+            coeffs_to_embed, basis = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
+        else:
+            coeffs_to_embed = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham, label_type)
+
         if coeffs_to_embed:
             embedded_labels = self.errorgen_coefficient_labels(label_type=label_type, identity_label=identity_label)
             embedded_coeffs = {lbl:val for lbl, val in zip(embedded_labels, coeffs_to_embed.values())}
         else:
             embedded_coeffs = dict()
 
-        return embedded_coeffs
+        if return_basis:
+            return embedded_coeffs, basis
+        else:
+            return embedded_coeffs
 
     def errorgen_coefficient_labels(self, label_type='global', identity_label='I'):
         """

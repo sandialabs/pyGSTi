@@ -1,5 +1,5 @@
 ********************************************************************************
-  pyGSTi 0.9.14.3
+  pyGSTi 0.10
 ********************************************************************************
 
 [![master build](https://img.shields.io/github/actions/workflow/status/sandialabs/pyGSTi/beta-master.yml?branch=master&label=master)](https://github.com/sandialabs/pyGSTi/actions/workflows/beta-master.yml)
@@ -36,7 +36,7 @@ In particular, there are a number of characterization protocols currently implem
 
 PyGSTi is designed with a modular structure so as to be highly customizable
 and easily integrated to new or existing python software.  It runs using
-python 3.9 or higher.  To faclilitate integration with software for running
+python 3.10 or higher.  To facilitate integration with software for running
 cloud-QIP experiments, pyGSTi `Circuit` objects can be converted to IBM's
 **OpenQASM** and Rigetti Quantum Computing's **Quil** circuit description languages.
 
@@ -58,7 +58,7 @@ included in the package will then be buried within your Python's
 
 ~~~
 cd <install_directory>
-git clone https://github.com/pyGSTio/pyGSTi.git
+git clone https://github.com/sandialabs/pyGSTi.git
 cd pyGSTi
 pip install -e .[complete]
 ~~~
@@ -152,45 +152,74 @@ report = pygsti.report.construct_standard_report(results, title="My Report", ver
 report.write_html("myReport", auto_open=True, verbosity=1) # Can also write out Jupyter notebooks!
 ~~~
 
-Tutorials and Examples
-----------------------
+Documentation
+-------------
 There are numerous tutorials (meant to be pedagogical) and examples (meant to be demonstrate
-how to do some particular thing) in the form of Jupyter notebooks beneath the `pyGSTi/jupyter_notebooks`
-directory.  The root "START HERE" notebook will direct you where to go based on what you're most
-interested in learning about.  You can view the
-[read-only GitHub version of this notebook](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/START_HERE.ipynb)
-or you can [explore the tutorials interactively](https://mybinder.org/v2/gh/pyGSTio/pyGSTi/master)
-using JupyterHub via Binder.  Note the existence of a
-[FAQ](https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb), which
-addresses common issues.
+how to do some particular thing) in the `pyGSTi/docs` directory. These are stored as MyST Markdown
+for version control convenience, but can be converted to Jupyter notebooks as needed using Jupytext.
 
+#### Viewing the documentation *online*
+The recommended way to view the documentation is on [ReadTheDocs](https://pygsti.readthedocs.io/en/latest/),
+although the raw Markdown files can also be looked at on [GitHub](https://github.com/sandialabs/pyGSTi/blob/master/docs/markdown/intro.md).
+
+The site renders the source MyST Markdown without executing notebook cells, so you won't see outputs (plots, tables) inline.
+Each rendered page offers two ways to run the notebook yourself:
+
+- **Rocket icon → Binder or Colab:** launches a fully-provisioned notebook environment in your browser with no local install.
+- **Cloud/download icon → "Download this page" dropdown:** grab the `.ipynb` (or the `.md` source) and run it in your own Jupyter setup.
+
+#### Building the documentation *locally*
+The docs are built using [Jupyter Book v1](https://jupyterbook.org). Note: v2 is a separate product (MyST Engine + Node.js)
+that doesn't support our autodoc-based API reference yet, so we pin `jupyter-book<2`.
+
+To install the build dependencies along with pyGSTi:
+    ``pip install -e .[docs]``
+
+then build:
+    ``jb build docs``
+
+Then open `docs/_build/html/index.html` in a web browser to look through the documentation.
 
 #### Running notebooks *locally*
-While it's possible to view the notebooks on GitHub using the links above, it's
-usually nicer to run them *locally* so you can mess around with the code as
-you step through it.  To do this, you'll need to start up a Jupyter notebook
-server using the following steps (this assumes you've followed the *local
-installation* directions above):
+It can also be convenient to build and run the tutorials locally. We can do this using Jupytext
+for conversion and then start a Jupyter notebook or JupyterLab server to run the notebooks.
+Assuming you've followed the *local installation* directions above:
 
-* Changing to the notebook directory, by running:
-    ``cd jupyter_notebooks/Tutorials/``
+* Change to the docs directory, by running:
+    ``cd docs``
 
-* Start up the Jupyter notebook server by running:
-  ``jupyter notebook``
+* Build the notebooks from their Markdown sources, by running:
+    ``jupytext --to notebook markdown/**/*.md`` 
+  This writes an `.ipynb` next to each `.md` under `markdown/`.
+
+* Start up the Jupyter notebook server by running ``jupyter notebook`` or a JupyterLab server by running ``jupyter lab``.
 
 The Jupyter server should open up your web browser to the server root, from
-where you can start the first "START_HERE.ipynb" notebook.  Note that the key
+where you can start the first `markdown/intro.ipynb` notebook.  Note that the key
 command to execute a cell within the Jupyter notebook is ``Shift+Enter``, not
 just ``Enter``.
 
+#### Contributing notebook changes
+**Only the `docs/markdown/*.md` files are version-controlled.** The paired `.ipynb` files — generated next to
+each `.md` under `docs/markdown/` — are gitignored build artifacts. The canonical source is the `.md` file, and
+edits there "win" on the next sync. So:
 
-Documentation
--------------
-Online documentation is hosted on [Read the Docs](http://pygsti.readthedocs.io).
+- If you find it more convenient to edit the `.ipynb` (e.g. for interactive iteration), **sync your edits back to
+  Markdown before committing**: from the `docs/` folder run `jupytext --sync markdown/**/*.md`, then commit the updated `.md`.
+- If you edit a `.ipynb` and forget to sync, your changes will be silently overwritten the next time anyone runs the sync. When in doubt, edit the `.md`.
+
+A few other gotchas worth knowing when editing the MyST sources:
+
+- **Block math (`$$...$$`) needs blank lines around it.** A single `$` is inline math; multiple `$$` blocks crammed
+  against surrounding text get parsed as inline math chains and render incorrectly.
+- **Don't change `kernelspec.name` away from `python3`** when adding a new file. Jupyter writes the local conda
+  env name into the notebook metadata; that name then propagates through `jupytext --sync` and breaks execution on
+  anyone else's machine.
+- **Adding a new tutorial** requires editing `docs/_toc.yml` to slot the new file into the navigation.
 
 License
 -------
-PyGSTi is licensed under the [Apache License Version 2.0](https://github.com/pyGSTio/pyGSTi/blob/master/LICENSE).
+PyGSTi is licensed under the [Apache License Version 2.0](https://github.com/sandialabs/pyGSTi/blob/master/LICENSE).
 
 
 Questions?

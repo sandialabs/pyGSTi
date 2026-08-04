@@ -15,13 +15,12 @@ from __future__ import annotations
 import numpy as _np
 
 from pygsti.tools import basistools as _bt
-from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs.basis import Basis as _Basis, BasisLike
 from typing import Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from cvxpy import Expression
-
-BasisLike = Union[_Basis, str]
 
 
 
@@ -101,12 +100,8 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     numpy array or cvxpy Expression
         the Choi matrix, in the desired basis.
     """
-    try:
-        import cvxpy as cp
-        is_cvxpy_expression = isinstance(operation_mx, cp.Expression)
-    except ImportError:
-        is_cvxpy_expression = False
-    
+    is_cvxpy_expression = _bt.is_cvxpy_expression(operation_mx)
+
     if not is_cvxpy_expression:
         operation_mx = _np.asarray(operation_mx)
     op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
@@ -129,11 +124,21 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     if not isinstance(choi_mx_basis, _Basis):
         choi_mx_basis = _Basis.cast(choi_mx_basis, N)  # we'd like a basis of dimension N
 
-    BVec = choi_mx_basis.create_simple_equivalent().elements
+    try:
+        temp = choi_mx_basis.create_simple_equivalent()
+        BVec : Union[_np.ndarray, list] = temp.elements  # type: ignore
+    except (AssertionError, ValueError, NotImplementedError):
+        # create_simple_equivalent fails for bases with no same-name builtin equivalent.
+        # In particular, a leakage tensor-product basis like pp ⊗ l2p1 raises
+        # AssertionError ("Unknown builtin basis name 'pp*l2p1'"). Such bases are
+        # already simple, so use their elements directly.
+        assert hasattr(choi_mx_basis, 'elements')
+        BVec : Union[_np.ndarray, list] = choi_mx_basis.elements  # type: ignore
+    
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
-    opMxInStdBasis_vec = opMxInStdBasis.flatten()
+    opMxInStdBasis_vec = opMxInStdBasis.flatten(order='C')
     # ^ use flatten, not ravel, in case we're using a CVXPY Expression.
     choiMx_rows = []
     for i in range(M):
@@ -144,13 +149,14 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
             rows.append(BiBj.conj().ravel())
         choiMx_rows.append( _np.array(rows) @ opMxInStdBasis_vec )
     if is_cvxpy_expression:
+        import cvxpy as cp
         choiMx = cp.vstack(choiMx_rows)
     else:
         choiMx = _np.vstack(choiMx_rows)
     # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
     #  (dimension of density matrix) but we'd like a Jmx with trace == 1, so normalize:
     if normalized:
-        choiMx /= dmDim
+        choiMx = choiMx / dmDim
     return choiMx
 
 # GStd = sum_ij Jij (BSi x BSj^*)
@@ -165,7 +171,7 @@ def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis:
 
     Parameters
     ----------
-    choi_mx : numpy array
+    choi_mx : numpy array or cvxpy Expression
         the Choi matrix, normalized to have trace == 1, to compute operation matrix for.
 
     choi_mx_basis : Basis object
@@ -184,10 +190,13 @@ def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis:
 
     Returns
     -------
-    numpy array
+    numpy array or cvxpy Expression
         operation matrix in the desired basis.
     """
-    choi_mx = _np.asarray(choi_mx)  # will have "expanded" dimension even if bases are for reduced...
+    is_cvxpy_expression = _bt.is_cvxpy_expression(choi_mx)
+
+    if not is_cvxpy_expression:
+        choi_mx = _np.asarray(choi_mx)  # will have "expanded" dimension even if bases are for reduced...
     N = choi_mx.shape[0]  # dimension of full-basis (expanded) operation matrix
     if not isinstance(choi_mx_basis, _Basis):  # if we're not given a basis, build
         choi_mx_basis = _Basis.cast(choi_mx_basis, N)  # one with the full dimension
@@ -204,11 +213,29 @@ def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis:
     else:
         choiMx_unnorm = choi_mx
 
-    opMxInStdBasis = _np.zeros((N, N), 'complex')  # in matrix unit basis of entire density matrix
-    for i in range(N):
-        for j in range(N):
-            BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
-            opMxInStdBasis += choiMx_unnorm[i, j] * BiBj
+    # Both branches compute the same thing:
+    #     opMxInStdBasis = sum_ij choiMx_unnorm[i, j] * kron(B_i, conj(B_j))
+    # in the matrix unit basis of the entire density matrix.
+    if is_cvxpy_expression:
+        # Accumulate one row of `choiMx_unnorm` at a time as an explicit matrix-vector
+        # product. This is needed because in-place operations with CVXPY Expressions
+        # aren't allowed.
+        import cvxpy as cp
+        opMx_vec = 0
+        for i in range(N):
+            BiBj_cols = _np.empty((N * N, N), dtype=complex)
+            for j in range(N):
+                BiBj_cols[:, j] = _np.kron(BVec[i], _np.conjugate(BVec[j])).ravel()
+            opMx_vec = opMx_vec + BiBj_cols @ choiMx_unnorm[i, :]
+        opMxInStdBasis = cp.reshape(opMx_vec, (N, N), order='C')
+    else:
+        # Don't route ndarrays through the branch above: in-place accumulation is
+        # materially faster.
+        opMxInStdBasis = _np.zeros((N, N), 'complex')
+        for i in range(N):
+            for j in range(N):
+                BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
+                opMxInStdBasis += choiMx_unnorm[i, j] * BiBj
 
     if not isinstance(op_mx_basis, _Basis):
         op_mx_basis = _Basis.cast(op_mx_basis, N)  # make sure op_mx_basis is a Basis; we'd like dimension to be N
@@ -341,9 +368,8 @@ def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
     """
     sumOfNeg = 0
     J = fast_jamiolkowski_iso_std(op_mx, op_mx_basis)  # Choi mx basis doesn't matter
-    evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
-    for ev in evals:
-            if ev.real < 0: sumOfNeg -= ev.real
+    evals = _mt.eigenvalues(J, assume_hermitian=True)
+    sumOfNeg = - _np.sum(evals[evals < 0])
     return sumOfNeg
 
 def sum_of_negative_choi_eigenvalues(model, weights=None):
@@ -368,13 +394,11 @@ def sum_of_negative_choi_eigenvalues(model, weights=None):
     float
         the sum of negative eigenvalues of the Choi matrix for each gate.
     """
+    sums = sums_of_negative_choi_eigenvalues(model)
     if weights is not None:
         default = weights.get('gates', 1.0)
-        sums = sums_of_negative_choi_eigenvalues(model)
-        return sum([s * weights.get(gl, default)
-                    for gl, s in zip(model.operations.keys(), sums)])
-    else:
-        return sum(sums_of_negative_choi_eigenvalues(model))
+        sums = [s * weights.get(gl, default) for gl, s in zip(model.operations, sums)]
+    return sum(sums)
 
 
 def sums_of_negative_choi_eigenvalues(model):
@@ -399,11 +423,8 @@ def sums_of_negative_choi_eigenvalues(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = fast_jamiolkowski_iso_std(gate.to_dense("HilbertSchmidt"), model.basis)  # Choi mx basis doesn't matter
-        evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
-        sumOfNeg = 0.0
-        for ev in evals:
-            if ev.real < 0: sumOfNeg -= ev.real
+        mx = gate.to_dense()
+        sumOfNeg = sum_of_negative_choi_eigenvalues_gate(mx, model.basis)
         ret.append(sumOfNeg)
     return ret
 
@@ -420,14 +441,15 @@ def magnitudes_of_negative_choi_eigenvalues(model):
     Returns
     -------
     list of floats
-        list of the magnitues of all negative Choi eigenvalues.  The length of
+        list of the magnitudes of all negative Choi eigenvalues.  The length of
         this list will vary based on how many negative eigenvalues are found,
         as positive eigenvalues contribute nothing to this list.
     """
     ret = []
+    choi_basis = model.basis.create_simple_equivalent('std')
     for (_, gate) in model.operations.items():
-        J = jamiolkowski_iso(gate, model.basis, choi_mx_basis=model.basis.create_simple_equivalent('std'))
-        evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
+        J : _np.ndarray = jamiolkowski_iso(gate.to_dense('minimal'), model.basis, choi_mx_basis=choi_basis) # type: ignore
+        evals = _mt.eigenvalues(J, assume_hermitian=True)
         for ev in evals:
-            ret.append(-ev.real if ev.real < 0 else 0.0)
+            ret.append(-ev if ev < 0 else 0.0)
     return ret

@@ -117,7 +117,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
         for typ, fidpair, obsOrOutcome, jac_row, _ in obs_rate_specs:
             fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ,
-                                                 fidpair, obsOrOutcome, title={'text': "auto"},
+                                                 fidpair, obsOrOutcome, title="auto",
                                                  mdl_simulator=mdl_simulator)
             intrinsic_reln = ""
             for i, el in enumerate(jac_row):
@@ -778,12 +778,8 @@ def create_idletomography_report(results, filename, title="auto",
 
     if title is None or title == "auto":
         if filename is not None:
-            autoname = _autotitle.generate_name()
+            autoname = _autotitle.generate_name(log_warning=True)
             title = "Idle Tomography Report for " + autoname
-            _warnings.warn(("You should really specify `title=` when generating reports,"
-                            " as this makes it much easier to identify them later on.  "
-                            "Since you didn't, pyGSTi has generated a random one"
-                            " for you: '{}'.").format(autoname))
         else:
             title = "N/A"  # No title - but it doesn't matter since filename is None
 

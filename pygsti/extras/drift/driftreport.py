@@ -309,6 +309,10 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
 
     def _create(self, stabilityanalyzer, circuits, outcome, times, dskey, estimatekey, estimator, showlegend, scale):
 
+        # Accept either a StabilityAnalysisResults (as the sibling plots do) or a bare
+        # StabilityAnalyzer (as passed internally by GermFiducialProbTrajectoriesPlot).
+        stabilityanalyzer = getattr(stabilityanalyzer, 'stabilityanalyzer', stabilityanalyzer)
+
         # If we're plotting probability trajectories for multiple circuits.
         if isinstance(circuits, dict) or isinstance(circuits, list):
 
@@ -588,8 +592,10 @@ def create_drift_report(results, circuits, filename, title={'text': "auto"},
     advanced_options = advanced_options or {}
     ws = ws or _ws.Workspace(advanced_options.get('cachefile', None))
 
+    # NOTE: the factory derives the circuit list from ``results.data.edesign``; the
+    # ``circuits`` argument is retained only for backward compatibility and is unused.
     report = create_drift_report(
-        results, circuits, title, ws, verbosity
+        results, title, ws, verbosity
     )
 
     advanced_options = advanced_options or {}

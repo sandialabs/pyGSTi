@@ -35,7 +35,7 @@ def p_to_r(p, d, rtype='EI'):
     the depolarizing channel to the identity channel.
 
     The default (EI) is the convention used in direct RB, and is perhaps
-    the most well-motivated as then r corresponds to the error probablity
+    the most well-motivated as then r corresponds to the error probability
     of the gates (in the idealized pauli-errors scenario). AGI is
     the convention used throughout Clifford RB theory.
 

@@ -1,45 +1,17 @@
 import unittest
 import pygsti
+import pytest
 import numpy as np
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.baseobjs import Label as L
 from pygsti.circuits import Circuit
-import pygsti.models.modelconstruction as mc
-from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import warnings
 
-from ..testutils import BaseTestCase, compare_files, regenerate_references
+from ..testutils import BaseTestCase, compare_files, regenerate_references, build_XYCNOT_cloudnoise_model
 from pygsti.models import modelconstruction
 from pygsti.circuits import cloudcircuitconstruction
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure
-
-
-#Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
-def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
-                                  maxIdleWeight=1, maxSpamWeight=1, maxhops=0,
-                                  extraWeight1Hops=0, extraGateWeight=0,
-                                  roughNoise=None, simulator="matrix", parameterization="H+S",
-                                  spamtype="lindblad", addIdleNoiseToAllGates=True,
-                                  errcomp_type="gates", evotype="default", return_clouds=False, verbosity=0):
-
-    availability = {}; nonstd_gate_unitaries = {}
-    if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    pspec = _ProcessorSpec(nQubits, ['Gidle', 'Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability, geometry)
-    assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
-    mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
-        pspec, None,
-        maxIdleWeight, maxSpamWeight, maxhops,
-        extraWeight1Hops, extraGateWeight,
-        simulator, evotype, parameterization, parameterization,
-        "add_global" if addIdleNoiseToAllGates else "none",
-        errcomp_type, True, True, True, 'pp', verbosity)
-
-    if return_clouds:
-        #FUTURE - just return cloud *keys*? (operation label values are never used
-        # downstream, but may still be useful for debugging, so keep for now)
-        return mdl, mdl.clouds
-    else:
-        return mdl
 
 
 class NQubitTestCase(BaseTestCase):
@@ -62,12 +34,6 @@ class NQubitTestCase(BaseTestCase):
 
     def test_sequential_sequenceselection(self):
 
-        #only test when reps are fast (b/c otherwise this test is slow!)
-        #try: from pygsti.objects.replib import fastreplib
-        #except ImportError:
-        #    warnings.warn("Skipping test_sequential_sequenceselection b/c no fastreps!")
-        #    return
-
         nQubits = 2
         maxLengths = [1,2]
         cnot_edges = [(i,i+1) for i in range(nQubits-1)] #only single direction
@@ -79,9 +45,14 @@ class NQubitTestCase(BaseTestCase):
                                                     roughNoise=(1234,0.01))
 
         cache = {}
-        gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
-            nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
-            extra_weight_1_hops=0, extra_gate_weight=0, verbosity=0, cache=cache, algorithm="sequential")
+        with pytest.warns(pyGSTiDeprecationWarning):
+            # _create_xycnot_cloudnoise_circuits is deprecated, but the replacement
+            # function, create_cloudnoise_circuits, is not a 1-to-1 match. Just suppressing
+            # this warning for now. Will need to go back and add a test for create_cloudnoise_circuits
+            # in the future.
+            gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
+                nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=2, maxhops=1,
+                extra_weight_1_hops=0, extra_gate_weight=0, verbosity=0, cache=cache, algorithm="sequential")
         expList = list(gss) #[ tup[0] for tup in expList_tups]
         
         #RUN to SAVE list & dataset
@@ -99,15 +70,15 @@ class NQubitTestCase(BaseTestCase):
         maxLengths = [1,2]
         cnot_edges = []
 
-        mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=1, maxhops=0,
-                                                    extraWeight1Hops=0, extraGateWeight=0,
-                                                    verbosity=1, simulator="matrix", parameterization="H+S",
-                                                    roughNoise=(1234,0.01))
-
         cache = {}
-        gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
-            nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
-            extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
+        with pytest.warns(pyGSTiDeprecationWarning):
+            # _create_xycnot_cloudnoise_circuits is deprecated, but the replacement
+            # function, create_cloudnoise_circuits, is not a 1-to-1 match. Just suppressing
+            # this warning for now. Will need to go back and add a test for create_cloudnoise_circuits
+            # in the future.
+            gss = cloudcircuitconstruction._create_xycnot_cloudnoise_circuits(
+                nQubits, maxLengths, 'line', cnot_edges, max_idle_weight=1, maxhops=0,
+                extra_weight_1_hops=0, extra_gate_weight=0, verbosity=4, cache=cache, algorithm="greedy")
         #expList = gss.allstrs #[ tup[0] for tup in expList_tups]
 
         #RUN to SAVE list
@@ -116,27 +87,9 @@ class NQubitTestCase(BaseTestCase):
 
         compare_gss = PlaquetteGridCircuitStructure.read(compare_files + "/nqubit_1Q_seqs.json")
 
-        #expList_tups_mod = [tuple( etup[0:3] + ('XX','XX')) for etup in expList_tups ]
-        #for etup in expList_tups:
-        #    etup_mod = tuple( etup[0:3] + ('XX','XX'))
-        #    if etup_mod not in compare_tups:
-        #        print("Not found: ", etup)
-        #
-        #    #if (etup[0] != ctup[0]) or (etup[1] != ctup[1]) or (etup[2] != ctup[2]):
-        #    #    print("Mismatch:",(etup[0] != ctup[0]), (etup[1] != ctup[1]), (etup[2] != ctup[2]))
-        #    #    print(etup); print(ctup)
-        #    #    print(tuple(etup[0]))
-        #    #    print(tuple(ctup[0]))
-
         self.assertEqual(set(gss), set(compare_gss))
 
     def test_2Q(self):
-
-        #only test when reps are fast (b/c otherwise this test is slow!)
-        #try: from pygsti.objects.replib import fastreplib
-        #except ImportError:
-        #    warnings.warn("Skipping test_2Q b/c no fastreps!")
-        #    return
 
         gss = PlaquetteGridCircuitStructure.read(compare_files + "/nqubit_2Q_seqs.json")
         expList = list(gss)
@@ -167,12 +120,6 @@ class NQubitTestCase(BaseTestCase):
                                                     #don't for the 3Q case?
 
     def test_2Q_terms(self):
-
-        #only test when reps are fast (b/c otherwise this test is slow!)
-        #try: from pygsti.objects.replib import fastreplib
-        #except ImportError:
-        #    warnings.warn("Skipping test_2Q_terms b/c no fastreps!")
-        #    return
 
         gss = PlaquetteGridCircuitStructure.read(compare_files + "/nqubit_2Q_seqs.json")
         expList = list(gss)
@@ -205,12 +152,6 @@ class NQubitTestCase(BaseTestCase):
                                                     gauge_opt_suite_name='none')
 
     def test_3Q(self):
-
-        ##only test when reps are fast (b/c otherwise this test is slow!)
-        #try: from pygsti.objects.replib import fastreplib
-        #except ImportError:
-        #    warnings.warn("Skipping test_3Q b/c no fastreps!")
-        #    return
 
         nQubits = 3
         target_model = build_XYCNOT_cloudnoise_model(

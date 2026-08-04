@@ -11,33 +11,36 @@ Defines the ComposedPOVM class
 #***************************************************************************************************
 
 import collections as _collections
+from typing import Optional
 
 from pygsti.modelmembers.povms.composedeffect import ComposedPOVMEffect as _ComposedPOVMEffect
 from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM as _ComputationalBasisPOVM
 from pygsti.modelmembers.povms.povm import POVM as _POVM
-from pygsti.modelmembers import modelmember as _mm
+from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
+
+from pygsti.evotypes import Evotype as _Evotype
 from pygsti.modelmembers import operations as _op
-from pygsti.baseobjs import Basis as _Basis
+from pygsti.baseobjs.basis import BasisLike as _BasisLike, Basis as _Basis
 
 
 class ComposedPOVM(_POVM):
     """
-    TODO: update docstring
-    A POVM that is effectively a *single* Lindblad-parameterized gate followed by a computational-basis POVM.
+    A parameterized POVM that is effectively a *single* parameterized gate followed by
+    a static (usually, computational basis) POVM.
 
     Parameters
     ----------
-    errormap : MapOperator
+    errormap : LinearOperator
         The error generator action and parameterization, encapsulated in
-        a gate object.  Usually a :class:`LindbladOp`
-        or :class:`ComposedOp` object.  (This argument is *not* copied,
+        a gate object.  Usually an :class:`ExpErrorGenOp`
+        or a :class:`ComposedOp` object.  (This argument is *not* copied,
         to allow ComposedPOVMEffects to share error generator
         parameters with other gates and spam vectors.)
 
     povm : POVM, optional
         A sub-POVM which supplies the set of "reference" effect vectors
         that `errormap` acts on to produce the final effect vectors of
-        this LindbladPOVM.  This POVM must be *static*
+        this ComposedPOVM.  This POVM must be *static*
         (have zero parameters) and its evolution type must match that of
         `errormap`.  If None, then a :class:`ComputationalBasisPOVM` is
         used on the number of qubits appropriate to `errormap`'s dimension.
@@ -49,60 +52,37 @@ class ComposedPOVM(_POVM):
         `errormap`.
     """
 
-    def __init__(self, errormap, povm=None, mx_basis=None):
-        """
-        Creates a new LindbladPOVM object.
-
-        Parameters
-        ----------
-        errormap : MapOperator
-            The error generator action and parameterization, encapsulated in
-            a gate object.  Usually a :class:`LindbladOp`
-            or :class:`ComposedOp` object.  (This argument is *not* copied,
-            to allow ComposedPOVMEffects to share error generator
-            parameters with other gates and spam vectors.)
-
-        povm : POVM, optional
-            A sub-POVM which supplies the set of "reference" effect vectors
-            that `errormap` acts on to produce the final effect vectors of
-            this LindbladPOVM.  This POVM must be *static*
-            (have zero parameters) and its evolution type must match that of
-            `errormap`.  If None, then a :class:`ComputationalBasisPOVM` is
-            used on the number of qubits appropriate to `errormap`'s dimension.
-
-        mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
-            The basis for this spam vector. Allowed values are Matrix-unit (std),
-            Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt) (or a custom
-            basis object).  If None, then this is extracted (if possible) from
-            `errormap`.
-        """
+    def __init__(self,
+            errormap : _LinearOperator, povm: Optional[_POVM]=None, mx_basis: Optional[_BasisLike]=None
+        ):
         self.error_map = errormap
-        state_space = self.error_map.state_space
+        state_space = errormap.state_space
+        evotype : _Evotype = errormap._evotype  # type: ignore
+    
+        if povm is None:
+            povm = _ComputationalBasisPOVM(state_space.num_qubits, evotype)
+        elif isinstance(povm, ComposedPOVM):
+            from pygsti.modelmembers.operations import ComposedOp
+            errormap = ComposedOp([povm.errormap, errormap])
+            povm = povm.base_povm
+
+        assert(povm.evotype == evotype), \
+            ("Evolution type of `povm` (%s) must match that of "
+                "`errormap` (%s)!") % (povm.evotype, evotype)
+        assert(povm.num_params == 0), \
+            "Given `povm` must be static (have 0 parameters)!"
+        
+        self.base_povm : _POVM = povm
 
         if mx_basis is None:
-            if (isinstance(errormap, (_op.ExpErrorgenOp, _op.IdentityPlusErrorgenOp))
-                and isinstance(errormap.errorgen, _op.LindbladErrorgen)):
-                mx_basis = errormap.errorgen.matrix_basis
+            if hasattr(errormap, 'errorgen') and isinstance(errormap.errorgen, _op.LindbladErrorgen): # type: ignore
+                mx_basis = errormap.errorgen.matrix_basis # type: ignore
             else:
-                raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
-                                 % str(type(errormap)))
+                raise ValueError(f"Cannot extract a matrix-basis from `errormap` (type {type(errormap)})")
 
         self.matrix_basis = _Basis.cast(mx_basis, state_space)
-        evotype = self.error_map._evotype
 
-        if povm is None:
-            assert(state_space.num_qubits >= 0), \
-                ("A default computational-basis POVM can only be used with an"
-                 " integral number of qubits!")
-            povm = _ComputationalBasisPOVM(state_space.num_qubits, evotype)
-        else:
-            assert(povm.evotype == evotype), \
-                ("Evolution type of `povm` (%s) must match that of "
-                 "`errormap` (%s)!") % (povm.evotype, evotype)
-            assert(povm.num_params == 0), \
-                "Given `povm` must be static (have 0 parameters)!"
-        self.base_povm = povm
-
+        self.errormap = errormap
         items = []  # init as empty (lazy creation of members)
         try:
             rep = evotype.create_composed_povm_rep(self.error_map._rep, self.base_povm._rep, state_space)
@@ -188,7 +168,7 @@ class ComposedPOVM(_POVM):
             assert(self.parent is None or num_new == 0)  # ensure effect inds are already allocated to current model
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
-        else: raise KeyError("%s is not an outcome label of this LindbladPOVM" % key)
+        else: raise KeyError("%s is not an outcome label of this ComposedPOVM" % key)
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """

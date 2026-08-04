@@ -28,13 +28,19 @@ from pygsti.modelmembers.operations import LinearOperator as _LinearOp
 from pygsti.modelmembers.operations import FullArbitraryOp as _FullOp
 
 
+def _tuplize(x):
+    if isinstance(x, (list, tuple)):
+        return tuple((_tuplize(el) for el in x))
+    return x
+
+
 class ProcessorSpec(_NicelySerializable):
     """
     The API presented by a quantum processor, and possible classical control processors.
 
     Operation names and ideal actions (e.g. gate names and their unitaries) are stored in
     a processor specification, as is the availability of the different operations and overall
-    proccesor geometry.  Processor specifications do not include any information about how
+    processor geometry.  Processor specifications do not include any information about how
     operations are parameterized or can be adjusted (at least not yet).
     """
     # base class for potentially other types of processors (not composed of just qubits)
@@ -159,7 +165,7 @@ class QuditProcessorSpec(ProcessorSpec):
                 1. They can be strings which directly correspond to the desired output bit/ditstring in the standard basis.
                    E.g. "0000" or "2212" 
                 2. Strings prefixed by either 'E_' or 'E' (w/o an underscore). In the first case any digits proceeding the
-                   "E_" are interpretted as a bit/ditstring written in whatever base is appropriate given the qudit dimensions.
+                   "E_" are interpreted as a bit/ditstring written in whatever base is appropriate given the qudit dimensions.
                    If prefixed by "E" (w/o an underscore) the proceeding digits are interpreted as an integer and converted into
                    a base d number using right-LSB convention. E.g. 'E_0000' corresponds to the state |0000>, and E15 corresponds
                    to |1111> (assuming this was acting on 4-qubits).
@@ -203,7 +209,7 @@ class QuditProcessorSpec(ProcessorSpec):
         self.instrument_names = tuple(instrument_names[:])
         self.nonstd_instruments = nonstd_instruments.copy() if (nonstd_instruments is not None) else {}
 
-        # Store the unitary matrices defining the gates, as it is convenient to have these easily accessable.
+        # Store the unitary matrices defining the gates, as it is convenient to have these easily accessible.
         self.gate_unitaries = dict()
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
         for gname in gate_names:
@@ -309,7 +315,12 @@ class QuditProcessorSpec(ProcessorSpec):
 
         nonstd_preps = {k: _serialize_state(obj) for k, obj in self.nonstd_preps.items()}
         nonstd_povms = {k: _serialize_povm(obj) for k, obj in self.nonstd_povms.items()}
-        nonstd_instruments = {':'.join(map(str, k)): _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
+        # Serialize as a list of [name, spec] pairs so that compound (Label/tuple) names keep
+        # their structure and sslbl types.  The old format was a dict whose keys were flattened
+        # with ':'.join(map(str, k)) -- a lossy transform that exploded plain-string names
+        # character-by-character and coerced integer sslbls to strings.
+        nonstd_instruments = [[k if isinstance(k, str) else list(k), _serialize_instrument(obj)]
+                              for k, obj in self.nonstd_instruments.items()]
 
         state.update({'qudit_labels': list(self.qudit_labels),
                       'qudit_udims': list(self.qudit_udims),
@@ -384,17 +395,31 @@ class QuditProcessorSpec(ProcessorSpec):
 
         nonstd_preps = {k: _unserialize_state(obj) for k, obj in state.get('nonstd_preps', {}).items()}
         nonstd_povms = {k: _unserialize_povm(obj) for k, obj in state.get('nonstd_povms', {}).items()}
-        nonstd_instruments = {tuple(k.split(':')): _unserialize_instrument(obj) for k, obj in state.get('nonstd_instruments', {}).items()}
+
+        # Note: compound (sslbls-qualified) instrument names are reconstructed as plain tuples,
+        # both here and for `instrument_names` in the _from_nice_serialization methods.  This
+        # differs from the symplectic_reps handling in QubitProcessorSpec._from_nice_serialization
+        # and from ModelMemberGraph.load_modelmembers_from_serialization_dict, both of which
+        # rebuild Label objects.
+        serial_instruments = state.get('nonstd_instruments', [])
+        if isinstance(serial_instruments, dict):
+            # Legacy format: keys were flattened to strings with ':'.join(map(str, key)), which
+            # exploded plain-string names character-by-character (e.g. 'Iparity' -> 'I:p:a:r:i:t:y')
+            # and coerced integer sslbls to strings (e.g. ('Iz', 0) -> 'Iz:0').  Repair each key by
+            # finding the instrument name whose flattening reproduces it -- `instrument_names`
+            # round-trips faithfully, so it serves as ground truth.  Unmatched keys fall back to
+            # the old split-on-colon reconstruction.
+            instrument_names = [_tuplize(iname) for iname in state.get('instrument_names', [])]
+            flattened_names = {':'.join(map(str, iname)): iname for iname in instrument_names}
+            nonstd_instruments = {flattened_names.get(k, tuple(k.split(':'))): _unserialize_instrument(obj)
+                                  for k, obj in serial_instruments.items()}
+        else:
+            nonstd_instruments = {_tuplize(k): _unserialize_instrument(obj) for k, obj in serial_instruments}
 
         return nonstd_gate_unitaries, nonstd_preps, nonstd_povms, nonstd_instruments
 
     @classmethod
     def _from_nice_serialization(cls, state):
-        def _tuplize(x):
-            if isinstance(x, (list, tuple)):
-                return tuple((_tuplize(el) for el in x))
-            return x
-
         nonstd_gate_unitaries, nonstd_preps, nonstd_povms, nonstd_instruments = \
             cls._nonstd_elements_from_serialization(state)
 
@@ -403,7 +428,7 @@ class QuditProcessorSpec(ProcessorSpec):
 
         return cls(state['qudit_labels'], state['qudit_udims'], state['gate_names'], nonstd_gate_unitaries,
                    availability, geometry, state['prep_names'], state['povm_names'],
-                   [tuple(iname) for iname in state['instrument_names']],
+                   [_tuplize(iname) for iname in state['instrument_names']],
                    nonstd_preps, nonstd_povms, nonstd_instruments, state['aux_info'])
 
     @property
@@ -947,7 +972,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
                 1. They can be strings which directly correspond to the desired output bit/ditstring in the standard basis.
                     E.g. "0000" or "1001". 
                 2. Strings prefixed by either 'E_' or 'E' (w/o an underscore). In the first case any digits proceeding the
-                    "E_" are interpretted as a bitstring.
+                    "E_" are interpreted as a bitstring.
                     If prefixed by "E" (w/o an underscore) the proceeding digits are interpreted as an integer and converted into
                     a base d number using right-LSB convention. E.g. 'E_0000' corresponds to the state |0000>, and E15 corresponds
                     to |1111> (assuming this was acting on 4-qubits).
@@ -1003,11 +1028,6 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
     @classmethod
     def _from_nice_serialization(cls, state):
-        def _tuplize(x):
-            if isinstance(x, (list, tuple)):
-                return tuple((_tuplize(el) for el in x))
-            return x
-
         nonstd_gate_unitaries, nonstd_preps, nonstd_povms, nonstd_instruments = \
             cls._nonstd_elements_from_serialization(state)
 
@@ -1020,9 +1040,10 @@ class QubitProcessorSpec(QuditProcessorSpec):
                             " You should check to make sure you don't want/need to add this information and"
                             " then re-save this processor spec."))
 
+        instrument_names = [_tuplize(iname) for iname in state.get('instrument_names', [])]
         return cls(len(state['qubit_labels']), state['gate_names'], nonstd_gate_unitaries, availability,
                    geometry, state['qubit_labels'], symplectic_reps, state.get('prep_names', []),
-                   state.get('povm_names', []), state.get('instrument_names', []), nonstd_preps, nonstd_povms,
+                   state.get('povm_names', []), instrument_names, nonstd_preps, nonstd_povms,
                    nonstd_instruments, state['aux_info'])
 
     @property
