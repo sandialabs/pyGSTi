@@ -1048,7 +1048,6 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
     return evecs, evals, inv_evecs
 
 
-
 def real_matrix_log(m: _np.ndarray, action_if_imaginary: Literal["raise", "warn", "ignore"] = "raise",
                     tol: float = 1e-8) -> _np.ndarray:
     """

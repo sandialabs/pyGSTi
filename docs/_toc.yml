@@ -41,6 +41,7 @@ parts:
       - file: markdown/rb/Samplers
       - file: markdown/rb/MultiRBExperiments
       - file: markdown/rb/BinaryRB
+      - file: markdown/rb/SU2QuditRB
     - file: markdown/protocols/VolumetricBenchmarks
       sections:
       - file: markdown/protocols/MirrorCircuitBenchmarks
