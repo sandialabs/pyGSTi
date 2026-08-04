@@ -36,6 +36,10 @@ from pygsti.baseobjs import QubitSpace as _QubitSpace
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, _bel_less_than
+# Imported as a module rather than `from ... import BEL_ORDERING_INDEX_PATH_MIN_WIDTH` so that
+# the threshold is read at call time. A by-value import would bind the int at import time and
+# silently let this module's threshold drift from the one `_bel_less_than` actually uses.
+import pygsti.errorgenpropagation.localstimerrorgen as _localstimerrorgen
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
@@ -2047,7 +2051,7 @@ def stim_pauli_string_less_than(pauli1: stim.PauliString, pauli2: stim.PauliStri
     """
     if pauli1 == pauli2:
         return False
-    if len(pauli1) < 20:
+    if len(pauli1) < _localstimerrorgen.BEL_ORDERING_INDEX_PATH_MIN_WIDTH:
         return _bel_less_than(pauli1/pauli1.sign, pauli2/pauli2.sign)
     else:
         diff_indices = (pauli1 * pauli2).pauli_indices()

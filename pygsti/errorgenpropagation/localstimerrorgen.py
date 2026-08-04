@@ -52,6 +52,15 @@ from pygsti.tools.lindbladtools import create_elementary_errorgen
 #     - `errgenpolytools._truncate_lse_support`
 #-----------------------------------------------------------------------------------------
 
+# Pauli string width (number of qubits) at or above which `_bel_less_than` switches from
+# comparing rendered strings to locating the first differing qubit via `pauli_indices`.
+#
+# Exposed as a module level setting so the two call sites (here and
+# `errgenproptools.stim_pauli_string_less_than`) cannot drift apart, and so a width sweep
+# can override it.
+BEL_ORDERING_INDEX_PATH_MIN_WIDTH = 20
+
+
 def _bel_less_than(pauli1, pauli2):
     """
     Returns True if `pauli1` sorts before `pauli2` in the canonical basis element label
@@ -62,10 +71,14 @@ def _bel_less_than(pauli1, pauli2):
     The `_`->`I` substitution is required: `_` is ASCII 95 and would otherwise sort after
     `X`/`Y`/`Z`, inverting the ordering relative to the `'I'`-padded string convention used
     by `LocalElementaryErrorgenLabel` and `CompleteElementaryErrorgenBasis`.
+
+    Both `pauli1` and `pauli2` are assumed to have the same width. Mismatched widths are
+    not part of the ordering convention and are not handled consistently by the two
+    branches below; see `BEL_ORDERING_INDEX_PATH_MIN_WIDTH`.
     """
     if pauli1 == pauli2:
         return False
-    if len(pauli1) < 20:
+    if len(pauli1) < BEL_ORDERING_INDEX_PATH_MIN_WIDTH:
         return str(pauli1)[1:].replace('_', 'I') < str(pauli2)[1:].replace('_', 'I')
     else:
         diff_indices = (pauli1 * pauli2).pauli_indices()
