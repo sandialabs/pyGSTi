@@ -483,7 +483,7 @@ def is_trace_preserving(a: _np.ndarray, mx_basis: BasisLike='pp', tol=1e-8) -> b
     basis = _Basis.cast(mx_basis, dim=dim)
     if basis.first_element_is_identity:
         checkone = _np.isclose(a[0,0], 1.0, rtol=tol, atol=tol)
-        checktwo = _np.allclose(a[1:], 0.0, atol=tol)
+        checktwo = _np.allclose(a[0, 1:], 0.0, atol=tol)
         return checkone and checktwo
     # else, check that the adjoint of a is unital.
     I_mat = _np.eye(udim)
