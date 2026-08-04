@@ -106,6 +106,7 @@ testing_no_cython_mpi = [
     'seaborn',
     'ply',
     'cirq-core',
+    'sympy',
     'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,reports]'
 ]
 testing_no_cython = ['pygsti[multiprocessor,testing_no_cython_mpi]']
