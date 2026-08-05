@@ -472,14 +472,13 @@ def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list
     """
     # An empty `fixed_errorgen_layer` (rather than no arguments at all) is required: the
     # constructor asserts that exactly one of `model`/`fixed_errorgen_layer` is given. We need
-    # neither -- this instance is only used for its stateless propagation helpers
-    # (`construct_stim_layers`/`construct_propagation_layers`/`_propagate_errorgen_layers`, none
-    # of which read `self.model` or `self.fixed_errorgen_layer`), because the error generator
-    # layers are built explicitly below from `error_generators`.
+    # neither -- this instance is only used for its stateless propagation helpers, because the 
+    # error generator layers are built explicitly below from `error_generators`.
+
     error_propagator = _ep.ErrorGeneratorPropagator(fixed_errorgen_layer={})
     stim_layers = error_propagator.construct_stim_layers(circuit, drop_first_layer=True)
     propagation_layers = error_propagator.construct_propagation_layers(stim_layers)
-    # TODO : It's the list of error gens in every layer of the circuit.
+    # It's the list of error gens in every layer of the circuit.
     errorgen_layers = [{_lseg.LocalStimErrorgenLabel.cast(lbl):1 for lbl in error_generators}] * circuit.depth
 
     propagated_errorgen_layers = error_propagator._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam=False) # list of dicts of error generators

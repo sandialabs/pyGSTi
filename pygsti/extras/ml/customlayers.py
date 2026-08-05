@@ -169,21 +169,6 @@ class SelectiveDense(Layer):
 
         return output
 
-# # Example usage
-# input_indices = [
-#     list(range(0, 100, 2)),  # Neuron 1: even indices
-#     list(range(1, 100, 2)),  # Neuron 2: odd indices
-#     list(range(0, 50))       # Neuron 3: indices 0 to 49
-# ]
-
-# inputs = tf.keras.Input(shape=(100,))
-# selective_dense_layer = SelectiveDense(units=3, input_indices=input_indices, activation='relu')
-# outputs = selective_dense_layer(inputs)
-
-# model = tf.keras.Model(inputs=inputs, outputs=outputs)
-# model.summary()
-
-
 class CustomDense(Layer):
     def __init__(self, units: int, num_errorgens: int, activation=None, use_bias: bool = True,
                  kernel_initializer: Any = 'glorot_uniform', bias_initializer: Any = 'zeros',
