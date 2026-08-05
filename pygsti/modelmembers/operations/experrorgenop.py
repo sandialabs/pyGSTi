@@ -33,7 +33,6 @@ from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _Er
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.baseobjs import _compatibility as _compat
-from pygsti.tools import optools as _ot
 from pygsti import SpaceT
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -191,22 +190,11 @@ class ExpErrorgenOp(_LinearOperator, _Torchable, _ErrorGeneratorContainer):
         """
         if self._rep_type == 'dense':
             # Then self._rep contains a dense version already
-            superop = self._rep.base  # copy() unnecessary since we set to readonly
+            return self._rep.base  # copy() unnecessary since we set to readonly
 
         else:
             # Construct a dense version from scratch (more time consuming)
-            superop = _spl.expm(self.errorgen.to_dense(on_space))
-        
-        # Attempt to cast down to unitary, if requested
-        if on_space == 'Hilbert' or (on_space == 'minimal' and self.evotype.minimal_space == 'Hilbert'):
-            try:
-                U = _ot.superop_to_unitary(superop, self.errorgen.matrix_basis, True)
-            except ValueError as e:
-                raise ValueError("Could not convert to unitary. Check that only Hamiltonian errors are provided.") from e
-            
-            return U
-    
-        return superop
+            return _spl.expm(self.errorgen.to_dense(on_space))
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         assert isinstance(self.errorgen, _Torchable)
