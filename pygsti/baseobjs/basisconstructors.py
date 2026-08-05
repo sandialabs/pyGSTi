@@ -14,6 +14,7 @@ import numbers as _numbers
 import numpy as _np
 import scipy.sparse as _sps
 from functools import partial as _partial
+from math import log2, sqrt
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
@@ -136,7 +137,7 @@ class MatrixBasisConstructor(object):
         -------
         int
         """
-        d = int(round(_np.sqrt(dim)))
+        d = int(round(sqrt(dim)))
         assert(d**2 == dim), "Matrix bases can only have dimension = perfect square (not %d)!" % dim
         return d
 
