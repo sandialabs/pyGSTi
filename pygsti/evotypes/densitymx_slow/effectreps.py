@@ -75,11 +75,8 @@ class EffectRepComputational(EffectRep):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
     def probability(self, state):
-        # Use the sparse inner-product routine rather than densifying this (mostly-zero)
-        # effect vector to length 4**nfactors and then taking a full dense dot product;
-        # this avoids O(4**nfactors) work (both the densification and the dot product)
-        # in favor of O(2**nfactors) work, mirroring the analogous fast C++ implementation
-        # used by the compiled evotypes.
+        # Only O(2**nfactors) nonzeros so use the sparse matvec instead of full dense
+        # matvec which is O(4**nfactors).
         return _mt.zvals_int64_probability(self.zvals_int, self.nfactors, state.data, self.abs_elval)
 
     def to_dense(self, on_space: SpaceT = 'minimal', outvec=None):
