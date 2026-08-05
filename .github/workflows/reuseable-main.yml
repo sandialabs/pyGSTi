@@ -185,7 +185,7 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
         fi
     - name: Run graphcoloring slow (scaling) tests
-      if: ${{ inputs.run-unit-tests == 'true' && steps.graphcoloring.outputs.changed == 'true' }}
+      if: ${{ inputs.run-extra-tests == 'true' && steps.graphcoloring.outputs.changed == 'true' }}
       timeout-minutes: 30
       shell: bash
       env:
