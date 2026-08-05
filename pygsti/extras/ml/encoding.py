@@ -449,12 +449,11 @@ def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list
     error_generators : list
         List of error generator labels. Each element should be a tuple:
             (errorgen_type, paulis_tuple)
-        where `errorgen_type` is the error generator type ('H'', 'S', 'C', or 'A') and `paulis_tuple` is a tuple of Pauli strings.
-        For 'H' and 'S', this is a single Pauli string. The Pauli strings should be length-n strings
-        where n is the number of qubits on which `circuit` acts.        
+        where `errorgen_type` is the error generator type ('H', 'S', 'C', or 'A') and
+        `paulis_tuple` is a tuple of Pauli strings. For 'H' and 'S', this is a single Pauli
+        string. The Pauli strings should be length-n strings where n is the number of qubits
+        on which `circuit` acts.
 
-
-        
     Returns
     -------
     indices : numpy.ndarray
@@ -480,18 +479,10 @@ def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list
     propagated_errorgen_layers = error_propagator._propagate_errorgen_layers(errorgen_layers, propagation_layers, include_spam=False) # list of dicts of error generators
 
     indices = _np.array([[_tools.error_generator_index(err.errorgen_type, err.bel_to_strings()) for err in propagated_errorgen_layers[l]] for  l in range(circuit.depth)])
-    # NOTE on the extra `error_generator_canonicalization_sign(...)` factor below (only ever
-    # nontrivial for 'A'-type generators): `err.bel_to_strings()` returns the propagated error
-    # generator's Pauli(s) in whatever order Clifford propagation happened to produce them --
-    # NOT necessarily the canonical (lexicographically sorted) order that `error_generator_index`
-    # uses internally to assign a stable index to a 'C'/'A' pair (regardless of input order).
-    # For 'C'-type generators this canonicalization is "free" (C_{P,Q} = C_{Q,P}, so reindexing
-    # into canonical order changes nothing). But for 'A'-type generators, A_{P,Q} = -A_{Q,P}
-    # (antisymmetric under swapping its two indexing Paulis -- see "A Taxonomy of Small Errors",
-    # Sec. V.D, Eq. 16), so silently reindexing a non-canonically-ordered propagated 'A' label
-    # into its canonical index WITHOUT also flipping the sign of its propagated rate would use
-    # the wrong sign. `error_generator_canonicalization_sign` returns exactly the compensating
-    # +-1 factor needed (and is a no-op, always returning +1, for 'H'/'S'/'C').
+    # Clifford propagation can return an 'A' label whose two Paulis are not in the canonical
+    # order `error_generator_index` indexes by. Since A_{P,Q} = -A_{Q,P} ("A Taxonomy of Small
+    # Errors", Sec. V.D, Eq. 16), reindexing must be accompanied by a compensating sign.
+    # `error_generator_canonicalization_sign` supplies it (always +1 for 'H'/'S'/'C').
     signs = _np.array([[_np.sign(val) * _tools.error_generator_canonicalization_sign(err.errorgen_type, err.bel_to_strings())
                         for err, val in propagated_errorgen_layers[l].items()] for l in range(circuit.depth)])
 
@@ -877,19 +868,11 @@ def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: l
             egtype = cast(Any, _tools.index_to_error_gen(error_generator_index, num_qubits))[0]
 
             # A definite-outcome bitstring (p_bs exactly 0 or 1) has zero first-order
-            # sensitivity to any Hamiltonian ('H'-type) error: p_bs(eps) is a smooth function
-            # of the (either-sign) rate eps that is bounded to [0, 1], so if it's already sitting
-            # at one of those bounds, its derivative at eps=0 must vanish (otherwise p_bs would
-            # go out of [0, 1] for one sign of eps). This does not hold for 'S'-type (stochastic)
-            # errors, whose rates are constrained to eps >= 0, so being at a boundary doesn't
-            # force a one-sided derivative to vanish. Skipping the (otherwise unnecessary)
-            # alpha_coefficient call here is purely a performance optimization: it was checked
-            # empirically (across many random stabilizer states/qubit counts) that
-            # alpha_coefficient already evaluates to exactly 0 in this regime, so this does not
-            # change any computed alphas -- but computing it anyway costs real time, and for
-            # high-fidelity (near-deterministic, i.e. low "random support") circuits -- the
-            # regime this whole codebase targets -- the vast majority of bitstrings can be at
-            # p_bs = 0, so skipping them here is a substantial speedup in this hot loop.
+            # sensitivity to an 'H'-type error, since p_bs is bounded to [0, 1] and the rate can
+            # take either sign. `alpha_coefficient` already returns exactly 0 here, so this is
+            # purely a speedup -- but a worthwhile one, as most bitstrings sit at p_bs = 0 for
+            # the near-deterministic circuits this code targets. ('S' rates are one-sided, so
+            # the argument does not apply to them.)
             if egtype == 'H' and (_np.isclose(probabilities[l], 0.) or _np.isclose(probabilities[l], 1.)):
                 alphas_dict[l, error_generator_index] = 0.0
                 continue
