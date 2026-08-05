@@ -2109,8 +2109,7 @@ class Circuit(object):
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
             else:
                 serial_lbls.extend(list(lbl.components) * lbl.reps)
-        tmp = Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
-        return tmp
+        return Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
