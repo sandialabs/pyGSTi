@@ -5,7 +5,7 @@ For each elementary error generator, it returns a list of indices into the circu
 per-layer feature vector that should be used as inputs when predicting that generator's rate.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -20,6 +20,7 @@ from pygsti.extras.ml import graphtools as _graphtools
 
 if TYPE_CHECKING:
     from pygsti.extras.ml.encoding import StandardCircuitEncoder
+
 
 def undirected_adjacency_matrix_from_edges(edges: list[tuple], qubit_labels: list) -> _np.ndarray:
     """
@@ -49,13 +50,14 @@ def undirected_adjacency_matrix_from_edges(edges: list[tuple], qubit_labels: lis
     graph = _graphtools.qubit_graph_from_edges(edges, qubit_labels)
     return _graphtools.qubit_graph_adjacency_matrix(graph, qubit_labels=qubit_labels)
 
+
 def layer_snipper_from_qubit_graph(
     error_generators: list[tuple], encoder: "StandardCircuitEncoder", qubit_graph: Any = None,
     hops: int | None = None, *, input_is: str = 'auto', adjacency_matrix: _np.ndarray | None = None,
 ) -> list[list[int]]:
     """
     Creates a "snipper" for a QPANN. This snipper will specify that, when predicting the
-    error rate of an error generator G that acts non-trivially on the qubit set Q, the 
+    error rate of an error generator G that acts non-trivially on the qubit set Q, the
     QPANN shoud look at what is occuring on all the qubits within Q and all those qubits
     within 'hops' steps of that qubit on the graph given by 'qubit_graph'. This graph can be
     the connectivity of the qubits (the qubit pairs for which there are two-qubit gates), but
@@ -64,7 +66,7 @@ def layer_snipper_from_qubit_graph(
     Parameters
     ----------
     error_generators : list
-        A list of elementary error generators, in the same format as used by QPANNs. Each element of this 
+        A list of elementary error generators, in the same format as used by QPANNs. Each element of this
             list is a tuple. The first element of the tuple is a string specifying the error
             generator type: 'H', 'S', 'C', or 'A' (Hamiltonian, Stochastic-Pauli, Stochastic
             Pauli-Correlation, and Active, respectively; see "A Taxonomy of Small Errors",
@@ -102,14 +104,14 @@ def layer_snipper_from_qubit_graph(
     adjacency_matrix : numpy.ndarray, optional
         Deprecated alias for `qubit_graph`. Specify only one of the two.
 
-    Returns 
+    Returns
     -------
     list[list[int]]
         A list of lists, of the same length as `error_generators`. The ith element of this list
         is the indices in the layer encoding used by `encoder` that a QPANN should look at for
         predicting the rate of the corresponding error generator. This list is in the correct
         format to be passed to an initialization of a QPANN, as the `snipper` argument.
-        
+
     Notes
     -----
     "Within `hops` steps" is determined by true (unweighted) shortest-path graph distance
@@ -142,7 +144,7 @@ def layer_snipper_from_qubit_graph(
         # since (per the same paper, Sec. VIII) the "support"/"weight" of a 'C'/'A' generator
         # C_{P,Q}/A_{P,Q} is defined as the union of P's and Q's individual qubit supports.
         pauli_strings = error_generator[1]
-        # The following commented-out line is *wrong* but it used to be in the code, so leaving it here 
+        # The following commented-out line is *wrong* but it used to be in the code, so leaving it here
         # but commented out for now. It is unclear if somehow this was the correct thing to do in older
         # versions of the QPANN code before my (Tim's) rewrite.
         # pauli_string = pauli_string[::-1] # for reverse indexing

@@ -11,7 +11,7 @@ Notes
 These functions predate the newer QPANN workflows and are kept for backwards compatibility.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     import pandas
     from pygsti.processors import ProcessorSpec
 
+
 def batch_prediction(model: Any, circuits: list[Circuit], prediction_key: str = 'success') -> _np.ndarray:
     """Compute a vector of outcome probabilities from a model over a list of circuits.
 
@@ -55,6 +56,7 @@ def batch_prediction(model: Any, circuits: list[Circuit], prediction_key: str = 
         Array of shape `(len(circuits),)` with the requested probabilities.
     """
     return _np.array([model.probabilities(circuit)[prediction_key] for circuit in circuits])
+
 
 def extract_success_fail(df: "pandas.DataFrame") -> tuple[DataSet, list[Circuit]]:
     """Build a two-outcome ('success','fail') pyGSTi DataSet from a dataframe.
@@ -82,6 +84,7 @@ def extract_success_fail(df: "pandas.DataFrame") -> tuple[DataSet, list[Circuit]
         circuits.append(circuit)
     sfds.done_adding_data()
     return sfds, circuits
+
 
 def create_spec_model(pspec: "ProcessorSpec") -> tuple[TwirledLayersModel, dict]:
     """Create a simple `TwirledLayersModel` and corresponding error dictionary from a ProcessorSpec.
@@ -116,10 +119,11 @@ def create_spec_model(pspec: "ProcessorSpec") -> tuple[TwirledLayersModel, dict]
         error_dict['gates'][Label(i,state_space_labels = (j,))] = 0.01
     for i,j in _itertools.product(['Gcnot'],availability['Gcnot']):
         error_dict['gates'][Label('Gcnot',state_space_labels = cast(Any, j))] = 0.01
-    specmodel = TwirledLayersModel(error_dict, num_qubits = num_qubits, state_space_labels = qubit_labels, 
+    specmodel = TwirledLayersModel(error_dict, num_qubits = num_qubits, state_space_labels = qubit_labels,
                                    idle_name = cast(Any, None))
-    
+
     return specmodel, error_dict
+
 
 def create_mle_model(df: "pandas.DataFrame", indices: dict, pspec: "ProcessorSpec", specmodel: TwirledLayersModel) -> object:
     """Fit an MLE GST model on a subset of circuits selected from a dataframe.
@@ -142,7 +146,7 @@ def create_mle_model(df: "pandas.DataFrame", indices: dict, pspec: "ProcessorSpe
     """
     from pygsti.processors import QubitProcessorSpec
     assert isinstance(pspec, QubitProcessorSpec)
-    sfds, train_circuits  = extract_success_fail(df.loc[indices['train']]) 
+    sfds, train_circuits  = extract_success_fail(df.loc[indices['train']])
     train_circuits = list(sfds.keys())
     print('You had {} circuits. You are training on {} circuits.'.format(len(df), len(train_circuits)))
     print('Creating MLE Model')
@@ -152,5 +156,5 @@ def create_mle_model(df: "pandas.DataFrame", indices: dict, pspec: "ProcessorSpe
     gst_protocol = GST(specmodel, gaugeopt_suite=cast(Any, None),  badfit_options={}, verbosity=1) #
     gst_results = gst_protocol.run(gst_protocol_data) #fits an mle model to the gst_protocol_data
     mlemodel = gst_results.estimates['GateSetTomography'].models['final iteration estimate'] # extracts the mle model parameters
-    
+
     return mlemodel

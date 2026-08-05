@@ -12,7 +12,7 @@ CustomDense
     A Dense-like layer with parameters replicated over a leading "error generator" dimension.
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -112,7 +112,7 @@ class SelectiveDense(Layer):
                 name='kernel'
             )
             self.kernels.append(kernel)
-        
+
         if self.use_bias:
             self.bias = self.add_weight(
                 shape=(self.units,),
@@ -127,7 +127,7 @@ class SelectiveDense(Layer):
         self.built = True
 
     def call(self, inputs: tf.Tensor) -> tf.Tensor:
-        """Apply the selective dense transformations.
+        r"""Apply the selective dense transformations.
 
         Parameters
         ----------
@@ -158,16 +158,15 @@ class SelectiveDense(Layer):
             outputs.append(tf.expand_dims(output, 1))
             # print('output', output.shape)
 
-        
         output = tf.concat(outputs, axis=1)
         # print(output.shape, output.shape)
-        
+
         if self.bias is not None:
             output = tf.nn.bias_add(output, self.bias)
-        
+
         if self.activation is not None:
             output = self.activation(output)
-        
+
         return output
 
 # # Example usage
@@ -189,8 +188,7 @@ class CustomDense(Layer):
     def __init__(self, units: int, num_errorgens: int, activation=None, use_bias: bool = True,
                  kernel_initializer: Any = 'glorot_uniform', bias_initializer: Any = 'zeros',
                  kernel_regularizer=None, bias_regularizer=None,
-                 kernel_constraint=None, bias_constraint=None, **kwargs) -> None:        
-        
+                 kernel_constraint=None, bias_constraint=None, **kwargs) -> None:
         """Create a Dense-like layer with parameters replicated over error generators.
 
         This layer generalizes `tf.keras.layers.Dense` by introducing a leading
@@ -209,7 +207,7 @@ class CustomDense(Layer):
 
         Parameters
         ----------
-        units : int 
+        units : int
             Dimensionality of the output space (number of output features).
         num_errorgens : int
             Number of error-generator slices. The kernel will have shape
@@ -278,7 +276,7 @@ class CustomDense(Layer):
         self.built = True
 
     def call(self, inputs: tf.Tensor) -> tf.Tensor:
-        """Apply the per-error-generator dense transformations.
+        r"""Apply the per-error-generator dense transformations.
 
         Parameters
         ----------

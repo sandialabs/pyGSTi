@@ -13,7 +13,7 @@ This module defines utility functions for:
     `canonical_pauli_pair` for the canonical-ordering convention used for 'C'/'A' pairs).
 """
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -61,7 +61,7 @@ def numberToBase(n: int, b: int) -> list[int]:
 
 def padded_numberToBase4(n: int, length: int) -> list[int]:
     """
-    Returns the (base-10) integer in base 4, as a length `length` list values between 0 and 3, i.e., it 
+    Returns the (base-10) integer in base 4, as a length `length` list values between 0 and 3, i.e., it
     pads the list with 0s at the start if n can be expressed with less than `length` string in base 4.
 
     Parameters
@@ -88,7 +88,7 @@ def padded_numberToBase4(n: int, length: int) -> list[int]:
 
 
 def index_to_paulistring(i: int, num_qubits: int) -> str:
-    """
+    r"""
     Implements the inverse of `paulistring_to_index` i.e. mapping an integer index to an n-qubit Pauli string.
 
     Parameters
@@ -110,7 +110,7 @@ def index_to_paulistring(i: int, num_qubits: int) -> str:
     i_to_p = {0: 'I', 1: 'X', 2: 'Y', 3: 'Z'}
     assert (i < 4**num_qubits), "The input integer is too large! Please input an integer in `[0, 4**num_qubits)`"
     return ''.join([i_to_p[i] for i in padded_numberToBase4(i, num_qubits)])
- 
+
 
 _VALID_PAULI_LETTERS = frozenset('IXYZ')
 _STIM_INT_TO_PAULI_LETTER = {0: 'I', 1: 'X', 2: 'Y', 3: 'Z'}
@@ -174,7 +174,7 @@ def _validate_pauli_string(ps: str | list | tuple | _stim.PauliString, argname: 
 
 
 def paulistring_to_index(ps: str | list | tuple | _stim.PauliString, num_qubits: int) -> int:
-    """
+    r"""
     Maps an n-qubit Pauli operator (represented as a string, list or tuple of elements from
     {'I', 'X', 'Y', 'Z'}, or as a `stim.PauliString`) to an integer.  It uses the most
     conventional mapping, whereby, e.g., if `num_qubits` is 2, then 'II' -> 0, and 'IX' -> 1,
@@ -467,7 +467,7 @@ def index_to_pauli_pair(idx: int, n: int) -> tuple[str, str]:
 # def up_to_weight_k_paulis(k, n):
 #     """
 #     Returns the string representation of all n-qubit Pauli operators that
-#     are weight 1 up to weight k (i.e., all Paulis contain at leat one and at most 
+#     are weight 1 up to weight k (i.e., all Paulis contain at leat one and at most
 #     k non-identity Paulis).
 #     """
 #     assert (k <= 2), "Only implemented up to k = 2!"
@@ -605,7 +605,7 @@ def up_to_weight_k_paulis(k: int, n: int) -> list[str]:
 
     if not isinstance(k, int) or k < 1:
         raise TypeError("Pauli weight must be an integer > 1.")
-    
+
     if not isinstance(n, int) or n < 0:
         raise TypeError("Number of qubits must be a non-negative integer.")
 
@@ -1050,8 +1050,8 @@ def up_to_weight_k_error_gens_from_qubit_graph(
         `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
         types and exactly how they're interpreted.
     num_hops : int
-        The maximum graph hop distance defining allowable connectivity between 
-        individual qubits. Supports with a hop distance larger than `num_hops` 
+        The maximum graph hop distance defining allowable connectivity between
+        individual qubits. Supports with a hop distance larger than `num_hops`
         between nodes are treated as disconnected.
     egtypes : list[str], default ['H', 'S']
         A list of error generator types to generate. Supported values are:
@@ -1068,11 +1068,11 @@ def up_to_weight_k_error_gens_from_qubit_graph(
     Returns
     -------
     list[tuple]
-        A list of error generator descriptors. Each descriptor is a tuple of the 
+        A list of error generator descriptors. Each descriptor is a tuple of the
         form `(egtype, (pauli_string,))` for 'H'/'S', or `(egtype, (pauli_string_1,
         pauli_string_2))` for 'C'/'A', where:
           * `egtype` (str) is the type of the error generator ('H', 'S', 'C', or 'A').
-          * each `pauli_string` (str) is a Pauli representation (e.g. 'IX', 'XY') 
+          * each `pauli_string` (str) is a Pauli representation (e.g. 'IX', 'XY')
             which (jointly, for 'C'/'A') indexes the error generator on the connected support.
     """
     qubit_graph = _graphtools._resolve_qubit_graph_arg(qubit_graph, qubit_graph_laplacian,
@@ -1218,6 +1218,7 @@ def error_generator_index(typ: str, paulis: tuple[str | _stim.PauliString, ...])
     else:
         raise ValueError(f"Invalid error generator specification: {typ!r}! Supported types are 'H', 'S', 'C', 'A'.")
 
+
 def index_to_error_gen(i: int, n: int, as_label: bool = False) -> tuple[str, tuple[str, ...]] | LocalStimErrorgenLabel:
     """
     Maps from the index to the 'label' representation of an elementary
@@ -1267,8 +1268,9 @@ def index_to_error_gen(i: int, n: int, as_label: bool = False) -> tuple[str, tup
     else:
         return _lseg.LocalStimErrorgenLabel(typ, paulis)
 
+
 def num_error_generators(num_qubits: int) -> int:
-    """Return the total number of indexed H/S/C/A error generators for `num_qubits`, i.e. the
+    r"""Return the total number of indexed H/S/C/A error generators for `num_qubits`, i.e. the
     size of the full index range `[0, num_error_generators(num_qubits))` used by
     `error_generator_index`/`index_to_error_gen`.
 

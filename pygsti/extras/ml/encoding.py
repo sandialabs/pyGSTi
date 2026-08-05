@@ -12,7 +12,7 @@ measurement outcome probabilities in a first-order approximation.
 """
 
 #***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from pygsti.processors import ProcessorSpec
     from pygsti.data import DataSet
 
+
 class CircuitEncoder(object):
     """
    Base class for encoders that map `pygsti.circuits.Circuit` objects to numpy arrays.
@@ -50,6 +51,7 @@ class CircuitEncoder(object):
 
     Derived classes implement `layer_encoding` and usually `indices_for_qubits`.
     """
+
     def __init__(self, pspec: "ProcessorSpec") -> None:
         """
         Initialize a CircuitEncoder object.
@@ -117,9 +119,9 @@ class CircuitEncoder(object):
     def initialization_encoding(self, circuit: _Circuit) -> list[list[float]] | list[list[int]]:
         """
         This method defines the encoding of the implicit initialization layer at the end of a circuit.
-        In this base class, we define this to be a trivial encoding: the implicit initialization layer 
-        is not represented. In general, this method should return a list of lists. If this measurement 
-        is not represented in the encoding, as here, this is an empty list. Otherwise each element in the 
+        In this base class, we define this to be a trivial encoding: the implicit initialization layer
+        is not represented. In general, this method should return a list of lists. If this measurement
+        is not represented in the encoding, as here, this is an empty list. Otherwise each element in the
         list is contains the encoding values (typically 0 or 1)
 
         Parameters
@@ -149,9 +151,9 @@ class CircuitEncoder(object):
     def measurement_encoding(self, circuit: _Circuit) -> list[list[float]] | list[list[int]]:
         """
         This method defines the encoding of the implicit measurement layer at the end of a circuit.
-        In this base class, we define this to be a trivial encoding: the implicit measurement layer 
-        is not represented. In general, this method should return a list of lists. If this measurement 
-        is not represented in the encoding, as here, this is an empty list. Otherwise each element in the 
+        In this base class, we define this to be a trivial encoding: the implicit measurement layer
+        is not represented. In general, this method should return a list of lists. If this measurement
+        is not represented in the encoding, as here, this is an empty list. Otherwise each element in the
         list is contains the encoding values (typically 0 or 1)
 
         Parameters
@@ -166,7 +168,7 @@ class CircuitEncoder(object):
         """
         return []
 
-    def measurement_encoding_depth(self) -> int: 
+    def measurement_encoding_depth(self) -> int:
         """
         Returns the length of the measurement encoding list, i.e., the length of lists returned by
         `measurement_encoding`.
@@ -244,6 +246,7 @@ class CircuitEncoder(object):
         """
         raise NotImplementedError("Specified in a derived class!")
 
+
 class StandardCircuitEncoder(CircuitEncoder):
     """
     "Standard" circuit encoder used by QPANN workflows.
@@ -293,7 +296,7 @@ class StandardCircuitEncoder(CircuitEncoder):
         list[float]
             A list of length `self.length` containing 0/1 floats.
         """
-        
+
         if layer is not None:
             assert(isinstance(layer, (tuple, list))), "The layer must be a list or tuple of label objects, or None!"
         if layer is not None:
@@ -341,15 +344,16 @@ def circuits_to_tensor(circuits: list[_Circuit], encoder: CircuitEncoder, encodi
         Tensor of shape `(len(circuits), encoding_depth, encoder.length)`.
     """
 
-    if encoding_depth is None: 
+    if encoding_depth is None:
         max_depth = _np.max([c.depth for c in circuits])
         encoding_depth = encoder.depth(max_depth)
-    
+
     circuits_tensor = _np.zeros((len(circuits), encoding_depth, encoder.length), float)
     for i, circuit in enumerate(circuits):
         circuits_tensor[i,:,:] = encoder(circuit, padded_depth=encoding_depth)
 
     return circuits_tensor
+
 
 def dense_dataset_encoding(ds: "DataSet", n: int, circuits: list[_Circuit] | None = None) -> _np.ndarray:
     """
@@ -379,7 +383,8 @@ def dense_dataset_encoding(ds: "DataSet", n: int, circuits: list[_Circuit] | Non
 
     return freqs_array
 
-def error_generator_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", alpha_representation: str = 'concise',  measurements: str= 'probabilities', 
+
+def error_generator_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", alpha_representation: str = 'concise',  measurements: str= 'probabilities',
                             measurement_paulis: list | None = None, process_num: int = 5) -> dict:
     """
     Compute the tensors needed by QPANN probability-approximation layers.
@@ -425,11 +430,12 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
     if alpha_representation == 'matrix':
         probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=indices)
     elif alpha_representation == 'concise':
-        probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements = measurements, 
-                                                                                  measurement_paulis = measurement_paulis, process_num=process_num)        
+        probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements = measurements,
+                                                                                  measurement_paulis = measurement_paulis, process_num=process_num)
     else:
         raise NotImplementedError('No other representations have been implemented yet!')
     return {'indices':indices, 'signs':signs, 'probabilities':probabilities, 'alphas':alphas}
+
 
 def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list) -> tuple[_np.ndarray, _np.ndarray]:
     """
@@ -488,7 +494,8 @@ def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list
 
     return indices, signs
 
-def error_propagation_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", prior_error_generators: list | None = None, 
+
+def error_propagation_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", prior_error_generators: list | None = None,
                               prior_indices: _np.ndarray | None = None, prior_signs: _np.ndarray | None = None) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Compute batched error-propagation tensors (`indices`, `signs`) for multiple circuits.
@@ -542,15 +549,16 @@ def error_propagation_tensors(circuits: list[_Circuit], error_generators: list, 
         assert prior_indices is not None and prior_signs is not None
         indices[:, :, 0:num_pregs] = prior_indices.copy()
         signs[:, :, 0:num_pregs] = prior_signs.copy()
-       
+
     for i, circuit in enumerate(circuits):
 
         # compute the sign and indices matrices for this circuit
         indices_for_circuit, signs_for_circuit = circuit_error_propagation_matrices(circuit, error_generators)
         indices[i, 0:circuit.depth, num_pregs:] = indices_for_circuit.copy()
         signs[i, 0:circuit.depth, num_pregs:] = signs_for_circuit.copy()
-    
+
     return indices, signs
+
 
 def alpha_coefficient(i: int, num_qubits: int, tableau: _stim.Tableau, bs: str) -> float:
     """
@@ -579,6 +587,7 @@ def alpha_coefficient(i: int, num_qubits: int, tableau: _stim.Tableau, bs: str) 
     lbl = cast(_lseg.LocalStimErrorgenLabel, _tools.index_to_error_gen(i, num_qubits, as_label=True))
     return _np.float64(_egptools.alpha(lbl, tableau, bs).real)
 
+
 def alpha_coefficient_pauli(i: int, num_qubits: int, tableau: _stim.Tableau, pauli: str) -> float:
     """
     Computes the alpha coefficient for the ith error generator, with the circuit defined by the
@@ -606,6 +615,7 @@ def alpha_coefficient_pauli(i: int, num_qubits: int, tableau: _stim.Tableau, pau
     lbl = cast(_lseg.LocalStimErrorgenLabel, _tools.index_to_error_gen(i, num_qubits, as_label=True))
     return _np.float64(_egptools.alpha_pauli(lbl, tableau, cast(Any, pauli)))
 
+
 def _get_tableau(circuit_or_tableau: _Circuit | _stim.Tableau) -> _stim.Tableau:
     """
     Helper function that returns a tableau given a Circuit or a Stim.Tableau object
@@ -632,9 +642,10 @@ def _get_tableau(circuit_or_tableau: _Circuit | _stim.Tableau) -> _stim.Tableau:
     else:
         raise ValueError('Input must be a Circuit or a Stim.Tableau!')
 
+
 def dense_alpha_matrix(circuit: _Circuit | _stim.Tableau, num_qubits: int, populate_for_error_generators: list[int] | None = None, existing_alpha_matrix: _np.ndarray | None = None) -> _np.ndarray:
     """
-    Creates the alpha matrix, a 2**n by 2 * 4**n matrix, that is used to compute the 
+    Creates the alpha matrix, a 2**n by 2 * 4**n matrix, that is used to compute the
     first-order impact of each end-of-circuit error generator on each n-bit string. Can
     be used to update an existing partially-populated alpha matrix.
 
@@ -660,14 +671,14 @@ def dense_alpha_matrix(circuit: _Circuit | _stim.Tableau, num_qubits: int, popul
     populate_for_error_generators : list[int] or None, optional
         If not None, the indices of the error generators for which to compute the alpha tensor for.
         If None, the entire alpha tensor is computed. If a list of integers, this function creates
-        an alpha tensor that is zero except for the alphas corresponding to the end-of-circuit 
+        an alpha tensor that is zero except for the alphas corresponding to the end-of-circuit
         error generators in this list. All indices must be in the 'H'/'S' range,
         `[0, 2*4**num_qubits)` -- see the note above.
 
     existing_alpha_matrix : None or numpy.ndarray of shape (2**n, 2 * 4**n), optional
         An existing partially-populated alpha matrix. Note that providing an existing alpha matrix
         has no purpose if `populuate_for_error_generators` is None, as then the complete alpha
-        matrix is computed. 
+        matrix is computed.
 
     Returns
     -------
@@ -752,14 +763,14 @@ def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], error_ge
 
     alphas = _np.zeros((len(circuits), 2 ** num_qubits, 2 * 4 ** num_qubits), float)
     probabilities = _np.zeros((len(circuits), 2 ** num_qubits), float)
-      
+
     for i, circuit in enumerate(circuits):
 
         # Compute the error-free probabilities for each bit string.
         tableau = circuit.convert_to_stim_tableau()
         probabilities[i, :] = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
 
-        # Compute the alpha matrix for the circuit, filling in only those 
+        # Compute the alpha matrix for the circuit, filling in only those
         if prior_error_generators is not None:
             assert prior_alphas is not None
             prior_alpha_matrix = prior_alphas[i, :, :]
@@ -774,11 +785,11 @@ def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], error_ge
 
         alphas[i, :, :] = dense_alpha_matrix(tableau, num_qubits, populate_for_error_generators=unique_end_of_circuit_error_generators,
                                              existing_alpha_matrix=prior_alpha_matrix)
-    
+
     return probabilities, alphas
 
 
-def first_order_outcome_probabilities_tensors_concise(circuits: list[_Circuit], pspec: "ProcessorSpec", indices: _np.ndarray, signs: _np.ndarray, measurements: str = 'probabilities', 
+def first_order_outcome_probabilities_tensors_concise(circuits: list[_Circuit], pspec: "ProcessorSpec", indices: _np.ndarray, signs: _np.ndarray, measurements: str = 'probabilities',
                                                       measurement_paulis: list | None = None, process_num: int = 5) -> tuple[_np.ndarray, _np.ndarray]:
     """
     TODO
@@ -816,7 +827,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits: list[_Circuit], 
         measurements_array = _np.zeros((len(circuits), 2 ** num_qubits), float)
         circ_indices_tuples=[]
         for idx,circ in enumerate(circuits):
-            circ_indices_tuples.append((circ,indices[idx],nbit_strings,num_qubits))  
+            circ_indices_tuples.append((circ,indices[idx],nbit_strings,num_qubits))
         with Pool(process_num) as p:
             output_list = p.starmap(_circuit_loop_probs, tqdm.tqdm(circ_indices_tuples))
         for idx, tup in enumerate(output_list):
@@ -825,9 +836,9 @@ def first_order_outcome_probabilities_tensors_concise(circuits: list[_Circuit], 
 
         for l, bs in enumerate(nbit_strings):
             first_order_coefficients[:, l, :, :] = first_order_coefficients[:, l, :, :] * signs
-        
+
     elif measurements == 'paulis':
-        
+
         assert(measurement_paulis is not None), "Must provided the measurement Pauli operators!"
         shape = (indices.shape[0], len(measurement_paulis), indices.shape[1], indices.shape[2])
         first_order_coefficients = _np.zeros(shape, float)
@@ -836,7 +847,7 @@ def first_order_outcome_probabilities_tensors_concise(circuits: list[_Circuit], 
 
         # TIM COPIED OUT WHILE BUG HUNTING
         for idx, circ in enumerate(circuits):
-            circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis)) 
+            circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis))
 
         with Pool(process_num) as p:
             output_list = p.starmap(_circuit_loop_paulis, tqdm.tqdm(circ_indices_tuples))
@@ -853,10 +864,11 @@ def first_order_outcome_probabilities_tensors_concise(circuits: list[_Circuit], 
 
     return measurements_array, first_order_coefficients
 
+
 def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: list[str], num_qubits: int) -> tuple[_np.ndarray, _np.ndarray]:
 
     unique_indices = set(indices.flatten())
-    
+
     tableau = _get_tableau(circuit)
     shape = ( 2 ** num_qubits, indices.shape[0], indices.shape[1])
     first_order_coefficients = _np.zeros(shape, float)
@@ -880,7 +892,6 @@ def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: l
             alpha = scale * alpha_coefficient(error_generator_index, num_qubits, tableau, bs)
             alphas_dict[l, error_generator_index] = alpha
 
-
     for l in range(len(nbit_strings)):
         for j in range(indices.shape[0]):
             for k in range(indices.shape[1]):
@@ -888,10 +899,11 @@ def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: l
 
     return (probabilities, first_order_coefficients)
 
+
 def _circuit_loop_paulis(circuit: _Circuit, indices: _np.ndarray, num_qubits: int, paulis: list[str]) -> tuple[_np.ndarray, _np.ndarray]:
 
     unique_indices = set(indices.flatten())
-    
+
     tableau = _get_tableau(circuit)
     shape = (len(paulis), indices.shape[0], indices.shape[1])
     first_order_coefficients = _np.zeros(shape, float)
@@ -907,7 +919,6 @@ def _circuit_loop_paulis(circuit: _Circuit, indices: _np.ndarray, num_qubits: in
             #    alpha = 0
 
             alphas_dict[l, error_generator_index] = alpha_coefficient_pauli(error_generator_index, num_qubits, tableau, p)
-
 
     for l in range(len(paulis)):
         for j in range(indices.shape[0]):
@@ -925,15 +936,16 @@ def make_paulis(num_qubits: int, maximum_weight: int) -> list[Any]:
         paulis += make_paulis_of_weight(num_qubits, w)
     return paulis
 
+
 def make_paulis_of_weight(num_qubits: int, weight: int) -> list[Any]:
     """
     num_qubits : number of qubits
     weight : the weight of the Pauli operators
     """
-    
+
     # Generate all combinations of positions for 'Z'
     positions = _itertools.combinations(range(num_qubits), weight)
-    
+
     result = []
     for pos in positions:
         # Start with all 'I's
