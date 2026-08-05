@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -173,5 +173,3 @@ dict(mult_meas_model.probabilities( pygsti.circuits.Circuit([('Gxpi2', 0), ('Gxp
 # ... while using parity-Z should give us odd for qubits 0 & 1 and 0 for qubit 2
 dict(mult_meas_model.probabilities( pygsti.circuits.Circuit([('Gxpi2', 0), ('Gxpi2', 0), "M_parz"], line_labels=(0,1,2)) ))
 ```
-
-

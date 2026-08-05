@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -413,5 +413,3 @@ ln_model_corr.probabilities(circ)
 #circ = pygsti.circuits.Circuit([])
 #ctf_povm_model.probabilities(circ) # Expect about 80% all 0, 5% on weight one errors, 0.25% on weight 2, etc.
 ```
-
-
