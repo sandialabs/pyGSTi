@@ -716,46 +716,7 @@ def dense_alpha_matrix(circuit: _Circuit | _stim.Tableau, num_qubits: int, popul
 
     return alpha_matrix
 
-### Code that Tim wrote but never tested as he decided that to write `first_order_outcome_probabilities_tensors_concise`
-### which creates an alternative representation that is probably more useful in practice. This has been left in in case
-### it becomes useful, but it shouldn't be assumed that it works correctly as it was never tested.
-# def sparse_alpha_matrix(circuit, num_qubits, error_generators, bitstrings):
-#     """
-#     Creates a sparse reprentation of the alpha matrix, a 2**n by 2 * 4**n matrix, that is used to compute the 
-#     first-order impact of each end-of-circuit error generator on each n-bit string.
 
-#     Parameters
-#     ----------
-#     circuit: Circuit or Stim.Tableau
-#         The circuit for which we are computing the alpha tensor.
-
-#     num_qubits: int
-#         The number of qubits in the circuit.
-
-#     error_generators : list of integers.
-#         Tthe **indices** of the error generators for which to compute the alpha matrix elements for.
-
-#     bitstrings : list of strings 
-#         The n-bit strings for which to compute the alppha coefficients for.
-
-#     Returns
-#     -------
-#     list of lists
-#         A list of lists in which each element of the list ... TODO
-
-#     """
-#     tableau = _get_tableau(circuit)
-
-#     contributing_error_generators = [[] for bs in bitstrings]
-#     alphas = [[] for bs in bitstrings]
-#     for i, bs in enumerate(bitstrings):
-#         for j in error_generators:
-#             alpha = alpha_coefficient(j, num_qubits, tableau, bs)
-#             if not _np.isclose(alpha, 0.):
-#                 contributing_error_generators[i].append(j)
-#                 alphas[i].append(alpha)
-
-#     return contributing_error_generators, alphas
 def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", indices: _np.ndarray | None = None, prior_error_generators: list | None = None, prior_alphas: _np.ndarray | None = None) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Compute ideal outcome probabilities and dense alpha matrices for a batch of circuits.
