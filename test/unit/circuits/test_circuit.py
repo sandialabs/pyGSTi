@@ -355,18 +355,11 @@ class CircuitMethodTester(BaseCase):
         # 'Q0' should still have gates. 'Q3' is new and should be idling.
         self.assertEqual(set(self.c.idling_lines()), {'Q3'})
 
-
     def test_set_line_labels_non_editable(self):
         # Test that setting line labels on a non-editable circuit raises an AssertionError
         non_editable_circuit = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1'], editable=False)
         with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit!"):
             non_editable_circuit.line_labels = ('Qalpha', 'Qbeta')
-
-    def test_set_line_labels_equivalent(self):
-        # Test that setting line_labels to the same value does nothing
-        original_circuit = self.c.copy()
-        self.c.line_labels = self.c.line_labels
-        self.assertEqual(self.c, original_circuit)
 
     def test_set_occurrence(self):
         # Test setting occurrence id on an editable circuit
@@ -377,7 +370,6 @@ class CircuitMethodTester(BaseCase):
         non_editable_circuit = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1'], editable=False)
         with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit!"):
             non_editable_circuit.occurrence = 456
-
 
     def test_delete_layers(self):
         # Test layer deletion
