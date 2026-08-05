@@ -1,6 +1,7 @@
 import pickle
 
 import pygsti.baseobjs.outcomelabeldict as ld
+from pygsti.baseobjs.label import Label
 from pygsti.models.memberdict import OrderedMemberDict
 from pygsti.models.modelconstruction import create_explicit_model_from_expressions
 from pygsti.models import ExplicitOpModel
@@ -46,3 +47,37 @@ class LabelDictTester(BaseCase):
         d = ld.OutcomeLabelDict([(('0',), 90), (('1',), 10)])
         d_copy = d.copy()
         self.assertEqual(d, d_copy)
+
+    def test_validate_keys_round_trip(self):
+        # Build a real ExplicitOpModel so we have valid ModelMember values to assign.
+        # The four primary member dicts (preps, povms, operations, instruments)
+        # have validate_keys=True; factories does not.
+        model = create_explicit_model_from_expressions(
+            [('Q0',)], ['Gi', 'Gx', 'Gy'],
+            ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
+        )
+        # Grab a real Instrument-compatible member by constructing a tiny
+        # ExplicitOpModel-style instrument from existing ops via the
+        # public Instrument class.
+        from pygsti.modelmembers import instruments as _inst
+        op_gi = model.operations[Label('Gi')]
+        instr_value = _inst.Instrument([('outcome', op_gi.copy())])
+
+        # 1) Round-tripping str key -> success
+        model.instruments[Label('Iz')] = instr_value
+        # 2) Non-round-tripping str key -> ValueError
+        with self.assertRaises(ValueError):
+            model.instruments['IzTP'] = instr_value
+        # 3) Label constructed from non-round-tripping string -> ValueError
+        with self.assertRaises(ValueError):
+            model.instruments[Label('IzTP')] = instr_value
+        # 4) Label constructed from round-tripping string -> success
+        model.instruments[Label('Iz2')] = instr_value
+
+        # 5) Opt-in nature: when validate_keys is False (default),
+        # the same assignments succeed on a bare OrderedMemberDict.
+        d = OrderedMemberDict(None, "full", "I", {'cast_to_type': None})
+        # Use a ModelMember directly to bypass cast logic.
+        d[Label('IzTP')] = op_gi.copy()
+        d['I_zTP'] = op_gi.copy()
+        return

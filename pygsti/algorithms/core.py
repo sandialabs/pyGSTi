@@ -23,7 +23,8 @@ import scipy.stats as _stats
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti import models as _models
-from pygsti.baseobjs import BuiltinBasis, VerbosityPrinter, DirectSumBasis
+from pygsti.baseobjs import VerbosityPrinter
+from pygsti.baseobjs.basis import BuiltinBasis, DirectSumBasis, BasisLike
 from pygsti import tools as _tools
 from pygsti import circuits as _circuits
 from pygsti import objectivefns as _objfns
@@ -234,7 +235,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 [(lbl, _np.dot(invABMat_p, X_ps[i]))
                  for i, lbl in enumerate(target_model.instruments[opLabel])])
         else:
-            #Just a normal gae
+            #Just a normal gate
             assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
             lgstModel.operations[opLabel] = _op.FullArbitraryOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
 
@@ -347,16 +348,17 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                             _povm.optimize_effect(new_vec, lgstModel.povms[povmLabel][effectLabel])
                             new_effects.append((effectLabel, new_vec))
 
-                        # Construct identity vector for complement effect vector
+                        # Compute complement effect by substracting from the identity effect.
                         #  Pad with zeros if needed (ROBIN - is this correct?)
-                        identity = povm[povm.complement_label].identity
+                        identity = povm[povm.complement_label].identity.to_dense('minimal')
                         Idim = identity.shape[0]
                         assert(Idim <= trunc)
-                        if Idim < trunc:
-                            padded_identityVec = _np.concatenate((identity, _np.zeros((trunc - Idim, 1), 'd')))
-                        else:
-                            padded_identityVec = identity
-                        comp_effect = padded_identityVec - sum([v for k, v in new_effects])
+                        comp_effect = _np.zeros(trunc)
+                        comp_effect[:Idim] = identity
+                        for _, v in new_effects:
+                            v_array = v.to_dense('minimal') if hasattr(v, 'to_dense') else v
+                            comp_effect -= v_array
+
                         new_effects.append((povm.complement_label, comp_effect))  # add complement
                         lgstModel.povms[povmLabel] = _povm.TPPOVM(new_effects)
 
@@ -370,7 +372,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             #Also convey default gauge group & simulator from guess_model_for_gauge
             lgstModel.default_gauge_group = \
                 guess_model_for_gauge.default_gauge_group
-            lgstModel.sim = guess_model_for_gauge.sim.copy()
+            lgstModel.sim = guess_model_for_gauge.sim.copy(keep_model_attached=False)
 
         #inv_BMat_p = _np.dot(invABMat_p, AMat_p) # should be equal to inv(BMat_p) when trunc == gsDim ?? check??
         # # lgstModel had dim trunc, so after transform is has dim gsDim
@@ -468,10 +470,10 @@ def _construct_a(effect_fiducials, model):
         #A[k,:] = st[0,:] # E_k == kth row of A
         for i in range(dim):  # propagate each basis initial state
             basis_st[i] = 1.0
-            model.preps['rho_LGST_tmp'] = basis_st
-            probs = model.probabilities(_circuits.Circuit(('rho_LGST_tmp',), line_labels=estr.line_labels) + estr)
+            model.preps['rho_lgst_tmp'] = basis_st
+            probs = model.probabilities(_circuits.Circuit(('rho_lgst_tmp',), line_labels=estr.line_labels) + estr)
             A[eoff:eoff + povmLen, i] = [probs[(ol,)] for ol in model.povms[povmLbl]]  # CHECK will this work?
-            del model.preps['rho_LGST_tmp']
+            del model.preps['rho_lgst_tmp']
             basis_st[i] = 0.0
 
         eoff += povmLen
@@ -497,16 +499,16 @@ def _construct_b(prep_fiducials, model):
         basis_E = _np.zeros((dim, 1), 'd')
         basis_E[i] = 1.0
         basis_Es.append(basis_E)
-    model.povms['M_LGST_tmp_povm'] = _povm.UnconstrainedPOVM(
+    model.povms['M_lgst_tmp_povm'] = _povm.UnconstrainedPOVM(
         [("E%d" % i, E) for i, E in enumerate(basis_Es)], evotype='default')
 
     for k, rhostr in enumerate(prep_fiducials):
         #Build fiducial | rho_k > := Circuit(prepSpec[0:-1]) | rhoVec[ prepSpec[-1] ] >
         # B[:,k] = st[:,0] # rho_k == kth column of B
-        probs = model.probabilities(rhostr + _circuits.Circuit(('M_LGST_tmp_povm',), line_labels=rhostr.line_labels))
+        probs = model.probabilities(rhostr + _circuits.Circuit(('M_lgst_tmp_povm',), line_labels=rhostr.line_labels))
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
-    del model.povms['M_LGST_tmp_povm']
+    del model.povms['M_lgst_tmp_povm']
     model.povms.default_param = old_default_param
 
     return B
@@ -937,6 +939,16 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
     #pre-compute a dictionary caching completed circuits for layout construction performance.
     unique_circuits = list({ckt for circuit_list in circuit_lists for ckt in circuit_list})
+    # Preserve any op-label aliases (e.g. from op_label_aliases / string_manipulation_rules) so that
+    # the precomputed layout cache looks up the *aliased* circuits in the dataset (otherwise circuits
+    # containing aliased labels raise a KeyError during dataset lookup).
+    op_label_aliases = None
+    for circuit_list in circuit_lists:
+        if isinstance(circuit_list, _CircuitList) and circuit_list.op_label_aliases:
+            op_label_aliases = circuit_list.op_label_aliases
+            break
+    if op_label_aliases is not None:
+        unique_circuits = _CircuitList(unique_circuits, op_label_aliases=op_label_aliases)
     if isinstance(mdl.sim, (_fwdsims.MatrixForwardSimulator, _fwdsims.MapForwardSimulator)):
         precomp_layout_circuit_cache = mdl.sim.create_copa_layout_circuit_cache(unique_circuits, mdl, dataset=dataset)
     else:
@@ -1028,7 +1040,7 @@ def _do_runopt(objective, optimizer, printer):
     `objective` using `optimizer`.
 
     This is factored out as a separate function because of the differences
-    when running Taylor-term simtype calculations, which utilize this
+    when running Taylor-term simulator calculations, which utilize this
     as a subroutine (see :func:`_do_term_runopt`).
 
     Parameters
@@ -1185,7 +1197,7 @@ def _do_term_runopt(objective, optimizer, printer):
 ###################################################################################
 
 
-def find_closest_unitary_opmx(operation_mx):
+def find_closest_unitary_opmx(operation_mx, op_basis: BasisLike='pp'):
     """
     Find the closest (in fidelity) unitary superoperator to `operation_mx`.
 
@@ -1203,7 +1215,7 @@ def find_closest_unitary_opmx(operation_mx):
         The resulting closest unitary operation matrix.
     """
 
-    gate_JMx = _tools.jamiolkowski_iso(operation_mx, choi_mx_basis="std")
+    gate_JMx = _tools.jamiolkowski_iso(operation_mx, op_mx_basis=op_basis, choi_mx_basis="std")
     # d = _np.sqrt(operation_mx.shape[0])
     # I = _np.identity(d)
 

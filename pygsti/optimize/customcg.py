@@ -59,7 +59,7 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag=None, xopt=None):
     RESET = 5
     stepsize = 1e-6
 
-    #if no dfdx specifed, use finite differences
+    #if no dfdx specified, use finite differences
     if dfdx_and_bdflag is None:
         def dfdx_and_bdflag(x): return _finite_diff_dfdx_and_bdflag(f, x, FINITE_DIFF_STEP)
 

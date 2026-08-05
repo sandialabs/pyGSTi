@@ -15,7 +15,7 @@ comm = MPI.COMM_WORLD
 resource_alloc = pygsti.baseobjs.ResourceAllocation(comm)
 mdl = std.target_model()
 
-exp_design = std.get_gst_experiment_design(64)
+exp_design = std.create_gst_experiment_design(64)
 
 mdl_datagen = mdl.depolarize(op_noise=0.01, spam_noise=0.01)
 

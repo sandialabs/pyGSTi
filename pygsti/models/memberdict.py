@@ -140,7 +140,8 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         self.flags = {'auto_embed': flags.get('auto_embed', False),
                       'match_parent_statespace': flags.get('match_parent_statespace', False),
                       'match_parent_evotype': flags.get('match_parent_evotype', False),
-                      'cast_to_type': flags.get('cast_to_type', None)
+                      'cast_to_type': flags.get('cast_to_type', None),
+                      'validate_keys': flags.get('validate_keys', False)
                       }
         _PrefixOrderedDict.__init__(self, prefix, items)
         _mm.ModelChild.__init__(self, parent)  # set's self.parent
@@ -272,6 +273,17 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         return obj
 
     def __setitem__(self, key, value):
+        if self.flags.get('validate_keys', False):
+            from pygsti.circuits.circuitparser import parse_label as _parse_label
+            key_as_lbl = _Label(key) # handles if `key` is a str, or castable to a LabelTup, or already a Label.
+            round_trip = _parse_label(str(key_as_lbl))
+            if str(key_as_lbl) != str(round_trip):
+                raise ValueError(
+                    f"Model-member key {key!r} does not round-trip through "
+                    f"parse_label (parsed form is "
+                    f"{round_trip!r}). Pick a name whose string "
+                    f"form is preserved by parse_label."
+                )
         if not isinstance(key, _Label): key = _Label(key)
         value = self._auto_embed(key, value)  # automatically create an embedded gate if needed
         self._check_state_space(value)

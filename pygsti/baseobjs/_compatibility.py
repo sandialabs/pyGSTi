@@ -12,6 +12,43 @@ Tools for general compatibility.
 
 import numbers as _numbers
 
+import numpy as _np
+from numpy.lib import NumpyVersion as _NumpyVersion
+
+# The ``copy`` keyword of ``numpy.reshape`` was added in NumPy 2.1; direct
+# assignment to ``ndarray.shape`` was deprecated in NumPy 2.5.
+_NUMPY_HAS_RESHAPE_COPY = _NumpyVersion(_np.__version__) >= '2.1.0'
+
+
+def reshape_no_copy(a, shape):
+    """
+    Return a view of `a` with the given `shape` without copying its data.
+
+    Forward-compatible replacement for the idiom ``a.shape = shape``, which was
+    deprecated in NumPy 2.5. Like that idiom, this raises (rather than copying)
+    if the requested shape is incompatible with `a`'s memory layout, preserving
+    the no-copy guarantee that callers rely on.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        Array to reshape.
+
+    shape : int or tuple or list of int
+        The new shape. May be a single int, or a tuple/list of ints that may
+        contain a single ``-1`` to infer one dimension.
+
+    Returns
+    -------
+    numpy.ndarray
+        A view of `a` (sharing its memory) with the requested shape.
+    """
+    if _NUMPY_HAS_RESHAPE_COPY:            # numpy >= 2.1
+        return _np.reshape(a, shape, copy=False)
+    view = a.view()                        # numpy < 2.1: copy= kwarg unavailable
+    view.shape = shape                     # in-place; raises if a copy is needed; not deprecated < 2.5
+    return view
+
 
 def isint(x):
     """

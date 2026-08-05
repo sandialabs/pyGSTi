@@ -18,10 +18,10 @@ if TYPE_CHECKING:
     except:
         pass
     
-import warnings as _warnings
-
 import numpy as _np
 import scipy.linalg as _spl
+
+from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
 
 from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
@@ -135,7 +135,7 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
 
     The correspondence between the standard names and unitaries is w.r.t the
     internally-used gatenames (see internal_gate_unitaries()).  For example, one use
-    of this function is to check whether some gate specifed by a user with the name
+    of this function is to check whether some gate specified by a user with the name
     'Ghadamard' is the Hadamard gate, denoted internally by 'H'.
 
     Parameters
@@ -326,8 +326,8 @@ def standard_gatename_unitaries():
     std_unitaries['Gcres'] = _spl.expm(-1j*_np.pi/4*sigmaxz)
     std_unitaries['Gecres'] = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                                         [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
-
     std_unitaries['Gecr'] = std_unitaries['Gecres']  # alias
+    
     std_unitaries['Gzr'] = Gzr()
     std_unitaries['Gczr'] = Gczr()
 
@@ -458,6 +458,8 @@ def standard_gatenames_stim_conversions():
     gate_dict['Gc21'] = stim.Tableau.from_unitary_matrix(_np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2), endian='big')  # This is Gypi2 (up to phase)
     gate_dict['Gc22'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex), endian='big')  # This is P H Pdag
     gate_dict['Gc23'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, -1j]], complex), endian='big') # This is Gzmpi2 / Gpdag (up to phase)
+
+
     return gate_dict
 
 def standard_gatenames_cirq_conversions():
@@ -953,17 +955,9 @@ def standard_gatenames_qiskit_conversions() -> Dict[str, Tuple[qiskit.circuit.In
         a later version of qiskit.
     """
 
-    try:
-        import qiskit
-        from qiskit.circuit import Delay
-        from qiskit.circuit.library import standard_gates
-
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn("function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 2.1.1 \
-                    and may not function properly for your qiskit version, which is " + qiskit.__version__)
-            
-    except ImportError:
-        _warnings.warn("This operation requires qiskit, which does not appear to be installed.")
+    _check_qiskit_version('standard_gatenames_qiskit_conversions()')
+    from qiskit.circuit import Delay
+    from qiskit.circuit.library import standard_gates
 
     std_gatenames_to_qiskit = {}
 

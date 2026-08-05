@@ -56,6 +56,7 @@ cdef extern from "basecreps.h" namespace "CReps":
         void add_scalar_to_all_coeffs_inplace(double complex offset)
         void scale(double complex scale)
         vector[INT] int_to_vinds(PolynomialVarsIndex indx_tup)
+        PolynomialVarsIndex vinds_to_int(vector[INT] vinds)
         unordered_map[PolynomialVarsIndex, complex] _coeffs
         INT _max_num_vars
         INT _vindices_per_int
