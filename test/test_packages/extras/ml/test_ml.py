@@ -2,9 +2,16 @@ import unittest
 from typing import Any, cast
 import numpy as np
 import networkx as nx
+import pytest
 import stim
-import tensorflow as tf
-import keras
+
+# TensorFlow/Keras are an opt-in dependency (`pip install pygsti[ml]`), and importing anything
+# from `pygsti.extras.ml` pulls them in, so guard at module scope. Without this, merely
+# *collecting* this file on a machine without TensorFlow -- e.g. a plain `pytest test/` -- is a
+# hard collection error rather than a skip. CI installs the `ml` extra for the jobs that set
+# `run-extra-tests`, so these tests are skipped only where the dependency genuinely is absent.
+tf = pytest.importorskip('tensorflow', reason="requires the 'ml' extra: pip install pygsti[ml]")
+keras = pytest.importorskip('keras', reason="requires the 'ml' extra: pip install pygsti[ml]")
 
 try:
     import igraph
