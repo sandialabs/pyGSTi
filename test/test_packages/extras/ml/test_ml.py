@@ -260,7 +260,9 @@ class MLSubpackageTester(unittest.TestCase):
         from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
         from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as LSE
 
-        prop = ErrorGeneratorPropagator(None)
+        # Empty fixed_errorgen_layer: we only want the stateless propagation helpers.
+        # See the note in encoding.circuit_error_propagation_matrices.
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer={})
         stim_layers = prop.construct_stim_layers(circuit, drop_first_layer=True)
         propagation_layers = prop.construct_propagation_layers(stim_layers)
         lse = LSE('A', [stim.PauliString('X'), stim.PauliString('Y')])
