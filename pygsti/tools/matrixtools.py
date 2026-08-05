@@ -11,7 +11,6 @@ Matrix related utility functions
 #***************************************************************************************************
 
 from __future__ import annotations
-
 import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
@@ -1376,7 +1375,7 @@ def minweight_match(a: Union[list, _np.ndarray], b: Union[list, _np.ndarray],
     a_arr = _np.asarray(a); b_arr = _np.asarray(b)
 
     filled = False
-    if D > 0 and default_metric and not pass_indices_to_metricfn:
+    if D > 0 and default_metric:
         diff = a_arr[:, None] - b_arr[None, :]
         weightMx[:, :] = _np.hypot(diff.real, diff.imag)
         filled = True
