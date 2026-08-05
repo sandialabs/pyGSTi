@@ -17,6 +17,7 @@ from .protocol import *
 from .rb import *
 from .rpe import *
 from .stability import *
+from .su2rb import *
 from .vb import *
 from .vbdataframe import *
 from .mirror_edesign import *

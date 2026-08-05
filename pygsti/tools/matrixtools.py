@@ -11,7 +11,6 @@ Matrix related utility functions
 #***************************************************************************************************
 
 from __future__ import annotations
-
 import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
@@ -1046,7 +1045,6 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
         evals, evecs = _np.linalg.eig(m)
         inv_evecs = _np.linalg.inv(evecs)
     return evecs, evals, inv_evecs
-
 
 
 def real_matrix_log(m: _np.ndarray, action_if_imaginary: Literal["raise", "warn", "ignore"] = "raise",

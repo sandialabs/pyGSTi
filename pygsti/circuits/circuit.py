@@ -2109,8 +2109,7 @@ class Circuit(object):
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
             else:
                 serial_lbls.extend(list(lbl.components) * lbl.reps)
-        tmp = Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
-        return tmp
+        return Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
@@ -2304,6 +2303,10 @@ class Circuit(object):
         every qubit, but it should not contain more than one gate on
         a qubit.
 
+        Passing j=-1 does not append a layer; it inserts before the
+        current layer at position -1, which means it inserts to the
+        second-to-last position. Pass j=len(self) to append.
+
         Parameters
         ----------
         circuit_layer : Label
@@ -2330,6 +2333,10 @@ class Circuit(object):
         The input layer does not need to contain a gate that acts on
         every qubit, but it should not contain more than one gate on
         a qubit.
+
+        Passing j=-1 does not append a layer; it inserts before the
+        current layer at position -1, which means it inserts to the
+        second-to-last position. Pass j=len(self) to append.
 
         Parameters
         ----------

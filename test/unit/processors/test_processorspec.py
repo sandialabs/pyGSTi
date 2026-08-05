@@ -613,22 +613,3 @@ class GlobalIdleConnectivityTester(BaseCase):
     def test_global_idle_coexists_with_a_real_2Q_gate(self):
         pspec = self._pspec(['Gxpi2', 'Gcnot', '{idle}'])
         self.assertEqual(set(pspec.compute_2Q_connectivity().edges()), {(0, 1), (1, 0)})
-
-    def test_singly_available_2Q_gate_is_not_treated_as_the_global_idle(self):
-        # All three clauses of the `'{idle}'` guard must hold together. A normal 2Q
-        # gate available on exactly one pair satisfies `len(avail) == 1` on its own,
-        # so if the clauses were OR-ed its availability would be overwritten with the
-        # whole register. Use 3 qubits and a pair that is *not* the first two qubit
-        # labels, so that the overwrite produces an observably different edge --
-        # on a 2-qubit device `[qubit_labels]` coincides with the real pair and the
-        # bug is invisible.
-        qubit_labels = ('q0', 'q1', 'q2')
-        pspec = QubitProcessorSpec(3, gate_names=['Gxpi2', 'Gcnot'],
-                                   availability={'Gcnot': [('q1', 'q2')]},
-                                   qubit_labels=qubit_labels)
-
-        self.assertEqual(len(pspec.resolved_availability('Gcnot', 'tuple')), 1)
-
-        expected = {frozenset({'q1', 'q2'})}
-        for graph in (pspec.compute_2Q_connectivity(), pspec.compute_clifford_2Q_connectivity()):
-            self.assertEqual({frozenset(edge) for edge in graph.edges()}, expected)

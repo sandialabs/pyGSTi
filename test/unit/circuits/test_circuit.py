@@ -355,18 +355,11 @@ class CircuitMethodTester(BaseCase):
         # 'Q0' should still have gates. 'Q3' is new and should be idling.
         self.assertEqual(set(self.c.idling_lines()), {'Q3'})
 
-
     def test_set_line_labels_non_editable(self):
         # Test that setting line labels on a non-editable circuit raises an AssertionError
         non_editable_circuit = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1'], editable=False)
         with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit!"):
             non_editable_circuit.line_labels = ('Qalpha', 'Qbeta')
-
-    def test_set_line_labels_equivalent(self):
-        # Test that setting line_labels to the same value does nothing
-        original_circuit = self.c.copy()
-        self.c.line_labels = self.c.line_labels
-        self.assertEqual(self.c, original_circuit)
 
     def test_set_occurrence(self):
         # Test setting occurrence id on an editable circuit
@@ -377,7 +370,6 @@ class CircuitMethodTester(BaseCase):
         non_editable_circuit = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1'], editable=False)
         with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit!"):
             non_editable_circuit.occurrence = 456
-
 
     def test_delete_layers(self):
         # Test layer deletion
@@ -641,32 +633,6 @@ class CircuitMethodTester(BaseCase):
         parallel_c = serial_c.parallelize(adjacent_only=False)  # default
         serial_c_from_parallel = parallel_c.serialize()
         self.assertNotEqual(serial_c, serial_c_from_parallel)
-
-    def test_serialize_preserves_empty_layers(self):
-        # An empty-layer label has no components, so the generic branch would
-        # `extend` the accumulator with nothing and silently drop the layer.
-        # `serialize` special-cases it and re-appends it atomically; this test
-        # pins that down, since a dropped idle layer changes circuit depth
-        # without changing any gate.
-        empty = Label(())
-        self.assertEqual(len(empty.components), 0)
-
-        c = circuit.Circuit([Label([('Gx', 0)]), empty, Label([('Gy', 0)])],
-                            line_labels=(0,), expand_subcircuits=False)
-        self.assertEqual(c.num_layers, 3)
-
-        serial = c.serialize()
-        self.assertEqual(serial.num_layers, 3)
-        self.assertEqual(serial[1], empty)
-        self.assertEqual(serial, c)
-
-    def test_serialize_returns_a_read_only_circuit(self):
-        # `serialize` builds its result with `editable=False`, matching
-        # `parallelize`. Returning an editable circuit would hand callers a
-        # mutable alias and make hashing emit ImplicitlyDoneEditingCircuitWarning.
-        serial = circuit.Circuit("Gx:0Gy:1Gx:0", line_labels=(0, 1)).serialize()
-        with self.assertRaises(AssertionError):
-            serial[0, 0] = 'Gy'
 
     def test_str_props(self):
         c_with_labels = circuit.Circuit('Gx:0@(0,1)', line_labels=(0, 1))

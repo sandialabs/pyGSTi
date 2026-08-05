@@ -52,7 +52,7 @@ from pygsti.tools import listtools as _lt
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
-from typing import Literal
+from typing import Union, Literal
 from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
 
 
@@ -249,7 +249,7 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value: Literal['tp', 'unitary'] | _GaugeGroup) -> None:
+    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]) -> None:
         """
         The default gauge group.
         """

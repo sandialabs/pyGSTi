@@ -716,3 +716,55 @@ class DepolarizeOpTester(BaseCase):
         v = (rho.T @ dop.to_dense() @ rho).item()
         u = float(v)
         self.assertAlmostEqual(u, 0.98)
+
+
+class ExpErrorgenOpToDenseHilbertTester(BaseCase):
+    """`ExpErrorgenOp.to_dense` must return a unitary when a Hilbert space is requested.
+
+    An error generator is never itself unitary -- it is the argument of the exponential, not
+    the result -- so `LindbladErrorgen.to_dense` rejects ``on_space='Hilbert'`` outright. The
+    cast down to a unitary therefore has to happen in `ExpErrorgenOp.to_dense`, after
+    exponentiating.
+    """
+
+    @staticmethod
+    def _exp_errorgen(elementary_errorgens, evotype):
+        errgen = op.LindbladErrorgen.from_elementary_errorgens(
+            elementary_errorgens, evotype=evotype, state_space=1)
+        return op.ExpErrorgenOp(errgen)
+
+    def test_hilbert_evotype_returns_unitary(self):
+        # 'statevec' has minimal_space == 'Hilbert', so both 'minimal' and 'Hilbert' must give
+        # back a 2x2 unitary rather than a 4x4 superoperator.
+        expop = self._exp_errorgen({('H', 'X'): 0.1}, 'statevec')
+        self.assertEqual(expop.evotype.minimal_space, 'Hilbert')
+
+        for on_space in ('minimal', 'Hilbert'):
+            mx = expop.to_dense(on_space)
+            self.assertEqual(mx.shape, (2, 2))
+            self.assertArraysAlmostEqual(mx.conj().T @ mx, np.identity(2))
+
+        # pyGSTi's H generator is H_P[rho] = -i[P, rho], so exp(0.1 * H_X) is the unitary
+        # exp(-0.1i X) = cos(0.1) I - i sin(0.1) X.
+        expected = np.array([[np.cos(0.1), -1j * np.sin(0.1)],
+                             [-1j * np.sin(0.1), np.cos(0.1)]])
+        self.assertArraysAlmostEqual(expop.to_dense('Hilbert'), expected)
+
+    def test_explicit_hilbert_schmidt_still_returns_superop(self):
+        expop = self._exp_errorgen({('H', 'X'): 0.1}, 'statevec')
+        self.assertEqual(expop.to_dense('HilbertSchmidt').shape, (4, 4))
+
+    def test_hilbert_schmidt_evotype_unaffected(self):
+        # 'densitymx' has minimal_space == 'HilbertSchmidt'; 'minimal' must stay a superoperator.
+        expop = self._exp_errorgen({('H', 'X'): 0.1}, 'densitymx')
+        self.assertEqual(expop.evotype.minimal_space, 'HilbertSchmidt')
+        self.assertEqual(expop.to_dense().shape, (4, 4))
+        self.assertEqual(expop.to_dense('minimal').shape, (4, 4))
+
+    def test_non_unitary_errorgen_raises_informative_error(self):
+        # A stochastic error generator does not exponentiate to a unitary, so asking for one
+        # must raise a helpful ValueError rather than an opaque failure.
+        expop = self._exp_errorgen({('S', 'X'): 0.1}, 'densitymx')
+        with self.assertRaises(ValueError) as ctx:
+            expop.to_dense('Hilbert')
+        self.assertIn('Could not convert to unitary', str(ctx.exception))
