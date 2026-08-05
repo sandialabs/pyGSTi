@@ -60,11 +60,8 @@ class ComputationalEffectProbabilityTester(BaseCase):
     Cover ``EffectRepComputational.probability`` for the pure-Python
     ``densitymx_slow`` evotype.
 
-    That method delegates to ``matrixtools.zvals_int64_probability``, an
-    O(2**n) sparse inner product used in place of densifying the effect to
-    length 4**n and taking a full dense dot product. These tests check the
-    optimized result against the dense computation it replaced, and against the
-    compiled ``densitymx`` evotype, which implements the same thing in C++.
+    Ensure that the O(2**nfactors) sparse algorithm computes the same results
+    as the O(4**nfactors) dense algorithm.
     """
 
     ZVAL_STRINGS = ['0', '1', '00', '01', '10', '11', '011', '101', '111']
