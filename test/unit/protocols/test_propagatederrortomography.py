@@ -1,25 +1,37 @@
 """
 Tests for pygsti.protocols.propagatederrortomography: the error-generator-rate coordinate
-enumeration and the first-order design matrix built from it.
+enumeration, the first-order design matrix built from it, and the protocol/solvers/results that
+fit rates from data against that model.
 """
 import tempfile
+import warnings
 
 import numpy as np
 from numpy.testing import assert_array_equal
 
 from pygsti.algorithms.randomcircuit import create_random_circuit
+from pygsti.baseobjs import Label
+from pygsti.circuits import Circuit
+from pygsti.data.datasetconstruction import simulate_data
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
+from pygsti.io import read_results_from_dir
 from pygsti.models import create_cloud_crosstalk_model
 from pygsti.processors import QubitProcessorSpec
+from pygsti.protocols.protocol import ProtocolData
 from pygsti.protocols.propagatederrortomography import (
     error_generator_rates,
     design_matrix_rank_diagnostics,
     sample_full_rank_design,
+    PropagatedErrorTomography,
     PropagatedErrorTomographyDesign,
+    PropagatedErrorTomographyResults,
     _circuit_design_block,
     _design_matrix,
     _hamiltonian_column_mask,
+    _multinomial_covariance,
+    _observed_expectations,
     _split_rows,
+    _whitener,
     _z_type_observables,
 )
 from pygsti.tools import errgenpolytools as _errgenpolytools
@@ -78,6 +90,13 @@ def _sample_circuits(pspec, depth, num_circuits, seed=0):
     return [create_random_circuit(pspec, depth, sampler='edgegrab', samplerargs=[0.5],
                                   rand_state=seed + i)
             for i in range(num_circuits)]
+
+
+def _protocol_data(circuits, model, num_samples=1, sample_error='none', seed=None):
+    """A `ProtocolData` pairing `circuits` with a `DataSet` simulated from `model`."""
+    design = PropagatedErrorTomographyDesign.from_circuits(circuits)
+    ds = simulate_data(model, circuits, num_samples, sample_error, seed=seed)
+    return ProtocolData(design, ds)
 
 
 def _order1_reference(propagator, circuit, observables):
@@ -426,3 +445,299 @@ class SampleFullRankDesignTester(BaseCase):
         self.assertIn('max_circuits', max_circuits_message)
         self.assertNotIn('gauge freedom', max_circuits_message)
         self.assertNotEqual(saturation_message, max_circuits_message)
+
+
+class ObservedExpectationsTester(BaseCase):
+    def test_bit_ordering_against_independent_oracle(self):
+        """On a noiseless 3-qubit model, `_observed_expectations` reproduces
+        `stabilizer_pauli_expectation` (an independent oracle) for every circuit and observable,
+        to 1e-12, including a weight-2 observable on a circuit whose action (qubit 0 flipped,
+        qubits 1 and 2 untouched) is not symmetric under qubit permutation -- so a transposed
+        bit-to-qubit convention could not pass by accident."""
+        num_qubits = 3
+        qubit_labels = tuple(range(num_qubits))
+        pspec, model = _paper_shaped_ansatz(num_qubits, seed=8, scale=0.0, with_spam=False)
+        circuits = _sample_circuits(pspec, depth=4, num_circuits=4, seed=81)
+        asymmetric = Circuit([Label('Gxpi2', 0), Label('Gxpi2', 0)], line_labels=qubit_labels)
+        circuits = circuits + [asymmetric]
+        observables = _z_type_observables(qubit_labels, max_weight=2)
+        data = _protocol_data(circuits, model, sample_error='none')
+
+        observed, _, _ = _observed_expectations(data.dataset, circuits, observables, qubit_labels)
+        for i, circuit in enumerate(circuits):
+            tableau = circuit.convert_to_stim_tableau()
+            oracle = np.array([_errgenproptools.stabilizer_pauli_expectation(tableau, obs)
+                               for obs in observables])
+            self.assertLess(np.max(np.abs(observed[i] - oracle)), 1e-12)
+
+
+class MultinomialCovarianceTester(BaseCase):
+    def test_deterministic_outcome_variance(self):
+        """For a circuit whose outcome is deterministic, every diagonal entry of
+        `_multinomial_covariance` equals `2 / (N + 2)**2` to 1e-15, pinning the add-one
+        smoothing convention exactly, including the `M2[j,j] == N/(N+2)` detail."""
+        signs = np.array([[1., -1., 1., -1.],
+                          [1., 1., -1., -1.],
+                          [1., -1., -1., 1.]])
+        num_outcomes = signs.shape[1]
+        for deterministic_outcome in range(num_outcomes):
+            for total in (10., 137., 10000.):
+                counts = np.zeros(num_outcomes)
+                counts[deterministic_outcome] = total
+                cov = _multinomial_covariance(signs, counts, total)
+                expected = 2. / (total + 2) ** 2
+                self.assertTrue(np.allclose(np.diag(cov), expected, atol=1e-15, rtol=0))
+
+
+class WhitenerTester(BaseCase):
+    def test_is_genuine_inverse_square_root(self):
+        """For a PSD covariance with a known eigendecomposition, `W.T @ cov @ W` is the
+        identity on the non-clipped subspace to 1e-10 -- the check that catches
+        `matrixtools.eigendecomposition`'s reversed `(evecs, evals, inv_evecs)` return order."""
+        rng = np.random.default_rng(0)
+        q, _ = np.linalg.qr(rng.normal(size=(4, 4)))
+        eigenvalues = np.array([5.0, 3.0, 1.0, 1e-14])
+        cov = q @ np.diag(eigenvalues) @ q.T
+        cov = (cov + cov.T) / 2  # exactly symmetric in floating point
+
+        w = _whitener(cov, tol=1e-12)
+        whitened = w.T @ cov @ w
+        non_clipped = q[:, :3]
+        projected = non_clipped.T @ whitened @ non_clipped
+        self.assertTrue(np.allclose(projected, np.eye(3), atol=1e-10))
+
+
+class PropagatedErrorTomographyTester(BaseCase):
+    def test_recovery_is_first_order_accurate(self):
+        """On a gauge-free ansatz (`spectators=False`) and noiseless infinite-shot data,
+        recovered rates match truth to a bound consistent with `O(h^2, s^2)`, not to machine
+        precision. Asserts its own precondition: both design-matrix blocks are full rank."""
+        pspec, model = _paper_shaped_ansatz(3, seed=2, spectators=False)
+        design, diagnostics = sample_full_rank_design(pspec, model, depth=4, batch_size=10,
+                                                      samplerargs=[0.5], seed=123)
+        self.assertEqual(diagnostics['hamiltonian']['deficit'], 0)
+        self.assertEqual(diagnostics['stochastic']['deficit'], 0)
+
+        circuits = list(design.all_circuits_needing_data)
+        data = _protocol_data(circuits, model, sample_error='none')
+        results = PropagatedErrorTomography(model, weighting='none').run(data)
+
+        truth = error_generator_rates(model)
+        truth_vec = np.array([truth[lbl] for lbl in results.rate_labels])
+        error = np.max(np.abs(results.rates - truth_vec))
+        self.assertGreater(error, 1e-7)
+        self.assertLess(error, 1e-3)
+
+    def test_quadratic_convergence(self):
+        """Shrinking the ansatz's error scale 10x shrinks the maximum recovery error by a
+        factor between 50 and 200 -- the signature of a correct first-order model that a
+        one-sided recovery-error bound alone cannot distinguish from a merely-approximate
+        one."""
+        pspec, model = _paper_shaped_ansatz(3, seed=2, spectators=False)
+        design, _ = sample_full_rank_design(pspec, model, depth=4, batch_size=10,
+                                            samplerargs=[0.5], seed=123)
+        circuits = list(design.all_circuits_needing_data)
+
+        errors = {}
+        for scale in (1.0, 0.1):
+            _, scaled_model = _paper_shaped_ansatz(3, seed=2, scale=scale, spectators=False)
+            data = _protocol_data(circuits, scaled_model, sample_error='none')
+            results = PropagatedErrorTomography(scaled_model, weighting='none').run(data)
+            truth = error_generator_rates(scaled_model)
+            truth_vec = np.array([truth[lbl] for lbl in results.rate_labels])
+            errors[scale] = np.max(np.abs(results.rates - truth_vec))
+
+        ratio = errors[1.0] / errors[0.1]
+        self.assertGreater(ratio, 50)
+        self.assertLess(ratio, 200)
+
+    def test_nnls_output_is_non_negative(self):
+        """Every stochastic-coordinate rate is >= 0, on data noisy enough that an
+        unconstrained least-squares fit would go negative."""
+        pspec, model = _paper_shaped_ansatz(2, seed=9)
+        circuits = _sample_circuits(pspec, depth=4, num_circuits=30, seed=90)
+        data = _protocol_data(circuits, model, num_samples=200, sample_error='multinomial', seed=3)
+        results = PropagatedErrorTomography(model, ill_posed_action='truncate-quiet').run(data)
+
+        rate_labels = list(error_generator_rates(model))
+        is_h_col = _hamiltonian_column_mask(rate_labels)
+        self.assertTrue(np.all(results.rates[~is_h_col] >= 0))
+        self.assertTrue(np.any(results.rates[~is_h_col] == 0))
+        # ^ Some coordinates pinned at the non-negativity boundary confirms the constraint is
+        #   actually active on this data, not merely coincidentally satisfied.
+
+    def test_ill_posed_action_behaviors(self):
+        """On the default (`spectators=True`) ansatz's rank-deficient Hamiltonian block,
+        each `ill_posed_action` does what it says: 'error' raises, 'warn' warns and returns a
+        full-length result, 'truncate-loud' warns, 'truncate-quiet' warns about nothing."""
+        pspec, model = _paper_shaped_ansatz(4, seed=1)
+        circuits = _sample_circuits(pspec, depth=6, num_circuits=60, seed=80)
+        data = _protocol_data(circuits, model, sample_error='none')
+        num_rates = len(error_generator_rates(model))
+
+        with self.assertRaises(ValueError):
+            PropagatedErrorTomography(model, ill_posed_action='error').run(data)
+
+        with self.assertWarns(UserWarning):
+            results = PropagatedErrorTomography(model, ill_posed_action='warn').run(data)
+        self.assertEqual(results.rates.shape, (num_rates,))
+
+        with self.assertWarns(UserWarning):
+            PropagatedErrorTomography(model, ill_posed_action='truncate-loud').run(data)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            PropagatedErrorTomography(model, ill_posed_action='truncate-quiet').run(data)
+        self.assertEqual(len(caught), 0)
+
+    def test_hamiltonian_uncertainty_lives_on_the_solved_subspace(self):
+        """The reported Hamiltonian 1-sigma values describe the subspace the estimate was
+        actually solved on. The whitened block's covariance is `V_r diag(s^-2) V_r^T` over the
+        `solve_rank` retained directions, and the rows of `V_r` are orthonormal, so the sum of
+        the squared uncertainties is exactly `sum(1/s_k**2)` over those directions -- a closed
+        form that a covariance built on any other set of directions cannot match."""
+        pspec, model = _paper_shaped_ansatz(3, seed=4)
+        circuits = _sample_circuits(pspec, depth=5, num_circuits=40, seed=44)
+        data = _protocol_data(circuits, model, sample_error='none')
+        rate_labels = list(error_generator_rates(model))
+        is_h_col = _hamiltonian_column_mask(rate_labels)
+
+        default = PropagatedErrorTomography(model, ill_posed_action='truncate-quiet').run(data)
+        default_block = default.diagnostics['hamiltonian']
+        # A `rank_tol` well inside the retained spectrum, so the solved subspace is set by the
+        # caller's tolerance rather than by the natural gauge deficit. This is the regime that
+        # distinguishes a covariance restricted to the solved subspace from one built at some
+        # other cutoff; on the default tolerance the two coincide.
+        retained = default_block['singular_values'][:default_block['solve_rank']]
+        coarse_tol = float(np.sqrt(retained[len(retained) // 2] * retained[len(retained) // 2 - 1]))
+
+        for action, rank_tol in (('truncate-quiet', None), ('truncate-quiet', coarse_tol),
+                                 ('warn', None), ('warn', coarse_tol)):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                results = PropagatedErrorTomography(model, ill_posed_action=action,
+                                                    rank_tol=rank_tol).run(data)
+            block = results.diagnostics['hamiltonian']
+            rank = block['solve_rank']
+            self.assertGreater(rank, 0)
+            total = np.sum(results.uncertainties[is_h_col] ** 2)
+            reference = np.sum(block['singular_values'][:rank] ** -2.)
+            self.assertAlmostEqual(total / reference, 1.0, places=8)
+
+    def test_hamiltonian_uncertainty_responds_to_rank_tol(self):
+        """Raising `rank_tol` drops directions from the estimate, and each dropped direction
+        removes a positive-semidefinite rank-1 term from the covariance: every coordinate's
+        reported uncertainty weakly shrinks, and at least one strictly shrinks."""
+        pspec, model = _paper_shaped_ansatz(3, seed=4)
+        circuits = _sample_circuits(pspec, depth=5, num_circuits=40, seed=44)
+        data = _protocol_data(circuits, model, sample_error='none')
+
+        loose = PropagatedErrorTomography(model, ill_posed_action='truncate-quiet').run(data)
+        loose_rank = loose.diagnostics['hamiltonian']['solve_rank']
+        # Just above the smallest retained singular value, so at least one more direction goes.
+        rank_tol = 1.5 * loose.diagnostics['hamiltonian']['singular_values'][loose_rank - 1]
+        tight = PropagatedErrorTomography(model, ill_posed_action='truncate-quiet',
+                                          rank_tol=rank_tol).run(data)
+        self.assertLess(tight.diagnostics['hamiltonian']['solve_rank'], loose_rank)
+
+        rate_labels = list(error_generator_rates(model))
+        is_h_col = _hamiltonian_column_mask(rate_labels)
+        loose_h, tight_h = loose.uncertainties[is_h_col], tight.uncertainties[is_h_col]
+        self.assertTrue(np.all(tight_h <= loose_h + 1e-12))
+        self.assertTrue(np.any(tight_h < loose_h - 1e-12))
+
+    def test_weighting_agreement(self):
+        """`weighting='none'` and `weighting='multinomial'` agree to within the reported
+        multinomial-weighted uncertainty, on well-conditioned, high-shot data."""
+        pspec, model = _paper_shaped_ansatz(3, seed=2, spectators=False)
+        design, diagnostics = sample_full_rank_design(pspec, model, depth=4, batch_size=10,
+                                                      samplerargs=[0.5], seed=123)
+        self.assertEqual(diagnostics['hamiltonian']['deficit'], 0)
+        self.assertEqual(diagnostics['stochastic']['deficit'], 0)
+        circuits = list(design.all_circuits_needing_data)
+        data = _protocol_data(circuits, model, num_samples=100000, sample_error='multinomial',
+                              seed=7)
+
+        none_results = PropagatedErrorTomography(model, weighting='none').run(data)
+        multi_results = PropagatedErrorTomography(model, weighting='multinomial').run(data)
+        # Precondition: no coordinate is pinned at the NNLS non-negativity boundary, where the
+        # reported uncertainty is exactly 0.0 and "agrees to within N * uncertainty" is
+        # unsatisfiable even for exact agreement (a pinned coordinate's sampling distribution is
+        # one-sided, not the Gaussian this bound assumes).
+        self.assertTrue(np.all(multi_results.uncertainties > 0))
+        diff = np.abs(none_results.rates - multi_results.rates)
+        self.assertTrue(np.all(diff < 5 * multi_results.uncertainties))
+
+    def test_k_validation(self):
+        """`k=2` and `k=3` raise `NotImplementedError`; `k=0` and `k=4` raise `ValueError`;
+        `k=1` constructs."""
+        _, model = _paper_shaped_ansatz(2, with_spam=False)
+        PropagatedErrorTomography(model, k=1)
+        for k in (2, 3):
+            with self.assertRaises(NotImplementedError):
+                PropagatedErrorTomography(model, k=k)
+        for k in (0, 4):
+            with self.assertRaises(ValueError):
+                PropagatedErrorTomography(model, k=k)
+
+    def test_weighting_and_ill_posed_action_validation(self):
+        """An invalid `weighting` or `ill_posed_action` raises `ValueError` in `__init__`."""
+        _, model = _paper_shaped_ansatz(2, with_spam=False)
+        with self.assertRaises(ValueError):
+            PropagatedErrorTomography(model, weighting='bogus')
+        with self.assertRaises(ValueError):
+            PropagatedErrorTomography(model, ill_posed_action='bogus')
+
+    def test_importable_from_package(self):
+        """`PropagatedErrorTomography` and `PropagatedErrorTomographyResults` are
+        importable from `pygsti.protocols`, and are the same classes this module imports."""
+        from pygsti.protocols import PropagatedErrorTomography as pkg_pet
+        from pygsti.protocols import PropagatedErrorTomographyResults as pkg_pet_results
+        self.assertIs(pkg_pet, PropagatedErrorTomography)
+        self.assertIs(pkg_pet_results, PropagatedErrorTomographyResults)
+
+
+class PropagatedErrorTomographyResultsTester(BaseCase):
+    def test_to_model_round_trips(self):
+        """`to_model()`'s error-generator coefficients, read back through
+        `error_generator_rates`, equal `rates` at the `rate_labels` coordinates to 1e-12."""
+        pspec, model = _paper_shaped_ansatz(2, seed=11)
+        circuits = _sample_circuits(pspec, depth=4, num_circuits=20, seed=91)
+        data = _protocol_data(circuits, model, sample_error='none')
+        results = PropagatedErrorTomography(model, ill_posed_action='truncate-quiet').run(data)
+
+        fit_model = results.to_model()
+        readback = error_generator_rates(fit_model)
+        for label, rate in zip(results.rate_labels, results.rates):
+            self.assertLess(abs(readback[label] - rate), 1e-12)
+
+    def test_rates_dataframe_columns(self):
+        """`rates_dataframe` has the fixed column order, one row per coordinate, in
+        `rate_labels` order."""
+        pspec, model = _paper_shaped_ansatz(2, seed=11)
+        circuits = _sample_circuits(pspec, depth=4, num_circuits=20, seed=91)
+        data = _protocol_data(circuits, model, sample_error='none')
+        results = PropagatedErrorTomography(model, ill_posed_action='truncate-quiet').run(data)
+
+        df = results.rates_dataframe()
+        self.assertEqual(list(df.columns), ['gate', 'errorgen', 'type', 'rate', 'uncertainty'])
+        self.assertEqual(len(df), len(results.rate_labels))
+        assert_array_equal(df['rate'].to_numpy(), results.rates)
+        self.assertEqual(list(df['gate']), [str(lbl) for lbl, _ in results.rate_labels])
+
+    def test_serialization_round_trip(self):
+        """`write` then `read_results_from_dir` reproduces `rates`, `uncertainties` and
+        `rate_labels`."""
+        pspec, model = _paper_shaped_ansatz(2, seed=11)
+        circuits = _sample_circuits(pspec, depth=4, num_circuits=20, seed=91)
+        data = _protocol_data(circuits, model, sample_error='none')
+        results = PropagatedErrorTomography(model, ill_posed_action='truncate-quiet').run(data)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            results.write(tmpdir)
+            reloaded_dir = read_results_from_dir(tmpdir)
+        reloaded = reloaded_dir.for_protocol[results.name]
+
+        assert_array_equal(reloaded.rates, results.rates)
+        assert_array_equal(reloaded.uncertainties, results.uncertainties)
+        self.assertEqual(reloaded.rate_labels, results.rate_labels)
