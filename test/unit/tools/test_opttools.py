@@ -43,9 +43,16 @@ class TestTimedBlock(BaseCase):
         self.assertTrue(isinstance(timeDict['time'], list), "time was not appended to list")
         self.assertTrue(isinstance(timeDict['time'][0], numbers.Number), "time is not numeric")
 
-    # The accuracy of the reported duration is asserted against wall-clock time,
-    # which is not reliable under load; that test lives in
-    # test/performance/test_opttools_timing.py.
+    def test_timer(self):
+
+        duration = 0.5
+        timeDict = {}
+        with opt.timed_block('time', timeDict):
+            sleep(duration)
+        lt_tol = 1e-3
+        self.assertGreaterEqual(timeDict['time'], duration-lt_tol) #sometimes sleeps lasts slightly less than specified duration.
+        tolerance = 0.2  # this should deliberately be large, for repeatability
+        self.assertLessEqual(timeDict['time'], duration + tolerance, "timed block result is greater than {} seconds off".format(tolerance))
 
 
 class TestTimeHash(BaseCase):
