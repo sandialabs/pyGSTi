@@ -75,9 +75,9 @@ class EffectRepComputational(EffectRep):
         return (EffectRepComputational, (self.zvals, self.basis, self.state_space))
 
     def probability(self, state):
-        scratch = _np.empty(self.state_space.dim, 'd')
-        Edense = self.to_dense('HilbertSchmidt', scratch)
-        return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
+        # Only O(2**nfactors) nonzeros so use the sparse matvec instead of full dense
+        # matvec which is O(4**nfactors).
+        return _mt.zvals_int64_probability(self.zvals_int, self.nfactors, state.data, self.abs_elval)
 
     def to_dense(self, on_space: SpaceT = 'minimal', outvec=None):
         if on_space not in ('minimal', 'HilbertSchmidt'):

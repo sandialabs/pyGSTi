@@ -10,11 +10,16 @@ Matrix related utility functions
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
 import functools as _functools
 import itertools as _itertools
 import warnings as _warnings
 
-from typing import Protocol, Any, runtime_checkable, TypeVar, Optional, Union, Literal
+from typing import (Protocol, Any, runtime_checkable, TypeVar, Optional, Union, Literal,
+                    Callable, Sequence, TYPE_CHECKING)
+
+if TYPE_CHECKING:
+    from pygsti.baseobjs.basis import Basis
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -30,6 +35,9 @@ try:
 except ImportError:
     _fastcalc = None
 
+# Type alias for functions that accept either a dense numpy array or a scipy sparse matrix.
+MatrixLike = Union[_np.ndarray, _sps.spmatrix]
+
 #EXPM_DEFAULT_TOL = 1e-7
 EXPM_DEFAULT_TOL = 2**-53  # Scipy default
 
@@ -42,7 +50,7 @@ BLAS_FUNCS = {
     }
 }
 
-def gram_matrix(m, adjoint=False):
+def gram_matrix(m: _np.ndarray, adjoint: bool = False) -> _np.ndarray:
     """
     If adjoint=False, then return m.T.conj() @ m, computed in a more efficient way.
 
@@ -221,7 +229,7 @@ def induced_projector(mx: _np.ndarray, tol: float = 1e-12, *, require_real: bool
         )
 
 
-def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
+def is_pos_def(mx: _np.ndarray, tol: float = 1e-9, attempt_cholesky: bool = False) -> bool:
     """
     Test whether mx is a positive-definite matrix.
 
@@ -250,7 +258,7 @@ def is_pos_def(mx, tol=1e-9, attempt_cholesky=False):
     return all([ev > -tol for ev in evals])
 
 
-def is_valid_density_mx(mx, tol=1e-9):
+def is_valid_density_mx(mx: _np.ndarray, tol: float = 1e-9) -> bool:
     """
     Test whether mx is a valid density matrix (hermitian, positive-definite, and unit trace).
 
@@ -288,7 +296,7 @@ def pivot_indices_after_deflation(m_fixed: _np.ndarray, m: _np.ndarray) -> _np.n
     return J
 
 
-def nullspace(m, tol=1e-7):
+def nullspace(m: _np.ndarray, tol: float = 1e-7) -> _np.ndarray:
     """
     Compute the nullspace of a matrix.
 
@@ -309,7 +317,7 @@ def nullspace(m, tol=1e-7):
     return vh[rank:].T.conjugate()
 
 
-def nullspace_qr(m, tol=1e-7):
+def nullspace_qr(m: _np.ndarray, tol: float = 1e-7) -> _np.ndarray:
     """
     Compute the nullspace of a matrix using the QR decomposition.
 
@@ -342,7 +350,7 @@ def nullspace_qr(m, tol=1e-7):
     return q[:, rank:]
 
 
-def nice_nullspace(m, tol=1e-7, orthogonalize=False):
+def nice_nullspace(m: _np.ndarray, tol: float = 1e-7, orthogonalize: bool = False) -> _np.ndarray:
     """
     Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
 
@@ -385,7 +393,9 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     return ret
 
 
-def normalize_columns(m, return_norms=False, ord=None):
+def normalize_columns(m: MatrixLike, return_norms: bool = False,
+                      ord: Optional[Union[int, list, _np.ndarray]] = None
+                      ) -> Union[MatrixLike, tuple[MatrixLike, _np.ndarray]]:
     """
     Normalizes the columns of a matrix.
 
@@ -418,7 +428,7 @@ def normalize_columns(m, return_norms=False, ord=None):
     return (normalized_m, norms) if return_norms else normalized_m
 
 
-def column_norms(m, ord=None):
+def column_norms(m: MatrixLike, ord: Optional[Union[int, list, _np.ndarray]] = None) -> _np.ndarray:
     """
     Compute the norms of the columns of a matrix.
 
@@ -450,7 +460,7 @@ def column_norms(m, ord=None):
     return norms
 
 
-def scale_columns(m, scale_values):
+def scale_columns(m: MatrixLike, scale_values: _np.ndarray) -> MatrixLike:
     """
     Scale each column of a matrix by a given value.
 
@@ -482,7 +492,7 @@ def scale_columns(m, scale_values):
         return m * scale_values[None, :]
 
 
-def columns_are_orthogonal(m, tol=1e-7):
+def columns_are_orthogonal(m: _np.ndarray, tol: float = 1e-7) -> bool:
     """
     Checks whether a matrix contains orthogonal columns.
 
@@ -509,7 +519,7 @@ def columns_are_orthogonal(m, tol=1e-7):
     return bool(_np.linalg.norm(check) / check.size < tol)
 
 
-def columns_are_orthonormal(m, tol=1e-7):
+def columns_are_orthonormal(m: _np.ndarray, tol: float = 1e-7) -> bool:
     """
     Checks whether a matrix contains orthogonal columns.
 
@@ -536,7 +546,8 @@ def columns_are_orthonormal(m, tol=1e-7):
     return bool(_np.linalg.norm(check) / check.size < tol)
 
 
-def independent_columns(m, initial_independent_cols=None, tol=1e-7):
+def independent_columns(m: MatrixLike, initial_independent_cols: Optional[MatrixLike] = None,
+                        tol: float = 1e-7) -> list:
     """
     Computes the indices of the linearly-independent columns in a matrix.
 
@@ -604,7 +615,7 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
     return indep_cols
 
 
-def pinv_of_matrix_with_orthogonal_columns(m):
+def pinv_of_matrix_with_orthogonal_columns(m: _np.ndarray) -> _np.ndarray:
     """
     Return the matrix "pinv_m" so m @ pinvm and pinv_m @ m are orthogonal projectors
     onto subspaces of dimension rank(m).
@@ -622,7 +633,7 @@ def pinv_of_matrix_with_orthogonal_columns(m):
     return m_with_scaled_cols.T
 
 
-def matrix_sign(m):
+def matrix_sign(m: _np.ndarray) -> _np.ndarray:
     """
     Compute the matrix s = sign(m). The eigenvectors of s are the same as those of m.
     The eigenvalues of s are +/- 1, corresponding to the signs of m's eigenvalues.
@@ -683,7 +694,7 @@ def matrix_sign(m):
 
 
 
-def print_mx(mx, width=9, prec=4, withbrackets=False):
+def print_mx(mx: _np.ndarray, width: int = 9, prec: int = 4, withbrackets: bool = False) -> None:
     """
     Print matrix in pretty format.
 
@@ -712,7 +723,7 @@ def print_mx(mx, width=9, prec=4, withbrackets=False):
     print(mx_to_string(mx, width, prec, withbrackets))
 
 
-def mx_to_string(m, width=9, prec=4, withbrackets=False):
+def mx_to_string(m: _np.ndarray, width: int = 9, prec: int = 4, withbrackets: bool = False) -> str:
     """
     Generate a "pretty-format" string for a matrix.
 
@@ -757,7 +768,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     return s
 
 
-def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
+def mx_to_string_complex(m: _np.ndarray, real_width: int = 9, im_width: int = 9, prec: int = 4) -> str:
     """
     Generate a "pretty-format" string for a complex-valued matrix.
 
@@ -792,7 +803,7 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     return s
 
 
-def unitary_superoperator_matrix_log(m, mx_basis):
+def unitary_superoperator_matrix_log(m: _np.ndarray, mx_basis: Union[str, Basis]) -> _np.ndarray:
     """
     Construct the logarithm of superoperator matrix `m`.
 
@@ -834,7 +845,7 @@ def unitary_superoperator_matrix_log(m, mx_basis):
     return logM
 
 
-def near_identity_matrix_log(m, tol=1e-8):
+def near_identity_matrix_log(m: _np.ndarray, tol: float = 1e-8) -> _np.ndarray:
     """
     Construct the logarithm of superoperator matrix `m` that is near the identity.
 
@@ -867,7 +878,8 @@ def near_identity_matrix_log(m, tol=1e-8):
     return logM
 
 
-def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
+def approximate_matrix_log(m: _np.ndarray, target_logm: _np.ndarray,
+                           target_weight: float = 10.0, tol: float = 1e-6) -> _np.ndarray:
     """
     Construct an approximate logarithm of superoperator matrix `m` that is real and near the `target_logm`.
 
@@ -945,7 +957,8 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
     return logM
 
 
-def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assume_normal: bool = False):
+def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None,
+                assume_normal: bool = False) -> _np.ndarray:
     if assume_hermitian is None:
         assume_hermitian = is_hermitian(m)
     if assume_hermitian:
@@ -965,7 +978,8 @@ def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None, assu
 
 
 def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None,
-                        assume_normal: bool = False, tol: float = 1e-12):
+                        assume_normal: bool = False, tol: float = 1e-12
+                        ) -> tuple[_np.ndarray, _np.ndarray, _np.ndarray]:
     """
     Eigendecompose a square matrix as `m = evecs @ diag(evals) @ inv_evecs`.
 
@@ -1033,7 +1047,8 @@ def eigendecomposition(m: _np.ndarray, *, assume_hermitian: Optional[bool] = Non
     return evecs, evals, inv_evecs
 
 
-def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
+def real_matrix_log(m: _np.ndarray, action_if_imaginary: Literal["raise", "warn", "ignore"] = "raise",
+                    tol: float = 1e-8) -> _np.ndarray:
     """
     Construct a *real* logarithm of real matrix `m`.
 
@@ -1141,7 +1156,7 @@ def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
 
 ## ------------------------ Erik : Matrix tools that Tim has moved here -----------
 
-def column_basis_vector(i, dim):
+def column_basis_vector(i: int, dim: int) -> _np.ndarray:
     """
     Returns the ith standard basis vector in dimension dim.
 
@@ -1164,7 +1179,7 @@ def column_basis_vector(i, dim):
     return output
 
 
-def vec(matrix_in):
+def vec(matrix_in: _np.ndarray) -> list:
     """
     Stacks the columns of a matrix to return a vector
 
@@ -1179,7 +1194,7 @@ def vec(matrix_in):
     return [b for a in _np.transpose(matrix_in) for b in a]
 
 
-def norm1(m):
+def norm1(m: _np.ndarray) -> float:
     """
     Returns the Schatten 1-norm of a matrix
 
@@ -1199,7 +1214,7 @@ def norm1(m):
 
 # Riley note: I'd like to rewrite this, but I don't want to mess with reproducibility
 # issues. For now I've just made it a teeny bit more efficient.
-def random_hermitian(dim):
+def random_hermitian(dim: int) -> _np.ndarray:
     """
     Generates a random Hermitian matrix
 
@@ -1223,7 +1238,7 @@ def random_hermitian(dim):
     return c / my_norm
 
 
-def norm1to1(operator, num_samples=10000, mx_basis="gm"):
+def norm1to1(operator: _np.ndarray, num_samples: int = 10000, mx_basis: Union[str, Basis] = "gm") -> float:
     """
     The Hermitian 1-to-1 norm of a superoperator represented in the standard basis.
 
@@ -1259,7 +1274,7 @@ def norm1to1(operator, num_samples=10000, mx_basis="gm"):
 ## ------------------------ General utility fns -----------------------------------
 
 
-def complex_compare(a, b):
+def complex_compare(a: complex, b: complex) -> int:
     """
     Comparison function for complex numbers that compares real part, then imaginary part.
 
@@ -1284,7 +1299,7 @@ def complex_compare(a, b):
     else: return 0
 
 
-def prime_factors(n):
+def prime_factors(n: int) -> list:
     """
     GCD algorithm to produce prime factors of `n`
 
@@ -1310,8 +1325,10 @@ def prime_factors(n):
     return factors
 
 
-def minweight_match(a, b, metricfn=None, return_pairs=True,
-                    pass_indices_to_metricfn=False):
+def minweight_match(a: Union[list, _np.ndarray], b: Union[list, _np.ndarray],
+                    metricfn: Optional[Callable] = None, return_pairs: bool = True,
+                    pass_indices_to_metricfn: bool = False
+                    ) -> Union[_np.ndarray, tuple[_np.ndarray, list]]:
     """
     Matches the elements of two vectors, `a` and `b` by minimizing the weight between them.
 
@@ -1374,8 +1391,8 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
         return min_weights
 
 
-def minweight_match_realmxeigs(a, b, metricfn=None,
-                               pass_indices_to_metricfn=False, eps=1e-9):
+def minweight_match_realmxeigs(a: _np.ndarray, b: _np.ndarray, metricfn: Optional[Callable] = None,
+                               pass_indices_to_metricfn: bool = False, eps: float = 1e-9) -> list:
     """
     Matches the elements of `a` and `b`, whose elements are assumed to either real or one-half of a conjugate pair.
 
@@ -1501,7 +1518,7 @@ def minweight_match_realmxeigs(a, b, metricfn=None,
     return sorted(pairs, key=lambda x: x[0])  # sort by a's index
 
 
-def _fas(a, inds, rhs, add=False):
+def _fas(a: _np.ndarray, inds: Sequence, rhs: _np.ndarray, add: bool = False) -> _np.ndarray:
     """
     Fancy Assignment, equivalent to `a[*inds] = rhs` but with
     the elements of inds (allowed to be integers, slices, or
@@ -1517,9 +1534,9 @@ def _fas(a, inds, rhs, add=False):
     # one or more index-lists
     if all([isinstance(i, (int, slice)) for i in inds]) or len(inds) == 1:
         if add:
-            a[inds] += rhs  # all integers or slices behave nicely
+            a[inds] += rhs
         else:
-            a[inds] = rhs  # all integers or slices behave nicely
+            a[inds]  = rhs
     else:
         #convert each dimension's index to a list, take a product of
         # these lists, and flatten the right hand side to get the
@@ -1607,7 +1624,7 @@ def _fas(a, inds, rhs, add=False):
     return a
 
 
-def _findx_shape(a, inds):
+def _findx_shape(a: _np.ndarray, inds: Sequence) -> list:
     """ Returns the shape of a fancy-indexed array (`a[*inds].shape`) """
     shape = []
     for ii, N in enumerate(a.shape):
@@ -1620,7 +1637,7 @@ def _findx_shape(a, inds):
     return shape
 
 
-def _findx(a, inds, always_copy=False):
+def _findx(a: _np.ndarray, inds: Sequence, always_copy: bool = False) -> _np.ndarray:
     """
     Fancy Indexing, equivalent to `a[*inds].copy()` but with
     the elements of inds (allowed to be integers, slices, or
@@ -1662,7 +1679,7 @@ def _findx(a, inds, always_copy=False):
         return a_inds
 
 
-def safe_norm(a, part=None):
+def safe_norm(a: MatrixLike, part: Optional[Literal['real', 'imag']] = None) -> float:
     """
     Get the frobenius norm of a matrix or vector, `a`, when it is either a dense array or a sparse matrix.
 
@@ -1690,7 +1707,7 @@ def safe_norm(a, part=None):
     # could also use _spsl.norm(A)
 
 
-def safe_onenorm(a):
+def safe_onenorm(a: MatrixLike) -> float:
     """
     Computes the 1-norm of the dense or sparse matrix `a`.
 
@@ -1709,7 +1726,7 @@ def safe_onenorm(a):
         return _np.linalg.norm(a, 1)
 
 
-def csr_sum_indices(csr_matrices):
+def csr_sum_indices(csr_matrices: list) -> tuple[list, _np.ndarray, _np.ndarray, int]:
     """
     Precomputes the indices needed to sum a set of CSR sparse matrices.
 
@@ -1766,7 +1783,7 @@ def csr_sum_indices(csr_matrices):
     return csr_sum_array, indptr, indices, N
 
 
-def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
+def csr_sum(data: _np.ndarray, coeffs: Sequence, csr_mxs: Sequence, csr_sum_indices: Sequence) -> None:
     """
     Accelerated summation of several CSR-format sparse matrices.
 
@@ -1804,7 +1821,7 @@ def csr_sum(data, coeffs, csr_mxs, csr_sum_indices):
         data[inds] += coeff * mx.data
 
 
-def csr_sum_flat_indices(csr_matrices):
+def csr_sum_flat_indices(csr_matrices: list) -> tuple:
     """
     Precomputes quantities allowing fast computation of linear combinations of CSR sparse matrices.
 
@@ -1851,7 +1868,8 @@ def csr_sum_flat_indices(csr_matrices):
 
 
 if _fastcalc is None:
-    def csr_sum_flat(data, coeffs, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr):
+    def csr_sum_flat(data: _np.ndarray, coeffs: _np.ndarray, flat_dest_index_array: _np.ndarray,
+                     flat_csr_mx_data: _np.ndarray, mx_nnz_indptr: _np.ndarray) -> None:
         """
         Computation of the summation of several CSR-format sparse matrices.
 
@@ -1893,7 +1911,8 @@ if _fastcalc is None:
             for i in range(mx_nnz_indptr[iMx], mx_nnz_indptr[iMx + 1]):
                 data[flat_dest_index_array[i]] += coeff * flat_csr_mx_data[i]
 else:
-    def csr_sum_flat(data, coeffs, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr):
+    def csr_sum_flat(data: _np.ndarray, coeffs: _np.ndarray, flat_dest_index_array: _np.ndarray,
+                     flat_csr_mx_data: _np.ndarray, mx_nnz_indptr: _np.ndarray) -> None:
         """
         Computes the summation of several CSR-format sparse matrices.
 
@@ -1929,7 +1948,7 @@ else:
         return _fastcalc.fast_csr_sum_flat(data, coeffs_complex, flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr)
 
 
-def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
+def expm_multiply_prep(a: _sps.spmatrix, tol: float = EXPM_DEFAULT_TOL) -> tuple:
     """
     Computes "prepared" meta-info about matrix `a`, to be used in `expm_multiply_fast`.
 
@@ -1990,7 +2009,7 @@ def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
 
 
 if _fastcalc is None:
-    def expm_multiply_fast(prep_a, v, tol=EXPM_DEFAULT_TOL):
+    def expm_multiply_fast(prep_a: tuple, v: _np.ndarray, tol: float = EXPM_DEFAULT_TOL) -> _np.ndarray:
         """
         Multiplies `v` by an exponentiated matrix.
 
@@ -2016,7 +2035,7 @@ if _fastcalc is None:
             A, v, mu, m_star, s, tol, eta)  # t == 1.0 always, `balance` not implemented so removed
 
 else:
-    def expm_multiply_fast(prep_a, v, tol=EXPM_DEFAULT_TOL):
+    def expm_multiply_fast(prep_a: tuple, v: _np.ndarray, tol: float = EXPM_DEFAULT_TOL) -> _np.ndarray:
         """
         Multiplies `v` by an exponentiated matrix.
 
@@ -2046,7 +2065,9 @@ else:
                                                           v.copy(), mu, m_star, s, tol, eta)
 
 
-def _custom_expm_multiply_simple_core(a, b, mu, m_star, s, tol, eta):  # t == 1.0 replaced below
+def _custom_expm_multiply_simple_core(a: Union[_np.ndarray, _sps.spmatrix, "_spsl.LinearOperator"],
+                                      b: _np.ndarray, mu: float, m_star: int, s: int,
+                                      tol: float, eta: float) -> _np.ndarray:  # t == 1.0 replaced below
     """
     a helper function.  Note that this (python) version works when a is a LinearOperator
     as well as a SciPy CSR sparse matrix.
@@ -2071,7 +2092,8 @@ def _custom_expm_multiply_simple_core(a, b, mu, m_star, s, tol, eta):  # t == 1.
     return F
 
 
-def expop_multiply_prep(op, a_1_norm=None, tol=EXPM_DEFAULT_TOL):
+def expop_multiply_prep(op: "_spsl.LinearOperator", a_1_norm: Optional[float] = None,
+                        tol: float = EXPM_DEFAULT_TOL) -> tuple:
     """
     Returns "prepared" meta-info about operation op, which is assumed to be traceless (so no shift is needed).
 
@@ -2118,7 +2140,7 @@ def expop_multiply_prep(op, a_1_norm=None, tol=EXPM_DEFAULT_TOL):
     return mu, m_star, s, eta
 
 
-def sparse_equal(a, b, atol=1e-8):
+def sparse_equal(a: _sps.spmatrix, b: _sps.spmatrix, atol: float = 1e-8) -> bool:
     """
     Checks whether two Scipy sparse matrices are (almost) equal.
 
@@ -2160,7 +2182,7 @@ def sparse_equal(a, b, atol=1e-8):
     return _np.allclose(V1, V2, atol=atol)
 
 
-def sparse_onenorm(a):
+def sparse_onenorm(a: _sps.spmatrix) -> float:
     """
     Computes the 1-norm of the scipy sparse matrix `a`.
 
@@ -2177,7 +2199,7 @@ def sparse_onenorm(a):
     # also == return _spsl.norm(a, ord=1) (comparable speed)
 
 
-def ndarray_base(a, verbosity=0):
+def ndarray_base(a: _np.ndarray, verbosity: int = 0) -> _np.ndarray:
     """
     Get the base memory object for numpy array `a`.
 
@@ -2203,7 +2225,7 @@ def ndarray_base(a, verbosity=0):
     return a
 
 
-def to_unitary(scaled_unitary):
+def to_unitary(scaled_unitary: _np.ndarray) -> tuple[float, _np.ndarray]:
     """
     Compute the scaling factor required to turn a scalar multiple of a unitary matrix to a unitary matrix.
 
@@ -2226,7 +2248,7 @@ def to_unitary(scaled_unitary):
     return scale, (scaled_unitary / scale)
 
 
-def sorted_eig(mx):
+def sorted_eig(mx: _np.ndarray) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Similar to `numpy.eig`, but returns sorted output.
 
@@ -2254,7 +2276,7 @@ def sorted_eig(mx):
     return sorted_ev, sorted_U
 
 
-def compute_kite(eigenvalues):
+def compute_kite(eigenvalues: _np.ndarray) -> list:
     """
     Computes the "kite" corresponding to a list of eigenvalues.
 
@@ -2284,7 +2306,8 @@ def compute_kite(eigenvalues):
     return kite
 
 
-def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
+def find_zero_communtant_connection(u: _np.ndarray, u_inv: _np.ndarray, u0: _np.ndarray,
+                                    u0_inv: _np.ndarray, kite: list) -> _np.ndarray:
     """
     Find a matrix `R` such that u_inv R u0 is diagonal AND log(R) has no projection onto the commutant of G0.
 
@@ -2361,7 +2384,7 @@ def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
     return R.real
 
 
-def project_onto_kite(mx, kite):
+def project_onto_kite(mx: _np.ndarray, kite: list) -> _np.ndarray:
     """
     Project `mx` onto `kite`, so `mx` is zero everywhere except on the kite.
 
@@ -2390,7 +2413,7 @@ def project_onto_kite(mx, kite):
     return mx
 
 
-def project_onto_antikite(mx, kite):
+def project_onto_antikite(mx: _np.ndarray, kite: list) -> _np.ndarray:
     """
     Project `mx` onto the complement of `kite`, so `mx` is zero everywhere *on* the kite.
 
@@ -2418,7 +2441,8 @@ def project_onto_antikite(mx, kite):
     return mx
 
 
-def intersection_space(space1, space2, tol=1e-7, use_nice_nullspace=False):
+def intersection_space(space1: _np.ndarray, space2: _np.ndarray, tol: float = 1e-7,
+                       use_nice_nullspace: bool = False) -> _np.ndarray:
     """
     TODO: docstring
     """
@@ -2428,7 +2452,7 @@ def intersection_space(space1, space2, tol=1e-7, use_nice_nullspace=False):
     return _np.dot(space1, nullsp[0:space1.shape[1], :])
 
 
-def union_space(space1, space2, tol=1e-7):
+def union_space(space1: _np.ndarray, space2: _np.ndarray, tol: float = 1e-7) -> _np.ndarray:
     """
     TODO: docstring
     """
@@ -2437,7 +2461,7 @@ def union_space(space1, space2, tol=1e-7):
     return VW[:, indep_cols]
 
 
-def jamiolkowski_angle(hamiltonian_mx):
+def jamiolkowski_angle(hamiltonian_mx: _np.ndarray) -> _np.ndarray:
     """
     TODO: docstring
     """
@@ -2457,7 +2481,7 @@ def jamiolkowski_angle(hamiltonian_mx):
     #return _np.arccos(_np.sqrt(cos_squared_theta))
 
 
-def zvals_to_dense(self, zvals, superket=True):
+def zvals_to_dense(self, zvals: Union[list, _np.ndarray], superket: bool = True) -> _np.ndarray:
     """
     Construct the dense operator or superoperator representation of a computational basis state.
 
@@ -2500,20 +2524,22 @@ def zvals_to_dense(self, zvals, superket=True):
         return ret
 
 
-def int64_parity(x):
+def int64_parity(x: Union[int, _np.ndarray]) -> Union[int, _np.ndarray]:
     """
     Compute the partity of x.
 
     Recursively divide a (64-bit) integer (x) into two equal
     halves and take their XOR until only 1 bit is left.
 
+    This function is vectorized and works on numpy arrays.
+
     Parameters
     ----------
-    x : int64
+    x : int64 or numpy.ndarray
 
     Returns
     -------
-    int64
+    int64 or numpy.ndarray
     """
     x = (x & 0x00000000FFFFFFFF) ^ (x >> 32)
     x = (x & 0x000000000000FFFF) ^ (x >> 16)
@@ -2524,9 +2550,108 @@ def int64_parity(x):
     return x & 1  # return the last bit (0 or 1)
 
 
-def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=False, abs_elval=None):
+def _spread_bits(x: Union[int, _np.ndarray]) -> Union[int, _np.ndarray]:
+    """
+    Insert a 0 bit after each of the (up to 32) low-order bits of `x`, e.g.
+    ...b3 b2 b1 b0 -> ...0 b3 0 b2 0 b1 0 b0.
+
+    This is the standard "Morton code" bit-spreading trick (see e.g. the
+    "Interleave bits" section of "Bit Twiddling Hacks"), specialized to
+    64-bit integers and to spreading a single value (rather than
+    interleaving two values together).  It is vectorized and works on
+    numpy arrays as well as scalars.  Crucially, this operation is
+    *order-preserving*: if x1 < x2 then _spread_bits(x1) < _spread_bits(x2).
+
+    Parameters
+    ----------
+    x : int64 or numpy.ndarray
+        Value(s) with at most 32 significant bits.
+
+    Returns
+    -------
+    int64 or numpy.ndarray
+    """
+    x = x & 0x00000000FFFFFFFF
+    x = (x | (x << 16)) & 0x0000FFFF0000FFFF
+    x = (x | (x << 8)) & 0x00FF00FF00FF00FF
+    x = (x | (x << 4)) & 0x0F0F0F0F0F0F0F0F
+    x = (x | (x << 2)) & 0x3333333333333333
+    x = (x | (x << 1)) & 0x5555555555555555
+    return x
+
+
+def _reverse_bits_scalar(x: int, nbits: int) -> int:
+    """
+    Reverse the lowest `nbits` bits of the (scalar) integer `x`.
+
+    This is a cheap O(nbits) operation intended to be called once per
+    `zvals_int64_to_dense` call (on the scalar `zvals_int`), not per-element.
+    """
+    result = 0
+    for i in range(nbits):
+        if (x >> i) & 1:
+            result |= 1 << (nbits - 1 - i)
+    return result
+
+
+# Cache of (r, final_indices) arrays computed by _zvals_int64_indices_and_signs, keyed by
+# nqubits.  These arrays depend only on nqubits (not on zvals_int/abs_elval/outvec/state_data),
+# so they can be safely reused across calls with the same nqubits.
+_zvals_int64_to_dense_cache: dict = {}
+
+
+def _zvals_int64_indices_and_signs(zvals_int: int, nqubits: int) -> tuple[_np.ndarray, _np.ndarray]:
+    """
+    Shared internals of :func:`zvals_int64_to_dense` and :func:`zvals_int64_probability`.
+
+    Computes the indices of the ``2**nqubits`` nonzero elements of the computational-basis
+    effect/state vector described by `zvals_int` and `nqubits`, along with the +1/-1 sign at
+    each index.  The index array depends only on `nqubits` and is cached (keyed by `nqubits`);
+    only the sign computation is redone per-call.  Requires `nqubits >= 1` (the `nqubits == 0`
+    case is handled by the callers).
+
+    Parameters
+    ----------
+    zvals_int : int64
+        The array of (up to 64) z-values, encoded as the 0s and 1s in the binary representation
+        of this integer.
+
+    nqubits : int
+        The number of z-values (up to 64); must be >= 1.
+
+    Returns
+    -------
+    final_indices : numpy.ndarray of int64
+        Sorted indices (length ``2**nqubits``) of the nonzero elements.
+
+    signs : numpy.ndarray of int8
+        The +1/-1 sign (length ``2**nqubits``) corresponding to each index in `final_indices`.
+    """
+    N = nqubits
+    cached = _zvals_int64_to_dense_cache.get(N)
+    if cached is None:
+        r = _np.arange(2**N, dtype=_np.int64)
+        final_indices = 3 * _spread_bits(r)
+        _zvals_int64_to_dense_cache[N] = (r, final_indices)
+    else:
+        r, final_indices = cached
+
+    zvals_rev = _reverse_bits_scalar(int(zvals_int), N)
+    # parities are 0/1; keep as int8 to save memory (promoted to float by abs_elval later).
+    parities = int64_parity(r & _np.int64(zvals_rev)).astype(_np.int8)
+    signs = 1 - 2 * parities  # maps {0,1} -> {+1,-1}
+
+    return final_indices, signs
+
+
+def zvals_int64_to_dense(
+        zvals_int: int, nqubits: int, outvec: Optional[_np.ndarray] = None,
+        trust_outvec_sparsity: bool = False, abs_elval: Optional[float] = None) -> _np.ndarray:
     """
     Fills a dense array with the super-ket representation of a computational basis state.
+
+    The index arrays used internally depend only on `nqubits` and are cached (keyed by
+    `nqubits`) and reused across calls.
 
     Parameters
     ----------
@@ -2554,52 +2679,67 @@ def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=
     -------
     numpy.ndarray
     """
-
     if outvec is None:
         outvec = _np.zeros(4**nqubits, 'd')
+    elif not trust_outvec_sparsity:
+        # caller-supplied outvec may hold leftover data, so reset it.
+        outvec[:] = 0
+
     if abs_elval is None:
         abs_elval = 1 / (_np.sqrt(2)**nqubits)
 
-    # when trust_outvec_sparsity is True, assume we only need to fill in the
-    # non-zero elements of outvec (i.e. that outvec is already zero wherever
-    # this vector is zero).
-    if not trust_outvec_sparsity:
-        outvec[:] = 0  # reset everything to zero
-
     N = nqubits
+    if N == 0:
+        # With N=0, `finds=0` is the only iteration and `finds & zvals_int == 0`
+        # always has even parity, so the (single) output element is +abs_elval.
+        if outvec.size > 0: outvec[0] = abs_elval
+        return outvec
 
-    # there are nQubits factors
-    # each factor (4-element, 1Q dmvec) has 2 zero elements and 2 nonzero ones
-    # loop is over all non-zero elements of the final outvec by looping over
-    #  all the sets of *entirely* nonzero elements from the factors.
+    final_indices, signs = _zvals_int64_indices_and_signs(zvals_int, N)
 
-    # Let the two possible nonzero elements of the k-th factor be represented
-    # by the k-th bit of `finds` below, which ranges from 0 to 2^nFactors-1
-    for finds in range(2**N):
-
-        #Create the final index (within outvec) corresponding to finds
-        # assume, like tensorprod, that factor ordering == kron ordering
-        # so outvec = kron( factor[0], factor[1], ... factor[N-1] ).
-        # Let factorDim[k] == 4**(N-1-k) be the stride associated with the k-th index
-        # Whenever finds[bit k] == 0 => finalIndx += 0*factorDim[k]
-        #          finds[bit k] == 1 => finalIndx += 3*factorDim[k] (3 b/c factor's 2nd nonzero el is at index 3)
-        finalIndx = sum([3 * (4**(N - 1 - k)) for k in range(N) if bool(finds & (1 << k))])
-
-        #Determine the sign of this element (the element is either +/- (1/sqrt(2))^N )
-        # A minus sign is picked up whenever finds[bit k] == 1 (which means we're looking
-        # at the index=3 element of the factor vec) AND zvals_int[bit k] == 1
-        # (which means it's a [1 0 0 -1] state rather than a [1 0 0 1] state).
-        # Since we only care whether the number of minus signs is even or odd, we can
-        # BITWISE-AND finds with zvals_int (giving an integer whose binary-expansion's
-        # number of 1's == the number of minus signs) and compute the parity of this.
-        minus_sign = int64_parity(finds & zvals_int)
-
-        outvec[finalIndx] = -abs_elval if minus_sign else abs_elval
-
+    outvec[final_indices] = signs * abs_elval
     return outvec
 
 
-def sign_fix_qr(q, r, tol=1e-6):
+def zvals_int64_probability(
+        zvals_int: int, nqubits: int, state_data: _np.ndarray,
+        abs_elval: Optional[float] = None) -> float:
+    """
+    Compute the inner product of a computational-basis POVM effect with a dense state vector.
+
+    Parameters
+    ----------
+    zvals_int : int64
+        The array of (up to 64) z-values, encoded as the 0s and 1s in the binary representation
+        of this integer.  See :func:`zvals_int64_to_dense`.
+
+    nqubits : int
+        The number of z-values (up to 64)
+
+    state_data : numpy.ndarray
+        The dense state vector (length `4**nqubits`) to take the inner product with.
+
+    abs_elval : float, optional
+        the value `1 / (sqrt(2)**nqubits)`, which can be passed here so that
+        it doesn't need to be recomputed on every call to this function.  If
+        `None`, then we just compute the value.
+
+    Returns
+    -------
+    float
+    """
+    if abs_elval is None:
+        abs_elval = 1 / (_np.sqrt(2)**nqubits)
+
+    N = nqubits
+    if N == 0:
+        return abs_elval * state_data[0]
+
+    final_indices, signs = _zvals_int64_indices_and_signs(zvals_int, N)
+    return abs_elval * _np.dot(signs.astype('d'), state_data[final_indices])
+
+
+def sign_fix_qr(q: _np.ndarray, r: _np.ndarray, tol: float = 1e-6) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Change the signs of the columns of Q and rows of R to follow a convention.
 
@@ -2683,14 +2823,14 @@ class IdentityOperator:
         return other
     
     @property
-    def T(self):
+    def T(self) -> "IdentityOperator":
         return self
     
-    def conj(self):
+    def conj(self) -> "IdentityOperator":
         return self
 
 
-def to_operatorlike(obj):
+def to_operatorlike(obj: Any) -> "OperatorLike":
     if obj is None:
         return IdentityOperator()
     elif isinstance(obj, OperatorLike):

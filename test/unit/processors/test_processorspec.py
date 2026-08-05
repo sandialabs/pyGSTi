@@ -1,3 +1,13 @@
+#***************************************************************************************************
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+import itertools
+
 import numpy as np
 
 from pygsti.baseobjs.label import Label
@@ -374,3 +384,232 @@ class ProcessorSpecTester(BaseCase):
         pspec_defaults = save_and_load(pspec_defaults, pth)
         pspec_names = save_and_load(pspec_names, pth)
         pspec_vecs = save_and_load(pspec_vecs, pth)
+
+    def test_resolved_availability_contradiction(self):
+        nQubits = 1
+        qubit_labels = [0]
+        
+        gate_names = ['Ga', 'Gb']
+        
+        # Define two distinct dummy unitaries for the gates
+        Ua = np.array([[1, 0], [0, 1]], 'd')
+        Ub = np.array([[0, 1], [1, 0]], 'd')
+        
+        nonstd_gate_unitaries = {'Ga': Ua, 'Gb': Ub}
+        
+        # Both gates are available on the same qubit
+        availability = {'Ga': [(0,)], 'Gb': [(0,)]}
+        
+        ps = QubitProcessorSpec(nQubits, gate_names, nonstd_gate_unitaries=nonstd_gate_unitaries, 
+                                availability=availability, qubit_labels=qubit_labels)
+        
+        ga_available = ps.is_available(('Ga', 0))
+        gb_available = ps.is_available(('Gb', 0))
+        
+        self.assertTrue(ga_available and gb_available)
+
+    def test_compute_2Q_connectivity(self):
+        qubit_labels = ['q0', 'q1', 'q2']
+        gate_names = ['Gcnot']
+        availability = {'Gcnot': [('q0', 'q1'), ('q1', 'q2')]}
+        
+        ps = QubitProcessorSpec(3, gate_names, availability=availability, qubit_labels=qubit_labels)
+        
+        computed_graph = ps.compute_2Q_connectivity()
+
+        # Check that the graph is undirected and has the correct edges
+        computed_undirected_edges = {frozenset(edge) for edge in computed_graph.edges()}
+        expected_undirected_edges = {frozenset({'q0', 'q1'}), frozenset({'q1', 'q2'})}
+        self.assertEqual(computed_undirected_edges, expected_undirected_edges)
+
+        # Check that the nodes are correct
+        self.assertEqual(set(computed_graph.node_names), set(qubit_labels))
+
+    def test_compute_clifford_2Q_connectivity_only_counts_validated_sites(self):
+        # Regression test: a 2Q gate name can be in `clifford_gate_names` (i.e. have
+        # *some* registered Clifford symplectic rep) while only being validated as
+        # Clifford on a subset of its availability -- e.g. when
+        # `nonstd_gate_symplecticreps` registers the rep against a specific full
+        # Label rather than against the gate name. `compute_clifford_2Q_connectivity`
+        # must still validate each site individually (via `clifford_symplectic_rep_of`)
+        # rather than marking every availability site of the gate name as connected.
+        identity_srep = (np.eye(4, dtype=int), np.zeros(4, dtype=int))
+        ps = QubitProcessorSpec(
+            num_qubits=3,
+            gate_names=['Gi', 'Gexample'],
+            nonstd_gate_num_qubits={'Gexample': 2},
+            availability={'Gexample': [(0, 1), (1, 2)]},
+            nonstd_gate_symplecticreps={Label('Gexample', (0, 1)): identity_srep},
+            qubit_labels=(0, 1, 2),
+        )
+
+        clifford_ops = ps.compute_clifford_ops_on_qubits()
+        self.assertIn((0, 1), clifford_ops)
+        self.assertNotIn((1, 2), clifford_ops)
+
+        computed_graph = ps.compute_clifford_2Q_connectivity()
+        computed_undirected_edges = {frozenset(edge) for edge in computed_graph.edges()}
+        self.assertEqual(computed_undirected_edges, {frozenset({0, 1})})
+
+    def test_gate_num_qubits(self):
+        ps = QubitProcessorSpec(2, gate_names=['Gx', 'Gcnot'], geometry='line')
+        self.assertEqual(ps.gate_num_qubits('Gx'), 1)
+        self.assertEqual(ps.gate_num_qubits('Gcnot'), 2)
+
+    def test_rename_gate_inplace(self):
+        ps = QubitProcessorSpec(1, gate_names=['Gx', 'Gy'], availability={'Gx': [(0,)], 'Gy': [(0,)]})
+        ps.rename_gate_inplace('Gx', 'MyGx')
+        self.assertNotIn('Gx', ps.gate_names)
+        self.assertIn('MyGx', ps.gate_names)
+        self.assertNotIn('Gx', ps.gate_unitaries)
+        self.assertIn('MyGx', ps.gate_unitaries)
+        self.assertNotIn('Gx', ps.availability)
+        self.assertIn('MyGx', ps.availability)
+
+    def test_resolved_availability_modes(self):
+        ps = QubitProcessorSpec(3, gate_names=['Gcnot'], availability={'Gcnot': [(0, 1)]}, geometry='line')
+        self.assertEqual(ps.resolved_availability('Gcnot', 'tuple'), [(0, 1)])
+
+        avail_fn = ps.resolved_availability('Gcnot', 'function')
+        self.assertTrue(avail_fn((0, 1)))
+        self.assertFalse(avail_fn((1, 0)))
+        self.assertFalse(avail_fn((0, 2)))
+
+    def test_availability_specifiers(self):
+        qubit_labels = [0, 1, 2]
+        # Test "all-permutations"
+        ps_perm = QubitProcessorSpec(3, gate_names=['Gcnot'], availability={'Gcnot': 'all-permutations'}, qubit_labels=qubit_labels)
+        self.assertEqual(set(ps_perm.resolved_availability('Gcnot', 'tuple')), set(itertools.permutations(qubit_labels, 2)))
+
+        # Test "all-combinations"
+        ps_comb = QubitProcessorSpec(3, gate_names=['Gcnot'], availability={'Gcnot': 'all-combinations'}, qubit_labels=qubit_labels)
+        self.assertEqual(set(ps_comb.resolved_availability('Gcnot', 'tuple')), set(itertools.combinations(qubit_labels, 2)))
+
+        # Test "all-edges"
+        ps_edges = QubitProcessorSpec(3, gate_names=['Gcnot'], geometry='line', qubit_labels=qubit_labels)
+        self.assertEqual(set(ps_edges.resolved_availability('Gcnot', 'tuple')), { (0, 1), (1, 0), (1, 2), (2, 1)})
+
+    def test_available_gatenames(self):
+        qubit_labels = [0, 1, 2]
+        gate_names = ['Gx', 'Gy', 'Gcnot']
+        availability = {'Gx': [(0,)], 'Gy': [(1,)], 'Gcnot': [(0, 1)]}
+        ps = QubitProcessorSpec(3, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        self.assertEqual(set(ps.available_gatenames((0,))), {'Gx'})
+        self.assertEqual(set(ps.available_gatenames((1,))), {'Gy'})
+        self.assertEqual(set(ps.available_gatenames((0, 1))), {'Gx', 'Gy', 'Gcnot'})
+        self.assertEqual(set(ps.available_gatenames((2,))), set())
+
+    def test_available_gatelabels(self):
+        qubit_labels = [0, 1, 2]
+        gate_names = ['Gx', 'Gcnot']
+        availability = {'Gx': [(0,), (1,)], 'Gcnot': 'all-permutations'}
+        ps = QubitProcessorSpec(3, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        self.assertEqual(set(ps.available_gatelabels('Gx', (0, 1))), {Label('Gx', (0,)), Label('Gx', (1,))})
+        self.assertEqual(set(ps.available_gatelabels('Gx', (0, 2))), {Label('Gx', (0,))})
+        self.assertEqual(set(ps.available_gatelabels('Gcnot', (0, 1, 2))), set(map(lambda t: Label('Gcnot', t), itertools.permutations([0, 1, 2], 2))))
+
+    def test_compute_ops_on_qudits(self):
+        qubit_labels = [0, 1]
+        gate_names = ['Gx', 'Gcnot']
+        availability = {'Gx': [(0,)], 'Gcnot': [(0, 1)]}
+        ps = QubitProcessorSpec(2, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        ops_on_qudits = ps.compute_ops_on_qudits()
+        self.assertEqual(ops_on_qudits, {(0,): [Label('Gx', (0,))], (0, 1): [Label('Gcnot', (0, 1))]})
+
+    def test_subset(self):
+        qubit_labels = [0, 1, 2]
+        gate_names = ['Gx', 'Gy', 'Gcnot']
+        availability = {'Gx': [(0,), (1,)], 'Gy': [(1,), (2,)], 'Gcnot': [(0, 1), (1, 2)]}
+        ps = QubitProcessorSpec(3, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        subset_ps = ps.subset(gate_names_to_include=['Gx', 'Gcnot'], qubit_labels_to_keep=[0, 1])
+
+        self.assertEqual(subset_ps.gate_names, ('Gx', 'Gcnot'))
+        self.assertEqual(subset_ps.qubit_labels, (0, 1))
+        self.assertEqual(subset_ps.availability, {'Gx': ((0,), (1,)), 'Gcnot': ((0, 1),)})
+
+    def test_map_qudit_labels(self):
+        qubit_labels = [0, 1]
+        gate_names = ['Gx', 'Gcnot']
+        availability = {'Gx': [(0,)], 'Gcnot': [(0, 1)]}
+        ps = QubitProcessorSpec(2, gate_names=gate_names, availability=availability, qubit_labels=qubit_labels)
+
+        mapped_ps = ps.map_qudit_labels({0: 'a', 1: 'b'})
+
+        self.assertEqual(mapped_ps.qubit_labels, ('a', 'b'))
+        self.assertEqual(mapped_ps.availability, {'Gx': (('a',),), 'Gcnot': (('a', 'b'),)})
+
+    def test_compute_clifford_symplectic_reps(self):
+        # Create a non-Clifford gate unitary
+        non_clifford_U = np.array([[1, 0], [0, np.exp(1j * np.pi / 8)]], 'D')
+
+        ps = QubitProcessorSpec(1, gate_names=['Gh', 'Gp', 'Gnc'], 
+                                nonstd_gate_unitaries={'Gnc': non_clifford_U})
+        
+        srep_dict = ps.compute_clifford_symplectic_reps()
+        
+        internal_srep_dict = symplectic.compute_internal_gate_symplectic_representations()
+        
+        self.assertIn('Gh', srep_dict)
+        self.assertIn('Gp', srep_dict)
+        self.assertNotIn('Gnc', srep_dict)
+        
+        expected_Gh_s, expected_Gh_p = internal_srep_dict['H']
+        expected_Gp_s, expected_Gp_p = internal_srep_dict['P']
+        
+        actual_Gh_s, actual_Gh_p = srep_dict['Gh']
+        actual_Gp_s, actual_Gp_p = srep_dict['Gp']
+        
+        self.assertArraysEqual(actual_Gh_s, expected_Gh_s)
+        self.assertArraysEqual(actual_Gh_p, expected_Gh_p)
+        self.assertArraysEqual(actual_Gp_s, expected_Gp_s)
+        self.assertArraysEqual(actual_Gp_p, expected_Gp_p)
+
+
+class GlobalIdleConnectivityTester(BaseCase):
+    """
+    Cover the ``'{idle}'`` special case in ``compute_2Q_connectivity`` and
+    ``compute_clifford_2Q_connectivity``.
+
+    A global idle is a 2-qubit gate whose availability resolves to ``[None]``
+    rather than to a list of qubit pairs, because it applies to the whole
+    register at once. Both methods special-case that and treat it as available
+    on every qubit; without it, ``qubit_labels.index(None)`` would raise.
+    """
+
+    @staticmethod
+    def _pspec(gate_names):
+        # 2 qubits so that the global idle is a *2-qubit* gate and therefore
+        # reaches the `gate_num_qubits(gn) == 2` branch at all.
+        return QubitProcessorSpec(2, gate_names=gate_names, geometry='line',
+                                  qubit_labels=(0, 1))
+
+    def test_global_idle_availability_resolves_to_none(self):
+        # The precondition the special case exists for; if this ever changes the
+        # tests below would silently stop covering it.
+        pspec = self._pspec(['Gxpi2', 'Gypi2', '{idle}'])
+        self.assertEqual(pspec.gate_num_qubits('{idle}'), 2)
+        self.assertEqual(list(pspec.resolved_availability('{idle}', 'tuple')), [None])
+
+    def test_global_idle_alone_supplies_2Q_connectivity(self):
+        # No genuine 2Q gate here, so the edge can only come from the global idle.
+        pspec = self._pspec(['Gxpi2', 'Gypi2', '{idle}'])
+        self.assertEqual(pspec.compute_2Q_connectivity().edges(), [(0, 1)])
+
+    def test_global_idle_alone_supplies_clifford_2Q_connectivity(self):
+        pspec = self._pspec(['Gxpi2', 'Gypi2', '{idle}'])
+        self.assertEqual(pspec.compute_clifford_2Q_connectivity().edges(), [(0, 1)])
+
+    def test_without_the_global_idle_there_is_no_2Q_connectivity(self):
+        # Same spec minus '{idle}': confirms the edge above is attributable to the
+        # global idle rather than to the 1Q gates or the 'line' geometry.
+        pspec = self._pspec(['Gxpi2', 'Gypi2'])
+        self.assertEqual(pspec.compute_2Q_connectivity().edges(), [])
+        self.assertEqual(pspec.compute_clifford_2Q_connectivity().edges(), [])
+
+    def test_global_idle_coexists_with_a_real_2Q_gate(self):
+        pspec = self._pspec(['Gxpi2', 'Gcnot', '{idle}'])
+        self.assertEqual(set(pspec.compute_2Q_connectivity().edges()), {(0, 1), (1, 0)})

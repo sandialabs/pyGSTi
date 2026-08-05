@@ -2101,9 +2101,14 @@ class Circuit(object):
 
         serial_lbls = []
         for lbl in layertup:
-            if len(lbl.components) == 0:  # special case of an empty-layer label,
+            if isinstance(lbl, _CircuitLabel) and not expand_subcircuits:
+                serial_lbls.append(lbl) # Extending the components will create additional layers
+                                        # but we did not want to expand the subcircuit.
+
+            elif len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
-            serial_lbls.extend(list(lbl.components) * lbl.reps)
+            else:
+                serial_lbls.extend(list(lbl.components) * lbl.reps)
         return Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
