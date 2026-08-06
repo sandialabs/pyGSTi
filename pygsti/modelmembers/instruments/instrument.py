@@ -168,6 +168,16 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
         member completely positive.  An `n`-outcome instrument needs only `n`
         effects and `n` gates.
 
+        .. warning::
+            For Lindblad gate parameterizations the supplied gates and effects
+            become a *frozen static base*: the seed's `G_k` superoperator rank
+            is an invariant of the parameterized family (only an invertible
+            `exp(L)` is composed onto it), and the base effects' spectral
+            intervals bound every reachable effect.  Diagnose a seed with
+            :func:`~pygsti.modelmembers.instruments.diagnostics.diagnose_instrument`
+            and repair it with
+            :func:`~pygsti.modelmembers.instruments.seeding.patch_instrument_seed`.
+
         Parameters
         ----------
         members : dict
@@ -234,6 +244,16 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
         gathered into a single shared :class:`ComposedPOVM` and each gate is
         parameterized independently, so an `n`-outcome instrument needs only `n`
         effects and `n` gates regardless of any member's Kraus rank.
+
+        .. warning::
+            The recovered `(E_k, G_k)` become a *frozen static base* for Lindblad
+            gate parameterizations (see the warning in :meth:`from_effects`), and
+            this decomposition returns the *minimum-rank* gate completion -- for
+            ideal projective members that base is singular and hard-caps every
+            reachable member's rank (a warning is emitted).  Diagnose with
+            :func:`~pygsti.modelmembers.instruments.diagnostics.diagnose_instrument`;
+            repair with
+            :func:`~pygsti.modelmembers.instruments.seeding.patch_instrument_seed`.
 
         Parameters
         ----------
@@ -337,9 +357,15 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
         dict_to_pickle = self.__dict__.copy()
         dict_to_pickle['_parent'] = None
 
-        #Note: must *copy* elements for pickling/copying
+        #Note: must *copy* elements for pickling/copying.  All the members are copied under a
+        # *single shared* memo so that any submember reachable from more than one member stays
+        # aliased in the copy.  (E.g. the members built by `from_effects` / `from_cptr_superops`
+        # all share one ComposedPOVM error map -- that sharing is what enforces the instrument's
+        # trace preservation, and duplicating it per member would silently inflate the
+        # instrument's parameter count.)
+        memo = {}
         return (Instrument, (None, self.evotype, self.state_space, True,
-                             [(key, gate.copy()) for key, gate in self.items()]),
+                             [(key, gate.copy(memo=memo)) for key, gate in self.items()]),
                 dict_to_pickle)
 
     def __pygsti_reduce__(self) -> tuple:
