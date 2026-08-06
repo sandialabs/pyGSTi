@@ -462,39 +462,6 @@ def index_to_pauli_pair(idx: int, n: int) -> tuple[str, str]:
     return P, Q
 
 
-# # This is definitely not the best way to do this.
-# # It's very slow.
-# def up_to_weight_k_paulis(k, n):
-#     """
-#     Returns the string representation of all n-qubit Pauli operators that
-#     are weight 1 up to weight k (i.e., all Paulis contain at leat one and at most
-#     k non-identity Paulis).
-#     """
-#     assert (k <= 2), "Only implemented up to k = 2!"
-#     paulis = []
-
-#     # weight 1
-#     for i in range(n):
-#         for p in ['X', 'Y', 'Z']:
-#             nq_pauli = n * ['I']
-#             nq_pauli[n - 1 - i] = p # reversed index
-#             paulis.append(''.join(nq_pauli))
-
-#     # weight 2
-#     if k > 1:
-#         for i in range(n):
-#             for j in range(i + 1, n):
-#                 for p in ['X', 'Y', 'Z']:
-#                     for q in ['X', 'Y', 'Z']:
-#                         nq_pauli = n * ['I']
-#                         nq_pauli[n - 1 - i] = p # reversed index
-#                         nq_pauli[n - 1 - j] = q # reversed index
-#                         paulis.append(''.join(nq_pauli))
-
-#     return paulis
-
-
-##### Noah's Updated implementation 5/8/2026 #####
 # All 15 valid (non-'both-identity') local (single-qubit) `(P_letter, Q_letter)` choices used
 # when enumerating pairs of Paulis for 'C'/'A' error generators (see `_pauli_pairs_for_support`
 # below): 3 where only P is non-trivial at this qubit, 3 where only Q is, and 9 where both are
@@ -525,10 +492,9 @@ def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bo
     reverse_index : bool
         If True, qubit `q` maps to string position `n - 1 - q` (matching the convention used by
         `up_to_weight_k_paulis_from_qubit_graph`); if False, qubit `q` maps directly to string
-        position `q` (matching the convention used by `up_to_weight_k_paulis`). This mirrors an
-        existing (pre-existing, not introduced here) inconsistency between those two single-
-        Pauli functions; each of this module's two pair-enumeration functions below passes
-        whichever value keeps it consistent with its own single-Pauli counterpart.
+        position `q` (matching the convention used by `up_to_weight_k_paulis`). Each of this
+        module's two pair-enumeration functions below passes whichever value keeps it
+        consistent with its own single-Pauli counterpart.
 
     Returns
     -------
@@ -537,17 +503,18 @@ def _pauli_pairs_for_support(support: tuple[int, ...], n: int, reverse_index: bo
 
     Notes
     -----
-    For a fixed support of size `w`, there are `15**w` raw per-qubit-choice combinations. Of
-    these, the ones to exclude are: all-P-only (which would make Q the identity, disallowed),
-    all-Q-only (which would make P the identity, disallowed), and all-'both'-with-matching-
-    letters (which would make P == Q, disallowed) -- these three cases are disjoint for `w >= 1`
-    (each forces the *other* two Pauli(s) to be manifestly non-identity/distinct), so by
-    inclusion-exclusion there are `15**w - 3*3**w = 15**w - 3**(w+1)` valid *ordered* pairs, and
-    half that many *unordered* (canonically-ordered) pairs, since swapping the roles of P and Q
-    in the per-qubit choices always produces another valid combination representing the same
-    unordered pair. This was cross-checked (during development) against
-    `num_pauli_pairs(n)` (the *unrestricted* total, obtained here by summing over all supports
-    of all sizes `1..n`) for small `n`, and against the paper's own stated total of 105 for
+    For a fixed support of size `w`, counting valid `(P, Q)` pairs is inclusion-exclusion on the
+    `15**w` raw per-qubit-choice combinations:
+
+    * `3**w` are all-P-only (Q would be the identity: disallowed)
+    * `3**w` are all-Q-only (P would be the identity: disallowed)
+    * `3**w` are all-'both'-with-matching-letters (P would equal Q: disallowed)
+
+    These three cases are disjoint for `w >= 1` (each forces the other two to be manifestly
+    non-identity/distinct), giving `15**w - 3*3**w = 15**w - 3**(w+1)` valid *ordered* pairs, and
+    half that many *unordered* (canonically-ordered) ones -- swapping P and Q's roles always maps
+    one valid combination to another representing the same unordered pair. Cross-checked against
+    `num_pauli_pairs(n)` (summed over all supports/sizes) and the paper's stated total of 105 for
     `n=2`; see the corresponding unit tests.
     """
     w = len(support)
