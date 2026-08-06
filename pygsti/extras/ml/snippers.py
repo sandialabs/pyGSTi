@@ -114,11 +114,8 @@ def layer_snipper_from_qubit_graph(
 
     Notes
     -----
-    "Within `hops` steps" is determined by true (unweighted) shortest-path graph distance
-    (computed via breadth-first search). Earlier versions of this function instead computed a
-    graph Laplacian `L = D - A` and used `L**hops` to infer which nodes are within `hops` steps
-    (via nonzero entries); that was a heuristic (and, for an isolated qubit with no edges, an
-    inaccurate one -- it dropped the qubit's own index from its own list for any `hops >= 1`).
+    "Within `hops` steps" is determined by true (unweighted) shortest-path graph distance,
+    computed via breadth-first search.
     """
     qubit_graph = _graphtools._resolve_qubit_graph_arg(qubit_graph, adjacency_matrix, 'adjacency_matrix')
     if hops is None:
@@ -133,24 +130,16 @@ def layer_snipper_from_qubit_graph(
     # (always including the qubit itself, regardless of hops or its degree).
     nodes_within_hops = _graphtools.qubits_within_hops(
         qubit_graph, hops, qubit_labels=qubit_labels, include_self=True, input_is=input_is)
-    #
-    # Init the list that this function will return, specifying the relevant encoding indices for each error generator in `error_generators`
+
+    # For each error generator, find the relevant encoding indices.
     encoding_indices = []
     for error_generator in error_generators:
-        # The Pauli(s) that label the error gen, as strings containing 'I', 'X', 'Y', and 'Z'.
-        # This is a 1-tuple for 'H'/'S' error generators, or a 2-tuple of two DISTINCT Paulis
-        # for 'C'/'A' error generators (see "A Taxonomy of Small Errors", Sec. V.C-V.D). In
-        # either case, we take the UNION of the qubits acted on by every Pauli in the tuple,
-        # since (per the same paper, Sec. VIII) the "support"/"weight" of a 'C'/'A' generator
-        # C_{P,Q}/A_{P,Q} is defined as the union of P's and Q's individual qubit supports.
+        # The Pauli(s) that label the error gen: a 1-tuple for 'H'/'S', or a 2-tuple of two
+        # DISTINCT Paulis for 'C'/'A' (see "A Taxonomy of Small Errors", Sec. V.C-V.D). We take
+        # the UNION of the qubits acted on by every Pauli in the tuple, since (per the same
+        # paper, Sec. VIII) that union is the defined support/weight of a 'C'/'A' generator.
+        # Pauli-string position i always corresponds to qubit i (no reverse-indexing here).
         pauli_strings = error_generator[1]
-        # The following commented-out line is *wrong* but it used to be in the code, so leaving it here
-        # but commented out for now. It is unclear if somehow this was the correct thing to do in older
-        # versions of the QPANN code before my (Tim's) rewrite.
-        # pauli_string = pauli_string[::-1] # for reverse indexing
-        #
-        # The indices of each `pauli` that are not equal to 'I' are the qubits that PART of the
-        # error acts on; take the union across all Pauli(s) in this error generator's tuple.
         qubits_acted_on_by_error = sorted(set().union(*[
             set(_np.where(_np.array(list(pauli_string)) != 'I')[0]) for pauli_string in pauli_strings
         ]))
@@ -158,7 +147,6 @@ def layer_snipper_from_qubit_graph(
         relevant_qubits = _np.unique(_np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
         # The encoding indices that encode what is happening to these qubits
         relevant_encoding_indices = encoder.indices_for_qubits(list(relevant_qubits))
-        # Add to the list specifying the relevant encoding indices for each error generator in `error_generators`
         encoding_indices.append(relevant_encoding_indices)
 
     return encoding_indices
