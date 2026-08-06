@@ -9,7 +9,7 @@
 
 import numpy as np
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast
 import tqdm as _tqdm
 
 from pygsti.protocols.gst import GateSetTomographyDesign
@@ -31,19 +31,7 @@ __all__ = ['CrosstalkFreeExperimentDesign', 'make_xfgst_design']
 
 def find_neighbors(vertices: Sequence[Vertex], edges: Sequence[Edge]) -> Dict[Vertex, List[Vertex]]:
     """
-    Find the neighbors of each vertex in a graph.
-
-    This function takes a list of vertices and a dictionary of edges, 
-    where edges are represented as tuples. It returns a dictionary 
-    mapping each vertex to a list of its neighbors.
-
-    Parameters:
-    vertices (list): A list of vertices in the graph.
-    edges (dict): A symmetric list of the edges in the graph [e.g., (v1, v2) and (v2, v1) are elements].
-
-    Returns:
-    dict: A dictionary where each key is a vertex and the value is a 
-          list of neighboring vertices.
+    Scan `edges` to build a dict mapping each vertex to its list of neighbors.
     """
     neighbors = {v: [] for v in vertices}
     for e in edges:
@@ -51,17 +39,16 @@ def find_neighbors(vertices: Sequence[Vertex], edges: Sequence[Edge]) -> Dict[Ve
     return neighbors
 
 
-
-def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign,
-                        twoq_gstdesign: GateSetTomographyDesign) -> LayerMappers:
+def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign: GateSetTomographyDesign) -> LayerMappers:
     """
     Build the ``layer_mappers`` used by ``batch_tensor`` when stitching 1Q and 2Q
     GST circuits together.
 
     The returned dict maps a lane size (1 or 2) to a per-label mapper that embeds
-    the 1Q/2Q labels into the full tensored state space without introducing implicit
-    idle labels. This depends only on the labels appearing in the two designs'
-    circuit lists, not on any color patch.
+    the 1Q/2Q labels into the full tensored state space without implicit idles.
+
+    Any implicit idles present in these designs are mapped to Labels with
+    names `Gi` and `Gii` for 1 and 2 qubits, respectively.
 
     Parameters
     ----------
@@ -79,17 +66,21 @@ def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign,
     oneq_idle_label = Label(('Gi',) + oneq_gstdesign.qubit_labels)
     mapper_2q: dict[Label, Label] = {twoq_idle_label: twoq_idle_label}
     mapper_1q: dict[Label, Label] = {oneq_idle_label: oneq_idle_label}
+    empty_label = Label(())
     for cl in twoq_gstdesign.circuit_lists:
         for c in cl:
             mapper_2q.update({k:k for k in c._labels})
-            mapper_2q[Label(())] = twoq_idle_label
+            mapper_2q[empty_label] = twoq_idle_label
     for cl in oneq_gstdesign.circuit_lists:
         for c in cl:
             mapper_1q.update({k:k for k in c._labels})
-            mapper_1q[Label(())] = oneq_idle_label
-    assert Label(()) not in mapper_2q.values()
-    assert Label(()) not in mapper_1q.values()
+            mapper_1q[empty_label] = oneq_idle_label
+    assert empty_label not in mapper_2q.values()
+    assert empty_label not in mapper_1q.values()
 
+    # Check for any labels in `mapper_2q` that imply a single-qubit target.
+    # For any such label, add an explicit single-qubit idle on the non-target
+    # qubit, and wrap the whole thing as a LabelTupTup.
     m2q = mapper_2q.copy()
     for k2 in mapper_2q:
         if k2.num_qubits == 1:
@@ -99,38 +90,29 @@ def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign,
             assert tgt in [0,1]
             tmp = [None, None]
             tmp[tgt] = k2
-            # This implies that the correction is only for the single noisy idle gate.
-            tmp[1-tgt] = Label("Gi", 1-tgt) # Wrap around will set the tmp correctly.
-            # However, we still need to ensure that Label("Gi", 1-tgt) is correct.
-            # Wrap in a Label (yielding a LabelTupTup parallel layer) so that the
-            # mapper value exposes .map_state_space_labels, as _prepare_target_circuit
-            # (via batch_tensor) requires. A bare tuple would raise AttributeError.
+            tmp[1-tgt] = Label("Gi", 1-tgt)
             m2q[k2] = Label(tuple(tmp))
-            # We are going to be replacing the 1q gate with a parallelized noisy idle and the gate.
 
     mapper_2q = m2q # Reset here.
     # layer mappers handles how big each lane is not the length of a circuit.
     return {1: mapper_1q, 2: mapper_2q}
 
 
-def make_xfgst_design(nq_pspec: QubitProcessorSpec,
-                      oneq_gstdesign: GateSetTomographyDesign,
-                      twoq_gstdesign: GateSetTomographyDesign,
-                      seed: int = 0) -> "CrosstalkFreeExperimentDesign":
-    vertices = nq_pspec.qubit_labels
+def make_xfgst_design(
+        nq_pspec: QubitProcessorSpec,
+        oneq_gstdesign: GateSetTomographyDesign,
+        twoq_gstdesign: GateSetTomographyDesign,
+        seed: int = 0
+    ) -> "CrosstalkFreeExperimentDesign":
+    vertices = cast(List[Vertex] , list(nq_pspec.qubit_labels))
     edges = nq_pspec.compute_2Q_connectivity().edges()
-
-    # Generate the sub-experiment designs
-    
-    edges = set(edges)
+    edges = list(set(edges))
     neighbors = find_neighbors(vertices, edges)
-    # Calculate the maximum degree of the graph
     deg = max(len(neighbors[v]) for v in vertices)
-    # "auto" detects canonical topologies (line/ring/grid/torus, as produced by
-    # ProcessorSpec(geometry=...)) and uses an optimal closed-form coloring for
-    # them, falling back to a generic (deg+1)-color algorithm otherwise.
     edge_coloring = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=seed)
-
+    # ^ "auto" detects canonical topologies (line/ring/grid/torus, as produced by
+    #   ProcessorSpec(geometry=...)) and uses an optimal closed-form coloring for
+    #   them, falling back to a generic (deg+1)-color algorithm otherwise.
     return CrosstalkFreeExperimentDesign(nq_pspec, oneq_gstdesign, twoq_gstdesign, edge_coloring, seed=(seed+1))
 
 
@@ -212,11 +194,9 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
         kwargs.update(stitcher_kwargs)
         self.stitcher_kwargs = kwargs
 
-        self.circuit_lists = circuit_stitcher(self.oneq_gstdesign,
-                                              self.twoq_gstdesign,
-                                              self.vertices, self.color_patches,
-                                              **kwargs,
-                                              )
+        self.circuit_lists = circuit_stitcher(
+            self.oneq_gstdesign, self.twoq_gstdesign, self.vertices, self.color_patches, **kwargs,
+        )
         # The default stitcher (assign_the_designs_with_mapping) does not produce
         # aux_info; keep the attribute for API compatibility.
         self.aux_info = {}
@@ -231,15 +211,6 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
         super().__init__(processor_spec, self.circuit_lists,qubit_labels=self.vertices, nested=nested)
 
 
-def ordered_edge_set(edge_set: Sequence[Edge]) -> List[Edge]:
-    """
-    Canonicalize the order of edges, but preserve endpoint orientation.
-
-    If endpoint orientation is meaningful, do NOT sort inside each edge.
-    """
-    return sorted([tuple(edge) for edge in edge_set])
-
-
 def patch_lines(edge_set: Sequence[Edge],
                 vertices: Sequence[Vertex]) -> Tuple[List[Edge], List[Vertex], List[Edge]]:
     """
@@ -247,22 +218,10 @@ def patch_lines(edge_set: Sequence[Edge],
       - first the 2Q edge lines
       - then the 1Q unused-qubit lines
     """
-    edge_set = ordered_edge_set(edge_set)
-
-    used_qubits = {
-        q
-        for edge in edge_set
-        for q in edge
-    }
-
-    unused_qubits = [
-        q
-        for q in vertices
-        if q not in used_qubits
-    ]
-
+    edge_set = sorted([tuple(edge) for edge in edge_set])
+    used_qubits    = {q for edge in edge_set for q in edge}
+    unused_qubits  = [q for q in vertices if q not in used_qubits]
     tensored_lines = list(edge_set) + [(q,) for q in unused_qubits]
-
     return edge_set, unused_qubits, tensored_lines
 
 
@@ -303,6 +262,7 @@ def make_line_mapper(source_lines: Sequence[Edge],
         raise ValueError("Mapper is not one-to-one.")
 
     return mapper
+
 
 def build_patch_infos(vertices: Sequence[Vertex],
                       color_patches: Dict[int, List[Edge]]
