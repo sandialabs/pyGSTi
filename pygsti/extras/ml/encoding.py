@@ -21,7 +21,6 @@ measurement outcome probabilities in a first-order approximation.
 #***************************************************************************************************
 
 import numpy as _np
-import warnings as _warnings
 import itertools as _itertools
 import stim as _stim
 from pygsti.errorgenpropagation import errorpropagator as _ep
@@ -32,7 +31,6 @@ from pygsti.circuits import Circuit as _Circuit
 import tqdm
 from tqdm import trange as _trange
 from multiprocessing import Pool
-from itertools import starmap
 from typing import TYPE_CHECKING, cast, Any
 
 if TYPE_CHECKING:
@@ -428,7 +426,7 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
         )
     indices, signs = error_propagation_tensors(circuits, error_generators, pspec)
     if alpha_representation == 'matrix':
-        probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=indices)
+        probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, pspec, indices=indices)
     elif alpha_representation == 'concise':
         probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, process_num=process_num)
     else:
@@ -689,7 +687,7 @@ def dense_alpha_matrix(circuit: _Circuit | _stim.Tableau, num_qubits: int, popul
     return alpha_matrix
 
 
-def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", indices: _np.ndarray | None = None, prior_error_generators: list | None = None, prior_alphas: _np.ndarray | None = None) -> tuple[_np.ndarray, _np.ndarray]:
+def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], pspec: "ProcessorSpec", indices: _np.ndarray | None = None, prior_alphas: _np.ndarray | None = None) -> tuple[_np.ndarray, _np.ndarray]:
     """
     Compute ideal outcome probabilities and dense alpha matrices for a batch of circuits.
 
@@ -701,19 +699,20 @@ def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], error_ge
     ----------
     circuits : list[pygsti.circuits.Circuit]
         Circuits to process.
-    error_generators : list
-        Currently unused directly (kept for API symmetry); alphas are computed in the
-        canonical indexing over all H/S end-of-circuit generators, optionally restricted
-        by `indices`.
     pspec : ProcessorSpec
         Processor spec; used for `num_qubits`.
     indices : numpy.ndarray or None, optional
         If provided, only compute alpha columns for end-of-circuit generator indices that
-        appear in `indices[i,:,:]` for each circuit i.
-    prior_error_generators : list or None, optional
-        If provided, indicates we are updating existing alpha matrices (no overlap allowed).
+        appear in `indices[i,:,:]` for each circuit i. If None, the entire (2*4**n)-wide alpha
+        matrix is computed for every circuit.
     prior_alphas : numpy.ndarray or None, optional
-        Existing alpha tensor to partially reuse.
+        An existing `(num_circuits, 2**n, 2*4**n)` alpha tensor to use as the starting point for
+        each circuit's alpha matrix (see `dense_alpha_matrix`'s `existing_alpha_matrix`); only
+        the columns selected by `indices` are (re)computed and written into it. Since every
+        alpha matrix here already spans the full H/S index range regardless of which specific
+        generators are of interest, this is purely a compute-reuse mechanism, not a "new
+        generators" concept -- unlike `error_propagation_tensors`'s `prior_*` arguments, there is
+        no separate "prior error generators" list to reconcile.
 
     Returns
     -------
@@ -724,9 +723,6 @@ def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], error_ge
     """
     from pygsti.processors import QubitProcessorSpec
     assert isinstance(pspec, QubitProcessorSpec)
-
-    if prior_error_generators is not None:
-        assert(len(set(error_generators).intersection(set(prior_error_generators))) == 0), "Can only add new error generators!"
 
     num_qubits = pspec.num_qubits
     nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
@@ -740,12 +736,7 @@ def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], error_ge
         tableau = circuit.convert_to_stim_tableau()
         probabilities[i, :] = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
 
-        # Compute the alpha matrix for the circuit, filling in only those
-        if prior_error_generators is not None:
-            assert prior_alphas is not None
-            prior_alpha_matrix = prior_alphas[i, :, :]
-        else:
-            prior_alpha_matrix = None
+        prior_alpha_matrix = prior_alphas[i, :, :] if prior_alphas is not None else None
 
         if indices is not None:
             unique_end_of_circuit_error_generators = list(set(indices[i,:,:].flatten()))
