@@ -30,7 +30,7 @@ from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.baseobjs.qubitgraph import QubitGraph
 from pygsti.circuits import Circuit
 from pygsti.data import DataSet
-from pygsti.extras.ml import errgentools, encoding, snippers, legacy, customlayers, qpanns, graphtools
+from pygsti.extras.ml import errgentools, encoding, snippers, customlayers, qpanns, graphtools
 
 
 class MLSubpackageTester(unittest.TestCase):
@@ -390,18 +390,6 @@ class MLSubpackageTester(unittest.TestCase):
         snip_mixed = snippers.layer_snipper_from_qubit_graph(mixed, encoder, adj, hops=0)
         self.assertEqual(snip_mixed[0], encoder.indices_for_qubits([3]))
         self.assertEqual(snip_mixed[1], encoder.indices_for_qubits([1, 3]))
-
-    def test_legacy(self):
-        nonstd_gate_unitaries = {}
-        availability = {'Gcnot': [(0, 1)]}
-        pspec = _ProcessorSpec(2, ['{idle}', 'Gx', 'Gy', 'Gcnot'], nonstd_gate_unitaries, availability, geometry="line")
-        specmodel, error_dict = legacy.create_spec_model(pspec)
-        self.assertIsNotNone(specmodel)
-        self.assertIsNotNone(error_dict)
-
-        circuits = [Circuit(cast(Any, [('Gx', 0)])), Circuit(cast(Any, [('Gy', 1)]))]
-        preds = legacy.batch_prediction(specmodel, circuits)
-        self.assertEqual(preds.shape, (2,))
 
     def test_qpanns_and_customlayers(self):
         layer = customlayers.SelectiveDense(units=5, input_indices=[[0, 1], [1, 2]])
