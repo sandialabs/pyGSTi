@@ -11,11 +11,14 @@ Encapsulates a group in terms of matrices and relations
 #***************************************************************************************************
 
 from functools import reduce as _reduce
+import numbers as _numbers
 
 import numpy as _np
 
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
-def is_integer(x):
+
+def _isint(x):
     """
     Check if `x` is an integer type.
 
@@ -28,8 +31,27 @@ def is_integer(x):
     -------
     bool
     """
-    #TODO: combine with compattools.isint(x) ??
-    return bool(isinstance(x, int) or isinstance(x, _np.int_))
+    return isinstance(x, _numbers.Integral)
+
+
+@_deprecated_fn('isinstance(x, numbers.Integral)')
+def is_integer(x):
+    """
+    Check if `x` is an integer type.
+
+    .. deprecated:: 0.10.2
+        Use `isinstance(x, numbers.Integral)` instead.
+
+    Parameters
+    ----------
+    x : object
+        Object to test.
+
+    Returns
+    -------
+    bool
+    """
+    return _isint(x)
 
 
 def construct_1q_clifford_group():
@@ -121,7 +143,7 @@ class MatrixGroup(object):
         -------
         numpy array
         """
-        if not is_integer(i): i = self.label_indices[i]
+        if not _isint(i): i = self.label_indices[i]
         return self.mxs[i]
 
     def inverse_matrix(self, i):
@@ -137,7 +159,7 @@ class MatrixGroup(object):
         -------
         numpy array
         """
-        if not is_integer(i): i = self.label_indices[i]
+        if not _isint(i): i = self.label_indices[i]
         return self.mxs[self.inverse_table[i]]
 
     def inverse_index(self, i):
@@ -155,7 +177,7 @@ class MatrixGroup(object):
             If `i` is an integer, returns the element's index.  Otherwise
             returns the element's label.
         """
-        if is_integer(i):
+        if _isint(i):
             return self.inverse_table[i]
         else:
             i = self.label_indices[i]
@@ -181,7 +203,7 @@ class MatrixGroup(object):
             index.  Otherwise returns the resulting element's label.
         """
         if len(indices) == 0: return None
-        if is_integer(indices[0]):
+        if _isint(indices[0]):
             return _reduce(lambda i, j: self.product_table[i, j], indices)
         else:
             indices = [self.label_indices[i] for i in indices]
