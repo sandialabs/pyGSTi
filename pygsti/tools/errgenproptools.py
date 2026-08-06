@@ -809,6 +809,194 @@ def _error_generator_layer_pairwise_commutator(errorgen_layer_1: dict[_LSE, floa
 
 _COMMUTATOR_CACHE_SIZE = 2**20
 
+#region: Commutator Helpers
+def _error_generator_commutator_as(bels_1: _Bels, bels_2: _Bels,
+                                   identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    P, Q = bels_1
+    A = bels_2[0]
+    com_AP = A.commutes(P)
+    com_AQ = A.commutes(Q)
+    if com_AP == com_AQ:
+        return []
+    composed_errorgens = []
+    PA = pauli_product(P, A)
+    QA = pauli_product(Q, A)
+    lead = 1j if com_AP else -1j
+    _append_product_pair(composed_errorgens, True, PA, QA, -2 * lead, identity, 1.0)
+    if not P.commutes(Q):
+        PQ = pauli_product(P, Q)
+        _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), A,
+                                     False, True, -2j, -2, identity, 1.0)
+    return composed_errorgens
+
+
+def _error_generator_commutator_ah(bels_1: _Bels, bels_2: _Bels,
+                                   identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    P, Q = bels_1
+    A = bels_2[0]
+    composed_errorgens = []
+    com_AP = A.commutes(P)
+    com_AQ = A.commutes(Q)
+    if not com_AP:
+        _append_conditional_errorgen(composed_errorgens, pauli_product(P, A), Q, False,
+                                     True, 1, -2j, identity, 1.0)
+    if not com_AQ:
+        _append_conditional_errorgen(composed_errorgens, pauli_product(Q, A), P, False,
+                                     True, -1, 2j, identity, 1.0)
+    return composed_errorgens
+
+
+def _error_generator_commutator_ch(bels_1: _Bels, bels_2: _Bels,
+                                   identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    P, Q = bels_1
+    A = bels_2[0]
+    composed_errorgens = []
+    com_AP = A.commutes(P)
+    com_AQ = A.commutes(Q)
+    if not com_AP:
+        _append_conditional_errorgen(composed_errorgens, pauli_product(P, A), Q, False,
+                                     False, -1, -2j, identity, 1.0)
+    if not com_AQ:
+        _append_conditional_errorgen(composed_errorgens, pauli_product(Q, A), P, False,
+                                     False, -1, -2j, identity, 1.0)
+    return composed_errorgens
+
+
+def _error_generator_commutator_cs(bels_1: _Bels, bels_2: _Bels,
+                                   identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    P, Q = bels_1
+    A = bels_2[0]
+    composed_errorgens = []
+    com_AP = A.commutes(P)
+    com_AQ = A.commutes(Q)
+    same = (com_AP == com_AQ)
+    if not same:
+        PA = pauli_product(P, A)
+        QA = pauli_product(Q, A)
+        lead_diff = 2j if com_AP else -2j
+        _append_product_pair(composed_errorgens, same, PA, QA, lead_diff, identity, 1.0)
+        if P.commutes(Q):
+            PQ = pauli_product(P, Q)
+            _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), A,
+                                         same, True, -1, -2j, identity, 1.0)
+    return composed_errorgens
+
+
+def _error_generator_commutator_hs(bels_1: _Bels, bels_2: _Bels,
+                                   identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    H_bel = bels_1[0]
+    S_bel = bels_2[0]
+    composed_errorgens = []
+    if not H_bel.commutes(S_bel):
+        _append_conditional_errorgen(composed_errorgens, pauli_product(H_bel, S_bel), S_bel, False,
+                                     False, -1, -2j, identity, 1.0)
+    return composed_errorgens
+
+
+def _error_generator_commutator_cc(bels_1: _Bels, bels_2: _Bels,
+                                   identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    A, B = bels_1
+    P, Q = bels_2
+    composed_errorgens = []
+    com_AB = A.commutes(B)
+    com_PQ = P.commutes(Q)
+    com_AP = A.commutes(P)
+    com_AQ = A.commutes(Q)
+    com_BP = B.commutes(P)
+    com_BQ = B.commutes(Q)
+
+    PA = pauli_product(P, A)
+    QA = pauli_product(Q, A)
+    PB = pauli_product(P, B)
+    QB = pauli_product(Q, B)
+
+    for prod_1, prod_2, com_1, com_2 in ((PA, QB, com_AP, com_BQ),
+                                         (QA, PB, com_AQ, com_BP)):
+        same = (com_1 == com_2)
+        if not same:
+            lead = -1j if com_1 else 1j
+            _append_product_pair(composed_errorgens, same, prod_1, prod_2, 2 * lead, identity, 1.0)
+
+    if com_AB and com_PQ:
+        PQ = pauli_product(P, Q)
+        AB = pauli_product(A, B)
+        if com_AP != com_AQ:
+            _append_conditional_errorgen(composed_errorgens, pauli_product(A, PQ[0]*PQ[1]), B, False,
+                                         True, -1, 2j, identity, 1.0)
+        if com_BP != com_BQ:
+            _append_conditional_errorgen(composed_errorgens, pauli_product(B, PQ[0]*PQ[1]), A, False,
+                                         True, -1, 2j, identity, 1.0)
+        if com_AP != com_BP:
+            _append_conditional_errorgen(composed_errorgens, pauli_product(P, AB[0]*AB[1]), Q, False,
+                                         True, -1, -2j, identity, 1.0)
+        if com_AQ != com_BQ:
+            _append_conditional_errorgen(composed_errorgens, pauli_product(Q, AB[0]*AB[1]), P, False,
+                                         True, -1, -2j, identity, 1.0)
+        if sum((com_AP, com_AQ, com_BP, com_BQ)) % 2 == 1:
+            AB_prod = (A * B)
+            PQ_prod = (P * Q)
+            if not AB_prod.commutes(PQ_prod):
+                AB = pauli_product(A, B)
+                PQ = pauli_product(P, Q)
+                ABPQ = pauli_product(AB[0]*AB[1], PQ[0]*PQ[1])
+                if ABPQ[1] != identity:
+                    composed_errorgens.append((_LSE('H', [ABPQ[1]]), 2j * ABPQ[0]))
+
+    elif com_AB:
+        AB = pauli_product(A, B)
+        if com_AP != com_BP:
+            _append_conditional_errorgen(composed_errorgens, pauli_product(AB[0]*AB[1], P), Q, False,
+                                         True, -1, 2j, identity, 1.0)
+        if com_AQ != com_BQ:
+            _append_conditional_errorgen(composed_errorgens, pauli_product(AB[0]*AB[1], Q), P, False,
+                                         True, -1, 2j, identity, 1.0)
+
+    elif com_PQ:
+        PQ = pauli_product(P, Q)
+        if com_BP != com_BQ:
+            _append_conditional_errorgen(composed_errorgens, pauli_product(PQ[0]*PQ[1], B), A, False,
+                                         True, -1, -2j, identity, 1.0)
+        if com_AP != com_AQ:
+            _append_conditional_errorgen(composed_errorgens, pauli_product(PQ[0]*PQ[1], A), B, False,
+                                         True, -1, -2j, identity, 1.0)
+    return composed_errorgens
+
+
+def _error_generator_commutator_aa(bels_1: _Bels, bels_2: _Bels,
+                                   identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    a = _LSE('A', bels_1)
+    b = _LSE('A', bels_2)
+    terms1 = _error_generator_composition_impl(a, b, 1, identity)
+    terms2 = _error_generator_composition_impl(b, a, -1, identity)
+    aggregated = {}
+    for lbl, rate in terms1 + terms2:
+        aggregated[lbl] = aggregated.get(lbl, 0j) + rate
+    return [(lbl, rate) for lbl, rate in aggregated.items() if rate != 0]
+
+
+def _error_generator_commutator_ac(bels_1: _Bels, bels_2: _Bels,
+                                   identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    a = _LSE('A', bels_1)
+    c = _LSE('C', bels_2)
+    terms1 = _error_generator_composition_impl(a, c, 1, identity)
+    terms2 = _error_generator_composition_impl(c, a, -1, identity)
+    aggregated = {}
+    for lbl, rate in terms1 + terms2:
+        aggregated[lbl] = aggregated.get(lbl, 0j) + rate
+    return [(lbl, rate) for lbl, rate in aggregated.items() if rate != 0]
+#endregion Commutator Helpers
+
+_COMMUTATOR_DISPATCH = {
+    ('A', 'A'): _error_generator_commutator_aa,
+    ('A', 'C'): _error_generator_commutator_ac,
+    ('A', 'H'): _error_generator_commutator_ah,
+    ('A', 'S'): _error_generator_commutator_as,
+    ('C', 'C'): _error_generator_commutator_cc,
+    ('C', 'H'): _error_generator_commutator_ch,
+    ('C', 'S'): _error_generator_commutator_cs,
+    ('H', 'S'): _error_generator_commutator_hs,
+}
+
 @lru_cache(maxsize=_COMMUTATOR_CACHE_SIZE)
 def _error_generator_commutator_canonical_unweighted(errorgen_1: _LSE, errorgen_2: _LSE) -> _ErrorgenTerms:
     return _error_generator_commutator_impl(errorgen_1, errorgen_2, None)
@@ -816,19 +1004,29 @@ def _error_generator_commutator_canonical_unweighted(errorgen_1: _LSE, errorgen_
 
 def _error_generator_commutator_impl(errorgen_1: _LSE, errorgen_2: _LSE,
                                      identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
+    t1, t2 = errorgen_1.errorgen_type, errorgen_2.errorgen_type
+    if t1 == 'S' and t2 == 'S':
+        return []
+    if t1 == 'H' and t2 == 'H':
+        ptup = com(errorgen_1.basis_element_labels[0], errorgen_2.basis_element_labels[0])
+        if ptup is not None:
+            return [(_LSE('H', [ptup[1]]), -1j * ptup[0])]
+        else:
+            return []
+
     if identity is None:
         identity = _identity_pauli_string(len(errorgen_1.basis_element_labels[0]))
 
-    terms1 = _error_generator_composition_impl(errorgen_1, errorgen_2, 1, identity)
-    terms2 = _error_generator_composition_impl(errorgen_2, errorgen_1, -1, identity)
+    handler = _COMMUTATOR_DISPATCH.get((t1, t2))
+    if handler is not None:
+        return handler(errorgen_1.basis_element_labels, errorgen_2.basis_element_labels, identity)
 
-    aggregated = {}
-    for lbl, rate in terms1:
-        aggregated[lbl] = aggregated.get(lbl, 0j) + rate
-    for lbl, rate in terms2:
-        aggregated[lbl] = aggregated.get(lbl, 0j) + rate
+    handler_rev = _COMMUTATOR_DISPATCH.get((t2, t1))
+    if handler_rev is not None:
+        base = handler_rev(errorgen_2.basis_element_labels, errorgen_1.basis_element_labels, identity)
+        return [(lbl, -rate) for lbl, rate in base]
 
-    return [(lbl, rate) for lbl, rate in aggregated.items() if rate != 0]
+    return []
 
 
 def error_generator_commutator(errorgen_1: _LSE, errorgen_2: _LSE, flip_weight: bool = False, weight: float = 1.0,
