@@ -10,10 +10,12 @@ Defines OrderedDict-derived classes used to store specific pyGSTi objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 import collections as _collections
-import copy as _copy
 
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.modelmembers import modelmember as _mm
+
+
+LabelLike = _Label | tuple | str
 
 
 class _PrefixOrderedDict(_collections.OrderedDict):
@@ -192,14 +194,11 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
                               " '%s' to a model with one of '%s'") %
                              (evotype, self.parent._evotype))
 
-    def __contains__(self, key):
+    def __contains__(self, key: LabelLike):
         if not isinstance(key, _Label): key = _Label(key, None)
         return super(OrderedMemberDict, self).__contains__(key)
 
-    def __getitem__(self, key):
-        #if self.parent is not None:
-        #    #print("DEBUG: cleaning paramvec before getting ", key)
-        #    self.parent._clean_paramvec()
+    def __getitem__(self, key: LabelLike) -> _mm.ModelMember:
         if not isinstance(key, _Label): key = _Label(key, None)
         return super(OrderedMemberDict, self).__getitem__(key)
 
@@ -272,7 +271,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
 
         return obj
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: LabelLike, value):
         if self.flags.get('validate_keys', False):
             from pygsti.circuits.circuitparser import parse_label as _parse_label
             key_as_lbl = _Label(key) # handles if `key` is a str, or castable to a LabelTup, or already a Label.
@@ -353,7 +352,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
             if new_item.parent is not self.parent:  # de-allocate any items allocated to other models
                 new_item.unlink_parent(force=True)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: LabelLike):
         """Implements `del self[key]`"""
         if not isinstance(key, _Label): key = _Label(key, None)
         super(OrderedMemberDict, self).__delitem__(key)
