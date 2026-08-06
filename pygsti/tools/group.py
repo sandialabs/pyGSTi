@@ -94,7 +94,8 @@ class MatrixGroup(object):
         labels : list, optional
             A label corresponding to each group element.
         """
-        self.mxs = list(list_of_matrices)
+        self.mxs = [m.to_dense() if hasattr(m, 'to_dense') else _np.asarray(m)
+                    for m in list_of_matrices]
         self.labels = list(labels) if (labels is not None) else None
         assert(labels is None or len(labels) == len(list_of_matrices))
         if labels is not None:
@@ -111,23 +112,39 @@ class MatrixGroup(object):
 
         #Construct group table
         self.product_table = -1 * _np.ones([N, N], dtype=int)
-        for i in range(N):
-            for j in range(N):
-                ij_product = _np.dot(self.mxs[j], self.mxs[i])
-                #Dot in reverse order here for multiplication here because
-                #gates are applied left to right.
+        if N > 0:
+            A = _np.asarray(self.mxs)
 
-                for k in range(N):
-                    if _np.isclose(_np.linalg.norm(ij_product - self.mxs[k]), 0):
-                        self.product_table[i, j] = k; break
+            def make_key(m):
+                # Round to 9 decimals and add 0.0 to normalize -0.0
+                return (_np.round(m, 9) + 0.0).tobytes()
+
+            lookup = {make_key(A[k]): k for k in range(N)}
+
+            for i in range(N):
+                # Batched product of all matrices in A with matrix i: (N, d, d)
+                # Gates applied left-to-right means product sequence g_j * g_i
+                row_products = _np.matmul(A, A[i])
+
+                for j in range(N):
+                    product_key = make_key(row_products[j])
+                    k = lookup.get(product_key, -1)
+
+                    if k < 0:
+                        # Fallback to tolerant linear scan on hash boundary miss
+                        diffs = _np.abs(A - row_products[j]).reshape(N, -1).max(axis=1)
+                        best_k = int(_np.argmin(diffs))
+                        if _np.isclose(_np.linalg.norm(row_products[j] - self.mxs[best_k]), 0):
+                            k = best_k
+
+                    self.product_table[i, j] = k
         assert (-1 not in self.product_table), "Cannot construct group table"
 
         #Construct inverse table
         self.inverse_table = -1 * _np.ones(N, dtype=int)
-        for i in range(N):
-            for j in range(N):
-                if self.product_table[i, j] == 0:  # the identity
-                    self.inverse_table[i] = j; break
+        if N > 0:
+            rows, cols = _np.nonzero(self.product_table == 0)
+            self.inverse_table[rows] = cols
         assert (-1 not in self.inverse_table), "Cannot construct inv table"
 
     def matrix(self, i):
