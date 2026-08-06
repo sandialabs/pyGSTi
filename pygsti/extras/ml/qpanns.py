@@ -26,7 +26,7 @@ import warnings as _warnings
 from pygsti.extras.ml import customlayers as _cl
 
 
-@_keras.utils.register_keras_serializable(package='Blah1')
+@_keras.utils.register_keras_serializable(package='pygsti.extras.ml')
 class QPANN(_keras.Model):
     """
     A quantum-physics-aware neural network (QPANN), which is a neural network model for a noisy quantum
@@ -155,9 +155,9 @@ class QPANN(_keras.Model):
         circuit_encoding = inputs[0]  # circuit
         # Computes the error rates matrix, which has shape (circuit depth , self.modelled_error_generators)
         error_rates = self.dense_layer(circuit_encoding)
-        # The "expanded" original form of the probability computation. Is slower than the 'concise' version, as more
-        # computation is done within the network. But it is possibly more amenable to future changes (e.g., a second-order
-        # approximation) and it is the required
+        # The "expanded" original form of the probability computation. It is slower than the 'concise'
+        # version, as more computation is done within the network, but it is more amenable to future
+        # changes (e.g., a second-order approximation).
         if self.probability_computation == 'expanded':
             signs = _tf.cast(inputs[1], _tf.float32)  # sign matrix
             permutations = _tf.cast(inputs[2], _tf.int32)  # permutation matrix
@@ -172,23 +172,16 @@ class QPANN(_keras.Model):
         else:
             raise ValueError("Invalid probability_computation choice: " + str(self.probability_computation))
 
-        # Old code that was written by someone that attempted to find a correction to the first-order approximation.
-        # C = _tf.reshape(self.dense_correction(_tf.reshape(circuit_encoding, [1, -1])), [-1])
-        # probabilities = probabilities +C
-
         return probabilities
 
-    # @_tf.function
     def call(self, inputs: list | tuple | _tf.Tensor) -> _tf.Tensor:
         """Vectorize `circuit_to_probability` over a batch using `tf.map_fn`."""
         return _tf.map_fn(self.circuit_to_probability, inputs, fn_output_signature=_tf.float32)
 
+
 # ------------------------------------------------------------------- #
 #        Main part of the QPANNs (input circuit --> error rates matrix)
 # ------------------------------------------------------------------- #
-
-# @_keras.utils.register_keras_serializable()
-
 
 class CircuitToErrorRatesEinSum(_keras.layers.Layer):
     """Layer mapping a circuit encoding to per-error-generator error rates.
@@ -334,14 +327,11 @@ class EinsumSubNetwork(_keras.layers.Layer):
 
     def build(self, input_shape: tuple | list) -> None:
         """Build the underlying Sequential model (stack of CustomDense layers)."""
-        kernel_regularizer = None#_keras.regularizers.L2(1E-4)  # Adjust the regularization factor as needed
-        bias_regularizer = None# _keras.regularizers.L2(1E-4)    # Adjust the regularization factor as needed
         init = _keras.initializers.RandomUniform(minval=-0.0001, maxval=0.0001)
 
         # Define the sub-unit's dense layers
         self.sequential = _keras.Sequential(
-            # [_cl.SelectiveDense(self.units[0], self.layer_encoding_indices_for_error_generators,  activation='gelu')] +
-             [_cl.CustomDense(i, self.number_of_modelled_error_generators, activation='linear') for i in self.units[:-1]] +
+            [_cl.CustomDense(i, self.number_of_modelled_error_generators, activation='linear') for i in self.units[:-1]] +
             [_cl.CustomDense(self.units[-1], self.number_of_modelled_error_generators, activation='linear', kernel_initializer=init, bias_initializer=init)])
 
     def get_config(self) -> dict:
@@ -357,10 +347,10 @@ class EinsumSubNetwork(_keras.layers.Layer):
         """Forward pass through the subnetwork."""
         return self.sequential(inputs)
 
+
 # ------------------------------------------------------------- #
 #        Output layers for the QPANNs (error matrices --> output)
 # ------------------------------------------------------------- #
-
 
 class ProbabilitiesLayer(_keras.layers.Layer):
     """Expanded probability-approximation layer.
