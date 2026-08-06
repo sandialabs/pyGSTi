@@ -1259,7 +1259,8 @@ def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis_x=None, mx
 def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None, mx_basis_y=None,
                               xlabel=None, ylabel=None,
                               box_labels=False, colorbar=None, prec=0, scale=1.0,
-                              eb_matrices=None, title=None, arrangement='row', subtitles= None):
+                              eb_matrices=None, title=None, arrangement='row',
+                              subtitles=None) -> ReportFigure:
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -1406,7 +1407,7 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
             fig.update_yaxes(row=i+1, col=j+1, **matrix_dict_layout['yaxis'])
             #add the shapes from the subplot to the main figure but update
             #the axis references to point to the correct subplot.
-            flattened_idx = num_rows*i+ (j+1)
+            flattened_idx = num_cols*i + (j+1)  # row-major index (num_rows would be wrong for non-square grids)
             matrix_shapes = matrix_dict_layout['shapes']
             for shape in matrix_shapes:
                 shape['xref'] = f'x{flattened_idx}'
@@ -1455,8 +1456,16 @@ def _opmatrices_color_boxplot(op_matrices, color_min, color_max, mx_basis_x=None
     )
 
     fig.update_layout(layout)
-    
-    return ReportFigure(fig)
+
+    #Gather up the per-panel plt_data (in the same row-major order the
+    #traces were added to `fig` above) so that plotly_to_matplotlib can
+    #render each subplot's heatmap correctly instead of KeyError'ing on
+    #a missing 'plt_data' entry (see #828).
+    plt_data_list: list[_np.ndarray] = [matrix.metadata['plt_data'] for row in op_matrix_plots for matrix in row]
+
+    return ReportFigure(fig, colormap, plt_data=plt_data_list,
+                        num_matrix_rows=num_rows, num_matrix_cols=num_cols,
+                        subtitles=subtitles)
 
 
 
@@ -1729,7 +1738,7 @@ def _matrices_color_boxplot(matrices, xlabels=None, ylabels=None,
                           xlabel=None, ylabel=None, box_labels=False,
                           thick_line_interval=None, colorbar=None, colormap=None,
                           prec=0, scale=1.0, eb_matrices=None, title=None, grid="black",
-                          arrangement='row', subtitles= None):
+                          arrangement='row', subtitles=None) -> ReportFigure:
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -1846,7 +1855,7 @@ def _matrices_color_boxplot(matrices, xlabels=None, ylabels=None,
             fig.update_yaxes(row=i+1, col=j+1, **matrix_dict_layout['yaxis'])
             #add the shapes from the subplot to the main figure but update
             #the axis references to point to the correct subplot.
-            flattened_idx = num_rows*i+ (j+1)
+            flattened_idx = num_cols*i + (j+1)  # row-major index (num_rows would be wrong for non-square grids)
             matrix_shapes = matrix_dict_layout['shapes']
             for shape in matrix_shapes:
                 shape['xref'] = f'x{flattened_idx}'
@@ -1895,9 +1904,15 @@ def _matrices_color_boxplot(matrices, xlabels=None, ylabels=None,
 
     fig.update_layout(layout)
 
-    return ReportFigure(fig)
-    #return ReportFigure(go.Figure(data=data, layout=layout),
-    #                    colormap, flipped_mx, plt_data=flipped_mx)
+    #Gather up the per-panel plt_data (in the same row-major order the
+    #traces were added to `fig` above) so that plotly_to_matplotlib can
+    #render each subplot's heatmap correctly instead of KeyError'ing on
+    #a missing 'plt_data' entry (see #828).
+    plt_data_list: list[_np.ndarray] = [matrix.metadata['plt_data'] for row in matrix_plots for matrix in row]
+
+    return ReportFigure(fig, colormap, plt_data=plt_data_list,
+                        num_matrix_rows=num_rows, num_matrix_cols=num_cols,
+                        subtitles=subtitles)
 
 
 

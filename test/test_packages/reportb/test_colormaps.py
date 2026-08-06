@@ -90,6 +90,143 @@ class ColormapTests(BaseTestCase):
             fig = ReportFigure(go.Figure(data=data, layout=layout))
             plotly_to_matplotlib(fig) #invalid mode
 
+    def test_mpl_conversion_heatmap_without_plt_data(self):
+        """Minimal reproducer for the ``KeyError: 'plt_data'`` seen in report generation.
+
+        The multi-subplot matrix plot builders ``_matrices_color_boxplot`` and
+        ``_opmatrices_color_boxplot`` (pygsti/report/workspaceplots.py) return a
+        ``ReportFigure`` that contains a ``heatmap`` trace but does *not* carry
+        ``plt_data`` (or a ``colormap``) in its metadata.  When such a figure is
+        rendered to matplotlib (PDF reports, or HTML reports with ``link_to``
+        including 'pdf'/'pkl'), ``plotly_to_matplotlib`` fails at
+        ``pygsti/report/mpl_colormaps.py`` with ``KeyError: 'plt_data'``.
+
+        This test constructs the minimal figure that triggers the bug and asserts
+        the *desired* behavior: the figure should render to matplotlib without
+        raising.  While the bug is present this test FAILS (the KeyError is the
+        undesired behavior we want surfaced).
+        """
+        try:
+            import matplotlib
+            from pygsti.report.mpl_colormaps import plotly_to_matplotlib
+        except ImportError:
+            return  # no matplotlib => stop here
+
+        nX, nY = 5, 3
+        heatmap_data = [go.Heatmap(z=np.ones((nY, nX), 'd'),
+                                   colorscale=[[0, 'white'], [1, 'black']],
+                                   showscale=False, zmin=0, zmax=1, hoverinfo='none')]
+        layout = go.Layout(width=800, height=400,
+                           xaxis=dict(type="linear"),
+                           yaxis=dict(type="linear"))
+
+        # Mimic _matrices_color_boxplot / _opmatrices_color_boxplot: the figure is
+        # built with ReportFigure(fig) -- no colormap and no plt_data metadata.
+        fig = ReportFigure(go.Figure(data=heatmap_data, layout=layout))
+
+        # Desired behavior: this should render without raising.  While the bug is
+        # present, plotly_to_matplotlib raises ``KeyError: 'plt_data'`` and this
+        # call fails the test.
+        plotly_to_matplotlib(fig, temp_files + "/testMPLHeatmapNoPltData.pdf")
+
+    def test_mpl_conversion_opmatrices_color_boxplot(self):
+        """Reproduce the ``KeyError: 'plt_data'`` through the actual builder
+        function, `_opmatrices_color_boxplot`, in the same way it is used in
+        real report generation (e.g. real/imaginary error-generator and
+        Hamiltonian-coefficient tables in workspacetables.py -- always called
+        with `colorbar=False, box_labels=True, subtitles=[...]`).
+        """
+        try:
+            import matplotlib
+            from matplotlib.collections import QuadMesh
+            from pygsti.report.mpl_colormaps import plotly_to_matplotlib
+        except ImportError:
+            return  # no matplotlib => stop here
+
+        from pygsti.report.workspaceplots import _opmatrices_color_boxplot
+
+        real_mx = np.array([[0.1, 0.2], [0.3, 0.4]])
+        imag_mx = np.array([[-0.1, 0.0], [0.05, -0.2]])
+
+        fig = _opmatrices_color_boxplot([real_mx, imag_mx], -1.0, 1.0,
+                                        box_labels=True, colorbar=False,
+                                        subtitles=['Real', 'Imag'])
+
+        mpl_fig = plotly_to_matplotlib(fig)
+        try:
+            self.assertEqual(len(mpl_fig.axes), 2)
+            for ax in mpl_fig.axes:
+                quadmeshes = [c for c in ax.collections if isinstance(c, QuadMesh)]
+                self.assertEqual(len(quadmeshes), 1)
+        finally:
+            matplotlib.pyplot.close(mpl_fig)
+
+        plotly_to_matplotlib(fig, temp_files + "/testMPLOpMatricesColorBoxplot.pdf")
+
+    def test_mpl_conversion_matrices_color_boxplot(self):
+        """Same as above but for `_matrices_color_boxplot`."""
+        try:
+            import matplotlib
+            from matplotlib.collections import QuadMesh
+            from pygsti.report.mpl_colormaps import plotly_to_matplotlib
+        except ImportError:
+            return  # no matplotlib => stop here
+
+        from pygsti.report.workspaceplots import _matrices_color_boxplot
+
+        mx1 = np.array([[0.1, 0.2], [0.3, 0.4]])
+        mx2 = np.array([[0.5, 0.6], [0.7, 0.8]])
+        seqcmap = cmap.SequentialColormap(0, 1.0, "whiteToBlack")
+
+        fig = _matrices_color_boxplot([mx1, mx2], box_labels=True, colorbar=False,
+                                      colormap=seqcmap, subtitles=['Mx1', 'Mx2'])
+
+        mpl_fig = plotly_to_matplotlib(fig)
+        try:
+            self.assertEqual(len(mpl_fig.axes), 2)
+            for ax in mpl_fig.axes:
+                quadmeshes = [c for c in ax.collections if isinstance(c, QuadMesh)]
+                self.assertEqual(len(quadmeshes), 1)
+        finally:
+            matplotlib.pyplot.close(mpl_fig)
+
+        plotly_to_matplotlib(fig, temp_files + "/testMPLMatricesColorBoxplot.pdf")
+
+    def test_matrices_color_boxplot_nonsquare_grid_arrangement(self):
+        """Regression test for the `flattened_idx` gridline/annotation remapping
+        formula in `_matrices_color_boxplot`/`_opmatrices_color_boxplot`.
+
+        The formula used to retag each subplot's gridline shapes with the
+        correct `xref`/`yref` was `num_rows*i + (j+1)`, which is only correct
+        when `num_rows == 1` (the default `'row'` arrangement used by every
+        real caller today).  For a non-square `(rows, cols)` grid with more
+        than one row, this dropped/duplicated shapes onto the wrong subplot.
+        The correct row-major formula is `num_cols*i + (j+1)`.
+        """
+        from collections import Counter
+
+        from pygsti.report.workspaceplots import _matrices_color_boxplot
+
+        seqcmap = cmap.SequentialColormap(0, 1.0, "whiteToBlack")
+        num_rows, num_cols = 2, 3
+        matrices = [np.array([[0.1, 0.2], [0.3, 0.4]]) for _ in range(num_rows * num_cols)]
+
+        fig = _matrices_color_boxplot(matrices, colormap=seqcmap, box_labels=True,
+                                      arrangement=(num_rows, num_cols))
+
+        shapes = fig.plotlyfig.layout.shapes
+        xref_counts = Counter(s.xref for s in shapes)
+        yref_counts = Counter(s.yref for s in shapes)
+
+        #Every one of the 6 panels should have its own (non-empty, and equal-count)
+        #set of gridline shapes -- i.e. none should be missing (dropped) or have
+        #shapes from another panel merged in (duplicated).
+        expected_axes = {'x', 'x2', 'x3', 'x4', 'x5', 'x6'}
+        self.assertEqual(set(xref_counts.keys()), expected_axes)
+        self.assertEqual(set(yref_counts.keys()), {'y', 'y2', 'y3', 'y4', 'y5', 'y6'})
+        self.assertEqual(len(set(xref_counts.values())), 1)  # all panels have the same shape count
+        self.assertEqual(len(set(yref_counts.values())), 1)
+
 
 if __name__ == '__main__':
     import unittest
