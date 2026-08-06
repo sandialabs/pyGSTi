@@ -1366,44 +1366,18 @@ def minweight_match(a: Union[list, _np.ndarray], b: Union[list, _np.ndarray],
         ascending order starting at zero.
     """
     assert(len(a) == len(b))
-    default_metric = metricfn is None
     if metricfn is None:
         def metricfn(x, y): return abs(x - y)
 
     D = len(a)
-    weightMx = _np.zeros((D, D), 'd')  # zeros, not empty: a branch that skips filling this must fail loudly
-    a_arr = _np.asarray(a); b_arr = _np.asarray(b)
+    weightMx = _np.empty((D, D), 'd')
 
-    filled = False
-    if D > 0 and default_metric and not pass_indices_to_metricfn:
-        diff = a_arr[:, None] - b_arr[None, :]
-        weightMx[:, :] = _np.hypot(diff.real, diff.imag)
-        filled = True
-    elif D > 0 and not (_np.iscomplexobj(a_arr) or _np.iscomplexobj(b_arr)):
-        # Custom metric on *real* inputs: elementwise real ops give the exact same IEEE
-        # result whether applied to scalars or broadcast arrays (no reductions), so this
-        # is bit-identical to the loop. Complex custom metrics fall back (can't guarantee
-        # bit-identical vectorization). Anything that can't be evaluated on arrays (or
-        # returns the wrong shape/complex) also falls back.
-        try:
-            if pass_indices_to_metricfn:
-                vals = metricfn(_np.arange(D)[:, None], _np.arange(D)[None, :])
-            else:
-                vals = metricfn(a_arr[:, None], b_arr[None, :])
-            vals = _np.asarray(vals)
-            if vals.shape == (D, D) and not _np.iscomplexobj(vals):
-                weightMx[:, :] = vals
-                filled = True
-        except Exception:
-            filled = False
-
-    if not filled:
-        if pass_indices_to_metricfn:
-            for i, x in enumerate(a):
-                weightMx[i, :] = _np.ravel(_np.array([metricfn(i, j) for j, y in enumerate(b)]))
-        else:
-            for i, x in enumerate(a):
-                weightMx[i, :] = _np.ravel(_np.array([metricfn(x, y) for j, y in enumerate(b)]))
+    if pass_indices_to_metricfn:
+        for i, x in enumerate(a):
+            weightMx[i, :] = _np.ravel(_np.array([metricfn(i, j) for j, y in enumerate(b)]))
+    else:
+        for i, x in enumerate(a):
+            weightMx[i, :] = _np.ravel(_np.array([metricfn(x, y) for j, y in enumerate(b)]))
 
     a_inds, b_inds = _spo.linear_sum_assignment(weightMx)
     assert(_np.allclose(a_inds, range(D))), "linear_sum_assignment returned unexpected row indices!"
