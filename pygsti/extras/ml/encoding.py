@@ -384,8 +384,8 @@ def dense_dataset_encoding(ds: "DataSet", n: int, circuits: list[_Circuit] | Non
     return freqs_array
 
 
-def error_generator_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", alpha_representation: str = 'concise',  measurements: str= 'probabilities',
-                            measurement_paulis: list | None = None, process_num: int = 5) -> dict:
+def error_generator_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", alpha_representation: str = 'concise',
+                            process_num: int = 5) -> dict:
     """
     Compute the tensors needed by QPANN probability-approximation layers.
 
@@ -430,8 +430,7 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
     if alpha_representation == 'matrix':
         probabilities, alphas = first_order_outcome_probabilities_tensors(circuits, error_generators, pspec, indices=indices)
     elif alpha_representation == 'concise':
-        probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, measurements = measurements,
-                                                                                  measurement_paulis = measurement_paulis, process_num=process_num)
+        probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, process_num=process_num)
     else:
         raise NotImplementedError('No other representations have been implemented yet!')
     return {'indices':indices, 'signs':signs, 'probabilities':probabilities, 'alphas':alphas}
@@ -585,34 +584,6 @@ def alpha_coefficient(i: int, num_qubits: int, tableau: _stim.Tableau, bs: str) 
     """
     lbl = cast(_lseg.LocalStimErrorgenLabel, _tools.index_to_error_gen(i, num_qubits, as_label=True))
     return _np.float64(_egptools.alpha(lbl, tableau, bs).real)
-
-
-def alpha_coefficient_pauli(i: int, num_qubits: int, tableau: _stim.Tableau, pauli: str) -> float:
-    """
-    Computes the alpha coefficient for the ith error generator, with the circuit defined by the
-    input tableau and for the given bit string.
-
-    Parameters
-    ----------
-    i : int
-        The index of the error generator, as specified in the ordering of ml.tools.index_to_error_gen
-
-    num_qubits : int
-        The number of qubits
-
-    tableau : stim.Tableau
-        The tableau of the circuit for which we are calculating the alpha coefficient
-
-    bs : str
-        The bit string for which the alpha coefficient is to be computed.
-
-    Returns
-    -------
-    float
-        The alpha coefficient
-    """
-    lbl = cast(_lseg.LocalStimErrorgenLabel, _tools.index_to_error_gen(i, num_qubits, as_label=True))
-    return _np.float64(_egptools.alpha_pauli(lbl, tableau, cast(Any, pauli)))
 
 
 def _get_tableau(circuit_or_tableau: _Circuit | _stim.Tableau) -> _stim.Tableau:
@@ -788,84 +759,63 @@ def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], error_ge
     return probabilities, alphas
 
 
-def first_order_outcome_probabilities_tensors_concise(circuits: list[_Circuit], pspec: "ProcessorSpec", indices: _np.ndarray, signs: _np.ndarray, measurements: str = 'probabilities',
-                                                      measurement_paulis: list | None = None, process_num: int = 5) -> tuple[_np.ndarray, _np.ndarray]:
+def first_order_outcome_probabilities_tensors_concise(circuits: list[_Circuit], pspec: "ProcessorSpec", indices: _np.ndarray, signs: _np.ndarray,
+                                                      process_num: int = 5) -> tuple[_np.ndarray, _np.ndarray]:
     """
-    TODO
+    Compute ideal bitstring probabilities and the "concise" first-order sensitivity tensor for a
+    batch of circuits, multiprocessed over circuits.
+
+    Unlike `first_order_outcome_probabilities_tensors` (the dense `'matrix'`/H-S-only
+    representation), this only ever computes alphas for the (few) end-of-circuit error generator
+    indices that actually occur in `indices`, so it supports all four error generator types with
+    no scaling problem. This is the representation used by `error_generator_tensors`'s default
+    `alpha_representation='concise'`.
 
     Parameters
     ----------
-    circuits: list of circuits we are calculating the probabilities tensors for
+    circuits : list[pygsti.circuits.Circuit]
+        Circuits to process.
+    pspec : ProcessorSpec
+        Processor specification (used for `num_qubits`).
+    indices : numpy.ndarray
+        Propagated end-of-circuit error generator indices, of shape
+        `(num_circuits, depth, num_error_generators)` (see `error_propagation_tensors`).
+    signs : numpy.ndarray
+        Sign factors of the same shape as `indices` (see `error_propagation_tensors`).
+    process_num : int, default 5
+        Number of worker processes to use (via `multiprocessing.Pool`).
 
-    pspec: the processor spec of the quantum computer
-
-    indices:
-
-    signs:
-
-    measurements: measurement to calculate the sensitivity tensor for, currently supports 'probabilties' (bitstring probabilties)
-    and 'paulis' (pauli outcomes)
-
-    pauli_params: describes the measurements to use in the calculation, recieves a two component list, the first argument in the max weight
-    of any pauli observables, the second element is the list of allowed paulis
-
-    process_num: number of processes to use for parallel computation
-
+    Returns
+    -------
+    probabilities : numpy.ndarray
+        Array of shape `(num_circuits, 2**n)` with ideal outcome probabilities.
+    first_order_coefficients : numpy.ndarray
+        Array of shape `(num_circuits, 2**n, depth, num_error_generators)` with the alpha
+        coefficient for each circuit/bitstring/layer/error-generator combination, already
+        multiplied by `signs`.
     """
     from pygsti.processors import QubitProcessorSpec
     assert isinstance(pspec, QubitProcessorSpec)
     num_qubits = pspec.num_qubits
     nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
 
-    measurements_array: _np.ndarray
-    first_order_coefficients: _np.ndarray
+    shape = (indices.shape[0], 2 ** num_qubits, indices.shape[1], indices.shape[2])
+    first_order_coefficients = _np.zeros(shape, float)
+    probabilities = _np.zeros((len(circuits), 2 ** num_qubits), float)
+    circ_indices_tuples = [(circ, indices[idx], nbit_strings, num_qubits) for idx, circ in enumerate(circuits)]
+    with Pool(process_num) as p:
+        output_list = p.starmap(_circuit_loop_probs, tqdm.tqdm(circ_indices_tuples))
+    for idx, tup in enumerate(output_list):
+        probabilities[idx] = tup[0]
+        first_order_coefficients[idx] = tup[1]
 
-    if measurements == 'probabilities':
-        shape = (indices.shape[0], 2 ** num_qubits, indices.shape[1], indices.shape[2])
-        first_order_coefficients = _np.zeros(shape, float)
-        measurements_array = _np.zeros((len(circuits), 2 ** num_qubits), float)
-        circ_indices_tuples=[]
-        for idx,circ in enumerate(circuits):
-            circ_indices_tuples.append((circ,indices[idx],nbit_strings,num_qubits))
-        with Pool(process_num) as p:
-            output_list = p.starmap(_circuit_loop_probs, tqdm.tqdm(circ_indices_tuples))
-        for idx, tup in enumerate(output_list):
-            measurements_array[idx]=tup[0]
-            first_order_coefficients[idx]=tup[1]
+    for l, bs in enumerate(nbit_strings):
+        first_order_coefficients[:, l, :, :] = first_order_coefficients[:, l, :, :] * signs
 
-        for l, bs in enumerate(nbit_strings):
-            first_order_coefficients[:, l, :, :] = first_order_coefficients[:, l, :, :] * signs
-
-    elif measurements == 'paulis':
-
-        assert(measurement_paulis is not None), "Must provided the measurement Pauli operators!"
-        shape = (indices.shape[0], len(measurement_paulis), indices.shape[1], indices.shape[2])
-        first_order_coefficients = _np.zeros(shape, float)
-        measurements_array = _np.zeros((len(circuits),len(measurement_paulis)))
-        circ_indices_tuples=[]
-
-        # TIM COPIED OUT WHILE BUG HUNTING
-        for idx, circ in enumerate(circuits):
-            circ_indices_tuples.append((circ, indices[idx], num_qubits, measurement_paulis))
-
-        with Pool(process_num) as p:
-            output_list = p.starmap(_circuit_loop_paulis, tqdm.tqdm(circ_indices_tuples))
-
-        for idx, tup in enumerate(output_list):
-            measurements_array[idx, :] = tup[0]
-            first_order_coefficients[idx, :, :, :] = tup[1]
-
-        for l in range(len(measurement_paulis)):
-            first_order_coefficients[:, l, :, :] = first_order_coefficients[:, l, :, :] * signs
-
-    else:
-        raise ValueError(f"Unknown measurements type: {measurements}")
-
-    return measurements_array, first_order_coefficients
+    return probabilities, first_order_coefficients
 
 
 def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: list[str], num_qubits: int) -> tuple[_np.ndarray, _np.ndarray]:
-
     unique_indices = set(indices.flatten())
 
     tableau = _get_tableau(circuit)
@@ -877,14 +827,12 @@ def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: l
     for l, bs in enumerate(nbit_strings):
         for error_generator_index in unique_indices:
             egtype = cast(Any, _tools.index_to_error_gen(error_generator_index, num_qubits))[0]
-
-            # A definite-outcome bitstring (p_bs exactly 0 or 1) has zero first-order
-            # sensitivity to an 'H'-type error, since p_bs is bounded to [0, 1] and the rate can
-            # take either sign. `alpha_coefficient` already returns exactly 0 here, so this is
-            # purely a speedup -- but a worthwhile one, as most bitstrings sit at p_bs = 0 for
-            # the near-deterministic circuits this code targets. ('S' rates are one-sided, so
-            # the argument does not apply to them.)
             if egtype == 'H' and (_np.isclose(probabilities[l], 0.) or _np.isclose(probabilities[l], 1.)):
+                # A definite-outcome bitstring has zero first-order sensitivity to an 'H'-type
+                # error (its rate can take either sign, and p_bs is bounded to [0, 1]); this is
+                # a worthwhile speedup since most bitstrings sit at p_bs = 0 for the
+                # near-deterministic circuits this code targets. ('S' rates are one-sided, so
+                # this doesn't apply to them.)
                 alphas_dict[l, error_generator_index] = 0.0
                 continue
 
@@ -897,61 +845,3 @@ def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: l
                 first_order_coefficients[l, j, k] = alphas_dict[l, indices[j,k]]
 
     return (probabilities, first_order_coefficients)
-
-
-def _circuit_loop_paulis(circuit: _Circuit, indices: _np.ndarray, num_qubits: int, paulis: list[str]) -> tuple[_np.ndarray, _np.ndarray]:
-
-    unique_indices = set(indices.flatten())
-
-    tableau = _get_tableau(circuit)
-    shape = (len(paulis), indices.shape[0], indices.shape[1])
-    first_order_coefficients = _np.zeros(shape, float)
-    #scale = 1 / 2 ** _egptools.random_support(tableau) #TODO: This might overflow
-    measurements = _np.array([_egptools.stabilizer_pauli_expectation(tableau, p) for p in paulis]).T
-    alphas_dict = {}
-    for l, p in enumerate(paulis):
-        for error_generator_index in unique_indices:
-            egtype = cast(Any, _tools.index_to_error_gen(error_generator_index, num_qubits))[0]
-            #print(egtype)
-            # TIM THINKS THIS IS CORRECT BUT COMMENTING OUT WHILE BUG FIXING
-            #if egtype == 'H' and (_np.isclose(measurements[l], -1.) or _np.isclose(measurements[l], 1.)):
-            #    alpha = 0
-
-            alphas_dict[l, error_generator_index] = alpha_coefficient_pauli(error_generator_index, num_qubits, tableau, p)
-
-    for l in range(len(paulis)):
-        for j in range(indices.shape[0]):
-            for k in range(indices.shape[1]):
-                first_order_coefficients[l, j, k] = alphas_dict[l, indices[j,k]]
-
-    return (measurements, first_order_coefficients)
-
-
-def make_paulis(num_qubits: int, maximum_weight: int) -> list[Any]:
-    """
-    """
-    paulis = []
-    for w in range(1, maximum_weight+1):
-        paulis += make_paulis_of_weight(num_qubits, w)
-    return paulis
-
-
-def make_paulis_of_weight(num_qubits: int, weight: int) -> list[Any]:
-    """
-    num_qubits : number of qubits
-    weight : the weight of the Pauli operators
-    """
-
-    # Generate all combinations of positions for 'Z'
-    positions = _itertools.combinations(range(num_qubits), weight)
-
-    result = []
-    for pos in positions:
-        # Start with all 'I's
-        chars = ['I'] * num_qubits
-        # Place 'Z' at the chosen positions
-        for p in pos:
-            chars[p] = 'Z'
-        result.append(''.join(chars))
-
-    return [_stim.PauliString(pauli) for pauli in result]

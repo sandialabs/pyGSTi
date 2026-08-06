@@ -107,7 +107,6 @@ class QPANN(_keras.Model):
         # numpy/Python values don't have this problem: TF converts them fresh in whatever graph
         # context actually needs them.
         self.stochastic_mask = _np.array([i[0] == 'S' for i in self.modelled_error_generators])
-        self.hamiltonian_mask = _np.array([i[0] == 'H' for i in self.modelled_error_generators])
 
     def get_config(self) -> dict:
         """Return a serializable config dictionary for Keras model saving/loading."""
@@ -121,7 +120,6 @@ class QPANN(_keras.Model):
             'dense_units': self.dense_units,
             'probability_computation': self.probability_computation,
             'stochastic_mask': self.stochastic_mask,
-            'hamiltonian_mask': self.hamiltonian_mask
         })
         return config
 
@@ -227,11 +225,11 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
         self.modelled_error_generators = modelled_error_generators
         self.snipper = snipper
         self.dense_units = dense_units + [1] # The + [1] is the output layer.
-        # Masks that find the 'S' (stochastic) and 'H' (Hamiltonian) error generators.
-        # NOTE: plain numpy arrays, not tf.constant(...) -- see the identical note in
+        # Mask that finds the 'S' (stochastic) error generators, so their rates can be squared
+        # to enforce non-negativity (see EinsumSubNetwork's caller below).
+        # NOTE: a plain numpy array, not tf.constant(...) -- see the identical note in
         # QPANN.__init__ for why (avoids `InaccessibleTensorError` during `.fit()` on Keras 3).
         self.stochastic_mask = _np.array([i[0] == 'S' for i in self.modelled_error_generators])
-        self.hamiltonian_mask = _np.array([i[0] == 'H' for i in self.modelled_error_generators])
 
     def get_config(self) -> dict:
         """Return a serializable config dictionary for Keras layer saving/loading."""
@@ -243,7 +241,6 @@ class CircuitToErrorRatesEinSum(_keras.layers.Layer):
             'dense_units': self.dense_units,
             'layer_snipper': self.snipper,
             'stochastic_mask': self.stochastic_mask,
-            'hamiltonian_mask': self.hamiltonian_mask
         })
         return config
 
@@ -452,65 +449,3 @@ class ProbabilitiesLayerConcise(_keras.layers.Layer):
         perturbation = _tf.reduce_sum(_tf.math.multiply(corrections_coefficients, error_rates), [1, 2])
         probabilities = probabilities_ideal + perturbation
         return probabilities
-
-
-class FidelityLayer(_keras.layers.Layer):
-    """(Incomplete/experimental) layer intended to map error rates to process fidelity predictions.
-
-    Warning
-    -------
-    This class appears incomplete/duplicated (two `call` methods exist) and references
-    undefined variables (e.g., `Px_ideal` in one call). It is preserved as-is; docstrings
-    here reflect intent rather than guaranteed behavior.
-    """
-
-    def __init__(self, **kwargs) -> None:
-        """Initialize the layer."""
-        super(FidelityLayer, self).__init__(**kwargs)
-        self.bitstring_shape = None
-
-    def compute_output_shape(self, input_shape: tuple | list) -> tuple:
-        """Return output shape `(None, bitstring_shape)` once bitstring_shape is known."""
-        # Define the output shape based on the input shape and the number of tracked error generators
-        return (None, self.bitstring_shape)
-
-    @staticmethod
-    def calc_masked_err_rates(error_rates: _tf.Tensor, P: _tf.Tensor, mask: _tf.Tensor) -> _tf.Tensor:
-        """Helper: sum signed error rates grouped by propagated error-generator indices.
-
-        Parameters
-        ----------
-        error_rates : tf.Tensor
-            Signed per-layer error rates.
-        P : tf.Tensor
-            Propagated index tensor.
-        mask : tf.Tensor
-            Boolean/0-1 mask selecting a subset of errors.
-
-        Returns
-        -------
-        tf.Tensor
-            Summed masked error rates per unique propagated index.
-        """
-        masked_error_rates = _tf.math.multiply(_tf.cast(mask, _tf.float32), error_rates)
-        masked_P = _tf.math.multiply(mask, P)
-        flat_masked_error_rates, flat_masked_P = _tf.reshape(masked_error_rates, [-1]), _tf.reshape(masked_P, [-1])
-        unique_masked_P, idx = _tf.unique(flat_masked_P)
-        num_segments = _tf.reduce_max(idx) + 1
-        return _tf.math.unsorted_segment_sum(flat_masked_error_rates, idx, num_segments)
-
-    def call(self, inputs: list | tuple) -> _tf.Tensor:
-        """
-        A function that maps an error rates for a circuit to a prediction for that circuit's process
-        fidelity.
-
-        """
-        try:
-            error_rates, P, S, stochastic_mask, hamiltonian_mask = inputs
-        except Exception as e:
-            raise ValueError('Incorrectly formatted inputs. Should be (error_rates, P, S, stochastic_mask, hamiltonian_mask)') from e
-
-        signed_error_rates = _tf.math.multiply(S, error_rates)
-        final_stochastic_error_rates = self.calc_masked_err_rates(signed_error_rates, P, stochastic_mask)
-        final_hamiltonian_error_rates = self.calc_masked_err_rates(signed_error_rates, P, hamiltonian_mask)
-        return _tf.reduce_sum(final_stochastic_error_rates) + _tf.reduce_sum(_tf.square(final_hamiltonian_error_rates))

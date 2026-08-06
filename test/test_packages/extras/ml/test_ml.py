@@ -235,9 +235,6 @@ class MLSubpackageTester(unittest.TestCase):
         tensor = encoding.circuits_to_tensor(circs, encoder)
         self.assertEqual(tensor.shape[0], 2)
 
-        paulis = encoding.make_paulis(2, 1)
-        self.assertTrue(len(paulis) > 0)
-
     def test_encoding_active_generator_canonicalization_sign(self):
         # Regression/correctness test for a subtlety in `circuit_error_propagation_matrices`
         # specific to 'A'-type (active) error generators: A_{P,Q} = -A_{Q,P} (antisymmetric
@@ -441,14 +438,14 @@ class MLSubpackageTester(unittest.TestCase):
         # would have caught two Keras-3-specific bugs that the old test did not exercise:
         #   1. The `CustomDense`/`Dense.kernel` property conflict (see test_customdense_forward
         #      above) -- raised on the very first forward pass.
-        #   2. `QPANN`/`CircuitToErrorRatesEinSum` used to cache `self.stochastic_mask` and
-        #      `self.hamiltonian_mask` as `tf.constant(...)`, created eagerly at construction
-        #      time. Keras 3's `Model.fit` wraps `train_step` in nested `tf.function`s, and
-        #      referencing a `tf.constant` from a different (already-closed) graph context
-        #      inside one of those raised `InaccessibleTensorError: ... is out of scope`. This
-        #      only manifested during `.fit()` (not a bare forward pass), so it required both
-        #      fixes to be applied together in order to write a passing end-to-end test. The
-        #      masks are now plain numpy arrays.
+        #   2. `QPANN`/`CircuitToErrorRatesEinSum` used to cache `self.stochastic_mask` as a
+        #      `tf.constant(...)`, created eagerly at construction time. Keras 3's `Model.fit`
+        #      wraps `train_step` in nested `tf.function`s, and referencing a `tf.constant` from
+        #      a different (already-closed) graph context inside one of those raised
+        #      `InaccessibleTensorError: ... is out of scope`. This only manifested during
+        #      `.fit()` (not a bare forward pass), so it required both fixes to be applied
+        #      together in order to write a passing end-to-end test. The mask is now a plain
+        #      numpy array.
         pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2'], {}, {}, geometry="line", qubit_labels=[0, 1])
         circuits = [Circuit('[Gxpi2:0Gypi2:1]@(0,1)'), Circuit('[Gypi2:0][Gxpi2:1]@(0,1)')]
         modelled_error_generators = [('H', ('XI',)), ('S', ('IX',))]
