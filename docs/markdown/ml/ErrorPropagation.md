@@ -98,7 +98,7 @@ In a physical quantum device, a coherent or stochastic error affecting a set of 
 
 To embed this physics assumption, a QPANN uses a **snipper** (a list of index lists). For each candidate error generator, the snipper lists the specific indices of the circuit-encoding tensor that the generator's sub-network is allowed to see. This drastically reduces the number of network parameters and prevents overfitting.
 
-We construct a snipper using `layer_snipper_from_qubit_graph`, which describes the device's connectivity using a `networkx`/`igraph`/`graph-tool` graph, a pygsti `QubitGraph`/`QubitProcessorSpec`, or a raw graph Laplacian/adjacency matrix (see `pygsti.extras.ml.graphtools`):
+We construct a snipper using `layer_snipper_from_qubit_graph`, which describes the device's connectivity using a `networkx`/`igraph`/`graph-tool` graph, a pygsti `QubitGraph`/`QubitProcessorSpec`, or a raw adjacency matrix (see `pygsti.extras.ml.graphtools`):
 * `hops=0`: The sub-network for an error generator acting on qubit $q$ only sees gate features applied directly to qubit $q$.
 * `hops=1`: It sees gate features on qubit $q$ AND any of its directly adjacent neighbor qubits in the graph.
 

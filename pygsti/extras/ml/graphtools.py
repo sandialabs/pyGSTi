@@ -1,8 +1,7 @@
 """Graph-library-agnostic qubit connectivity utilities for `pygsti.extras.ml`.
 
 This module lets the rest of `pygsti.extras.ml` (`errgentools`, `snippers`) accept a qubit
-connectivity graph in essentially any common representation, instead of requiring a raw graph
-Laplacian:
+connectivity graph in essentially any common representation:
 
   * a `networkx.Graph`/`DiGraph`/`MultiGraph`/`MultiDiGraph`,
   * an `igraph.Graph` (optional third-party dependency; only inspected via duck-typing, never
@@ -11,9 +10,13 @@ Laplacian:
   * a `pygsti.baseobjs.QubitGraph`,
   * a `pygsti.processors.QubitProcessorSpec` (its 2-qubit-gate connectivity is used, via
     `compute_2Q_connectivity()`),
-  * a raw graph Laplacian or adjacency matrix, as a `numpy.ndarray`, nested list/tuple, or
-    `scipy.sparse` matrix, or
+  * a raw adjacency matrix, as a `numpy.ndarray`, nested list/tuple, or `scipy.sparse` matrix, or
   * an explicit edge list (via `qubit_graph_from_edges`).
+
+A bare matrix must be a plain adjacency matrix (non-negative entries); a graph Laplacian is not
+accepted (see `_matrix_to_adjacency`'s error message if you have one -- it costs nothing to
+convert a Laplacian `L = D - A` to an adjacency matrix `A` yourself, whereas supporting both
+representations ambiguously here would cost real complexity for no real benefit).
 
 Since `networkx` is already a hard pyGSTi dependency (see `pyproject.toml`), it is used as the
 single canonical internal representation: every accepted input is first coerced to a plain
@@ -40,7 +43,6 @@ always `0..n-1` unless `qubit_labels` is supplied to attach labels positionally.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import warnings as _warnings
 from typing import Any
 
 import numpy as _np
@@ -52,13 +54,12 @@ __all__ = [
     'qubit_graph_to_networkx',
     'qubit_graph_from_edges',
     'qubit_graph_adjacency_matrix',
-    'qubit_graph_laplacian',
     'within_hops_matrix',
     'qubits_within_hops',
 ]
 
-# Absolute tolerance used when auto-detecting whether a bare matrix is a Laplacian or an
-# adjacency matrix, and when treating small numerical residues as exact zeros.
+# Absolute tolerance used when checking a bare matrix for (disallowed) negative entries, and
+# when treating small numerical residues as exact zeros.
 _ATOL = 1e-8
 
 
@@ -159,88 +160,43 @@ def _coerce_to_dense_matrix(obj: Any):
     return M
 
 
-def _classify_matrix(M: _np.ndarray, atol: float = _ATOL) -> str:
+def _matrix_to_adjacency(M: _np.ndarray, atol: float = _ATOL) -> _np.ndarray:
     """
-    Automatically classify a square matrix as a graph Laplacian or an adjacency matrix.
-
-    A valid (undirected, non-negative-weight) graph Laplacian `L = D - A` always has symmetric
-    entries, zero row sums, and off-diagonal entries `<= 0`; a valid adjacency matrix always has
-    entries `>= 0`. These two conditions only overlap when every off-diagonal entry is exactly
-    zero (an edgeless graph), in which case `L == A` and either interpretation gives the same
-    (edgeless) result. Everywhere else, the sign of the off-diagonal entries unambiguously
-    identifies which of the two was given.
+    Validate that `M` is a plain adjacency matrix and return a zero-diagonal copy of it.
 
     Parameters
     ----------
     M : numpy.ndarray
         A square matrix.
     atol : float, optional
-        Absolute tolerance used for all the zero/symmetry/row-sum comparisons.
+        Absolute tolerance used when checking for negative entries.
 
     Returns
     -------
-    str
-        Either `'laplacian'` or `'adjacency'`.
+    numpy.ndarray
+        A copy of `M` with its diagonal zeroed.
 
     Raises
     ------
     ValueError
-        If `M` is not square, or if it satisfies neither a Laplacian's nor an adjacency
-        matrix's defining properties (e.g. it has off-diagonal entries of mixed sign, or
-        negative off-diagonal entries but nonzero row sums).
+        If `M` is not square, or has a negative off-diagonal entry (a graph Laplacian
+        `L = D - A` always has off-diagonal entries `<= 0`, so this is the tell-tale sign of
+        one being passed where a plain adjacency matrix -- entries `>= 0` -- is required).
     """
     if M.ndim != 2 or M.shape[0] != M.shape[1]:
         raise ValueError(f"A qubit-graph matrix must be square; got shape {M.shape}.")
-    n = M.shape[0]
-    if n <= 1:
-        return 'adjacency'  # 0x0 / 1x1: no off-diagonal entries, L == A == the empty matrix.
 
-    offdiag = M[~_np.eye(n, dtype=bool)]
-    if _np.allclose(offdiag, 0, atol=atol):
-        return 'adjacency'  # Edgeless graph: L == A, so it doesn't matter which we call it.
-
-    symmetric = _np.allclose(M, M.T, atol=atol)
-    if _np.all(offdiag <= atol):
-        # Every off-diagonal entry is <= 0, and at least one is strictly negative.
-        row_sums_zero = _np.allclose(M.sum(axis=1), 0, atol=atol)
-        if symmetric and row_sums_zero:
-            return 'laplacian'
+    offdiag = M[~_np.eye(M.shape[0], dtype=bool)]
+    if _np.any(offdiag < -atol):
         raise ValueError(
-            "Could not automatically determine whether this matrix is a graph Laplacian or an "
-            "adjacency matrix: its off-diagonal entries are all <= 0 (suggesting a Laplacian), "
-            "but it is not symmetric with zero row sums (a Laplacian must be both). Pass "
-            "input_is='laplacian' or input_is='adjacency' explicitly."
+            "A bare qubit_graph matrix must be a plain adjacency matrix (off-diagonal entries "
+            ">= 0), but this one has negative off-diagonal entries -- it looks like a graph "
+            "Laplacian (L = D - A) instead. Convert it to an adjacency matrix first (e.g. "
+            "`A = -L; numpy.fill_diagonal(A, 0)`), or pass a networkx/igraph/graph-tool graph, "
+            "a pygsti QubitGraph, or a QubitProcessorSpec instead."
         )
-    if _np.all(offdiag >= -atol):
-        # Every off-diagonal entry is >= 0, and at least one is strictly positive: adjacency,
-        # whether or not it happens to be symmetric (a directed/asymmetric adjacency matrix is
-        # still a valid adjacency matrix; it gets symmetrized when building the graph).
-        return 'adjacency'
 
-    raise ValueError(
-        "Could not automatically determine whether this matrix is a graph Laplacian or an "
-        "adjacency matrix: its off-diagonal entries have mixed signs (a Laplacian's must all "
-        "be <= 0; an adjacency matrix's must all be >= 0). Pass input_is='laplacian' or "
-        "input_is='adjacency' explicitly."
-    )
-
-
-def _matrix_to_adjacency(M: _np.ndarray, input_is: str, atol: float = _ATOL) -> _np.ndarray:
-    """Convert a Laplacian-or-adjacency matrix `M` to a plain (zero-diagonal) adjacency matrix."""
-    if M.ndim != 2 or M.shape[0] != M.shape[1]:
-        raise ValueError(f"A qubit-graph matrix must be square; got shape {M.shape}.")
-
-    if input_is == 'auto':
-        input_is = _classify_matrix(M, atol=atol)
-
-    if input_is == 'laplacian':
-        A = -M
-    elif input_is == 'adjacency':
-        A = M.copy()
-    else:
-        raise ValueError(f"input_is must be 'auto', 'laplacian', or 'adjacency'; got {input_is!r}.")
-
-    A = _np.array(A, copy=True)
+    A = _np.array(M, copy=True)
     _np.fill_diagonal(A, 0)
     return A
 
@@ -305,10 +261,10 @@ def _unsupported_type_error(obj: Any) -> TypeError:
     return TypeError(
         f"Unsupported qubit_graph type: {type(obj)!r}. Supported types are: a networkx "
         "Graph/DiGraph/MultiGraph/MultiDiGraph, an igraph.Graph, a graph_tool.Graph, a "
-        "pygsti.baseobjs.QubitGraph, a pygsti.processors.QubitProcessorSpec, a square graph "
-        "Laplacian or adjacency matrix (as a numpy.ndarray, nested list/tuple, or scipy.sparse "
-        "matrix), or a networkx graph produced by qubit_graph_from_edges. Note: a bare edge "
-        "list is ambiguous with a matrix and is not accepted here -- use "
+        "pygsti.baseobjs.QubitGraph, a pygsti.processors.QubitProcessorSpec, a square adjacency "
+        "matrix (as a numpy.ndarray, nested list/tuple, or scipy.sparse matrix), or a networkx "
+        "graph produced by qubit_graph_from_edges. Note: a bare edge list is ambiguous with a "
+        "matrix and is not accepted here -- use "
         "`graphtools.qubit_graph_from_edges(edges, qubit_labels)` to build a graph from one."
     )
 
@@ -317,8 +273,7 @@ def _unsupported_type_error(obj: Any) -> TypeError:
 # Public API
 # ----------------------------------------------------------------------------------------------
 
-def qubit_graph_to_networkx(qubit_graph: Any, qubit_labels: list | None = None,
-                             input_is: str = 'auto') -> _nx.Graph:
+def qubit_graph_to_networkx(qubit_graph: Any, qubit_labels: list | None = None) -> _nx.Graph:
     """
     Coerce a qubit connectivity graph, in essentially any common representation, to a plain
     undirected `networkx.Graph`. This is the single coercion step every other function in this
@@ -342,8 +297,9 @@ def qubit_graph_to_networkx(qubit_graph: Any, qubit_labels: list | None = None,
           * a `pygsti.processors.QubitProcessorSpec` (its two-qubit-gate connectivity, i.e.
             `pspec.compute_2Q_connectivity()`, is used -- *not* `pspec.qubit_graph`, which has
             no edges unless an explicit `geometry` was given when the spec was constructed),
-          * a square graph Laplacian or adjacency matrix, as a `numpy.ndarray`, a nested
-            list/tuple, or a `scipy.sparse` matrix (see `input_is`), or
+          * a square adjacency matrix, as a `numpy.ndarray`, a nested list/tuple, or a
+            `scipy.sparse` matrix (off-diagonal entries must be `>= 0`; see `_matrix_to_adjacency`
+            for the error raised if a graph Laplacian is passed instead), or
           * a `networkx.Graph` already built by `qubit_graph_from_edges`.
 
         A bare edge list (`list[tuple]`) is deliberately *not* accepted here, since e.g.
@@ -359,12 +315,6 @@ def qubit_graph_to_networkx(qubit_graph: Any, qubit_labels: list | None = None,
         `qubit_labels` is applied to a matrix input. If None, `qubit_graph`'s own native node
         order is used (or plain positions `0..n-1` for a bare matrix).
 
-    input_is : {'auto', 'laplacian', 'adjacency'}, optional
-        Only consulted when `qubit_graph` is a matrix (dense or sparse); ignored otherwise.
-        `'auto'` (the default) distinguishes a Laplacian from an adjacency matrix by the sign of
-        its off-diagonal entries (see `_classify_matrix`); pass `'laplacian'` or `'adjacency'`
-        explicitly to bypass that heuristic.
-
     Returns
     -------
     networkx.Graph
@@ -376,8 +326,9 @@ def qubit_graph_to_networkx(qubit_graph: Any, qubit_labels: list | None = None,
     TypeError
         If `qubit_graph` is not one of the supported types.
     ValueError
-        If a matrix input is not square, is ambiguous under `input_is='auto'`, or if
-        `qubit_labels` cannot be reconciled with `qubit_graph`'s own nodes.
+        If a matrix input is not square, has a negative off-diagonal entry (see
+        `_matrix_to_adjacency`), or if `qubit_labels` cannot be reconciled with `qubit_graph`'s
+        own nodes.
     """
     orig_nodes: list | None = None
     edges: list[tuple] = []
@@ -404,7 +355,7 @@ def qubit_graph_to_networkx(qubit_graph: Any, qubit_labels: list | None = None,
                 f"qubit_labels has length {len(qubit_labels)}, but the given matrix has shape "
                 f"{M.shape}; a bare matrix's rows/columns are positional, so these must match."
             )
-        A = _matrix_to_adjacency(M, input_is)
+        A = _matrix_to_adjacency(M)
         n = A.shape[0]
         orig_nodes = list(range(n))
         edges = [(i, j) for i in range(n) for j in range(i + 1, n) if A[i, j] or A[j, i]]
@@ -460,8 +411,7 @@ def qubit_graph_from_edges(edges: list[tuple], qubit_labels: list) -> _nx.Graph:
     return G
 
 
-def qubit_graph_adjacency_matrix(qubit_graph: Any, qubit_labels: list | None = None,
-                                  input_is: str = 'auto') -> _np.ndarray:
+def qubit_graph_adjacency_matrix(qubit_graph: Any, qubit_labels: list | None = None) -> _np.ndarray:
     """
     Get the adjacency matrix of a qubit connectivity graph, in any of the representations
     accepted by `qubit_graph_to_networkx`.
@@ -472,8 +422,6 @@ def qubit_graph_adjacency_matrix(qubit_graph: Any, qubit_labels: list | None = N
         See `qubit_graph_to_networkx`.
     qubit_labels : list, optional
         See `qubit_graph_to_networkx`. Also fixes the row/column order of the returned matrix.
-    input_is : {'auto', 'laplacian', 'adjacency'}, optional
-        See `qubit_graph_to_networkx`.
 
     Returns
     -------
@@ -482,48 +430,17 @@ def qubit_graph_adjacency_matrix(qubit_graph: Any, qubit_labels: list | None = N
         zero diagonal. Row/column `i` corresponds to `qubit_labels[i]` if given, else to the
         `i`-th qubit in `qubit_graph`'s own native node order.
     """
-    G = qubit_graph_to_networkx(qubit_graph, qubit_labels=qubit_labels, input_is=input_is)
+    G = qubit_graph_to_networkx(qubit_graph, qubit_labels=qubit_labels)
     nodes = list(qubit_labels) if qubit_labels is not None else list(G.nodes())
     return _nx.to_numpy_array(G, nodelist=nodes, dtype=int)
 
 
-def qubit_graph_laplacian(qubit_graph: Any, qubit_labels: list | None = None,
-                           input_is: str = 'auto') -> _np.ndarray:
-    """
-    Get the graph Laplacian (`L = D - A`) of a qubit connectivity graph, in any of the
-    representations accepted by `qubit_graph_to_networkx`.
-
-    Parameters
-    ----------
-    qubit_graph : graph-like
-        See `qubit_graph_to_networkx`.
-    qubit_labels : list, optional
-        See `qubit_graph_to_networkx`. Also fixes the row/column order of the returned matrix.
-    input_is : {'auto', 'laplacian', 'adjacency'}, optional
-        See `qubit_graph_to_networkx`.
-
-    Returns
-    -------
-    numpy.ndarray
-        Integer Laplacian matrix of shape `(n, n)`. Row/column `i` corresponds to
-        `qubit_labels[i]` if given, else to the `i`-th qubit in `qubit_graph`'s own native node
-        order.
-    """
-    A = qubit_graph_adjacency_matrix(qubit_graph, qubit_labels=qubit_labels, input_is=input_is)
-    D = _np.diag(A.sum(axis=1))
-    return D - A
-
-
-def within_hops_matrix(qubit_graph: Any, hops: int, qubit_labels: list | None = None,
-                        input_is: str = 'auto') -> _np.ndarray:
+def within_hops_matrix(qubit_graph: Any, hops: int, qubit_labels: list | None = None) -> _np.ndarray:
     """
     Compute the boolean "within `hops` hops" adjacency matrix for a qubit connectivity graph:
     `close[i, j]` is True iff qubits `i` and `j` (`i != j`) are connected by a path of at most
-    `hops` edges. This uses true (unweighted) shortest-path graph distance -- computed via
-    breadth-first search -- rather than the `matrix_power(laplacian, hops)` heuristic used by
-    earlier versions of this package (nonzero entries of a Laplacian power are not, in general,
-    exactly the vertices within a given hop distance, e.g. in the presence of even-length
-    cycles; BFS distance is exact and is used here instead).
+    `hops` edges. This uses true (unweighted) shortest-path graph distance, computed via
+    breadth-first search.
 
     Parameters
     ----------
@@ -533,8 +450,6 @@ def within_hops_matrix(qubit_graph: Any, hops: int, qubit_labels: list | None = 
         Maximum hop (graph-edge) distance; must be a non-negative integer.
     qubit_labels : list, optional
         See `qubit_graph_to_networkx`. Also fixes the row/column order of the returned matrix.
-    input_is : {'auto', 'laplacian', 'adjacency'}, optional
-        See `qubit_graph_to_networkx`.
 
     Returns
     -------
@@ -545,7 +460,7 @@ def within_hops_matrix(qubit_graph: Any, hops: int, qubit_labels: list | None = 
     if not isinstance(hops, (int, _np.integer)) or hops < 0:
         raise ValueError(f"hops must be a non-negative integer; got {hops!r}.")
 
-    G = qubit_graph_to_networkx(qubit_graph, qubit_labels=qubit_labels, input_is=input_is)
+    G = qubit_graph_to_networkx(qubit_graph, qubit_labels=qubit_labels)
     nodes = list(qubit_labels) if qubit_labels is not None else list(G.nodes())
     n = len(nodes)
     index_of = {node: i for i, node in enumerate(nodes)}
@@ -561,7 +476,7 @@ def within_hops_matrix(qubit_graph: Any, hops: int, qubit_labels: list | None = 
 
 
 def qubits_within_hops(qubit_graph: Any, hops: int, qubit_labels: list | None = None,
-                        include_self: bool = True, input_is: str = 'auto') -> list[list[int]]:
+                        include_self: bool = True) -> list[list[int]]:
     """
     For every qubit, find the (positional indices of the) qubits within `hops` hops of it on
     the qubit connectivity graph `qubit_graph`.
@@ -579,8 +494,6 @@ def qubits_within_hops(qubit_graph: Any, hops: int, qubit_labels: list | None = 
         Whether qubit `i` should always be included in its own list (regardless of `hops`).
         Default True, matching the convention used elsewhere in this package that an error
         generator's own support qubits are always "relevant to themselves".
-    input_is : {'auto', 'laplacian', 'adjacency'}, optional
-        See `qubit_graph_to_networkx`.
 
     Returns
     -------
@@ -589,7 +502,7 @@ def qubits_within_hops(qubit_graph: Any, hops: int, qubit_labels: list | None = 
         positional indices of the qubits within `hops` hops of qubit `i` (including `i` itself
         iff `include_self` is True).
     """
-    close = within_hops_matrix(qubit_graph, hops, qubit_labels=qubit_labels, input_is=input_is)
+    close = within_hops_matrix(qubit_graph, hops, qubit_labels=qubit_labels)
     n = close.shape[0]
     result = []
     for i in range(n):
@@ -598,52 +511,3 @@ def qubits_within_hops(qubit_graph: Any, hops: int, qubit_labels: list | None = 
             indices.add(i)
         result.append(sorted(indices))
     return result
-
-
-def _resolve_qubit_graph_arg(qubit_graph, deprecated_value, deprecated_name: str,
-                              new_name: str = 'qubit_graph'):
-    """
-    Resolve a (`new_name`, `deprecated_name`) pair of mutually-exclusive keyword arguments,
-    warning if the deprecated one was used. Internal helper shared by `errgentools` and
-    `snippers` while their old `qubit_graph_laplacian=`/`adjacency_matrix=` parameter names are
-    phased out in favor of the generic, graph-library-agnostic `qubit_graph=`.
-
-    Parameters
-    ----------
-    qubit_graph : object or None
-        The value passed for the new parameter name (or None if it wasn't given).
-    deprecated_value : object or None
-        The value passed for the deprecated parameter name (or None if it wasn't given).
-    deprecated_name : str
-        The deprecated parameter's name, for the warning/error messages.
-    new_name : str, optional
-        The new parameter's name, for the warning/error messages.
-
-    Returns
-    -------
-    object
-        Whichever of `qubit_graph`/`deprecated_value` was given.
-
-    Raises
-    ------
-    TypeError
-        If neither or both were given.
-    """
-    if deprecated_value is not None:
-        if qubit_graph is not None:
-            raise TypeError(
-                f"Specify only one of '{new_name}' or the deprecated '{deprecated_name}' "
-                "(they are aliases for the same argument)."
-            )
-        _warnings.warn(
-            f"The '{deprecated_name}' argument is deprecated and will be removed in a future "
-            f"version; use '{new_name}' instead. It accepts everything '{deprecated_name}' did "
-            "(a raw numpy/scipy.sparse Laplacian or adjacency matrix) plus a networkx, igraph, "
-            "or graph-tool graph, a pygsti QubitGraph, or a pygsti QubitProcessorSpec -- see "
-            "pygsti.extras.ml.graphtools.",
-            DeprecationWarning, stacklevel=3,
-        )
-        return deprecated_value
-    if qubit_graph is None:
-        raise TypeError(f"Missing required argument: '{new_name}'.")
-    return qubit_graph

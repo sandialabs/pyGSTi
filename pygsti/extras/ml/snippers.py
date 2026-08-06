@@ -53,7 +53,7 @@ def undirected_adjacency_matrix_from_edges(edges: list[tuple], qubit_labels: lis
 
 def layer_snipper_from_qubit_graph(
     error_generators: list[tuple], encoder: "StandardCircuitEncoder", qubit_graph: Any = None,
-    hops: int | None = None, *, input_is: str = 'auto', adjacency_matrix: _np.ndarray | None = None,
+    hops: int | None = None,
 ) -> list[list[int]]:
     """
     Creates a "snipper" for a QPANN. This snipper will specify that, when predicting the
@@ -85,24 +85,16 @@ def layer_snipper_from_qubit_graph(
         The qubit connectivity graph. Accepts a `networkx.Graph`/`DiGraph`/`MultiGraph`, an
         `igraph.Graph`, a `graph_tool.Graph`, a `pygsti.baseobjs.QubitGraph`, a
         `pygsti.processors.QubitProcessorSpec` (its 2-qubit-gate connectivity is used), or a
-        raw graph Laplacian or adjacency matrix (`numpy.ndarray`, nested list/tuple, or
-        `scipy.sparse` matrix; see `input_is`). If the graph object carries its own qubit
-        labels (a labeled `networkx`/`igraph`/`graph_tool` graph, a `QubitGraph`, or a
-        `QubitProcessorSpec`), those labels must agree with `encoder.pspec.qubit_labels`
-        (order does not matter in that case); a bare matrix's rows/columns are always
-        positional and are matched to `encoder.pspec.qubit_labels` by position. See
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
-        types and exactly how they're interpreted.
+        raw adjacency matrix (`numpy.ndarray`, nested list/tuple, or `scipy.sparse` matrix). If
+        the graph object carries its own qubit labels (a labeled `networkx`/`igraph`/`graph_tool`
+        graph, a `QubitGraph`, or a `QubitProcessorSpec`), those labels must agree with
+        `encoder.pspec.qubit_labels` (order does not matter in that case); a bare matrix's
+        rows/columns are always positional and are matched to `encoder.pspec.qubit_labels` by
+        position. See `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of
+        accepted types and exactly how they're interpreted.
 
     hops : int
         The number of steps on the qubit graph to take.
-
-    input_is : {'auto', 'laplacian', 'adjacency'}, optional
-        Only consulted when `qubit_graph` is a bare matrix; see
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx`.
-
-    adjacency_matrix : numpy.ndarray, optional
-        Deprecated alias for `qubit_graph`. Specify only one of the two.
 
     Returns
     -------
@@ -117,7 +109,8 @@ def layer_snipper_from_qubit_graph(
     "Within `hops` steps" is determined by true (unweighted) shortest-path graph distance,
     computed via breadth-first search.
     """
-    qubit_graph = _graphtools._resolve_qubit_graph_arg(qubit_graph, adjacency_matrix, 'adjacency_matrix')
+    if qubit_graph is None:
+        raise TypeError("Missing required argument: 'qubit_graph'.")
     if hops is None:
         raise TypeError("Missing required argument: 'hops'.")
 
@@ -129,7 +122,7 @@ def layer_snipper_from_qubit_graph(
     # position), find the positions of all qubits within `hops` hops of it on `qubit_graph`
     # (always including the qubit itself, regardless of hops or its degree).
     nodes_within_hops = _graphtools.qubits_within_hops(
-        qubit_graph, hops, qubit_labels=qubit_labels, include_self=True, input_is=input_is)
+        qubit_graph, hops, qubit_labels=qubit_labels, include_self=True)
 
     # For each error generator, find the relevant encoding indices.
     encoding_indices = []

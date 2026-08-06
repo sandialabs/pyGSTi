@@ -72,7 +72,7 @@ probabilities_ideal, alphas = tensors['probabilities'], tensors['alphas']
 # 3. Build snipper & QPANN. `pspec` has no 2-qubit gates declared (availability={}), so we
 # describe the physical qubit-0/qubit-1 coupling as a standalone networkx graph instead --
 # `layer_snipper_from_qubit_graph` accepts a networkx/igraph/graph-tool graph, a pygsti
-# QubitGraph/QubitProcessorSpec, or a raw Laplacian/adjacency matrix (see graphtools).
+# QubitGraph/QubitProcessorSpec, or a raw adjacency matrix (see graphtools).
 qubit_graph = nx.Graph()
 qubit_graph.add_nodes_from(qubit_labels)
 qubit_graph.add_edge(0, 1)
@@ -253,7 +253,7 @@ circuits_tensor_3q = encoding.circuits_to_tensor(circuits_3q, encoder_3q)
 # 2. Build snipper. `pspec_3q` already declares 'Gcphase' on our ring connectivity
 # (availability['Gcphase']), so we can pass it directly as the qubit graph -- its
 # 2-qubit-gate connectivity (pspec_3q.compute_2Q_connectivity()) is used automatically.
-# A networkx/igraph/graph-tool graph or a raw Laplacian/adjacency matrix work identically.
+# A networkx/igraph/graph-tool graph or a raw adjacency matrix work identically.
 snipper_3q = snippers.layer_snipper_from_qubit_graph(true_error_generators, encoder_3q, pspec_3q, hops=1)
 
 # 3. Build QPANN
