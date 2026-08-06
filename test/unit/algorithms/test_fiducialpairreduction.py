@@ -120,6 +120,7 @@ class FindSufficientFiducialPairsPerGermGreedy(object):
             initial_seed_mode='greedy', seed=_SEED, check_complete_fid_set=False)
         #TODO assert correctness
 
+
 class FindSufficientFiducialPairsPerGermGlobal(object):
 
     def test_germ_set_spanning_vectors_greedy(self):
@@ -143,6 +144,7 @@ class FindSufficientFiducialPairsPerGermGlobal(object):
             self.model, self.preps, self.effects, germ_vector_spanning_set= self.spanning_vec_set_greedy,
             initial_seed_mode='greedy', float_type = _np.double, evd_tol=1e-6, inv_trace_tol= 30)
         #TODO assert correctness
+
 
 class StdDataFindSufficientFiducialPairsTester(FindSufficientFiducialPairsBase,
                                                FindSufficientFiducialPairsPerGermBase,

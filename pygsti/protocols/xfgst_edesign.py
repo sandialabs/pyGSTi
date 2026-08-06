@@ -63,7 +63,7 @@ def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign:
         ``{1: mapper_1q, 2: mapper_2q}``.
     """
     twoq_idle_label = Label(('Gii',) + twoq_gstdesign.qubit_labels)
-    oneq_idle_label = Label(('Gi',) + oneq_gstdesign.qubit_labels)
+    oneq_idle_label = Label(('Gi',)  + oneq_gstdesign.qubit_labels)
     mapper_2q: dict[Label, Label] = {twoq_idle_label: twoq_idle_label}
     mapper_1q: dict[Label, Label] = {oneq_idle_label: oneq_idle_label}
     empty_label = Label(())
@@ -644,7 +644,6 @@ def assign_the_designs_with_mapping(
     color_patches: Dict[int, List[Edge]],
     randgen: Optional[np.random.Generator] = None,
     ensure_containment: bool = False,
-    _layer_mappers_override: Optional[LayerMappers] = None,
     **kwargs: Any,
 ) -> List[List[Circuit]]:
     """
@@ -712,11 +711,7 @@ def assign_the_designs_with_mapping(
     ensure_containment: bool, optional
         If True, ensure that circuitlists[L+1] contains the exact circuits
         from circuitlists[L]. Containment is enforced patch-wise, so the
-    output remains patch-major. Default is False. 
-
-    _layer_mappers_override : LayerMappers, optional
-        If provided, use these layer mappers instead of building them from the
-        two designs via ``build_layer_mappers``. Primarily for testing.
+    output remains patch-major. Default is False.
 
     **kwargs
         Ignored. Accepted so this stitcher matches the generic
@@ -742,10 +737,7 @@ def assign_the_designs_with_mapping(
 
     oneq_gstdesign_circuitlists = oneq_gstdesign.circuit_lists
     twoq_gstdesign_circuitlists = twoq_gstdesign.circuit_lists
-    if _layer_mappers_override is not None:
-        layer_mappers = _layer_mappers_override
-    else:
-        layer_mappers = build_layer_mappers(oneq_gstdesign, twoq_gstdesign)
+    layer_mappers = build_layer_mappers(oneq_gstdesign, twoq_gstdesign)
 
     assert len(oneq_gstdesign_circuitlists) == len(twoq_gstdesign_circuitlists), \
         "Not implemented."
