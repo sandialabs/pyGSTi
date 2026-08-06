@@ -13,6 +13,7 @@ from pygsti.tools import slicetools as _slct
 from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp
 from pygsti.algorithms import BuiltinBasis
 from pygsti.modelmembers.operations import create_from_unitary_mx
+from pygsti.tools.internalgates import standard_gatename_unitaries
 
 from ..util import BaseCase
 
@@ -111,8 +112,10 @@ class TestRebuildParamVec(BaseCase):
                                                                         state_space=QubitSpace(1),
                                                                         evotype='densitymx')
 
-            comp = ComposedOp([create_from_unitary_mx(np.eye(2), "static standard",
-                                                      stdname=gate_name),
+            # Note: the unitary and `stdname` have to agree -- create_from_unitary_mx's
+            # 'static standard' branch is only taken when they do.
+            comp = ComposedOp([create_from_unitary_mx(standard_gatename_unitaries()[gate_name],
+                                                      "static standard", stdname=gate_name),
                                ExpErrorgenOp(my_lindbladian)])
             comp1 = comp.copy()
 
