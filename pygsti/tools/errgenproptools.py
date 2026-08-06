@@ -44,13 +44,18 @@ import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
-from functools import reduce, lru_cache
+from functools import reduce, lru_cache, partial
 from itertools import chain, product
 from math import factorial
 
 # A list of (error generator label, rate) pairs, as produced by the commutator and
 # composition routines below. Rates may be complex prior to aggregation.
 _ErrorgenTerms = list[tuple[_LSE, complex]]
+
+# The `basis_element_labels` of a single error generator label: length 1 for H and S,
+# length 2 for C and A. The composition helpers take these tuples whole rather than
+# pre-unpacked elements, which is what lets them share one calling convention.
+_Bels = tuple[stim.PauliString, ...]
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label: Union[_GEEL, _LEEL],
                                           num_qubits: int) -> tuple[stim.PauliString, ...]:
@@ -688,27 +693,9 @@ def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity
 
     (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
 
-    Parameters:
-    ----------
-    errorgen_layers : list of dicts
-        List of dictionaries of the error generator coefficients and rates for a circuit layer. 
-        The error generator coefficients are represented using LocalStimErrorgenLabel.
-
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-        
-    truncation_threshold : float, optional (default 1e-14)
-        Threshold for which any error generators with magnitudes below this value
-        are truncated.
-
-    Returns
-    -------
-    second_order_comm_dict : dict
-        A dictionary with the same general structure as those in `errorgen_layers`, but with the
-        rates combined according to the second order of the magnus expansion.
+    See `magnus_expansion` for the parameter descriptions. Returns a dictionary with the
+    same structure as the entries of `errorgen_layers`, with the rates combined according
+    to the above.
     """
     errorgen_pairs = []
     for i in range(len(errorgen_layers)):
@@ -922,35 +909,38 @@ error_generator_commutator.cache_clear = _error_generator_commutator_canonical_u
 #term-count check in the unit tests (`_composition_block_max_terms`) recognises appends by
 #that receiver name, so renaming it would silently drop the derived bounds to zero.
 
+#region: Composition Helpers
+#Calling convention shared by this block and every `_error_generator_composition_*` helper
+#below, documented here rather than repeated in each docstring:
+#
+#  A, B, P, Q  Sign-stripped `stim.PauliString` basis elements of the error generators named
+#              in the function's suffix, in that order (e.g. `_hc_or_ch(A, P, Q, ...)` takes
+#              A from the H generator and P, Q from the C generator).
+#  <X>_error_is_first
+#              Selects the operator ordering, i.e. whether the X generator is the outer one.
+#              `_hc_or_ch(..., H_error_is_first=True)` computes H_A[C_{P,Q}[.]] rather than
+#              C_{P,Q}[H_A[.]]. For the pairs that share an implementation this flag usually
+#              only flips the sign of an imaginary unit; each docstring notes where it does
+#              more than that.
+#  weight      Multiplies the rate of every returned term. Defaults to 1.0.
+#  identity    Optional pre-built identity `stim.PauliString`, compared against to detect
+#              terms that vanish. Purely an optimization -- passing None is legal and only
+#              costs the allocations it would have saved, which matters when these helpers
+#              are called in a hot loop.
+#
+#The `_append_*` primitives mutate `composed_errorgens` in place and return None. The
+#`_error_generator_composition_*` helpers return a fresh `_ErrorgenTerms` (see the alias
+#definition near the top of this module for what those tuples contain).
+
 def _append_composed_errorgen(composed_errorgens: _ErrorgenTerms, use_C: bool, pauli_1: stim.PauliString,
                               pauli_2: stim.PauliString, ident_1: bool, ident_2: bool,
                               pauli_eq: bool, coeff: complex, weight: float=1.0) -> None:
     r"""
     Append one composed error generator term, if it is non-vanishing.
 
-    Parameters
-    ----------
-    composed_errorgens : list
-        Accumulator of (`LocalStimErrorgenLabel`, rate) tuples, appended to in place.
-
-    use_C : bool
-        Whether to build the term with `_ordered_new_bels_C` rather than
-        `_ordered_new_bels_A`.
-
-    pauli_1, pauli_2 : stim.PauliString
-        The two basis elements of the new term.
-
-    ident_1, ident_2 : bool
-        Whether the corresponding Pauli is the identity.
-
-    pauli_eq : bool
-        Whether the two Paulis are equal.
-
-    coeff : complex
-        Coefficient for the term, excluding `addl_factor` and `weight`.
-
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
+    `use_C` picks `_ordered_new_bels_C` over `_ordered_new_bels_A`. That call may report
+    that the term vanishes, in which case nothing is appended, and it may return an
+    `addl_factor`; `coeff` is the coefficient *excluding* that factor and `weight`.
     """
     ordered_new_bels = _ordered_new_bels_C if use_C else _ordered_new_bels_A
     new_eg_type, new_bels, addl_factor = ordered_new_bels(pauli_1, pauli_2, ident_1, ident_2,
@@ -987,23 +977,9 @@ def _append_conditional_errorgen(composed_errorgens: _ErrorgenTerms, prod: tuple
     (`C_if_true`, `coeff_if_true`) and its complement, so the caller states the rule
     rather than encoding it in a function name.
 
-    Parameters
-    ----------
-    prod : tuple
-        (phase, `stim.PauliString`) pair as returned by `pauli_product`.
-
-    other : stim.PauliString
-        The partner basis element. Assumed never to be the identity.
-
-    condition : bool
-        Selects which of the two forms to emit.
-
-    C_if_true : bool
-        Whether `condition` being True means a `_ordered_new_bels_C` term.
-
-    coeff_if_true, coeff_if_false : complex
-        Coefficients for the two forms, excluding the product phase, `addl_factor`
-        and `weight`.
+    `prod` is a (phase, `stim.PauliString`) pair as returned by `pauli_product`. `other`
+    is the partner basis element and is assumed never to be the identity. The two
+    coefficients exclude the product phase, `addl_factor` and `weight`.
     """
     use_C = C_if_true if condition else not C_if_true
     _append_composed_errorgen(composed_errorgens, use_C, prod[1], other,
@@ -1011,34 +987,19 @@ def _append_conditional_errorgen(composed_errorgens: _ErrorgenTerms, prod: tuple
                               (coeff_if_true if condition else coeff_if_false)*prod[0], weight)
 
 
-def _error_generator_composition_hs_or_sh(P: stim.PauliString, Q: stim.PauliString, P_from_an_S_error: bool,
+def _error_generator_composition_hs_or_sh(P_from_an_S_error: bool, bels_1: _Bels, bels_2: _Bels,
                                           weight: float=1.0,
                                           identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
-    Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
-    
-    Parameters
-    ----------
+    Returns the composition of an H error generator with an S error generator, in either
+    order. I.e. H_P[S_Q[\cdot]] or S_P[H_Q[\cdot]].
 
-    P_from_an_S_error: `bool`
-        Did we take P from an S error or was it Q?
-        
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-    
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s 
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
+    Unlike the other mixed pairs this one keeps both basis elements in operand order, so
+    `P_from_an_S_error` says which generator P came from rather than which generator is
+    applied first, and no swap is needed.
     """
+    P = bels_1[0]
+    Q = bels_2[0]
     composed_errorgens = []
     # If P and Q only multiply to the identity they are equal, in which case they commute.
     _append_conditional_errorgen(composed_errorgens, pauli_product(P, Q),
@@ -1048,8 +1009,8 @@ def _error_generator_composition_hs_or_sh(P: stim.PauliString, Q: stim.PauliStri
 
     return composed_errorgens
 
-def _error_generator_composition_hc_or_ch(A: stim.PauliString, P: stim.PauliString, Q: stim.PauliString,
-                                          H_error_is_first: bool, weight: float=1.0,
+def _error_generator_composition_hc_or_ch(H_error_is_first: bool, bels_1: _Bels, bels_2: _Bels,
+                                          weight: float=1.0,
                                           identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an H error generator with a C error generator, in
@@ -1065,35 +1026,10 @@ def _error_generator_composition_hc_or_ch(A: stim.PauliString, P: stim.PauliStri
 
     The only difference between the two orderings is the sign of the imaginary unit
     carried by the anticommuting terms, which is why they share an implementation.
-
-    Parameters
-    ----------
-    A : stim.PauliString
-        The basis element of the H error generator.
-
-    P, Q : stim.PauliString
-        The basis elements of the C error generator.
-
-    H_error_is_first : `bool`
-        Whether the H error generator is the outer one, i.e. whether we are computing
-        H_A[C_{P,Q}[.]] rather than C_{P,Q}[H_A[.]].
-
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
     """
+    h_bels, c_bels = (bels_1, bels_2) if H_error_is_first else (bels_2, bels_1)
+    A = h_bels[0]
+    P, Q = c_bels
     composed_errorgens = []
     com_AP = A.commutes(P)
     com_AQ = A.commutes(Q)
@@ -1117,8 +1053,8 @@ def _error_generator_composition_hc_or_ch(A: stim.PauliString, P: stim.PauliStri
 
     return composed_errorgens
 
-def _error_generator_composition_ha_or_ah(A: stim.PauliString, P: stim.PauliString, Q: stim.PauliString,
-                                          H_error_is_first: bool, weight: float=1.0,
+def _error_generator_composition_ha_or_ah(H_error_is_first: bool, bels_1: _Bels, bels_2: _Bels,
+                                          weight: float=1.0,
                                           identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an H error generator with an A error generator, in
@@ -1135,35 +1071,10 @@ def _error_generator_composition_ha_or_ah(A: stim.PauliString, P: stim.PauliStri
 
     As with the H/C pair, the two orderings differ only in the sign of the imaginary
     unit on the terms where A anticommutes with the relevant element.
-
-    Parameters
-    ----------
-    A : stim.PauliString
-        The basis element of the H error generator.
-
-    P, Q : stim.PauliString
-        The basis elements of the A error generator.
-
-    H_error_is_first : `bool`
-        Whether the H error generator is the outer one, i.e. whether we are computing
-        H_A[A_{P,Q}[.]] rather than A_{P,Q}[H_A[.]].
-
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
     """
+    h_bels, a_bels = (bels_1, bels_2) if H_error_is_first else (bels_2, bels_1)
+    A = h_bels[0]
+    P, Q = a_bels
     composed_errorgens = []
     com_AP = A.commutes(P)
     com_AQ = A.commutes(Q)
@@ -1189,8 +1100,8 @@ def _error_generator_composition_ha_or_ah(A: stim.PauliString, P: stim.PauliStri
 
     return composed_errorgens
 
-def _error_generator_composition_sc_or_cs(A: stim.PauliString, P: stim.PauliString, Q: stim.PauliString,
-                                          S_error_is_first: bool, weight: float=1.0,
+def _error_generator_composition_sc_or_cs(S_error_is_first: bool, bels_1: _Bels, bels_2: _Bels,
+                                          weight: float=1.0,
                                           identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an S error generator with a C error generator, in
@@ -1208,35 +1119,10 @@ def _error_generator_composition_sc_or_cs(A: stim.PauliString, P: stim.PauliStri
     As with the other mixed pairs, the two orderings differ only in the sign of the
     imaginary unit, which appears exactly on the terms where A relates to P and Q
     differently.
-
-    Parameters
-    ----------
-    A : stim.PauliString
-        The basis element of the S error generator.
-
-    P, Q : stim.PauliString
-        The basis elements of the C error generator.
-
-    S_error_is_first : `bool`
-        Whether the S error generator is the outer one, i.e. whether we are computing
-        S_A[C_{P,Q}[.]] rather than C_{P,Q}[S_A[.]].
-
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
     """
+    s_bels, c_bels = (bels_1, bels_2) if S_error_is_first else (bels_2, bels_1)
+    A = s_bels[0]
+    P, Q = c_bels
     composed_errorgens = []
     com_PQ = P.commutes(Q)
     com_AP = A.commutes(P)
@@ -1267,8 +1153,8 @@ def _error_generator_composition_sc_or_cs(A: stim.PauliString, P: stim.PauliStri
 
     return composed_errorgens
 
-def _error_generator_composition_sa_or_as(A: stim.PauliString, P: stim.PauliString, Q: stim.PauliString,
-                                          S_error_is_first: bool, weight: float=1.0,
+def _error_generator_composition_sa_or_as(S_error_is_first: bool, bels_1: _Bels, bels_2: _Bels,
+                                          weight: float=1.0,
                                           identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an S error generator with an A error generator, in
@@ -1290,35 +1176,10 @@ def _error_generator_composition_sa_or_as(A: stim.PauliString, P: stim.PauliStri
     The two orderings are related more simply than for the other pairs: when A relates
     to P and Q the same way they agree exactly, and otherwise every coefficient flips
     sign. The trailing A_{P,Q} term never flips.
-
-    Parameters
-    ----------
-    A : stim.PauliString
-        The basis element of the S error generator.
-
-    P, Q : stim.PauliString
-        The basis elements of the A error generator.
-
-    S_error_is_first : `bool`
-        Whether the S error generator is the outer one, i.e. whether we are computing
-        S_A[A_{P,Q}[.]] rather than A_{P,Q}[S_A[.]].
-
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
     """
+    s_bels, a_bels = (bels_1, bels_2) if S_error_is_first else (bels_2, bels_1)
+    A = s_bels[0]
+    P, Q = a_bels
     composed_errorgens = []
     com_PQ = P.commutes(Q)
     com_AP = A.commutes(P)
@@ -1348,8 +1209,7 @@ def _error_generator_composition_sa_or_as(A: stim.PauliString, P: stim.PauliStri
 
     return composed_errorgens
 
-def _error_generator_composition_cc(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
-                                    Q: stim.PauliString, weight: float=1.0,
+def _error_generator_composition_cc(bels_1: _Bels, bels_2: _Bels, weight: float=1.0,
                                     identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of two C error generators. I.e. C_{A,B}[C_{P,Q}[\cdot]].
@@ -1382,31 +1242,9 @@ def _error_generator_composition_cc(A: stim.PauliString, B: stim.PauliString, P:
     negates `addl_factor` on a swap (including in its identity branches), those are
     written here in a single canonical order with the sign folded into the
     coefficient.
-
-    Parameters
-    ----------
-    A, B : stim.PauliString
-        The basis elements of the first (outer) C error generator.
-
-    P, Q : stim.PauliString
-        The basis elements of the second (inner) C error generator.
-
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
     """
+    A, B = bels_1
+    P, Q = bels_2
     composed_errorgens = []
     com_AB = A.commutes(B)
     com_PQ = P.commutes(Q)
@@ -1462,8 +1300,7 @@ def _error_generator_composition_cc(A: stim.PauliString, B: stim.PauliString, P:
 
     return composed_errorgens
 
-def _error_generator_composition_aa(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
-                                    Q: stim.PauliString, weight: float=1.0,
+def _error_generator_composition_aa(bels_1: _Bels, bels_2: _Bels, weight: float=1.0,
                                     identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of two A error generators. I.e. A_{A,B}[A_{P,Q}[\cdot]].
@@ -1481,31 +1318,9 @@ def _error_generator_composition_aa(A: stim.PauliString, B: stim.PauliString, P:
     The two cross terms built from PA/QB and QA/PB are again emitted for every
     signature, and the Hamiltonian term on ABPQ again appears exactly when an odd
     number of the four cross relations commute.
-
-    Parameters
-    ----------
-    A, B : stim.PauliString
-        The basis elements of the first (outer) A error generator.
-
-    P, Q : stim.PauliString
-        The basis elements of the second (inner) A error generator.
-
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
     """
+    A, B = bels_1
+    P, Q = bels_2
     composed_errorgens = []
     com_AB = A.commutes(B)
     com_PQ = P.commutes(Q)
@@ -1563,8 +1378,8 @@ def _error_generator_composition_aa(A: stim.PauliString, B: stim.PauliString, P:
     return composed_errorgens
 
 
-def _error_generator_composition_ac_or_ca(A: stim.PauliString, B: stim.PauliString, P: stim.PauliString,
-                                          Q: stim.PauliString, C_error_is_first: bool, weight: float=1.0,
+def _error_generator_composition_ac_or_ca(C_error_is_first: bool, bels_1: _Bels, bels_2: _Bels,
+                                          weight: float=1.0,
                                           identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
     r"""
     Returns the composition of an A error generator with a C error generator, in
@@ -1592,35 +1407,9 @@ def _error_generator_composition_ac_or_ca(A: stim.PauliString, B: stim.PauliStri
       C terms carries the same coefficients for both of its members; the other group's
       two members differ by an overall sign;
     * the second cross term picks up a relative minus sign.
-
-    Parameters
-    ----------
-    A, B : stim.PauliString
-        The basis elements of the first (outer) error generator.
-
-    P, Q : stim.PauliString
-        The basis elements of the second (inner) error generator.
-
-    C_error_is_first : bool
-        Whether the C error generator is the outer one, i.e. whether we are computing
-        C_{A,B}[A_{P,Q}[.]] rather than A_{A,B}[C_{P,Q}[.]].
-
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
     """
+    A, B = bels_1
+    P, Q = bels_2
     composed_errorgens = []
     com_AB = A.commutes(B)
     com_PQ = P.commutes(Q)
@@ -1677,6 +1466,74 @@ def _error_generator_composition_ac_or_ca(A: stim.PauliString, B: stim.PauliStri
     return composed_errorgens
 
 
+
+def _error_generator_composition_hh(bels_1: _Bels, bels_2: _Bels, weight: float=1.0,
+                                    identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
+    r"""
+    Returns the composition of two H error generators. I.e. H_P[H_Q[\cdot]].
+    """
+    P = bels_1[0]
+    Q = bels_2[0]
+    composed_errorgens = []
+    P_eq_Q = (P==Q)
+    if not P.commutes(Q):
+        PQ = pauli_product(P, Q)
+        # `weight` last, as in every other term here, so that the result is exactly
+        # linear in it -- see `_error_generator_composition_impl`'s docstring.
+        composed_errorgens.append((_LSE('H', [PQ[1]]), -1j*PQ[0]*weight))
+
+    new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(P, Q, False, False, P_eq_Q)
+    composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_factor*weight))
+    return composed_errorgens
+
+
+def _error_generator_composition_ss(bels_1: _Bels, bels_2: _Bels, weight: float=1.0,
+                                    identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
+    r"""
+    Returns the composition of two S error generators. I.e. S_P[S_Q[\cdot]].
+    """
+    P = bels_1[0]
+    Q = bels_2[0]
+    composed_errorgens = []
+    PQ = pauli_product(P, Q)
+    if PQ[1] != identity:
+        composed_errorgens.append((_LSE('S', [PQ[1]]), weight))
+    composed_errorgens.append((_LSE('S', [P]), -weight))
+    composed_errorgens.append((_LSE('S', [Q]), -weight))
+    return composed_errorgens
+
+
+# Dispatch for `_error_generator_composition_impl`, keyed on the pair of error generator
+# types. Every value is callable as `handler(bels_1, bels_2, weight, identity)`: the
+# helpers shared by two orderings take their ordering flag first precisely so it can be
+# bound here with a positional `partial`, which keeps the call site uniform without the
+# cost of keyword binding.
+#
+# Read through a module-global lookup inside `_error_generator_composition_impl` rather
+# than captured in a default argument or closure, so that tests can substitute an
+# instrumented copy of this table.
+_COMPOSITION_DISPATCH = {
+    ('H', 'H'): _error_generator_composition_hh,
+    ('H', 'S'): partial(_error_generator_composition_hs_or_sh, False),
+    ('S', 'H'): partial(_error_generator_composition_hs_or_sh, True),
+    ('S', 'S'): _error_generator_composition_ss,
+
+    ('H', 'C'): partial(_error_generator_composition_hc_or_ch, True),
+    ('C', 'H'): partial(_error_generator_composition_hc_or_ch, False),
+    ('H', 'A'): partial(_error_generator_composition_ha_or_ah, True),
+    ('A', 'H'): partial(_error_generator_composition_ha_or_ah, False),
+    ('S', 'C'): partial(_error_generator_composition_sc_or_cs, True),
+    ('C', 'S'): partial(_error_generator_composition_sc_or_cs, False),
+    ('S', 'A'): partial(_error_generator_composition_sa_or_as, True),
+    ('A', 'S'): partial(_error_generator_composition_sa_or_as, False),
+
+    ('C', 'C'): _error_generator_composition_cc,
+    ('A', 'A'): _error_generator_composition_aa,
+    ('C', 'A'): partial(_error_generator_composition_ac_or_ca, True),
+    ('A', 'C'): partial(_error_generator_composition_ac_or_ca, False),
+}
+
+
 def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight,
                                       identity: Optional[stim.PauliString]) -> _ErrorgenTerms:
     r"""
@@ -1696,169 +1553,19 @@ def _error_generator_composition_impl(errorgen_1: _LSE, errorgen_2: _LSE, weight
     `weight` as the last factor or floating point associativity may bite.
     """
 
-    composed_errorgens = []
-
-    errorgen_1_type = errorgen_1.errorgen_type
-    errorgen_2_type = errorgen_2.errorgen_type
-
-    # The first basis element label is always well defined,
-    # the second we'll define only if the error generator is C or A type.
-    errorgen_1_bel_0 = errorgen_1.basis_element_labels[0]
-    errorgen_2_bel_0 = errorgen_2.basis_element_labels[0]
-
-    if errorgen_1_type == 'C' or errorgen_1_type == 'A':
-        errorgen_1_bel_1 = errorgen_1.basis_element_labels[1]
-    if errorgen_2_type == 'C' or errorgen_2_type == 'A':
-        errorgen_2_bel_1 = errorgen_2.basis_element_labels[1]
+    bels_1 = errorgen_1.basis_element_labels
+    bels_2 = errorgen_2.basis_element_labels
 
     # create the identity stim.PauliString for later comparisons.
     if identity is None:
-        identity = stim.PauliString('I'*len(errorgen_1_bel_0))
+        identity = stim.PauliString('I'*len(bels_1[0]))
 
-    if errorgen_1_type == 'H' and errorgen_2_type == 'H':
-        # H_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
-        P = errorgen_1_bel_0
-        Q = errorgen_2_bel_0
-        P_eq_Q = (P==Q)
-        if not P.commutes(Q):
-            PQ = pauli_product(P, Q)
-            # `weight` last, as in every other term here, so that the result is exactly
-            # linear in it -- see this function's docstring.
-            composed_errorgens.append((_LSE('H', [PQ[1]]), -1j*PQ[0]*weight))
-
-        new_eg_type, new_bels, addl_factor = _ordered_new_bels_C(P, Q, False, False, P_eq_Q)
-        composed_errorgens.append((_LSE(new_eg_type, new_bels), addl_factor*weight))
-        return composed_errorgens
-
-    elif errorgen_1_type == 'H' and errorgen_2_type == 'S':
-        # H_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
-        P = errorgen_1_bel_0
-        Q = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_hs_or_sh(P, Q, False, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'H' and errorgen_2_type == 'C':
-        # H_A[C_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
-        A = errorgen_1_bel_0
-        P = errorgen_2_bel_0
-        Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_hc_or_ch(A, P, Q, True, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'H' and errorgen_2_type == 'A':
-        # H_A[A_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
-        A = errorgen_1_bel_0
-        P = errorgen_2_bel_0
-        Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_ha_or_ah(A, P, Q, True, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'S' and errorgen_2_type == 'H':
-        # S_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
-        P = errorgen_1_bel_0
-        Q = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_hs_or_sh(P, Q, True, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'S' and errorgen_2_type == 'S':
-        # S_P[S_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
-        P = errorgen_1_bel_0
-        Q = errorgen_2_bel_0
-        PQ = pauli_product(P, Q)
-        PQ_ident = (PQ[1] == identity)
-        if not PQ_ident:
-            composed_errorgens.append((_LSE('S', [PQ[1]]), weight))
-        composed_errorgens.append((_LSE('S', [P]), -weight))
-        composed_errorgens.append((_LSE('S', [Q]), -weight))
-        return composed_errorgens
-
-    elif errorgen_1_type == 'S' and errorgen_2_type == 'C':
-        # S_A[C_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
-        A = errorgen_1_bel_0
-        P = errorgen_2_bel_0
-        Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_sc_or_cs(A, P, Q, True, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'S' and errorgen_2_type == 'A':
-        # S_A[A_{P,Q}] A->errorgen_1_bel_0, P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
-        A = errorgen_1_bel_0
-        P = errorgen_2_bel_0
-        Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_sa_or_as(A, P, Q, True, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'C' and errorgen_2_type == 'H':
-        # C_{P,Q}[H_A] P,Q -> errorgen_1_bel_0, errorgen_1_bel_1, A->errorgen_2_bel_0
-        P = errorgen_1_bel_0
-        Q = errorgen_1_bel_1
-        A = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_hc_or_ch(A, P, Q, False, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'C' and errorgen_2_type == 'S':
-        # C_{P,Q}[S_A] P,Q -> errorgen_1_bel_0, errorgen_1_bel_1, A->errorgen_2_bel_0
-        P = errorgen_1_bel_0
-        Q = errorgen_1_bel_1
-        A = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_sc_or_cs(A, P, Q, False, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'C' and errorgen_2_type == 'C':
-        # C_{A,B}[C_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
-        A = errorgen_1_bel_0
-        B = errorgen_1_bel_1
-        P = errorgen_2_bel_0
-        Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_cc(A, B, P, Q, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'C' and errorgen_2_type == 'A':
-        # C_{A,B}[A_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
-        A = errorgen_1_bel_0
-        B = errorgen_1_bel_1
-        P = errorgen_2_bel_0
-        Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_ac_or_ca(A, B, P, Q, True, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'A' and errorgen_2_type == 'H':
-        # A_{P,Q}[H_A] P,Q -> errorgen_1_bel_0, errorgen_1_bel_1, A->errorgen_2_bel_0
-        P = errorgen_1_bel_0
-        Q = errorgen_1_bel_1
-        A = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_ha_or_ah(A, P, Q, False, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'A' and errorgen_2_type == 'S':
-        # A_{P,Q}[S_A] P,Q -> errorgen_1_bel_0, errorgen_1_bel_1, A->errorgen_2_bel_0
-        P = errorgen_1_bel_0
-        Q = errorgen_1_bel_1
-        A = errorgen_2_bel_0
-        composed_errorgens = _error_generator_composition_sa_or_as(A, P, Q, False, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'A' and errorgen_2_type == 'C':
-        # A_{A,B}[C_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
-        A = errorgen_1_bel_0
-        B = errorgen_1_bel_1
-        P = errorgen_2_bel_0
-        Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_ac_or_ca(A, B, P, Q, False, weight, identity)
-        return composed_errorgens
-
-    elif errorgen_1_type == 'A' and errorgen_2_type == 'A':
-        # A_{A,B}[A_{P,Q}] A,B -> errorgen_1_bel_0, errorgen_1_bel_1; P,Q -> errorgen_2_bel_0, errorgen_2_bel_1
-        A = errorgen_1_bel_0
-        B = errorgen_1_bel_1
-        P = errorgen_2_bel_0
-        Q = errorgen_2_bel_1
-        composed_errorgens = _error_generator_composition_aa(A, B, P, Q, weight, identity)
-        return composed_errorgens
-
-    # Every (H, S, C, A) x (H, S, C, A) pair is handled above, so this is reached only for
-    # an unrecognized error generator type.
-    return composed_errorgens
+    handler = _COMPOSITION_DISPATCH.get((errorgen_1.errorgen_type, errorgen_2.errorgen_type))
+    if handler is None:
+        # Every (H, S, C, A) x (H, S, C, A) pair is in the table, so this is reached only
+        # for an unrecognized error generator type.
+        return []
+    return handler(bels_1, bels_2, weight, identity)
 
 
 @lru_cache(maxsize=None)
@@ -1905,7 +1612,7 @@ def _error_generator_composition_unweighted(errorgen_1: _LSE, errorgen_2: _LSE) 
     return _error_generator_composition_impl(
         errorgen_1, errorgen_2, 1,
         _identity_pauli_string(len(errorgen_1.basis_element_labels[0])))
-
+#endregion Composition Helpers
 
 def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: float=1.0,
                                 identity: Optional[stim.PauliString]=None) -> _ErrorgenTerms:
@@ -2307,7 +2014,7 @@ def iterative_error_generator_composition(errorgen_labels: tuple[_LSE, ...],
     return fully_processed_label_rate_tuples
 
 # Helper functions for doing numeric commutators, compositions and BCH.
-
+#region Numeric Commutators
 def error_generator_commutator_numerical(errorgen1: _EEL, errorgen2: _EEL,
                                          errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
                                          num_qubits: Optional[int] = None) -> _np.ndarray:
@@ -2755,6 +2462,7 @@ def iterative_error_generator_composition_numerical(errorgen_labels: tuple[_LSE,
         composition = composition@errorgen_matrix_dict[lbl]
     composition *= _np.prod(rates)
     return composition
+#endregion Numeric Commutators
 
 # -----------First-Order Approximate Error Generator Probabilities and Expectation Values---------------# 
 

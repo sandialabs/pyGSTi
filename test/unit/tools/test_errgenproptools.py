@@ -1,6 +1,4 @@
 import ast
-import re
-import sys
 import numpy as np
 from scipy.linalg import logm, expm
 from pygsti.baseobjs import Label, QubitSpace, BuiltinBasis
@@ -1130,10 +1128,6 @@ def _composition_block_max_terms():
     the bound unsound.
     """
     tree = ast.parse(open(_eprop.__file__).read())
-    # The public `error_generator_composition` is a thin caching wrapper; the dispatch
-    # chain this walks lives in the uncached implementation behind it.
-    fn = next(n for n in tree.body
-              if isinstance(n, ast.FunctionDef) and n.name == '_error_generator_composition_impl')
     module_fns = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
 
     def is_append(stmt):
@@ -1186,16 +1180,42 @@ def _composition_block_max_terms():
                     best += max_appends(scope[helper].body, depth + 1, scope)
         return best
 
-    head = "errorgen_1_type == 'H' and errorgen_2_type == 'H'"
-    node = next(s for s in fn.body if isinstance(s, ast.If) and head in ast.unparse(s.test))
-    bounds = {}
-    while node is not None:
-        types = re.findall(r"errorgen_[12]_type == '(\w)'", ast.unparse(node.test))
-        if len(types) == 2:
-            bounds[(types[0], types[1])] = max_appends(node.body)
-        nested = [s for s in node.orelse if isinstance(s, ast.If)]
-        node = nested[0] if (len(node.orelse) == 1 and nested) else None
-    return bounds
+    return {key: max_appends(module_fns[handler].body)
+            for key, handler in _composition_dispatch_table().items()}
+
+
+def _composition_dispatch_table():
+    """
+    Return {(type_1, type_2): handler_function_name} by reading the
+    `_COMPOSITION_DISPATCH` literal out of the installed source.
+
+    Values are either a bare function name or `partial(function_name, flag)`, where the
+    flag is the pre-bound ordering argument; both forms resolve to the same handler, so
+    the two orderings that share a helper get the same entry here.
+    """
+    tree = ast.parse(open(_eprop.__file__).read())
+    table = next((n.value for n in tree.body
+                  if isinstance(n, ast.Assign)
+                  and any(getattr(t, 'id', None) == '_COMPOSITION_DISPATCH' for t in n.targets)),
+                 None)
+    assert isinstance(table, ast.Dict), '_COMPOSITION_DISPATCH is not a dict literal'
+
+    def handler_name(value):
+        if isinstance(value, ast.Name):
+            return value.id
+        # partial(_helper, True) -- the bound flag does not affect the term-count bound.
+        if (isinstance(value, ast.Call) and getattr(value.func, 'id', None) == 'partial'
+                and value.args and isinstance(value.args[0], ast.Name)):
+            return value.args[0].id
+        raise AssertionError(f'unrecognised dispatch value: {ast.unparse(value)}')
+
+    entries = {}
+    for key, value in zip(table.keys, table.values):
+        assert isinstance(key, ast.Tuple) and len(key.elts) == 2, ast.unparse(key)
+        pair = tuple(e.value for e in key.elts)
+        assert pair not in entries, f'duplicate dispatch key {pair}'
+        entries[pair] = handler_name(value)
+    return entries
 
 
 def _commutation_signature(A, B, P, Q):
@@ -1224,32 +1244,6 @@ def _signature_representatives(num_qubits):
         if len(reps) == 64:
             break
     return reps
-
-
-def _composition_dispatch_block_ranges():
-    """
-    Return {(type_1, type_2): (first_line, last_line)} for each of the 16 blocks in
-    the `_error_generator_composition_impl` elif chain, read from the installed source.
-
-    Line numbers are absolute so they can be compared directly against the line
-    numbers reported by `sys.monitoring` for the function's code object.
-    """
-    tree = ast.parse(open(_eprop.__file__).read())
-    fn = next(n for n in tree.body
-              if isinstance(n, ast.FunctionDef) and n.name == '_error_generator_composition_impl')
-    head = "errorgen_1_type == 'H' and errorgen_2_type == 'H'"
-    node = next(s for s in fn.body if isinstance(s, ast.If) and head in ast.unparse(s.test))
-
-    ranges = {}
-    while node is not None:
-        types = re.findall(r"errorgen_[12]_type == '(\w)'", ast.unparse(node.test))
-        if len(types) == 2:
-            lo = min(s.lineno for s in node.body)
-            hi = max(getattr(s, 'end_lineno', s.lineno) for s in node.body)
-            ranges[(types[0], types[1])] = (lo, hi)
-        nested = [s for s in node.orelse if isinstance(s, ast.If)]
-        node = nested[0] if (len(node.orelse) == 1 and nested) else None
-    return ranges
 
 
 def _merge_terms(terms):
@@ -1311,48 +1305,37 @@ class ErrgenCompositionRegressionTester(BaseCase):
                         self.assertNotEqual(bels[0], bels[1])
                         self.assertTrue(_eprop.stim_pauli_string_less_than(bels[0], bels[1]))
 
-    def test_pep669_all_dispatch_blocks_are_reachable(self):
+    def test_every_dispatch_entry_is_reachable(self):
         """
-        PEP 669 line-coverage gate: drive one composition per (type_1, type_2) pair
-        and assert that every one of the 16 dispatch blocks actually executed.
+        Drive one composition per (type_1, type_2) pair and assert that every entry in
+        `_COMPOSITION_DISPATCH` actually fired.
 
-        This guards against a refactor silently making a block unreachable (e.g. by
-        reordering the elif chain so an earlier predicate shadows a later one), which
-        no value-based test would catch -- a shadowed block just never runs.
-
-        `sys.monitoring` is used rather than `sys.settrace` to avoid the ~40x
-        interpreter slowdown. It is skipped only when the COVERAGE_ID tool slot is
-        genuinely already claimed (i.e. coverage really is collecting), not merely
-        when pytest-cov happens to be installed.
+        This guards against a refactor silently making an entry unreachable, which no
+        value-based test would catch -- an entry that never runs simply produces
+        nothing to compare against. Instrumenting the table rather than line ranges
+        distinguishes the two orderings that share a helper (('H','C') and ('C','H')
+        both route to `_error_generator_composition_hc_or_ch`), which a line- or
+        function-level probe cannot do.
         """
-        if sys.version_info < (3, 12):
-            self.skipTest("PEP 669 sys.monitoring requires Python 3.12+")
+        original = _eprop._COMPOSITION_DISPATCH
+        self.assertEqual(len(original), 16,
+                         f'expected 16 dispatch entries, found {sorted(original)}')
 
-        tool_id = sys.monitoring.COVERAGE_ID
-        if sys.monitoring.get_tool(tool_id) is not None:
-            self.skipTest(f"COVERAGE_ID slot already claimed by "
-                          f"{sys.monitoring.get_tool(tool_id)!r}; coverage is active")
+        fired = set()
+
+        def record(key, handler):
+            def wrapper(*args, **kwargs):
+                fired.add(key)
+                return handler(*args, **kwargs)
+            return wrapper
+
+        # Clearing the cache is essential -- a warm entry from an earlier test would
+        # short-circuit the implementation entirely and the entry would look unreached.
+        # It is cleared again afterwards so the wrapped handlers' results do not leak
+        # into later tests.
         try:
-            sys.monitoring.use_tool_id(tool_id, "errgencomp_gate")
-        except ValueError:
-            self.skipTest("Could not acquire the sys.monitoring COVERAGE_ID tool slot")
-
-        # Monitor the uncached implementation: the public entry point is a caching
-        # wrapper and contains none of the dispatch chain. Clearing the cache is
-        # essential here -- a warm entry from an earlier test would short-circuit the
-        # implementation entirely and the block would look unreached.
-        _eprop.error_generator_composition.cache_clear()
-        target_code = _eprop._error_generator_composition_impl.__code__
-        executed_lines = set()
-
-        def line_callback(code, line_no):
-            if code is target_code:
-                executed_lines.add(line_no)
-            return sys.monitoring.DISABLE
-
-        try:
-            sys.monitoring.register_callback(tool_id, sys.monitoring.events.LINE, line_callback)
-            sys.monitoring.set_events(tool_id, sys.monitoring.events.LINE)
+            _eprop._COMPOSITION_DISPATCH = {k: record(k, h) for k, h in original.items()}
+            _eprop.error_generator_composition.cache_clear()
 
             basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(2), default_label_type='local')
             by_type = {}
@@ -1366,20 +1349,11 @@ class ErrgenCompositionRegressionTester(BaseCase):
                     for i in range(min(10, len(first))):
                         _eprop.error_generator_composition(first[i], second[(i * 7) % len(second)])
         finally:
-            sys.monitoring.set_events(tool_id, 0)
-            sys.monitoring.register_callback(tool_id, sys.monitoring.events.LINE, None)
-            sys.monitoring.free_tool_id(tool_id)
+            _eprop._COMPOSITION_DISPATCH = original
+            _eprop.error_generator_composition.cache_clear()
 
-        self.assertGreater(len(executed_lines), 0, "sys.monitoring recorded no lines at all.")
-
-        block_ranges = _composition_dispatch_block_ranges()
-        self.assertEqual(len(block_ranges), 16,
-                         f'expected 16 dispatch blocks, found {sorted(block_ranges)}')
-        unreached = [f'{t1},{t2} (lines {lo}-{hi})'
-                     for (t1, t2), (lo, hi) in sorted(block_ranges.items())
-                     if not any(lo <= ln <= hi for ln in executed_lines)]
-        self.assertEqual(unreached, [],
-                         f'dispatch blocks never executed: {unreached}')
+        self.assertEqual(fired, set(original),
+                         f'dispatch entries never used: {sorted(set(original) - fired)}')
 
 
 @unittest.skipIf(stim is None, "stim is not installed")
