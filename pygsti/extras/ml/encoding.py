@@ -29,13 +29,11 @@ from pygsti.extras.ml import errgentools as _tools
 from pygsti.tools import errgenproptools as _egptools
 from pygsti.circuits import Circuit as _Circuit
 import tqdm
-from tqdm import trange as _trange
 from multiprocessing import Pool
 from typing import TYPE_CHECKING, cast, Any
 
 if TYPE_CHECKING:
     from pygsti.processors import ProcessorSpec
-    from pygsti.data import DataSet
 
 
 class CircuitEncoder(object):
@@ -353,35 +351,6 @@ def circuits_to_tensor(circuits: list[_Circuit], encoder: CircuitEncoder, encodi
     return circuits_tensor
 
 
-def dense_dataset_encoding(ds: "DataSet", n: int, circuits: list[_Circuit] | None = None) -> _np.ndarray:
-    """
-    Convert a pyGSTi dataset into a dense frequency array over all (2^n) bitstrings.
-
-    Parameters
-    ----------
-    ds : pygsti.data.DataSet
-        Dataset keyed by circuits, with outcome counts.
-    n : int
-        Number of qubits (determines (2^n) outcomes).
-    circs : list[pygsti.circuits.Circuit] or None, optional
-        Subset of circuits to include. If None, uses `list(ds.keys())`.
-
-    Returns
-    -------
-    numpy.ndarray
-        Array of shape `(num_circuits, 2**n)` with frequencies for each bitstring.
-    """
-
-    if circuits is None: circuits = list(ds.keys())
-    nbit_strings: list[str] = [] # TO DO
-    freqs_array = _np.zeros((len(circuits), 2**n), float)
-    for i in _trange(len(circuits)):
-        dsrow: Any = ds[circuits[i]]
-        freqs_array[i,:] =  _np.array([dsrow.counts.get((bs,), 0.) / dsrow.total for bs in nbit_strings])
-
-    return freqs_array
-
-
 def error_generator_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", alpha_representation: str = 'concise',
                             process_num: int = 5) -> dict:
     """
@@ -680,7 +649,10 @@ def dense_alpha_matrix(circuit: _Circuit | _stim.Tableau, num_qubits: int, popul
     else:
         alpha_matrix = _np.zeros((2 ** num_qubits, num_nq_errgens), float)
 
-    scale = 1 / 2 ** cast(Any, _egptools.random_support(tableau)) #TODO: This might overflow
+    # Python's true division of two arbitrary-precision ints handles this gracefully (correct
+    # gradual underflow to 0.0) for any random_support, unlike float(2**random_support) alone,
+    # which would raise OverflowError for random_support above ~1023.
+    scale = 1 / 2 ** cast(Any, _egptools.random_support(tableau))
     for i in populate_for_error_generators:
         alpha_matrix[:, i] = scale * _np.array([alpha_coefficient(i, num_qubits, tableau, bs) for bs in nbit_strings])
 
@@ -812,7 +784,8 @@ def _circuit_loop_probs(circuit: _Circuit, indices: _np.ndarray, nbit_strings: l
     tableau = _get_tableau(circuit)
     shape = ( 2 ** num_qubits, indices.shape[0], indices.shape[1])
     first_order_coefficients = _np.zeros(shape, float)
-    scale = 1 / 2 ** cast(Any, _egptools.random_support(tableau)) #TODO: This might overflow
+    # See the identical computation in dense_alpha_matrix for why this can't overflow.
+    scale = 1 / 2 ** cast(Any, _egptools.random_support(tableau))
     probabilities = _np.array([_egptools.stabilizer_probability(tableau, bs) for bs in nbit_strings]).T
     alphas_dict = {}
     for l, bs in enumerate(nbit_strings):

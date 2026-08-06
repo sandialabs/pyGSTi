@@ -23,13 +23,10 @@ This module defines utility functions for:
 
 import numpy as np
 import itertools as _itertools
-import copy as _copy
-import warnings as _warnings
 import stim as _stim
 from typing import Any
 
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
-from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation import localstimerrorgen as _lseg
 from pygsti.extras.ml import graphtools as _graphtools
 

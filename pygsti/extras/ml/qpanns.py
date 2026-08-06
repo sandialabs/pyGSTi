@@ -22,7 +22,6 @@ import tensorflow as _tf
 import keras as _keras
 import numpy as _np
 import copy as _copy
-import warnings as _warnings
 from pygsti.extras.ml import customlayers as _cl
 
 

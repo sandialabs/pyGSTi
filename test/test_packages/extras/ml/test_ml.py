@@ -29,7 +29,6 @@ import pygsti
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.baseobjs.qubitgraph import QubitGraph
 from pygsti.circuits import Circuit
-from pygsti.data import DataSet
 from pygsti.extras.ml import errgentools, encoding, snippers, customlayers, qpanns, graphtools
 
 
