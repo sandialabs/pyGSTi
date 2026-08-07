@@ -577,7 +577,7 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
         this object.  Usually you should just leave this empty.
 
     include_attributes : list or tuple or None
-        A list of (string-valued) names of attributs to specifically include
+        A list of (string-valued) names of attributes to specifically include
         when serializing this object.  If `None`, then *all* attributes are
         included except those specifically omitted via `omit_attributes`.
         If `include_attributes` is not `None` then `omit_attributes` is

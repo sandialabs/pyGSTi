@@ -57,7 +57,7 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
         What type of sample error is included in the counts.  Can be:
 
         - "none"  - no sample error: counts are floating point numbers such
-          that the exact probabilty can be found by the ratio of count / total.
+          that the exact probability can be found by the ratio of count / total.
         - "clip" - no sample error, but clip probabilities to [0,1] so, e.g.,
           counts are always positive.
         - "round" - same as "clip", except counts are rounded to the nearest
@@ -182,7 +182,7 @@ def simulate_data(model_or_dataset, circuit_list, num_samples,
 
                 if num_samples is None and dsGen is not None:
                     N = dsGen[trans_s].total  # use the number of samples from the generating dataset
-                    #Note: total() accounts for other intermediate-measurment branches automatically
+                    #Note: total() accounts for other intermediate-measurement branches automatically
                 else:
                     try:
                         N = num_samples[k]  # try to treat num_samples as a list
@@ -451,7 +451,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
     returned `DataSet`'s circuits.
 
     A typical case is when the state-space is that of *n* qubits, and the
-    state space labels the intergers 0 to *n-1*.  As stated above, in this
+    state space labels the integers 0 to *n-1*.  As stated above, in this
     case there is no need to specify `sindices_to_keep`.  One may want to
     "rebase" the indices to 0 in the returned data set using `new_sectors`
     (E.g. `sectors_to_keep == [4,5,6]` and `new_sectors == [0,1,2]`).
@@ -467,7 +467,7 @@ def filter_dataset(dataset, sectors_to_keep, sindices_to_keep=None,
 
     sindices_to_keep : list or tuple, optional
         The 0-based indices of the labels in `sectors_to_keep` which give the
-        postiions of the corresponding letters in each outcome string (see above).
+        positions of the corresponding letters in each outcome string (see above).
         If the state space labels are integers (labeling *qubits*) thath are also
         letter-positions, then this may be left as `None`.  For example, if the
         outcome strings of `dataset` are '00','01','10',and '11' and the first

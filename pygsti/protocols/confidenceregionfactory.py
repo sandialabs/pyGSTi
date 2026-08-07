@@ -66,7 +66,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
     non-gauge space.
 
     Alternative (non-Hessian-based) means of computing confidence intervals
-    are also available, such as by using so-called "linear reponse error bars".
+    are also available, such as by using so-called "linear response error bars".
 
     Parameters
     ----------
@@ -91,7 +91,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
     non_mark_radius_sq : float, optional
         The non-Markovian radius associated with the goodness of fit found
         at the point where `hessian` was computed.  This must be specified
-        whenver `hessian` is, and should be left as `None` when `hessian`
+        whenever `hessian` is, and should be left as `None` when `hessian`
         is not specified.
     """
     collection_name = "pygsti_confidence_region_factories"
@@ -124,7 +124,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         non_mark_radius_sq : float, optional
             The non-Markovian radius associated with the goodness of fit found
             at the point where `hessian` was computed.  This must be specified
-            whenver `hessian` is, and should be left as `None` when `hessian`
+            whenever `hessian` is, and should be left as `None` when `hessian`
             is not specified.
         """
         super().__init__()
@@ -543,7 +543,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         model optimizations needed to compute error bars on quantities.
 
         'linear response' mode obtains elements of the Hessian via the
-        linear response of a "forcing term".  This requres a likelihood
+        linear response of a "forcing term".  This requires a likelihood
         optimization for *every* computed error bar, but avoids pre-
         computation of the entire Hessian matrix, which can be
         prohibitively costly on large parameter spaces.
@@ -663,7 +663,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         assert(sym_err_rel < TOL)
         hessian += hessian.T
         hessian /= 2
-        invB = _np.concatenate([nongauge_space, gauge_space], axis=1)  # takes (nongauge,guage) -> orig coords
+        invB = _np.concatenate([nongauge_space, gauge_space], axis=1)  # takes (nongauge,gauge) -> orig coords
         B = _np.linalg.inv(invB)  # takes orig -> (nongauge,gauge) coords
         Hprime = invB.T @ hessian @ invB
         assert(_la.norm(Hprime.imag) == 0)
@@ -823,11 +823,11 @@ class ConfidenceRegionFactoryView(object):
 
     n_non_gauge_params : int
         The numbers of non-gauge parameters.  This could be computed from `model`
-        but can be passed in to save compuational time.
+        but can be passed in to save computational time.
 
     n_gauge_params : int
         The numbers of gauge parameters.  This could be computed from `model`
-        but can be passed in to save compuational time.
+        but can be passed in to save computational time.
     """
 
     def __init__(self, model, inv_projected_hessian, mlgst_params, confidence_level,
@@ -868,7 +868,7 @@ class ConfidenceRegionFactoryView(object):
 
         n_non_gauge_params, n_gauge_params : int
             The numbers of non-gauge and gauge parameters, respectively.  These could be
-            computed from `model` but they're passed in to save compuational time.
+            computed from `model` but they're passed in to save computational time.
         """
 
         # Scale projected Hessian for desired confidence level => quadratic form for confidence region assume hessian

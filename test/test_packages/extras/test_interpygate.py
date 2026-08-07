@@ -10,7 +10,7 @@ from pygsti.tools.exceptions import MissingDependencyWarning as _MissingDependen
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", _MissingDependencyWarning)
     from pygsti.extras import interpygate as interp
-    from pygsti.extras.interpygate.process_tomography import run_process_tomography, unvec_square
+    from pygsti.extras.interpygate.process_tomography import run_process_tomography
 from pygsti.tools import change_basis
 from ..testutils import BaseTestCase
 from ...unit.util import needs_csaps
@@ -26,6 +26,12 @@ except ImportError: # Reverted RuntimeError to cause Windows runners to break
     _size = 1
 
 mpi_workers_per_process = 1
+
+
+def unvec_square(vec: _np.ndarray, order):
+    n = round(vec.size ** 0.5)
+    mat = vec.reshape((n, n), order=order)
+    return mat
 
 
 class ExampleProcess(interp.PhysicalProcess):

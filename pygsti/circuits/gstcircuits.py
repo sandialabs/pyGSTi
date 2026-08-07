@@ -115,7 +115,7 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fid_pairs, which specifies the
         *same* fiducial pairs for *all* same-germ base strings).  If
-        fid_pairs is used in conjuction with keep_fraction, the pairs
+        fid_pairs is used in conjunction with keep_fraction, the pairs
         specified by fid_pairs are always selected, and any additional
         pairs are randomly selected.
 
@@ -357,7 +357,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fid_pairs, which specifies the
         *same* fiducial pairs for *all* same-germ base strings).  If
-        fid_pairs is used in conjuction with keep_fraction, the pairs
+        fid_pairs is used in conjunction with keep_fraction, the pairs
         specified by fid_pairs are always selected, and any additional
         pairs are randomly selected.
 
@@ -689,7 +689,7 @@ def create_lsgst_circuits(op_label_src, prep_strs, effect_strs, germ_list,
     strings required throughout all the iterations of LSGST given by
     max_length_list.  Thus, the returned list is equivalently the list of
     the experiments required to run LSGST using the supplied parameters,
-    and so commonly used when construting data set templates or simulated
+    and so commonly used when constructing data set templates or simulated
     data sets.  The breakdown of which circuits are used for which
     iteration(s) of LSGST is given by create_lsgst_circuit_lists(...).
 
@@ -739,7 +739,7 @@ def create_lsgst_circuits(op_label_src, prep_strs, effect_strs, germ_list,
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fid_pairs, which specifies the
         *same* fiduicial pairs for *all* same-germ base strings).  If
-        fid_pairs is used in conjuction with keep_fraction, the pairs
+        fid_pairs is used in conjunction with keep_fraction, the pairs
         specified by fid_pairs are always selected, and any additional
         pairs are randomly selected.
 
@@ -883,7 +883,7 @@ def create_elgst_experiment_list(op_label_src, germ_list, max_length_list,
     strings required throughout all the iterations of eLGST given by
     max_length_list.  Thus, the returned list is equivalently the list of
     the experiments required to run eLGST using the supplied parameters,
-    and so commonly used when construting data set templates or simulated
+    and so commonly used when constructing data set templates or simulated
     data sets.  The breakdown of which circuits are used for which
     iteration(s) of eLGST is given by create_elgst_lists(...).
 

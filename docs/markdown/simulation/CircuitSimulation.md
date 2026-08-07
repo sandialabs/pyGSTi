@@ -87,12 +87,6 @@ probs = implicit_mdl.povm_blks['layers']['Mdefault'].acton(rho)
 print(probs)
 ```
 
-## Method 3: hybrid
-
-```{note}
-(an addition planned in future releases of pyGSTi)
-```
-
 ## Forward-simulation types
 
 PyGSTi refers to the process of computing circuit-outcome probabilities as *forward simulation*, and there are several methods of forward simulation currently available.  The current default method (selected when `simulator="auto"`) is `"map"`, which performs repeated matrix-vector products on the state representation (operations are treated as abstract *maps*).  The `"matrix"` method — which multiplies together dense process matrices for the entire circuit — is also available and can be useful for small (1–2 qubit) Hilbert spaces where dense-matrix caching pays off across very large circuit batches.  A `Model`'s active forward simulator is held by its `.sim` attribute (an instance of a `ForwardSimulator` subclass) and is set at construction time.  For more information on using different types of forward simulation see the [forward simulation types tutorial](ForwardSimulationTypes).

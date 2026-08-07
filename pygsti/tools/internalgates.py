@@ -18,13 +18,10 @@ if TYPE_CHECKING:
     except:
         pass
     
-import warnings as _warnings
-
 import numpy as _np
 import scipy.linalg as _spl
 
-from pygsti.tools.exceptions import (QiskitInteropWarning as _QiskitInteropWarning,
-                                     MissingDependencyWarning as _MissingDependencyWarning)
+from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
 
 from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
@@ -138,7 +135,7 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
 
     The correspondence between the standard names and unitaries is w.r.t the
     internally-used gatenames (see internal_gate_unitaries()).  For example, one use
-    of this function is to check whether some gate specifed by a user with the name
+    of this function is to check whether some gate specified by a user with the name
     'Ghadamard' is the Hadamard gate, denoted internally by 'H'.
 
     Parameters
@@ -958,19 +955,9 @@ def standard_gatenames_qiskit_conversions() -> Dict[str, Tuple[qiskit.circuit.In
         a later version of qiskit.
     """
 
-    try:
-        import qiskit
-        from qiskit.circuit import Delay
-        from qiskit.circuit.library import standard_gates
-
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn("function 'standard_gatenames_qiskit_conversions()' is designed for qiskit version 2.1.1 \
-                    and may not function properly for your qiskit version, which is " + qiskit.__version__,
-                           _QiskitInteropWarning)
-            
-    except ImportError:
-        _warnings.warn("This operation requires qiskit, which does not appear to be installed.",
-                       _MissingDependencyWarning)
+    _check_qiskit_version('standard_gatenames_qiskit_conversions()')
+    from qiskit.circuit import Delay
+    from qiskit.circuit.library import standard_gates
 
     std_gatenames_to_qiskit = {}
 

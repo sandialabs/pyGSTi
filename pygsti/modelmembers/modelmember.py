@@ -32,6 +32,62 @@ if TYPE_CHECKING:
     from pygsti.baseobjs.statespace import StateSpace
     from pygsti.evotypes.evotype import Evotype
 
+class _DenseCopyMixin:
+    """Mixin that provides ``__copy__`` and ``__deepcopy__`` for dense ModelMember subclasses.
+
+    **Why this mixin exists**
+
+    Dense modelmember classes (DenseOperator, DenseUnitaryOperator, DenseState,
+    DensePureState, ConjugatedStatePOVMEffect) each need a custom copy protocol
+    because they hold a Cython/C-level ``_rep`` object whose ``__dict__`` must be
+    replicated verbatim — including the ``_parent`` back-reference.
+
+    **How this differs from other copy paths in the hierarchy**
+
+    There are three distinct copy behaviours in modelmember code, and they are
+    *intentionally* inconsistent:
+
+    1. ``ModelChild.copy(parent=...)`` — the sanctioned high-level API.  Seeds the
+       deepcopy memo with ``memo[id(self.parent)] = None`` so the parent model is
+       *not* copied; the caller supplies the new parent explicitly afterward.
+
+    2. ``ModelChild.__getstate__`` — the pickle / JSON-serialisation path.  Drops
+       ``_parent`` entirely (``d['_parent'] = None``) so that serialised objects
+       carry no hidden reference to their parent model.
+
+    3. **This mixin** — called by a bare ``copy.deepcopy(member)``.  Copies
+       ``__dict__`` field-by-field, which *preserves* ``_parent`` and deepcopies
+       it along with the member.  This is the behaviour required by the regression
+       test for GitHub issue #651 (deepcopy of a FullTPOp whose ``._parent`` is
+       not None must yield a copy whose ``.parent`` is a distinct but equivalent
+       model, *not* None).
+
+    **Future work**
+
+    Behaviour 3 is arguably surprising: a caller who does ``copy.deepcopy(op)``
+    gets a full copy of the parent model as a side-effect, whereas
+    ``ModelChild.copy()`` gives None.  Whether to unify these semantics is tracked
+    in sandialabs/pyGSTi#<ISSUE_NUMBER> (see also ``agent-docs/known-debt.md``
+    entry "Inconsistent ModelMember copy/deepcopy/pickle semantics around
+    ``_parent``").  **Do not "fix" this mixin to drop or null ``_parent`` without
+    first resolving that issue**, as doing so silently breaks the #651 test.
+    """
+
+    def __copy__(self):
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        cpy.__dict__.update(self.__dict__)
+        return cpy
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        cpy = cls.__new__(cls)
+        memo[id(self)] = cpy
+        for k, v in self.__dict__.items():
+            setattr(cpy, k, _copy.deepcopy(v, memo))
+        return cpy
+
+
 class ModelChild(object):
     """
     Base class for all objects contained in a Model that hold a `parent` reference to their parent Model.

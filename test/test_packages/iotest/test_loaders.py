@@ -93,16 +93,16 @@ class LoadersTester(IOBase):
         rotXPiOv2 = pygsti.models.modelconstruction.create_operation("X(pi/2,Q0)", sslbls, "pp")
         rotYPiOv2 = pygsti.models.modelconstruction.create_operation("Y(pi/2,Q0)", sslbls, "pp")
 
-        self.assertArraysAlmostEqual(mdl_formats.operations['Gi'], np.identity(4, 'd'))
-        self.assertArraysAlmostEqual(mdl_formats.operations['Gx'], rotXPiOv2)
-        self.assertArraysAlmostEqual(mdl_formats.operations['Gy'], rotYPiOv2)
-        self.assertArraysAlmostEqual(mdl_formats.operations['Gx2'], rotXPi)
-        self.assertArraysAlmostEqual(mdl_formats.operations['Gy2'], rotYPi)
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gi'].to_dense(), np.identity(4, 'd'))
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gx'].to_dense(), rotXPiOv2.to_dense())
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gy'].to_dense(), rotYPiOv2.to_dense())
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gx2'].to_dense(), rotXPi.to_dense())
+        self.assertArraysAlmostEqual(mdl_formats.operations['Gy2'].to_dense(), rotYPi.to_dense())
 
-        self.assertArraysAlmostEqual(mdl_formats.preps['rho0'], 1 / np.sqrt(2) * np.array([[1], [0], [0], [1]], 'd'))
-        self.assertArraysAlmostEqual(mdl_formats.preps['rho1'], 1 / np.sqrt(2) * np.array([[1], [0], [0], [-1]], 'd'))
-        self.assertArraysAlmostEqual(mdl_formats.povms['Mdefault']['00'],
-                                     1 / np.sqrt(2) * np.array([[1], [0], [0], [1]], 'd'))
+        self.assertArraysAlmostEqual(mdl_formats.preps['rho0'].to_dense(), 1 / np.sqrt(2) * np.array([1, 0, 0, 1], 'd'))
+        self.assertArraysAlmostEqual(mdl_formats.preps['rho1'].to_dense(), 1 / np.sqrt(2) * np.array([1, 0, 0, -1], 'd'))
+        self.assertArraysAlmostEqual(mdl_formats.povms['Mdefault']['00'].to_dense(),
+                                     1 / np.sqrt(2) * np.array([1, 0, 0, 1], 'd'))
 
     def test_load_circuit_dict(self):
         # Legacy .txt circuit-dict format; no replacement provided by the

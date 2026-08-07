@@ -1,37 +1,39 @@
 from ...util import BaseCase
 
+import pytest
 import pygsti
 from pygsti.extras.devices.experimentaldevice import ExperimentalDevice
 from pygsti.extras import ibmq
 from pygsti.processors import CliffordCompilationRules as CCR
 from pygsti.protocols import MirrorRBDesign as RMCDesign
 from pygsti.protocols import PeriodicMirrorCircuitDesign as PMCDesign
+from pygsti.protocols import FreeformDesign
 from pygsti.protocols import ByDepthSummaryStatistics
 from pygsti.modelpacks import smq1Q_XY
 from pygsti.protocols import StandardGSTDesign
 import numpy as np
+
 
 try:
     from qiskit.providers.fake_provider import GenericBackendV2
 except:
     GenericBackendV2 = None
 
+
 try:
     from qiskit_ibm_runtime import QiskitRuntimeService
 except:
     QiskitRuntimeService = None
 
-import pytest
 
-class IBMQExperimentTester():
+class IBMQExperimentTester(BaseCase):
+
     @classmethod
     def setup_class(cls):
         if GenericBackendV2 is None:
             pytest.skip('Qiskit is required for this operation, and does not appear to be installed.')
-        elif QiskitRuntimeService is None:
-            pytest.skip('Qiskit Runtime is required for this operation, and does not appear to be installed.')
             
-        cls.backend = GenericBackendV2(num_qubits=4)
+        cls.backend = GenericBackendV2(num_qubits=4, noise_info=False) # noise_info=False guarantees ideal simulation, which is needed at least for test_e2e_mirror_rb
         cls.device = ExperimentalDevice.from_qiskit_backend(cls.backend)
         cls.pspec = cls.device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcphase'])
 
@@ -41,7 +43,6 @@ class IBMQExperimentTester():
                                   clifford_compilations=compilations, sampler='edgegrab', samplerargs=[3/8,])
         cls.edesign = pygsti.protocols.CombinedExperimentDesign([mirror_design])
 
-    
     def test_init(self):
         exp1 = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
                                    disable_checkpointing=True)
@@ -56,6 +57,8 @@ class IBMQExperimentTester():
         assert exp3.pygsti_circuit_batches == exp1.pygsti_circuit_batches
     
     def test_transpile(self):
+        if QiskitRuntimeService is None:
+            pytest.skip('Qiskit Runtime is required for this operation, and does not appear to be installed.')
         chkpt = 'test_ibmq_transpile_checkpoint'
         exp1 = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
                                    checkpoint_path=chkpt, checkpoint_override=True)
@@ -129,6 +132,10 @@ class IBMQExperimentTester():
 
         data = exp.data
 
+        # import ipdb
+
+        # ipdb.set_trace()
+
         # The summary statistics to calculate for each circuit.
         statistics = ['polarization', 'success_probabilities', 'success_counts', 'total_counts', 'two_q_gate_count']
         stats_generator = pygsti.protocols.SimpleRunner(ByDepthSummaryStatistics(statistics_to_compute=statistics))
@@ -161,3 +168,107 @@ class IBMQExperimentTester():
         exp.submit(self.backend)
         exp.monitor()
         exp.retrieve_results()
+
+    def test_e2e_openqasm_w_mcms(self):
+        backend = GenericBackendV2(num_qubits=9, noise_info=False)
+        device = ExperimentalDevice.from_qiskit_backend(backend)
+        pspec = device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcnot'])
+
+        circ = pygsti.circuits.Circuit('Iz:Q1Iz:Q3Gxpi:Q1Gxpi:Q3Gxpi:Q3@(Q1,Q3)')
+        edesign = FreeformDesign({circ: {}})
+
+        exp = ibmq.IBMQExperiment(edesign, pspec, disable_checkpointing=True)
+        exp.transpile(ibmq_backend=backend)
+
+        exp.submit(ibmq_backend=backend)
+        exp.retrieve_results()
+
+        self.assertEqual(exp.data.dataset[circ].counts, {('p0', 'p0', '10',): 1024})
+
+    def test_e2e_openqasm_no_mcms(self):
+        backend = GenericBackendV2(num_qubits=9, noise_info=False)
+        device = ExperimentalDevice.from_qiskit_backend(backend)
+        pspec = device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcnot'])
+
+        circ = pygsti.circuits.Circuit('Gxpi:Q1Gxpi:Q3Gxpi:Q3@(Q1,Q3)')
+        edesign = FreeformDesign({circ: {}})
+
+        exp = ibmq.IBMQExperiment(edesign, pspec, disable_checkpointing=True)
+        exp.transpile(ibmq_backend=backend)
+
+        exp.submit(ibmq_backend=backend)
+        exp.retrieve_results()
+
+        self.assertEqual(exp.data.dataset[circ].counts, {('10',): 1024})
+    
+    def test_e2e_qiskit_all_w_mcms(self):
+        backend = GenericBackendV2(num_qubits=9, noise_info=False)
+        device = ExperimentalDevice.from_qiskit_backend(backend)
+        pspec = device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcnot'])
+
+        circ = pygsti.circuits.Circuit('Iz:Q1Iz:Q3Gxpi:Q1Gxpi:Q3Gxpi:Q3@(Q1,Q3)')
+        edesign = FreeformDesign({circ: {}})
+
+        exp = ibmq.IBMQExperiment(edesign, pspec, disable_checkpointing=True)
+
+        qiskit_convert_kwargs = {'qubits_to_measure': 'all'}
+        exp.transpile(ibmq_backend=backend, direct_to_qiskit=True, qiskit_convert_kwargs=qiskit_convert_kwargs)
+
+        exp.submit(ibmq_backend=backend)
+        exp.retrieve_results()
+
+        self.assertEqual(exp.data.dataset[circ].counts, {('p0', 'p0', '10',): 1024})
+
+    def test_e2e_qiskit_all_no_mcms(self):
+        backend = GenericBackendV2(num_qubits=9, noise_info=False)
+        device = ExperimentalDevice.from_qiskit_backend(backend)
+        pspec = device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcnot'])
+
+        circ = pygsti.circuits.Circuit('Gxpi:Q1Gxpi:Q3Gxpi:Q3@(Q1,Q3)')
+        edesign = FreeformDesign({circ: {}})
+
+        exp = ibmq.IBMQExperiment(edesign, pspec, disable_checkpointing=True)
+
+        qiskit_convert_kwargs = {'qubits_to_measure': 'all'}
+        exp.transpile(ibmq_backend=backend, direct_to_qiskit=True, qiskit_convert_kwargs=qiskit_convert_kwargs)
+
+        exp.submit(ibmq_backend=backend)
+        exp.retrieve_results()
+
+        self.assertEqual(exp.data.dataset[circ].counts, {('10',): 1024})
+
+    def test_e2e_qiskit_active_w_mcms(self):
+        backend = GenericBackendV2(num_qubits=9, noise_info=False)
+        device = ExperimentalDevice.from_qiskit_backend(backend)
+        pspec = device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcnot'])
+
+        circ = pygsti.circuits.Circuit('Iz:Q1Iz:Q3Gxpi:Q1Gxpi:Q3Gxpi:Q3@(Q1,Q3)')
+        edesign = FreeformDesign({circ: {}})
+
+        exp = ibmq.IBMQExperiment(edesign, pspec, disable_checkpointing=True)
+
+        qiskit_convert_kwargs = {'qubits_to_measure': 'active'}
+        exp.transpile(ibmq_backend=backend, direct_to_qiskit=True, qiskit_convert_kwargs=qiskit_convert_kwargs)
+
+        exp.submit(ibmq_backend=backend)
+        exp.retrieve_results()
+
+        self.assertEqual(exp.data.dataset[circ].counts, {('p0', 'p0', '10',): 1024})
+
+    def test_e2e_qiskit_active_no_mcms(self):
+        backend = GenericBackendV2(num_qubits=9, noise_info=False)
+        device = ExperimentalDevice.from_qiskit_backend(backend)
+        pspec = device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcnot'])
+
+        circ = pygsti.circuits.Circuit('Gxpi:Q1Gxpi:Q3Gxpi:Q3@(Q1,Q3)')
+        edesign = FreeformDesign({circ: {}})
+
+        exp = ibmq.IBMQExperiment(edesign, pspec, disable_checkpointing=True)
+
+        qiskit_convert_kwargs = {'qubits_to_measure': 'active'}
+        exp.transpile(ibmq_backend=backend, direct_to_qiskit=True, qiskit_convert_kwargs=qiskit_convert_kwargs)
+
+        exp.submit(ibmq_backend=backend)
+        exp.retrieve_results()
+
+        self.assertEqual(exp.data.dataset[circ].counts, {('10',): 1024})

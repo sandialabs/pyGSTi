@@ -15,12 +15,15 @@ kernelspec:
 
 ```{warning} This notebook is under construction and will have more description in the near future.```
 
+Start by installing the pure-Python version of CHP sim.
+
 ```{code-cell} ipython3
-from __future__ import print_function #python 2 & 3 compatibility
+%pip install chp_sim -q
+```
+
+```{code-cell} ipython3
 import pygsti
-
 import numpy as np
-
 from pygsti.modelmembers.operations import LinearOperator, StaticStandardOp, StochasticNoiseOp, DepolarizeOp, ComposedOp, EmbeddedOp
 ```
 
@@ -110,9 +113,6 @@ print(Gzx_comp_embed._rep._chp_ops())
 ## CHPForwardSimulator + Explicit Model
 
 ```{code-cell} ipython3
-#This is the directory where the chp directory lives during github testing, replace this with the 
-#correct directory for your personal installation
-pygsti.evotypes.chp.chpexe = 'chp'
 sim = pygsti.forwardsims.WeakForwardSimulator(shots=100)
 ```
 

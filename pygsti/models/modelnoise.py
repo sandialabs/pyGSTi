@@ -416,7 +416,7 @@ class OpModelPerOpNoise(OpModelNoise):
     per_op_noise : dict
         A dictionary mapping operation labels (which will become the keys of this
         :class:`OpModelNoise` object) to either :class:`OpNoise` objects or to a
-        nexted dictionary mapping absolute or stencil state space labels to
+        nested dictionary mapping absolute or stencil state space labels to
         :class:`OpNoise` objects.  In the former case, the :class:`OpNoise` object
         is assumed to apply to all the target labels of the operation.
     """
@@ -721,7 +721,7 @@ class ComposedOpModelNoise(OpModelNoise):
             A set (i.e. without any duplicates) of the state space labels that would be acted upon.
         """
         stencil_lbls = set()
-        for sub_stencil, modelnoise in zip(stencil, self.opmodelnoises):  # stencil is a tuple of compontent stencils
+        for sub_stencil, modelnoise in zip(stencil, self.opmodelnoises):  # stencil is a tuple of component stencils
             stencil_lbls.update(modelnoise.compute_stencil_absolute_sslbls(sub_stencil, state_space,
                                                                            target_labels, qudit_graph))
         return stencil_lbls

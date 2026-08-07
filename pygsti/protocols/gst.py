@@ -605,7 +605,7 @@ class GSTBadFitOptions(_NicelySerializable):
     actions : tuple, optional
         Actions to take when a GST fit is unsatisfactory. Allowed actions include:
         
-        * 'wildcard': Find an admissable wildcard model.
+        * 'wildcard': Find an admissible wildcard model.
         * 'wildcard1d': Fits a single parameter wildcard model in which
           the amount of wildcard error added to an operation is proportional
           to the diamond distance between that operation and the target.
@@ -1911,10 +1911,13 @@ class StandardGST(_proto.Protocol):
             target_model = self.target_model
         elif isinstance(data.edesign, HasProcessorSpec):
             # warnings.warn(...) -- or try/except and warn if fails?
+            from pygsti.baseobjs.basis import default_basis_for_udims
+            udims = data.edesign.processor_spec.qudit_udims
+            basis = default_basis_for_udims(udims)
             target_model = _models.modelconstruction._create_explicit_model(
                 data.edesign.processor_spec, None, evotype='default', simulator='auto',
                 ideal_gate_type='static', ideal_prep_type='auto', ideal_povm_type='auto',
-                embed_gates=False, basis='pp')  # HARDCODED basis!
+                embed_gates=False, basis=basis)
         else:
             target_model = None  # Usually this path leads to an error being raised below.
 
@@ -2473,43 +2476,44 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
     for lbl, gaugeopt_model in gopped_models.items():
 
         argdicts = gaugeopt_suite.gaugeopt_argument_dicts.get(lbl, dict())
-        n_leak: int = 0
+        leakage_modeling: bool = False
         if isinstance(argdicts, list) and len(argdicts) > 0:
-            n_leak = argdicts[0].get('n_leak', n_leak)
+            leakage_modeling = argdicts[0].get('leakage_modeling', leakage_modeling)
 
         basis = gaugeopt_model.basis
-        udim = int(_np.round(_np.sqrt(basis.dim)))
-        I = _tools.matrixtools.IdentityOperator()
-        if n_leak == 0:
-            P = I
-        elif n_leak > 0:
-            U = _tools.leading_dxd_submatrix_basis_vectors(udim - n_leak, udim, basis)
-            P = U @ U.T.conj()
-            P = P.real
+        if not leakage_modeling:
+            P = _tools.matrixtools.IdentityOperator()
+            def diamonddist_fn(*args, **kwargs):
+                return 0.5 * _tools.diamonddist(*args, **kwargs)  # type: ignore
+            jtracedist_fn = _tools.jtracedist
+        else:
+            from pygsti.leakage.core import computational_projector
+            from pygsti.leakage.metrics import subspace_diamonddist, subspace_jtracedist
+            P = computational_projector(basis) 
+            diamonddist_fn  = subspace_diamonddist
+            jtracedist_fn   = subspace_jtracedist
 
         ops, preps, _, insts = _memberdicts(gaugeopt_model)
 
         for key, op in ops.items():
             X = op.to_dense()
             Y = target_ops[key].to_dense()
-            X_restricted = X @ P
-            Y_restricted = Y @ P
 
             # Get basis for this operation.
             op_basis = basis # start with the model's basis
-            if (basis.dim != X_restricted.shape[0] and isinstance(basis, _tools.TensorProdBasis)
-                and basis.component_bases[0].dim == X_restricted.shape[0]):
+            if (basis.dim != X.shape[0] and isinstance(basis, _tools.TensorProdBasis)
+                and basis.component_bases[0].dim == X.shape[0]):
                 # use first component of a TensorProdBasis if a smaller dim is needed and matches.
                 op_basis = basis.component_bases[0]
 
-            dd[lbl][key] : float = 0.5 * _tools.diamonddist(X_restricted, Y_restricted, mx_basis=op_basis) # type: ignore
+            dd[lbl][key] : float = diamonddist_fn(X, Y, mx_basis=op_basis) # type: ignore
             if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                 msg = f"""
                 Diamond distance failed to compute {key} reference value for 1D wildcard budget!
                 Falling back to trace distance.
                 """
                 _warnings.warn(msg)
-                dd[lbl][key] = _tools.subspace_jtracedist(X, Y, basis, n_leak=n_leak)
+                dd[lbl][key] = jtracedist_fn(X, Y, basis)
         
         for key, op in insts.items():
             inst_dd : float = 0.5* _tools.instrument_diamonddist(
@@ -2848,7 +2852,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         printer.log("   " + str(budget))
         printer.log("")
 
-        # Test that the found wildcard budget is admissable (there is not a strictly smaller wildcard budget
+        # Test that the found wildcard budget is admissible (there is not a strictly smaller wildcard budget
         # that also satisfies the constraints), and while doing this find the active constraints.
         printer.log("VERIFYING that the final wildcard budget vector is admissable")
 
@@ -3291,6 +3295,69 @@ class ModelEstimateResults(_proto.ProtocolResults):
                              objfn_builder, badfit_options, name=estimate_key, verbosity=verbosity)
         test_result = mdltest.run(self.data, simulator=simulator)
         self.add_estimates(test_result, silent_steal=True)
+
+    def add_hessians(
+            self, estimate_names:   Optional[list[str]]=None,
+            compute_hessian_kwargs: Optional[dict[str, Any]]=None,
+            project_hessian_kwargs: Optional[dict[str, Any]]=None,
+        ):
+        """
+        Compute and store objective-function Hessians for estimates in this results object.
+
+        For each named estimate (except 'Target') and each of its gauge-optimized models,
+        this method creates a confidence region factory for the 'final' circuit list,
+        computes the Hessian of the final objective function at that model, and projects
+        it onto the model's non-gauge parameter space. Once this has run, report
+        generation with a not-None `confidence_level` can render error bars for the
+        affected estimates.
+
+        Models simulated with a MatrixForwardSimulator are switched to a
+        MapForwardSimulator first, since that is the only forward simulator that can
+        compute objective-function Hessians with a reasonable amount of memory.
+
+        Parameters
+        ----------
+        estimate_names : list of str, optional
+            Names of the estimates (keys of `self.estimates`) to process. If None, all
+            estimates are processed. The 'Target' estimate is always skipped.
+
+        compute_hessian_kwargs : dict, optional
+            Keyword arguments forwarded to
+            :meth:`ConfidenceRegionFactory.compute_hessian` (e.g. `comm`, `mem_limit`).
+
+        project_hessian_kwargs : dict, optional
+            Keyword arguments forwarded to
+            :meth:`ConfidenceRegionFactory.project_hessian`. If no 'projection_type'
+            is given, 'intrinsic error' is used.
+
+        Returns
+        -------
+        None
+        """
+        if project_hessian_kwargs is None:
+            project_hessian_kwargs = dict()
+        project_hessian_kwargs.setdefault('projection_type', 'intrinsic error')
+
+        if compute_hessian_kwargs is None:
+            compute_hessian_kwargs = dict()
+
+        if estimate_names is None:
+            estimate_names = [en for en in self.estimates]
+
+        from pygsti.forwardsims import MatrixForwardSimulator, MapForwardSimulator
+
+        for estname in estimate_names:
+            est = self.estimates[estname]
+            if estname == 'Target':
+                continue
+            for gop_name in est.goparameters:
+                mdl = est.models[gop_name]
+                if isinstance(mdl.sim, MatrixForwardSimulator):
+                    mdl.sim = MapForwardSimulator
+                crf = est.add_confidence_region_factory(gop_name, 'final')
+                crf.compute_hessian(**compute_hessian_kwargs)
+                crf.project_hessian(**project_hessian_kwargs)
+        return
 
     def view(self, estimate_keys, gaugeopt_keys=None):
         """

@@ -22,11 +22,15 @@ As a concrete example, we'll explore one of the `ModelEstimateResults` objects g
 
 ```{code-cell} ipython3
 import pygsti
+import os
 ```
 
 ```{code-cell} ipython3
-results = pygsti.io.read_results_from_dir("../../tutorial_files/Example_GST_Data","GateSetTomography")
-print(results)
+if os.path.isdir("../../tutorial_files/Example_GST_Data"):
+  results = pygsti.io.read_results_from_dir("../../tutorial_files/Example_GST_Data","GateSetTomography")
+  print(results)
+else:
+  raise ValueError("You have to run the GST protocols tutorial first!")
 ```
 
 As you can see, printing a `ModelEstimateResults` object gives you a summary of its structure and what you can do with it.  The *single* `DataSet` can be accessed via the `.dataset` member, and the estimated `Model` objects can be found within the `pygsti.report.Estimate` objects contained within the `.estimates` member.  As the summary states, `.estimates` is a *dictionary* of `Estimate` objects, and **can contain as multiple estimates of the data *with the caveat* that all of these estimates must use the same experiment design** (roughly, the same `Circuit` lists and/or `CircuitStructure`s for each algorithm iteration, and the same number of iterations).

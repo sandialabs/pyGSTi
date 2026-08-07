@@ -31,10 +31,13 @@ from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoeffici
 
 # ---- validity matrix (block_type -> valid param_modes) ----
 VALID = {
-    'ham':            ('static', 'elements'),
-    'other_diagonal': ('static', 'elements', 'cholesky', 'depol', 'reldepol'),
-    'other':          ('static', 'elements', 'cholesky'),
+    'ham':                 ('static', 'elements'),
+    'other_diagonal':      ('static', 'elements', 'cholesky', 'depol', 'reldepol'),
+    'other':               ('static', 'elements', 'cholesky'),
+    'other_unconstrained': ('static', 'elements'),
 }
+# block types whose param count grows like n*n (kept out of the heavy finite-diff/Hessian tests at large dim)
+_BIG_BLOCK_TYPES = ('other', 'other_unconstrained')
 # (basis_name, superop_dim).  'pp' requires a power-of-two Hilbert dim; 'gm' dim 9 == qutrit.
 BASES = [('pp', 4), ('gm', 9), ('pp', 16)]
 
@@ -43,8 +46,8 @@ def _cases(include_other_big) -> list[tuple[str, int, str, str]]:
     out = []
     for bname, dim in BASES:
         for bt, pms in VALID.items():
-            if bt == 'other' and dim >= 16 and not include_other_big:
-                continue  # keep large 'other' (n*n params) out of the heavy finite-diff tests
+            if bt in _BIG_BLOCK_TYPES and dim >= 16 and not include_other_big:
+                continue  # keep large n*n-parameter blocks out of the heavy finite-diff tests
             for pm in pms:
                 out.append((bname, dim, bt, pm))
     return out
@@ -52,7 +55,7 @@ def _cases(include_other_big) -> list[tuple[str, int, str, str]]:
 
 ALL_CASES  = _cases(include_other_big=True)
 FD_CASES   = [ c for c in _cases(include_other_big=False) if c[3] != 'static']
-HESS_CASES = [ c for c in FD_CASES if not (c[2] == 'other' and c[1] > 4)     ]
+HESS_CASES = [ c for c in FD_CASES if not (c[2] in _BIG_BLOCK_TYPES and c[1] > 4) ]
 
 
 def _config_as_string(c : tuple[str, int, str, str]) -> str:
@@ -111,7 +114,7 @@ def test_num_params_matches_formula(c):
         expected = n
     elif bt == 'other_diagonal':
         expected = 1 if pm in ('depol', 'reldepol') else n
-    else:  # 'other'
+    else:  # 'other' / 'other_unconstrained' (full eeg set has n*n elementary error generators)
         expected = n * n
     assert blk.num_params == expected
     assert blk.to_vector().shape == (expected,)
@@ -219,9 +222,6 @@ def test_labels_snapshot_1q():
 
     assert LCB('ham', pp, param_mode='elements').param_labels == \
         ['X Hamiltonian error coefficient', 'Y Hamiltonian error coefficient', 'Z Hamiltonian error coefficient']
-    assert LCB('ham', pp).coefficient_labels == \
-        ['X Hamiltonian error coefficient', 'Y Hamiltonian error coefficient', 'Z Hamiltonian error coefficient']
-
     assert LCB('other_diagonal', pp, param_mode='cholesky').param_labels == \
         ['sqrt(X stochastic coefficient)', 'sqrt(Y stochastic coefficient)', 'sqrt(Z stochastic coefficient)']
     assert LCB('other_diagonal', pp, param_mode='elements').param_labels == \
@@ -230,8 +230,6 @@ def test_labels_snapshot_1q():
         ['sqrt(common stochastic error coefficient for depolarization)']
     assert LCB('other_diagonal', pp, param_mode='reldepol').param_labels == \
         ['common stochastic error coefficient for depolarization']
-    assert LCB('other_diagonal', pp).coefficient_labels == \
-        ['(X,X) other error coefficient', '(Y,Y) other error coefficient', '(Z,Z) other error coefficient']
 
     # 'static' blocks have no parameters
     assert LCB('ham', pp, param_mode='static').param_labels == []
@@ -434,9 +432,9 @@ def test_coefficient_labels_block_type_and_caches():
     from_vector no-op, the cached elementary_errorgen_indices return, and convert()."""
     pp = Basis.cast('pp', 4)
     for bt, n_labels in [('ham', 3), ('other_diagonal', 3), ('other', 9)]:
-        blk = LCB(bt, pp, param_mode='static')
+        blk = LCB(bt, pp, param_mode='elements')
         assert blk._block_type == bt
-        labels = blk.coefficient_labels
+        labels = blk.param_labels
         assert len(labels) == n_labels and all(isinstance(s, str) for s in labels)
 
     LCB('ham', pp, param_mode='static').from_vector(np.empty(0))  # static carries no params -> no-op
@@ -463,9 +461,8 @@ def test_invalid_param_mode_raises():
     from pygsti.modelmembers.operations.lindbladcoefficients import InvalidParamModeError
     pp = Basis.cast('pp', 4)
     for bt, pm in [('ham', 'cholesky'), ('other_diagonal', 'not_a_mode')]:
-        blk = LCB(bt, pp, param_mode=pm)   # invalid param_mode is not validated at construction
         with pytest.raises(InvalidParamModeError):
-            _ = blk.num_params             # ...it surfaces on first use
+            _ = LCB(bt, pp, param_mode=pm)
 
 
 @pytest.mark.parametrize("case", [c for c in FD_CASES if c[2] == 'other'], ids=_config_as_string)

@@ -99,7 +99,7 @@ opt_result, mdl_single_optimization = \
 The iterative algorithm, which essentially runs `run_gst_fit` multiple times, is implemented by `run_iterative_gst`.  The number of iterations is set by the number of circuit lists provided as the 3rd argument.  It takes two lists of objective function builders: the first, `iteration_objfn_builders` gives the objective functions to (sequentially) optimize on each iteration, while the second, `final_objfn_builders` gives additional objective functions to optimize on the final iteration.
 
 ```{code-cell} ipython3
-models, opt_results, cache = \
+models, optimums, final_objfn, mdc_store = \
     pygsti.algorithms.run_iterative_gst(ds, mdl_clgst, lsgstListOfLists,
                                        optimizer={'tol': 1e-5}, resource_alloc=None, verbosity=2,
                                        iteration_objfn_builders=['chi2'],

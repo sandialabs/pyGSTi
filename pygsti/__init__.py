@@ -15,6 +15,7 @@ from . import baseobjs
 from . import algorithms as alg
 from . import circuits
 from . import data
+from . import leakage
 from . import models
 from . import modelmembers as mm
 from . import forwardsims
@@ -22,6 +23,7 @@ from . import processors
 from . import protocols
 from . import report as rpt
 from . import serialization
+from . import objectivefns
 
 # Import the most important/useful routines of each module/sub-package
 # into the package namespace

@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -196,19 +196,19 @@ print("Model 1:\n", model1)
 ```
 
 ```{code-cell} ipython3
-#You can also access individual gates like they're numpy arrays:
-Gx = model1['Gx'] # a LinearOperator object, but behaves like a numpy array
+#You can access individual gates as LinearOperator objects:
+Gx = model1['Gx'] # a LinearOperator object; call .to_dense() to get a numpy array
 
 #By printing a gate, you can see that it's not just a numpy array
 print("Gx = ", Gx)
 
-#But can be accessed as one:
-print("Array-like printout\n", Gx[:,:],"\n")
-print("First row\n", Gx[0,:],"\n")
-print("Element [2,3] = ",Gx[2,3], "\n")
+#Use .to_dense() to obtain a plain numpy array for indexing or arithmetic:
+print("Array-like printout\n", Gx.to_dense()[:,:],"\n")
+print("First row\n", Gx.to_dense()[0,:],"\n")
+print("Element [2,3] = ",Gx.to_dense()[2,3], "\n")
 
 Id = np.identity(4,'d')
-Id_dot_Gx = np.dot(Id,Gx)
+Id_dot_Gx = np.dot(Id,Gx.to_dense())
 print("Id_dot_Gx\n", Id_dot_Gx, "\n")
 ```
 

@@ -9,15 +9,44 @@ Defines the ProtectedArray class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
 
+from typing import Any, List, NoReturn, Optional, Sequence, TYPE_CHECKING, Tuple, Union
 import copy as _copy
 import numpy as _np
+import numpy.typing as _npt
+from warnings import warn
 
-from pygsti.baseobjs import _compatibility as _compat
+
+PROTECTEDARRAYERRORSTRING = "some or all of assignment destination is read-only"
+
+# The atomic index specifiers accepted along a single axis of the array.
+_AxisIndex = Union[int, slice]
+
+# A single (per-axis) index specification for a whole element/slice,
+# e.g. `(0, slice(None, None, None))`.  Given as a tuple or list of `_AxisIndex`.
+_IndexSpec = Sequence[_AxisIndex]
+
+# Everything ``indices_to_protect`` will accept:
+#   * a bare ``int`` (protect that index along the first axis),
+#   * a single ``_IndexSpec`` (one element/slice), or
+#   * a sequence of ``_IndexSpec`` (several elements/slices).
+IndicesToProtect = Union[int, _IndexSpec, Sequence[_IndexSpec]]
+
+# The key accepted by ``__getitem__``/``__setitem__`` (numpy-style indexing).
+_IndexKey = Union[_AxisIndex, Tuple[_AxisIndex, ...], _npt.NDArray[Any], List[int]]
+
 
 class ProtectedArray(object):
     """
     A numpy ndarray-like class that allows certain elements to be treated as read-only.
+
+    Note that all in-place arithmetic/logical operators (e.g. `+=`, `-=`,
+    `*=`, `/=`, `//=`, `**=`, `%=`, `@=`, `<<=`, `>>=`, `|=`, `^=`, `&=`)
+    unconditionally raise a `ValueError` on `ProtectedArray` instances, even
+    when no indices are currently protected (i.e. when `protected_index_mask`
+    is all-zero). Use `__setitem__` (e.g. `pa[:] = pa[:] + x`) instead, which
+    only raises when a protected index would actually be modified.
 
     Parameters
     ----------
@@ -41,13 +70,18 @@ class ProtectedArray(object):
         is ignored.
     """
 
-    def __init__(self, input_array, indices_to_protect=None, protected_index_mask= None):
+    base: _npt.NDArray[Any]
+    protected_index_mask: _npt.NDArray[_np.bool_]
+
+    def __init__(self, input_array: _npt.NDArray[Any],
+                 indices_to_protect: Optional[IndicesToProtect] = None,
+                 protected_index_mask: Optional[_npt.NDArray[Any]] = None):
         self.base = input_array
 
         if protected_index_mask is not None:
             #check this has the correct shape
             assert protected_index_mask.shape == input_array.shape
-            
+
             #Cast this to a binary dtype (to save space since we only
             #need boolean values).
             self.protected_index_mask = protected_index_mask.astype(_np.bool_)
@@ -59,61 +93,100 @@ class ProtectedArray(object):
         #everything into this format and then looping over the nested
         #submembers.
         elif indices_to_protect is not None:
+            normalized_specs: List[Tuple[_AxisIndex, ...]]
             if isinstance(indices_to_protect, int):
-                indices_to_protect= [(indices_to_protect,)]
+                normalized_specs = [(indices_to_protect,)]
             #if this is a list go through and wrap any integers
             #at the top level in a tuple.
             elif isinstance(indices_to_protect, (list, tuple)):
-                #check whether this is a single-level tuple/list corresponding
-                #containing only ints and/or slices. If so wrap this in a list.
-                if all([isinstance(idx, (int, slice)) for idx in indices_to_protect]):
-                    indices_to_protect = [indices_to_protect]
-                
+                #runtime dispatch below is deliberately duck-typed;
+                outer: Sequence[Any]
+                if all(isinstance(idx, (int, slice)) for idx in indices_to_protect):
+                    outer = [indices_to_protect]
+                else:
+                    outer = indices_to_protect
+
                 #add some logic for mixing of unwrapped top-level ints and tuples/lists.
-                indices_to_protect = [tuple(indices) if isinstance(indices, (list, tuple)) else (indices,) for indices in indices_to_protect]
+                normalized_specs = []
+                for indices in outer:
+                    idx: Any = indices
+                    if isinstance(idx, (list, tuple)):
+                        spec: Tuple[_AxisIndex, ...] = tuple(idx)
+                    else:
+                        spec = (idx,)
+                    normalized_specs.append(spec)
+            else:
+                raise TypeError("`indices_to_protect` must be an int, a sequence of "
+                                "ints/slices, or a sequence of such sequences; got "
+                                f"{type(indices_to_protect).__name__}.")
             #initialize an empty mask
-            self.protected_index_mask = _np.zeros(input_array.shape , dtype= _np.bool_)
+            self.protected_index_mask = _np.zeros(input_array.shape, dtype=_np.bool_)
 
             #now loop over the nested subelements and add them to the mask:
-            for indices in indices_to_protect:
-                assert(len(indices) <= len(self.base.shape))
-                self.protected_index_mask[indices]=1
+            for indices in normalized_specs:
+                assert len(indices) <= len(self.base.shape)
+                if len(indices) < len(self.base.shape):
+                    warn("You must fully specify the indices you wish to protect. "
+                         "e.g. for a (3,3) array you would need to specify the row "
+                         "and the column for each individual element in the array you "
+                         "wish to protect. Note that a slice can allow you to specify "
+                         "multiple at once. So to specify the zeroth row, "
+                         "(0, slice(0, None, None)).", RuntimeWarning)
+                else:
+                    self.protected_index_mask[indices] = 1
         #otherwise set the mask to all zeros.
         else:
-            self.protected_index_mask = _np.zeros(input_array.shape , dtype= _np.bool_)
+            self.protected_index_mask = _np.zeros(input_array.shape, dtype=_np.bool_)
         #Note: no need to set self.base.flags.writeable = True anymore,
         # since this flag can only apply to a data owner as of numpy 1.16 or so.
         # Instead, we just copy the data whenever we return a readonly array.
         #Here, we just leave the writeable flag of self.base alone (either value is ok)
 
     #Mimic array behavior
-    def __pos__(self): return self.base
-    def __neg__(self): return -self.base
-    def __abs__(self): return abs(self.base)
-    def __add__(self, x): return self.base + x
-    def __radd__(self, x): return x + self.base
-    def __sub__(self, x): return self.base - x
-    def __rsub__(self, x): return x - self.base
-    def __mul__(self, x): return self.base * x
-    def __rmul__(self, x): return x * self.base
-    def __truediv__(self, x): return self.base / x
-    def __rtruediv__(self, x): return x / self.base
-    def __floordiv__(self, x): return self.base // x
-    def __rfloordiv__(self, x): return x // self.base
-    def __pow__(self, x): return self.base ** x
-    def __eq__(self, x): return self.base == x
-    def __len__(self): return len(self.base)
-    def __int__(self): return int(self.base)
-    def __long__(self): return int(self.base)
-    def __float__(self): return float(self.base)
-    def __complex__(self): return complex(self.base)
+    def __pos__(self) -> _npt.NDArray[Any]: return self.base
+    def __neg__(self) -> _npt.NDArray[Any]: return -self.base
+    def __abs__(self) -> _npt.NDArray[Any]: return abs(self.base)
+    def __add__(self, x: Any) -> _npt.NDArray[Any]: return self.base + x
+    def __radd__(self, x: Any) -> _npt.NDArray[Any]: return x + self.base
+    def __sub__(self, x: Any) -> _npt.NDArray[Any]: return self.base - x
+    def __rsub__(self, x: Any) -> _npt.NDArray[Any]: return x - self.base
+    def __mul__(self, x: Any) -> _npt.NDArray[Any]: return self.base * x
+    def __rmul__(self, x: Any) -> _npt.NDArray[Any]: return x * self.base
+    def __truediv__(self, x: Any) -> _npt.NDArray[Any]: return self.base / x
+    def __rtruediv__(self, x: Any) -> _npt.NDArray[Any]: return x / self.base
+    def __floordiv__(self, x: Any) -> _npt.NDArray[Any]: return self.base // x
+    def __rfloordiv__(self, x: Any) -> _npt.NDArray[Any]: return x // self.base
+    def __pow__(self, x: Any) -> _npt.NDArray[Any]: return self.base ** x
+    def __eq__(self, x: Any) -> _npt.NDArray[Any]: return self.base == x  # type: ignore[override]
+    def __len__(self) -> int: return len(self.base)
+    def __int__(self) -> int: return int(self.base)
+    def __long__(self) -> int: return int(self.base)
+    def __float__(self) -> float: return float(self.base)
+    def __complex__(self) -> complex: return complex(self.base)
+
+    if TYPE_CHECKING:
+        # Arithmetic Assignment Operations
+        def __iadd__(self, other: Any) -> NoReturn: ...
+        def __isub__(self, other: Any) -> NoReturn: ...
+        def __imul__(self, other: Any) -> NoReturn: ...
+        def __itruediv__(self, other: Any) -> NoReturn: ...
+        def __ifloordiv__(self, other: Any) -> NoReturn: ...
+        def __ipow__(self, other: Any) -> NoReturn: ...
+        def __imod__(self, other: Any) -> NoReturn: ...
+        def __imatmul__(self, other: Any) -> NoReturn: ...
+        # Logical Assignment Operations
+        def __ilshift__(self, other: Any) -> NoReturn: ...
+        def __irshift__(self, other: Any) -> NoReturn: ...
+        def __ior__(self, other: Any) -> NoReturn: ...
+        def __ixor__(self, other: Any) -> NoReturn: ...
+        def __iand__(self, other: Any) -> NoReturn: ...
 
     #Pickle plumbing
 
-    def __reduce__(self):
+    def __reduce__(self) -> Tuple[Any, ...]:
         return (ProtectedArray, (_np.zeros(self.base.shape),), self.__dict__)
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo: dict) -> ProtectedArray:
         cls = self.__class__
         result = cls.__new__(cls)
         memo[id(self)] = result
@@ -121,12 +194,12 @@ class ProtectedArray(object):
             setattr(result, k, _copy.deepcopy(v, memo))
         return result
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict) -> None:
         self.__dict__.update(state)
 
     #Access to underlying ndarray
-        
-    def __getattr__(self, attr):
+
+    def __getattr__(self, attr: str) -> Any:
         # set references to our memory as (entirely) read-only
         ret = getattr(self.__dict__['base'], attr)
         if isinstance(ret, _np.ndarray) and ret.base is self.base:
@@ -134,13 +207,15 @@ class ProtectedArray(object):
             ret.flags.writeable = False  # as of numpy 1.16, this can only be set by OWNER
         return ret
 
-    def __getslice__(self, i, j):
+    def __getslice__(self, i: int, j: int) -> Union[ProtectedArray, _npt.NDArray[Any], Any]:
         #For special cases when getslice is still called, e.g. A[:] in Python 2.7
         return self.__getitem__(slice(i, j))
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: _IndexKey) -> Union[ProtectedArray, _npt.NDArray[Any], Any]:
+        #Returns a `ProtectedArray` (for non-scalar selections), or the raw
+        #numpy scalar for scalar selections.
         #Use key to extract subarray of self.base and self.protected_index_mask
-        ret = self.base[key]
+        ret: Any = self.base[key]
         new_protected_mask = self.protected_index_mask[key]
 
         #If ret is not a scalar return a new ProtectedArray corresponding to the
@@ -148,23 +223,39 @@ class ProtectedArray(object):
         #original.
         if not _np.isscalar(ret):
             if not _np.all(new_protected_mask):  # then some of the indices are writeable
-                ret = ProtectedArray(ret, protected_index_mask= new_protected_mask)
-            else: #otherwise all of the values are masked off.
+                ret = ProtectedArray(ret, protected_index_mask=new_protected_mask)
+            else:  # otherwise all of the values are masked off.
                 ret = _np.require(ret.copy(), requirements=['OWNDATA'])  # copy to a new read-only array
                 ret.flags.writeable = False  # a read-only array
-                ret = ProtectedArray(ret, protected_index_mask=new_protected_mask)  # return a ProtectedArray that is read-only
+                # return a ProtectedArray that is read-only
+                ret = ProtectedArray(ret, protected_index_mask=new_protected_mask)
         return ret
 
-    def __setitem__(self, key, val):
-                #check if any of the indices in key have been masked off.
+    def __setitem__(self, key: _IndexKey, val: Any) -> None:
+        #check if any of the indices in key have been masked off.
         if _np.any(self.protected_index_mask[key]):  # assigns to a protected index in each dim
-            raise ValueError("**some or all of assignment destination is read-only")
-        #not sure what the original logic was for this return statement, but I don't see any
-        #harm in keeping it.
-        return self.base.__setitem__(key, val)
+            raise ValueError(PROTECTEDARRAYERRORSTRING)
+        self.base.__setitem__(key, val)
 
     #add a repr method that prints the base array, which is typically what
     #we want.
-    def __repr__(self):
+    def __repr__(self) -> str:
         return _np.array2string(self.base)
-        
+
+
+def _raise_protected_array_error(self: ProtectedArray, other: Any) -> NoReturn:
+    raise ValueError(PROTECTEDARRAYERRORSTRING)
+
+
+# Attach the in-place operators declared under `TYPE_CHECKING` above. Doing
+# this in a loop (rather than 13 separate `def`s) avoids repeating the same
+# one-line method body for each operator.
+for _op_name in (
+    # Arithmetic Assignment Operations
+    '__iadd__', '__isub__', '__imul__', '__itruediv__', '__ifloordiv__',
+    '__ipow__', '__imod__', '__imatmul__',
+    # Logical Assignment Operations
+    '__ilshift__', '__irshift__', '__ior__', '__ixor__', '__iand__',
+):
+    setattr(ProtectedArray, _op_name, _raise_protected_array_error)
+del _op_name

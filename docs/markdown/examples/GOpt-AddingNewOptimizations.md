@@ -26,7 +26,7 @@ mdl_datagen  = smq1Q_XYI.target_model().depolarize(op_noise=0.1, spam_noise=0.00
 ds = pygsti.data.simulate_data(mdl_datagen, exp_design.all_circuits_needing_data, num_samples=1000, seed=1234)
 data = pygsti.protocols.ProtocolData(exp_design, ds)
 
-gst = pygsti.protocols.StandardGST("full TP", gaugeopt_suite={'go0': {'item_weights': {'gates': 1, 'spam': 1}}})
+gst = pygsti.protocols.StandardGST("full TP", gaugeopt_suite={'stdgaugeopt': {'item_weights': {'gates': 1, 'spam': 1}}})
 results = gst.run(data) 
 results.write("../../example_files/regaugeopt_example")
 ```
@@ -42,7 +42,7 @@ estimate = my_results.estimates['full TP']
 estimate.add_gaugeoptimized( {'item_weights': {'gates': 1, 'spam': 0.001}}, label="Spam 1e-3" )
 mdl_gaugeopt = estimate.models['Spam 1e-3']
 
-print(list(estimate.goparameters.keys())) # 'go0' is the default gauge-optimization label
+print(list(estimate.goparameters.keys())) # 'stdgaugeopt' is the default gauge-optimization label
 print(mdl_gaugeopt.frobeniusdist(estimate.models['target']))
 ```
 

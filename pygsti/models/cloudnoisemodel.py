@@ -89,7 +89,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         function is meant to identify that cloud.  This is used to keep track
         of which primitive layer-labels correspond to the same cloud - e.g.
         the cloud-key for ("Gx",2) and ("Gy",2) might be the same and could
-        be processed together when selecing sequences that amplify the parameters
+        be processed together when selecting sequences that amplify the parameters
         in the cloud-noise operations for these two labels.  The return value
         should be something hashable with the property that two noise
         which act on the same qudits should have the same cloud key.
@@ -185,7 +185,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         global_idle_name = self.processor_spec.global_idle_gate_name
 
         # Set noisy_global_idle_layer = pspec.global_idle_layer_label if the global idle gate isn't the perfect identity
-        #  and if we're generating cloudnoise members (if we're not then layer rules could encouter a key error
+        #  and if we're generating cloudnoise members (if we're not then layer rules could encounter a key error
         #  if we let noisy_global_idle_layer be non-None).
         global_idle_gate = mm_gatedict.get(global_idle_name, None)
         if (global_idle_gate is not None) and (build_cloudnoise_fn is not None) \
@@ -395,7 +395,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         if not normalized_elem_gens:
             def rescale(coeffs):
                 """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
-                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         to be coefficients for the usual un-normalized-Pauli-basis elementary gens.  This
                          is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
                          factor of d2 baked into it.
                 """
@@ -436,9 +436,9 @@ class CloudNoiseLayerRules(_LayerRules):
         if implicit_idle_mode is None or implicit_idle_mode == "none":  # no noise on idles
             pass  # just use defaults above
         elif implicit_idle_mode == "only_global" and self.implied_global_idle_label is not None:
-            self._use_global_idle = True  # use global idle only in emtpy (implied global idle) layers
+            self._use_global_idle = True  # use global idle only in empty (implied global idle) layers
         elif implicit_idle_mode == "add_global" and self.implied_global_idle_label is not None:
-            self._use_global_idle = True  # use global idle in emtpy (implied global idle) layers
+            self._use_global_idle = True  # use global idle in empty (implied global idle) layers
             self._add_global_idle_to_all_layers = True    # add global idle to all layers
         elif implicit_idle_mode == "pad_1Q" and self.single_qubit_idle_layer_labels is not None:
             self._add_padded_idle = True
@@ -657,7 +657,7 @@ class CloudNoiseLayerRules(_LayerRules):
         if isinstance(complbl, _CircuitLabel):
             raise NotImplementedError("Cloud noise models cannot simulate circuits with partial-layer subcircuits.")
             # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
-            #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
+            #  do for the "errorgens" case - how do we gate an error generator of an entire (multi-layer) sub-circuit?
             # Maybe we just need to expand the label and create a composition of those layers?
         elif complbl in model.operation_blks['layers']:
             return model.operation_blks['layers'][complbl]

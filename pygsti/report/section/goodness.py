@@ -87,7 +87,10 @@ class GoodnessColorBoxPlotSection(_Section):
 
     @_Section.figure_factory()
     def maxlength_switchboard1(workspace, switchboard=None, switchbd_maxlengths=None, **kwargs):
+        # One entry per master-switchboard switch; only the max(L) slider is shown here.
+        # A trailing entry covers the interactive "Metrics" (Subspace/Full-space) switch.
         maxLView = [False, False, False, len(switchbd_maxlengths) > 1]
+        maxLView += [False] * (len(switchboard.switchNames) - len(maxLView))
         return switchboard.view(maxLView, 'v6')
 
 

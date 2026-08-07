@@ -137,7 +137,7 @@ class StolenResourceWarning(UserWarning):
 
         B = Bar()        # sets B.parent = None
         F = Foo(child=B) # sets F.child = B and updates B.parent = F
-        G = make_foo(B)  # sets G.child = B and udpates B.parent = G,
+        G = make_foo(B)  # sets G.child = B and updates B.parent = G,
 
     the `make_foo` function should raise a StolenResourceWarning if it
     changes the value of `id(F.child)`.
@@ -181,3 +181,23 @@ class ForwardSimDiagnosticWarning(UserWarning):
     to surface them.
     """
     enabled = False
+
+
+class ClobberingWarning(UserWarning):
+    """
+    Inform the user that contradictory values have been encountered
+    in some operation, and that we'll adopt some heuristic for
+    choosing one of the values.
+    """
+
+
+class RBFitFailureWarning(UserWarning):
+    """
+    Inform the user that a randomized-benchmarking decay/rate fit failed
+    (e.g. scipy.optimize.curve_fit raised an exception) for one or more
+    of the quantities an RB protocol tried to fit, and that results
+    derived from a shared fit (such as per-irrep rates recovered from a
+    common recoupling matrix) may consequently be entirely NaN rather
+    than just the failed piece.
+    """
+    pass

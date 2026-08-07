@@ -114,7 +114,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     path_fraction_threshold : float, optional
         When greater than this fraction of the total available paths (set by
-        other constraints) are considered, no further re-compuation of the
+        other constraints) are considered, no further re-computation of the
         path set will occur, as it is expected to give little improvement.
 
     oob_check_interval : int, optional
@@ -283,7 +283,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         derivative_dimension : int, optional
             Optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            and second derivatives with respect to the circuit outcome probabilities.  This must be
             non-None when `array_types` contains `'ep'` or `'epp'` types.
 
         verbosity : int or VerbosityPrinter
@@ -345,11 +345,11 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         if not resource_alloc.is_host_leader:
             # (same as "if resource_alloc.host_comm is not None and resource_alloc.host_comm.rank != 0")
-            # we cannot further utilize multiplie processors when computing a single block.  The required
+            # we cannot further utilize multiple processors when computing a single block.  The required
             # ending condition is that array_to_fill on each processor has been filled.  But if memory
             # is being shared and resource_alloc contains multiple processors on a single host, we only
             # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
-            # shared memory that we don't want to have muliple procs using simultaneously to compute the
+            # shared memory that we don't want to have multiple procs using simultaneously to compute the
             # same thing.  Thus, we just do nothing on all of the non-root host_comm processors.
             # We could also print a warning (?), or we could carefully guard any shared mem updates
             # using "if resource_alloc.is_host_leader" conditions (if we could use  multiple procs elsewhere).
@@ -565,7 +565,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         Parameters
         ----------
         layout : TermCOPALayout
-            The layout specifiying the quantities (circuit outcome probabilities) to be
+            The layout specifying the quantities (circuit outcome probabilities) to be
             computed, and related information.
 
         exit_after_this_many_failures : int, optional
@@ -673,7 +673,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             An array containing the per-circuit-outcome maximum sum-of-path-magnitudes.
 
         layout : TermCOPALayout
-            The layout specifiying the quantities (circuit outcome probabilities) to be
+            The layout specifying the quantities (circuit outcome probabilities) to be
             computed, and related information.
 
         Returns
@@ -708,7 +708,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         Parameters
         ----------
         layout : TermCOPALayout
-            The layout specifiying the quantities (circuit outcome probabilities) to be
+            The layout specifying the quantities (circuit outcome probabilities) to be
             computed, and related information.
 
         probs : numpy.ndarray
@@ -781,7 +781,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         Parameters
         ----------
         layout : TermCOPALayout
-            The layout specifiying the quantities (circuit outcome probabilities) to be
+            The layout specifying the quantities (circuit outcome probabilities) to be
             computed, and related information.
 
         Returns
@@ -799,7 +799,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         layout.free_local_array(achieved_sopm)
 
         gaps = global_max_sopm - global_achieved_sopm
-        # Gaps can be slightly negative b/c of SMALL magnitude given to acutually-0-weight paths.
+        # Gaps can be slightly negative b/c of SMALL magnitude given to actually-0-weight paths.
         assert(_np.all(gaps >= -1e-6))
         return _np.clip(gaps, 0, None)
 
@@ -904,7 +904,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         Parameters
         ----------
         layout : TermCOPALayout
-            The layout specifiying the quantities (circuit outcome probabilities) to be
+            The layout specifying the quantities (circuit outcome probabilities) to be
             computed, and related information.
 
         resource_alloc : ResourceAllocation, optional
@@ -1083,7 +1083,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
         vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
-        ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
+        ctape = _np.concatenate([t[1] for t in tapes])  # concat all the ctapes
         layout_atom.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
         return
 
@@ -1213,7 +1213,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         tapes = all_compact_polys  # each "compact polynomials" is a (vtape, ctape) 2-tupe
         vtape = _np.concatenate([t[0] for t in tapes])  # concat all the vtapes
-        ctape = _np.concatenate([t[1] for t in tapes])  # concat all teh ctapes
+        ctape = _np.concatenate([t[1] for t in tapes])  # concat all the ctapes
         layout_atom.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good

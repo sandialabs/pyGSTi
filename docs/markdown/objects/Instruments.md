@@ -211,7 +211,7 @@ gst = StandardGST(modes=('full TP', 'CPTPLND'), target_model=mdl_ideal, verbosit
 results = gst.run(ProtocolData(edesign, ds))
 ```
 
-Both fits recover the data-generating model about equally well.  We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
+Both fits recover the data-generating model fairly well. We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
 
 ```{code-cell} ipython3
 for mode in ('full TP', 'CPTPLND'):
