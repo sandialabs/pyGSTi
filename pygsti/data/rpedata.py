@@ -20,7 +20,7 @@ def make_rpe_data_set(model_or_dataset: Union[_Model, _DataSet],
                       string_list_d: Dict[Union[str, tuple], list[_Circuit]],
                       num_samples: Optional[Union[int, list[int]]],
                       sample_error: Literal['binomial', 'none', 'round', 'multinomial'] = 'binomial',
-                      seed: Optional[int] = None):
+                      seed: Optional[int] = None) -> _DataSet:
     """
     Generate a fake RPE DataSet using the probabilities obtained from a model.
 

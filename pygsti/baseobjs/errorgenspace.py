@@ -10,16 +10,18 @@ Defines the ErrorgenSpace class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 from typing import Union
 import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis, ElementaryErrorgenBasis
 
+
 class ErrorgenSpace(_NicelySerializable):
 
-
-    def __init__(self, vectors, basis : ElementaryErrorgenBasis):
+    def __init__(self, vectors: _np.ndarray, basis: ElementaryErrorgenBasis):
         """
         A vector space of error generators, spanned by some basis.
 
@@ -41,17 +43,22 @@ class ErrorgenSpace(_NicelySerializable):
         #self._vectors = [] if (items is None) else items  # list of (basis, vectors_mx) pairs
         # map sslbls => (vectors, basis) where basis.sslbls == sslbls
         # or basis => vectors if bases can hash well(?)
-    def _to_nice_serialization(self):
-        state = super()._to_nice_serialization()
-        state.update({'vectors' : self._encodemx(self.vectors),
-                      'basis': self.elemgen_basis._to_nice_serialization()
-        })
-        return state
-    @classmethod
-    def from_nice_serialization(cls, state):
-        return cls(cls._decodemx(state['vectors']), ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
 
-    def intersection(self, other_space, free_on_unspecified_space=False, use_nice_nullspace=False):
+    def _to_nice_serialization(self) -> dict:
+        state = super()._to_nice_serialization()
+        state.update({'vectors': self._encodemx(self.vectors),
+                      'basis': self.elemgen_basis._to_nice_serialization()
+                      })
+        return state
+
+    @classmethod
+    def from_nice_serialization(cls, state: dict) -> ErrorgenSpace:
+        return cls(cls._decodemx(state['vectors']),
+                   ExplicitElementaryErrorgenBasis.from_nice_serialization(state['basis']))
+
+    def intersection(self, other_space: ErrorgenSpace,
+                     free_on_unspecified_space: bool = False,
+                     use_nice_nullspace: bool = False) -> ErrorgenSpace:
         """
         TODO: docstring
         """
@@ -107,13 +114,14 @@ class ErrorgenSpace(_NicelySerializable):
         if not isinstance(other, ErrorgenSpace):
             return False
         return _np.allclose(self.vectors, other.vectors) and self.elemgen_basis.__eq__(other.elemgen_basis)
-    def union(self, other_space):
+
+    def union(self, other_space: ErrorgenSpace) -> ErrorgenSpace:
         """
         TODO: docstring
         """
         raise NotImplementedError("TODO in FUTURE")
 
-    def normalize(self, norm_order: Union[int, float]=2):
+    def normalize(self, norm_order: Union[int, float] = 2) -> None:
         """
         Normalize the vectors defining this space according to a given norm.
 

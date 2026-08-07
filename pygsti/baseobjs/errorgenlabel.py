@@ -11,10 +11,10 @@ Defines the ElementaryErrorgenLabel class and supporting functionality.
 #***************************************************************************************************
 from __future__ import annotations
 
-from typing import Callable, Dict, Union
+from typing import Callable, Optional, Union
 
 
-def _to_int_or_strip(x):  # (same as in slowcircuitparser.py)
+def _to_int_or_strip(x: str) -> Union[int, str]:  # (same as in slowcircuitparser.py)
     return int(x) if x.strip().isdigit() else x.strip()
 
 
@@ -31,7 +31,9 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
     basis element labels.
     """
     @classmethod
-    def cast(cls, obj, sslbls=None, identity_label='I'):
+    def cast(cls, obj: Union[ElementaryErrorgenLabel, str, tuple, list],
+             sslbls: Optional[Union[tuple, list]] = None,
+             identity_label: str = 'I') -> LocalElementaryErrorgenLabel:
         """
         Method for casting an object to an instance of LocalElementaryErrorgenLabel
 
@@ -98,7 +100,7 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         else:
             raise ValueError("Cannot convert %s to a local elementary errorgen label!" % str(obj))
 
-    def __init__(self, errorgen_type, basis_element_labels):
+    def __init__(self, errorgen_type: str, basis_element_labels: Union[tuple, list]):
         """
         Parameters
         ----------
@@ -121,27 +123,27 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         return self._hash
     
     #pickle management functions
-    def __getstate__(self):
+    def __getstate__(self) -> dict:
         state_dict = self.__dict__
         return state_dict
 
-    def __setstate__(self, state_dict):
+    def __setstate__(self, state_dict: dict) -> None:
         for k, v in state_dict.items():
             self.__dict__[k] = v
         #reinitialize the hash
         self._hash = hash((self.errorgen_type, self.basis_element_labels))
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return (self.errorgen_type == other.errorgen_type
                 and self.basis_element_labels == other.basis_element_labels)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.errorgen_type + "(" + ",".join(map(str, self.basis_element_labels)) + ")"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str((self.errorgen_type, self.basis_element_labels))
     
-    def support_indices(self, identity_label='I'):
+    def support_indices(self, identity_label: str = 'I') -> tuple[int, ...]:
         """ 
         Returns a sorted tuple of the elements of indices of the nontrivial basis
         element label entries for this label.
@@ -160,7 +162,9 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
     """
 
     @classmethod
-    def cast(cls, obj, sslbls=None, identity_label='I'):
+    def cast(cls, obj: Union[ElementaryErrorgenLabel, str, tuple, list],
+             sslbls: Optional[Union[tuple, list]] = None,
+             identity_label: str = 'I') -> GlobalElementaryErrorgenLabel:
         """
         Method for casting an object to an instance of GlobalElementaryErrorgenLabel
 
@@ -241,7 +245,8 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         else:
             raise ValueError("Cannot convert %s to a global elementary errorgen label!" % str(obj))
 
-    def __init__(self, errorgen_type, basis_element_labels, sslbls, sort=True):
+    def __init__(self, errorgen_type: str, basis_element_labels: Union[tuple, list],
+                 sslbls: Union[tuple, list], sort: bool = True):
         """
         Parameters
         ----------
@@ -278,34 +283,34 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         return self._hash
     
     #pickle management functions
-    def __getstate__(self):
+    def __getstate__(self) -> dict:
         state_dict = self.__dict__
         return state_dict
 
-    def __setstate__(self, state_dict):
+    def __setstate__(self, state_dict: dict) -> None:
         for k, v in state_dict.items():
             self.__dict__[k] = v
         #reinitialize the hash
         self._hash = hash((self.errorgen_type, self.basis_element_labels, self.sslbls))
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         return (self.errorgen_type == other.errorgen_type
                 and self.basis_element_labels == other.basis_element_labels
                 and self.sslbls == other.sslbls)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.errorgen_type + "(" + ",".join(map(str, self.basis_element_labels)) + ":" \
             + ",".join(map(str, self.sslbls)) + ")"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str((self.errorgen_type, self.basis_element_labels, self.sslbls))
 
     @property
-    def support(self):
+    def support(self) -> tuple:
         """ Returns a sorted tuple of the elements of `self.sslbls` """
         return tuple(sorted(self.sslbls))
 
-    def padded_basis_element_labels(self, all_sslbls, identity_label='I'):
+    def padded_basis_element_labels(self, all_sslbls: tuple, identity_label: str = 'I') -> tuple[str, ...]:
         """
         Idle-padded versions of this label's basis element labels based on its state space labels.
 
@@ -334,16 +339,16 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             A tuple of strings.
         """
         ret = []
-        all_sslbls = {lbl: i for i, lbl in enumerate(all_sslbls)}
-        sslbl_indices = [all_sslbls[lbl] for lbl in self.sslbls]
+        all_sslbls_dict = {lbl: i for i, lbl in enumerate(all_sslbls)}
+        sslbl_indices = [all_sslbls_dict[lbl] for lbl in self.sslbls]
         for bel in self.basis_element_labels:
-            lbl = [identity_label] * len(all_sslbls)
+            lbl = [identity_label] * len(all_sslbls_dict)
             for i, char in zip(sslbl_indices, bel):
                 lbl[i] = char
             ret.append(''.join(lbl))
         return tuple(ret)
 
-    def map_state_space_labels(self, mapper: Union[Dict, Callable]) -> GlobalElementaryErrorgenLabel:
+    def map_state_space_labels(self, mapper: Union[dict, Callable]) -> GlobalElementaryErrorgenLabel:
         """
         Creates a new GlobalElementaryErrorgenLabel whose `sslbls` attribute is updated according to a mapping function.
 
