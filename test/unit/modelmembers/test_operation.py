@@ -237,6 +237,63 @@ class StaticStdOpTester(BaseCase):
             op.StaticStandardOp('Gi', 'pp', 'not_an_evotype')
 
 
+class CreateFromUnitaryMxStdnameTester(BaseCase):
+    """
+    `create_from_unitary_mx`'s 'static standard' branch builds a `StaticStandardOp` from `stdname`
+    alone and never looks at `unitary_mx`.  It may therefore only be taken when the two agree --
+    otherwise the caller's unitary is silently thrown away.
+    """
+
+    #: CNOT with the roles of the two qubits exchanged; still "a CNOT", but not *the* standard one.
+    REVERSED_CNOT = np.array([[1, 0, 0, 0],
+                              [0, 0, 0, 1],
+                              [0, 0, 1, 0],
+                              [0, 1, 0, 0]], dtype=complex)
+
+    PREFS = ('static standard', 'static unitary')
+
+    def test_matching_stdname_yields_static_standard_op(self):
+        U = itgs.standard_gatename_unitaries()['Gcnot']
+        created = op.create_from_unitary_mx(U, self.PREFS, 'pp', 'Gcnot')
+        self.assertIsInstance(created, op.StaticStandardOp)
+        self.assertArraysAlmostEqual(created.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
+
+    def test_mismatched_stdname_is_ignored(self):
+        created = op.create_from_unitary_mx(self.REVERSED_CNOT, self.PREFS, 'pp', 'Gcnot')
+        self.assertNotIsInstance(created, op.StaticStandardOp)
+        self.assertArraysAlmostEqual(created.to_dense('HilbertSchmidt'),
+                                     gt.unitary_to_pauligate(self.REVERSED_CNOT))
+
+    def test_mismatched_stdname_is_ignored_for_lindblad_postfactor(self):
+        # The Lindblad types build a static unitary postfactor by recursing into
+        # create_from_unitary_mx with the same stdname, so the check has to hold there too.
+        created = op.create_from_unitary_mx(self.REVERSED_CNOT, 'CPTPLND', 'pp', 'Gcnot')
+        self.assertArraysAlmostEqual(created.to_dense('HilbertSchmidt'),
+                                     gt.unitary_to_pauligate(self.REVERSED_CNOT))
+
+    def test_stdname_of_wrong_dimension_is_ignored(self):
+        U = itgs.standard_gatename_unitaries()['Gxpi2']  # 1-qubit name, 2-qubit unitary
+        created = op.create_from_unitary_mx(self.REVERSED_CNOT, self.PREFS, 'pp', 'Gxpi2')
+        self.assertNotIsInstance(created, op.StaticStandardOp)
+        self.assertArraysAlmostEqual(created.to_dense('HilbertSchmidt'),
+                                     gt.unitary_to_pauligate(self.REVERSED_CNOT))
+
+    def test_unknown_stdname_is_ignored(self):
+        U = itgs.standard_gatename_unitaries()['Gxpi2']
+        created = op.create_from_unitary_mx(U, self.PREFS, 'pp', 'ThisIsNotAGateName')
+        self.assertNotIsInstance(created, op.StaticStandardOp)
+        self.assertArraysAlmostEqual(created.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
+
+    def test_parameterized_stdname_is_ignored(self):
+        # 'Gzr' and friends map to *functions* in the standard gate table, so there is no matrix to
+        # compare against -- and StaticStandardOp raises a TypeError (which create_from_unitary_mx
+        # does not catch) if one tries anyway.
+        U = itgs.standard_gatename_unitaries()['Gzpi2']
+        created = op.create_from_unitary_mx(U, self.PREFS, 'pp', 'Gzr')
+        self.assertNotIsInstance(created, op.StaticStandardOp)
+        self.assertArraysAlmostEqual(created.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
+
+
 class FullOpTester(MutableDenseOpBase, BaseCase):
     n_params = 16
 

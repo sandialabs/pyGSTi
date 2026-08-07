@@ -883,10 +883,11 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                         else:
                             if isinstance(gate_unitary, (int, _np.int64)):  # interpret gate_unitary as identity
                                 gate_unitary = _np.identity(2**gate_unitary, 'd')  # turn into explicit identity op
-                            if gate_unitary.shape[0] == state_space.udim:  # no need to embed!
-                                embedded_unitary = gate_unitary
-                            else:
-                                embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
+                            # Note: we're in the `else` of `inds is None or inds == tuple(qudit_labels)`, so
+                            # `inds` is guaranteed to be a *non-trivial* ordering of target qudits.  Embedding
+                            # is therefore required even when the gate already spans the entire state space,
+                            # since in that case the embedding is a (nonidentity) permutation of the qudits.
+                            embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
                             ideal_gate = _op.create_from_unitary_mx(embedded_unitary, ideal_gate_type, basis,
                                                                     stdname, evotype, state_space)
 

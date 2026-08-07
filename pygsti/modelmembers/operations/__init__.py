@@ -10,6 +10,7 @@ Sub-package holding model operation objects.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import functools as _functools
 import numpy as _np
 import warnings as _warnings
 
@@ -42,8 +43,36 @@ from .affineshiftop import AffineShiftOp
 from .cptrop import RootConjOperator, SummedOperator
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
+from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti import SpaceT
+
+
+@_functools.lru_cache(maxsize=1)
+def _standard_gatename_unitaries_readonly():
+    """
+    Cached copy of :func:`standard_gatename_unitaries`, which rebuilds its dict (~3ms) on each call.
+
+    Private, and never handed out, so the usual caveat about mutating a cached mutable doesn't apply.
+    """
+    return _itgs.standard_gatename_unitaries()
+
+
+def _standard_name_matches_unitary(stdname, unitary_mx):
+    """
+    Whether `stdname` names a standard gate whose unitary is (numerically) `unitary_mx`.
+
+    `StaticStandardOp` is built from the gate *name* alone and ignores any unitary it's handed,
+    so it may only be used when the two agree.  Returns `False` for unrecognized names and for
+    continuously-parameterized standard gates (e.g. `'Gzr'`), whose entries in
+    :func:`standard_gatename_unitaries` are functions rather than matrices.
+    """
+    if stdname is None:
+        return False
+    std_unitary = _standard_gatename_unitaries_readonly().get(stdname, None)
+    if std_unitary is None or callable(std_unitary):
+        return False
+    return std_unitary.shape == unitary_mx.shape and _np.allclose(std_unitary, unitary_mx)
 
 
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
@@ -54,6 +83,14 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
     U = unitary_mx
     if state_space is None:
         state_space = _statespace.default_space_for_udim(U.shape[0])
+
+    # A `stdname` that disagrees with `unitary_mx` cannot be honored: the 'static standard' branch below
+    # builds the operation from the name alone and would silently discard `unitary_mx`.  This happens, for
+    # instance, when a standard gate is embedded into a permuted ordering of the model's qudits -- the
+    # name is still "Gcnot" but the unitary is not the standard CNOT.  Drop the name in that case and let
+    # the remaining (unitary-respecting) preferences handle it.
+    if stdname is not None and not _standard_name_matches_unitary(stdname, U):
+        stdname = None
 
     for typ in op_type_preferences:
         try:
