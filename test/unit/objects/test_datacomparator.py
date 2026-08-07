@@ -1,3 +1,4 @@
+import unittest
 import pygsti.circuits as pc
 import pygsti.data as pdata
 import pygsti.data.datacomparator as dc
@@ -93,3 +94,8 @@ class DataComparatorTester(BaseCase):
         DS_bad.done_adding_data()
         with self.assertRaises(ValueError):
             dc.DataComparator([self.DS_0, DS_bad])
+
+    @unittest.expectedFailure
+    def test_run_with_pass_alpha_false(self):
+        comparator = dc.DataComparator([self.DS_0, self.DS_1])
+        comparator.run(significance=0.05, pass_alpha=False)
