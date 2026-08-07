@@ -395,7 +395,7 @@ class Label(object):
         """
         return len(self.sslbls) if (self.sslbls is not None) else None
 
-    def has_prefix(self, prefix, typ="all") -> bool:
+    def has_prefix(self, prefix: str, typ="all") -> bool:
         """
         Whether this label has the given `prefix`.
 

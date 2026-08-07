@@ -4,7 +4,7 @@ from pygsti.baseobjs.label import Label
 
 from pygsti.circuits.circuit import Circuit
 from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp
-from pygsti.models.explicitmodel import ExplicitOpModel
+from pygsti.models import LocalNoiseModel, ExplicitOpModel, ImplicitOpModel
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.processors.processorspec import QubitProcessorSpec
 from pygsti.modelmembers.operations import (
@@ -14,7 +14,14 @@ from pygsti.modelmembers.instruments import Instrument
 from ..util import BaseCase
 
 
-class LocalNoiseModelInstanceTester(BaseCase):
+class ImplitOpModelMixin:
+    """
+    Reusable functionality for testing ImplicitOpModel subclasses. Right now
+    this file only handles the LocalNoiseModel subclass.
+    
+    TODO: migrate CloudNoiseModel tests from test_nqnoiseconstruction.py
+          to this file.
+    """
 
     def setUp(self):
         nQubits = 2
@@ -29,6 +36,33 @@ class LocalNoiseModelInstanceTester(BaseCase):
             nQubits, ('Gx', 'Gy', 'Gcnot'), geometry="line",
             qubit_labels=qubit_labels
         )
+
+    @staticmethod
+    def _test_getitem(base: BaseCase, m: ImplicitOpModel):
+        base.assertIs( m['rho0'],        m.prep_blks['layers']['rho0']             )
+        base.assertIs( m['Mdefault'],    m.povm_blks['layers']['Mdefault']         )
+        base.assertIs( m['Gx'],          m.operation_blks['gates']['Gx']           )
+        base.assertIs( m[('Gx', 'qb0')], m.operation_blks['layers'][('Gx', 'qb0')] )
+        base.assertIs( m['Gx:qb0'],      m.operation_blks['layers'][('Gx', 'qb0')] )
+        return
+
+
+class LocalNoiseModelTester(ImplitOpModelMixin, BaseCase):
+    """
+    Build LocalNoiseModel objects from create_crosstalk_free_model.
+    """
+
+    def ideal_model_from_pspec(self, ps: QubitProcessorSpec) -> LocalNoiseModel:
+        mdl_local = create_crosstalk_free_model(
+            ps, ideal_gate_type='H+S', ideal_spam_type='tensor product H+S',
+            independent_gates=False, ensure_composed_gates=False
+        )
+        return mdl_local
+
+    def test_getitem(self):
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        super()._test_getitem(self, m)
+        return
 
     def test_indep_localnoise(self):
         mdl_local = create_crosstalk_free_model(
@@ -186,7 +220,6 @@ class LocalNoiseModelInstanceTester(BaseCase):
         c3.done_editing()
         prob3 = mdl_local.probabilities(c3)
         self.assertEqual(len(prob3), 16)  # Full 4 qubit space
-
 
 
 class ToExplicitModelTester(BaseCase):
