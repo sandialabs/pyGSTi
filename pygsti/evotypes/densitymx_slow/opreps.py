@@ -305,14 +305,14 @@ class OpRepSum(OpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
+        output_state = _StateRepDense(_np.zeros(state.data.shape, state.data.dtype), state.state_space, None)
         for f in self.factor_reps:
             output_state.data += f.acton(state).data
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
+        output_state = _StateRepDense(_np.zeros(state.data.shape, state.data.dtype), state.state_space, None)
         for f in self.factor_reps:
             output_state.data += f.adjoint_acton(state).data
         return output_state
@@ -379,7 +379,7 @@ class OpRepEmbedded(OpRep):
             offset += blockSize
 
     def acton(self, state):
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
+        output_state = _StateRepDense(_np.zeros(state.data.shape, state.data.dtype), state.state_space, None)
         offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
@@ -405,7 +405,7 @@ class OpRepEmbedded(OpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
+        output_state = _StateRepDense(_np.zeros(state.data.shape, state.data.dtype), state.state_space, None)
         offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations

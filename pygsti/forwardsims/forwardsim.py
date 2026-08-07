@@ -202,7 +202,13 @@ class ForwardSimulator(_NicelySerializable):
                 pass  # continue on to create full layout and calculate all outcomes
 
         copa_layout = self.create_layout([circuit], array_types=('e',), resource_alloc=resource_alloc)
-        probs_array = _np.empty(copa_layout.num_elements, 'd')
+        # Use a complex output array when the model carries complex parameters
+        # (e.g. a complex-step finite-difference perturbation), so the imaginary
+        # part (which encodes the derivative) is preserved.  Otherwise keep the
+        # usual real array so ordinary simulation is unaffected.
+        _pvec = getattr(self.model, '_paramvec', _np.empty(0))
+        _pdtype = complex if _np.iscomplexobj(_pvec) else 'd'
+        probs_array = _np.empty(copa_layout.num_elements, _pdtype)
         if time is None:
             self.bulk_fill_probs(probs_array, copa_layout)
         else:
@@ -446,8 +452,10 @@ class ForwardSimulator(_NicelySerializable):
         global_layout = copa_layout.global_layout
 
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
+        _pvec = getattr(self.model, '_paramvec', _np.empty(0))
+        _pdtype = complex if _np.iscomplexobj(_pvec) else 'd'
         with resource_alloc.temporarily_track_memory(global_layout.num_elements):  # 'E' (vp)
-            local_vp = copa_layout.allocate_local_array('e', 'd')
+            local_vp = copa_layout.allocate_local_array('e', _pdtype)
             if smartc:
                 smartc.cached_compute(self.bulk_fill_probs, local_vp, copa_layout, _filledarrays=(0,))
             else:
