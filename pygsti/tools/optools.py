@@ -1051,16 +1051,6 @@ def fidelity_upper_bound(operation_mx):
     maxF = fidelity(choi, closestJmx)
 
     if not _np.isnan(maxF):
-        #Uncomment for debugging
-        #if abs(maxF - maxF_direct) >= 1e-6:
-        #    print "DEBUG: operation_mx:\n",operation_mx
-        #    print "DEBUG: choi_mx:\n",choi
-        #    print "DEBUG choi_evals = ",choi_evals, " iMax = ",iMax
-        #    #print "DEBUG: J = \n", closestUnitaryJmx
-        #    print "DEBUG: eigvals(J) = ", _np.linalg.eigvals(closestJmx)
-        #    print "DEBUG: trace(J) = ", _np.trace(closestJmx)
-        #    print "DEBUG: maxF = %f,  maxF_direct = %f" % (maxF, maxF_direct)
-        #    raise ValueError("ERROR: maxF - maxF_direct = %f" % (maxF -maxF_direct))
         assert(abs(maxF - maxF_direct) < 1e-6)
     else:
         maxF = maxF_direct  # case when maxF is nan, due to scipy sqrtm function being buggy - just use direct F
@@ -1367,11 +1357,6 @@ def decompose_gate_matrix(operation_mx):
 
     nQubits = _np.log2(operation_mx.shape[0]) / 2
     if nQubits == 1:
-        #print "DEBUG: 1 qubit decomp --------------------------"
-        #print "   --> evals = ", op_evals
-        #print "   --> unit eval indices = ", unit_eval_indices
-        #print "   --> conj eval indices = ", conjpair_eval_indices
-        #print "   --> unpaired real eval indices = ", real_eval_indices
 
         #Special case: if have two conjugate pairs, check if one (or both) are real
         #  and break the one with the largest (real) value into two unpaired real evals.
@@ -2134,18 +2119,6 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
         if return_projected_errorgen:
             space_projector[:, i] = flat_projector
 
-        # # DEBUG - for checking why perfect gates gave weird projections --> log ambiguity
-        # print("DB: rawproj(%d) = " % i, proj)
-        # errorgen_pp = errorgen.copy() #_bt.change_basis(errorgen_std,"std","pp")
-        # lindbladMx_pp = _bt.change_basis(lindbladMx,"std","pp")
-        # if proj > 1.0:
-        #    for k in range(errorgen_std.shape[0]):
-        #        for j in range(errorgen_std.shape[1]):
-        #            if abs(errorgen_pp[k,j].conjugate() * lindbladMx_pp[k,j]) > 1e-2:
-        #                print(" [%d,%d]: + " % (k,j), errorgen_pp[k,j].conjugate(),
-        #                      "*", lindbladMx_pp[k,j],
-        #                      "=", (errorgen_pp[k,j].conjugate() * lindbladMx_pp[i,j]))
-
         #assert(_np.isreal(proj)), "non-real projection: %s" % str(proj) #just a warning now
         if not _np.isreal(proj):
             _warnings.warn("Taking abs() of non-real projection for %s: %s" % (str(lbl), str(proj)))
@@ -2747,7 +2720,6 @@ def compute_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False)
     #Update Utgt so that Utgt * inv_Uop is close to the identity
     kite = _mt.compute_kite(evals_tgt)  # evals are grouped by standard_diag, so this works
     D_prior_to_proj = _np.dot(_np.linalg.inv(Utgt), Uop)
-    #print("D prior to projection to ",kite," kite:"); _mt.print_mx(D_prior_to_proj)
     D = _mt.project_onto_kite(D_prior_to_proj, kite)
     start = 0
     for i, k in enumerate(kite):
