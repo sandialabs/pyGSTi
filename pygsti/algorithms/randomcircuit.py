@@ -1728,9 +1728,7 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand
     if interacting_qs_density > 0:
 
         assert(germ_depth * width * interacting_qs_density >= 2)
-        #print(len(qubits))
         num2Qtoadd = int(_np.floor(germ_depth * width * interacting_qs_density / 2))
-        #print(num2Qtoadd)
 
         edgelistdict = {}
         clifford_qubit_graph = pspec.compute_clifford_2Q_connectivity()
@@ -2056,13 +2054,10 @@ def _symplectic_to_pauli(s,p):
         x_pow = s[i]
         z_pow = s[n+i]
         if x_pow != 0 and z_pow != 0: # Have XZ in the i-th slot, ie product is a Y
-            #print('need to undo a Y, apply HP^(-1)')
             pauli.append('Y')
         elif x_pow != 0 and z_pow == 0: # Have X in the i-th slot, ie product is an X
-            #print('need to undo an X, so apply inverse Hadamard, ie a Hadamard')
             pauli.append('X')
         elif x_pow == 0 and z_pow != 0: # Have Z or I in the i-th slot, so nothing needs to be done
-            #print('need to undo a Z or I, ie leave it be')
             pauli.append('Z')
         else:
             pauli.append('I')
