@@ -11,14 +11,19 @@ Functions for generating bootstrapped error bars
 #***************************************************************************************************
 
 import numpy as _np
+from typing import Callable, Literal, Optional, Sequence, Union
 
 from pygsti.drivers import longsequence as _longseq
 from pygsti import algorithms as _alg
 from pygsti.data.dataset import DataSet as _DataSet
+from pygsti.circuits import Circuit as _Circuit
+from pygsti.models.model import Model as _Model
 
 
-def create_bootstrap_dataset(input_data_set, generation_method, input_model=None,
-                             seed=None, outcome_labels=None, verbosity=1):
+def create_bootstrap_dataset(input_data_set: _DataSet, generation_method: Literal["nonparametric", "parametric"],
+                             input_model: Optional[_Model] = None, seed: Optional[int] = None,
+                             outcome_labels: Optional[Sequence[tuple[str, ...]]] = None,
+                             verbosity: int = 1) -> _DataSet:
     """
     Creates a DataSet used for generating bootstrapped error bars.
 
@@ -43,9 +48,10 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
     seed : int, optional
         A seed value for numpy's random number generator.
 
-    outcome_labels : list, optional
+    outcome_labels : list of tuples, optional
         The list of outcome labels to include in the output dataset.  If None
-        are specified, defaults to the spam labels of input_data_set.
+        are specified, defaults to the spam labels of input_data_set. Note that
+        entries must be outcome tuples, e.g., `('0',)`, rather than bare strings.
 
     verbosity : int, optional
         How verbose the function output is.  If 0, then printing is suppressed.
@@ -106,11 +112,16 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
     return simDS
 
 
-def create_bootstrap_models(num_models, input_data_set, generation_method,
-                            fiducial_prep, fiducial_measure, germs, max_lengths,
-                            input_model=None, target_model=None, start_seed=0,
-                            outcome_labels=None, lsgst_lists=None,
-                            return_data=False, verbosity=2):
+def create_bootstrap_models(num_models: int, input_data_set: _DataSet,
+                            generation_method: Literal["nonparametric", "parametric"],
+                            fiducial_prep: list[_Circuit], fiducial_measure: list[_Circuit],
+                            germs: list[_Circuit], max_lengths: list[int],
+                            input_model: Optional[_Model] = None,
+                            target_model: Optional[_Model] = None, start_seed: int = 0,
+                            outcome_labels: Optional[Sequence[tuple[str, ...]]] = None,
+                            lsgst_lists: Optional[list[list[_Circuit]]] = None,
+                            return_data: bool = False, verbosity: int = 2) -> Union[
+                                list[_Model], tuple[list[_Model], list[_DataSet]]]:
     """
     Creates a series of "bootstrapped" Models.
 
@@ -165,9 +176,11 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
         generating data sets.  For each successive dataset (and model)
         that are generated, the seed is incremented by one.
 
-    outcome_labels : list, optional
+    outcome_labels : list of tuples, optional
         The list of Outcome labels to include in the output dataset.  If None
-        are specified, defaults to the effect labels of `input_data_set`.
+        are specified, defaults to the effect labels of `input_data_set`. Note
+        that entries must be outcome tuples, e.g., `('0',)`, rather than bare
+        strings.
 
     lsgst_lists : list of circuit lists, optional
         Provides explicit list of circuit lists to be used in analysis;
@@ -232,9 +245,9 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
         return modelList, datasetList
 
 
-def gauge_optimize_models(gs_list, target_model,
-                          gate_metric='frobenius', spam_metric='frobenius',
-                          plot=True):
+def gauge_optimize_models(gs_list: list[_Model], target_model: _Model,
+                          gate_metric: str = 'frobenius', spam_metric: str = 'frobenius',
+                          plot: bool = True) -> list[_Model]:
     """
     Optimizes the "spam weight" parameter used when gauge optimizing a set of models.
 
@@ -252,11 +265,11 @@ def gauge_optimize_models(gs_list, target_model,
         to gauge-optimize them to.
 
     gate_metric : { "frobenius", "fidelity", "tracedist" }, optional
-        The metric used within the gauge optimization to determining error
+        The metric used within the gauge optimization to determine error
         in the gates.
 
     spam_metric : { "frobenius", "fidelity", "tracedist" }, optional
-        The metric used within the gauge optimization to determining error
+        The metric used within the gauge optimization to determine error
         in the state preparation and measurement.
 
     plot : bool, optional
@@ -347,7 +360,8 @@ def gauge_optimize_models(gs_list, target_model,
 ################################################################################
 
 #For metrics that evaluate model with single scalar:
-def _model_stdev(gs_func, gs_ensemble, ddof=1, axis=None, **kwargs):
+def _model_stdev(gs_func: Callable[..., Union[float, _np.ndarray]], gs_ensemble: list[_Model],
+                 ddof: int = 1, axis: Optional[int] = None, **kwargs) -> Union[_np.floating, _np.ndarray]:
     """
     Standard deviation of `gs_func` over an ensemble of models.
 
@@ -368,13 +382,14 @@ def _model_stdev(gs_func, gs_ensemble, ddof=1, axis=None, **kwargs):
 
     Returns
     -------
-    numpy.ndarray
+    numpy.ndarray or numpy.floating
         The output of numpy.std
     """
-    return _np.std([gs_func(mdl, **kwargs) for mdl in gs_ensemble], axis=axis, ddof=ddof)
+    return _np.std([gs_func(mdl, **kwargs) for mdl in gs_ensemble], axis=axis, ddof=ddof)  # type: ignore
 
 
-def _model_mean(gs_func, gs_ensemble, axis=None, **kwargs):
+def _model_mean(gs_func: Callable[..., Union[float, _np.ndarray]], gs_ensemble: list[_Model],
+                axis: Optional[int] = None, **kwargs) -> Union[_np.floating, _np.ndarray]:
     """
     Mean of `gs_func` over an ensemble of models.
 
@@ -392,16 +407,16 @@ def _model_mean(gs_func, gs_ensemble, axis=None, **kwargs):
 
     Returns
     -------
-    numpy.ndarray
+    numpy.ndarray or numpy.floating
         The output of numpy.mean
     """
-    return _np.mean([gs_func(mdl, **kwargs) for mdl in gs_ensemble], axis=axis)
+    return _np.mean([gs_func(mdl, **kwargs) for mdl in gs_ensemble], axis=axis)  # type: ignore
 
 #Note: for metrics that evaluate model with scalar for each gate, use axis=0
 # argument to above functions
 
 
-def _to_mean_model(gs_list, target_gs):
+def _to_mean_model(gs_list: list[_Model], target_gs: _Model) -> _Model:
     """
     Take the per-gate-element mean of a set of models.
 
@@ -431,7 +446,7 @@ def _to_mean_model(gs_list, target_gs):
     return output_gs
 
 
-def _to_std_model(gs_list, target_gs, ddof=1):
+def _to_std_model(gs_list: list[_Model], target_gs: _Model, ddof: int = 1) -> _Model:
     """
     Take the per-gate-element standard deviation of a list of models.
 
@@ -464,7 +479,7 @@ def _to_std_model(gs_list, target_gs, ddof=1):
     return output_gs
 
 
-def _to_rms_model(gs_list, target_gs):
+def _to_rms_model(gs_list: list[_Model], target_gs: _Model) -> _Model:
     """
     Take the per-gate-element RMS of a set of models.
 
