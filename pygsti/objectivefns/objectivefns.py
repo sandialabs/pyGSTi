@@ -1211,22 +1211,6 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         return self.raw_objfn.description
 
     def chi2k_distributed_qty(self, objective_function_value):
-        """
-        Convert a value of this objective function to one that is expected to be chi2_k distributed.
-
-        For instance, if the objective function is DeltaLogL then this function would
-        multiply `objective_function_value` by 2, whereas in the case of a chi-squared
-        objective function this function just return `objective_function_value`.
-
-        Parameters
-        ----------
-        objective_function_value : float
-            A value of this objective function, i.e. one returned from `self.fn(...)`.
-
-        Returns
-        -------
-        float
-        """
         return self.raw_objfn.chi2k_distributed_qty(objective_function_value)
 
     def lsvec(self, paramvec=None, oob_check=False):
@@ -1812,108 +1796,15 @@ class RawChi2Function(RawObjectiveFunction):
         return
 
     def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the least-squares vector of the objective function.
-
-        This is the square-root of the terms-vector returned from :meth:`terms`.
-        This vector is the objective function value used by a least-squares
-        optimizer when optimizing this objective function.  Note that the existence
-        of this quantity requires that the terms be non-negative.  If this is not
-        the case, an error is raised.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         out = (probs - freqs) * self._weights(probs, freqs, total_counts)  # Note: ok if this is negative
         return out
 
     def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the derivatives of the least-squares vector of this objective function.
-
-        Note that because each `lsvec` element only depends on the corresponding probability,
-        this is just an element-wise derivative (or, the diagonal of a jacobian matrix),
-        i.e. the resulting values are the derivatives of the `local_function` at
-        each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         weights = self._weights(probs, freqs, total_counts)
         out =  weights + (probs - freqs) * self._dweights(probs, freqs, weights)
         return out
 
     def hlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the 2nd derivatives of the least-squares vector of this objective function.
-
-        Note that because each `lsvec` element only depends on the corresponding probability,
-        this is just an element-wise 2nd derivative, i.e. the resulting values are
-        the 2nd-derivatives of `sqrt(local_function)` at each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         # lsvec = (p-f)*sqrt(N/cp) = (p-f)*w
         # dlsvec/dp = w + (p-f)*dw/dp
         # d2lsvec/dp2 = dw/dp + (p-f)*d2w/dp2 + dw/dp = 2*dw/dp + (p-f)*d2w/dp2
@@ -1962,77 +1853,14 @@ class RawChi2Function(RawObjectiveFunction):
 
     #Required zero-term methods for omitted probs support in model-based objective functions
     def zero_freq_terms(self, total_counts, probs):
-        """
-        Evaluate objective function terms with zero frequency (where count and frequency are zero).
-
-        Such terms are treated specially because, for some objective functions,
-        having zero frequency is a special case and must be handled differently.
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         clipped_probs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         return total_counts * probs**2 / clipped_probs
 
     def zero_freq_dterms(self, total_counts, probs):
-        """
-        Evaluate the derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         clipped_probs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         return _np.where(probs == clipped_probs, total_counts, 2 * total_counts * probs / clipped_probs)
 
     def zero_freq_hterms(self, total_counts, probs):
-        """
-        Evaluate the 2nd derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        2nd derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         clipped_probs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         return _np.where(probs == clipped_probs, 0.0, 2 * total_counts / clipped_probs)
 
@@ -2229,36 +2057,6 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         return x, itaylor, c0, c1
 
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the terms of the objective function.
-
-        The "terms" are the per-(probability, count, total-count) values
-        that get summed together to result in the objective function value.
-        These are the "local" or "per-element" values of the objective function.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -2271,37 +2069,6 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         return terms
 
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise derivative (or, the diagonal of a jacobian matrix),
-        i.e. the resulting values are the derivatives of the `local_function` at
-        each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -2314,70 +2081,9 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         return dterms
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the 2nd derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise 2nd derivative, i.e. the resulting values are
-        the 2nd-derivatives of the `local_function` at each
-        (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise NotImplementedError("Hessian not implemented for ChiAlpha function yet")
 
     def hlsvec(self, probs, counts, total_counts, freqs):
-        """
-        Compute the 2nd derivatives of the least-squares vector of this objective function.
-
-        Note that because each `lsvec` element only depends on the corresponding probability,
-        this is just an element-wise 2nd derivative, i.e. the resulting values are
-        the 2nd-derivatives of `sqrt(local_function)` at each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise NotImplementedError("Hessian not implemented for ChiAlpha function yet")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
@@ -2431,18 +2137,6 @@ class RawFreqWeightedChi2Function(RawChi2Function):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
     def chi2k_distributed_qty(self, objective_function_value):
-        """
-        Convert a value of this objective function to one that is expected to be chi2_k distributed.
-
-        Parameters
-        ----------
-        objective_function_value : float
-            A value of this objective function, i.e. one returned from `self.fn(...)`.
-
-        Returns
-        -------
-        float
-        """
         return objective_function_value  # default is to assume the value *is* chi2_k distributed
 
     def set_regularization(self, min_freq_clip_for_weighting: Optional[float]=None):
@@ -2467,138 +2161,21 @@ class RawFreqWeightedChi2Function(RawChi2Function):
 
     def _weights(self, p, f, total_counts):
         #Note: this could be computed once and cached?
-        """
-        Get the chi2 weighting factor.
-
-        Parameters
-        ----------
-        p : numpy.ndarray
-            The probabilities.
-
-        f : numpy.ndarray
-            The frequencies
-
-        total_counts : numpy.ndarray
-            The total counts.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
         return _np.sqrt(total_counts / _np.clip(f, self.min_freq_clip_for_weighting, None))
 
     def _dweights(self, p, f, wts):
-        """
-        Get the derivative of the chi2 weighting factor.
-
-        Parameters
-        ----------
-        p : numpy.ndarray
-            The probabilities.
-
-        f : numpy.ndarray
-            The frequencies
-
-        wts : numpy.ndarray
-            The weights, as computed by :meth:`_weights`.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
         return _np.zeros(len(p), 'd')
 
     def _hweights(self, p, f, wts):
-        """
-        Get the 2nd derivative of the chi2 weighting factor.
-
-        Parameters
-        ----------
-        p : numpy.ndarray
-            The probabilities.
-
-        f : numpy.ndarray
-            The frequencies
-
-        wts : numpy.ndarray
-            The weights, as computed by :meth:`_weights`.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
         return _np.zeros(len(p), 'd')
 
     def zero_freq_terms(self, total_counts, probs):
-        """
-        Evaluate objective function terms with zero frequency (where count and frequency are zero).
-
-        Such terms are treated specially because, for some objective functions,
-        having zero frequency is a special case and must be handled differently.
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return total_counts * probs**2 / self.min_freq_clip_for_weighting  # N * p^2 / fmin
 
     def zero_freq_dterms(self, total_counts, probs):
-        """
-        Evaluate the derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return 2 * total_counts * probs / self.min_freq_clip_for_weighting
 
     def zero_freq_hterms(self, total_counts, probs):
-        """
-        Evaluate the 2nd derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        2nd derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return 2 * total_counts / self.min_freq_clip_for_weighting
 
 
@@ -2647,147 +2224,30 @@ class RawCustomWeightedChi2Function(RawChi2Function):
 
     def _weights(self, p, f, total_counts):
         #Note: this could be computed once and cached?
-        """
-        Get the chi2 weighting factor.
-
-        Parameters
-        ----------
-        p : numpy.ndarray
-            The probabilities.
-
-        f : numpy.ndarray
-            The frequencies
-
-        total_counts : numpy.ndarray
-            The total counts.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
         if self.custom_weights is not None:
             return self.custom_weights
         else:
             return _np.ones(len(p), 'd')
 
     def _dweights(self, p, f, wts):
-        """
-        Get the derivative of the chi2 weighting factor.
-
-        Parameters
-        ----------
-        p : numpy.ndarray
-            The probabilities.
-
-        f : numpy.ndarray
-            The frequencies
-
-        wts : numpy.ndarray
-            The weights, as computed by :meth:`_weights`.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
         return _np.zeros(len(p), 'd')
 
     def _hweights(self, p, f, wts):
-        """
-        Get the 2nd derivative of the chi2 weighting factor.
-
-        Parameters
-        ----------
-        p : numpy.ndarray
-            The probabilities.
-
-        f : numpy.ndarray
-            The frequencies
-
-        wts : numpy.ndarray
-            The weights, as computed by :meth:`_weights`.
-
-        Returns
-        -------
-        numpy.ndarray
-        """
         return _np.zeros(len(p), 'd')
 
     def zero_freq_terms(self, total_counts, probs):
-        """
-        Evaluate objective function terms with zero frequency (where count and frequency are zero).
-
-        Such terms are treated specially because, for some objective functions,
-        having zero frequency is a special case and must be handled differently.
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         if self.custom_weights is not None:
             return self.custom_weights**2 * probs**2  # elementwise cw^2 * p^2
         else:
             return probs**2  # p^2
 
     def zero_freq_dterms(self, total_counts, probs):
-        """
-        Evaluate the derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         if self.custom_weights is not None:
             return 2 * self.custom_weights**2 * probs
         else:
             return 2 * probs  # p^2
 
     def zero_freq_hterms(self, total_counts, probs):
-        """
-        Evaluate the 2nd derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        2nd derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         if self.custom_weights is not None:
             return 2 * self.custom_weights**2
         else:
@@ -2978,36 +2438,6 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the terms of the objective function.
-
-        The "terms" are the per-(probability, count, total-count) values
-        that get summed together to result in the objective function value.
-        These are the "local" or "per-element" values of the objective function.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -3054,38 +2484,6 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
 
     def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         # lsvec = sqrt(terms), but don't use base class fn b/c of special taylor patch...
-        """
-        Compute the least-squares vector of the objective function.
-
-        This is the square-root of the terms-vector returned from :meth:`terms`.
-        This vector is the objective function value used by a least-squares
-        optimizer when optimizing this objective function.  Note that the existence
-        of this quantity requires that the terms be non-negative.  If this is not
-        the case, an error is raised.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         lsvec = _np.sqrt(self.terms(probs, counts, total_counts, freqs, intermediates))
 
         if self.regtype == "pfratio":  # post-sqrt(v) 1st order taylor patch for x near 1.0 - maybe unnecessary
@@ -3096,37 +2494,6 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         return lsvec
 
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise derivative (or, the diagonal of a jacobian matrix),
-        i.e. the resulting values are the derivatives of the `local_function` at
-        each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -3150,37 +2517,6 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         return dterms
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the 2nd derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise 2nd derivative, i.e. the resulting values are
-        the 2nd-derivatives of the `local_function` at each
-        (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         # terms = Nf*(log(f)-log(p)) + N*(p-f)  OR const + S*(p - minp) + S2*(p - minp)^2
         # dterms/dp = -Nf/p + N  OR  c0 + 2*S2*(p - minp)
         # d2terms/dp2 = Nf/p^2   OR  2*S2
@@ -3336,36 +2672,6 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the terms of the objective function.
-
-        The "terms" are the per-(probability, count, total-count) values
-        that get summed together to result in the objective function value.
-        These are the "local" or "per-element" values of the objective function.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -3388,37 +2694,6 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         return terms
 
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise derivative (or, the diagonal of a jacobian matrix),
-        i.e. the resulting values are the derivatives of the `local_function` at
-        each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -3439,37 +2714,6 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         return dterms
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the 2nd derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise 2nd derivative, i.e. the resulting values are
-        the 2nd-derivatives of the `local_function` at each
-        (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         # terms = Nf*log(p) OR const + S*(p - minp) + S2*(p - minp)^2
         # dterms/dp = Nf/p  OR  c0 + 2*S2*(p - minp)
         # d2terms/dp2 = -Nf/p^2   OR  2*S2
@@ -3485,213 +2729,25 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
 
     def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
         # lsvec = sqrt(terms), but terms are not guaranteed to be positive!
-        """
-        Compute the least-squares vector of the objective function.
-
-        This is the square-root of the terms-vector returned from :meth:`terms`.
-        This vector is the objective function value used by a least-squares
-        optimizer when optimizing this objective function.  Note that the existence
-        of this quantity requires that the terms be non-negative.  If this is not
-        the case, an error is raised.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
     def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the derivatives of the least-squares vector of this objective function.
-
-        Note that because each `lsvec` element only depends on the corresponding probability,
-        this is just an element-wise derivative (or, the diagonal of a jacobian matrix),
-        i.e. the resulting values are the derivatives of the `local_function` at
-        each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
     def dlsvec_and_lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the derivatives of the least-squares vector together with the vector itself.
-
-        This is sometimes more computationally efficient than calling :meth:`dlsvec` and
-        :meth:`lsvec` separately, as the former call may require computing the latter.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        dlsvec: numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-
-        lsvec: numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
     def hlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the 2nd derivatives of the least-squares vector of this objective function.
-
-        Note that because each `lsvec` element only depends on the corresponding probability,
-        this is just an element-wise 2nd derivative, i.e. the resulting values are
-        the 2nd-derivatives of `sqrt(local_function)` at each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
     def zero_freq_terms(self, total_counts, probs):
-        """
-        Evaluate objective function terms with zero frequency (where count and frequency are zero).
-
-        Such terms are treated specially because, for some objective functions,
-        having zero frequency is a special case and must be handled differently.
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return _np.zeros(len(probs), 'd')
 
     def zero_freq_dterms(self, total_counts, probs):
-        """
-        Evaluate the derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return _np.zeros(len(probs), 'd')
 
     def zero_freq_hterms(self, total_counts, probs):
-        """
-        Evaluate the 2nd derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        2nd derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return _np.zeros(len(probs), 'd')
 
 
@@ -3722,36 +2778,6 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         self.poisson_picture = poisson_picture
 
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the terms of the objective function.
-
-        The "terms" are the per-(probability, count, total-count) values
-        that get summed together to result in the objective function value.
-        These are the "local" or "per-element" values of the objective function.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
         if self.poisson_picture:
             terms = counts * (_np.log(freqs_nozeros) - 1.0)
@@ -3761,281 +2787,31 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         return terms
 
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise derivative (or, the diagonal of a jacobian matrix),
-        i.e. the resulting values are the derivatives of the `local_function` at
-        each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         return _np.zeros(len(probs), 'd')
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the 2nd derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise 2nd derivative, i.e. the resulting values are
-        the 2nd-derivatives of the `local_function` at each
-        (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         return _np.zeros(len(probs), 'd')
 
     def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the least-squares vector of the objective function.
-
-        This is the square-root of the terms-vector returned from :meth:`terms`.
-        This vector is the objective function value used by a least-squares
-        optimizer when optimizing this objective function.  Note that the existence
-        of this quantity requires that the terms be non-negative.  If this is not
-        the case, an error is raised.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise ValueError("MaxLogL objective function cannot produce a LS-vector: terms are not necessarily positive!")
 
     def dlsvec(self, probs, counts, total_counts, freqs):
-        """
-        Compute the derivatives of the least-squares vector of this objective function.
-
-        Note that because each `lsvec` element only depends on the corresponding probability,
-        this is just an element-wise derivative (or, the diagonal of a jacobian matrix),
-        i.e. the resulting values are the derivatives of the `local_function` at
-        each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise ValueError("MaxLogL objective function cannot produce a LS-vector: terms are not necessarily positive!")
 
     def dlsvec_and_lsvec(self, probs, counts, total_counts, freqs):
-        """
-        Compute the derivatives of the least-squares vector together with the vector itself.
-
-        This is sometimes more computationally efficient than calling :meth:`dlsvec` and
-        :meth:`lsvec` separately, as the former call may require computing the latter.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        dlsvec: numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-
-        lsvec: numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise ValueError("MaxLogL objective function cannot produce a LS-vector: terms are not necessarily positive!")
 
     def hlsvec(self, probs, counts, total_counts, freqs):
-        """
-        Compute the 2nd derivatives of the least-squares vector of this objective function.
-
-        Note that because each `lsvec` element only depends on the corresponding probability,
-        this is just an element-wise 2nd derivative, i.e. the resulting values are
-        the 2nd-derivatives of `sqrt(local_function)` at each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
     def zero_freq_terms(self, total_counts, probs):
-        """
-        Evaluate objective function terms with zero frequency (where count and frequency are zero).
-
-        Such terms are treated specially because, for some objective functions,
-        having zero frequency is a special case and must be handled differently.
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return _np.zeros(len(probs), 'd')
 
     def zero_freq_dterms(self, total_counts, probs):
-        """
-        Evaluate the derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return _np.zeros(len(probs), 'd')
 
     def zero_freq_hterms(self, total_counts, probs):
-        """
-        Evaluate the 2nd derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        2nd derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return _np.zeros(len(probs), 'd')
 
 
@@ -4072,182 +2848,27 @@ class RawTVDFunction(RawObjectiveFunction):
         return -1
 
     def terms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the terms of the objective function.
-
-        The "terms" are the per-(probability, count, total-count) values
-        that get summed together to result in the objective function value.
-        These are the "local" or "per-element" values of the objective function.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         return 0.5 * _np.abs(probs - freqs)
 
     def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise derivative (or, the diagonal of a jacobian matrix),
-        i.e. the resulting values are the derivatives of the `local_function` at
-        each (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         t = probs - freqs
         d = 0.5*_np.ones_like(t)
         d[t < 0] *= -1
         return d
 
     def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
-        """
-        Compute the 2nd derivatives of the terms of this objective function.
-
-        Note that because each term only depends on the corresponding probability,
-        this is just an element-wise 2nd derivative, i.e. the resulting values are
-        the 2nd-derivatives of the `local_function` at each
-        (probability, count, total-count) value.
-
-        Parameters
-        ----------
-        probs : numpy.ndarray
-            Array of probability values.
-
-        counts : numpy.ndarray
-            Array of count values.
-
-        total_counts : numpy.ndarray
-            Array of total count values.
-
-        freqs : numpy.ndarray
-            Array of frequency values.  This should always equal `counts / total_counts`
-            but is supplied separately to increase performance.
-
-        intermediates : tuple, optional
-            Used internally to speed up computations.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of length equal to that of each array argument.
-        """
         return _np.zeros_like(probs)
 
     #Required zero-term methods for omitted probs support in model-based objective functions
     def zero_freq_terms(self, total_counts, probs):
-        """
-        Evaluate objective function terms with zero frequency (where count and frequency are zero).
-
-        Such terms are treated specially because, for some objective functions,
-        having zero frequency is a special case and must be handled differently.
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return 0.5 * _np.abs(probs)
 
     def zero_freq_dterms(self, total_counts, probs):
-        """
-        Evaluate the derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         d = 0.5*_np.ones_like(probs)
         d[probs < 0] = -0.5  # it's technically possible to predict negative probs.
         return d
 
     def zero_freq_hterms(self, total_counts, probs):
-        """
-        Evaluate the 2nd derivative of zero-frequency objective function terms.
-
-        Zero frequency terms are treated specially because, for some objective functions,
-        these are a special case and must be handled differently.  Derivatives are
-        evaluated element-wise, i.e. the i-th element of the returned array is the
-        2nd derivative of the i-th term with respect to the i-th probability (derivatives
-        with respect to all other probabilities are zero because of the function structure).
-
-        Parameters
-        ----------
-        total_counts : numpy.ndarray
-            The total counts.
-
-        probs : numpy.ndarray
-            The probabilities.
-
-        Returns
-        -------
-        numpy.ndarray
-            A 1D array of the same length as `total_counts` and `probs`.
-        """
         return _np.zeros_like(probs)
 
 
@@ -4297,59 +2918,8 @@ class RawAbsPower(RawObjectiveFunction):
 
 
 class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
-
-    TEMPLATE_FIELDS = (
     """
     A time-independent model-based (:class:`MDCObjectiveFunction`-derived) objective function.
-    """,
-    """ 
-    raw_objfn : RawObjectiveFunction
-        The raw objective function - specifies how probability and count values
-        are turned into objective function values.
-    """, ""
-    )
-
-    DOCSTR_TEMPLATE = \
-    """
-    %s
-    Parameters
-    ----------%s
-    mdl : Model
-        The model - specifies how parameter values are turned into probabilities
-        for each circuit outcome.
-
-    dataset : DataSet
-        The data set - specifies how counts and total_counts are obtained for each
-        circuit outcome.
-
-    circuits : list or CircuitList
-        The circuit list - specifies what probabilities and counts this objective
-        function compares.  If `None`, then the keys of `dataset` are used.
-
-    regularization : dict, optional
-        Regularization values.
-
-    penalties : dict, optional
-        Penalty values.  Penalties usually add additional (penalty) terms to the sum
-        of per-circuit-outcome contributions that evaluate to the objective function.
-
-    resource_alloc : ResourceAllocation, optional
-        Available resources and how they should be allocated for computations.
-
-    name : str, optional
-        A name for this objective function (can be anything).
-
-    description : str, optional
-        A description for this objective function (can be anything)
-
-    verbosity : int, optional
-        Level of detail to print to stdout.
-
-    enable_hessian : bool, optional
-        Whether hessian calculations are allowed.  If `True` then more resources are
-        needed.  If `False`, calls to hessian-requiring function will result in an
-        error.
-    %s
     """
 
     @classmethod
@@ -4402,8 +2972,56 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         return array_types
 
-    @set_docstring(DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, raw_objfn, mdc_store, penalties=None, verbosity=0, **kwargs):
+        """
+        Create a new model-based objective function.
+
+        Parameters
+        ----------
+        raw_objfn : RawObjectiveFunction
+            The raw objective function - specifies how probability and count values
+            are turned into objective function values.
+
+        mdc_store : ModelDatasetCircuitsStore or EvaluatedModelDatasetCircuitsStore
+            The store object containing model, dataset, circuits and resource allocation.
+
+        penalties : dict, optional
+            Penalty values. Penalties usually add additional (penalty) terms to the sum
+            of per-circuit-outcome contributions that evaluate to the objective function.
+
+        verbosity : int, optional
+            Level of detail to print to stdout.
+
+        mdl : Model, optional
+            The model - specifies how parameter values are turned into probabilities
+            for each circuit outcome. Included for legacy support in some construction paths.
+
+        dataset : DataSet, optional
+            The data set - specifies how counts and total_counts are obtained for each
+            circuit outcome. Included for legacy support in some construction paths.
+
+        circuits : list or CircuitList, optional
+            The circuit list - specifies what probabilities and counts this objective
+            function compares. If `None`, then the keys of `dataset` are used. Included for
+            legacy support in some construction paths.
+
+        regularization : dict, optional
+            Regularization values. Included for legacy support in some construction paths.
+
+        resource_alloc : ResourceAllocation, optional
+            Available resources and how they should be allocated for computations.
+
+        name : str, optional
+            A name for this objective function (can be anything).
+
+        description : str, optional
+            A description for this objective function (can be anything)
+
+        enable_hessian : bool, optional
+            Whether hessian calculations are allowed. If `True` then more resources are
+            needed. If `False`, calls to hessian-requiring function will result in an
+            error.
+        """
 
         super().__init__(raw_objfn, mdc_store, verbosity, **kwargs)
 
@@ -4842,27 +3460,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     def approximate_hessian(self, paramvec=None):
         #Almost the same as function above but drops hprobs term
-        """
-        Compute an approximate Hessian of this objective function.
-
-        This is typically much less expensive than :meth:`hessian` and
-        does not require that `enable_hessian=True` was set upon initialization.
-        It computes an approximation to the Hessian that only utilizes the
-        information in the Jacobian. Derivatives are takes with respect to model
-        parameters.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nParams, nParams)` where `nParams` is the number
-            of model parameters.
-        """
         if self.firsts is not None:
             raise NotImplementedError("Chi2 hessian not implemented for sparse data (yet)")
 
@@ -4890,23 +3487,6 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         return self._gather_hessian(hessian)  # `hessian` is just the part of the (approximate) Hessian this proc "owns"
 
     def hessian(self, paramvec=None):
-        """
-        Compute the Hessian of this objective function.
-
-        Derivatives are takes with respect to model parameters.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nParams, nParams)` where `nParams` is the number
-            of model parameters.
-        """
         if self.ex != 0: raise NotImplementedError("Hessian is not implemented for penalty terms yet!")
         if paramvec is not None: self.model.from_vector(paramvec)
         return self._gather_hessian(self._construct_hessian(self.counts, self.total_counts, self.prob_clip_interval))
@@ -4970,31 +3550,24 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
 
 class Chi2Function(TimeIndependentMDCObjectiveFunction):
-
-    TEMPLATE_FIELDS = (
     """
     Model-based chi-squared function: `N(p-f)^2 / p`
-    """, "", ""
-    )
+    """
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
-
-    TEMPLATE_FIELDS = (
     """
     Model-based chi-alpha function: `N[x + 1/(alpha * x^alpha) - (1 + 1/alpha)]` where `x := p/f`.
-    """,
-    "", # no custom leading arguments.
-    """
+
+    Parameters
+    ----------
     alpha : float, optional
         The alpha parameter, which lies in the interval (0,1].
-    """  # one custom trailing argument.
-    )
+    """
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
@@ -5003,7 +3576,6 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
         mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, alpha, **kwargs)
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
                  alpha=1, **kwargs):
         raw_objfn = RawChiAlphaFunction(regularization, mdc_store.resource_alloc, name, description, verbosity, alpha)
@@ -5011,32 +3583,26 @@ class ChiAlphaFunction(TimeIndependentMDCObjectiveFunction):
 
 
 class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
-
-    TEMPLATE_FIELDS = (
     """
     Model-based frequency-weighted chi-squared function: `N(p-f)^2 / f`
-    """, "", ""
-    )
+    """
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawFreqWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
-
-    TEMPLATE_FIELDS = (
     """
     Model-based custom-weighted chi-squared function: `cw^2 (p-f)^2`
-    """, "",
-    """
+
+    Parameters
+    ----------
     custom_weights : numpy.ndarray, optional
         One-dimensional array of the custom weights, which linearly multiply the
         *least-squares* terms, i.e. `(p - f)`.  If `None`, then unit weights are
         used and the objective function computes the sum of unweighted squares.
     """
-    )
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
@@ -5045,7 +3611,6 @@ class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
         mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, custom_weights, **kwargs)
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
                  custom_weights=None):
         raw_objfn = RawCustomWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description,
@@ -5054,14 +3619,10 @@ class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
 
 
 class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
-
-    TEMPLATE_FIELDS = (
     """
     Model-based poisson-picture delta log-likelihood function: `N*f*log(f/p) - N*(f-p)`.
-    """, "", ""
-    )
+    """
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawPoissonPicDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description,
                                                    verbosity)
@@ -5069,26 +3630,19 @@ class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
 
 
 class DeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
-
-    TEMPLATE_FIELDS = (
     """
     Model-based delta log-likelihood function: `N*f*log(f/p)`.
-    """, "", ""
-    )
+    """
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawDeltaLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
 
 
 class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
-
-    TEMPLATE_FIELDS = (
     """
     Model-based maximum-model log-likelihood function: `N*f*log(f)`
-    """, "", ""
-    )
+    """
 
     @classmethod
     def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
@@ -5097,7 +3651,6 @@ class MaxLogLFunction(TimeIndependentMDCObjectiveFunction):
         mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names, array_types, verbosity)
         return cls(mdc_store, regularization, penalties, name, description, verbosity, poisson_picture, **kwargs)
 
-    @set_docstring(TimeIndependentMDCObjectiveFunction.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
                  poisson_picture=True, **kwargs):
         raw_objfn = RawMaxLogLFunction(regularization, mdc_store.resource_alloc, name, description, verbosity,
@@ -5153,17 +3706,13 @@ class TermWeighted(TimeIndependentMDCObjectiveFunction):
 
 
 class TVDFunction(TermWeighted):
-
-    TEMPLATE_FIELDS = (
     """
     Model-based TVD function: `0.5 * w * |p-f|`, where w is a vector of weights.
 
     If `name == 'normalized tvd'`, then `w[i]` will be 1/(length of circuit associated with i).
     Otherwise, w[i] will equal 1.
-    """, "", ""
-    )
+    """
 
-    @set_docstring(TermWeighted.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0, **kwargs):
         raw_objfn = RawTVDFunction(regularization, mdc_store.resource_alloc, name, description, verbosity)
         super().__init__(raw_objfn, mdc_store, penalties, verbosity, **kwargs)
@@ -5193,18 +3742,15 @@ class TVDFunction(TermWeighted):
 
 
 class LpNormToPowerP(TermWeighted):
-
-    TEMPLATE_FIELDS = (
     """
     Model-based loss function: `|p-f|^power`.
-    """, "",
-    """
-    power : float, optonal
+
+    Parameters
+    ----------
+    power : float, optional
         Must be >= 1.
     """
-    )
 
-    @set_docstring(TermWeighted.DOCSTR_TEMPLATE % TEMPLATE_FIELDS)
     def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None,
                  verbosity=0, power=2, **kwargs):
         raw_objfn = RawAbsPower(power, regularization, mdc_store.resource_alloc, name, description, verbosity)
@@ -5356,23 +3902,6 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         raise NotImplementedError()
 
     def dlsvec(self, paramvec=None):
-        """
-        The derivative (jacobian) of the least-squares vector.
-
-        Derivatives are taken with respect to model parameters.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nElements,nParams)` where `nElements` is the number
-            of circuit outcomes and `nParams` is the number of model parameters.
-        """
         raise NotImplementedError()
 
 
@@ -5474,27 +4003,6 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         return objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
     def lsvec(self, paramvec=None):
-        """
-        Compute the least-squares vector of the objective function.
-
-        This is the square-root of the terms-vector returned from :meth:`terms`.
-        This vector is the objective function value used by a least-squares
-        optimizer when optimizing this objective function.  Note that the existence
-        of this quantity requires that the terms be non-negative.  If this is not
-        the case, an error is raised.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nElements,)` where `nElements` is the number
-            of circuit outcomes.
-        """
         tm = _time.time()
         if paramvec is not None: self.model.from_vector(paramvec)
         fsim = self.model.sim
@@ -5507,23 +4015,6 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         return v.copy()  # copy() needed for FD deriv, and we don't need to be stingy w/memory at objective fn level
 
     def dlsvec(self, paramvec=None):
-        """
-        The derivative (jacobian) of the least-squares vector.
-
-        Derivatives are taken with respect to model parameters.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nElements,nParams)` where `nElements` is the number
-            of circuit outcomes and `nParams` is the number of model parameters.
-        """
         tm = _time.time()
         dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
         dprobs = _compat.reshape_no_copy(dprobs, (self.nelements, self.nparams))
@@ -5642,27 +4133,6 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         return 2 * objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
     def lsvec(self, paramvec=None):
-        """
-        Compute the least-squares vector of the objective function.
-
-        This is the square-root of the terms-vector returned from :meth:`terms`.
-        This vector is the objective function value used by a least-squares
-        optimizer when optimizing this objective function.  Note that the existence
-        of this quantity requires that the terms be non-negative.  If this is not
-        the case, an error is raised.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nElements,)` where `nElements` is the number
-            of circuit outcomes.
-        """
         tm = _time.time()
         if paramvec is not None: self.model.from_vector(paramvec)
         fsim = self.model.sim
@@ -5686,23 +4156,6 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
     #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
     #   and deriv == 0.5 / sqrt(...) * c0 * dp
     def dlsvec(self, paramvec=None):
-        """
-        The derivative (jacobian) of the least-squares vector.
-
-        Derivatives are taken with respect to model parameters.
-
-        Parameters
-        ----------
-        paramvec : numpy.ndarray, optional
-            The vector of (model) parameters to evaluate the objective function at.
-            If `None`, then the model's current parameter vector is used (held internally).
-
-        Returns
-        -------
-        numpy.ndarray
-            An array of shape `(nElements,nParams)` where `nElements` is the number
-            of circuit outcomes and `nParams` is the number of model parameters.
-        """
         tm = _time.time()
         dlogl = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dlogl
         dlogl = _compat.reshape_no_copy(dlogl, (self.nelements, self.nparams))
