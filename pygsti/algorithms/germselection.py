@@ -781,8 +781,6 @@ def compute_composite_germ_set_score(score_fn: Callable, threshold_ac: float=1e6
     major_score = -N_AC + opScore + l1Score + gate_score
     minor_score = AC_score
     ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
-    #DEBUG: ret.extra = {'opScore': opScore,
-    #    'sum(germ_lengths)': _np.sum(germ_lengths), 'l1': l1Score}
     return ret
 
 
@@ -5111,7 +5109,6 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
     
     #Note: we only actually need to calculate the diagonal elements of the G matrix. 
     if norm_w > 1e-10: #HARDCODED, need some wiggle room for numerical precision reasons.
-        #print('Case 1')
         #the diagonal of an outer-product of 2 vectors is just a vector of the element-wise
         #products of corresponding elements.
         vw_term_diag = (-2/norm_w**2)*(v*w)
@@ -5125,7 +5122,6 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
         rank_increase_flag = True
     
     elif (norm_w<1e-10) and (beta>1e-10):
-        #print('Case 3/5')
         G_diag = (-beta/_np.abs(beta)**2)*(v**2)
         
         rank_increase_flag = False
@@ -5176,7 +5172,6 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
     
     #Note: we only actually need to calculate the diagonal elements of the G matrix. 
     if norm_w > 1e-10: #HARDCODED, need some wiggle room for numerical precision reasons.
-        #print('Case 1')
         #the diagonal of an outer-product of 2 vectors is just a vector of the element-wise
         #products of corresponding elements.
         vw = v@w.T
@@ -5191,7 +5186,6 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
         rank_increase_flag = True
     
     elif (norm_w<1e-10) and (beta>1e-10):
-        #print('Case 3/5')
         G = (-beta/_np.abs(beta)**2)*(v@v.T)
         
         rank_increase_flag = False

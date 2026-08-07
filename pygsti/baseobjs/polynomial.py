@@ -739,11 +739,9 @@ def bulk_load_compact_polynomials(vtape, ctape, keep_compact=False, max_num_vars
         while i < vtape.size:
             poly_coeffs = {}
             nTerms = vtape[i]; i += 1
-            #print("POLY w/%d terms (i=%d)" % (nTerms,i))
             for m in range(nTerms):
                 nVars = vtape[i]; i += 1  # number of variable indices in this term
                 a = ctape[c]; c += 1
-                #print("  TERM%d: %d vars, coeff=%s" % (m,nVars,str(a)))
                 poly_coeffs[tuple(vtape[i:i + nVars])] = a; i += nVars
             result.append(Polynomial(poly_coeffs, max_num_vars))
     return result
