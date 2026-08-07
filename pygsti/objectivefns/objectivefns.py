@@ -374,7 +374,7 @@ class ObjectiveFunction(object):
     So far, this is just a base class for organizational purposes
     """
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -467,11 +467,13 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         pass  # no regularization parameters
 
-    def _intermediates(self, probs, counts, total_counts, freqs):
+    def _intermediates(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> Tuple:
         """ Intermediate values used by multiple functions (similar to a temporary cache) """
         return ()  # no intermdiate values
 
-    def fn(self, probs, counts, total_counts, freqs):
+    def fn(self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray) -> float:
         """
         Evaluate the objective function.
 
@@ -496,7 +498,9 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         return _np.sum(self.terms(probs, counts, total_counts, freqs))
 
-    def jacobian(self, probs, counts, total_counts, freqs):
+    def jacobian(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> _np.ndarray:
         """
         Evaluate the derivative of the objective function with respect to the probabilities.
 
@@ -523,7 +527,9 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         return self.dterms(probs, counts, total_counts, freqs)  # same as dterms b/c only i-th term depends on p_i
 
-    def hessian(self, probs, counts, total_counts, freqs):
+    def hessian(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> _np.ndarray:
         """
         Evaluate the Hessian of the objective function with respect to the probabilities.
 
@@ -556,7 +562,10 @@ class RawObjectiveFunction(ObjectiveFunction):
     # a child class must override one of these functions in order to 
     # be usable.
 
-    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def terms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         """
         Compute the terms of the objective function.
 
@@ -589,7 +598,10 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         return self.lsvec(probs, counts, total_counts, freqs, intermediates)**2
 
-    def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def lsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         """
         Compute the least-squares vector of the objective function.
 
@@ -628,7 +640,10 @@ class RawObjectiveFunction(ObjectiveFunction):
     # a child class must override one of these functions in order to 
     # be usable.
 
-    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         """
         Compute the derivatives of the terms of this objective function.
 
@@ -668,7 +683,10 @@ class RawObjectiveFunction(ObjectiveFunction):
         #       independent of whether or not lsvec is nonnegative.
         return 2 * u * v
 
-    def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dlsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         """
         Compute the derivatives of the least-squares vector of this objective function.
 
@@ -712,7 +730,10 @@ class RawObjectiveFunction(ObjectiveFunction):
         dterms = self.dterms(probs, counts, total_counts, freqs, intermediates)
         return pt5_over_lsvec * dterms
 
-    def dlsvec_and_lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dlsvec_and_lsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> Tuple[_np.ndarray, _np.ndarray]:
         """
         Compute the derivatives of the least-squares vector together with the vector itself.
 
@@ -752,7 +773,10 @@ class RawObjectiveFunction(ObjectiveFunction):
         dlsvec = self.dlsvec(probs, counts, total_counts, freqs, intermediates)
         return dlsvec, lsvec
 
-    def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         """
         Compute the 2nd derivatives of the terms of this objective function.
 
@@ -793,7 +817,10 @@ class RawObjectiveFunction(ObjectiveFunction):
                     + self.lsvec(probs, counts, total_counts, freqs, intermediates)
                     * self.hlsvec(probs, counts, total_counts, freqs, intermediates))
 
-    def hlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hlsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         """
         Compute the 2nd derivatives of the least-squares vector of this objective function.
 
@@ -836,7 +863,7 @@ class RawObjectiveFunction(ObjectiveFunction):
         return 0.5 / _np.sqrt(terms) * (hterms - 0.5 * dterms**2 / terms)
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def zero_freq_terms(self, total_counts, probs):
+    def zero_freq_terms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         """
         Evaluate objective function terms with zero frequency (where count and frequency are zero).
 
@@ -858,7 +885,7 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         raise NotImplementedError("Derived classes must implement this!")
 
-    def zero_freq_dterms(self, total_counts, probs):
+    def zero_freq_dterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         """
         Evaluate the derivative of zero-frequency objective function terms.
 
@@ -883,7 +910,7 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         raise NotImplementedError("Derived classes must implement this!")
 
-    def zero_freq_hterms(self, total_counts, probs):
+    def zero_freq_hterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         """
         Evaluate the 2nd derivative of zero-frequency objective function terms.
 
@@ -1210,10 +1237,10 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         return self.raw_objfn.description
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         return self.raw_objfn.chi2k_distributed_qty(objective_function_value)
 
-    def lsvec(self, paramvec=None, oob_check=False):
+    def lsvec(self, paramvec: Optional[_np.ndarray] = None, oob_check: bool = False) -> _np.ndarray:
         """
         Compute the least-squares vector of the objective function.
 
@@ -1241,7 +1268,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def dlsvec(self, paramvec=None):
+    def dlsvec(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         The derivative (jacobian) of the least-squares vector.
 
@@ -1261,7 +1288,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def terms(self, paramvec=None):
+    def terms(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the terms of the objective function.
 
@@ -1283,7 +1310,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         with self.resource_alloc.temporarily_track_memory(self.nelements):  # 'e'
             return self.lsvec(paramvec)**2
 
-    def dterms(self, paramvec=None):
+    def dterms(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the jacobian of the terms of the objective function.
 
@@ -1309,7 +1336,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             assert(dlsvec.shape == (len(lsvec), self.nparams)), "dlsvec returned a Jacobian with the wrong shape!"
             return 2.0 * lsvec[:, None] * dlsvec  # terms = lsvec**2, so dterms = 2*lsvec*dlsvec
 
-    def percircuit(self, paramvec=None):
+    def percircuit(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the per-circuit contributions to this objective function.
 
@@ -1341,7 +1368,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 percircuit[i] = _np.sum(terms[self.layout.indices_for_index(i)], axis=0)
             return percircuit
 
-    def dpercircuit(self, paramvec=None):
+    def dpercircuit(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the jacobian of the per-circuit contributions of this objective function.
 
@@ -1371,7 +1398,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 dpercircuit[i] = _np.sum(dterms[self.layout.indices_for_index(i)], axis=0)
             return dpercircuit
 
-    def lsvec_percircuit(self, paramvec=None):
+    def lsvec_percircuit(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the square root of per-circuit contributions to this objective function.
 
@@ -1392,7 +1419,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         return _np.sqrt(self.percircuit(paramvec))
 
-    def dlsvec_percircuit(self, paramvec=None):
+    def dlsvec_percircuit(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the jacobian of the sqrt(per-circuit) values given by :meth:`lsvec_percircuit`.
 
@@ -1417,7 +1444,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         # Note: don't need paramvec here since above call sets it
         return (0.5 / denom)[:, None] * self.dpercircuit()
 
-    def fn_local(self, paramvec=None, stateless=False) -> float:
+    def fn_local(self, paramvec: Optional[_np.ndarray] = None, stateless: bool = False) -> float:
         """
         Evaluate the *local* value of this objective function.
 
@@ -1454,7 +1481,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
             # redefining paramvec = self.model.to_vector().
             return _np.sum(self.terms(paramvec))
 
-    def fn(self, paramvec=None, stateless=False) -> float:
+    def fn(self, paramvec: Optional[_np.ndarray] = None, stateless: bool = False) -> float:
         """
         Evaluate the value of this objective function.
 
@@ -1493,7 +1520,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         self.model = m
         return val
 
-    def jacobian(self, paramvec=None):
+    def jacobian(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the Jacobian of this objective function.
 
@@ -1513,7 +1540,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         return _np.sum(self.dterms(paramvec), axis=0)
 
-    def hessian(self, paramvec=None):
+    def hessian(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the Hessian of this objective function.
 
@@ -1533,7 +1560,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def approximate_hessian(self, paramvec=None):
+    def approximate_hessian(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute an approximate Hessian of this objective function.
 
@@ -1557,7 +1584,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def _construct_hessian(self, counts, total_counts, prob_clip_interval):
+    def _construct_hessian(self, counts: _np.ndarray, total_counts: _np.ndarray, prob_clip_interval) -> _np.ndarray:
         """
         Framework for constructing a hessian matrix row by row using a derived
         class's `_hessian_from_hprobs` method.  This function expects that this
@@ -1676,7 +1703,10 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
         return atom_hessian  # (my_nparams1, my_nparams2)
 
-    def _hessian_from_block(self, hprobs, dprobs12, probs, element_slice, counts, total_counts, freqs, resource_alloc):
+    def _hessian_from_block(
+            self, hprobs, dprobs12, probs: _np.ndarray, element_slice, counts: _np.ndarray, total_counts: _np.ndarray,
+            freqs: _np.ndarray, resource_alloc
+        ) -> _np.ndarray:
         raise NotImplementedError("Derived classes should implement this!")
 
     def _gather_hessian(self, local_hessian):
@@ -1760,7 +1790,7 @@ class RawChi2Function(RawObjectiveFunction):
     def __init__(self, regularization=None, resource_alloc=None, name="chi2", description="Sum of Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -1795,23 +1825,35 @@ class RawChi2Function(RawObjectiveFunction):
             self.min_prob_clip_for_weighting = RawChi2Function.DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING
         return
 
-    def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def lsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         out = (probs - freqs) * self._weights(probs, freqs, total_counts)  # Note: ok if this is negative
         return out
 
-    def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dlsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         weights = self._weights(probs, freqs, total_counts)
         out =  weights + (probs - freqs) * self._dweights(probs, freqs, weights)
         return out
 
-    def hlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hlsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         # lsvec = (p-f)*sqrt(N/cp) = (p-f)*w
         # dlsvec/dp = w + (p-f)*dw/dp
         # d2lsvec/dp2 = dw/dp + (p-f)*d2w/dp2 + dw/dp = 2*dw/dp + (p-f)*d2w/dp2
         weights = self._weights(probs, freqs, total_counts)
         return 2 * self._dweights(probs, freqs, weights) + (probs - freqs) * self._hweights(probs, freqs, weights)
 
-    def hterms_alt(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hterms_alt(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         """
         Alternate computation of the 2nd derivatives of the terms of this objective function.
 
@@ -1852,20 +1894,20 @@ class RawChi2Function(RawObjectiveFunction):
         return d2v_dp2
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def zero_freq_terms(self, total_counts, probs):
+    def zero_freq_terms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         clipped_probs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         return total_counts * probs**2 / clipped_probs
 
-    def zero_freq_dterms(self, total_counts, probs):
+    def zero_freq_dterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         clipped_probs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         return _np.where(probs == clipped_probs, total_counts, 2 * total_counts * probs / clipped_probs)
 
-    def zero_freq_hterms(self, total_counts, probs):
+    def zero_freq_hterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         clipped_probs = _np.clip(probs, self.min_prob_clip_for_weighting, None)
         return _np.where(probs == clipped_probs, 0.0, 2 * total_counts / clipped_probs)
 
     #Support functions
-    def _weights(self, p, f, total_counts):
+    def _weights(self, p: _np.ndarray, f: _np.ndarray, total_counts: _np.ndarray) -> _np.ndarray:
         """
         Get the chi2 weighting factor.
 
@@ -1887,7 +1929,9 @@ class RawChi2Function(RawObjectiveFunction):
         cp = _np.clip(p, self.min_prob_clip_for_weighting, None)
         return _np.sqrt(total_counts / cp)  # nSpamLabels x nCircuits array (K x M)
 
-    def _dweights(self, p, f, wts):  # derivative of weights w.r.t. p
+    def _dweights(
+            self, p: _np.ndarray, f: _np.ndarray, wts: _np.ndarray
+        ) -> _np.ndarray:  # derivative of weights w.r.t. p
         """
         Get the derivative of the chi2 weighting factor.
 
@@ -1911,7 +1955,9 @@ class RawChi2Function(RawObjectiveFunction):
         dw[p < self.min_prob_clip_for_weighting] = 0.0
         return dw
 
-    def _hweights(self, p, f, wts):  # 2nd derivative of weights w.r.t. p
+    def _hweights(
+            self, p: _np.ndarray, f: _np.ndarray, wts: _np.ndarray
+        ) -> _np.ndarray:  # 2nd derivative of weights w.r.t. p
         # wts = sqrt(N/cp), dwts = (-1/2) sqrt(N) *cp^(-3/2), hwts = (3/4) sqrt(N) cp^(-5/2)
         """
         Get the 2nd derivative of the chi2 weighting factor.
@@ -1969,7 +2015,7 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
         self.alpha = alpha
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -2047,7 +2093,9 @@ class RawChiAlphaFunction(RawObjectiveFunction):
             self.zero_freq_hterms = None  # no hessian support
             self.fmin = None
 
-    def _intermediates(self, probs, counts, total_counts, freqs):
+    def _intermediates(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> Tuple:
         """ Intermediate values used by both terms(...) and dterms(...) """
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
         x = probs / freqs_nozeros
@@ -2056,7 +2104,10 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         c1 = 0.5 * (1. + self.alpha) / self.x1**(2 + self.alpha)
         return x, itaylor, c0, c1
 
-    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def terms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -2068,7 +2119,10 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         terms = _np.where(counts == 0, self.zero_freq_terms(total_counts, probs), terms)
         return terms
 
-    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -2080,28 +2134,33 @@ class RawChiAlphaFunction(RawObjectiveFunction):
         dterms = _np.where(counts == 0, self.zero_freq_dterms(total_counts, probs), dterms)
         return dterms
 
-    def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         raise NotImplementedError("Hessian not implemented for ChiAlpha function yet")
 
-    def hlsvec(self, probs, counts, total_counts, freqs):
+    def hlsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> _np.ndarray:
         raise NotImplementedError("Hessian not implemented for ChiAlpha function yet")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def _zero_freq_terms_harsh(self, total_counts, probs):
+    def _zero_freq_terms_harsh(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         a = self.radius
         return total_counts * _np.where(probs >= a, probs,
                                         (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
 
-    def _zero_freq_dterms_harsh(self, total_counts, probs):
+    def _zero_freq_dterms_harsh(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         a = self.radius
         return total_counts * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
 
-    def _zero_freq_terms_relaxed(self, total_counts, probs):
+    def _zero_freq_terms_relaxed(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         c1 = (0.5 / self.fmin) * (1. + self.alpha) / (self.x1**(2 + self.alpha))
         p0 = 1.0 / c1
         return total_counts * _np.where(probs > p0, probs, c1 * probs**2)
 
-    def _zero_freq_dterms_relaxed(self, total_counts, probs):
+    def _zero_freq_dterms_relaxed(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         c1 = (0.5 / self.fmin) * (1. + self.alpha) / (self.x1**(2 + self.alpha))
         p0 = 1.0 / c1
         return total_counts * _np.where(probs > p0, 1.0, 2 * c1 * probs)
@@ -2136,7 +2195,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
                  description="Sum of freq-weighted Chi^2", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         return objective_function_value  # default is to assume the value *is* chi2_k distributed
 
     def set_regularization(self, min_freq_clip_for_weighting: Optional[float]=None):
@@ -2159,23 +2218,23 @@ class RawFreqWeightedChi2Function(RawChi2Function):
             self.min_freq_clip_for_weighting = RawFreqWeightedChi2Function.DEFAULT_MIN_PROB_CLIP_FOR_WEIGHTING
         return
 
-    def _weights(self, p, f, total_counts):
+    def _weights(self, p: _np.ndarray, f: _np.ndarray, total_counts: _np.ndarray) -> _np.ndarray:
         #Note: this could be computed once and cached?
         return _np.sqrt(total_counts / _np.clip(f, self.min_freq_clip_for_weighting, None))
 
-    def _dweights(self, p, f, wts):
+    def _dweights(self, p: _np.ndarray, f: _np.ndarray, wts: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(p), 'd')
 
-    def _hweights(self, p, f, wts):
+    def _hweights(self, p: _np.ndarray, f: _np.ndarray, wts: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(p), 'd')
 
-    def zero_freq_terms(self, total_counts, probs):
+    def zero_freq_terms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return total_counts * probs**2 / self.min_freq_clip_for_weighting  # N * p^2 / fmin
 
-    def zero_freq_dterms(self, total_counts, probs):
+    def zero_freq_dterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return 2 * total_counts * probs / self.min_freq_clip_for_weighting
 
-    def zero_freq_hterms(self, total_counts, probs):
+    def zero_freq_hterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return 2 * total_counts / self.min_freq_clip_for_weighting
 
 
@@ -2222,32 +2281,32 @@ class RawCustomWeightedChi2Function(RawChi2Function):
         """
         pass
 
-    def _weights(self, p, f, total_counts):
+    def _weights(self, p: _np.ndarray, f: _np.ndarray, total_counts: _np.ndarray) -> _np.ndarray:
         #Note: this could be computed once and cached?
         if self.custom_weights is not None:
             return self.custom_weights
         else:
             return _np.ones(len(p), 'd')
 
-    def _dweights(self, p, f, wts):
+    def _dweights(self, p: _np.ndarray, f: _np.ndarray, wts: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(p), 'd')
 
-    def _hweights(self, p, f, wts):
+    def _hweights(self, p: _np.ndarray, f: _np.ndarray, wts: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(p), 'd')
 
-    def zero_freq_terms(self, total_counts, probs):
+    def zero_freq_terms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         if self.custom_weights is not None:
             return self.custom_weights**2 * probs**2  # elementwise cw^2 * p^2
         else:
             return probs**2  # p^2
 
-    def zero_freq_dterms(self, total_counts, probs):
+    def zero_freq_dterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         if self.custom_weights is not None:
             return 2 * self.custom_weights**2 * probs
         else:
             return 2 * probs  # p^2
 
-    def zero_freq_hterms(self, total_counts, probs):
+    def zero_freq_hterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         if self.custom_weights is not None:
             return 2 * self.custom_weights**2
         else:
@@ -2313,7 +2372,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
                  resource_alloc=None, name='dlogl', description="2*Delta(log(L))", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -2412,7 +2471,9 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             self.zero_freq_hterms = self._zero_freq_hterms_harsh
             self.fmin = None
 
-    def _intermediates(self, probs, counts, total_counts, freqs):
+    def _intermediates(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> Tuple:
         """ Intermediate values used by both `terms(...)` and `dterms(...)` """
         # Quantities depending on data only (not probs): could be computed once and
         # passed in as arguments to this (and other) functions?
@@ -2437,7 +2498,10 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 
-    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def terms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -2482,7 +2546,10 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
 
         return terms
 
-    def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def lsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         # lsvec = sqrt(terms), but don't use base class fn b/c of special taylor patch...
         lsvec = _np.sqrt(self.terms(probs, counts, total_counts, freqs, intermediates))
 
@@ -2493,7 +2560,10 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
 
         return lsvec
 
-    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -2516,7 +2586,10 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         dterms = _np.where(counts == 0, dterms_zerofreq, dterms)
         return dterms
 
-    def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         # terms = Nf*(log(f)-log(p)) + N*(p-f)  OR const + S*(p - minp) + S2*(p - minp)^2
         # dterms/dp = -Nf/p + N  OR  c0 + 2*S2*(p - minp)
         # d2terms/dp2 = Nf/p^2   OR  2*S2
@@ -2533,20 +2606,20 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         return d2terms_dp2  # a 1D array of d2(logl)/dprobs2 values; shape = (nEls,)
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def _zero_freq_terms_harsh(self, total_counts, probs):
+    def _zero_freq_terms_harsh(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         a = self.radius
         return total_counts * _np.where(probs >= a, probs,
                                         (-1.0 / (3 * a**2)) * probs**3 + probs**2 / a + a / 3.0)
 
-    def _zero_freq_dterms_harsh(self, total_counts, probs):
+    def _zero_freq_dterms_harsh(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         a = self.radius
         return total_counts * _np.where(probs >= a, 1.0, (-1.0 / a**2) * probs**2 + 2 * probs / a)
 
-    def _zero_freq_hterms_harsh(self, total_counts, probs):
+    def _zero_freq_hterms_harsh(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         a = self.radius
         return total_counts * _np.where(probs >= a, 0.0, (-2.0 / a**2) * probs + 2 / a)
 
-    def _zero_freq_terms_relaxed(self, total_counts, probs):
+    def _zero_freq_terms_relaxed(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         # quadratic N*C0*p^2 that == N*p at p=1/C0.
         # Pick C0 so it is ~ magnitude of curvature at patch-pt p/f = x1
         # Note that at d2f/dx2 at x1 is 0.5 N*f / x1^2 so d2f/dp2 = 0.5 (N/f) / x1^2  (dx/dp = 1/f)
@@ -2555,12 +2628,12 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         p0 = 1.0 / c1
         return total_counts * _np.where(probs > p0, probs, c1 * probs**2)
 
-    def _zero_freq_dterms_relaxed(self, total_counts, probs):
+    def _zero_freq_dterms_relaxed(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         c1 = (0.5 / self.fmin) * 1.0 / (self.x1**2)
         p0 = 1.0 / c1
         return total_counts * _np.where(probs > p0, 1.0, 2 * c1 * probs)
 
-    def _zero_freq_hterms_relaxed(self, total_counts, probs):
+    def _zero_freq_hterms_relaxed(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         raise NotImplementedError()  # This is straightforward, but do it later.
 
 
@@ -2591,7 +2664,7 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
                  resource_alloc=None, name='dlogl', description="2*Delta(log(L))", verbosity=0):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -2646,7 +2719,9 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
             self.x1 = pfratio_derivpt
             self.regtype = "pfratio"
 
-    def _intermediates(self, probs, counts, total_counts, freqs):
+    def _intermediates(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> Tuple:
         """ Intermediate values used by both `terms(...)` and `dterms(...)` """
         # Quantities depending on data only (not probs): could be computed once and
         # passed in as arguments to this (and other) functions?
@@ -2671,7 +2746,10 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         else:
             raise ValueError("Invalid regularization type: %s" % self.regtype)
 
-    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def terms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -2693,7 +2771,10 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         #Note: no penalty for omitted probabilities (objective fn == 0 whenever counts == 0)
         return terms
 
-    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         if intermediates is None:
             intermediates = self._intermediates(probs, counts, total_counts, freqs)
 
@@ -2713,7 +2794,10 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         dterms = _np.where(counts == 0, 0.0, dterms)
         return dterms
 
-    def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         # terms = Nf*log(p) OR const + S*(p - minp) + S2*(p - minp)^2
         # dterms/dp = Nf/p  OR  c0 + 2*S2*(p - minp)
         # d2terms/dp2 = -Nf/p^2   OR  2*S2
@@ -2727,27 +2811,39 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         d2terms_dp2 = _np.where(counts == 0, 0.0, d2terms_dp2)
         return d2terms_dp2  # a 1D array of d2(logl)/dprobs2 values; shape = (nEls,)
 
-    def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def lsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         # lsvec = sqrt(terms), but terms are not guaranteed to be positive!
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
-    def dlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dlsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
-    def dlsvec_and_lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dlsvec_and_lsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> Tuple[_np.ndarray, _np.ndarray]:
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
-    def hlsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hlsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def zero_freq_terms(self, total_counts, probs):
+    def zero_freq_terms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(probs), 'd')
 
-    def zero_freq_dterms(self, total_counts, probs):
+    def zero_freq_dterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(probs), 'd')
 
-    def zero_freq_hterms(self, total_counts, probs):
+    def zero_freq_hterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(probs), 'd')
 
 
@@ -2777,7 +2873,10 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         super().__init__(regularization, resource_alloc, name, description, verbosity)
         self.poisson_picture = poisson_picture
 
-    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def terms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
         if self.poisson_picture:
             terms = counts * (_np.log(freqs_nozeros) - 1.0)
@@ -2786,32 +2885,47 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         terms[counts == 0] = 0.0
         return terms
 
-    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         return _np.zeros(len(probs), 'd')
 
-    def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         return _np.zeros(len(probs), 'd')
 
-    def lsvec(self, probs, counts, total_counts, freqs, intermediates=None):
+    def lsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         raise ValueError("MaxLogL objective function cannot produce a LS-vector: terms are not necessarily positive!")
 
-    def dlsvec(self, probs, counts, total_counts, freqs):
+    def dlsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> _np.ndarray:
         raise ValueError("MaxLogL objective function cannot produce a LS-vector: terms are not necessarily positive!")
 
-    def dlsvec_and_lsvec(self, probs, counts, total_counts, freqs):
+    def dlsvec_and_lsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> Tuple[_np.ndarray, _np.ndarray]:
         raise ValueError("MaxLogL objective function cannot produce a LS-vector: terms are not necessarily positive!")
 
-    def hlsvec(self, probs, counts, total_counts, freqs):
+    def hlsvec(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray
+        ) -> _np.ndarray:
         raise ValueError("LogL objective function cannot produce a LS-vector b/c terms are not necessarily positive!")
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def zero_freq_terms(self, total_counts, probs):
+    def zero_freq_terms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(probs), 'd')
 
-    def zero_freq_dterms(self, total_counts, probs):
+    def zero_freq_dterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(probs), 'd')
 
-    def zero_freq_hterms(self, total_counts, probs):
+    def zero_freq_hterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return _np.zeros(len(probs), 'd')
 
 
@@ -2844,31 +2958,40 @@ class RawTVDFunction(RawObjectiveFunction):
             description = "Total Variational Distance (TVD)"
         super().__init__(regularization, resource_alloc, name, description, verbosity)
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         return -1
 
-    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def terms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         return 0.5 * _np.abs(probs - freqs)
 
-    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         t = probs - freqs
         d = 0.5*_np.ones_like(t)
         d[t < 0] *= -1
         return d
 
-    def hterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def hterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         return _np.zeros_like(probs)
 
     #Required zero-term methods for omitted probs support in model-based objective functions
-    def zero_freq_terms(self, total_counts, probs):
+    def zero_freq_terms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return 0.5 * _np.abs(probs)
 
-    def zero_freq_dterms(self, total_counts, probs):
+    def zero_freq_dterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         d = 0.5*_np.ones_like(probs)
         d[probs < 0] = -0.5  # it's technically possible to predict negative probs.
         return d
 
-    def zero_freq_hterms(self, total_counts, probs):
+    def zero_freq_hterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return _np.zeros_like(probs)
 
 
@@ -2888,23 +3011,29 @@ class RawAbsPower(RawObjectiveFunction):
         assert power >= 1
         self.power = power
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         return -1
     
-    def terms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def terms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         return _np.abs(probs - freqs) ** self.power
     
-    def dterms(self, probs, counts, total_counts, freqs, intermediates=None):
+    def dterms(
+            self, probs: _np.ndarray, counts: _np.ndarray, total_counts: _np.ndarray, freqs: _np.ndarray,
+            intermediates: Optional[Tuple] = None
+        ) -> _np.ndarray:
         t = probs - freqs
         d = _np.abs(t) ** (self.power - 1)
         d[t < 0] *= -1
         d *= self.power
         return d
     
-    def zero_freq_terms(self, total_counts, probs):
+    def zero_freq_terms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         return _np.abs(probs) ** self.power
 
-    def zero_freq_dterms(self, total_counts, probs):
+    def zero_freq_dterms(self, total_counts: _np.ndarray, probs: _np.ndarray) -> _np.ndarray:
         d = _np.abs(probs) ** (self.power - 1)
         d[probs < 0] *= -1
         d *= self.power
@@ -3148,7 +3277,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         #
         return ex
 
-    def terms(self, paramvec=None, oob_check=False, profiler_str="TERMS OBJECTIVE"):
+    def terms(
+            self, paramvec: Optional[_np.ndarray] = None, oob_check: bool = False, profiler_str = 'TERMS OBJECTIVE'
+        ) -> _np.ndarray:
         tm = _time.time()
         if paramvec is None:
             paramvec = self.model.to_vector()
@@ -3188,7 +3319,9 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         assert(terms.shape == (self.nelements + self.local_ex,))
         return terms
 
-    def lsvec(self, paramvec=None, oob_check=False, raw_objfn_lsvec_signs=True):
+    def lsvec(
+            self, paramvec: Optional[_np.ndarray] = None, oob_check: bool = False, raw_objfn_lsvec_signs = True
+        ) -> _np.ndarray:
         unit_ralloc = self.layout.resource_alloc('atom-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
         lsvec = self.terms(paramvec, oob_check, "LS OBJECTIVE")
@@ -3210,7 +3343,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         unit_ralloc.host_comm_barrier()
         return lsvec
 
-    def dterms(self, paramvec=None):
+    def dterms(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         tm = _time.time()
         unit_ralloc = self.layout.resource_alloc('param-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
@@ -3248,7 +3381,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
         return self.jac
     
-    def dlsvec(self, paramvec=None):
+    def dlsvec(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         tm = _time.time()
         unit_ralloc = self.layout.resource_alloc('param-processing')
         shared_mem_leader = unit_ralloc.is_host_leader
@@ -3280,7 +3413,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # Optional: multiply terms_jac rowwise by some constants.
         return
 
-    def _dterms_fill_penalty(self, paramvec, terms_jac):
+    def _dterms_fill_penalty(self, paramvec: _np.ndarray, terms_jac) -> None:
         wrtslice = self.layout.global_param_slice if isinstance(self.layout, _DistributableCOPALayout) else slice(0, len(paramvec))  # all params
         off = 0
 
@@ -3347,7 +3480,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         assert(off == self.local_ex)
         return
 
-    def _terms_penalty(self, paramvec):
+    def _terms_penalty(self, paramvec: _np.ndarray) -> _np.ndarray:
         blocks = [_np.zeros(shape=(0,))]
 
         if self.forcefn_grad is not None:
@@ -3393,7 +3526,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     # Hessians, public and private instance functions
 
-    def hessian_brute(self, paramvec=None):
+    def hessian_brute(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Computes the Hessian using a brute force approach.
 
@@ -3458,7 +3591,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         return self._gather_hessian(ret)  # ret is just the part of the Hessian that this processor "owns"
 
-    def approximate_hessian(self, paramvec=None):
+    def approximate_hessian(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         #Almost the same as function above but drops hprobs term
         if self.firsts is not None:
             raise NotImplementedError("Chi2 hessian not implemented for sparse data (yet)")
@@ -3486,12 +3619,15 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
         return self._gather_hessian(hessian)  # `hessian` is just the part of the (approximate) Hessian this proc "owns"
 
-    def hessian(self, paramvec=None):
+    def hessian(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         if self.ex != 0: raise NotImplementedError("Hessian is not implemented for penalty terms yet!")
         if paramvec is not None: self.model.from_vector(paramvec)
         return self._gather_hessian(self._construct_hessian(self.counts, self.total_counts, self.prob_clip_interval))
 
-    def _hessian_from_block(self, hprobs, dprobs12, probs, element_slice, counts, total_counts, freqs, resource_alloc):
+    def _hessian_from_block(
+            self, hprobs, dprobs12, probs: _np.ndarray, element_slice, counts: _np.ndarray, total_counts: _np.ndarray,
+            freqs: _np.ndarray, resource_alloc
+        ) -> _np.ndarray:
         """ Factored-out computation of hessian from raw components """
 
         # Note: hprobs, dprobs12, probs are sometimes shared memory, but the caller (e.g. _construct_hessian)
@@ -3877,7 +4013,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         return 0  # no penalties
 
-    def lsvec(self, paramvec=None):
+    def lsvec(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the least-squares vector of the objective function.
 
@@ -3901,7 +4037,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         raise NotImplementedError()
 
-    def dlsvec(self, paramvec=None):
+    def dlsvec(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         raise NotImplementedError()
 
 
@@ -3987,7 +4123,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         self.prob_clip_interval = prob_clip_interval
         return 0
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -4002,7 +4138,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         """
         return objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
-    def lsvec(self, paramvec=None):
+    def lsvec(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         tm = _time.time()
         if paramvec is not None: self.model.from_vector(paramvec)
         fsim = self.model.sim
@@ -4014,7 +4150,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         assert(v.shape == (self.nelements,))  # reshape ensuring no copy is needed
         return v.copy()  # copy() needed for FD deriv, and we don't need to be stingy w/memory at objective fn level
 
-    def dlsvec(self, paramvec=None):
+    def dlsvec(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         tm = _time.time()
         dprobs = self.jac.view()  # avoid mem copying: use jac mem for dprobs
         dprobs = _compat.reshape_no_copy(dprobs, (self.nelements, self.nparams))
@@ -4117,7 +4253,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         self.prob_clip_interval = prob_clip_interval
         return 0
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -4132,7 +4268,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         """
         return 2 * objective_function_value  # 2 * deltaLogL is what is chi2_k distributed
 
-    def lsvec(self, paramvec=None):
+    def lsvec(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         tm = _time.time()
         if paramvec is not None: self.model.from_vector(paramvec)
         fsim = self.model.sim
@@ -4155,7 +4291,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
 
     #  if p <  p_min then term == sqrt( N_{i,sl} * -log(p_min) + N[i] * p_min + S*(p-p_min) )
     #   and deriv == 0.5 / sqrt(...) * c0 * dp
-    def dlsvec(self, paramvec=None):
+    def dlsvec(self, paramvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         tm = _time.time()
         dlogl = self.jac[0:self.nelements, :]  # avoid mem copying: use jac mem for dlogl
         dlogl = _compat.reshape_no_copy(dlogl, (self.nelements, self.nparams))
@@ -4505,7 +4641,7 @@ class LogLWildcardFunction(ObjectiveFunction):
     def __getattr__(self, attr):
         return getattr(self.__dict__['logl_objfn'], attr)  # use __dict__ so no chance for recursive __getattr__
 
-    def chi2k_distributed_qty(self, objective_function_value):
+    def chi2k_distributed_qty(self, objective_function_value: float) -> float:
         """
         Convert a value of this objective function to one that is expected to be chi2_k distributed.
 
@@ -4520,7 +4656,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         """
         return self.logl_objfn.chi2k_distributed_qty(objective_function_value)
 
-    def fn(self, wvec=None):
+    def fn(self, wvec: Optional[_np.ndarray] = None) -> float:
         """
         Evaluate this objective function.
 
@@ -4536,7 +4672,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         """
         return sum(self.terms(wvec))
 
-    def terms(self, wvec=None):
+    def terms(self, wvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the terms of the objective function.
 
@@ -4557,7 +4693,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         """
         return self.lsvec(wvec)**2
 
-    def lsvec(self, wvec=None):
+    def lsvec(self, wvec: Optional[_np.ndarray] = None) -> _np.ndarray:
         """
         Compute the least-squares vector of the objective function.
 
@@ -4589,7 +4725,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         counts, N, freqs = self.logl_objfn.counts, self.logl_objfn.total_counts, self.logl_objfn.freqs
         return self.logl_objfn.raw_objfn.lsvec(self.logl_objfn.probs, counts, N, freqs)
 
-    def dlsvec(self, wvec):
+    def dlsvec(self, wvec: _np.ndarray) -> _np.ndarray:
         """
         The derivative (jacobian) of the least-squares vector.
 
