@@ -1,9 +1,14 @@
 import numpy as np
 import itertools
+import stim
 
 from collections import defaultdict
 import pygsti.tools.errgenproptools as eprop
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
+
+#Note on code integration process: This was written to pass around the TableauSimulator to avoid computing it multiple times. 
+# But pyGSTi's bulk_alpha_pauli operates on a Tableau. 
+# So this should all be rewritten to take in the stim Tableau and use bulk_alpha_pauli as efficiently as possible
 
 def pauli_product(P1, P2):
     P3 = P1*P2
@@ -24,12 +29,29 @@ def format_dem_stim(dem_dict, n_logical):
             dem_string+=line
     return dem_string
 
+def to_full_pauli(partial_pauli, qs, n_qubits):
+    full_p = stim.PauliString('I'*n_qubits)
+    for i,q in enumerate(qs):
+        full_p[q]=partial_pauli[i]
+    return full_p
+    
+
+def get_detector_as_parity(detector_indices, measurements, n_qubits):
+    #for each measurement in the detector, 
+    p_net = stim.PauliString('I'*n_qubits)
+    for idx in detector_indices:
+        #turn each Pauli into an n-qubit Pauli
+        partial_pauli, qs = measurements[idx]
+        p = to_full_pauli(partial_pauli, qs, n_qubits)
+        p_net *= p
+    #take the product of these Paulis
+    return p_net
 
 def compute_contribution(eeg, rate, det_pauli, tableau):
-    contribution = rate*alpha_pauli(eeg, tableau, det_pauli)/2 
+    contribution = rate*eprop.bulk_alpha_pauli([eeg], tableau, [det_pauli])/2 #TODO improve since this'll be slow
     return contribution
 
-def sort_terms_by_effect(terms, detectors, sim=None, show_progress=False):
+def sort_terms_by_effect(terms, detectors, show_progress=False):
     sorted_terms = defaultdict(list)
     for j,eeg in enumerate(terms):
         dets_fired = []
@@ -63,7 +85,7 @@ def split_generator(term_sorting, eoc_eeg):
         generator_split.append(term_dict)
     return generator_split, base_events
 
-def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_strings, sim):
+def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_strings, sim): 
     for event, egens in zip(base_events, leading_order_channels):
         if event != '0'*len(event):
             if all(k.errorgen_type=='S' for k in egens.keys()) or (len(egens.keys())==1 and all(k.errorgen_type=='H' for k in egens.keys())):
@@ -83,7 +105,7 @@ def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_
                     det_pauli = dets_as_pauli_strings[first_flipped_detector]
 
                     new_eeg = LocalStimErrorgenLabel('C',(eeg1.basis_element_labels[0], eeg2.basis_element_labels[0]))
-                    contribution = compute_contribution(new_eeg, weight, det_pauli, sim)
+                    contribution = compute_contribution(new_eeg, weight, det_pauli, tableau)
                     dem[event] += -1*contribution.real
 
                 #TODO handle SCA terms
@@ -91,7 +113,7 @@ def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_
                     weight = eoc_eeg[eeg]
                     first_flipped_detector = event.find('1')
                     det_pauli = dets_as_pauli_strings[first_flipped_detector]
-                    contribution = compute_contribution(eeg, weight, det_pauli, sim)
+                    contribution = compute_contribution(eeg, weight, det_pauli, tableau)
                     dem[event] += -1*contribution.real
 
     return dem
@@ -165,10 +187,15 @@ def estimate_error_rate_taylor(edict, sim, det_pauli, order=1, truncation_thresh
         expanded_error = eprop.error_generator_taylor_expansion(edict, order=order)
         for egen_dict in expanded_error:   
             alpha_errgen_prods = np.zeros(len(egen_dict))
-            for i, (lbl, rate) in enumerate(egen_dict.items()):
-                if abs(rate) > truncation_threshold:
-                    sensitivity = alpha_pauli(lbl, sim, det_pauli)
-                    alpha_errgen_prods[i] = np.real_if_close(sensitivity*rate)
+            egens = np.array(egens.keys())
+            rates = np.array(egens.values())
+            sensitivities = eprop.bulk_alpha_pauli(egens, sim, det_pauli)
+            alpha_errgen_prods = np.real_if_close(sensitivities) @ rates
+            # for i, (lbl, rate) in enumerate(egen_dict.items()):
+            #     if abs(rate) > truncation_threshold:
+            #         ###TODO refactor to use bulk_alpha_pauli
+            #         sensitivity = bulk_alpha_pauli(lbl, sim, det_pauli)
+            #         alpha_errgen_prods[i] = np.real_if_close(sensitivity*rate)
             contribution += np.abs(np.sum(alpha_errgen_prods))
         #print(alpha_errgen_prods)
         contribution /= 2 #convert from change in expextation value to probability
