@@ -192,9 +192,6 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     # Ud shape = (K, nESpecs)
     # Vd shape = (nRhoSpecs, K)
 
-    #print "DEBUG: dataset = ",dataset
-    #print "DEBUG: ABmat = \n",ABMat
-    #print "DEBUG: Evals(ABmat) = \n",_np.linalg.eigvals(ABMat)
     rankAB = _np.linalg.matrix_rank(ABMat_p)
     if rankAB < ABMat_p.shape[0]:
         raise ValueError("LGST AB matrix is rank %d < %d. Choose better prep_fiducials and/or effect_fiducials, "
@@ -213,7 +210,6 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         lgstModel = _models.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
 
     for opLabel in op_labelsToEstimate:
-        #print("LGST ",opLabel)
         Xs = _construct_x_matrix(prep_fiducials, effect_fiducials, target_model, (opLabel,),
                                  dataset, op_label_aliases)  # shape (nVariants, nESpecs, nRhoSpecs)
 
@@ -222,10 +218,6 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             # shape (K,K) this should be close to rank "svd_truncate_to" (which is <= K) -- TODO: check this
             X2 = _np.dot(Ud, _np.dot(X, Vd))
 
-            #if svd_truncate_to > 0:
-            #    printer.log("LGST DEBUG: %s before trunc to first %d row and cols = \n" % (opLabel,svd_truncate_to), 3)
-            #    if printer.verbosity >= 3:
-            #        _tools.print_mx(X2)
             X_p = _np.dot(Pjt, _np.dot(X2, Pj))  # truncate X => X', shape (trunc, trunc)
             X_ps.append(X_p)
 
@@ -380,8 +372,6 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
 
     printer.log("Resulting model:\n", 3)
     printer.log(lgstModel, 3)
-    #    for line in str(lgstModel).split('\n'):
-    #       printer.log(line, 3)
     return lgstModel
 
 
@@ -446,8 +436,6 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
                 X[k, eoff:eoff + povmLen, j] = [dsRow_fractions.get(ol, 0) for ol in outcomes]
         eoff += povmLen
 
-    #print("DEBUG LGST on instrument, X = ")
-    #print(_np.round(X, 4))
     return X
 
 
@@ -1243,14 +1231,8 @@ def find_closest_unitary_opmx(operation_mx, op_basis: BasisLike='pp'):
         #JU = _np.kron( vU, _np.transpose(_np.conjugate(vU))) # Choi matrix corresponding to U
         return -_tools.fidelity(gate_JMx, JU)
 
-    # print_obj_func = _opt.create_objfn_printer(_objective_func)
     solution = _spo.minimize(_objective_func, initialBasisVec, options={'maxiter': 10000},
                              method='Nelder-Mead', callback=None, tol=1e-8)  # if verbosity > 2 else None
     operation_mx = getGateMx(solution.x)
 
-    #print "DEBUG: Best fidelity = ",-solution.fun
-    #print "DEBUG: Using vector = ", solution.x
-    #print "DEBUG: Gate Mx = \n", operation_mx
-    #print "DEBUG: Chi Mx = \n", _tools.jamiolkowski_iso( operation_mx)
-    #return -solution.fun, operation_mx
     return operation_mx

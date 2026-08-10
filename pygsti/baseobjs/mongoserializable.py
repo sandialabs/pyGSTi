@@ -385,7 +385,6 @@ class WriteOpsByCollection(dict):
 
         if overwrite_existing is True:
             self[collection_name].append(ReplaceOne({'_id': doc_id}, doc, upsert=True))
-            #mongodb[collection_name].replace_one(doc_id, doc, upsert=True)  # alt line for DEBUG
         else:
             if not tried_to_find_existing_doc:  # then try now
                 existing_doc = mongodb[collection_name].find_one(doc_id)
@@ -396,9 +395,7 @@ class WriteOpsByCollection(dict):
 
             if existing_doc is None:  # then insert the document as given
                 self[collection_name].append(InsertOne(doc))
-                #mongodb[collection_name].insert_one(doc)  # alt line for DEBUG
             else:
-                #print("Found existing doc: ", doc.get('module','?'), doc.get('class','?'), doc.get('circuit_str','?'))
                 existing_to_chk = prepare_doc_for_existing_doc_check(existing_doc, None, False, False, False)
                 info_to_check = prepare_doc_for_existing_doc_check(doc, existing_doc)
                 if existing_to_chk != info_to_check:
@@ -611,7 +608,6 @@ def _find_one_doc(db, collection_name, doc_id, projection=None, error_if_no_doc=
                 doc_id_known_to_be_unique = True
                 break
         if not doc_id_known_to_be_unique:  # then check that this doc_id is indeed unique with a db call
-            # for DEBUG: print("UID without _id and not known unique: ", doc_id, " for ", collection_name)
             if db[collection_name].count_documents(doc_id, limit=2) > 1:
                 raise ValueError((f"Multiple records where identified by the given `doc_id` ({doc_id})."
                                   " `doc_id` must specify exactly one record."))

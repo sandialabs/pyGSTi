@@ -332,7 +332,6 @@ class Label(object):
         if time is None:
             time = 0.0  # for non-TupTup labels not setting a time is equivalent to setting it to 0.0
 
-        #print(" -> preproc with name=", name, "sslbls=", state_space_labels, "t=", time, "args=", args)
         # If numpy object, we have to check size=0 for empty; otherwise, check for empty tuple
         if state_space_labels is None \
                 or (isinstance(state_space_labels, (_np.ndarray, _np.generic)) and state_space_labels.size == 0) \
@@ -826,9 +825,6 @@ class LabelTupWithTime(LabelTup, tuple):
 
     def __str__(self) -> str:
         """Defines how a Label is printed out, e.g. Gx:0 or Gcnot:1:2"""
-        #caller = inspect.getframeinfo(inspect.currentframe().f_back)
-        #ky = "%s:%s:%d" % (caller[2],os.path.basename(caller[0]),caller[1])
-        #_debug_record[ky] = _debug_record.get(ky, 0) + 1
         s = str(self.name)
         if self.sslbls:  # test for None and len == 0
             s += ":" + ":".join(map(str, self.sslbls))

@@ -151,8 +151,6 @@ def _maximize_1d(g, s1, s2, g1):
     # s4,g4 = None,None
     s1_on_bd = s3_on_bd = False
 
-    #print "DEBUG: BEGIN MAX 1D: s1,s3=", (s1,s3)
-
     assert(g1 is not None or g3 is not None)
     if g1 is None or g3 is None:
         if g1 is None: s1, g1 = _find_boundary(g, s3, s1); s1_on_bd = True
@@ -160,7 +158,6 @@ def _maximize_1d(g, s1, s2, g1):
         s2 = s1 + (s3 - s1) / PHI; g2 = g(s2)
 
     while((abs(s3 - s1) > TOL) and (abs(s3 - s1) > FRAC_TOL * (abs(s3) + abs(s1)))):
-        #print "DEBUG: Max1D iter: (",s1,",",g1,") (",s2,",",g2,") (",s3,",",g3,")"
         if g3 > g2:
             if g2 >= g1:  # Expand to the right
                 if s3_on_bd: print("** Returning on bd"); return s3  # can't expand any further to right
@@ -197,7 +194,6 @@ def _max_within_bracket(g, s1, g1, s2, g2, s3, g3):
     assert(s2 - s1 > TOL)  # a legit bracket must have s1 < s2
     while((abs(s3 - s1) > TOL) and (abs(s3 - s1) > FRAC_TOL * (abs(s3) + abs(s1)))):
         s4 = s1 + (s3 - s2); g4 = g(s4)
-        #print "DEBUG: Max in brk iter: (",s1,",",g1,") (",s2,",",g2,") (",s3,",",g3,") (",s4,",",g4,")"
         assert(g4 is not None)  # assume function is defined at all points in bracket
         if s4 > s2:
             if(g4 > g2):  # Drop x1 (move to x2), move x2 to x4.
@@ -217,7 +213,6 @@ def _max_within_bracket(g, s1, g1, s2, g2, s3, g3):
 #find boundary of g (i.e. at the edge of where it is defined)
 # g(s1) must be defined (not None) and g(s2) must == None (function undefined)
 def _find_boundary(g, s1, s2):
-    #print "DEBUG: finding bd fn"
     TOL = 1e-6
     while(abs(s1 - s2) > TOL):  # just do binary search
         m = (s1 + s2) / 2.0; gm = g(m)
