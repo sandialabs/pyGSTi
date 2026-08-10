@@ -25,6 +25,7 @@ Vertex = Union[int, str]
 Edge = Tuple[Vertex, Vertex]
 LayerMappers = Dict[int, Dict[Label, Label]]
 CircuitStitcher = Callable[..., List[List[Circuit]]]
+SeedLike = Union[int, np.random.SeedSequence, np.random.Generator]
 
 __all__ = ['SimultaneousGSTDesign', 'make_simultaneous_gst_design']
 
@@ -104,16 +105,36 @@ def make_simultaneous_gst_design(
         twoq_gstdesign: GateSetTomographyDesign,
         seed: int = 0
     ) -> "SimultaneousGSTDesign":
+    """
+    Build a :class:`SimultaneousGSTDesign` for `nq_pspec` without having to supply an
+    edge coloring yourself.
+
+    There are two independent random choices downstream of `seed`: which edges land in
+    which patch (the coloring), and which circuit from each design lands in which lane
+    slot (the stitcher). `seed` is expanded into one independent stream for each via
+    ``SeedSequence.spawn``, so the two never draw from the same sequence and neither
+    depends on how much randomness the other consumed.
+
+    Note that the coloring stream is frequently unused: "auto" detects the canonical
+    topologies produced by ``ProcessorSpec(geometry=...)`` (line/ring/grid/torus) and
+    coloring those is a deterministic closed form using the optimal number of colors.
+    The seed reaches the coloring only on the randomized bipartite path; the generic
+    (deg+1)-color fallback is deterministic too.
+    """
     vertices = cast(List[Vertex] , list(nq_pspec.qubit_labels))
     edges = nq_pspec.compute_2Q_connectivity().edges()
     edges = list(set(edges))
     neighbors = find_neighbors(vertices, edges)
     deg = max(len(neighbors[v]) for v in vertices)
-    edge_coloring = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=seed)
-    # ^ "auto" detects canonical topologies (line/ring/grid/torus, as produced by
-    #   ProcessorSpec(geometry=...)) and uses an optimal closed-form coloring for
-    #   them, falling back to a generic (deg+1)-color algorithm otherwise.
-    return SimultaneousGSTDesign(nq_pspec, oneq_gstdesign, twoq_gstdesign, edge_coloring, seed=(seed+1))
+    coloring_seed, stitcher_seed = np.random.SeedSequence(seed).spawn(2)
+    coloring_seed = np.random.default_rng(coloring_seed)
+    edge_coloring = switchboard_find_edge_coloring(
+        "auto", deg, vertices, edges, neighbors, seed=coloring_seed
+    )
+    out = SimultaneousGSTDesign(
+        nq_pspec, oneq_gstdesign, twoq_gstdesign, edge_coloring, seed=stitcher_seed
+    )
+    return out
 
 
 class SimultaneousGSTDesign(GateSetTomographyDesign):
@@ -129,7 +150,8 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
     twoq_gstdesign: The design for two-qubit GST circuits.
     edge_coloring (dict): A dictionary mapping color patches to their corresponding edge sets.
     circuit_stitcher (callable): A function to stitch circuits together (default: assign_the_designs_with_mapping).
-    seed (int, optional): Seed for random number generation.
+    seed (optional): Anything ``np.random.default_rng`` accepts -- an int, a SeedSequence,
+        or an already-built Generator -- used to seed the randgen handed to the stitcher.
     **stitcher_kwargs: Extra keyword arguments forwarded verbatim to ``circuit_stitcher``.
 
     circuit_lists (list): The generated list of stitched circuits.
@@ -140,7 +162,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
                  twoq_gstdesign: GateSetTomographyDesign,
                  edge_coloring: Mapping[int, Sequence[Edge]],
                  circuit_stitcher: Optional[CircuitStitcher] = None,
-                 seed: Optional[int] = None,
+                 seed: Optional[SeedLike] = None,
                  nested: bool = False,
                  debug_check: bool = True,
                  **stitcher_kwargs: Any):

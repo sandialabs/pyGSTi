@@ -355,9 +355,9 @@ class MakeSimultaneousGSTDesignTester(BaseCase):
 
     It derives the graph (vertices, edges, neighbors, max degree) from the
     processor spec, computes an edge coloring with the 'auto' algorithm, and
-    forwards everything to ``SimultaneousGSTDesign`` with ``seed + 1``.
-    These tests check that each of those derived values lands on the returned
-    design correctly.
+    forwards everything to ``SimultaneousGSTDesign`` with the second of two
+    streams spawned off ``seed``. These tests check that each of those derived
+    values lands on the returned design correctly.
     """
 
     @classmethod
@@ -411,20 +411,33 @@ class MakeSimultaneousGSTDesignTester(BaseCase):
         assert_circuit_lists_match_color_patches(
             self.design.circuit_lists, self.design.vertices, self.design.color_patches)
 
-    def test_seed_is_forwarded_as_seed_plus_one(self):
-        # make_simultaneous_gst_design builds the design with seed=(seed + 1); constructing
-        # the design directly with that seed and the same coloring must reproduce
-        # it exactly.
+    def test_stitcher_gets_the_second_spawned_seed(self):
+        # make_simultaneous_gst_design splits `seed` into two independent streams
+        # with SeedSequence.spawn(2) and hands the second to the design;
+        # constructing the design directly with that stream and the same coloring
+        # must reproduce it exactly.
         #
         # The design is rebuilt here rather than reusing cls.design on purpose:
         # coverage contexts attribute setUpClass code to whichever test happened
         # to trigger class setup, so a test that only *reads* cls.design is not
-        # recorded as covering the `seed + 1` expression and is therefore never
+        # recorded as covering the spawn expression and is therefore never
         # selected by the diff-mutation tooling to guard it.
         design = make_simultaneous_gst_design(self.pspec, self.oneq, self.twoq, seed=0)
+        _, stitcher_seed = np.random.SeedSequence(0).spawn(2)
         direct = SimultaneousGSTDesign(
-            self.pspec, self.oneq, self.twoq, design.color_patches, seed=1)
+            self.pspec, self.oneq, self.twoq, design.color_patches, seed=stitcher_seed)
         self.assertEqual(direct.circuit_lists, design.circuit_lists)
+
+    def test_stitcher_stream_is_not_the_coloring_stream(self):
+        # The point of spawning is that the two consumers never draw the same
+        # sequence, so seeding the stitcher with the *coloring's* stream must not
+        # reproduce the design. Guards against a collapse back to a single shared
+        # seed (or to an off-by-one offset, which recycles one call's stitcher
+        # stream as the next call's coloring stream).
+        coloring_seed, _ = np.random.SeedSequence(0).spawn(2)
+        direct = SimultaneousGSTDesign(
+            self.pspec, self.oneq, self.twoq, self.design.color_patches, seed=coloring_seed)
+        self.assertNotEqual(direct.circuit_lists, self.design.circuit_lists)
 
     def test_different_seeds_give_different_circuit_assignments(self):
         # Guards the seed actually reaching the stitcher's randgen: on a line the
