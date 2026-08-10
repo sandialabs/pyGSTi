@@ -23,22 +23,6 @@ class MatrixGroupTester(BaseCase):
         for i in range(N):
             self.assertEqual(g.product_table[i, g.inverse_table[i]], 0)
 
-    def test_is_integer_deprecated(self):
-        # Call directly under catch_warnings to ensure pyGSTiDeprecationWarning is raised
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            res_int = group.is_integer(5)
-            res_np_int = group.is_integer(np.int32(5))
-            res_float = group.is_integer(5.5)
-
-            self.assertTrue(res_int)
-            self.assertTrue(res_np_int)
-            self.assertFalse(res_float)
-
-            # Assert at least one warning was emitted and it is pyGSTiDeprecationWarning
-            dep_warnings = [warning for warning in w if issubclass(warning.category, pyGSTiDeprecationWarning)]
-            self.assertGreaterEqual(len(dep_warnings), 1)
-
     def test_matrix_group_arguments(self):
         # Test that labels and integer indices both work for accessors
         g = group.construct_1q_clifford_group()
