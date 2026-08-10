@@ -4132,6 +4132,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
         printer.log('Testing initial germ list for AC.', 2)
         initial_germ_set_completeness = test_germs_list_completeness(model_list, goodGerms,
                                                                      score_func, threshold,
+                                                                     num_gauge_params=numGaugeParams,
                                                                      float_type=float_type,
                                                                      comm=comm)
         if initial_germ_set_completeness == -1:
