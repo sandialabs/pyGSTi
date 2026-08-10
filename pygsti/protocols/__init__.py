@@ -21,5 +21,5 @@ from .su2rb import *
 from .vb import *
 from .vbdataframe import *
 from .mirror_edesign import *
-from .xfgst_edesign import *
+from .simultaneous_gst import *
 from . import scarab

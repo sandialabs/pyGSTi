@@ -13,11 +13,11 @@ from pygsti.circuits.circuit import Circuit
 from pygsti.baseobjs.label import Label
 from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.processors import QubitProcessorSpec
-from pygsti.protocols.xfgst_edesign import (
-    CrosstalkFreeExperimentDesign, assert_circuit_lists_match_color_patches,
+from pygsti.protocols.simultaneous_gst import (
+    SimultaneousGSTDesign, assert_circuit_lists_match_color_patches,
     assert_mapped_circuit_matches_patch, assert_no_implicit_idles,
     assign_the_designs_with_mapping, build_layer_mappers,
-    build_patch_infos, find_neighbors, make_line_mapper, make_xfgst_design,
+    build_patch_infos, find_neighbors, make_line_mapper, make_simultaneous_gst_design,
 )
 from ..util import BaseCase
 
@@ -66,7 +66,7 @@ class AssignDesignsLengthPairingTester(BaseCase):
         # assign_the_designs_with_mapping no longer verifies its own output;
         # that's now stitcher-agnostic and lives in
         # assert_circuit_lists_match_color_patches (normally invoked by
-        # CrosstalkFreeExperimentDesign.__init__). Run it explicitly here
+        # SimultaneousGSTDesign.__init__). Run it explicitly here
         # since this test calls the stitcher directly.
         assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
         return circuit_lists
@@ -315,7 +315,7 @@ class EnsureContainmentTester(BaseCase):
 
 
 def _line_pspec(n_qubits=3):
-    """An `n_qubits`-qubit line processor spec usable with the XFGST design.
+    """An `n_qubits`-qubit line processor spec usable with the SGST design.
 
     "Gii" (the primitive two-qubit idle) is required on every 2Q edge because
     ``build_layer_mappers`` maps a 2Q lane's implicit-idle layer onto
@@ -349,13 +349,13 @@ def _make_designs(max_max_length=1):
     return oneq, twoq
 
 
-class MakeXfgstDesignTester(BaseCase):
+class MakeSimultaneousGSTDesignTester(BaseCase):
     """
-    Cover ``make_xfgst_design``, the public convenience entry point.
+    Cover ``make_simultaneous_gst_design``, the public convenience entry point.
 
     It derives the graph (vertices, edges, neighbors, max degree) from the
     processor spec, computes an edge coloring with the 'auto' algorithm, and
-    forwards everything to ``CrosstalkFreeExperimentDesign`` with ``seed + 1``.
+    forwards everything to ``SimultaneousGSTDesign`` with ``seed + 1``.
     These tests check that each of those derived values lands on the returned
     design correctly.
     """
@@ -364,10 +364,10 @@ class MakeXfgstDesignTester(BaseCase):
     def setUpClass(cls):
         cls.pspec, cls.qubits, cls.line_edges = _line_pspec(3)
         cls.oneq, cls.twoq = _make_designs()
-        cls.design = make_xfgst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
+        cls.design = make_simultaneous_gst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
 
     def test_returns_crosstalk_free_design_with_inputs_passed_through(self):
-        self.assertIsInstance(self.design, CrosstalkFreeExperimentDesign)
+        self.assertIsInstance(self.design, SimultaneousGSTDesign)
         self.assertIs(self.design.processor_spec, self.pspec)
         self.assertIs(self.design.oneq_gstdesign, self.oneq)
         self.assertIs(self.design.twoq_gstdesign, self.twoq)
@@ -380,8 +380,8 @@ class MakeXfgstDesignTester(BaseCase):
         self.assertEqual(self.design.qubit_labels, self.qubits)
 
     def test_defaults_forwarded_to_experiment_design(self):
-        # make_xfgst_design passes neither circuit_stitcher nor nested, so both
-        # must land on their CrosstalkFreeExperimentDesign defaults.
+        # make_simultaneous_gst_design passes neither circuit_stitcher nor nested, so both
+        # must land on their SimultaneousGSTDesign defaults.
         self.assertIs(self.design.circuit_stitcher, assign_the_designs_with_mapping)
         self.assertFalse(self.design.nested)
         self.assertFalse(self.design.stitcher_kwargs['ensure_containment'])
@@ -396,9 +396,7 @@ class MakeXfgstDesignTester(BaseCase):
         self.assertEqual(sorted(coloured), sorted(self.line_edges))
         self.assertEqual(len(coloured), len(set(coloured)))
 
-        # ...and each colour class is a matching, i.e. its edges are pairwise
-        # disjoint. This is the property the whole crosstalk-free construction
-        # rests on: two 2Q GST circuits in one patch must not share a qubit.
+        # ...and each colour class is a matching, i.e. its edges are pairwise disjoint.
         for color, edges in color_patches.items():
             qubits_in_patch = [q for e in edges for q in e]
             self.assertEqual(
@@ -414,7 +412,7 @@ class MakeXfgstDesignTester(BaseCase):
             self.design.circuit_lists, self.design.vertices, self.design.color_patches)
 
     def test_seed_is_forwarded_as_seed_plus_one(self):
-        # make_xfgst_design builds the design with seed=(seed + 1); constructing
+        # make_simultaneous_gst_design builds the design with seed=(seed + 1); constructing
         # the design directly with that seed and the same coloring must reproduce
         # it exactly.
         #
@@ -423,15 +421,15 @@ class MakeXfgstDesignTester(BaseCase):
         # to trigger class setup, so a test that only *reads* cls.design is not
         # recorded as covering the `seed + 1` expression and is therefore never
         # selected by the diff-mutation tooling to guard it.
-        design = make_xfgst_design(self.pspec, self.oneq, self.twoq, seed=0)
-        direct = CrosstalkFreeExperimentDesign(
+        design = make_simultaneous_gst_design(self.pspec, self.oneq, self.twoq, seed=0)
+        direct = SimultaneousGSTDesign(
             self.pspec, self.oneq, self.twoq, design.color_patches, seed=1)
         self.assertEqual(direct.circuit_lists, design.circuit_lists)
 
     def test_different_seeds_give_different_circuit_assignments(self):
         # Guards the seed actually reaching the stitcher's randgen: on a line the
         # coloring is seed-independent, so any difference comes from the seed.
-        other = make_xfgst_design(self.pspec, self.oneq, self.twoq, seed=7)
+        other = make_simultaneous_gst_design(self.pspec, self.oneq, self.twoq, seed=7)
         self.assertEqual(other.color_patches, self.design.color_patches)
         self.assertNotEqual(other.circuit_lists, self.design.circuit_lists)
 
@@ -450,16 +448,16 @@ class HelperRejectsMalformedInputTester(BaseCase):
     These tests feed the helpers deliberately malformed input and require them
     to raise, and check that ``debug_check`` really does wire
     ``assert_circuit_lists_match_color_patches`` into
-    ``CrosstalkFreeExperimentDesign.__init__``.
+    ``SimultaneousGSTDesign.__init__``.
     """
 
     @classmethod
     def setUpClass(cls):
         cls.pspec, cls.qubits, cls.line_edges = _line_pspec(3)
         cls.oneq, cls.twoq = _make_designs()
-        cls.design = make_xfgst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
+        cls.design = make_simultaneous_gst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
 
-    # -- debug_check wiring in CrosstalkFreeExperimentDesign.__init__ ------
+    # -- debug_check wiring in SimultaneousGSTDesign.__init__ ------
 
     @staticmethod
     def _malformed_stitcher(oneq_gstdesign, twoq_gstdesign, vertices,
@@ -472,7 +470,7 @@ class HelperRejectsMalformedInputTester(BaseCase):
         return [[Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1, 2))]]
 
     def _build_with_malformed_stitcher(self, **kwargs):
-        return CrosstalkFreeExperimentDesign(
+        return SimultaneousGSTDesign(
             self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
             circuit_stitcher=self._malformed_stitcher, **kwargs)
 

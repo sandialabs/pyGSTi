@@ -9,7 +9,7 @@
 
 import numpy as np
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast, Mapping
 import tqdm as _tqdm
 
 from pygsti.protocols.gst import GateSetTomographyDesign
@@ -22,11 +22,11 @@ from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
 
 # Type aliases for the graph / stitching data structures used throughout.
 Vertex = Union[int, str]
-Edge = Tuple[Vertex, ...]
+Edge = Tuple[Vertex, Vertex]
 LayerMappers = Dict[int, Dict[Label, Label]]
 CircuitStitcher = Callable[..., List[List[Circuit]]]
 
-__all__ = ['CrosstalkFreeExperimentDesign', 'make_xfgst_design']
+__all__ = ['SimultaneousGSTDesign', 'make_simultaneous_gst_design']
 
 
 def find_neighbors(vertices: Sequence[Vertex], edges: Sequence[Edge]) -> Dict[Vertex, List[Vertex]]:
@@ -98,12 +98,12 @@ def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign:
     return {1: mapper_1q, 2: mapper_2q}
 
 
-def make_xfgst_design(
+def make_simultaneous_gst_design(
         nq_pspec: QubitProcessorSpec,
         oneq_gstdesign: GateSetTomographyDesign,
         twoq_gstdesign: GateSetTomographyDesign,
         seed: int = 0
-    ) -> "CrosstalkFreeExperimentDesign":
+    ) -> "SimultaneousGSTDesign":
     vertices = cast(List[Vertex] , list(nq_pspec.qubit_labels))
     edges = nq_pspec.compute_2Q_connectivity().edges()
     edges = list(set(edges))
@@ -113,15 +113,15 @@ def make_xfgst_design(
     # ^ "auto" detects canonical topologies (line/ring/grid/torus, as produced by
     #   ProcessorSpec(geometry=...)) and uses an optimal closed-form coloring for
     #   them, falling back to a generic (deg+1)-color algorithm otherwise.
-    return CrosstalkFreeExperimentDesign(nq_pspec, oneq_gstdesign, twoq_gstdesign, edge_coloring, seed=(seed+1))
+    return SimultaneousGSTDesign(nq_pspec, oneq_gstdesign, twoq_gstdesign, edge_coloring, seed=(seed+1))
 
 
-class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
+class SimultaneousGSTDesign(GateSetTomographyDesign):
     """
-    This class initializes a crosstalk-free GST experiment design by combining 
-    1Q and 2Q GST designs based on a specified edge coloring. It assumes that 
-    the GST designs share the same germ powers (Ls) and utilizes a specified 
-    circuit stitcher to generate the final circuit lists.
+    A *simultaneous GST* experiment design by combines 1Q and 2Q GST designs
+    based on a specified edge coloring. It assumes that the GST designs share
+    the same germ powers (Ls) and utilizes a specified circuit stitcher to
+    generate the final circuit lists.
 
     Attributes:
     processor_spec: Specification of the processor, including qubit labels and connectivity.
@@ -138,7 +138,7 @@ class CrosstalkFreeExperimentDesign(GateSetTomographyDesign):
     def __init__(self, processor_spec: QubitProcessorSpec,
                  oneq_gstdesign: GateSetTomographyDesign,
                  twoq_gstdesign: GateSetTomographyDesign,
-                 edge_coloring: Dict[int, List[Edge]],
+                 edge_coloring: Mapping[int, Sequence[Edge]],
                  circuit_stitcher: Optional[CircuitStitcher] = None,
                  seed: Optional[int] = None,
                  nested: bool = False,
@@ -432,7 +432,7 @@ def assert_circuit_lists_match_color_patches(
     This is stitcher-agnostic: it validates the *output* of whatever
     ``circuit_stitcher`` produced ``circuit_lists``, not just the built-in
     ``assign_the_designs_with_mapping``, so it can (and is, by
-    ``CrosstalkFreeExperimentDesign.__init__``) be run regardless of which
+    ``SimultaneousGSTDesign.__init__``) be run regardless of which
     stitcher was actually used.
 
     For every germ-power entry ``circuit_lists[L]``, this re-derives each
@@ -454,14 +454,14 @@ def assert_circuit_lists_match_color_patches(
     ----------
     circuit_lists : list[list[Circuit]]
         The stitched circuit lists to check, e.g. ``self.circuit_lists`` on a
-        ``CrosstalkFreeExperimentDesign``.
+        ``SimultaneousGSTDesign``.
 
     vertices : list[Vertex]
         Vertices/qubits in the connectivity graph.
 
     color_patches : dict[int, list[tuple]]
         Mapping from patch/color identifier to the list of disjoint 2Q edges
-        in that patch, as passed to ``CrosstalkFreeExperimentDesign``.
+        in that patch, as passed to ``SimultaneousGSTDesign``.
 
     Returns
     -------
@@ -647,7 +647,7 @@ def assign_the_designs_with_mapping(
     **kwargs: Any,
 ) -> List[List[Circuit]]:
     """
-    Construct crosstalk-free GST circuit lists for each color patch.
+    Construct simultaneous GST circuit lists for each color patch.
 
     For each germ-power index, this function combines 2Q GST circuits on the edges
     of each color patch with 1Q GST circuits on the vertices not used by that patch.
@@ -685,7 +685,7 @@ def assign_the_designs_with_mapping(
     gates remain, or that circuits landed on the correct patch). That
     verification is stitcher-agnostic and lives in
     :func:`assert_circuit_lists_match_color_patches`, which
-    ``CrosstalkFreeExperimentDesign.__init__`` runs (by default) against
+    ``SimultaneousGSTDesign.__init__`` runs (by default) against
     whatever this or any other ``circuit_stitcher`` returns.
 
     Parameters
@@ -716,13 +716,13 @@ def assign_the_designs_with_mapping(
     **kwargs
         Ignored. Accepted so this stitcher matches the generic
         ``circuit_stitcher(oneq, twoq, vertices, color_patches, **kwargs)``
-        calling convention used by ``CrosstalkFreeExperimentDesign``, allowing
+        calling convention used by ``SimultaneousGSTDesign``, allowing
         it to be swapped with other stitchers that take extra options.
 
     Returns
     -------
     list[list]
-        ``circuit_lists[L]`` contains the generated crosstalk-free GST circuits for
+        ``circuit_lists[L]`` contains the generated simultaneous GST circuits for
         germ-power index ``L``. Within each germ-power group, circuits are ordered
         patch-major according to the input order of ``color_patches``.
 

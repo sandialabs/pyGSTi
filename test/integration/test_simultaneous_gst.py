@@ -8,15 +8,9 @@
 #***************************************************************************************************
 
 """
-System-integration test for the crosstalk-free GST (XFGST) pipeline:
+System-integration test for the simultaneous GST (SGST) pipeline:
 circuit generation -> noisy data simulation -> GST fitting, for each of the
 four Lindblad error types (H, S, H+S, and H+S+C+A).
-
-This test builds a small (3-qubit line) crosstalk-free experiment design and
-runs it end-to-end for each noise configuration. It takes roughly three
-minutes to run on typical hardware; the qubit count and germ-power depth
-(`max_max_length`) are deliberately kept small purely to keep the runtime
-CI-friendly.
 """
 
 import unittest
@@ -31,7 +25,7 @@ from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.gst import GateSetTomography
 from pygsti.protocols.protocol import ProtocolData
-from pygsti.protocols.xfgst_edesign import CrosstalkFreeExperimentDesign
+from pygsti.protocols.simultaneous_gst import SimultaneousGSTDesign
 from pygsti.tools import two_delta_logl
 
 
@@ -110,11 +104,11 @@ _NOISE_CONFIGS = [
 ]
 
 
-class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
+class TestSimultaneousGSTPipeline(unittest.TestCase):
     """
-    System-integration test for crosstalk-free GST across all four Lindblad
+    System-integration test for simultaneous GST across all four Lindblad
     error types (H, S, H+S, H+S+C+A). Uses a reduced-scale (3-qubit line,
-    max_max_length=2) crosstalk-free design so the full test -- which builds
+    max_max_length=2) design so the full test -- which builds
     one experiment design and then runs the noisy-simulate + GST loop for
     each of 4 noise configurations -- completes in roughly three minutes.
     """
@@ -126,11 +120,10 @@ class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
         line_edges = [(0, 1), (1, 2)]
         oneq_locations = [(q,) for q in qubits]
 
-        # "Gii" is the primitive two-qubit idle. It is required, not optional:
-        # `build_layer_mappers` maps a 2Q lane's implicit-idle layer `Label(())`
-        # onto `Label(('Gii',) + twoq_qubit_labels)`, so any processor spec used
-        # with the crosstalk-free design must make that gate available on every
-        # 2Q edge. It is not one of pyGSTi's standard gate names, hence the
+        # "Gii" is the primitive two-qubit idle, required by `build_layer_mappers`.
+        # It appears in circuits as `Label(('Gii',) + twoq_qubit_labels)`, so any
+        # processor spec used with these circuits must make that gate available on
+        # every 2Q edge. It is not one of pyGSTi's standard gate names, hence the
         # explicit 4x4 identity unitary.
         availability = {
             "Gi": oneq_locations,
@@ -159,7 +152,7 @@ class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
             1: [(1, 2)],
         }
 
-        cls.xfgst_design = CrosstalkFreeExperimentDesign(
+        cls.sgst_design = SimultaneousGSTDesign(
             processor_spec=cls.pspec,
             oneq_gstdesign=oneq_gstdesign,
             twoq_gstdesign=twoq_gstdesign,
@@ -170,7 +163,7 @@ class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
             seed=1234,
             nested=False,
         )
-        cls.circuits = cls.xfgst_design.all_circuits_needing_data
+        cls.circuits = cls.sgst_design.all_circuits_needing_data
 
     def test_pipeline_all_noise_types(self):
         for config_name, noise_coeffs, parameterization, max_two_delta_logl in _NOISE_CONFIGS:
@@ -189,7 +182,7 @@ class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
                     sample_error='none',
                 )
 
-                data = ProtocolData(self.xfgst_design, ds)
+                data = ProtocolData(self.sgst_design, ds)
                 # gaugeopt_suite=None: LocalNoiseModel (crosstalk-free model)
                 # has no default_gauge_group, so gauge optimization isn't
                 # applicable here.
@@ -201,12 +194,12 @@ class TestCrosstalkFreeGSTPipeline(unittest.TestCase):
                 # have this failure mode and is sufficient for this fit-
                 # quality smoke test.
                 proto = GateSetTomography(
-                    target_model, gaugeopt_suite=None, name='xfGST',
+                    target_model, gaugeopt_suite='none', name='simul_gst',
                     objfn_builders={'objective': 'chi2'},
                 )
                 results = proto.run(data)
 
-                mdl_result = results.estimates['xfGST'].models['final iteration estimate']
+                mdl_result = results.estimates['simul_gst'].models['final iteration estimate']
                 two_delta_logl_val = two_delta_logl(
                     mdl_result, ds, min_prob_clip=1e-12, radius=1e-12)
                 self.assertLess(
