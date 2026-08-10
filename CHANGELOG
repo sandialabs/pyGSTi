@@ -7,6 +7,7 @@
 
 ### Fixed
 * Fixed the `is_trace_preserving` utility function for bases whose first element is the identity. The utility function was only used in report generation and the bug did not affect the correctness of its caller.
+* Fixed a crash when the initial germ test is skipped.
 
 ## [0.10.2] - 2026-07-30
 
