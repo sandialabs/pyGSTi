@@ -9,7 +9,7 @@
 * Fixed the `is_trace_preserving` utility function for bases whose first element is the identity. The utility function was only used in report generation and the bug did not affect the correctness of its caller.
 * Fixed a crash when the initial germ test is skipped.
 * Fixed germ selection ignoring the user-specified number of non-gauge parameters.
-* Fixed two `UnboundLocalError` bugs in `pygsti.tools.errgenproptools` affecting 'A'-type (active) error generators: `slow_bulk_alpha` assigned its weight-1 anticommuting-Pauli result to the whole return array instead of the per-iteration local (masked whenever the Cython `fasterrgencalc` extension is built, since `bulk_alpha` then aliases the Cython implementation), and `error_generator_commutator`'s 'S'-'A' branch referenced an undefined `ptup` instead of `ptup1`. (#PLACEHOLDER) <!-- TODO: fill in actual PR number before merge -->
+* Fixed two `UnboundLocalError` bugs in `pygsti.tools.errgenproptools` affecting 'A'-type (active) error generators: `slow_bulk_alpha` assigned its weight-1 anticommuting-Pauli result to the whole return array instead of the per-iteration local (masked whenever the Cython `fasterrgencalc` extension is built, since `bulk_alpha` then aliases the Cython implementation), and `error_generator_commutator`'s 'S'-'A' branch referenced an undefined `ptup` instead of `ptup1`. (#876)
 
 ## [0.10.2] - 2026-07-30
 
