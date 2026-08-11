@@ -1091,15 +1091,6 @@ class ExplicitStateSpace(StateSpace):
 
     def __init__(self, label_list, udims=None, types=None):
 
-        #Allow initialization via another CustomStateSpace object
-        #if isinstance(label_list, CustomStateSpace):
-        #    assert(dims is None and types is None), "Clobbering non-None 'dims' and/or 'types' arguments"
-        #    dims = [tuple((label_list.labeldims[lbl] for lbl in tpbLbls))
-        #            for tpbLbls in label_list.labels]
-        #    types = [tuple((label_list.label_types[lbl] for lbl in tpbLbls))
-        #             for tpbLbls in label_list.labels]
-        #    label_list = label_list.labels
-
         #Step1: convert label_list (and dims, if given) to a list of
         # elements describing each "tensor product block" - each of
         # which is a tuple of string labels.

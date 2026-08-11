@@ -341,12 +341,6 @@ def nullspace_qr(m: _np.ndarray, tol: float = 1e-7) -> _np.ndarray:
     q, r, _ = _spl.qr(m.T, mode='full', pivoting=True)
     rank = (_np.abs(_np.diagonal(r)) > tol).sum()
 
-    #DEBUG: requires q,r,p = _sql.qr(...) above
-    #assert( _np.linalg.norm(_np.dot(q,r) - m.T[:,p]) < 1e-8) #check QR decomp
-    #print("Rank QR = ",rank)
-    #print('\n'.join(map(str,_np.abs(_np.diagonal(r)))))
-    #print("Ret = ", q[:,rank:].shape, " Q = ",q.shape, " R = ",r.shape)
-
     return q[:, rank:]
 
 
@@ -920,7 +914,6 @@ def approximate_matrix_log(m: _np.ndarray, target_logm: _np.ndarray,
         testM = _spl.expm(logM)
         ret = target_weight * _np.linalg.norm(logM - target_logm)**2 + \
             _np.linalg.norm(testM.ravel() - m.ravel(), 1)
-        #print("DEBUG: ",ret)
         return ret
 
         #Alt objective1: puts L1 on target term
@@ -941,18 +934,9 @@ def approximate_matrix_log(m: _np.ndarray, target_logm: _np.ndarray,
 
     if _objective(initial_flat_logM) > 1e-16:  # otherwise initial logM is fine!
 
-        #print("Initial objective fn val = ",_objective(initial_flat_logM))
-        #print("Initial inexactness = ",_np.linalg.norm(_spl.expm(logM)-m),
-        #      _np.linalg.norm(_spl.expm(logM).flatten()-m.flatten(), 1),
-        #      _np.linalg.norm(logM-target_logm)**2)
-
         solution = _spo.minimize(_objective, initial_flat_logM, options={'maxiter': 1000},
                                  method='L-BFGS-B', callback=print_obj_func, tol=tol)
         logM = solution.x.reshape(mx_shape)
-        #print("Final objective fn val = ",_objective(solution.x))
-        #print("Final inexactness = ",_np.linalg.norm(_spl.expm(logM)-m),
-        #      _np.linalg.norm(_spl.expm(logM).flatten()-m.flatten(), 1),
-        #      _np.linalg.norm(logM-target_logm)**2)
 
     return logM
 
@@ -1105,16 +1089,6 @@ def real_matrix_log(m: _np.ndarray, action_if_imaginary: Literal["raise", "warn"
 
     log_evals = _np.log(evals.astype("complex"))
     # astype guards against case all evals are real but some are negative
-
-    #DEBUG
-    #print("DB: evals = ",evals)
-    #print("DB: log_evals:",log_evals)
-    #for i,ev in enumerate(log_evals):
-    #    print(i,": ",ev, ",".join([str(j) for j in range(U.shape[0]) if abs(U[j,i]) > 0.05]))
-    #print("DB: neg_real_pairs_real_evecs = ",neg_real_pairs_real_evecs)
-    #print("DB: neg_real_pairs_conj_evecs = ",neg_real_pairs_conj_evecs)
-    #print("DB: evec[5] = ",mx_to_string(U[:,5]))
-    #print("DB: evec[6] = ",mx_to_string(U[:,6]))
 
     for (i, j) in neg_real_pairs_real_evecs:  # need to adjust evecs as well
         log_evals[i] = _np.log(-evals[i]) + 1j * _np.pi
@@ -1438,7 +1412,6 @@ def minweight_match_realmxeigs(a: _np.ndarray, b: _np.ndarray, metricfn: Optiona
                 b_conj = _np.isclose(b[p1], _np.conjugate(b[q1]))
                 if (abs(a[p0].imag) > 1e-6 and a_conj and not b_conj) or \
                    (abs(b[p1].imag) > 1e-6 and b_conj and not a_conj):
-                    #print("DB: FALSE at: ",(p0,p1),(q0,q1),(a[p0],b[p1]),(a[q0],b[q1]),a_conj,b_conj)
                     return False
         return True
 
@@ -1989,7 +1962,6 @@ def expm_multiply_prep(a: _sps.spmatrix, tol: float = EXPM_DEFAULT_TOL) -> tuple
                                               _np.ascontiguousarray(a.indices, _np.int64),
                                               data, indptr, indices, -mu, n)
         a = _sps.csr_matrix((data[0:nxt], indices[0:nxt], indptr), shape=(n, n))
-    #DB: CHECK: assert(_spsl.norm(A1 - A2) < 1e-6); a = A1
 
     #exact_1_norm specific for CSR
     A_1_norm = max(_np.sum(_np.abs(a.data[_np.where(a.indices == iCol)])) for iCol in range(n))
@@ -2368,7 +2340,6 @@ def find_zero_communtant_connection(u: _np.ndarray, u_inv: _np.ndarray, u0: _np.
         assert(_np.linalg.norm(r_on_comm.imag) < 1e-8), "projection to commutant should not make complex!"
 
         oncomm_norm = _np.linalg.norm(r_on_comm)
-        #print("Iter %d: onkite-norm = %g  lastdiff = %g" % (iter, oncomm_norm, _np.linalg.norm(R-lastR)))
         # if r has desired form or we didn't really update R
         if oncomm_norm < 1e-12 or (iter > 0 and _np.linalg.norm(R - lastR) < 1e-8):
             break  # STOP - converged!
