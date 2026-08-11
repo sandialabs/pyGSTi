@@ -7,23 +7,31 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import copy as _copy
+import functools
 import hashlib
 import json
+import pathlib
+import warnings
 
 import numpy as np
 
+import pygsti
 from pygsti.circuits.circuit import Circuit
 from pygsti.baseobjs.label import Label
 from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.simultaneous_gst import (
-    SimultaneousGSTDesign, assert_circuit_lists_match_color_patches,
+    SimultaneousGSTDesign, _normalize_coloring, _resolve_stitcher_name, _stitcher_name,
+    assert_circuit_lists_match_color_patches,
     assert_mapped_circuit_matches_patch, assert_no_implicit_idles,
     assign_the_designs_with_mapping, build_layer_mappers,
     build_patch_infos, make_line_mapper, make_simultaneous_gst_design,
 )
+from pygsti.protocols.gst import GateSetTomographyDesign
+from pygsti.protocols.protocol import CombinedExperimentDesign
 from pygsti.tools.graphcoloring import check_valid_edge_coloring
-from ..util import BaseCase
+from ..util import BaseCase, with_temp_path
 
 
 class _StubDesign:
@@ -550,7 +558,23 @@ def _make_designs(max_max_length=1):
     return oneq, twoq
 
 
-class MakeSimultaneousGSTDesignTester(BaseCase):
+class _SGSTFixture:
+    """A 3-qubit line device and the simultaneous-GST design built on it.
+
+    Class-scoped, so a tester that might mutate the design must copy it first (see
+    ``UnsupportedOperationsTester._fresh_design``). Mixed in ahead of ``BaseCase`` so
+    that subclasses adding their own setup can chain via ``super().setUpClass()``.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.pspec, cls.qubits, cls.line_edges = _line_pspec(3)
+        cls.oneq, cls.twoq = _make_designs()
+        cls.design = make_simultaneous_gst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
+
+
+class MakeSimultaneousGSTDesignTester(_SGSTFixture, BaseCase):
     """
     Cover ``make_simultaneous_gst_design``, the public convenience entry point.
 
@@ -560,12 +584,6 @@ class MakeSimultaneousGSTDesignTester(BaseCase):
     streams spawned off ``seed``. These tests check that each of those derived
     values lands on the returned design correctly.
     """
-
-    @classmethod
-    def setUpClass(cls):
-        cls.pspec, cls.qubits, cls.line_edges = _line_pspec(3)
-        cls.oneq, cls.twoq = _make_designs()
-        cls.design = make_simultaneous_gst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
 
     def test_returns_crosstalk_free_design_with_inputs_passed_through(self):
         self.assertIsInstance(self.design, SimultaneousGSTDesign)
@@ -650,7 +668,7 @@ class MakeSimultaneousGSTDesignTester(BaseCase):
         self.assertNotEqual(other.circuit_lists, self.design.circuit_lists)
 
 
-class HelperRejectsMalformedInputTester(BaseCase):
+class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
     """
     Cover the *detection power* of the verification helpers.
 
@@ -666,12 +684,6 @@ class HelperRejectsMalformedInputTester(BaseCase):
     ``assert_circuit_lists_match_color_patches`` into
     ``SimultaneousGSTDesign.__init__``.
     """
-
-    @classmethod
-    def setUpClass(cls):
-        cls.pspec, cls.qubits, cls.line_edges = _line_pspec(3)
-        cls.oneq, cls.twoq = _make_designs()
-        cls.design = make_simultaneous_gst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
 
     # -- debug_check wiring in SimultaneousGSTDesign.__init__ ------
 
@@ -766,28 +778,85 @@ class HelperRejectsMalformedInputTester(BaseCase):
             self.design.color_patches)
 
 
-class MapQubitLabelsTester(BaseCase):
+class EdgeNormalizationTester(_SGSTFixture, BaseCase):
+    """
+    Cover ``_normalize_coloring`` and the invariant it establishes: an edge in
+    ``color_patches`` is always a tuple.
+
+    Nothing downstream *requires* tuples -- ``patch_lines`` casts each edge before use --
+    so a coloring of lists produces byte-identical circuits and passes every internal
+    check. The invariant exists for callers: it makes two designs that were built
+    differently compare equal, and it keeps edges hashable. Neither is caught by any
+    circuit-level assertion, so both are tested directly.
+    """
+
+    #: The same coloring spelled two ways. JSON round trips produce the list form,
+    #: and a caller building a coloring by hand easily might too.
+    LIST_COLORING = {0: [[0, 1]], 1: [[1, 2]]}
+    TUPLE_COLORING = {0: [(0, 1)], 1: [(1, 2)]}
+
+    def _design(self, coloring):
+        return SimultaneousGSTDesign(self.pspec, self.oneq, self.twoq, coloring, seed=0)
+
+    def test_list_built_design_matches_tuple_built_design(self):
+        """The two spellings must be indistinguishable, coloring included.
+
+        The circuits already matched before normalization; ``color_patches`` did not, so
+        a design's equality depended on how its coloring happened to be spelled.
+        """
+        from_lists, from_tuples = self._design(self.LIST_COLORING), self._design(self.TUPLE_COLORING)
+        self.assertEqual(from_lists.color_patches, self.TUPLE_COLORING)
+        self.assertEqual(from_lists.color_patches, from_tuples.color_patches)
+        self.assertEqual([list(cl) for cl in from_lists.circuit_lists],
+                         [list(cl) for cl in from_tuples.circuit_lists])
+        # Lists are unhashable, so this raised TypeError for a list-built design.
+        self.assertEqual(set(from_lists.color_patches[0]), {(0, 1)})
+
+    def test_orientation_is_preserved_not_canonicalized(self):
+        """Guards against 'improving' the helper into ``order``/``canonical_edges``.
+
+        Orientation picks which lane of the 2Q design a qubit lands in, so rewriting
+        (1, 0) to (0, 1) would silently change the experiment while leaving every
+        structural check happy.
+        """
+        self.assertEqual(self._design({0: [(1, 0)]}).color_patches, {0: [(1, 0)]})
+
+    def test_does_not_mutate_the_callers_coloring(self):
+        coloring = {0: [[0, 1]], 1: [[1, 2]]}
+        self._design(coloring)
+        self.assertEqual(coloring, {0: [[0, 1]], 1: [[1, 2]]})
+
+    def test_normalize_coloring(self):
+        """The helper alone: tuple-ness, and everything it must leave alone."""
+        for name, coloring, expected in (
+            ('already tuples', self.TUPLE_COLORING, self.TUPLE_COLORING),
+            ('patch keys and edge order kept', {2: [[3, 4], [0, 1]], 0: [[1, 2]]},
+             {2: [(3, 4), (0, 1)], 0: [(1, 2)]}),
+            ('empty patch survives', {0: [], 1: [[0, 1]]}, {0: [], 1: [(0, 1)]}),
+        ):
+            with self.subTest(name):
+                normalized = _normalize_coloring(coloring)
+                self.assertEqual(normalized, expected)
+                self.assertEqual(list(normalized), list(expected))  # key order
+
+
+class MapQubitLabelsTester(_SGSTFixture, BaseCase):
     """
     Cover ``SimultaneousGSTDesign.map_qubit_labels``.
 
-    The inherited ``GateSetTomographyDesign.map_qubit_labels`` returns a plain
-    ``GateSetTomographyDesign``, which silently drops the edge coloring and the
-    1Q/2Q sub-designs -- a downgrade rather than a crash, so nothing catches it
-    but a test that looks. The override exists to relabel every piece of the
-    design's own state and hand back the same class.
+    The inherited version returns a plain ``GateSetTomographyDesign``, silently dropping
+    the edge coloring and the 1Q/2Q sub-designs -- a downgrade rather than a crash, so
+    nothing catches it but a test that looks.
 
-    Two behaviours here are easy to "fix" into being wrong, so each gets its own
-    test: the sub-designs must *not* be relabelled (they live on abstract lane
-    labels, not device qubits), and the circuits must be relabelled rather than
-    re-stitched (re-stitching would redraw the stitcher's random schedules and
-    quietly return a different experiment).
+    Two behaviours are easy to "fix" into being wrong, so each gets its own test: the
+    sub-designs must *not* be relabelled (they live on abstract lane labels, not device
+    qubits), and the circuits must be relabelled rather than re-stitched (which would
+    redraw the stitcher's random schedules and return a different experiment).
     """
 
     @classmethod
     def setUpClass(cls):
-        cls.pspec, cls.qubits, cls.line_edges = _line_pspec(3)
-        cls.oneq, cls.twoq = _make_designs()
-        cls.design = make_simultaneous_gst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
+        super().setUpClass()
         #: Shifts the device off the lane labels (0, 1, 2) entirely, so a mapper
         #: wrongly applied to the sub-designs shows up as changed lane labels.
         cls.mapper = {q: 'Q%d' % q for q in cls.design.vertices}
@@ -796,8 +865,7 @@ class MapQubitLabelsTester(BaseCase):
     # -- the returned object -------------------------------------------------
 
     def test_returns_a_simultaneous_gst_design(self):
-        # The whole point of the override: the inherited implementation returns
-        # a GateSetTomographyDesign, losing color_patches and the sub-designs.
+        # The point of the override: the inherited one returns a GateSetTomographyDesign.
         self.assertIsInstance(self.mapped, SimultaneousGSTDesign)
 
     def test_processor_spec_and_qubit_labels_are_mapped(self):
@@ -806,8 +874,7 @@ class MapQubitLabelsTester(BaseCase):
         self.assertEqual(self.mapped.qubit_labels, ('Q0', 'Q1', 'Q2'))
 
     def test_color_patches_are_mapped(self):
-        # Without this the design would describe patches over qubits that no
-        # longer exist, and its own validator would reject it.
+        # Otherwise the design describes patches over qubits that no longer exist.
         self.assertEqual(
             self.mapped.color_patches,
             {patch: [tuple('Q%d' % q for q in edge) for edge in edge_set]
@@ -820,8 +887,7 @@ class MapQubitLabelsTester(BaseCase):
             self.mapped.color_patches)
 
     def test_nested_flag_and_list_shape_are_preserved(self):
-        # Relabelling is a bijection on qubits, so it can neither merge circuits
-        # nor break nesting; a shape change here means something was rebuilt.
+        # Relabelling is a bijection, so a shape change here means something was rebuilt.
         self.assertEqual(self.mapped.nested, self.design.nested)
         self.assertEqual([len(cl) for cl in self.mapped.circuit_lists],
                          [len(cl) for cl in self.design.circuit_lists])
@@ -829,8 +895,7 @@ class MapQubitLabelsTester(BaseCase):
                          len(self.design.all_circuits_needing_data))
 
     def test_derived_graph_state_is_recomputed_from_the_mapped_pspec(self):
-        # edges/neighbors/deg are re-derived rather than mapped, so they must be
-        # canonical for the new labels -- same shape of graph, new names.
+        # edges/neighbors/deg are re-derived, not mapped: same graph, new names.
         self.assertEqual(sorted(self.mapped.edges), [('Q0', 'Q1'), ('Q1', 'Q2')])
         self.assertEqual(self.mapped.deg, self.design.deg)
         self.assertEqual({v: sorted(ns) for v, ns in self.mapped.neighbors.items()},
@@ -844,18 +909,15 @@ class MapQubitLabelsTester(BaseCase):
         self.assertEqual([list(cl) for cl in self.mapped.circuit_lists], expected)
 
     def test_mapping_back_recovers_the_original_circuits(self):
-        # A round trip through the inverse mapper is the sharpest statement that
-        # no circuit *content* changed: had the design been re-stitched, the
-        # stitcher would have drawn fresh random schedules and the circuits
-        # would differ despite carrying the right line labels.
+        # The sharpest statement that no circuit *content* changed: a re-stitched design
+        # would draw fresh schedules and differ despite carrying the right line labels.
         inverse = {new: old for old, new in self.mapper.items()}
         roundtripped = self.mapped.map_qubit_labels(inverse)
         self.assertEqual([list(cl) for cl in roundtripped.circuit_lists],
                          [list(cl) for cl in self.design.circuit_lists])
 
     def test_the_circuit_stitcher_is_never_called(self):
-        # Direct version of the test above: re-running the stitcher is the
-        # tempting "just call __init__" implementation, and it is wrong.
+        # Direct version of the above: the tempting "just call __init__" is wrong.
         def _explode(*args, **kwargs):
             raise AssertionError("circuit_stitcher must not be re-run when relabelling")
 
@@ -871,9 +933,8 @@ class MapQubitLabelsTester(BaseCase):
     # -- the sub-designs are deliberately left alone -------------------------
 
     def test_sub_designs_are_carried_over_unmapped(self):
-        # oneq/twoq GST designs live on abstract lane labels ((0,) and (0, 1)),
-        # not on device qubits. Applying a device mapper to them would corrupt
-        # them -- or KeyError -- so they must be passed through untouched.
+        # These live on abstract lane labels ((0,) and (0, 1)), not device qubits, so a
+        # device mapper would corrupt them -- or KeyError. Pass through untouched.
         self.assertIs(self.mapped.oneq_gstdesign, self.design.oneq_gstdesign)
         self.assertIs(self.mapped.twoq_gstdesign, self.design.twoq_gstdesign)
         self.assertEqual(self.mapped.oneq_gstdesign.qubit_labels, (0,))
@@ -882,17 +943,15 @@ class MapQubitLabelsTester(BaseCase):
     # -- mapper forms, immutability, and the self-check ----------------------
 
     def test_callable_mapper_matches_dict_mapper(self):
-        # `mapper` is documented as "dict or function" throughout the design
-        # hierarchy; the two spellings must agree.
+        # `mapper` is documented as "dict or function"; the two spellings must agree.
         via_callable = self.design.map_qubit_labels(lambda q: 'Q%d' % q)
         self.assertEqual([list(cl) for cl in via_callable.circuit_lists],
                          [list(cl) for cl in self.mapped.circuit_lists])
         self.assertEqual(via_callable.color_patches, self.mapped.color_patches)
 
     def test_a_permutation_of_the_existing_labels_is_handled(self):
-        # Mapping onto the *same* label set is the case where an in-place
-        # implementation would corrupt the design mid-map, and where the edges
-        # have to be re-canonicalized rather than carried over.
+        # Mapping onto the *same* label set is where an in-place implementation would
+        # corrupt the design mid-map, and where edges must be re-canonicalized.
         reversal = {q: 2 - q for q in self.design.vertices}
         mapped = self.design.map_qubit_labels(reversal)
         self.assertEqual(mapped.vertices, (2, 1, 0))
@@ -901,8 +960,7 @@ class MapQubitLabelsTester(BaseCase):
             mapped.circuit_lists, mapped.vertices, mapped.color_patches)
 
     def test_original_design_is_not_mutated(self):
-        # setUpClass builds `mapped` once and shares it, so a mutating
-        # implementation would corrupt every other test in this class.
+        # setUpClass shares `mapped`, so a mutating implementation corrupts every test.
         self.assertEqual(self.design.vertices, (0, 1, 2))
         self.assertEqual(self.design.qubit_labels, (0, 1, 2))
         self.assertEqual(self.design.processor_spec.qubit_labels, (0, 1, 2))
@@ -910,8 +968,7 @@ class MapQubitLabelsTester(BaseCase):
         self.assertEqual(self.design.circuit_lists[-1][0].line_labels, (0, 1, 2))
 
     def test_debug_check_rejects_a_design_that_was_already_malformed(self):
-        # map_qubit_labels re-runs the design's own validator, so a design built
-        # with debug_check=False cannot launder itself clean by being relabelled.
+        # A design built with debug_check=False cannot launder itself clean by relabelling.
         malformed = SimultaneousGSTDesign(
             self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
             circuit_stitcher=(lambda *a, **kw: [[Circuit([Label('Gcnot', (0, 1))],
@@ -927,6 +984,372 @@ class MapQubitLabelsTester(BaseCase):
         self.assertEqual([list(cl) for cl in relabelled.circuit_lists],
                          [[Circuit([Label('Gcnot', ('Q0', 'Q1'))],
                                    line_labels=('Q0', 'Q1', 'Q2'))]])
+
+
+class _CallableStitcher:
+    """A stitcher supplied as a callable object rather than a function.
+
+    Instances carry ``__module__`` (inherited from the class) but no
+    ``__qualname__``, which is the case :func:`_stitcher_name` has to reject.
+    """
+    def __call__(self, *args, **kwargs):
+        return _STUB_CIRCUIT_LISTS
+
+
+class StitcherNameTester(BaseCase):
+    """
+    Cover ``_stitcher_name`` / ``_resolve_stitcher_name``, the write/read pair that
+    stands in for the un-serializable ``circuit_stitcher``.
+
+    A stitcher is an arbitrary caller-supplied callable, so it is recorded by qualified
+    name and imported back. Not every callable has one: ``functools.partial`` objects and
+    callable class instances have a ``__module__`` but no ``__qualname__``. Formatting the
+    two together would yield a bogus name like ``'functools.None'`` -- harmless, since it
+    fails to import into the same "None plus a warning" state as no name at all, but
+    misleading in meta.json, so the helper reports None instead.
+    """
+
+    def test_plain_function_round_trips(self):
+        name = _stitcher_name(assign_the_designs_with_mapping)
+        self.assertEqual(name, 'pygsti.protocols.simultaneous_gst.assign_the_designs_with_mapping')
+        with self.assertNoWarns():
+            self.assertIs(_resolve_stitcher_name(name), assign_the_designs_with_mapping)
+
+    def test_partial_has_no_recordable_name(self):
+        # The realistic case: partial(assign_the_designs_with_mapping, <option>=...).
+        # functools.partial reports __module__ == 'functools' and has no __qualname__.
+        partial = functools.partial(assign_the_designs_with_mapping,
+                                    share_same_shape_schedules=False)
+        self.assertIsNone(_stitcher_name(partial))
+
+    def test_callable_instance_has_no_recordable_name(self):
+        self.assertIsNone(_stitcher_name(_CallableStitcher()))
+
+    def test_lambda_is_named_but_not_importable(self):
+        # A lambda does have a qualname, so it is recorded -- it just cannot be
+        # imported back. The two failure modes are distinct and both end at None.
+        name = _stitcher_name(lambda *args, **kwargs: None)
+        self.assertIsNotNone(name)
+        self.assertIn('<lambda>', name)
+        with self.assertWarns(Warning):
+            self.assertIsNone(_resolve_stitcher_name(name))
+
+    def test_missing_name_resolves_to_none_with_a_warning(self):
+        # What a partial or callable instance produces on the way back in.
+        with self.assertWarns(Warning):
+            self.assertIsNone(_resolve_stitcher_name(None))
+
+    def test_unimportable_module_resolves_to_none_with_a_warning(self):
+        with self.assertWarns(Warning):
+            self.assertIsNone(_resolve_stitcher_name('no_such_module_xyz.some_stitcher'))
+
+    def test_importable_module_missing_the_member_resolves_to_none(self):
+        # The module resolves but the attribute does not -- an AttributeError rather
+        # than an ImportError, and the only case that reaches that arm of the except
+        # clause. It is what a design written by an older/newer pyGSTi looks like if the
+        # stitcher it names has since been renamed or removed.
+        with self.assertWarns(Warning):
+            self.assertIsNone(_resolve_stitcher_name(
+                'pygsti.protocols.simultaneous_gst.no_such_stitcher'))
+
+    def test_method_of_a_class_is_named_but_not_restorable(self):
+        # rpartition splits at the last dot, so a method's class ends up inside the
+        # module name and the import fails. Recorded for provenance, not restored.
+        name = _stitcher_name(_CallableStitcher.__call__)
+        self.assertIn('_CallableStitcher.__call__', name)
+        with self.assertWarns(Warning):
+            self.assertIsNone(_resolve_stitcher_name(name))
+
+    def test_bare_name_with_no_module_resolves_to_none_with_a_warning(self):
+        # rpartition('.') yields an empty module name, which import_module rejects with
+        # ValueError rather than ImportError -- a distinct path through the except clause.
+        with self.assertWarns(Warning):
+            self.assertIsNone(_resolve_stitcher_name('stitcher_with_no_module'))
+
+
+class SerializationTester(_SGSTFixture, BaseCase):
+    """
+    Cover ``SimultaneousGSTDesign.write`` / ``from_dir``.
+
+    Writing used to fail outright: ``write_meta_based_dir`` puts every attribute not
+    named in ``auxfile_types`` straight into 'meta.json', gated by ``_check_jsonable``,
+    which rejects live objects *and* non-string dict keys -- and this design adds two
+    int-keyed dicts, two sub-designs, a function and a numpy Generator. ``design.write()``
+    raised ValueError, taking ``pygsti.io.write_empty_protocol_data`` down with it.
+
+    Members that are *not* stored get reconstructed on load, so these tests check the
+    reconstruction as much as the storage.
+    """
+
+    def _roundtrip(self, root_path, design=None, name='d'):
+        design = self.design if design is None else design
+        root = pathlib.Path(root_path) / name
+        design.write(root)
+        return root, SimultaneousGSTDesign.from_dir(root)
+
+    # -- the round trip ------------------------------------------------------
+
+    @with_temp_path
+    def test_write_then_from_dir_preserves_the_design(self, root_path):
+        _, loaded = self._roundtrip(root_path)
+        self.assertIsInstance(loaded, SimultaneousGSTDesign)
+        self.assertEqual([list(cl) for cl in loaded.circuit_lists],
+                         [list(cl) for cl in self.design.circuit_lists])
+        self.assertEqual(set(loaded.all_circuits_needing_data),
+                         set(self.design.all_circuits_needing_data))
+        self.assertEqual(loaded.nested, self.design.nested)
+        self.assertEqual(loaded.qubit_labels, self.design.qubit_labels)
+        self.assertEqual(loaded.processor_spec.qubit_labels,
+                         self.design.processor_spec.qubit_labels)
+
+    @with_temp_path
+    def test_color_patches_survive_with_int_keys_and_tuple_edges(self, root_path):
+        # Why color_patches needs 'fancykeydict:json': its keys are ints, which a JSON
+        # object cannot hold, and its edges are tuples, which JSON turns into lists. The
+        # isinstance checks matter -- equality alone would pass on two list-valued dicts.
+        _, loaded = self._roundtrip(root_path)
+        self.assertEqual(loaded.color_patches, self.design.color_patches)
+        for patch, edge_set in loaded.color_patches.items():
+            self.assertIsInstance(patch, int)
+            for edge in edge_set:
+                self.assertIsInstance(edge, tuple)
+
+    @with_temp_path
+    def test_graph_members_are_recomputed_from_the_processor_spec(self, root_path):
+        # Stored as 'none' and rebuilt, so they must come back identical -- including
+        # `vertices` being a tuple, which JSON would have decayed to a list.
+        _, loaded = self._roundtrip(root_path)
+        self.assertEqual(loaded.vertices, self.design.vertices)
+        self.assertIsInstance(loaded.vertices, tuple)
+        self.assertEqual(loaded.edges, self.design.edges)
+        self.assertEqual(loaded.neighbors, self.design.neighbors)
+        self.assertEqual(loaded.deg, self.design.deg)
+
+    @with_temp_path
+    def test_sub_designs_are_written_and_restored(self, root_path):
+        root, loaded = self._roundtrip(root_path)
+        # Beside 'edesign', not as TreeNode children: their circuits are never executed,
+        # so ProtocolData must not try to carve a dataset out for them.
+        self.assertTrue((root / 'sgst_oneq_gstdesign' / 'edesign').is_dir())
+        self.assertTrue((root / 'sgst_twoq_gstdesign' / 'edesign').is_dir())
+        self.assertEqual(loaded._vals, {})
+
+        self.assertEqual(loaded.oneq_gstdesign.qubit_labels, (0,))
+        self.assertEqual(loaded.twoq_gstdesign.qubit_labels, (0, 1))
+        for loaded_sub, original_sub in ((loaded.oneq_gstdesign, self.oneq),
+                                         (loaded.twoq_gstdesign, self.twoq)):
+            self.assertEqual(set(loaded_sub.all_circuits_needing_data),
+                             set(original_sub.all_circuits_needing_data))
+
+    @with_temp_path
+    def test_loaded_design_passes_its_own_validator(self, root_path):
+        # Ties the restored coloring to the restored circuits: every member above can
+        # look individually plausible and still not describe the others.
+        _, loaded = self._roundtrip(root_path)
+        assert_circuit_lists_match_color_patches(
+            loaded.circuit_lists, loaded.vertices, loaded.color_patches)
+
+    @with_temp_path
+    def test_mapped_design_is_also_serializable(self, root_path):
+        # map_qubit_labels calls GateSetTomographyDesign.__init__, which *resets*
+        # auxfile_types -- so it must re-declare them or its result is unserializable.
+        mapped = self.design.map_qubit_labels({q: 'Q%d' % q for q in self.design.vertices})
+        _, loaded = self._roundtrip(root_path, design=mapped, name='mapped')
+        self.assertEqual(loaded.color_patches, mapped.color_patches)
+        self.assertEqual(loaded.vertices, ('Q0', 'Q1', 'Q2'))
+
+    # -- the workflow that was broken ----------------------------------------
+
+    @with_temp_path
+    def test_write_empty_protocol_data_works(self, root_path):
+        # The bug report: ProtocolData.write calls edesign.write, so the standard way of
+        # emitting a design plus a blank dataset template used to raise.
+        root = pathlib.Path(root_path) / 'wepd'
+        pygsti.io.write_empty_protocol_data(root, self.design, clobber_ok=True)
+        self.assertTrue((root / 'data' / 'dataset.txt').exists())
+
+        data = pygsti.io.read_data_from_dir(root)
+        self.assertIsInstance(data.edesign, SimultaneousGSTDesign)
+        self.assertEqual(set(data.edesign.all_circuits_needing_data),
+                         set(self.design.all_circuits_needing_data))
+
+    # -- the circuit stitcher ------------------------------------------------
+
+    def test_stitcher_name_is_recorded(self):
+        self.assertEqual(self.design.circuit_stitcher_name,
+                         'pygsti.protocols.simultaneous_gst.assign_the_designs_with_mapping')
+
+    @with_temp_path
+    def test_importable_stitcher_is_restored(self, root_path):
+        _, loaded = self._roundtrip(root_path)
+        self.assertIs(loaded.circuit_stitcher, assign_the_designs_with_mapping)
+
+    @with_temp_path
+    def test_unimportable_stitcher_loads_as_none_with_a_warning(self, root_path):
+        # A lambda has no importable name. Not fatal -- the stitcher is only called from
+        # __init__ -- but the design forgets how it was built, hence the warning.
+        design = SimultaneousGSTDesign(
+            self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
+            circuit_stitcher=(lambda *args, **kwargs: _STUB_CIRCUIT_LISTS),
+            debug_check=False)
+
+        root = pathlib.Path(root_path) / 'lam'
+        design.write(root)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            loaded = SimultaneousGSTDesign.from_dir(root)
+
+        self.assertIsNone(loaded.circuit_stitcher)
+        self.assertTrue(any('circuit_stitcher' in str(w.message) for w in caught),
+                        msg='expected a warning naming circuit_stitcher, got %s'
+                            % [str(w.message) for w in caught])
+        # The circuits themselves are unaffected by the stitcher being unrestorable.
+        self.assertEqual([list(cl) for cl in loaded.circuit_lists],
+                         [list(cl) for cl in design.circuit_lists])
+
+    @with_temp_path
+    def test_rng_is_deliberately_not_preserved(self, root_path):
+        # A loaded design is a record of a generated experiment, not a recipe:
+        # stitcher_kwargs holds a numpy Generator, unserializable and not stable across
+        # versions. Pinned so the lossiness stays a decision, not an accident.
+        _, loaded = self._roundtrip(root_path)
+        self.assertEqual(loaded.stitcher_kwargs, {})
+        self.assertIn('randgen', self.design.stitcher_kwargs)
+
+
+class UnsupportedOperationsTester(_SGSTFixture, BaseCase):
+    """
+    Cover the operations ``SimultaneousGSTDesign`` refuses, and the escape hatch.
+
+    ``circuit_lists`` is ordered germ-power-major then patch-major, with every patch
+    contributing an equal contiguous chunk per germ power. The inherited truncation and
+    merge methods filter or concatenate circuits without regard to that structure, so they
+    produce a design that fails ``assert_circuit_lists_match_color_patches`` -- and return
+    a downgraded ``CircuitListsDesign`` while doing it. Both failures are silent, which is
+    why every entry point gets a test.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.some_circuits = list(cls.design.all_circuits_needing_data)[:5]
+
+    def _fresh_design(self):
+        """A private copy of the shared design, for tests that might mutate it.
+
+        The in-place hooks below are exactly what would corrupt ``setUpClass``'s shared
+        design if a refusal ever stopped working, silently poisoning a later test's
+        baseline. Copying is cheaper than re-stitching.
+        """
+        return _copy.deepcopy(self.design)
+
+    def _assert_refused(self, fn, named):
+        """Assert `fn` refuses, and that the message names `named` specifically.
+
+        The name matters: with a public override removed the call still reaches the
+        ``_truncate_to_*_inplace`` backstop and still raises, just with that hook's
+        wording. Asserting only "it raised" -- or only on the shared tail of the
+        message -- would pass either way.
+        """
+        with self.assertRaises(NotImplementedError) as ctx:
+            fn()
+        message = str(ctx.exception)
+        self.assertIn('%s is not supported' % named, message)
+        # Every refusal must also point at the way forward, or it is just a dead end.
+        self.assertIn('as_circuit_lists_design', message)
+
+    def test_public_methods_are_refused(self):
+        """Each must name *itself*, not fall through to a hook's generic wording."""
+        for method, args in (('truncate_to_circuits', (self.some_circuits,)),
+                             ('truncate_to_available_data', (_tiny_dataset(),)),
+                             ('truncate_to_design', (self.design,)),
+                             ('truncate_to_lists', ([0],)),
+                             ('merge_with', (self.design,))):
+            with self.subTest(method):
+                self._assert_refused(
+                    lambda m=method, a=args: getattr(self._fresh_design(), m)(*a), named=method)
+
+    def test_inplace_hooks_are_refused(self):
+        # The public methods above are conveniences; these hooks are what a parent
+        # design reaches, so they must refuse on their own account.
+        for hook, args, named in (
+                ('_truncate_to_circuits_inplace', (self.some_circuits,),
+                 'Truncating to a subset of circuits'),
+                ('_truncate_to_design_inplace', (self.design,), 'Truncating to another design'),
+                ('_truncate_to_available_data_inplace', (_tiny_dataset(),),
+                 'Truncating to available data')):
+            with self.subTest(hook):
+                self._assert_refused(
+                    lambda h=hook, a=args: getattr(self._fresh_design(), h)(*a), named=named)
+
+    def test_truncation_from_a_parent_design_is_refused(self):
+        # ExperimentDesign._truncate_to_available_data_inplace loops over its children, so
+        # a nested SimultaneousGSTDesign is reachable without any direct call. Overriding
+        # only the public methods would leave this path producing a broken child.
+        parent = CombinedExperimentDesign({'sgst': self._fresh_design()})
+        with self.assertRaises(NotImplementedError):
+            parent.truncate_to_available_data(_tiny_dataset())
+
+    def test_inplace_hooks_refuse_before_mutating_anything(self):
+        """Each in-place hook must refuse *immediately*, not on the way out.
+
+        ``CircuitListsDesign``'s versions overwrite ``self.circuit_lists`` and only then
+        delegate upwards, so a hook that relied on the ``_truncate_to_circuits_inplace``
+        backstop instead of refusing on its own account would leave a half-truncated
+        design behind -- here, all 1814 circuits replaced by none. Each hook gets its own
+        copy so that one leaking cannot hide behind another.
+        """
+        expected = [list(cl) for cl in self.design.circuit_lists]
+        for hook, args in (('_truncate_to_circuits_inplace', (self.some_circuits,)),
+                           ('_truncate_to_design_inplace', (self.design,)),
+                           ('_truncate_to_available_data_inplace', (_tiny_dataset(),))):
+            with self.subTest(hook=hook):
+                design = self._fresh_design()
+                with self.assertRaises(NotImplementedError):
+                    getattr(design, hook)(*args)
+                self.assertEqual([list(cl) for cl in design.circuit_lists], expected)
+
+    # -- the escape hatch ----------------------------------------------------
+
+    def test_as_circuit_lists_design_returns_a_plain_gst_design(self):
+        plain = self.design.as_circuit_lists_design()
+        self.assertIsInstance(plain, GateSetTomographyDesign)
+        self.assertNotIsInstance(plain, SimultaneousGSTDesign)
+        self.assertEqual([list(cl) for cl in plain.circuit_lists],
+                         [list(cl) for cl in self.design.circuit_lists])
+        self.assertEqual(plain.qubit_labels, self.design.qubit_labels)
+        self.assertEqual(plain.nested, self.design.nested)
+        # The pspec is what lets write_empty_protocol_data still work on the result.
+        self.assertIs(plain.processor_spec, self.design.processor_spec)
+
+    def test_as_circuit_lists_design_can_be_truncated(self):
+        # The whole point of the hatch: it does what this class refuses to.
+        truncated = self.design.as_circuit_lists_design().truncate_to_circuits(
+            self.some_circuits)
+        self.assertEqual(set(truncated.all_circuits_needing_data), set(self.some_circuits))
+
+    def test_as_circuit_lists_design_does_not_alias_the_original(self):
+        # It hands out its own lists, so truncating the copy cannot reach the original.
+        plain = self.design.as_circuit_lists_design()
+        plain.circuit_lists[0].pop()
+        self.assertEqual([len(cl) for cl in self.design.circuit_lists],
+                         [len(cl) + (1 if i == 0 else 0)
+                          for i, cl in enumerate(plain.circuit_lists)])
+
+
+#: Fixed output for a stub stitcher: two circuits so they split evenly over two patches.
+_STUB_CIRCUIT_LISTS = [[Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1, 2)),
+                        Circuit([Label('Gcnot', (1, 2))], line_labels=(0, 1, 2))]]
+
+
+def _tiny_dataset():
+    """A DataSet holding a couple of 3-qubit circuits, for truncation tests."""
+    dataset = pygsti.data.DataSet(outcome_labels=['000', '111'])
+    for circuit in (Circuit([Label('Gxpi2', 0)], line_labels=(0, 1, 2)),
+                    Circuit([Label('Gxpi2', 1)], line_labels=(0, 1, 2))):
+        dataset.add_count_dict(circuit, {'000': 10, '111': 10})
+    dataset.done_adding_data()
+    return dataset
 
 
 def _tee_pspec(edges):

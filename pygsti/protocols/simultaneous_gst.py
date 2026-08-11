@@ -7,11 +7,16 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import importlib as _importlib
+import pathlib as _pathlib
+import warnings as _warnings
+
 import numpy as np
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast, Mapping
 import tqdm as _tqdm
 
+from pygsti import io as _io
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.processors import QubitProcessorSpec
 from pygsti.circuits.circuit import Circuit
@@ -144,6 +149,72 @@ def make_simultaneous_gst_design(
     return out
 
 
+def _normalize_coloring(coloring: Mapping[int, Sequence[Edge]]) -> Dict[int, List[Edge]]:
+    """
+    An edge coloring with every edge as a tuple, per the ``Edge`` alias.
+
+    Callers may pass lists, and a JSON round trip always returns them, since JSON has
+    no tuple type. Normalizing keeps ``color_patches`` equal (and hashable) across
+    designs however they were built; nothing downstream requires it, as ``patch_lines``
+    casts each edge before use.
+
+    Only the container is normalized -- do not reach for ``order`` or
+    :func:`canonical_edges` here. ``(0, 1)`` and ``(1, 0)`` select different lanes of
+    the 2Q design, so canonicalizing orientation would silently move qubits between
+    lanes while leaving every structural check happy.
+    """
+    return {p: [tuple(e) for e in es][::-1] for p, es in coloring.items()}
+
+
+def _stitcher_name(circuit_stitcher: CircuitStitcher) -> Optional[str]:
+    """
+    The fully-qualified ``"module.qualname"`` of a circuit stitcher, or None.
+
+    A stitcher is an arbitrary caller-supplied callable, so it cannot be serialized
+    directly. Recording where it came from lets :func:`_resolve_stitcher_name` import
+    it back, and keeps the provenance readable in 'meta.json' even when it cannot.
+
+    Callables without a ``__qualname__`` -- ``functools.partial`` objects and callable
+    class instances -- report None so that 'meta.json' records a clean null rather than
+    something like ``'functools.None'``. Both load as None with a warning either way.
+    """
+    qualname = getattr(circuit_stitcher, '__qualname__', None)
+    if qualname is None:
+        return None
+    return '%s.%s' % (getattr(circuit_stitcher, '__module__', None), qualname)
+
+
+def _resolve_stitcher_name(name: Optional[str]) -> Optional[CircuitStitcher]:
+    """
+    Import the circuit stitcher recorded by :func:`_stitcher_name`.
+
+    Only a module-level callable can be restored; a lambda, closure, method, or
+    script-local function resolves to None with a warning. That is not fatal -- the
+    stitcher is only ever called during ``__init__`` -- but the loaded design then no
+    longer records how it was built, hence the warning.
+    """
+    if name is None:
+        _warnings.warn("Loaded a SimultaneousGSTDesign with no recorded circuit_stitcher; "
+                       "setting it to None. The design's circuits are unaffected.")
+        return None
+
+    # A qualname never contains a dot by the time it gets here: rpartition splits at the
+    # *last* one, so e.g. 'pkg.mod.Class.method' yields the un-importable module name
+    # 'pkg.mod.Class' -- which is the correct outcome, since a method is not restorable.
+    module_name, _, attr_name = name.rpartition('.')
+    try:
+        # ValueError: empty module_name, i.e. `name` had no dot at all.
+        # ImportError: no such module.  AttributeError: no such member of it.
+        resolved = getattr(_importlib.import_module(module_name), attr_name)
+    except (ImportError, AttributeError, ValueError) as e:
+        _warnings.warn("Could not restore the circuit_stitcher %r of a loaded "
+                       "SimultaneousGSTDesign (%s); setting it to None. This is expected for a "
+                       "lambda or a locally-defined function. The design's circuits are "
+                       "unaffected." % (name, e))
+        return None
+    return cast(CircuitStitcher, resolved)
+
+
 class SimultaneousGSTDesign(GateSetTomographyDesign):
     """
     A *simultaneous GST* experiment design by combines 1Q and 2Q GST designs
@@ -156,6 +227,9 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
     oneq_gstdesign: The design for one-qubit GST circuits.
     twoq_gstdesign: The design for two-qubit GST circuits.
     edge_coloring (dict): A dictionary mapping color patches to their corresponding edge sets.
+        Each edge is stored as a tuple regardless of how it was supplied, so that
+        ``color_patches`` compares equal across designs however they were built (see
+        :func:`_normalize_coloring`). Edge *orientation* is preserved as given.
     circuit_stitcher (callable): A function to stitch circuits together (default: assign_the_designs_with_mapping).
     seed (optional): Anything ``np.random.default_rng`` accepts -- an int, a SeedSequence,
         or an already-built Generator -- used to seed the randgen handed to the stitcher.
@@ -219,10 +293,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         ``circuit_lists`` via :func:`assert_circuit_lists_match_color_patches`
         -- checking that every generated circuit has no implicit idle gates and
         is correctly stitched onto its own patch's qubits/edges. This runs
-        regardless of which ``circuit_stitcher`` was used (unlike the previous
-        approach of relying on ``assign_the_designs_with_mapping``'s own
-        ``debug_check`` parameter, which a swapped-in stitcher could silently
-        skip).
+        regardless of which ``circuit_stitcher`` is used.
         """
         if circuit_stitcher is None:
             circuit_stitcher = assign_the_designs_with_mapping
@@ -234,8 +305,9 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         self.edges = canonical_edges(self.processor_spec.compute_2Q_connectivity().edges())
         self.neighbors = find_neighbors(self.vertices, self.edges)
         self.deg = max([len(self.neighbors[v]) for v in self.vertices])
-        self.color_patches = edge_coloring
+        self.color_patches = _normalize_coloring(edge_coloring)
         self.circuit_stitcher = circuit_stitcher
+        self.circuit_stitcher_name = _stitcher_name(circuit_stitcher)
 
         # Base kwargs common to the built-in calling convention; caller-supplied
         # stitcher_kwargs take precedence so any option can be overridden.
@@ -247,7 +319,6 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
             self.oneq_gstdesign, self.twoq_gstdesign, self.vertices, self.color_patches, **kwargs,
         )
 
-
         if debug_check:
             # Stitcher-agnostic verification of circuit_lists: runs no matter
             # which circuit_stitcher produced it.
@@ -256,6 +327,130 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
             )
 
         super().__init__(processor_spec, self.circuit_lists,qubit_labels=self.vertices, nested=nested)
+        self._register_auxfile_types()
+
+    # region Serialization
+
+    #: Sub-directories (siblings of 'edesign') that :meth:`write` puts the 1Q/2Q
+    #: sub-designs in. Written by hand rather than registered as ``TreeNode`` children
+    #: because they are not sub-*experiments*: their circuits live on abstract lane
+    #: labels and are never executed, so ``ProtocolData`` must not carve a dataset out.
+    _SUBDESIGN_DIRS = {'oneq_gstdesign': 'sgst_oneq_gstdesign',
+                       'twoq_gstdesign': 'sgst_twoq_gstdesign'}
+
+    def _register_auxfile_types(self) -> None:
+        """
+        Declare how this design's own attributes are serialized.
+
+        Anything *not* named in ``auxfile_types`` is written straight into 'meta.json'
+        as JSON, which fails outright for the members below -- they are int-keyed dicts
+        or live Python objects. See ``pygsti.io.metadir._check_jsonable``. ``'none'``
+        means "do not write, do not load"; :meth:`from_dir` reconstructs those.
+        """
+        # Keyed by int, so plain 'json' would be rejected. 'fancykeydict' stores the
+        # keys alongside the per-value file metadata instead of as JSON object keys.
+        self.auxfile_types['color_patches'] = 'fancykeydict:json'
+
+        # Pure functions of processor_spec, so recomputed on load rather than stored --
+        # which also sidesteps JSON turning every tuple into a list.
+        for member in ('vertices', 'edges', 'neighbors', 'deg'):
+            self.auxfile_types[member] = 'none'
+
+        for member in self._SUBDESIGN_DIRS:  # written/read by hand; see _SUBDESIGN_DIRS
+            self.auxfile_types[member] = 'none'
+
+        # The stitcher is recorded by name instead; its kwargs hold a live Generator.
+        self.auxfile_types['circuit_stitcher'] = 'none'
+        self.auxfile_types['stitcher_kwargs'] = 'none'
+
+    def write(self, dirname=None, parent=None) -> None:
+        """
+        Write this experiment design to a directory.
+
+        Extends ``ExperimentDesign.write`` by also writing the 1Q and 2Q sub-designs into
+        sub-directories of `dirname` that sit alongside 'edesign'.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory to write into.  This directory will have an 'edesign'
+            subdirectory, which will be created if needed and overwritten if present.
+            If None, then the path this object was loaded from is used.
+
+        parent : ExperimentDesign, optional
+            The parent experiment design, when a parent is writing this design as a
+            sub-experiment-design.  Otherwise leave as None.
+
+        Returns
+        -------
+        None
+        """
+        super().write(dirname=dirname, parent=parent)
+
+        # super().write() resolves a None dirname against _loaded_from, so read it back.
+        root = _pathlib.Path(self._loaded_from)
+        for member, subdir in self._SUBDESIGN_DIRS.items():
+            design = getattr(self, member, None)
+            if design is None:
+                continue
+            design.write(root / subdir)
+
+    @classmethod
+    def from_dir(cls, dirname: str, parent=None, name=None, quick_load=False) -> "SimultaneousGSTDesign":
+        """
+        Initialize a new SimultaneousGSTDesign from `dirname`.
+
+        Reconstructs the members that :meth:`_register_auxfile_types` marks ``'none'``:
+        the graph members are recomputed from the processor spec as ``__init__`` does,
+        the sub-designs are read back from their sub-directories, and the stitcher is
+        re-imported from its recorded name.
+
+        The design is restored as a *record of an already-generated experiment* -- the
+        stitcher's random state is not preserved (``stitcher_kwargs`` comes back empty),
+        so a loaded design reproduces its circuits but cannot re-stitch them.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is a 'edesign' subdirectory).
+
+        parent : ExperimentDesign, optional
+            The parent design object, if there is one.
+
+        name : str, optional
+            The sub-name of the design object being loaded.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of the potentially long circuit lists.
+
+        Returns
+        -------
+        SimultaneousGSTDesign
+        """
+        ret = super().from_dir(dirname, parent=parent, name=name, quick_load=quick_load)
+        root = _pathlib.Path(dirname)
+
+        ret.color_patches = _normalize_coloring(ret.color_patches)  # JSON has no tuples
+
+        # Recompute the graph members, mirroring __init__.
+        ret.vertices = ret.processor_spec.qubit_labels
+        ret.edges = canonical_edges(ret.processor_spec.compute_2Q_connectivity().edges())
+        ret.neighbors = find_neighbors(ret.vertices, ret.edges)
+        ret.deg = max(len(ret.neighbors[v]) for v in ret.vertices)
+
+        for member, subdir in cls._SUBDESIGN_DIRS.items():
+            subdesign_dir = root / subdir
+            if (subdesign_dir / 'edesign' / 'meta.json').exists():
+                subdesign_cls = _io.metadir._cls_from_meta_json(subdesign_dir / 'edesign')
+                setattr(ret, member, subdesign_cls.from_dir(subdesign_dir, quick_load=quick_load))
+            else:
+                setattr(ret, member, None)
+
+        ret.circuit_stitcher = _resolve_stitcher_name(getattr(ret, 'circuit_stitcher_name', None))
+        ret.stitcher_kwargs = {}
+        return ret
+
+    # endregion
 
     def map_qubit_labels(self, mapper, debug_check: bool = True) -> "SimultaneousGSTDesign":
         """
@@ -266,15 +461,14 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         and the 1Q/2Q sub-designs.
 
         The mapper relabels the *device's* qubits, so it is applied to the processor spec,
-        the vertices, the edges of every color patch, and the stitched circuits. It is
-        deliberately **not** applied to ``oneq_gstdesign``/``twoq_gstdesign``: those live on
-        their own abstract lane labels (e.g. ``(0,)`` and ``(0, 1)``), not on device qubits,
-        so they are carried over unchanged.
+        the vertices, the edges of every color patch, and the stitched circuits -- but
+        deliberately **not** to ``oneq_gstdesign``/``twoq_gstdesign``, which live on their
+        own abstract lane labels (e.g. ``(0,)`` and ``(0, 1)``) and are carried over
+        unchanged.
 
-        The circuits are relabelled rather than re-stitched. Re-running the stitcher would
-        redraw its random schedules and hand back different circuit content, whereas a
-        relabelling is exactly the same experiment on renamed qubits -- which is what this
-        method is supposed to mean.
+        The circuits are relabelled rather than re-stitched: re-running the stitcher would
+        redraw its random schedules and return different circuit content, whereas a
+        relabelling is the same experiment on renamed qubits.
 
         Parameters
         ----------
@@ -308,8 +502,8 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
                 mapped_circuit_lists, mapped_vertices, mapped_color_patches
             )
 
-        # Bypass __init__: it would re-run the circuit stitcher (and hence redraw its random
-        # schedules), which is precisely what we are avoiding by relabelling instead.
+        # Bypass __init__: it would re-run the stitcher and redraw its random schedules,
+        # which is precisely what relabelling exists to avoid.
         mapped = self.__class__.__new__(self.__class__)
         mapped.oneq_gstdesign = self.oneq_gstdesign
         mapped.twoq_gstdesign = self.twoq_gstdesign
@@ -319,6 +513,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         mapped.deg = max(len(mapped.neighbors[v]) for v in mapped.vertices)
         mapped.color_patches = mapped_color_patches
         mapped.circuit_stitcher = self.circuit_stitcher
+        mapped.circuit_stitcher_name = self.circuit_stitcher_name
         mapped.stitcher_kwargs = self.stitcher_kwargs
         mapped.circuit_lists = mapped_circuit_lists
 
@@ -327,7 +522,90 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
             mapped, mapped_processor_spec, mapped_circuit_lists,
             qubit_labels=mapped.vertices, nested=self.nested
         )
+        mapped._register_auxfile_types()  # ...which resets auxfile_types, so re-declare ours
         return mapped
+
+    # region Unsupported operations
+
+    #: Explanation shared by every refusal below.
+    _NO_SUBSETTING = (
+        "%s is not supported for a SimultaneousGSTDesign. Its circuit_lists are ordered "
+        "germ-power-major then patch-major, with every color patch contributing an equal "
+        "contiguous chunk at each germ power (see assign_the_designs_with_mapping); adding "
+        "or removing individual circuits breaks that structure and fails this design's own "
+        "assert_circuit_lists_match_color_patches check. Use .as_circuit_lists_design() to "
+        "get a plain GateSetTomographyDesign holding the same circuits, which supports this "
+        "operation, or rebuild the design from already-truncated sub-designs."
+    )
+
+    def as_circuit_lists_design(self) -> GateSetTomographyDesign:
+        """
+        A plain :class:`GateSetTomographyDesign` holding this design's circuits.
+
+        It carries the same circuit lists, processor spec, qubit labels and nesting, but
+        none of the simultaneous-GST structure -- no edge coloring, no sub-designs, no
+        patch-major ordering contract. That is what makes it useful: it supports the
+        truncation and merging this class refuses, at the cost of no longer knowing which
+        circuit belongs to which patch. The usual reason to want one is
+        ``truncate_to_available_data`` after a partial data run.
+
+        Returns
+        -------
+        GateSetTomographyDesign
+        """
+        return GateSetTomographyDesign(
+            self.processor_spec, [list(cl) for cl in self.circuit_lists],
+            qubit_labels=self.qubit_labels, nested=self.nested
+        )
+
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        # The backstop: every public truncation route reaches this method, so overriding
+        # the public methods alone would leave the in-place hooks reachable.
+        raise NotImplementedError(self._NO_SUBSETTING % "Truncating to a subset of circuits")
+
+    # A parent design (e.g. CombinedExperimentDesign) recurses straight into the two hooks
+    # below, so they must refuse on their own account rather than fall through to the
+    # backstop above: CircuitListsDesign's versions mutate self.circuit_lists *first* and
+    # only then call super(), which would leave a half-truncated design behind on the way
+    # out. (Its _truncate_to_design_inplace also assumes every circuit list is a
+    # CircuitList and raises AttributeError on plain lists, masking this refusal.)
+
+    def _truncate_to_design_inplace(self, other_design):
+        raise NotImplementedError(self._NO_SUBSETTING % "Truncating to another design")
+
+    def _truncate_to_available_data_inplace(self, dataset):
+        raise NotImplementedError(self._NO_SUBSETTING % "Truncating to available data")
+
+    def truncate_to_lists(self, list_indices_to_keep):
+        """Not supported; see :meth:`as_circuit_lists_design`."""
+        # Dropping whole germ powers keeps each list intact, but CircuitListsDesign's
+        # implementation returns a CircuitListsDesign, silently discarding the coloring
+        # and sub-designs. Refuse rather than hand back a downgraded object.
+        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_lists")
+
+    def merge_with(self, other_edesign, remove_duplicates=True):
+        """Not supported; see :meth:`as_circuit_lists_design`."""
+        # Concatenating another design's circuit lists interleaves a second, unrelated
+        # patch structure into this one's chunks.
+        raise NotImplementedError(self._NO_SUBSETTING % "merge_with")
+
+    # The three public entry points below all deepcopy `self` before reaching the backstop,
+    # so they are overridden purely to fail immediately rather than pay for a full copy of
+    # the design just to raise -- and to name themselves in the error message.
+
+    def truncate_to_circuits(self, circuits_to_keep):
+        """Not supported; see :meth:`as_circuit_lists_design`."""
+        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_circuits")
+
+    def truncate_to_available_data(self, dataset):
+        """Not supported; see :meth:`as_circuit_lists_design`."""
+        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_available_data")
+
+    def truncate_to_design(self, other_design):
+        """Not supported; see :meth:`as_circuit_lists_design`."""
+        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_design")
+
+    # endregion
 
 
 def patch_lines(edge_set: Sequence[Edge],
