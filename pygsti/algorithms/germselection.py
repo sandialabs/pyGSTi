@@ -4145,7 +4145,7 @@ def find_germs_breadthfirst_greedy(model_list: list[Model], germs_list: list[_ci
             first_outer_iter_log= True
             printer.log('Initial germ list is not AC, beginning greedy search loop.', 2)
     else:
-        initN=None
+        initN = 1
         first_outer_iter_log= True
     
     while _np.any(weights == 0):
