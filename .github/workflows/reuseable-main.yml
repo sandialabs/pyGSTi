@@ -201,10 +201,19 @@ jobs:
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -n auto --dist loadscope $COV_FLAG test/integration
+    - name: Install ml extra (TensorFlow/Keras) for test_packages
+      # test/test_packages/extras/ml exercises pygsti.extras.ml, which needs TensorFlow and
+      # Keras. Those are deliberately not in the `testing` extra -- TensorFlow is a heavy,
+      # platform-specific dependency that the other ~99% of the suite has no use for -- so
+      # install them only for the jobs that actually run test_packages. Without this the ml
+      # tests would be silently skipped by their pytest.importorskip guard rather than run.
+      if: ${{ inputs.run-extra-tests == 'true' }}
+      run: uv pip install --system -e .[ml]
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -Ic "import tensorflow, keras; print('tensorflow', tensorflow.__version__, '/ keras', keras.__version__)"
         python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/notebooks --durations=25 test/test_packages
     - name: Run notebook regression
       # Linux-only: this step compiles CHP with gcc and writes it to /usr/local/bin,
@@ -215,7 +224,13 @@ jobs:
         # .md with an .ipynb sitting NEXT TO IT in the same directory (see
         # docs/jupytext.toml), so the materialized notebooks land back under
         # docs/markdown/ for nbval to consume.
-        uv pip install --system -e .[docs]
+        #
+        # The `ml` extra is needed for docs/markdown/ml/* (the QPANN tutorials), which
+        # import pygsti.extras.ml. It is pulled in here rather than added to `docs`
+        # itself so that ReadTheDocs -- which installs `.[docs]` but never executes a
+        # notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't made to
+        # download TensorFlow purely to render Markdown.
+        uv pip install --system -e .[docs,ml]
         (cd docs && jupytext --sync 'markdown/**/*.md')
 
         # Download and compile CHP for the Clifford-simulation notebook;
