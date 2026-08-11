@@ -1607,7 +1607,6 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
         return clifford_ops_on_qubits
 
-        ### TODO: do we still need this?
     @lru_cache(maxsize=100)
     def compute_clifford_2Q_connectivity(self):
         """
@@ -1627,12 +1626,24 @@ class QubitProcessorSpec(QuditProcessorSpec):
         clifford_gate_names = {key.name if isinstance(key, _Lbl) else key for key in clifford_keys}
         for gn in self.gate_names:
             if self.gate_num_qubits(gn) == 2 and gn in clifford_gate_names:
-                for sslbls in self.resolved_availability(gn, 'tuple'):
+                avail = self.resolved_availability(gn, 'tuple')
+                if len(avail) == 1 and avail[0] is None and gn == '{idle}':
+                    # The global idle's availability isn't expressed as qubit pairs;
+                    # treat it as available on every qubit.
+                    avail = [qubit_labels]
+                for sslbls in avail:
+                    # `gn` being in `clifford_gate_names` only means *some* label with
+                    # this gate name has a registered Clifford symplectic rep --
+                    # `nonstd_gate_symplecticreps` may register that rep for a specific
+                    # embedding (a full Label key) rather than for every site the gate
+                    # is available on. So we still have to check this specific site.
                     try:
                         self.clifford_symplectic_rep_of(_Lbl(gn, sslbls))
                     except (KeyError, TypeError, ValueError):
                         continue
-                    CtwoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
+                    i = qubit_labels.index(sslbls[0])
+                    j = qubit_labels.index(sslbls[1])
+                    CtwoQ_connectivity[i, j] = True
 
         return _qgraph.QubitGraph(qubit_labels, CtwoQ_connectivity)
 
@@ -1652,8 +1663,13 @@ class QubitProcessorSpec(QuditProcessorSpec):
         qubit_labels = self.qubit_labels
         for gn in self.gate_names:
             if self.gate_num_qubits(gn) == 2:
-                for sslbls in self.resolved_availability(gn, 'tuple'):
-                    twoQ_connectivity[qubit_labels.index(sslbls[0]), qubit_labels.index(sslbls[1])] = True
+                avail = self.resolved_availability(gn, 'tuple')
+                if len(avail) == 1 and avail[0] is None and gn == '{idle}':
+                    avail = [qubit_labels]
+                for sslbls in avail:
+                    i = qubit_labels.index(sslbls[0])
+                    j = qubit_labels.index(sslbls[1])
+                    twoQ_connectivity[i, j] = True
 
         return _qgraph.QubitGraph(qubit_labels, twoQ_connectivity)
     
