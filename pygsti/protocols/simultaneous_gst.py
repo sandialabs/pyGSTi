@@ -27,7 +27,22 @@ LayerMappers = Dict[int, Dict[Label, Label]]
 CircuitStitcher = Callable[..., List[List[Circuit]]]
 SeedLike = Union[int, np.random.SeedSequence, np.random.Generator]
 
-__all__ = ['SimultaneousGSTDesign', 'make_simultaneous_gst_design']
+# This module is star-imported into ``pygsti.protocols``, so ``__all__`` is kept
+# to the documented public surface: the design class, its convenience
+# constructor, the default circuit stitcher (documented as pluggable, so callers
+# need to be able to name it), and the stitcher-agnostic output validator (which
+# anyone writing their own stitcher is expected to run). The remaining helpers
+# -- ``find_neighbors``, ``patch_lines``, ``make_line_mapper``,
+# ``build_patch_infos``, ``random_index_schedule``, and friends -- are
+# deliberately left out: they have generic names that would collide in the
+# shared ``pygsti.protocols`` namespace, and they remain importable from this
+# module directly.
+__all__ = [
+    'SimultaneousGSTDesign',
+    'make_simultaneous_gst_design',
+    'assign_the_designs_with_mapping',
+    'assert_circuit_lists_match_color_patches',
+]
 
 
 def find_neighbors(vertices: Sequence[Vertex], edges: Sequence[Edge]) -> Dict[Vertex, List[Vertex]]:
@@ -401,47 +416,49 @@ def group_patches_for_scheduling(patch_infos: List[Dict[str, Any]],
     return list(groups.values())
 
 
-def random_index_schedule(n: int, max_len: int, randgen: np.random.Generator) -> np.ndarray:
+def random_index_schedule(n: int, num_circs_at_germ_power: int, randgen: np.random.Generator) -> np.ndarray:
     """
-    A length-``max_len`` index schedule into a CircuitList of size ``n``.
+    A length-``num_circs_at_germ_power`` index schedule into a CircuitList of
+    size ``n``.
 
     This is what fills a single slot (one edge, or one unused qubit) across all
-    ``max_len`` simultaneous circuits generated for one germ power: entry ``j``
-    says which circuit of the design goes into that slot in the ``j``-th
-    simultaneous circuit.
+    ``num_circs_at_germ_power`` simultaneous circuits generated for one germ
+    power: entry ``j`` says which circuit of the design goes into that slot in
+    the ``j``-th simultaneous circuit.
 
     The ``n`` real indices ``0..n-1`` are always included, so every circuit of
-    the design is used at least once. If ``n < max_len`` the design is
-    bootstrapped up to ``max_len``: the remaining ``max_len - n`` entries are
-    drawn uniformly with replacement from ``0..n-1``. The whole schedule is then
-    shuffled, so the design's own (arbitrary) circuit order carries no meaning.
+    the design is used at least once. If ``n < num_circs_at_germ_power`` the
+    design is bootstrapped up to ``num_circs_at_germ_power``: the remaining
+    ``num_circs_at_germ_power - n`` entries are drawn uniformly with replacement
+    from ``0..n-1``. The whole schedule is then shuffled, so the design's own
+    (arbitrary) circuit order carries no meaning.
 
-    When ``n == max_len`` no bootstrapping happens and the result is a plain
-    random permutation of ``0..n-1``.
+    When ``n == num_circs_at_germ_power`` no bootstrapping happens and the
+    result is a plain random permutation of ``0..n-1``.
 
     Parameters
     ----------
     n : int
-        Size of the CircuitList being scheduled into ``max_len`` slots.
+        Size of the CircuitList being scheduled into ``num_circs_at_germ_power`` slots.
 
-    max_len : int
+    num_circs_at_germ_power : int
         Desired length of the returned schedule.
 
     randgen : numpy.random.Generator
         Random number generator used to draw the bootstrap indices (when
-        ``n < max_len``) and to shuffle the result.
+        ``n < num_circs_at_germ_power``) and to shuffle the result.
 
     Returns
     -------
     numpy.ndarray
-        A length-``max_len`` array of indices into ``0..n-1``.
+        A length-``num_circs_at_germ_power`` array of indices into ``0..n-1``.
     """
-    if n == max_len:
-        base = np.arange(max_len)
+    if n == num_circs_at_germ_power:
+        base = np.arange(num_circs_at_germ_power)
     else:
         base = np.concatenate((
             np.arange(n),
-            randgen.integers(0, n, size=max_len - n),
+            randgen.integers(0, n, size=num_circs_at_germ_power - n),
         ))
     return randgen.permutation(base)
 
@@ -633,7 +650,7 @@ def assert_circuit_lists_match_color_patches(
 def build_group_schedules(
     num_edges: int,
     num_unused_qubits: int,
-    max_len: int,
+    num_circs_at_germ_power: int,
     twoq_len: int,
     oneq_len: int,
     randgen: np.random.Generator,
@@ -644,10 +661,11 @@ def build_group_schedules(
 
     A patch of this shape has ``num_edges`` 2Q slots and ``num_unused_qubits``
     1Q slots. This draws one independent schedule per slot, each of length
-    ``max_len``, so that ``twoq_slot_schedules[s, j]`` names the 2Q circuit
-    occupying edge slot ``s`` of the ``j``-th simultaneous circuit (and likewise
-    for the 1Q slots). Whichever design is shorter at this germ power is
-    bootstrapped up to ``max_len``; see :func:`random_index_schedule`.
+    ``num_circs_at_germ_power``, so that ``twoq_slot_schedules[s, j]`` names the
+    2Q circuit occupying edge slot ``s`` of the ``j``-th simultaneous circuit
+    (and likewise for the 1Q slots). Whichever design is shorter at this germ
+    power is bootstrapped up to ``num_circs_at_germ_power``; see
+    :func:`random_index_schedule`.
 
     Independent draws per slot are the point: they are what make different edges
     of the same patch run different 2Q circuits simultaneously.
@@ -660,7 +678,7 @@ def build_group_schedules(
     num_unused_qubits : int
         Number of unused (1Q) qubit slots in this patch shape.
 
-    max_len : int
+    num_circs_at_germ_power : int
         Number of simultaneous circuits to generate for this germ power.
 
     twoq_len : int
@@ -674,20 +692,20 @@ def build_group_schedules(
 
     Returns
     -------
-    twoq_slot_schedules : numpy.ndarray, shape (num_edges, max_len)
+    twoq_slot_schedules : numpy.ndarray, shape (num_edges, num_circs_at_germ_power)
         Which 2Q circuit fills each edge slot, for each simultaneous circuit.
 
-    oneq_slot_schedules : numpy.ndarray, shape (num_unused_qubits, max_len)
+    oneq_slot_schedules : numpy.ndarray, shape (num_unused_qubits, num_circs_at_germ_power)
         Which 1Q circuit fills each unused-qubit slot, for each simultaneous
         circuit.
     """
-    twoq_slot_schedules = np.empty((num_edges, max_len), dtype=np.int64)
+    twoq_slot_schedules = np.empty((num_edges, num_circs_at_germ_power), dtype=np.int64)
     for edge_slot in range(num_edges):
-        twoq_slot_schedules[edge_slot, :] = random_index_schedule(twoq_len, max_len, randgen)
+        twoq_slot_schedules[edge_slot, :] = random_index_schedule(twoq_len, num_circs_at_germ_power, randgen)
 
-    oneq_slot_schedules = np.empty((num_unused_qubits, max_len), dtype=np.int64)
+    oneq_slot_schedules = np.empty((num_unused_qubits, num_circs_at_germ_power), dtype=np.int64)
     for qubit_slot in range(num_unused_qubits):
-        oneq_slot_schedules[qubit_slot, :] = random_index_schedule(oneq_len, max_len, randgen)
+        oneq_slot_schedules[qubit_slot, :] = random_index_schedule(oneq_len, num_circs_at_germ_power, randgen)
 
     return twoq_slot_schedules, oneq_slot_schedules
 
