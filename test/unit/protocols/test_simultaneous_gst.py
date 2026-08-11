@@ -7,6 +7,9 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import hashlib
+import json
+
 import numpy as np
 
 from pygsti.circuits.circuit import Circuit
@@ -151,12 +154,61 @@ class AssignDesignsLengthPairingTester(BaseCase):
                 self.assertEqual(covered, set(c.line_labels))
 
 
+class DefaultOutputIsStableTester(BaseCase):
+    """
+    Pin the default stitcher's output for fixed seeds.
+
+    ``share_same_shape_schedules`` was added as an option specifically so the
+    default behaviour would not move. These hashes were captured *before* that
+    option existed; if a refactor perturbs the order in which the random stream
+    is consumed, they change and this test fails loudly rather than silently
+    handing users a different (still valid-looking) experiment design.
+
+    Regenerating these is legitimate when the randomization is intentionally
+    changed -- but it should be a deliberate, reviewed act.
+    """
+
+    EXPECTED = {
+        'one_patch':
+            '122cb38a0e3bc5ea97c6723634c117ea651523605947eede2ee30f9c825cb145',
+        'two_same_shape_patches':
+            '9007108ae3377766df08406bb2ca04b77cdc00204d288e7427abd04622661f5c',
+        'mixed_shape_patches':
+            'efd013af0b64e8fb4cbd0fd9fb86b20774b6d4a92e4372d53e0279a2fe259e0e',
+    }
+
+    CASES = {
+        'one_patch': ([0, 1, 2, 3, 4, 5], {0: [(0, 1)]}),
+        'two_same_shape_patches':
+            ([0, 1, 2, 3, 4, 5], {0: [(0, 1), (2, 3)], 1: [(1, 2), (3, 4)]}),
+        'mixed_shape_patches':
+            ([0, 1, 2, 3, 4, 5], {0: [(0, 1), (2, 3)], 1: [(1, 2)]}),
+    }
+
+    def test_default_output_matches_recorded_hashes(self):
+        oneq = _StubDesign([_make_1q_circuits(n) for n in (3, 5)], (0,))
+        twoq = _StubDesign([_make_2q_circuits(n) for n in (3, 5)], (0, 1))
+
+        for name, (vertices, color_patches) in self.CASES.items():
+            with self.subTest(case=name):
+                circuit_lists = assign_the_designs_with_mapping(
+                    oneq, twoq, vertices, color_patches,
+                    randgen=np.random.default_rng(12345),
+                )
+                blob = json.dumps([[c.str for c in L] for L in circuit_lists])
+                digest = hashlib.sha256(blob.encode()).hexdigest()
+                self.assertEqual(digest, self.EXPECTED[name])
+
+
 class MultiplePatchesSameShapeTester(BaseCase):
     """
     Two color patches sharing the same shape (here, both have 1 edge and 1 unused
     qubit) are grouped together and share a randomly-generated "template" circuit;
     all but the first ("representative") patch in the group must have that template
     relabeled (via `Circuit.map_state_space_labels`) onto their own lines.
+
+    This is the ``share_same_shape_schedules=True`` contract, i.e. the default.
+    See ``IndependentSchedulesTester`` for the opposite setting.
     """
 
     def _run(self, oneq_len=4, twoq_len=4, seed=0):
@@ -224,14 +276,128 @@ class MultiplePatchesSameShapeTester(BaseCase):
         for c in patch1_circuits:
             self.assertEqual(self._gx_qubits(c), {0})
 
+    def test_patch1_is_exactly_patch0_relabeled(self):
+        # The sharing contract in full: patch 1 is not merely "similar" to patch
+        # 0, it is patch 0 pushed through the patch-0 -> patch-1 line mapper,
+        # circuit for circuit and slot for slot. This is what
+        # share_same_shape_schedules=False switches off.
+        vertices = [0, 1, 2]
+        patch_infos = build_patch_infos(vertices, {0: [(0, 1)], 1: [(1, 2)]})
+        mapper = make_line_mapper(
+            patch_infos[0]["tensored_lines"],
+            patch_infos[1]["tensored_lines"],
+        )
 
-class EnsureContainmentTester(BaseCase):
+        patch0_circuits, patch1_circuits = self._run()
+        self.assertEqual(len(patch0_circuits), len(patch1_circuits))
+        for c0, c1 in zip(patch0_circuits, patch1_circuits):
+            self.assertEqual(c0.map_state_space_labels(mapper), c1)
+
+
+class IndependentSchedulesTester(BaseCase):
     """
-    With ``ensure_containment=True``, the circuit list for a higher germ-power
-    index must contain every circuit generated for any lower germ-power index,
-    patch-wise: each patch's own chunk at germ power ``L`` must start with the
-    exact same circuits, in the same order, as that patch's chunk at every
-    germ power ``L' < L``.
+    With ``share_same_shape_schedules=False`` every patch is its own scheduling
+    group, so same-shape patches draw independently instead of one being a
+    relabelling of the other.
+
+    Everything else -- patch-major ordering, correct stitching onto each patch's
+    own qubits, nesting, no duplicates, seed reproducibility -- must still hold.
+    """
+
+    # Two same-shape patches (2 edges + 2 unused qubits each) on 6 qubits, which
+    # under the default would collapse into a single scheduling group.
+    VERTICES = [0, 1, 2, 3, 4, 5]
+    COLOR_PATCHES = {0: [(0, 1), (2, 3)], 1: [(1, 2), (3, 4)]}
+
+    def _run(self, share, seed=0, oneq_lens=(3, 6), twoq_lens=(3, 6)):
+        oneq = _StubDesign([_make_1q_circuits(n) for n in oneq_lens], (0,))
+        twoq = _StubDesign([_make_2q_circuits(n) for n in twoq_lens], (0, 1))
+        return assign_the_designs_with_mapping(
+            oneq, twoq, self.VERTICES, self.COLOR_PATCHES,
+            randgen=np.random.default_rng(seed),
+            share_same_shape_schedules=share,
+        )
+
+    def _patch_chunks(self, germ_power_list):
+        half = len(germ_power_list) // 2
+        return germ_power_list[:half], germ_power_list[half:]
+
+    def test_shared_schedules_make_patch1_a_relabeling_of_patch0(self):
+        # Control for the test below: under the default, the two patches *are*
+        # related by the line mapper.
+        patch_infos = build_patch_infos(self.VERTICES, self.COLOR_PATCHES)
+        mapper = make_line_mapper(
+            patch_infos[0]["tensored_lines"],
+            patch_infos[1]["tensored_lines"],
+        )
+        patch0, patch1 = self._patch_chunks(self._run(share=True)[0])
+        for c0, c1 in zip(patch0, patch1):
+            self.assertEqual(c0.map_state_space_labels(mapper), c1)
+
+    def test_independent_schedules_break_the_relabeling(self):
+        patch_infos = build_patch_infos(self.VERTICES, self.COLOR_PATCHES)
+        mapper = make_line_mapper(
+            patch_infos[0]["tensored_lines"],
+            patch_infos[1]["tensored_lines"],
+        )
+        patch0, patch1 = self._patch_chunks(self._run(share=False)[0])
+        self.assertTrue(
+            any(c0.map_state_space_labels(mapper) != c1
+                for c0, c1 in zip(patch0, patch1)),
+            "share_same_shape_schedules=False still produced patch 1 as an "
+            "exact relabelling of patch 0, i.e. the schedules were shared."
+        )
+
+    def test_independent_schedules_still_satisfy_the_output_contract(self):
+        circuit_lists = self._run(share=False)
+        assert_circuit_lists_match_color_patches(
+            circuit_lists, self.VERTICES, self.COLOR_PATCHES
+        )
+        for L, germ_power_list in enumerate(circuit_lists):
+            self.assertEqual(
+                len(germ_power_list), len(set(germ_power_list)),
+                f"germ-power {L} contains duplicated circuits."
+            )
+        # Still nested.
+        for earlier, later in zip(circuit_lists, circuit_lists[1:]):
+            self.assertTrue(set(earlier).issubset(set(later)))
+
+    def test_independent_schedules_are_seed_reproducible(self):
+        self.assertEqual(self._run(share=False, seed=7),
+                         self._run(share=False, seed=7))
+
+    def test_both_settings_produce_the_same_number_of_circuits(self):
+        # Sharing is a randomization choice, not a size choice.
+        shared = self._run(share=True)
+        independent = self._run(share=False)
+        self.assertEqual([len(L) for L in shared], [len(L) for L in independent])
+
+    def test_default_is_to_share(self):
+        oneq = _StubDesign([_make_1q_circuits(3)], (0,))
+        twoq = _StubDesign([_make_2q_circuits(3)], (0, 1))
+        default = assign_the_designs_with_mapping(
+            oneq, twoq, self.VERTICES, self.COLOR_PATCHES,
+            randgen=np.random.default_rng(0),
+        )
+        explicit = assign_the_designs_with_mapping(
+            oneq, twoq, self.VERTICES, self.COLOR_PATCHES,
+            randgen=np.random.default_rng(0),
+            share_same_shape_schedules=True,
+        )
+        self.assertEqual(default, explicit)
+
+
+class NestingTester(BaseCase):
+    """
+    The stitcher's output is always nested: the circuit list for a higher
+    germ-power index must contain every circuit generated for any lower
+    germ-power index.
+
+    Nesting is applied patch-wise so the germ-power-major-then-patch-major
+    ordering survives: each patch's own chunk at germ power ``L`` must start
+    with the exact same circuits, in the same order, as that patch's chunk at
+    every germ power ``L' < L``. (Concatenating whole germ-power lists instead
+    would interleave patches and break that contract.)
     """
 
     def _run(self, oneq_lens, twoq_lens, color_patches, vertices, seed=0):
@@ -243,13 +409,23 @@ class EnsureContainmentTester(BaseCase):
         circuit_lists = assign_the_designs_with_mapping(
             oneq, twoq, vertices, color_patches,
             randgen=np.random.default_rng(seed),
-            ensure_containment=True,
         )
         assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
         return circuit_lists
 
+    def _assert_no_duplicates(self, circuit_lists):
+        # Nesting must not double-count: each germ power's list is a set of
+        # distinct circuits, not the earlier lists pasted on twice.
+        for L, germ_power_list in enumerate(circuit_lists):
+            self.assertEqual(
+                len(germ_power_list), len(set(germ_power_list)),
+                f"germ-power {L} contains duplicated circuits "
+                f"({len(germ_power_list)} entries, "
+                f"{len(set(germ_power_list))} distinct)."
+            )
+
     def _assert_patchwise_containment(self, circuit_lists, vertices, color_patches):
-        patch_infos, _ = build_patch_infos(vertices, color_patches)
+        patch_infos = build_patch_infos(vertices, color_patches)
         num_patches = len(patch_infos)
 
         chunk_sizes = []
@@ -289,6 +465,7 @@ class EnsureContainmentTester(BaseCase):
         )
         self.assertEqual(len(circuit_lists), 2)
         self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
+        self._assert_no_duplicates(circuit_lists)
 
     def test_multiple_same_shape_patches_containment_across_germ_powers(self):
         # Two same-shape patches land in the same `groups` bucket and share a
@@ -302,6 +479,7 @@ class EnsureContainmentTester(BaseCase):
         )
         self.assertEqual(len(circuit_lists), 2)
         self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
+        self._assert_no_duplicates(circuit_lists)
 
     def test_three_germ_powers_containment_holds_for_all_pairs(self):
         vertices = [0, 1, 2]
@@ -312,6 +490,28 @@ class EnsureContainmentTester(BaseCase):
         )
         self.assertEqual(len(circuit_lists), 3)
         self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
+        self._assert_no_duplicates(circuit_lists)
+
+    def test_multiple_patches_and_germ_powers_stay_patch_major(self):
+        # Regression: renesting by concatenating whole germ-power lists yields
+        # [P0 P1][P0 P1], so patch 0's chunk would contain patch 1's circuits
+        # (and their Gcnot on patch 1's edge). Renesting patch-wise keeps
+        # [all of P0][all of P1].
+        vertices = [0, 1, 2]
+        color_patches = {0: [(0, 1)], 1: [(1, 2)]}
+        circuit_lists = self._run(
+            oneq_lens=[3, 6, 10], twoq_lens=[3, 6, 10],
+            color_patches=color_patches, vertices=vertices,
+        )
+        self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
+        self._assert_no_duplicates(circuit_lists)
+
+        for germ_power_list in circuit_lists:
+            half = len(germ_power_list) // 2
+            for c in germ_power_list[:half]:
+                self.assertEqual(MultiplePatchesSameShapeTester._cnot_edges(c), {(0, 1)})
+            for c in germ_power_list[half:]:
+                self.assertEqual(MultiplePatchesSameShapeTester._cnot_edges(c), {(1, 2)})
 
 
 def _line_pspec(n_qubits=3):
@@ -381,10 +581,11 @@ class MakeSimultaneousGSTDesignTester(BaseCase):
 
     def test_defaults_forwarded_to_experiment_design(self):
         # make_simultaneous_gst_design passes neither circuit_stitcher nor nested, so both
-        # must land on their SimultaneousGSTDesign defaults.
+        # must land on their SimultaneousGSTDesign defaults. The default stitcher always
+        # renests its output, so nested defaults to True.
         self.assertIs(self.design.circuit_stitcher, assign_the_designs_with_mapping)
-        self.assertFalse(self.design.nested)
-        self.assertFalse(self.design.stitcher_kwargs['ensure_containment'])
+        self.assertTrue(self.design.nested)
+        self.assertEqual(list(self.design.stitcher_kwargs), ['randgen'])
         self.assertEqual(self.design.aux_info, {})
 
     def test_edge_coloring_is_a_valid_proper_coloring(self):
@@ -537,7 +738,7 @@ class HelperRejectsMalformedInputTester(BaseCase):
 
     def test_multiqubit_gate_outside_patch_edges_is_rejected(self):
         """A 2Q gate on an edge the patch does not own must be caught."""
-        patch_infos, _ = build_patch_infos([0, 1, 2], {0: [(0, 1)]})
+        patch_infos = build_patch_infos([0, 1, 2], {0: [(0, 1)]})
         info = patch_infos[0]
         expected_labels = {q for line in info['tensored_lines'] for q in line}
 
