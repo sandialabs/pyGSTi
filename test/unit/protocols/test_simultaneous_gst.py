@@ -585,7 +585,9 @@ class MakeSimultaneousGSTDesignTester(BaseCase):
         # renests its output, so nested defaults to True.
         self.assertIs(self.design.circuit_stitcher, assign_the_designs_with_mapping)
         self.assertTrue(self.design.nested)
-        self.assertEqual(list(self.design.stitcher_kwargs), ['randgen'])
+        self.assertEqual(list(self.design.stitcher_kwargs), ['randgen', 'verbosity'])
+        # verbosity defaults to 0, i.e. no progress bar from the stitcher.
+        self.assertEqual(self.design.stitcher_kwargs['verbosity'], 0)
         self.assertEqual(self.design.aux_info, {})
 
     def test_edge_coloring_is_a_valid_proper_coloring(self):

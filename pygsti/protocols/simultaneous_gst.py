@@ -103,7 +103,8 @@ def make_simultaneous_gst_design(
         nq_pspec: QubitProcessorSpec,
         oneq_gstdesign: GateSetTomographyDesign,
         twoq_gstdesign: GateSetTomographyDesign,
-        seed: int = 0
+        seed: int = 0,
+        verbosity: int = 0
     ) -> "SimultaneousGSTDesign":
     """
     Build a :class:`SimultaneousGSTDesign` for `nq_pspec` without having to supply an
@@ -120,6 +121,9 @@ def make_simultaneous_gst_design(
     coloring those is a deterministic closed form using the optimal number of colors.
     The seed reaches the coloring only on the randomized bipartite path; the generic
     (deg+1)-color fallback is deterministic too.
+
+    ``verbosity`` is forwarded to the design's circuit stitcher; anything greater
+    than 0 displays a progress bar over germ powers while stitching.
     """
     vertices = cast(List[Vertex] , list(nq_pspec.qubit_labels))
     edges = nq_pspec.compute_2Q_connectivity().edges()
@@ -132,7 +136,8 @@ def make_simultaneous_gst_design(
         "auto", deg, vertices, edges, neighbors, seed=coloring_seed
     )
     out = SimultaneousGSTDesign(
-        nq_pspec, oneq_gstdesign, twoq_gstdesign, edge_coloring, seed=stitcher_seed
+        nq_pspec, oneq_gstdesign, twoq_gstdesign, edge_coloring, seed=stitcher_seed,
+        verbosity=verbosity
     )
     return out
 
@@ -156,6 +161,9 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         ``circuit_lists[L+1]`` contains every circuit in ``circuit_lists[L]``. The
         default stitcher always produces nested lists, hence the default of True;
         set this to False only when supplying a stitcher that does not.
+    verbosity (int): Forwarded to ``circuit_stitcher``. With the default stitcher,
+        anything greater than 0 displays a progress bar over germ powers.
+        Defaults to 0 (silent).
     **stitcher_kwargs: Extra keyword arguments forwarded verbatim to ``circuit_stitcher``.
 
     circuit_lists (list): The generated list of stitched circuits.
@@ -169,6 +177,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
                  seed: Optional[SeedLike] = None,
                  nested: bool = True,
                  debug_check: bool = True,
+                 verbosity: int = 0,
                  **stitcher_kwargs: Any):
         """
         Assume that the GST designs have the same Ls.
@@ -180,7 +189,11 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         Any ``circuit_stitcher`` is invoked as::
 
             circuit_stitcher(oneq_gstdesign, twoq_gstdesign, vertices,
-                             color_patches, randgen=..., **stitcher_kwargs)
+                             color_patches, randgen=..., verbosity=...,
+                             **stitcher_kwargs)
+
+        A stitcher that does not want ``verbosity`` should absorb it in its own
+        ``**kwargs``, as the default stitcher does for the options it ignores.
 
         Extra keyword arguments to ``__init__`` are collected into ``**stitcher_kwargs``
         and forwarded verbatim, so alternative stitchers can accept their own options
@@ -225,7 +238,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
 
         # Base kwargs common to the built-in calling convention; caller-supplied
         # stitcher_kwargs take precedence so any option can be overridden.
-        kwargs = dict(randgen=randgen)
+        kwargs = dict(randgen=randgen, verbosity=verbosity)
         kwargs.update(stitcher_kwargs)
         self.stitcher_kwargs = kwargs
 
@@ -562,6 +575,16 @@ def assert_circuit_lists_match_color_patches(
        that patch's own qubits/edges
        (see :func:`assert_mapped_circuit_matches_patch`).
 
+    Checks 2 and 3 inspect the *denested* content: each distinct circuit is
+    checked once per patch, and repeats are skipped. Both are pure functions of
+    the circuit and its patch, so re-checking a circuit yields no new
+    information -- but ``circuit_lists`` is normally nested, meaning germ power
+    ``L``'s chunk repeats germ powers ``0..L-1``, so a naive pass would re-walk
+    every layer of germ power 0's circuits once per germ power.
+
+    Check 1 is a length check and stays per-germ-power: it is O(1) per list, and
+    it is precisely the nested chunk structure that it exists to verify.
+
     Parameters
     ----------
     circuit_lists : list[list[Circuit]]
@@ -587,6 +610,11 @@ def assert_circuit_lists_match_color_patches(
     patch_infos = build_patch_infos(vertices, color_patches)
     num_patches = len(patch_infos)
 
+    # Circuits already checked, per patch. Nested circuit_lists repeat every
+    # earlier germ power's circuits, so without this the per-circuit checks
+    # below would redo the same work O(num_germ_powers) times.
+    checked: List[set] = [set() for _ in patch_infos]
+
     for circuit_list in circuit_lists:
         assert len(circuit_list) % num_patches == 0, (
             f"Expected {len(circuit_list)} circuits to split evenly into "
@@ -596,9 +624,13 @@ def assert_circuit_lists_match_color_patches(
 
         for patch_idx, info in enumerate(patch_infos):
             start = patch_idx * chunk_size
+            already_checked = checked[patch_idx]
             for circuit in circuit_list[start:start + chunk_size]:
+                if circuit in already_checked:
+                    continue
                 assert_no_implicit_idles(circuit)
                 assert_mapped_circuit_matches_patch(circuit, info)
+                already_checked.add(circuit)
 #endregion
 
 def build_group_schedules(
@@ -810,6 +842,7 @@ def assign_the_designs_with_mapping(
     color_patches: Dict[int, List[Edge]],
     randgen: Optional[np.random.Generator] = None,
     share_same_shape_schedules: bool = True,
+    verbosity: int = 0,
     **kwargs: Any,
 ) -> List[List[Circuit]]:
     """
@@ -934,6 +967,11 @@ def assign_the_designs_with_mapping(
         receive identical circuit content up to qubit relabelling). Defaults to
         True. See "Randomization across patches" above for the tradeoff.
 
+    verbosity : int, optional
+        If greater than 0, display a progress bar over germ powers while
+        stitching. Defaults to 0 (silent), so that library calls and test
+        suites produce no output.
+
     **kwargs
         Ignored. Accepted so this stitcher matches the generic
         ``circuit_stitcher(oneq, twoq, vertices, color_patches, **kwargs)``
@@ -950,9 +988,12 @@ def assign_the_designs_with_mapping(
 
     Raises
     ------
-    AssertionError
+    NotImplementedError
         If ``oneq_gstdesign`` and ``twoq_gstdesign`` do not have the same number
-        of germ-power groups.
+        of germ-power groups. The two designs are stitched germ power by germ
+        power, so pairing designs with differing numbers of germ powers is not
+        supported; truncate the longer design (or rebuild both with the same
+        ``max_lengths``) before calling.
     """
     if randgen is None:
         randgen = np.random.default_rng(0)
@@ -964,8 +1005,15 @@ def assign_the_designs_with_mapping(
     oneq_gstdesign_circuitlists = _denest_a_circuitlist(oneq_gstdesign_circuitlists)
     twoq_gstdesign_circuitlists = _denest_a_circuitlist(twoq_gstdesign_circuitlists)
 
-    assert len(oneq_gstdesign_circuitlists) == len(twoq_gstdesign_circuitlists), \
-        "Not implemented."
+    if len(oneq_gstdesign_circuitlists) != len(twoq_gstdesign_circuitlists):
+        raise NotImplementedError(
+            "The 1Q and 2Q designs must have the same number of germ powers, but got "
+            f"{len(oneq_gstdesign_circuitlists)} (1Q) versus "
+            f"{len(twoq_gstdesign_circuitlists)} (2Q). The designs are stitched germ "
+            "power by germ power, so pairing designs of differing lengths is not "
+            "supported; truncate the longer design (or rebuild both with the same "
+            "max_lengths) before calling."
+        )
 
     vertices = list(vertices)
 
@@ -989,18 +1037,19 @@ def assign_the_designs_with_mapping(
 
     for L, (oneq_circuits, twoq_circuits) in _tqdm.tqdm(
         enumerate(zip(oneq_gstdesign_circuitlists, twoq_gstdesign_circuitlists)),
-        total=len(twoq_gstdesign_circuitlists)
+        total=len(twoq_gstdesign_circuitlists),
+        disable=(verbosity <= 0), desc="Building Simultaneous Circuits"
     ):
         oneq_len = len(oneq_circuits)
         twoq_len = len(twoq_circuits)
 
-        max_len = max(oneq_len, twoq_len)
+        num_circs_at_germ_power = max(oneq_len, twoq_len)
 
         # Each generated simultaneous circuit at this germ power draws one 2Q circuit
         # per edge slot and one 1Q circuit per unused-qubit slot. We produce
-        # ``max_len`` simultaneous circuits so that every circuit in the *longer* of
+        # ``num_circs_at_germ_power`` simultaneous circuits so that every circuit in the *longer* of
         # the two CircuitLists is used exactly once; the shorter CircuitList is
-        # bootstrapped up to ``max_len`` by resampling from itself with replacement.
+        # bootstrapped up to ``num_circs_at_germ_power`` by resampling from itself with replacement.
         # Circuit *depths* are equalized separately: batch_tensor pads each shorter
         # sub-circuit with explicit idle layers (via the ``Label(()) ->
         # explicit-idle`` entry in ``layer_mappers``). This works regardless of which
@@ -1018,10 +1067,10 @@ def assign_the_designs_with_mapping(
 
             twoq_slot_schedules, oneq_slot_schedules = build_group_schedules(
                 representative["num_edges"], representative["num_unused_qubits"],
-                max_len, twoq_len, oneq_len, randgen
+                num_circs_at_germ_power, twoq_len, oneq_len, randgen
             )
 
-            for j in range(max_len):
+            for j in range(num_circs_at_germ_power):
                 circs_to_tensor = [twoq_circuits[idx] for idx in twoq_slot_schedules[:, j]]
                 circs_to_tensor += [oneq_circuits[idx] for idx in oneq_slot_schedules[:, j]]
 
