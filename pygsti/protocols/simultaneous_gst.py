@@ -257,6 +257,78 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
 
         super().__init__(processor_spec, self.circuit_lists,qubit_labels=self.vertices, nested=nested)
 
+    def map_qubit_labels(self, mapper, debug_check: bool = True) -> "SimultaneousGSTDesign":
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        This overrides ``GateSetTomographyDesign.map_qubit_labels``, which returns a plain
+        ``GateSetTomographyDesign`` and would therefore silently discard the edge coloring
+        and the 1Q/2Q sub-designs.
+
+        The mapper relabels the *device's* qubits, so it is applied to the processor spec,
+        the vertices, the edges of every color patch, and the stitched circuits. It is
+        deliberately **not** applied to ``oneq_gstdesign``/``twoq_gstdesign``: those live on
+        their own abstract lane labels (e.g. ``(0,)`` and ``(0, 1)``), not on device qubits,
+        so they are carried over unchanged.
+
+        The circuits are relabelled rather than re-stitched. Re-running the stitcher would
+        redraw its random schedules and hand back different circuit content, whereas a
+        relabelling is exactly the same experiment on renamed qubits -- which is what this
+        method is supposed to mean.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        debug_check : bool, optional
+            If True (the default), verify the relabelled ``circuit_lists`` against the
+            relabelled coloring via :func:`assert_circuit_lists_match_color_patches`, the
+            same check ``__init__`` runs.
+
+        Returns
+        -------
+        SimultaneousGSTDesign
+        """
+        def mapper_func(label): return mapper[label] if isinstance(mapper, dict) else mapper(label)
+
+        mapped_processor_spec = self.processor_spec.map_qubit_labels(mapper)
+        mapped_vertices = tuple(mapper_func(v) for v in self.vertices)
+        mapped_color_patches = {
+            patch: [tuple(mapper_func(q) for q in edge) for edge in edge_set]
+            for patch, edge_set in self.color_patches.items()
+        }
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+
+        if debug_check:
+            assert_circuit_lists_match_color_patches(
+                mapped_circuit_lists, mapped_vertices, mapped_color_patches
+            )
+
+        # Bypass __init__: it would re-run the circuit stitcher (and hence redraw its random
+        # schedules), which is precisely what we are avoiding by relabelling instead.
+        mapped = self.__class__.__new__(self.__class__)
+        mapped.oneq_gstdesign = self.oneq_gstdesign
+        mapped.twoq_gstdesign = self.twoq_gstdesign
+        mapped.vertices = mapped_vertices
+        mapped.edges = canonical_edges(mapped_processor_spec.compute_2Q_connectivity().edges())
+        mapped.neighbors = find_neighbors(mapped.vertices, mapped.edges)
+        mapped.deg = max(len(mapped.neighbors[v]) for v in mapped.vertices)
+        mapped.color_patches = mapped_color_patches
+        mapped.circuit_stitcher = self.circuit_stitcher
+        mapped.stitcher_kwargs = self.stitcher_kwargs
+        mapped.circuit_lists = mapped_circuit_lists
+
+        # Sets processor_spec, qubit_labels, all_circuits_needing_data, auxfile_types, etc.
+        GateSetTomographyDesign.__init__(
+            mapped, mapped_processor_spec, mapped_circuit_lists,
+            qubit_labels=mapped.vertices, nested=self.nested
+        )
+        return mapped
+
 
 def patch_lines(edge_set: Sequence[Edge],
                 vertices: Sequence[Vertex]) -> Tuple[List[Edge], List[Vertex], List[Union[Edge, Tuple[Vertex]]]]:

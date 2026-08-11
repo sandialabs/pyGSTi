@@ -766,6 +766,169 @@ class HelperRejectsMalformedInputTester(BaseCase):
             self.design.color_patches)
 
 
+class MapQubitLabelsTester(BaseCase):
+    """
+    Cover ``SimultaneousGSTDesign.map_qubit_labels``.
+
+    The inherited ``GateSetTomographyDesign.map_qubit_labels`` returns a plain
+    ``GateSetTomographyDesign``, which silently drops the edge coloring and the
+    1Q/2Q sub-designs -- a downgrade rather than a crash, so nothing catches it
+    but a test that looks. The override exists to relabel every piece of the
+    design's own state and hand back the same class.
+
+    Two behaviours here are easy to "fix" into being wrong, so each gets its own
+    test: the sub-designs must *not* be relabelled (they live on abstract lane
+    labels, not device qubits), and the circuits must be relabelled rather than
+    re-stitched (re-stitching would redraw the stitcher's random schedules and
+    quietly return a different experiment).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pspec, cls.qubits, cls.line_edges = _line_pspec(3)
+        cls.oneq, cls.twoq = _make_designs()
+        cls.design = make_simultaneous_gst_design(cls.pspec, cls.oneq, cls.twoq, seed=0)
+        #: Shifts the device off the lane labels (0, 1, 2) entirely, so a mapper
+        #: wrongly applied to the sub-designs shows up as changed lane labels.
+        cls.mapper = {q: 'Q%d' % q for q in cls.design.vertices}
+        cls.mapped = cls.design.map_qubit_labels(cls.mapper)
+
+    # -- the returned object -------------------------------------------------
+
+    def test_returns_a_simultaneous_gst_design(self):
+        # The whole point of the override: the inherited implementation returns
+        # a GateSetTomographyDesign, losing color_patches and the sub-designs.
+        self.assertIsInstance(self.mapped, SimultaneousGSTDesign)
+
+    def test_processor_spec_and_qubit_labels_are_mapped(self):
+        self.assertEqual(self.mapped.processor_spec.qubit_labels, ('Q0', 'Q1', 'Q2'))
+        self.assertEqual(self.mapped.vertices, ('Q0', 'Q1', 'Q2'))
+        self.assertEqual(self.mapped.qubit_labels, ('Q0', 'Q1', 'Q2'))
+
+    def test_color_patches_are_mapped(self):
+        # Without this the design would describe patches over qubits that no
+        # longer exist, and its own validator would reject it.
+        self.assertEqual(
+            self.mapped.color_patches,
+            {patch: [tuple('Q%d' % q for q in edge) for edge in edge_set]
+             for patch, edge_set in self.design.color_patches.items()})
+
+    def test_mapped_design_passes_its_own_validator(self):
+        # The relabelled circuits must still sit on the relabelled patches.
+        assert_circuit_lists_match_color_patches(
+            self.mapped.circuit_lists, self.mapped.vertices,
+            self.mapped.color_patches)
+
+    def test_nested_flag_and_list_shape_are_preserved(self):
+        # Relabelling is a bijection on qubits, so it can neither merge circuits
+        # nor break nesting; a shape change here means something was rebuilt.
+        self.assertEqual(self.mapped.nested, self.design.nested)
+        self.assertEqual([len(cl) for cl in self.mapped.circuit_lists],
+                         [len(cl) for cl in self.design.circuit_lists])
+        self.assertEqual(len(self.mapped.all_circuits_needing_data),
+                         len(self.design.all_circuits_needing_data))
+
+    def test_derived_graph_state_is_recomputed_from_the_mapped_pspec(self):
+        # edges/neighbors/deg are re-derived rather than mapped, so they must be
+        # canonical for the new labels -- same shape of graph, new names.
+        self.assertEqual(sorted(self.mapped.edges), [('Q0', 'Q1'), ('Q1', 'Q2')])
+        self.assertEqual(self.mapped.deg, self.design.deg)
+        self.assertEqual({v: sorted(ns) for v, ns in self.mapped.neighbors.items()},
+                         {'Q0': ['Q1'], 'Q1': ['Q0', 'Q2'], 'Q2': ['Q1']})
+
+    # -- circuits are relabelled, not rebuilt --------------------------------
+
+    def test_circuits_are_relabelled_one_for_one(self):
+        expected = [[c.map_state_space_labels(self.mapper) for c in circuit_list]
+                    for circuit_list in self.design.circuit_lists]
+        self.assertEqual([list(cl) for cl in self.mapped.circuit_lists], expected)
+
+    def test_mapping_back_recovers_the_original_circuits(self):
+        # A round trip through the inverse mapper is the sharpest statement that
+        # no circuit *content* changed: had the design been re-stitched, the
+        # stitcher would have drawn fresh random schedules and the circuits
+        # would differ despite carrying the right line labels.
+        inverse = {new: old for old, new in self.mapper.items()}
+        roundtripped = self.mapped.map_qubit_labels(inverse)
+        self.assertEqual([list(cl) for cl in roundtripped.circuit_lists],
+                         [list(cl) for cl in self.design.circuit_lists])
+
+    def test_the_circuit_stitcher_is_never_called(self):
+        # Direct version of the test above: re-running the stitcher is the
+        # tempting "just call __init__" implementation, and it is wrong.
+        def _explode(*args, **kwargs):
+            raise AssertionError("circuit_stitcher must not be re-run when relabelling")
+
+        original = self.design.circuit_stitcher
+        self.design.circuit_stitcher = _explode
+        try:
+            mapped = self.design.map_qubit_labels(self.mapper)
+        finally:
+            self.design.circuit_stitcher = original
+        self.assertEqual([list(cl) for cl in mapped.circuit_lists],
+                         [list(cl) for cl in self.mapped.circuit_lists])
+
+    # -- the sub-designs are deliberately left alone -------------------------
+
+    def test_sub_designs_are_carried_over_unmapped(self):
+        # oneq/twoq GST designs live on abstract lane labels ((0,) and (0, 1)),
+        # not on device qubits. Applying a device mapper to them would corrupt
+        # them -- or KeyError -- so they must be passed through untouched.
+        self.assertIs(self.mapped.oneq_gstdesign, self.design.oneq_gstdesign)
+        self.assertIs(self.mapped.twoq_gstdesign, self.design.twoq_gstdesign)
+        self.assertEqual(self.mapped.oneq_gstdesign.qubit_labels, (0,))
+        self.assertEqual(self.mapped.twoq_gstdesign.qubit_labels, (0, 1))
+
+    # -- mapper forms, immutability, and the self-check ----------------------
+
+    def test_callable_mapper_matches_dict_mapper(self):
+        # `mapper` is documented as "dict or function" throughout the design
+        # hierarchy; the two spellings must agree.
+        via_callable = self.design.map_qubit_labels(lambda q: 'Q%d' % q)
+        self.assertEqual([list(cl) for cl in via_callable.circuit_lists],
+                         [list(cl) for cl in self.mapped.circuit_lists])
+        self.assertEqual(via_callable.color_patches, self.mapped.color_patches)
+
+    def test_a_permutation_of_the_existing_labels_is_handled(self):
+        # Mapping onto the *same* label set is the case where an in-place
+        # implementation would corrupt the design mid-map, and where the edges
+        # have to be re-canonicalized rather than carried over.
+        reversal = {q: 2 - q for q in self.design.vertices}
+        mapped = self.design.map_qubit_labels(reversal)
+        self.assertEqual(mapped.vertices, (2, 1, 0))
+        self.assertEqual(sorted(mapped.edges), [(0, 1), (1, 2)])
+        assert_circuit_lists_match_color_patches(
+            mapped.circuit_lists, mapped.vertices, mapped.color_patches)
+
+    def test_original_design_is_not_mutated(self):
+        # setUpClass builds `mapped` once and shares it, so a mutating
+        # implementation would corrupt every other test in this class.
+        self.assertEqual(self.design.vertices, (0, 1, 2))
+        self.assertEqual(self.design.qubit_labels, (0, 1, 2))
+        self.assertEqual(self.design.processor_spec.qubit_labels, (0, 1, 2))
+        self.assertEqual(self.design.color_patches, {0: [(0, 1)], 1: [(1, 2)]})
+        self.assertEqual(self.design.circuit_lists[-1][0].line_labels, (0, 1, 2))
+
+    def test_debug_check_rejects_a_design_that_was_already_malformed(self):
+        # map_qubit_labels re-runs the design's own validator, so a design built
+        # with debug_check=False cannot launder itself clean by being relabelled.
+        malformed = SimultaneousGSTDesign(
+            self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
+            circuit_stitcher=(lambda *a, **kw: [[Circuit([Label('Gcnot', (0, 1))],
+                                                         line_labels=(0, 1, 2))]]),
+            debug_check=False)
+
+        with self.assertRaises(AssertionError) as ctx:
+            malformed.map_qubit_labels(self.mapper)
+        self.assertIn('split evenly', str(ctx.exception))
+
+        # ...and debug_check=False switches that verification off here too.
+        relabelled = malformed.map_qubit_labels(self.mapper, debug_check=False)
+        self.assertEqual([list(cl) for cl in relabelled.circuit_lists],
+                         [[Circuit([Label('Gcnot', ('Q0', 'Q1'))],
+                                   line_labels=('Q0', 'Q1', 'Q2'))]])
+
+
 def _tee_pspec(edges):
     """
     A 4-qubit "T": qubit 1 is a degree-3 hub joined to 0, 2 and 3.
