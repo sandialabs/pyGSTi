@@ -45,14 +45,28 @@ from .slicetools import *
 from .symplectic import *
 from .typeddict import TypedDict
 
+# Submodules exposed on this package but imported on first access rather than eagerly.
+# These cannot be imported at module scope: pygsti.baseobjs.errorgenbasis imports
+# pygsti.tools, so an eager import here re-enters baseobjs while it is still
+# initializing and raises ImportError.  Deferring also keeps optional third-party
+# dependencies (e.g. stim, which errgenproptools warns about when missing) from being
+# probed on a plain `import pygsti`.
+_LAZY_SUBMODULES = ('errgenproptools',)
+
 
 def __getattr__(name):
-    # PEP 562 hook: serve deprecation shims for leakage routines relocated to
-    # pygsti.leakage.  Only fires for names not otherwise defined in this module.
+    # PEP 562 hook: import lazily-exposed submodules on demand, and serve deprecation
+    # shims for leakage routines relocated to pygsti.leakage.  Only fires for names not
+    # otherwise defined in this module.
+    if name in _LAZY_SUBMODULES:
+        import importlib
+        module = importlib.import_module('.' + name, __name__)
+        globals()[name] = module  # cache, so later lookups skip this hook entirely
+        return module
     if name in _LEAKAGE_NAMES:
         return _get_leakage_shim(name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def __dir__():
-    return sorted(list(globals()) + list(_LEAKAGE_NAMES))
+    return sorted(set(globals()) | set(_LEAKAGE_NAMES) | set(_LAZY_SUBMODULES))
