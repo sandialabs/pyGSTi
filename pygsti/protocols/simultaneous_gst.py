@@ -18,7 +18,9 @@ from pygsti.circuits.circuit import Circuit
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label, LabelTup
 
-from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
+from pygsti.tools.graphcoloring import (
+    canonical_edges, find_neighbors, switchboard_find_edge_coloring,
+)
 
 # Type aliases for the graph / stitching data structures used throughout.
 Vertex = Union[int, str]
@@ -32,27 +34,13 @@ SeedLike = Union[int, np.random.SeedSequence, np.random.Generator]
 # constructor, the default circuit stitcher (documented as pluggable, so callers
 # need to be able to name it), and the stitcher-agnostic output validator (which
 # anyone writing their own stitcher is expected to run). The remaining helpers
-# -- ``find_neighbors``, ``patch_lines``, ``make_line_mapper``,
-# ``build_patch_infos``, ``random_index_schedule``, and friends -- are
-# deliberately left out: they have generic names that would collide in the
-# shared ``pygsti.protocols`` namespace, and they remain importable from this
-# module directly.
+# are deliberately left out.
 __all__ = [
     'SimultaneousGSTDesign',
     'make_simultaneous_gst_design',
     'assign_the_designs_with_mapping',
     'assert_circuit_lists_match_color_patches',
 ]
-
-
-def find_neighbors(vertices: Sequence[Vertex], edges: Sequence[Edge]) -> Dict[Vertex, List[Vertex]]:
-    """
-    Scan `edges` to build a dict mapping each vertex to its list of neighbors.
-    """
-    neighbors = {v: [] for v in vertices}
-    for e in edges:
-        neighbors[e[0]].append(e[1])
-    return neighbors
 
 
 def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign: GateSetTomographyDesign) -> LayerMappers:
@@ -141,8 +129,7 @@ def make_simultaneous_gst_design(
     than 0 displays a progress bar over germ powers while stitching.
     """
     vertices = cast(List[Vertex] , list(nq_pspec.qubit_labels))
-    edges = nq_pspec.compute_2Q_connectivity().edges()
-    edges = list(set(edges))
+    edges = canonical_edges(nq_pspec.compute_2Q_connectivity().edges())
     neighbors = find_neighbors(vertices, edges)
     deg = max(len(neighbors[v]) for v in vertices)
     coloring_seed, stitcher_seed = np.random.SeedSequence(seed).spawn(2)
@@ -244,7 +231,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         self.oneq_gstdesign = oneq_gstdesign
         self.twoq_gstdesign = twoq_gstdesign
         self.vertices = self.processor_spec.qubit_labels
-        self.edges = self.processor_spec.compute_2Q_connectivity().edges()
+        self.edges = canonical_edges(self.processor_spec.compute_2Q_connectivity().edges())
         self.neighbors = find_neighbors(self.vertices, self.edges)
         self.deg = max([len(self.neighbors[v]) for v in self.vertices])
         self.color_patches = edge_coloring

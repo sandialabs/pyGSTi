@@ -20,8 +20,9 @@ from pygsti.protocols.simultaneous_gst import (
     SimultaneousGSTDesign, assert_circuit_lists_match_color_patches,
     assert_mapped_circuit_matches_patch, assert_no_implicit_idles,
     assign_the_designs_with_mapping, build_layer_mappers,
-    build_patch_infos, find_neighbors, make_line_mapper, make_simultaneous_gst_design,
+    build_patch_infos, make_line_mapper, make_simultaneous_gst_design,
 )
+from pygsti.tools.graphcoloring import check_valid_edge_coloring
 from ..util import BaseCase
 
 
@@ -765,28 +766,98 @@ class HelperRejectsMalformedInputTester(BaseCase):
             self.design.color_patches)
 
 
-class FindNeighborsTester(BaseCase):
-    """``find_neighbors`` adjacency construction."""
+def _tee_pspec(edges):
+    """
+    A 4-qubit "T": qubit 1 is a degree-3 hub joined to 0, 2 and 3.
 
-    def test_undirected_edge_list_is_recorded_once_per_edge(self):
-        # `edges` holds one copy of each undirected edge -- deliberately not
-        # both (u, v) and (v, u) -- so that downstream edge-coloring colors each
-        # edge once rather than once per direction. find_neighbors records each
-        # edge in the direction it was given.
-        vertices = (0, 1, 2)
-        edges = [(0, 1), (1, 2)]
-        self.assertEqual(find_neighbors(vertices, edges),
-                         {0: [1], 1: [2], 2: []})
+    ``edges`` selects how that one physical graph is *written* in availability;
+    the hardware is the same whichever way each tuple is oriented.
 
-    def test_isolated_vertices_get_empty_neighbor_lists(self):
-        # Every vertex must appear as a key even with no incident edges, since
-        # callers index `neighbors[v]` for all v when computing the max degree.
-        self.assertEqual(find_neighbors((0, 1, 2), [(0, 1)]),
-                         {0: [1], 1: [], 2: []})
+    See :func:`_line_pspec` for why "Gii" must be available on every 2Q edge.
+    """
+    qubits = (0, 1, 2, 3)
+    oneq_locations = [(q,) for q in qubits]
+    availability = {
+        'Gi': oneq_locations,
+        'Gxpi2': oneq_locations,
+        'Gypi2': oneq_locations,
+        'Gcnot': list(edges),
+        'Gii': list(edges),
+    }
+    return QubitProcessorSpec(
+        4, gate_names=['Gi', 'Gxpi2', 'Gypi2', 'Gcnot', 'Gii'],
+        nonstd_gate_unitaries={'Gii': np.eye(4)},
+        availability=availability, qubit_labels=qubits,
+    )
 
-    def test_multiple_neighbors_accumulate_in_edge_order(self):
-        self.assertEqual(find_neighbors((0, 1, 2, 3), [(1, 0), (1, 2), (1, 3)]),
-                         {0: [], 1: [0, 2, 3], 2: [], 3: []})
+
+class DirectedAvailabilityTeeTester(BaseCase):
+    """
+    A degree-3 hub whose availability is written one-directional.
+
+    ``find_neighbors`` used to walk only ``e[0] -> e[1]``, so naming each edge
+    once understated the max degree -- 2 instead of 3 here -- and the coloring
+    packed adjacent edges into one color. That patch reached ``batch_tensor``
+    as the five lines ``[(0, 1), (1, 2), (3,)]`` on a four-qubit device and
+    tripped a bare, message-less assert far below its cause.
+
+    Hand-written availability is what armed it: ``geometry='line'`` and friends
+    emit both orientations themselves, making the old map accidentally
+    symmetric, but spelling out a T or heavy-hex by hand does not -- and one
+    entry per edge is natural for CNOT, where control/target is real.
+
+    ``test_graphcoloring.TeeOrientationInvarianceTester`` covers the graph-level
+    facts on plain edge lists. What needs a pspec, and is what actually
+    regressed, is that the design is constructible at all.
+    """
+
+    #: Each edge written once, pointing away from the hub where possible.
+    ONE_DIRECTIONAL = [(0, 1), (1, 2), (1, 3)]
+    #: The same graph with both orientations of every edge.
+    TWO_DIRECTIONAL = ONE_DIRECTIONAL + [(1, 0), (2, 1), (3, 1)]
+
+    def _build(self, edges):
+        oneq, twoq = _make_designs()
+        return make_simultaneous_gst_design(_tee_pspec(edges), oneq, twoq, seed=0)
+
+    def test_design_construction_survives_a_one_directional_tee(self):
+        # The call that used to die inside `batch_tensor` on
+        # `assert not s.intersection(t)`. `check_valid_edge_coloring` is the
+        # coloring package's own notion of proper: no two edges in a patch may
+        # share a qubit, i.e. every patch is physically runnable.
+        design = self._build(self.ONE_DIRECTIONAL)
+        self.assertTrue(
+            check_valid_edge_coloring(design.color_patches, ret_false_on_error=True))
+
+    def test_design_construction_works_for_a_two_directional_tee(self):
+        # This spelling used to be the one that worked, back when the doubled
+        # edges were what made the adjacency map accidentally symmetric. It is
+        # no longer independent cover: `canonical_edges` now collapses both
+        # spellings to the same one-directional list before `find_neighbors`
+        # sees them, so this fails too if `find_neighbors` regresses. Kept
+        # because the doubled list is what a `geometry=`-built pspec produces,
+        # and it must keep round-tripping to the same design.
+        design = self._build(self.TWO_DIRECTIONAL)
+        self.assertTrue(
+            check_valid_edge_coloring(design.color_patches, ret_false_on_error=True))
+
+    def test_both_spellings_build_the_same_design(self):
+        # Orientation is notation, not physics, so the two availability
+        # spellings must yield the same patches and the same circuits.
+        one = self._build(self.ONE_DIRECTIONAL)
+        two = self._build(self.TWO_DIRECTIONAL)
+        self.assertEqual(one.color_patches, two.color_patches)
+        self.assertEqual([[c.str for c in L] for L in one.circuit_lists],
+                         [[c.str for c in L] for L in two.circuit_lists])
+
+    def test_design_edges_are_canonical_whichever_spelling_is_used(self):
+        # `SimultaneousGSTDesign.__init__` re-derives the edges from the pspec
+        # rather than reusing the ones the coloring was built from, so it has to
+        # canonicalize them the same way `make_simultaneous_gst_design` does.
+        one = self._build(self.ONE_DIRECTIONAL)
+        two = self._build(self.TWO_DIRECTIONAL)
+        self.assertEqual(sorted(one.edges), sorted(two.edges))
+        self.assertEqual(sorted(one.edges), [(0, 1), (1, 2), (1, 3)])
 
 
 class MakeLineMapperValidationTester(BaseCase):
