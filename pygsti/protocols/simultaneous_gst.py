@@ -167,7 +167,6 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
     **stitcher_kwargs: Extra keyword arguments forwarded verbatim to ``circuit_stitcher``.
 
     circuit_lists (list): The generated list of stitched circuits.
-    aux_info (dict): Auxiliary information mapping circuits to their corresponding edges and vertices.
     """
     def __init__(self, processor_spec: QubitProcessorSpec,
                  oneq_gstdesign: GateSetTomographyDesign,
@@ -245,9 +244,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         self.circuit_lists = circuit_stitcher(
             self.oneq_gstdesign, self.twoq_gstdesign, self.vertices, self.color_patches, **kwargs,
         )
-        # The default stitcher (assign_the_designs_with_mapping) does not produce
-        # aux_info; keep the attribute for API compatibility.
-        self.aux_info = {}
+
 
         if debug_check:
             # Stitcher-agnostic verification of circuit_lists: runs no matter
