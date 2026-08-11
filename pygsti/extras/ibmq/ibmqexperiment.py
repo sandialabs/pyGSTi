@@ -35,7 +35,7 @@ except:
 try: 
     from qiskit_ibm_runtime.transpiler.passes import ConvertToMidCircuitMeasure
     from qiskit_ibm_runtime import SamplerV2 as _Sampler
-    from qiskit_ibm_runtime import Session as _Session
+    from qiskit_ibm_runtime import Batch as _Batch
     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
     from qiskit_ibm_runtime import IBMBackend as _IBMBackend
 except:
@@ -378,7 +378,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             self.write()
 
 
-    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_session=None):
+    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_batch=None):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -412,8 +412,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         wait_steps: int
             Number of steps to take before retrying job submission.
 
-        ibmq_session: IBMQuantumRuntimeSession
-            IBMQuantumRuntime Session to use 
+        ibmq_batch: IBMQuantumRuntimeBatch
+            IBMQuantumRuntime Batch to use 
 
         Returns
         -------
@@ -458,15 +458,11 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
             stop = min(start + allowed_jobs, stop)
         
-        if ibmq_session is None: 
-            ibmq_session = _Session(backend = ibmq_backend)
+        if ibmq_batch is None: 
+            ibmq_batch = _Batch(backend = ibmq_backend)
 
-        sampler = _Sampler(mode=ibmq_session)
-        
-        sampler.options.dynamical_decoupling.enable = True
-        sampler.options.dynamical_decoupling.sequence_type = "XpXm"
-        sampler.options.dynamical_decoupling.extra_slack_distribution = "middle"
-
+        sampler = _Sampler(mode=ibmq_batch)
+    
         for batch_idx, batch in enumerate(self.qiskit_isa_circuit_batches):
             if batch_idx < start or batch_idx >= stop:
                 continue
