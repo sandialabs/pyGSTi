@@ -114,21 +114,29 @@ class MatrixToolsTester(BaseCase):
         b = np.array([3.1, 2.1, 4.1, 1.1], 'd')
         expectedPairs = [(0, 3), (1, 1), (2, 0), (3, 2)]  # (i,j) indices into a & b
 
+        # Every matched pair in this fixture differs by exactly 0.1, so the weights
+        # are as diagnostic as the pairs -- assert them, not just the matching.
+        expectedWeights = np.full(len(a), 0.1)
+
         wts = mt.minweight_match(a, b, metricfn=None, return_pairs=False,
                                  pass_indices_to_metricfn=False)
+        self.assertArraysAlmostEqual(wts, expectedWeights)
         wts, pairs = mt.minweight_match(a, b, metricfn=None, return_pairs=True,
                                         pass_indices_to_metricfn=False)
         self.assertEqual(set(pairs), set(expectedPairs))
+        self.assertArraysAlmostEqual(wts, expectedWeights)
 
         def fn(x, y): return abs(x - y)
         wts, pairs = mt.minweight_match(a, b, metricfn=fn, return_pairs=True,
                                         pass_indices_to_metricfn=False)
         self.assertEqual(set(pairs), set(expectedPairs))
+        self.assertArraysAlmostEqual(wts, expectedWeights)
 
         def fn(i, j): return abs(a[i] - b[j])
         wts, pairs = mt.minweight_match(a, b, metricfn=fn, return_pairs=True,
                                         pass_indices_to_metricfn=True)
         self.assertEqual(set(pairs), set(expectedPairs))
+        self.assertArraysAlmostEqual(wts, expectedWeights)
 
     def test_fancy_assignment(self):
         a = np.zeros((4, 4, 4), 'd')

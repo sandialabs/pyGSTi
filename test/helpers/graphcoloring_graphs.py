@@ -18,6 +18,7 @@ coloring is *correct* -- cannot land in one suite and not the other.
 
 import numpy as np
 
+from pygsti.tools.graphcoloring import find_neighbors
 from pygsti.tools.graphcoloring._dispatch import VALID_ALGORITHMS
 
 
@@ -53,15 +54,14 @@ SPARSE_SAFE = ["vizing", "misra_gries", "auto"]
 def _finalize(vertices, edges):
     """Build the (vertices, edges, neighbors, deg) 4-tuple the API expects.
 
-    ``edges`` is a list of undirected ``(u, v)`` pairs (each listed once). The
-    neighbor lists are symmetric, and ``deg`` is the true maximum degree.
+    ``edges`` is a list of undirected ``(u, v)`` pairs (each listed once).
+    Adjacency comes from `find_neighbors` rather than a hand-rolled copy, so
+    these fixtures cannot drift from the symmetric map the API expects.
     """
-    neighbors = {v: [] for v in vertices}
-    for u, v in edges:
-        neighbors[u].append(v)
-        neighbors[v].append(u)
+    vertices = list(vertices)
+    neighbors = find_neighbors(vertices, edges)
     deg = max((len(neighbors[v]) for v in vertices), default=0)
-    return list(vertices), list(edges), neighbors, deg
+    return vertices, list(edges), neighbors, deg
 
 
 def make_cycle_graph(n):
@@ -114,6 +114,16 @@ def make_torus_graph(s):
             elif s > 2:
                 edges.append((idx(r, c), idx(0, c)))
     return _finalize(range(s * s), edges)
+
+
+def make_tee_graph():
+    """A 4-vertex "T": vertex 1 is a degree-3 hub joined to 0, 2 and 3.
+
+    The smallest graph `detect_topology` calls "unknown", so "auto" must take a
+    real coloring path rather than a closed form that ignores `deg`. See
+    `TeeOrientationInvarianceTester`.
+    """
+    return _finalize(range(4), [(0, 1), (1, 2), (1, 3)])
 
 
 def make_high_degree_graph():

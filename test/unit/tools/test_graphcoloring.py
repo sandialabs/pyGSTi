@@ -12,7 +12,9 @@ import numpy as np
 import pytest
 
 from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
-from pygsti.tools.graphcoloring._common import check_valid_edge_coloring, order
+from pygsti.tools.graphcoloring._common import (
+    canonical_edges, check_valid_edge_coloring, find_neighbors, order,
+)
 from pygsti.tools.graphcoloring._topology import detect_topology
 from pygsti.tools.graphcoloring._sinnamon import (
     sinnamon_2d_minus_1_edge_coloring,
@@ -34,6 +36,7 @@ from ...helpers.graphcoloring_graphs import (
     make_high_degree_graph,
     make_path_graph,
     make_random_regular_graph,
+    make_tee_graph,
     make_torus_graph,
 )
 
@@ -283,6 +286,130 @@ class EulerianPartitionTester(BaseCase):
 # ---------------------------------------------------------------------------
 # Class-based (example) tests.
 # ---------------------------------------------------------------------------
+class CanonicalEdgesTester(BaseCase):
+    """``canonical_edges`` dedup and orientation."""
+
+    def test_canonical_edges_behavior(self):
+        import pygsti.tools.graphcoloring as gc
+        self.assertIn('canonical_edges', gc.__all__)
+        self.assertIs(gc.canonical_edges, canonical_edges)
+        
+        self.assertEqual(canonical_edges([(0, 1), (1, 0), (1, 2), (2, 1)]), [(0, 1), (1, 2)])
+        self.assertEqual(canonical_edges([(1, 0), (2, 1)]), [(0, 1), (1, 2)])
+        
+        # Orientation matches order() coloring convention
+        edges = canonical_edges([(3, 1), (1, 0)])
+        self.assertEqual(edges, [order(3, 1), order(1, 0)])
+        
+        # First encounter order is preserved, not sorted
+        self.assertEqual(canonical_edges([(2, 1), (1, 0)]), [(1, 2), (0, 1)])
+        self.assertEqual(canonical_edges([]), [])
+
+
+class TeeOrientationInvarianceTester(BaseCase):
+    """Colorings must not depend on which way an edge's endpoints were written."""
+
+    #: (name, vertices, undirected edges) -- each edge written once.
+    SHAPES = {
+        "tee": (list(range(4)), [(0, 1), (1, 2), (1, 3)]),
+        "star_inward": (list(range(4)), [(1, 0), (2, 0), (3, 0)]),
+        "grid_2x3": (list(range(6)),
+                     [(0, 1), (1, 2), (3, 4), (4, 5), (0, 3), (1, 4), (2, 5)]),
+        "path_5": (list(range(5)), [(0, 1), (1, 2), (2, 3), (3, 4)]),
+    }
+
+    @staticmethod
+    def _color(vertices, edges):
+        """Derive deg and colour, the way a caller of this package would."""
+        edges = canonical_edges(edges)
+        neighbors = find_neighbors(vertices, edges)
+        deg = max(len(nbrs) for nbrs in neighbors.values())
+        return deg, switchboard_find_edge_coloring(
+            "auto", deg, vertices, edges, neighbors, seed=0)
+
+    @staticmethod
+    def _spellings(edges):
+        """The same graph written one-directional, reversed, and both ways."""
+        return {
+            "one_directional": list(edges),
+            "reversed": [(v, u) for u, v in edges],
+            "two_directional": list(edges) + [(v, u) for u, v in edges],
+        }
+
+    def test_tee_hub_degree_is_three_however_its_edges_are_written(self):
+        # Walking only e[0] -> e[1] gave 2 here: neighbors came out as
+        # {0: [1], 1: [2, 3], 2: [], 3: []}, leaving 2 and 3 apparently
+        # isolated and never crediting the hub with its edge to 0.
+        vertices, edges = self.SHAPES["tee"]
+        for name, spelling in self._spellings(edges).items():
+            with self.subTest(spelling=name):
+                deg, _ = self._color(vertices, spelling)
+                self.assertEqual(deg, 3)
+
+    def test_colorings_are_proper_for_every_shape_and_spelling(self):
+        # `check_valid_edge_coloring` is the package's own definition of proper:
+        # no two edges in a colour may share a vertex.
+        for shape, (vertices, edges) in self.SHAPES.items():
+            for name, spelling in self._spellings(edges).items():
+                with self.subTest(shape=shape, spelling=name):
+                    _, coloring = self._color(vertices, spelling)
+                    self.assertTrue(
+                        check_valid_edge_coloring(coloring, ret_false_on_error=True))
+
+    def test_every_spelling_yields_the_same_coloring(self):
+        # Stronger than "all proper": orientation is notation, so the actual
+        # partition of edges into colours must be identical too.
+        for shape, (vertices, edges) in self.SHAPES.items():
+            with self.subTest(shape=shape):
+                results = {name: self._color(vertices, spelling)
+                           for name, spelling in self._spellings(edges).items()}
+                degrees = {deg for deg, _ in results.values()}
+                partitions = {_canonical_coloring(c) for _, c in results.values()}
+                self.assertEqual(len(degrees), 1)
+                self.assertEqual(len(partitions), 1)
+
+    def test_every_edge_is_colored_exactly_once(self):
+        # Doubling the input must not double the work: an extra orientation
+        # cannot cost extra colours (for the GST caller, extra circuits).
+        for shape, (vertices, edges) in self.SHAPES.items():
+            for name, spelling in self._spellings(edges).items():
+                with self.subTest(shape=shape, spelling=name):
+                    _, coloring = self._color(vertices, spelling)
+                    colored = [e for edge_set in coloring.values() for e in edge_set]
+                    self.assertEqual(sorted(colored), sorted(canonical_edges(edges)))
+
+    def test_shared_fixture_agrees_with_the_one_directional_spelling(self):
+        # The shared fixture must not drift from the literal used above.
+        vertices, edges, neighbors, deg = make_tee_graph()
+        self.assertEqual(deg, 3)
+        self.assertEqual((vertices, edges), tuple(self.SHAPES["tee"]))
+        self.assertEqual(neighbors, find_neighbors(*self.SHAPES["tee"]))
+
+
+class FindNeighborsTester(BaseCase):
+    """``find_neighbors`` adjacency construction."""
+
+    def test_find_neighbors_behavior(self):
+        import pygsti.tools.graphcoloring as gc
+        self.assertIn('find_neighbors', gc.__all__)
+        self.assertIs(gc.find_neighbors, find_neighbors)
+
+        # Each edge is recorded from both endpoints
+        self.assertEqual(find_neighbors((0, 1, 2), [(0, 1), (1, 2)]), {0: [1], 1: [0, 2], 2: [1]})
+
+        # Writing both orientations does not duplicate neighbors
+        one_directional = find_neighbors((0, 1, 2), [(0, 1), (1, 2)])
+        two_directional = find_neighbors((0, 1, 2), [(0, 1), (1, 0), (1, 2), (2, 1)])
+        self.assertEqual(two_directional, one_directional)
+
+        # Isolated vertices get empty neighbor lists
+        self.assertEqual(find_neighbors((0, 1, 2), [(0, 1)]), {0: [1], 1: [0], 2: []})
+
+        # Multiple neighbors accumulate in edge order
+        self.assertEqual(find_neighbors((0, 1, 2, 3), [(1, 0), (1, 2), (1, 3)]),
+                         {0: [1], 1: [0, 2, 3], 2: [1], 3: [1]})
+
+
 class GraphColoringTester(BaseCase):
     """Correctness tests for the deterministic (deg+1) edge-coloring algorithms.
 

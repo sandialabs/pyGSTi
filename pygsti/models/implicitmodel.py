@@ -15,6 +15,8 @@ import itertools as _itertools
 import uuid as _uuid
 
 from pygsti.models import model as _mdl
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict, LabelLike as _LabelLike
+from pygsti.modelmembers import ModelMember as _ModelMember
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
@@ -88,6 +90,30 @@ class ImplicitOpModel(_mdl.OpModel):
     @property
     def _primitive_instrument_label_dict(self):
         return self.instrument_blks['layers']
+
+    def __getitem__(self, key: _LabelLike) -> _ModelMember:
+        """
+        Search for `key` among this ImplicitOpModel's OrderedMemberDict objects for
+        gates, SPAM, instruments, and factories. Return the `value` from the first
+        match, or raise a KeyError if no matches are found.
+        """
+        key_label = _Label(key)
+        # Sort dicts by length as a heuristic for search efficiency (e.g. SPAM is usually O(1)).
+        dicts = []
+        for outer_dict in [self.prep_blks, self.povm_blks, self.operation_blks, self.instrument_blks, self.factories]:
+            for inner_dict in outer_dict.values():
+                if isinstance(inner_dict, _OrderedMemberDict) and inner_dict:
+                    dicts.append((len(inner_dict), inner_dict))
+        dicts.sort(key=lambda k: k[0])
+        for _, d in dicts:
+            try:
+                out = d[key_label]
+                return out
+            except KeyError:
+                continue
+        msg = f"Key {key} does not appear in any OrderedMemberDict\n"
+        msg += "belonging to this ImplicitOpModel."
+        raise KeyError(msg)
 
     #Functions required for base class functionality
 
