@@ -163,7 +163,7 @@ def _normalize_coloring(coloring: Mapping[int, Sequence[Edge]]) -> Dict[int, Lis
     the 2Q design, so canonicalizing orientation would silently move qubits between
     lanes while leaving every structural check happy.
     """
-    return {p: [tuple(e) for e in es][::-1] for p, es in coloring.items()}
+    return {patch: [tuple(edge) for edge in edge_set] for patch, edge_set in coloring.items()}
 
 
 def _stitcher_name(circuit_stitcher: CircuitStitcher) -> Optional[str]:
@@ -181,7 +181,7 @@ def _stitcher_name(circuit_stitcher: CircuitStitcher) -> Optional[str]:
     qualname = getattr(circuit_stitcher, '__qualname__', None)
     if qualname is None:
         return None
-    return '%s.%s' % (getattr(circuit_stitcher, '__module__', None), qualname)
+    return qualname
 
 
 def _resolve_stitcher_name(name: Optional[str]) -> Optional[CircuitStitcher]:

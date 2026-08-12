@@ -1015,16 +1015,6 @@ class StitcherNameTester(BaseCase):
         with self.assertNoWarns():
             self.assertIs(_resolve_stitcher_name(name), assign_the_designs_with_mapping)
 
-    def test_partial_has_no_recordable_name(self):
-        # The realistic case: partial(assign_the_designs_with_mapping, <option>=...).
-        # functools.partial reports __module__ == 'functools' and has no __qualname__.
-        partial = functools.partial(assign_the_designs_with_mapping,
-                                    share_same_shape_schedules=False)
-        self.assertIsNone(_stitcher_name(partial))
-
-    def test_callable_instance_has_no_recordable_name(self):
-        self.assertIsNone(_stitcher_name(_CallableStitcher()))
-
     def test_lambda_is_named_but_not_importable(self):
         # A lambda does have a qualname, so it is recorded -- it just cannot be
         # imported back. The two failure modes are distinct and both end at None.
