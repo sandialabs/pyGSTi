@@ -5,6 +5,8 @@ from pygsti.models.modelconstruction import create_operation
 from pygsti.modelpacks.legacy import std1Q_XYI as std1Q
 from pygsti.baseobjs import statespace
 from pygsti.baseobjs import Basis
+from pygsti.baseobjs.basis import BuiltinBasis, TensorProdBasis
+from pygsti.tools.optools import unitary_to_superop
 from pygsti.tools import jamiolkowski as j
 from ..util import BaseCase, needs_cvxpy
 
@@ -105,6 +107,28 @@ class JamiolkowskiOpsTester(BaseCase):
         magsOfNeg = j.magnitudes_of_negative_choi_eigenvalues(std1Q.target_model())
         self.assertArraysAlmostEqual(magsOfNeg, np.zeros(12, 'd'))  # 3 gates * 4 evals each = 12
 
+        # Guard Opt 4: Test magnitudes_of_negative_choi_eigenvalues with a genuinely non-CP model,
+        # verifying that it matches eigenvalues computed directly from the Choi matrices.
+        non_cp_model = std1Q.target_model().copy()
+        rng = np.random.default_rng(42)
+        for gl, gate in non_cp_model.operations.items():
+            dense = gate.to_dense().copy()
+            dense[1:, :] += rng.normal(scale=0.1, size=dense[1:, :].shape)
+            non_cp_model.operations[gl] = dense
+
+        expected_mags = []
+        std_basis = non_cp_model.basis
+        simple_std = std_basis.create_simple_equivalent('std')
+        for gl, gate in non_cp_model.operations.items():
+            J = j.jamiolkowski_iso(gate.to_dense('minimal'), std_basis, choi_mx_basis=simple_std)
+            from pygsti.tools import matrixtools as mt
+            evals = mt.eigenvalues(J, assume_hermitian=True)
+            for ev in evals:
+                expected_mags.append(-ev if ev < 0 else 0.0)
+
+        mags = j.magnitudes_of_negative_choi_eigenvalues(non_cp_model)
+        self.assertArraysAlmostEqual(np.array(mags), np.array(expected_mags))
+
     def test_fast_jamiolkowski_iso(self):
         choiStd = j.jamiolkowski_iso(self.mxStd, self.std, self.std)
         fastChoiStd = j.fast_jamiolkowski_iso_std(self.mxStd, self.std)
@@ -122,6 +146,14 @@ class JamiolkowskiOpsTester(BaseCase):
         self.assertArraysAlmostEqual(fastGateStd, self.mxStd)
         self.assertArraysAlmostEqual(fastGateGM, self.mxGM)
         self.assertArraysAlmostEqual(fastGatePP, self.mxPP)
+
+    def test_fast_jamiolkowski_iso_std_unnormalized(self):
+        fastChoiStdUnnorm = j.fast_jamiolkowski_iso_std(self.mxGM, self.gm, normalized=False)
+        self.assertAlmostEqual(np.trace(fastChoiStdUnnorm), 2.0)
+        self.assertArraysAlmostEqual(fastChoiStdUnnorm, 2.0 * j.fast_jamiolkowski_iso_std(self.mxGM, self.gm))
+
+        fastGateGMUnnorm = j.fast_jamiolkowski_iso_std_inv(fastChoiStdUnnorm, self.gm, normalized=False)
+        self.assertArraysAlmostEqual(fastGateGMUnnorm, self.mxGM)
 
     def test_jamiolkowski_iso(self):
         choiStd = j.jamiolkowski_iso(self.mxStd, self.std, self.std)
@@ -260,3 +292,79 @@ class JamiolkowskiCVXPYTester(BaseCase):
         self.assertFalse(bt.is_cvxpy_expression(np.eye(4)))
         self.assertFalse(bt.is_cvxpy_expression(1.0))
         self.assertFalse(bt.is_cvxpy_expression(None))
+
+
+class JamiolkowskiLeakageBasisTester(BaseCase):
+    """
+    Tests `jamiolkowski_iso` with a leakage tensor-product basis (e.g., pp ⊗ l2p1).
+    This exercises the fallback branch in `jamiolkowski_iso` when `create_simple_equivalent`
+    fails for bases with no same-name builtin equivalent.
+    """
+
+    def setUp(self):
+        # 36-dimensional qubit x qutrit tensor product basis
+        self.tp = TensorProdBasis((BuiltinBasis('pp', 4), BuiltinBasis('l2p1', 9)))
+        self.dm_dim = 6
+
+        # Build a 6x6 unitary (qubit flip x qutrit rotation mixing level 1 and 2)
+        X_qubit = np.array([[0, 1], [1, 0]], dtype=complex)
+        theta = 0.3
+        R_qutrit = np.eye(3, dtype=complex)
+        R_qutrit[1, 1] = np.cos(theta)
+        R_qutrit[2, 2] = np.cos(theta)
+        R_qutrit[1, 2] = -np.sin(theta)
+        R_qutrit[2, 1] = np.sin(theta)
+        U = np.kron(X_qubit, R_qutrit)
+
+        # Convert the unitary to a superoperator in our tensor-product basis
+        self.superop = unitary_to_superop(U, self.tp)
+
+    def test_simple_equivalent_unavailable(self):
+        # Precondition check: the leakage tensor-product basis does not have a same-name
+        # builtin equivalent, which raises AssertionError during create_simple_equivalent().
+        self.assertRaises(AssertionError, self.tp.create_simple_equivalent)
+
+    def test_iso_falls_back_to_basis_elements(self):
+        # Exercises the fallback: uses choi_mx_basis.elements directly.
+        J = j.jamiolkowski_iso(self.superop, self.tp, self.tp)
+
+        self.assertEqual(J.shape, (36, 36))
+        self.assertAlmostEqual(np.trace(J), 1.0)
+        self.assertArraysAlmostEqual(J, J.conj().T)
+        self.assertGreater(np.linalg.eigvalsh(J).min(), -1e-10)
+
+        # Verification of correctness via reconstruction identity:
+        # S_std = sum_ik J_ik * d * kron(B_i, conj(B_k))
+        B = self.tp.elements
+        reconstructed = np.zeros_like(self.superop, dtype=complex)
+        for i in range(36):
+            for k in range(36):
+                reconstructed += J[i, k] * np.kron(B[i], np.conjugate(B[k])) * self.dm_dim
+
+        # Check against standard process matrix representation
+        simple_std = self.tp.create_simple_equivalent('std')
+        expected_std = bt.change_basis(self.superop, self.tp, simple_std)
+        self.assertArraysAlmostEqual(reconstructed, expected_std)
+
+    def test_iso_unnormalized(self):
+        J_unnorm = j.jamiolkowski_iso(self.superop, self.tp, self.tp, normalized=False)
+        self.assertAlmostEqual(np.trace(J_unnorm), float(self.dm_dim))
+        self.assertArraysAlmostEqual(J_unnorm, self.dm_dim * j.jamiolkowski_iso(self.superop, self.tp, self.tp))
+
+    def test_iso_eigenvalues_match_fast_std(self):
+        # Choi eigenvalues must be basis-independent.
+        # fast_jamiolkowski_iso_std does not call create_simple_equivalent on the target basis,
+        # so it avoids the fallback pathway but must produce the exact same eigenvalues.
+        J = j.jamiolkowski_iso(self.superop, self.tp, self.tp)
+        Jstd = j.fast_jamiolkowski_iso_std(self.superop, self.tp)
+
+        ev = np.sort(np.linalg.eigvalsh(J))
+        ev_std = np.sort(np.linalg.eigvalsh(Jstd))
+        self.assertArraysAlmostEqual(ev, ev_std)
+
+    def test_iso_inv_rejects_leakage_basis(self):
+        # jamiolkowski_iso_inv lacks the try-except fallback in line 207,
+        # so it currently raises AssertionError when given the leakage basis.
+        # This test documents today's behavior.
+        J = j.jamiolkowski_iso(self.superop, self.tp, self.tp)
+        self.assertRaises(AssertionError, j.jamiolkowski_iso_inv, J, self.tp, self.tp)
