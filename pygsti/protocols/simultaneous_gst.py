@@ -66,7 +66,9 @@ def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign:
     assert empty_label not in mapper_2q.values()
     assert empty_label not in mapper_1q.values()
 
-    # For any single-qubit targets in mapper_2q, add explicit single-qubit idle and wrap as Label
+    # Check for any labels in `mapper_2q` that imply a single-qubit target.
+    # For any such label, add an explicit single-qubit idle on the non-target
+    # qubit, and wrap the whole thing as a LabelTupTup.
     for k2 in list(mapper_2q.keys()):
         if k2.num_qubits == 1:
             assert isinstance(k2, LabelTup)

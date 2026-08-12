@@ -177,7 +177,12 @@ class LocalNoiseModel(_ImplicitOpModel):
         self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        # TODO: Unclear why instrument_blks is only keyed by layers, as gates can have direct instrument analogs.
+        # ^ Unclear why instrument_blks should only be keyed by `layers`.
+        #
+        #     I'll grant that it seems weird to key by `gates`, but the things
+        #     stored in operation_blks['gates'] have direct instrument analogs
+        #     that aren't suitable for instrument_blks['layers'].
+        #
         self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
 
