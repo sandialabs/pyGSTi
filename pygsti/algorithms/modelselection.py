@@ -6,11 +6,10 @@ import warnings
 import time
 from pygsti.tools.modelselectiontools import create_red_model, reduced_model_approx_GST_fast as _reduced_model_approx_GST_fast
 from pygsti.tools.modelselectiontools import parallel_GST as _parallel_GST, AMSCheckpoint as _AMSCheckpoint, remove_param, remove_params, create_approx_logl_fn
-from pygsti.tools.modelselectiontools import random_jumps_logl_GST, NON_CP_THRESHOLD
 from pygsti.tools.modelselectiontools import custom_builder as _custom_builders, AMSGreedyResult as _AMSGreedyResult, better_model as _better_model
 from pygsti.tools.modelselectiontools import custom_optimizers as _custom_optimizers, custom_fit_heuristic as _custom_fit_heuristic
 import os as _os
-from pygsti.tools import sum_of_negative_choi_eigenvalues as non_cp_metric
+
 
 
 
@@ -361,7 +360,7 @@ def do_greedy_from_full_fast(initial_model, data, er_thresh=2.0, verbosity=2, ma
 
 
 
-def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-6, comm = None, skip_initial_GST=False, transfer_seed=False, cptp_penalty=50):
+def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, maxiter=100, tol=1e-7, prob_clip=1e-6, comm = None, skip_initial_GST=False, transfer_seed=False):
     """
     TODO update docstring
     An automated model selection greedy algorithm. Specifically made for FOGI models, but it should be compatible
@@ -451,9 +450,9 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
     num_fogis = initial_model.fogi_store.fogi_directions.shape[1] - (initial_model.param_interposer.embedder_matrix.shape[0] - initial_model.param_interposer.embedder_matrix.shape[1])
     initial_model.param_interposer.full_span_inv_transform_matrix = initial_model.param_interposer.inv_transform_matrix
     initial_model.param_interposer.inv_transform_matrix_projector = np.eye(initial_model.num_params)
-    builders = _custom_builders(prob_clip, cptp_penalty=cptp_penalty)
+    builders = _custom_builders(prob_clip)
     optimizers = _custom_optimizers(maxiter=maxiter, tol=tol)
-    deltalogl_fn =  _custom_builders(prob_clip, cptp_penalty=0).final_builders[0].build(initial_model, data.dataset, list(data.dataset.keys()))
+    deltalogl_fn =  _custom_builders(prob_clip).final_builders[0].build(initial_model, data.dataset, list(data.dataset.keys()))
     original_dlogl = None
 
     if original_dlogl is None:
@@ -465,10 +464,8 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             if skip_initial_GST:
                 deltalogl_fn.model.from_vector(initial_model.to_vector().copy())
             else:
-                if cptp_penalty > 0:
-                    deltalogl_fn.model.from_vector(_custom_fit_heuristic(initial_model.copy(), data, builders, optimizers, cptp_penalty, verbosity=0).to_vector())
-                else:
-                    deltalogl_fn.model.from_vector(_parallel_GST(initial_model.copy(),data,builders,optimizers,verbosity=verbosity ).to_vector())
+                
+                deltalogl_fn.model.from_vector(_parallel_GST(initial_model.copy(),data,builders,optimizers,verbosity=verbosity ).to_vector())
         if comm is not None:
             deltalogl_fn.model.from_vector(comm.bcast(deltalogl_fn.model.to_vector(), root = 0))
         
@@ -485,14 +482,14 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
     exceeded_threshold = False
 
     if rank == 0:
-        print(f'Starting model has {original_dlogl=} and sum-of-negative-choi-eigenvals = ', non_cp_metric(deltalogl_fn.model))
+        print(f'Starting model has {original_dlogl=}')
     while not exceeded_threshold and len(graph_levels) < num_fogis:
         if rank == 0 and verbosity > 0:
             print(f'>> Working on level {len(graph_levels)} <<',flush = True)
             start = time.time()
                         
             print(f'comparing with {prev_dlogl=}')
-        all_non_cp = False
+        
         num_total_models = num_fogis - len(graph_levels) + 1
         bucket_size = num_total_models // size
         chunk_range = range(rank*bucket_size, (rank+1)*bucket_size)
@@ -500,27 +497,16 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         for i in chunk_range:
             
             candidate_model = remove_param(reduced_model, i, zero=False)
-            if cptp_penalty > 0:
-                deltalogl_fn.model = _custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity=0)
-            else:
-                deltalogl_fn.model = _parallel_GST(candidate_model, data, builders, optimizers)
+            
+            deltalogl_fn.model = _parallel_GST(candidate_model, data, builders, optimizers)
 
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
-            non_cpness = non_cp_metric(deltalogl_fn.model)
             norm = np.linalg.norm(deltalogl_fn.model.to_vector())
             if  verbosity > 1:
                 if i  % 1 == 0:
-                    if cptp_penalty > 0:
-                        if non_cpness < NON_CP_THRESHOLD:
-                            print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, |x|={norm}', flush=True)
-                        else:
-                            print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, |x|={norm} ignoring', flush=True)
-                    else:
-                        print('Model ', i, ' has ev. ratio of ', quantity, f', |x|={norm}')
-            if non_cpness < NON_CP_THRESHOLD or cptp_penalty == 0:
-                level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
-            else:
-                level_chunk.append([deltalogl_fn.model.to_vector(), None, i])
+                    print('Model ', i, ' has ev. ratio of ', quantity, f', |x|={norm}')
+            
+            level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
 
             
         left_over_start_index = size * bucket_size
@@ -529,24 +515,14 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
             
             i = left_over_start_index + rank 
             candidate_model = remove_param(reduced_model, i, zero=False)
-            if cptp_penalty > 0:
-                deltalogl_fn.model = _custom_fit_heuristic(candidate_model, data, builders, optimizers, cptp_penalty, verbosity=0)
-            else:
-                deltalogl_fn.model = _parallel_GST(candidate_model, data, builders, optimizers)
+            
+            deltalogl_fn.model = _parallel_GST(candidate_model, data, builders, optimizers)
             quantity = (deltalogl_fn.fn()- prev_dlogl)*2
             if  verbosity > 1:
                 if i  % 1 == 0:
-                    if cptp_penalty > 0:
-                        if non_cpness < NON_CP_THRESHOLD:
-                            print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, |x|={norm}', flush=True)
-                        else:
-                            print('Model ', i, ' has ev. ratio of ', quantity, f' with sum-negative-choi-eigenvals= {non_cpness}, |x|={norm} ignoring', flush=True)
-                    else:
-                        print('Model ', i, ' has ev. ratio of ', quantity, f', |x|={norm}')
-            if non_cpness < NON_CP_THRESHOLD or cptp_penalty == 0:
-                level_chunk.append([deltalogl_fn.model.to_vector(), quantity, i])
-            else:
-                level_chunk.append([deltalogl_fn.model.to_vector(), None, i])
+                    print('Model ', i, ' has ev. ratio of ', quantity, f', |x|={norm}')
+
+            level_chunk.append([deltalogl_fn.model.to_vector(), None, i])
         
         if comm is not None:
             level_raw = comm.allgather(level_chunk)
@@ -560,9 +536,6 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
         params_removed = sorted(params_removed)
         assert   params_removed == list(range(num_total_models)), 'rank ' + str(rank) + ' ' + str(params_removed) + '\n' + str(list(range(num_total_models)))
 
-        #Purge non-CP-models
-        level = [candidate for candidate in level if candidate[1] is not None]
-
         if len(level) > 0:
             best_model = sorted(level, key=lambda x: x[1])[0]
 
@@ -572,11 +545,10 @@ def do_greedy_from_full_exact(initial_model, data, er_thresh=2.0, verbosity=2, m
                 print(f'Model {best_model[2]} has lowest evidence ratio {best_model[1]:.4f}')
             if best_model[1] > er_thresh:
                 exceeded_threshold = True
-        else:
-            all_non_cp = True
-        if  exceeded_threshold or all_non_cp:
+        
+        if  exceeded_threshold:
                 if rank == 0 and verbosity > 0:
-                    print('All CP models from this level exceeded evidence ratio threshold, model rejected. Stopping!')
+                    print('All models from this level exceeded evidence ratio threshold, model rejected. Stopping!')
                 exceeded_threshold = True
                 if rank == 0 and verbosity > 0:
                     print('Removed ', len(graph_levels)-1, ' parameters')
