@@ -34,7 +34,10 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
-from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
+from pygsti.tools.exceptions import (
+    UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension,
+    StolenResourceWarning as _StolenResourceWarning
+)
 from pygsti.circuits import Circuit as _Circuit, SeparatePOVMCircuit as _SeparatePOVMCircuit
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
@@ -481,13 +484,20 @@ class OpModel(Model):
 
     @sim.setter
     def sim(self, simulator):
-        try:  # don't fail if state space doesn't have an integral # of qubits
-            nqubits = self.state_space.num_qubits
-        except:
-            nqubits = None
         # TODO: This should probably also take evotype (e.g. 'chp' should probably use a CHPForwardSim, etc)
-        self._sim = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
-        self._sim.model = self  # ensure the simulator's `model` is set to this object
+        simulator = _fwdsim.ForwardSimulator.cast(simulator)
+        if isinstance(simulator.model, OpModel) and id(simulator.model) != id(self):
+            msg =\
+            f"""
+            S={simulator.__repr__()} is attached to an OpModel,
+            M={simulator.model.__repr__()}. We're stealing this simulator for
+            {self.__repr__()} and setting M.sim = S.copy().
+            """
+            _warnings.warn(msg, _StolenResourceWarning)
+            simulator.model.sim = simulator.copy()
+        simulator.model = self
+        self._sim = simulator
+        return
 
     @property
     def evotype(self):
@@ -1084,7 +1094,6 @@ class OpModel(Model):
         #rebuild the model index to model member map if needed.
         self._build_index_mm_map()
 
-
     def _init_virtual_obj(self, obj):
         """
         Initializes a "virtual object" - an object (e.g. LinearOperator) that *could* be a
@@ -1209,8 +1218,6 @@ class OpModel(Model):
         """
         
         self.set_parameter_values([index], [val], close)
-        
-        
 
     def set_parameter_values(self, indices, values, close=False):
         """
@@ -1513,14 +1520,14 @@ class OpModel(Model):
                     circuit = ckt[1:]
                 elif len(primitive_prep_labels_tup)==1:
                     prep_lbl = primitive_prep_labels_tup[0]
-                    circuit = None
+                    circuit = ckt  # no explicit prep label to strip; ops circuit is the whole circuit
                 else:
                     if 'prep' in erroron and self._has_primitive_preps():
                         msg = f"Cannot resolve state prep in {ckt}. There are likely multiple preps in this model."
                         raise ValueError(msg)
                     else: 
                         prep_lbl = None
-                        circuit = None
+                        circuit = ckt  # no prep stripped; ops circuit is the whole circuit
 
                 if len(ckt) > 0 and ckt[-1] in primitive_povm_labels_set:
                     povm_lbl = ckt[-1]
@@ -2015,6 +2022,69 @@ class OpModel(Model):
     def primitive_instrument_labels(self):
         return tuple(self._primitive_instrument_label_dict.keys())
 
+    def _iter_ops_for_clifford_symplectic_reps(self):
+        """Iterate over operation-label, operation pairs to inspect for Clifford symplectic reps."""
+        raise NotImplementedError("Derived classes must implement this!")
+
+    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
+        """
+        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
+
+        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
+        from the returned dictionary.
+
+        Parameters
+        ----------
+        oplabel_filter : iterable, optional
+            A list, tuple, or set of operation labels whose symplectic
+            representations should be returned (if they exist).
+
+        Returns
+        -------
+        dict
+            keys are operation labels and/or just the root names of gates
+            (without any state space indices/labels).  Values are
+            `(symplectic_matrix, phase_vector)` tuples.
+        """
+        gfilter = set(oplabel_filter) if oplabel_filter is not None else None
+        exact_filter_names = {label.name for label in gfilter if isinstance(label, _Label)} \
+            if gfilter is not None else set()
+
+        srep_dict = {}
+        sreps_by_name = _collections.defaultdict(list)
+
+        def include_label(label):
+            return gfilter is None or label in gfilter or label.name in gfilter
+
+        def sreps_equal(srep1, srep2):
+            return _np.array_equal(srep1[0], srep2[0]) and _np.array_equal(srep1[1], srep2[1])
+
+        for gl, gate in self._iter_ops_for_clifford_symplectic_reps():
+            if not include_label(gl):
+                continue
+
+            if isinstance(gate, _op.EmbeddedOp):
+                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
+                    "EmbeddedCliffordOp contains a non-StaticCliffordOp!"
+                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
+            elif isinstance(gate, _op.StaticCliffordOp):
+                srep = (gate.smatrix, gate.svector)
+            else:
+                srep = None
+
+            if srep is not None:
+                sreps_by_name[gl.name].append((gl, srep))
+
+        for name, entries in sreps_by_name.items():
+            first_srep = entries[0][1]
+            if name not in exact_filter_names and all((sreps_equal(first_srep, srep) for _, srep in entries[1:])):
+                srep_dict[name] = first_srep
+            else:
+                for label, srep in entries:
+                    srep_dict[label] = srep
+
+        return srep_dict
+
     def _is_primitive_prep_layer_lbl(self, lbl):
         """
         Whether `lbl` is a valid state prep label (returns boolean)
@@ -2208,7 +2278,7 @@ class OpModel(Model):
             raise ValueError("Cannot create operator for non-primitive circuit layer: %s" % str(layerlbl))
         else:
             return fns[typ](self, layerlbl, self._opcaches)
-
+        
     def circuit_operator(self, circuit):
         """
         Construct or retrieve the operation associated with a circuit.
@@ -2524,7 +2594,7 @@ class OpModel(Model):
         F = _np.dot(invDeriv, fogi_vecs)
         F = _np.concatenate((prefix_mx, F), axis=1)
 
-        #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shoudn't?
+        #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shouldn't?
         #fogi_param_names = ["P%d" % i for i in range(len(unused_param_indices))] \
         #    + ham_fogi_vec_names + other_fogi_vec_names
 

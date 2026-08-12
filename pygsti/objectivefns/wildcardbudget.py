@@ -166,7 +166,7 @@ class WildcardBudget(_NicelySerializable):
         Updates `probs_in` to `probs_out` by applying this wildcard budget.
 
         Update a set of circuit outcome probabilities, `probs_in`, into a
-        corresponding set, `probs_out`, which uses the slack alloted to each
+        corresponding set, `probs_out`, which uses the slack allotted to each
         outcome probability to match (as best as possible) the data frequencies
         in `freqs`.  In particular, it computes this best-match in a way that
         maximizes the likelihood between `probs_out` and `freqs`. This method is
@@ -185,7 +185,7 @@ class WildcardBudget(_NicelySerializable):
 
         freqs : numpy array
             An array of frequencies corresponding to each of the
-            outcome probabilites in `probs_in` or `probs_out`.
+            outcome probabilities in `probs_in` or `probs_out`.
 
         layout : CircuitOutcomeProbabilityArrayLayout
             The layout for `probs_in`, `probs_out`, and `freqs`, specifying how array
@@ -271,7 +271,7 @@ class WildcardBudget(_NicelySerializable):
         Updates `probs_in` to `probs_out` by applying this wildcard budget.
 
         Update a set of circuit outcome probabilities, `probs_in`, into a
-        corresponding set, `probs_out`, which uses the slack alloted to each
+        corresponding set, `probs_out`, which uses the slack allotted to each
         outcome probability to match (as best as possible) the data frequencies
         in `freqs`.  In particular, it computes this best-match in a way that
         maximizes the likelihood between `probs_out` and `freqs`. This method is
@@ -290,7 +290,7 @@ class WildcardBudget(_NicelySerializable):
 
         freqs : numpy array
             An array of frequencies corresponding to each of the
-            outcome probabilites in `probs_in` or `probs_out`.
+            outcome probabilities in `probs_in` or `probs_out`.
 
         layout : CircuitOutcomeProbabilityArrayLayout
             The layout for `probs_in`, `probs_out`, and `freqs`, specifying how array
@@ -352,7 +352,7 @@ class WildcardBudget(_NicelySerializable):
                 C = (qvec == fvec); sum_qC = sum(qvec[C])
                 D = _np.logical_and(qvec != fvec, fvec == 0); sum_qD = sum(qvec[D])
 
-                #update other values tht depend on qvec (same as in precompute_for_same_probs_freqs)
+                #update other values the depend on qvec (same as in precompute_for_same_probs_freqs)
                 sum_qA = float(_np.sum(qvec[A]))
                 sum_qB = float(_np.sum(qvec[B]))
                 sum_qC = float(_np.sum(qvec[C]))
@@ -486,7 +486,7 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
     that is allocated per that particular operation.
 
     Primitive operations are the components of circuit layers, and so
-    the wilcard budget for a circuit is just the sum of the wildcard errors
+    the wildcard budget for a circuit is just the sum of the wildcard errors
     corresponding to each primitive operation in the circuit.
 
     Parameters
@@ -696,7 +696,7 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
 
     def budget_for(self, op_label):
         """
-        Retrieve the budget amount correponding to primitive op `op_label`.
+        Retrieve the budget amount corresponding to primitive op `op_label`.
 
         This is just the absolute value of this wildcard budget's parameter
         that corresponds to `op_label`.
@@ -960,7 +960,7 @@ class PrimitiveOpsWildcardBudget(PrimitiveOpsWildcardBudgetBase):
     operation.
 
     Primitive operations are the components of circuit layers, and so
-    the wilcard budget for a circuit is just the sum of the (abs vals of)
+    the wildcard budget for a circuit is just the sum of the (abs vals of)
     the parameters corresponding to each primitive operation in the circuit.
 
     Parameters
@@ -969,7 +969,7 @@ class PrimitiveOpsWildcardBudget(PrimitiveOpsWildcardBudgetBase):
         A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
         which give all the possible primitive ops (components of circuit
         layers) that will appear in circuits.  Each one of these operations
-        will be assigned it's own independent element in the wilcard-vector.
+        will be assigned it's own independent element in the wildcard-vector.
         A dictionary can be given whose keys are Labels and whose values are
         0-based parameter indices.  In the non-dictionary case, each label gets
         it's own parameter.  Dictionaries allow multiple labels to be associated
@@ -993,7 +993,7 @@ class PrimitiveOpsWildcardBudget(PrimitiveOpsWildcardBudgetBase):
             A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
             which give all the possible primitive ops (components of circuit
             layers) that will appear in circuits.  Each one of these operations
-            will be assigned it's own independent element in the wilcard-vector.
+            will be assigned it's own independent element in the wildcard-vector.
             A dictionary can be given whose keys are Labels and whose values are
             0-based parameter indices.  In the non-dictionary case, each label gets
             it's own parameter.  Dictionaries allow multiple labels to be associated

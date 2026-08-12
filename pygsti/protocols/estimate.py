@@ -173,7 +173,7 @@ class Estimate(_MongoSerializable):
         self.profiler = parameters.get('profiler', None)
         self._final_mdc_store = parameters.get('final_mdc_store', None)
         self._final_objfn_cache = parameters.get('final_objfn_cache', None)
-        self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+        self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder(_objfns.PoissonPicDeltaLogLFunction))
         self._final_objfn = parameters.get('final_objfn', None)
         self._per_iter_mdc_store = parameters.get('per_iter_mdc_store', None)
 
@@ -680,7 +680,7 @@ class Estimate(_MongoSerializable):
         This function rescales the actual data contained in this Estimate's
         parent :class:`ModelEstimteResults` object according to the estimate's
         "weights" parameter.  The scaled data set is returned, along with
-        (optionall) a list-of-lists of matrices containing the scaling values
+        (optional) a list-of-lists of matrices containing the scaling values
         which can be easily plotted via a `ColorBoxPlot`.
 
         Parameters
@@ -698,7 +698,7 @@ class Estimate(_MongoSerializable):
             scale values (see above).
         """
         p = self.parent
-        gss = _PlaquetteGridCircuitStructure.cast(p.circuit_lists['final'])  # FUTURE: overrideable?
+        gss = _PlaquetteGridCircuitStructure.cast(p.circuit_lists['final'])  # FUTURE: overridable?
         weights = self.circuit_weights
 
         if weights is not None:

@@ -81,13 +81,13 @@ format_dict['Rounded'] = {
     'latex': NormalLatex.variant(defaults={'precision': 2, 'sciprecision': 0}),
     'python': _no_format}
 
-# 'small' formating - make text smaller
+# 'small' formatting - make text smaller
 format_dict['Small'] = {
     'html': NormalHTML,
     'latex': NormalLatex.variant(formatstring='\\small%s'),
     'python': _no_format}
 
-# 'small' formating - make text smaller
+# 'small' formatting - make text smaller
 format_dict['Verbatim'] = {
     'html': NormalHTML,
     'latex': NormalLatex.variant(formatstring='\\spverb!%s!'),

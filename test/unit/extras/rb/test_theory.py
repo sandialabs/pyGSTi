@@ -55,7 +55,7 @@ class RBTheoryZrotModelTester(GaugeTransformBase, BaseCase):
         Zrot_channel = ot.unitary_to_pauligate(Zrot_unitary)
 
         for key in cls.target_model.operations.keys():
-            cls.mdl.operations[key] = np.dot(Zrot_channel, cls.target_model.operations[key])
+            cls.mdl.operations[key] = np.dot(Zrot_channel, cls.target_model.operations[key].to_dense())
 
 
 class RBTheoryWeightedInfidelityTester(GaugeTransformBase, InfidelityBase, BaseCase):
@@ -72,8 +72,8 @@ class RBTheoryWeightedInfidelityTester(GaugeTransformBase, InfidelityBase, BaseC
         depmap_X = np.array([[1., 0., 0., 0.], [0., lx, 0., 0.], [0., 0., lx, 0.], [0, 0., 0., lx]])
         ly = 1. - depol_strength_Y
         depmap_Y = np.array([[1., 0., 0., 0.], [0., ly, 0., 0.], [0., 0., ly, 0.], [0, 0., 0., ly]])
-        cls.mdl.operations['Gx'] = np.dot(depmap_X, cls.target_model.operations['Gx'])
-        cls.mdl.operations['Gy'] = np.dot(depmap_Y, cls.target_model.operations['Gy'])
+        cls.mdl.operations['Gx'] = np.dot(depmap_X, cls.target_model.operations['Gx'].to_dense())
+        cls.mdl.operations['Gy'] = np.dot(depmap_Y, cls.target_model.operations['Gy'].to_dense())
 
         Gx_weight = 1
         Gy_weight = 2

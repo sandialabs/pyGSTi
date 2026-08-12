@@ -17,6 +17,7 @@ from pygsti.modelmembers.operations.krausop import KrausOperatorInterface as _Kr
 
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import basistools as _bt
@@ -264,7 +265,7 @@ class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
         dVdp += _np.einsum('bml,ma,ab->lab', conj_basis_mxs, Lbar, F2)  # only b > a nonzero (F2)
         dVdp += _np.einsum('mbl,ma,ab->lab', conj_basis_mxs, L, F2.conjugate())  # ditto
 
-        dVdp.shape = [dVdp.shape[0], nP]  # jacobian with respect to "p" params,
+        dVdp = _compat.reshape_no_copy(dVdp, [dVdp.shape[0], nP])  # jacobian with respect to "p" params,
         # which don't include normalization for TP-constraint
 
         #Now get jacobian of actual params wrt the params used above. Denote the actual

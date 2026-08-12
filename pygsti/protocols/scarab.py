@@ -20,8 +20,6 @@ if TYPE_CHECKING:
         pass
 
 
-import warnings as _warnings
-
 from pygsti.protocols import (
     ProtocolData as _ProtocolData,
     FreeformDesign as _FreeformDesign,
@@ -29,6 +27,7 @@ from pygsti.protocols import (
     VBDataFrame as _VBDataFrame,
     mirror_edesign as _mirror
 )
+from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
 
 import numpy as _np
 
@@ -71,14 +70,7 @@ def lowlevel_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit], 
                 in order to perform mirror circuit fidelity estimation.
     """
 
-    try:
-        import qiskit
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn("The function 'noise_mirror_benchmark' is designed for qiskit 2.1.1." \
-            "Your version is " + qiskit.__version__)
-
-    except:
-        raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
+    _check_qiskit_version('lowlevel_mirror_benchmark()')
 
     return _mirror.qiskit_circuits_to_mirror_edesign(qk_circs, mirroring_kwargs_dict)
 
@@ -168,14 +160,7 @@ def fullstack_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit],
                 amount of time spent in Qiskit transpiler.            
     """
 
-    try:
-        import qiskit
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn("The function 'fullstack_mirror_benchmark' is designed for qiskit 2.1.1." \
-            "Your version is " + qiskit.__version__)
-
-    except:
-        raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
+    _check_qiskit_version('fullstack_mirror_benchmark()')
 
     return _mirror.qiskit_circuits_to_fullstack_mirror_edesign(qk_circs, #not transpiled
                                                     qk_backend,
@@ -209,7 +194,7 @@ def subcircuit_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit]
     aggregate_subcircs : bool
         Whether or not the provided Qiskit circuits should be used to create
         one combined subcircuit experiment design or kept separate.
-        Circuit aggregration can be useful if the provided circuits are all
+        Circuit aggregation can be useful if the provided circuits are all
         instances of the same 'kind' of the circuit, e.g., all
         Bernstein-Vazirani circuits with different secret keys.
 
@@ -267,14 +252,7 @@ def subcircuit_mirror_benchmark(qk_circs: Union[Dict[Any, qiskit.QuantumCircuit]
                 if `aggregate_subcircs` is False, otherwise a FreeformDesign is returned.
     """
 
-    try:
-        import qiskit
-        if qiskit.__version__ != '2.1.1':
-            _warnings.warn("The function 'noise_mirror_benchmark' is designed for qiskit 2.1.1." \
-            "Your version is " + qiskit.__version__)
-
-    except:
-        raise RuntimeError('Qiskit is required for this operation, and does not appear to be installed.')
+    _check_qiskit_version('subcircuit_mirror_benchmark()')
 
     return _mirror.qiskit_circuits_to_subcircuit_mirror_edesign(qk_circs,
                                               aggregate_subcircs,

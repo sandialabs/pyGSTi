@@ -133,9 +133,6 @@ class Profiler(object):
         else:
             self.timers[name] = val
 
-        #if self.comm is None or self.comm.Get_rank() == 0:
-        #    print("TIME [%s] += %.2fs (total = %.2fs)" % (name,val,self.timers[name]))
-
     def add_count(self, name, inc=1, prefix=0):
         """
         Adds a given value to a named "counter"-type accumulator.
@@ -224,7 +221,7 @@ class Profiler(object):
         Prints the current memory usage (but doesn't store it).
 
         Useful for debugging, this function prints the current memory
-        usage - optionally giving the mininum, maximum, and average
+        usage - optionally giving the minimum, maximum, and average
         across all the processors.
 
         Parameters
@@ -358,10 +355,6 @@ class Profiler(object):
         if len(self.mem_checkpoints) == 0:
             return "No memory checkpoints"
 
-        #for key in self.mem_checkpoints:
-        #    print("ITEM:",self.mem_checkpoints[key])
-        #    assert(False)
-        #print("LIST: ",list(self.mem_checkpoints.values()))
         max_memory = max([usage for timestamp, usage in
                           _itertools.chain(*self.mem_checkpoints.values())])
         s = "---> Max Memory usage = %.2fGB\n" % (max_memory * _BtoGB)

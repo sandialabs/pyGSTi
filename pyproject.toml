@@ -27,10 +27,12 @@ dependencies=[
     'stim',
     'plotly>=3.8.0',
     'pandas',
+    'matplotlib',
     'networkx',
+    'typing_extensions',
     'tqdm>=4.42.0'
 ]
-requires-python='>=3.9'
+requires-python='>=3.10'
 keywords=[
     'pygsti',
     'tomography',
@@ -54,18 +56,33 @@ classifiers=[
 diamond_norm = [
     'cvxpy>=1.4.0'
 ]
+docs = [
+    'jupyter-book>=0.15,<2',
+    'jupytext>=1.16',
+    'matplotlib'
+]
 evolutionary_optimization = ['deap']
 extensions = ['cython']
 html_reports = ['jinja2', 'MarkupSafe']
 ibmq = [
-    'qiskit>1',
-    'qiskit-ibm-runtime>=0.17.1',
+    # Keep consistent with TESTED_QISKIT_RANGE in pygsti/tools/_qiskit_interop.py.
+    'qiskit>=1.4,<3',
+    # >=0.44 additionally provides ConvertToMidCircuitMeasure (optional; see
+    # pygsti/extras/ibmq/ibmqexperiment.py).
+    'qiskit-ibm-runtime>=0.40',
     'dill'
 ]
 interpygate = ['csaps']
 linting = [
     'autopep8',
     'flake8'
+]
+# TensorFlow/Keras for pygsti.extras.ml (QPANNs). >=2.16 for Keras 3, which extras.ml's
+# custom layers target. Deliberately not part of `testing`/`no_mpi`/`complete`: TensorFlow is
+# heavy and platform-specific. CI installs it explicitly for the jobs that need it.
+ml = [
+    'tensorflow>=2.16',
+    'keras>=3.0'
 ]
 memory_profiling = ['psutil']
 mongodb = ['pymongo']
@@ -76,13 +93,19 @@ notebooks = [
     'notebook',
     'jupyter_server'
 ]
-pytorch = ['torch']
+# torch is deliberately NOT part of `complete` (or the `testing`/`no_mpi`
+# chains): it is rarely used and its default Linux wheels drag in ~2.5 GB of
+# nvidia-* CUDA wheels. Install it explicitly when needed, e.g.
+# `pip install pygsti[complete,pytorch]`. CI installs `...,pytorch` so the
+# TorchForwardSimulator tests actually run instead of being skipped.
+pytorch = ['torch>=2.4']  # >=2.4 for the torch.mps/torch.xpu device-query namespaces
 report_pdf_figures = ['matplotlib']
 reports = ['pygsti[html_reports,report_pdf_figures]']
 testing_no_cython_mpi = [
     'pytest',
     'pytest-xdist',
     'pytest-cov',
+    'hypothesis',
     'nbval',
     'nbformat',
     'packaging',
@@ -90,15 +113,17 @@ testing_no_cython_mpi = [
     'seaborn',
     'ply',
     'cirq-core',
-    'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,pytorch,reports]'
+    'sympy',
+    'pygsti[diamond_norm,ibmq,interpygate,memory_profiling,msgpack,notebooks,reports]'
 ]
 testing_no_cython = ['pygsti[multiprocessor,testing_no_cython_mpi]']
 testing = ['pygsti[extensions,testing_no_cython]']
 no_mpi = ['pygsti[evolutionary_optimization,extensions,linting,mongodb,testing_no_cython_mpi]']
-complete = ['pygsti[multiprocessor,no_mpi]']
+complete = ['pygsti[multiprocessor,no_mpi,docs]']
 
 [project.urls]
 Homepage = 'https://www.pygsti.info'
+Documentation = 'https://pygsti.readthedocs.io/en/latest/'
 Repository = 'https://github.com/sandialabs/pyGSTi'
 Download ='https://github.com/sandialabs/pyGSTi/tarball/master'
 

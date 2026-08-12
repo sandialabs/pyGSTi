@@ -282,16 +282,16 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     E1final = change_basis(_np.reshape(E1, (9, 1)), "std", basis)
     E2final = change_basis(_np.reshape(E2, (9, 1)), "std", basis)
 
-    state_space = _statespace.ExplicitStateSpace(['QT'], [3])
+    state_space = _statespace.ExplicitStateSpace(['T0'], [3])
     qutritMDL = _ExplicitOpModel(state_space, _Basis.cast(basis, 9), evotype=evotype)
     qutritMDL.preps['rho0'] = _TPState(rho0final, evotype=evotype)
     qutritMDL.povms['Mdefault'] = _TPPOVM([('0bright', E0final),
                                            ('1bright', E1final),
                                            ('2bright', E2final)], evotype=evotype)
-    qutritMDL.operations['Gi', 'QT'] = _FullTPOp(arrType(gateISOfinal), basis, evotype, state_space)
-    qutritMDL.operations['Gx', 'QT'] = _FullTPOp(arrType(gateXSOfinal), basis, evotype, state_space)
-    qutritMDL.operations['Gy', 'QT'] = _FullTPOp(arrType(gateYSOfinal), basis, evotype, state_space)
-    qutritMDL.operations['Gm', 'QT'] = _FullTPOp(arrType(gateMSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gi', 'T0'] = _FullTPOp(arrType(gateISOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gx', 'T0'] = _FullTPOp(arrType(gateXSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gy', 'T0'] = _FullTPOp(arrType(gateYSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gm', 'T0'] = _FullTPOp(arrType(gateMSOfinal), basis, evotype, state_space)
     qutritMDL.default_gauge_group = _TPGaugeGroup(state_space, qutritMDL.basis, evotype)
 
     return qutritMDL

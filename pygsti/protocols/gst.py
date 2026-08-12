@@ -50,8 +50,13 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti.circuits import Circuit
 from pygsti.forwardsims import ForwardSimulator
+from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
+from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
+
+ObjectiveType = _objfns.ObjectiveFunctionBuilder.ObjectiveType
 
 
 #For results object:
@@ -195,7 +200,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
         for each germ-power the selected pairs are *different* random
         sets of all possible pairs (unlike fid_pairs, which specifies the
         *same* fiducial pairs for *all* same-germ base strings).  If
-        fid_pairs is used in conjuction with keep_fraction, the pairs
+        fid_pairs is used in conjunction with keep_fraction, the pairs
         specified by fid_pairs are always selected, and any additional
         pairs are randomly selected.
 
@@ -472,7 +477,7 @@ class GSTInitialModel(_NicelySerializable):
             Data used to execute LGST when needed.
 
         comm : mpi4py.MPI.Comm
-            A MPI communicator to divide workload amoung multiple processors.
+            A MPI communicator to divide workload among multiple processors.
 
         Returns
         -------
@@ -600,7 +605,7 @@ class GSTBadFitOptions(_NicelySerializable):
     actions : tuple, optional
         Actions to take when a GST fit is unsatisfactory. Allowed actions include:
         
-        * 'wildcard': Find an admissable wildcard model.
+        * 'wildcard': Find an admissible wildcard model.
         * 'wildcard1d': Fits a single parameter wildcard model in which
           the amount of wildcard error added to an operation is proportional
           to the diamond distance between that operation and the target.
@@ -672,7 +677,7 @@ class GSTBadFitOptions(_NicelySerializable):
         """
         if isinstance(obj, GSTBadFitOptions):
             return obj
-        else:  # assum obj is a dict of arguments
+        else:  # assume obj is a dict of arguments
             return cls(**obj) if obj else cls()  # allow obj to be None => defaults
 
     def __init__(self, threshold=DEFAULT_BAD_FIT_THRESHOLD, actions=(),
@@ -756,8 +761,9 @@ class GSTObjFnBuilders(_NicelySerializable):
         on the final GST iteration.
     """
 
-    @classmethod
-    def cast(cls, obj):
+    # This used to be a class method, but this class has no derived classes.
+    @staticmethod
+    def cast(obj):
         """
         Cast `obj` to a :class:`GSTObjFnBuilders` object.
 
@@ -772,33 +778,37 @@ class GSTObjFnBuilders(_NicelySerializable):
         -------
         GSTObjFnBuilders
         """
+        cls = GSTObjFnBuilders
         if isinstance(obj, cls): return obj
         elif obj is None: return cls.create_from()
         elif isinstance(obj, dict): return cls.create_from(**obj)
         elif isinstance(obj, (list, tuple)): return cls(*obj)
         else: raise ValueError("Cannot create an %s object from '%s'" % (cls.__name__, str(type(obj))))
 
-    @classmethod
-    def create_from(cls, objective='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
+    # This used to be a class method, but this class has no derived classes.
+    @staticmethod
+    def create_from(objective: ObjectiveType='logl', freq_weighted_chi2=False, always_perform_mle=False, only_perform_mle=False):
         """
         Creates a common :class:`GSTObjFnBuilders` object from several arguments.
 
         Parameters
         ----------
-        objective : {'logl', 'chi2'}, optional
-            Whether to create builders for maximum-likelihood or minimum-chi-squared GST.
+        objective : ObjectiveType, optional
+            Specifies whether the final GST iteration uses a negative-log-likelihood loss ('logl'),
+            a chi-squared loss ('chi2'), a total variation distance loss ('tvd' or 'normalized tvd'),
+            or an Lp-norm loss.
 
         freq_weighted_chi2 : bool, optional
             Whether chi-squared objectives use frequency-weighting.  If you're not sure
             what this is, leave it as `False`.
 
         always_perform_mle : bool, optional
-            Perform a ML-GST step on *each* iteration (usually this is only done for the
-            final iteration).
+            Only used if objective == 'logl'. If True, then each GST iteration consists
+            of an ML-GST step.
 
         only_perform_mle : bool, optional
-            Only perform a ML-GST step on each iteration, i.e. do *not* perform any chi2
-            minimization to "seed" the ML-GST step.
+            Only used if objective == 'logl'. If False (default), then each ML-GST step is
+            seeded with the results of a chi2-GST step with the same circuit list.
 
         Returns
         -------
@@ -810,7 +820,6 @@ class GSTObjFnBuilders(_NicelySerializable):
         if objective == "chi2":
             iteration_builders = [chi2_builder]
             final_builders = []
-
         elif objective == "logl":
             if always_perform_mle:
                 iteration_builders = [mle_builder] if only_perform_mle else [chi2_builder, mle_builder]
@@ -819,8 +828,10 @@ class GSTObjFnBuilders(_NicelySerializable):
                 iteration_builders = [chi2_builder]
                 final_builders = [mle_builder]
         else:
-            raise ValueError("Invalid objective: %s" % objective)
-        return cls(iteration_builders, final_builders)
+            iteration_builders = [chi2_builder]
+            final_builders = [_objfns.ObjectiveFunctionBuilder.create_from(objective)]
+    
+        return GSTObjFnBuilders(iteration_builders, final_builders)
 
     def __init__(self, iteration_builders, final_builders=()):
         super().__init__()
@@ -1399,38 +1410,10 @@ class GateSetTomography(_proto.Protocol):
                                                       data.dataset, comm)
         if simulator is not None:
             mdl_start.sim = simulator
-        
         if optimizers is None:
             optimizers = [self.optimizer]*len(circuit_lists)
-        
         else:
-            if isinstance(optimizers, (_opt.Optimizer, dict)):    
-                optimizers = [optimizers]*len(circuit_lists)
-            if isinstance(optimizers, list):
-                if len(optimizers) == 1:
-                    optimizers = optimizers*len(circuit_lists)
-            else:
-                if not isinstance(optimizers, (list, dict)):
-                    raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
-                temp_optimizers = []
-                default_first_fditer = 1 if mdl_start and isinstance(mdl_start.sim, _MatrixFSim) else 0
-                for optimizer in optimizers:
-                    
-                    if isinstance(optimizer, _opt.Optimizer):
-                        temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                        if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
-                            # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
-                            temp_optimizer.first_fditer = default_first_fditer
-
-                    else:
-                        if optimizer is None:
-                            temp_optimizer = {}
-                        else:
-                            temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
-                        if 'first_fditer' not in optimizer:  # then add default first_fditer value
-                            temp_optimizer['first_fditer'] = default_first_fditer
-                        temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))
-                optimizers = temp_optimizers
+            optimizers = _validate_and_extend_optimizers(self.optimizer, len(circuit_lists), mdl_start)
 
         if disable_checkpointing:
             seed_model = mdl_start.copy()
@@ -1544,7 +1527,7 @@ class GateSetTomography(_proto.Protocol):
         elif self.initial_model.target_model is not None:
             target_model = self.initial_model.target_model.copy()
         elif self.initial_model.model is not None:
-            # when we desparately need a target model but none have been specifically given: use initial model
+            # when we desperately need a target model but none have been specifically given: use initial model
             target_model = self.initial_model.model.copy()
         else:
             msg = 'Could not identify a suitable target model, this may result'\
@@ -1727,7 +1710,7 @@ class LinearGateSetTomography(_proto.Protocol):
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['profiler'] = profiler
         parameters['final_mdc_store'] = final_store
-        parameters['final_objfn_builder'] = _objfns.PoissonPicDeltaLogLFunction.builder()
+        parameters['final_objfn_builder'] = _objfns.ObjectiveFunctionBuilder(_objfns.PoissonPicDeltaLogLFunction)
         # just set final objective function as default logl objective (for ease of later comparison)
 
         ret = ModelEstimateResults(data, self)
@@ -1828,9 +1811,10 @@ class StandardGST(_proto.Protocol):
         if isinstance(modes, str):
             if ',' in modes:
                 self.modes = modes.split(',')
-                _warnings.warn("The use of a comma-separated string as input for 'modes' is deprecated " 
+                _warnings.warn("The use of a comma-separated string as input for 'modes' is deprecated "
                             + " and may be removed in a future release. Please pass in a list or tuple"
-                                +" (or other iterable) of strings")
+                                +" (or other iterable) of strings",
+                               _pyGSTiDeprecationWarning)
             else:
                 self.modes = [modes] #Cast to a list for uniformity
         else:
@@ -1927,10 +1911,13 @@ class StandardGST(_proto.Protocol):
             target_model = self.target_model
         elif isinstance(data.edesign, HasProcessorSpec):
             # warnings.warn(...) -- or try/except and warn if fails?
+            from pygsti.baseobjs.basis import default_basis_for_udims
+            udims = data.edesign.processor_spec.qudit_udims
+            basis = default_basis_for_udims(udims)
             target_model = _models.modelconstruction._create_explicit_model(
                 data.edesign.processor_spec, None, evotype='default', simulator='auto',
                 ideal_gate_type='static', ideal_prep_type='auto', ideal_povm_type='auto',
-                embed_gates=False, basis='pp')  # HARDCODED basis!
+                embed_gates=False, basis=basis)
         else:
             target_model = None  # Usually this path leads to an error being raised below.
 
@@ -1991,7 +1978,7 @@ class StandardGST(_proto.Protocol):
                                          disable_checkpointing=disable_checkpointing,
                                          checkpoint=child_checkpoint,
                                          checkpoint_path=checkpoint_path)
-                    ret.add_estimates(result)
+                    ret.add_estimates(result, silent_steal=True)
 
                 elif mode in models_to_test:
                     mdl = models_to_test[mode]
@@ -2003,7 +1990,7 @@ class StandardGST(_proto.Protocol):
                                          disable_checkpointing=disable_checkpointing,
                                          checkpoint=child_checkpoint,
                                          checkpoint_path=checkpoint_path)
-                    ret.add_estimates(result)
+                    ret.add_estimates(result, silent_steal=True)
 
                 else:
                     if target_model is None:
@@ -2029,7 +2016,7 @@ class StandardGST(_proto.Protocol):
                                      disable_checkpointing=disable_checkpointing,
                                      checkpoint=child_checkpoint,
                                      checkpoint_path=checkpoint_path, optimizers=optimizers)
-                    ret.add_estimates(result)
+                    ret.add_estimates(result, silent_steal=True)
 
         return ret
 
@@ -2203,7 +2190,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
         The *primary* estimate label to base bad-fit additions off of.
 
     badfit_options : GSTBadFitOptions
-        The options specifing what constitutes a "bad fit" and what actions
+        The options specifying what constitutes a "bad fit" and what actions
         to take when one occurs.
 
     optimizer : Optimizer
@@ -2490,43 +2477,44 @@ def _compute_1d_reference_values(target_model: _ExplicitOpModel, gopped_models: 
     for lbl, gaugeopt_model in gopped_models.items():
 
         argdicts = gaugeopt_suite.gaugeopt_argument_dicts.get(lbl, dict())
-        n_leak: int = 0
+        leakage_modeling: bool = False
         if isinstance(argdicts, list) and len(argdicts) > 0:
-            n_leak = argdicts[0].get('n_leak', n_leak)
+            leakage_modeling = argdicts[0].get('leakage_modeling', leakage_modeling)
 
         basis = gaugeopt_model.basis
-        udim = int(_np.round(_np.sqrt(basis.dim)))
-        I = _tools.matrixtools.IdentityOperator()
-        if n_leak == 0:
-            P = I
-        elif n_leak > 0:
-            U = _tools.leading_dxd_submatrix_basis_vectors(udim - n_leak, udim, basis)
-            P = U @ U.T.conj()
-            P = P.real
+        if not leakage_modeling:
+            P = _tools.matrixtools.IdentityOperator()
+            def diamonddist_fn(*args, **kwargs):
+                return 0.5 * _tools.diamonddist(*args, **kwargs)  # type: ignore
+            jtracedist_fn = _tools.jtracedist
+        else:
+            from pygsti.leakage.core import computational_projector
+            from pygsti.leakage.metrics import subspace_diamonddist, subspace_jtracedist
+            P = computational_projector(basis) 
+            diamonddist_fn  = subspace_diamonddist
+            jtracedist_fn   = subspace_jtracedist
 
         ops, preps, _, insts = _memberdicts(gaugeopt_model)
 
         for key, op in ops.items():
             X = op.to_dense()
             Y = target_ops[key].to_dense()
-            X_restricted = X @ P
-            Y_restricted = Y @ P
 
             # Get basis for this operation.
             op_basis = basis # start with the model's basis
-            if (basis.dim != X_restricted.shape[0] and isinstance(basis, _tools.TensorProdBasis)
-                and basis.component_bases[0].dim == X_restricted.shape[0]):
+            if (basis.dim != X.shape[0] and isinstance(basis, _tools.TensorProdBasis)
+                and basis.component_bases[0].dim == X.shape[0]):
                 # use first component of a TensorProdBasis if a smaller dim is needed and matches.
                 op_basis = basis.component_bases[0]
 
-            dd[lbl][key] : float = 0.5 * _tools.diamonddist(X_restricted, Y_restricted, mx_basis=op_basis) # type: ignore
+            dd[lbl][key] : float = diamonddist_fn(X, Y, mx_basis=op_basis) # type: ignore
             if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                 msg = f"""
                 Diamond distance failed to compute {key} reference value for 1D wildcard budget!
                 Falling back to trace distance.
                 """
                 _warnings.warn(msg)
-                dd[lbl][key] = _tools.subspace_jtracedist(X, Y, basis, n_leak=n_leak)
+                dd[lbl][key] = jtracedist_fn(X, Y, basis)
         
         for key, op in insts.items():
             inst_dd : float = 0.5* _tools.instrument_diamonddist(
@@ -2565,12 +2553,12 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
     Parameters
     ----------
     scale_typ : {'robust', 'robust+', 'Robust', 'Robust+'}
-        The type of robust scaling.  Captial vs. lowercase "R" doesn't
+        The type of robust scaling.  Capital vs. lowercase "R" doesn't
         matter to this function (it indicates whether a post-scaling
         re-optimization is performed elsewhere).  The "+" postfix distinguishes
         a "version 1" scaling (no "+"), where we drastically scale down weights
         of especially bad sequences, from a "version 2" scaling ("+"), where
-        we additionaly rescale all the circuit data to achieve the desired chi2
+        we additionally rescale all the circuit data to achieve the desired chi2
         distribution of per-circuit goodness-of-fit values *without reordering*
         these values.
 
@@ -2624,8 +2612,63 @@ def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
 
     return circuit_weights  # contains *global* circuits as keys
 
+def _validate_and_extend_optimizers(optimizers: Union[_CustomLMOptimizer, _SimplerLMOptimizer,dict, list[_CustomLMOptimizer],list[_SimplerLMOptimizer], list[dict]], size, model: _Model) -> Union[list[_CustomLMOptimizer], list[_SimplerLMOptimizer]]:
+    """
+    GST allows for the user to provide a single optimizer,
+    or a list of optimizers to be used in every different
+    GST iteration. This function validates the optimizer
+    provided is an acceptable format, and if it is a single
+    optimizer, it generates a list of "size" copies of it.
 
-def _compute_wildcard_budget(objfn_cache, mdc_objfn, badfit_options, verbosity):
+    Parameters
+    ----------
+    optimizers: Union[_Optimizer, dict, list[_Optimizer], list[dict]]
+        Either a single optimizer or the settings to create an optimizer to be used in all GST iterations
+        or a list of optimizers or settings to create optimizers to be used in each different
+        GST iteration
+
+    size: int
+        The number of GST iterations. This is equal to the length of circuit_lists to be considered
+        for GST.
+
+    model: _Model
+        The starting model used within a GST run
+
+    Returns
+    -------
+    optimizers: list[_Optimizer]
+    """
+    from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
+
+    if isinstance(optimizers, (_opt.Optimizer, dict)):    
+        optimizers = [optimizers]*size
+    if isinstance(optimizers, list):
+        if len(optimizers) == 1:
+            optimizers = optimizers*size
+    else:
+        if not isinstance(optimizers, (list, dict)):
+            raise ValueError(f'Invalid argument for optimizers of type {type(optimizers)}, supported types are list, Optimizer')
+        temp_optimizers = []
+        default_first_fditer = 1 if model and isinstance(model.sim, _MatrixFSim) else 0
+        for optimizer in optimizers:
+            if isinstance(optimizer, _SimplerLMOptimizer) or isinstance(optimizer, _CustomLMOptimizer):
+                temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
+                if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
+                    # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
+                    temp_optimizer.first_fditer = default_first_fditer
+
+            else:
+                if optimizer is None:
+                    temp_optimizer = {}
+                else:
+                    temp_optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
+                if 'first_fditer' not in optimizer:  # then add default first_fditer value
+                    temp_optimizer['first_fditer'] = default_first_fditer
+                temp_optimizers.append(_opt.SimplerLMOptimizer.cast(temp_optimizer))
+        optimizers = temp_optimizers
+    return optimizers
+    
+def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
     """
     Create a wildcard budget for a model estimate.
     TODO: update docstring
@@ -2787,11 +2830,11 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, badfit_options, verbosity):
         printer.log("   " + str(budget))
         printer.log("")
 
-        # Test that the found wildcard budget is admissable (there is not a strictly smaller wildcard budget
+        # Test that the found wildcard budget is admissible (there is not a strictly smaller wildcard budget
         # that also satisfies the constraints), and while doing this find the active constraints.
         printer.log("VERIFYING that the final wildcard budget vector is admissable")
 
-        # Used for deciding what counts as a negligable per-gate wildcard.
+        # Used for deciding what counts as a negligible per-gate wildcard.
         max_depth = 0
         for circ in ds.keys():
             if circ.depth > max_depth:
@@ -2801,8 +2844,8 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, badfit_options, verbosity):
         for w_ind, w_ele in enumerate(wvec):
             active_constraints = {}
             strictly_smaller_wvec = wvec.copy()
-            negligable_budget = 1 / (100 * max_depth)
-            if abs(w_ele) > negligable_budget:  # Use absolute values everywhere (wildcard vector can be negative).
+            negligible_budget = 1 / (100 * max_depth)
+            if abs(w_ele) > negligible_budget:  # Use absolute values everywhere (wildcard vector can be negative).
                 strictly_smaller_wvec[w_ind] = 0.99 * abs(w_ele)  # Decrease the vector element by 1%.
                 printer.log(" - Trialing strictly smaller vector, with element %.3g reduced from %.3g to %.3g" %
                             (w_ind, w_ele, strictly_smaller_wvec[w_ind]))
@@ -2830,7 +2873,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, badfit_options, verbosity):
             else:
                 if budget_was_optimized:
                     printer.log((" - Element %.3g is %.3g. This is below %.3g, so trialing snapping to zero"
-                                 " and updating.") % (w_ind, w_ele, negligable_budget))
+                                 " and updating.") % (w_ind, w_ele, negligible_budget))
                     strictly_smaller_wvec[w_ind] = 0.
                     glob_constraint, percircuit_constraint = _evaluate_constraints(strictly_smaller_wvec)
                     if glob_constraint + _np.sum(percircuit_constraint) < 1e-4:
@@ -2842,7 +2885,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, badfit_options, verbosity):
                 else:
                     # We do this instead when we're not optimizing the budget, as otherwise we'd change the budget.
                     printer.log(" - Skipping trialing reducing element %.3g below %.3g, as it is less than %.3g" %
-                                (w_ind, w_ele, negligable_budget))
+                                (w_ind, w_ele, negligible_budget))
             active_constraints_list.append(active_constraints)
         budget.from_vector(wvec)
 
@@ -2878,7 +2921,7 @@ def _reoptimize_with_weights(mdc_objfn, circuit_weights_dict, optimizer, verbosi
         The model to re-optimize.
 
     ds : DataSet
-        The data set to compare againts.
+        The data set to compare against.
 
     circuit_list : list
         The circuits for which data and predictions should be compared.
@@ -3046,9 +3089,10 @@ class ModelEstimateResults(_proto.ProtocolResults):
             ret[k] = v
         return ret
 
-    def add_estimates(self, results, estimates_to_add=None):
+    def add_estimates(self, results: 'ModelEstimateResults', estimates_to_add:Optional[list[str]]=None, silent_steal:bool=False):
         """
-        Add some or all of the estimates from `results` to this `Results` object.
+        Add some or all of the estimates from `results` to `self`, possibly making
+        copies in the process.
 
         Parameters
         ----------
@@ -3061,6 +3105,12 @@ class ModelEstimateResults(_proto.ProtocolResults):
             A list of estimate keys to import from `results`.  If None, then all
             the estimates contained in `results` are imported.
 
+        silent_steal: bool, optional
+            Consider some `est` in results.estimates.values(). If silent_steal
+            is True, then then we can update `est.parent` without regard to its
+            current value. If silent_steal is False and `est.parent` is neither
+            None nor self, then we update self with a deep-copy of `est`.
+
         Returns
         -------
         None
@@ -3072,18 +3122,27 @@ class ModelEstimateResults(_proto.ProtocolResults):
         if 'iteration' not in self.circuit_lists:
             raise ValueError(("Circuits must be initialized"
                               "*before* adding estimates"))
+        
+        if estimates_to_add is None:
+            estimates_to_add = list(results.estimates)
 
         assert(results.dataset is self.dataset), "DataSet inconsistency: cannot import estimates!"
         assert(len(self.circuit_lists['iteration']) == len(results.circuit_lists['iteration'])), \
             "Iteration count inconsistency: cannot import estimates!"
 
-        for estimate_key in results.estimates:
-            if estimates_to_add is None or estimate_key in estimates_to_add:
-                if estimate_key in self.estimates:
-                    _warnings.warn("Re-initializing the %s estimate" % estimate_key
-                                   + " of this Results object!  Usually you don't"
-                                   + " want to do this.")
-                self.estimates[estimate_key] = results.estimates[estimate_key]
+        for estimate_key in estimates_to_add:
+            to_add = results.estimates[estimate_key]
+            if estimate_key in self.estimates:
+                _warnings.warn("Re-initializing the %s estimate" % estimate_key
+                                + " of this Results object!  Usually you don't"
+                                + " want to do this.")
+            if (not silent_steal) and (id(to_add.parent) != id(self)) and (to_add.parent is not None):
+                msg  = f"Provided estimate {estimate_key} has different parent than `self`.\n"
+                msg += "We'll make a copy of this estimate and set its parent to `self`."
+                _warnings.warn(msg)
+                to_add = to_add.copy()
+            to_add.parent = self
+            self.estimates[estimate_key] = to_add
 
     def rename_estimate(self, old_name, new_name):
         """
@@ -3112,7 +3171,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         keys_to_move = ordered_keys[ordered_keys.index(old_name) + 1:]  # everything after old_name
         for key in keys_to_move: self.estimates.move_to_end(key)
 
-    def add_estimate(self, estimate, estimate_key='default'):
+    def add_estimate(self, estimate: _Estimate, estimate_key: str='default', silent_steal: bool=False):
         """
         Add a set of `Model` estimates to this `Results` object.
 
@@ -3123,6 +3182,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
         estimate_key : str, optional
             The key or label used to identify this estimate.
+
+        silent_steal: bool, optional
+            If silent_steal is True, then then we can update `estimate.parent` without
+            regard to its current value. If silent_steal is False and `estimate.parent`
+            is neither None nor self, then we update self with a deep-copy of `estimate`.
 
         Returns
         -------
@@ -3144,7 +3208,13 @@ class ModelEstimateResults(_proto.ProtocolResults):
             _warnings.warn("Re-initializing the %s estimate" % estimate_key
                            + " of this Results object!  Usually you don't"
                            + " want to do this.")
-
+            
+        if (not silent_steal) and (id(estimate.parent) != id(self)) and (estimate.parent is not None):
+            msg  = f"Provided estimate {estimate_key} has different parent than `self`.\n"
+            msg += "We'll make a copy of this estimate and set its parent to `self`."
+            _warnings.warn(msg)
+            estimate = estimate.copy()
+        estimate.parent = self
         self.estimates[estimate_key] = estimate
 
     def add_model_test(self, target_model, themodel,
@@ -3202,7 +3272,70 @@ class ModelEstimateResults(_proto.ProtocolResults):
         mdltest = _ModelTest(themodel, target_model, gaugeopt_suite,
                              objfn_builder, badfit_options, name=estimate_key, verbosity=verbosity)
         test_result = mdltest.run(self.data, simulator=simulator)
-        self.add_estimates(test_result)
+        self.add_estimates(test_result, silent_steal=True)
+
+    def add_hessians(
+            self, estimate_names:   Optional[list[str]]=None,
+            compute_hessian_kwargs: Optional[dict[str, Any]]=None,
+            project_hessian_kwargs: Optional[dict[str, Any]]=None,
+        ):
+        """
+        Compute and store objective-function Hessians for estimates in this results object.
+
+        For each named estimate (except 'Target') and each of its gauge-optimized models,
+        this method creates a confidence region factory for the 'final' circuit list,
+        computes the Hessian of the final objective function at that model, and projects
+        it onto the model's non-gauge parameter space. Once this has run, report
+        generation with a not-None `confidence_level` can render error bars for the
+        affected estimates.
+
+        Models simulated with a MatrixForwardSimulator are switched to a
+        MapForwardSimulator first, since that is the only forward simulator that can
+        compute objective-function Hessians with a reasonable amount of memory.
+
+        Parameters
+        ----------
+        estimate_names : list of str, optional
+            Names of the estimates (keys of `self.estimates`) to process. If None, all
+            estimates are processed. The 'Target' estimate is always skipped.
+
+        compute_hessian_kwargs : dict, optional
+            Keyword arguments forwarded to
+            :meth:`ConfidenceRegionFactory.compute_hessian` (e.g. `comm`, `mem_limit`).
+
+        project_hessian_kwargs : dict, optional
+            Keyword arguments forwarded to
+            :meth:`ConfidenceRegionFactory.project_hessian`. If no 'projection_type'
+            is given, 'intrinsic error' is used.
+
+        Returns
+        -------
+        None
+        """
+        if project_hessian_kwargs is None:
+            project_hessian_kwargs = dict()
+        project_hessian_kwargs.setdefault('projection_type', 'intrinsic error')
+
+        if compute_hessian_kwargs is None:
+            compute_hessian_kwargs = dict()
+
+        if estimate_names is None:
+            estimate_names = [en for en in self.estimates]
+
+        from pygsti.forwardsims import MatrixForwardSimulator, MapForwardSimulator
+
+        for estname in estimate_names:
+            est = self.estimates[estname]
+            if estname == 'Target':
+                continue
+            for gop_name in est.goparameters:
+                mdl = est.models[gop_name]
+                if isinstance(mdl.sim, MatrixForwardSimulator):
+                    mdl.sim = MapForwardSimulator
+                crf = est.add_confidence_region_factory(gop_name, 'final')
+                crf.compute_hessian(**compute_hessian_kwargs)
+                crf.project_hessian(**project_hessian_kwargs)
+        return
 
     def view(self, estimate_keys, gaugeopt_keys=None):
         """

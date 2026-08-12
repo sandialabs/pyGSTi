@@ -88,7 +88,7 @@ def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_thre
     ----------
     elements : list
         A list containing some representation of the elements that can be used
-        by the verious score functions.
+        by the various score functions.
 
     score_fn : callable
         Function that takes a sublist of `elements` and returns a score to
@@ -174,7 +174,7 @@ def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_thre
 def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
                         feasible_threshold=None, feasible_fn=None):
     """
-    Perfom the local-search part of a grasp iteration.
+    Perform the local-search part of a grasp iteration.
 
     Attempts to find a better (lower-scoring) solution based on successive
     "local" (as determined by `get_neighbors_fn`) steps from `initialSolution`.
@@ -183,7 +183,7 @@ def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
     ----------
     initial_solution : list
         A list of some (or all) of the items in `elements`, representing an
-        initial solution.  This solution must be "feasbile" as determined by
+        initial solution.  This solution must be "feasible" as determined by
         `feasible_threshold` or `feasible_fn`.
 
     score_fn : callable
@@ -193,7 +193,7 @@ def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
 
     elements : list
         A list containing some representation of the elements that can be used
-        by the verious score functions.
+        by the various score functions.
 
     get_neighbors_fn : callable
         Function that takes a binary vector indicating which members of
@@ -282,7 +282,7 @@ def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
     ----------
     elements : list
         A list containing some representation of the elements that can be used
-        by the verious score functions.
+        by the various score functions.
 
     greedy_score_fn : callable
         Function that takes a sublist of `elements` and returns a score to
@@ -373,7 +373,7 @@ def run_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_f
     ----------
     elements : list
         A list containing some representation of the elements that can be used
-        by the verious score functions.
+        by the various score functions.
 
     greedy_score_fn : callable
         Function that takes a sublist of `elements` and returns a score to

@@ -1,5 +1,91 @@
 # CHANGELOG
 
+## [0.10.3] - Unreleased
+
+### Added
+* Rank-1 (Legendre-weighted) synthetic-SPAM randomized benchmarking (R1RB) of "Randomized Benchmarking with Synthetic Quantum Circuits" for arbitrary-spin SU(2)/qudit systems: `SU2QuditRBDesign`, `SU2QuditRBSimulator`, `SU2QuditRB`, and the underlying SU(2) representation-theory tools (`pygsti.tools.su2tools.SpinJ`; exact, stdlib-only Clebsch-Gordan/Wigner 6-j symbols in `pygsti.tools.wignersymbols`) (#853)
+* **Quantum physics-aware neural networks (QPANNs)** in the new `pygsti.extras.ml` subpackage, implementing ["What is my quantum computer good for? Quantum capability learning with physics-aware neural networks"](https://arxiv.org/abs/2406.05636) (Hothem, Miller & Proctor, NeurIPS 2024). A QPANN predicts per-layer elementary error generator rates with a localized, vectorized neural network, then combines them into a first-order prediction of a circuit's outcome probabilities via efficient Clifford error generator propagation — so it generalizes to circuits much deeper and wider than those it was trained on, and its learned parameters are interpretable Lindblad rates rather than black-box weights. Includes circuit encoders and error-propagation/sensitivity tensors (`encoding`), error generator enumeration and indexing (`errgentools`), graph-locality feature selection (`snippers`), graph-library-agnostic qubit connectivity handling (`graphtools`), and the Keras model itself (`qpanns`, `customlayers`). All four sectors of the elementary error generator taxonomy — Hamiltonian, Stochastic, Pauli-correlation and Active — are supported. Requires TensorFlow/Keras 3, available as `pip install pygsti[ml]`. See the four-part tutorial under `docs/markdown/ml/`. (#835)
+
+### Fixed
+* Fixed the `is_trace_preserving` utility function for bases whose first element is the identity. The utility function was only used in report generation and the bug did not affect the correctness of its caller.
+* Fixed a crash when the initial germ test is skipped.
+* Fixed germ selection ignoring the user-specified number of non-gauge parameters.
+* Fixed two `UnboundLocalError` bugs in `pygsti.tools.errgenproptools` affecting 'A'-type (active) error generators: `slow_bulk_alpha` assigned its weight-1 anticommuting-Pauli result to the whole return array instead of the per-iteration local (masked whenever the Cython `fasterrgencalc` extension is built, since `bulk_alpha` then aliases the Cython implementation), and `error_generator_commutator`'s 'S'-'A' branch referenced an undefined `ptup` instead of `ptup1`. (#876)
+
+## [0.10.2] - 2026-07-30
+
+Bugfix release, plus a line search safeguard for the Levenberg-Marquardt optimizer.
+
+### Added
+* Enumerative line search guard in the (simpler) Levenberg-Marquardt optimizer, triggered when the norm of the search direction is large relative to the current iterate. This prevents the optimizer from jumping to a wrong basin, which matters especially for models with CPTP-parameterized instruments (#852).
+* `tools.jamiolkowski.jamiolkowski_iso_inv` now accepts cvxpy `Expression` inputs, consistent with its type annotations; adds `tools.basistools.is_cvxpy_expression` as an import-cheap helper (#860).
+
+### Fixed
+* Deserializing models that use a `TensorProdBasis` (and a similar bug in `leakage/gaugeopt.py`) no longer fails by accessing a non-existent `state_space` field (#842).
+* `EmbeddedOp` no longer inherits a wrong dense-representation preference from the operation it embeds (#841, resolves #543).
+* Processor spec serialization now round-trips non-standard instruments. Previously, plain-string instrument names were exploded character-by-character (e.g., 'Iparity' -> 'I:p:a:r:i:t:y'), integer state-space labels were coerced to strings, and compound names came back as unhashable lists; no non-standard instrument survived a round trip correctly. The old on-disk format is still read, with a best-effort repair (#854).
+* `matrixtools.eigendecomposition(assume_normal=True)` now still routes Hermitian inputs to `eigh` (Hermitian matrices are normal, but the Hermiticity check was being skipped whenever the caller passed `assume_normal=True`); also fixed a pre-existing bug where `matrixtools.eigenvalues(assume_normal=True)` read off the Schur unitary factor instead of the triangular factor's diagonal (#856).
+* Building pyGSTi from source on a branch whose name contains "/" (or other characters that PEP 440 forbids in local version segments) no longer produces an invalid version string; branch names are sanitized in our custom setuptools_scm local version scheme (#857).
+
+## [0.10.1] - 2026-07-06
+
+Bugfix release. The only updates are to pyproject.toml to declare import-time dependencies.
+Thanks to @basnijholt for reporting this bug and creating a PR to fix.
+
+## [0.10.0] - 2026-07-03
+
+Major new features: symbolic error generator propagation (error generator polynomials), Lindblad-parameterized instruments, new GST objective functions, a generalized `pygsti.leakage` subpackage, turn-key MPI/SLURM helpers, and JupyterBook/ReadTheDocs documentation. Supported Python versions are now 3.10-3.13.
+
+### Added
+* Error generator polynomials: symbolic Magnus/Taylor expansions and polynomial probability/expectation corrections, with a new tutorial (#789)
+* Zassenhaus formula (second order) and 20-1000x performance improvements for error generator propagation sensitivities (#687)
+* Effect-then-gate Lindblad parameterization for instruments: `Instrument.from_effects` / `Instrument.from_cptr_superops` (#693)
+* New GST objective types ('tvd', 'normalized-tvd', Lp^p) and black-box penalty functions (#649); iteration-specific optimizers (#690, @juangmendoza19)
+* `pygsti.leakage` subpackage; leakage modeling now inferred from the basis (`Basis.implies_leakage_modeling`), basis-aware report metrics, `U1Group`, `promote_bb_to_bt` (#707); leakage confidence intervals and more robust LAGO (#699)
+* `Protocol.run_mpi()` and `Protocol.stage_slurm()` for MPI-accelerated runs (#724)
+* Germ selection: `gate_penalty` option (#666) and implicit-model support (#668, @enielse)
+* `ImplicitOpModel.to_explicit_model` (#748); unconstrained 'GLNDU' Lindblad coefficient blocks (#755, #801); A/D line-label prefixes (#810, @sserita)
+
+### Fixed
+* GST with penalty terms in objective functions (#528)
+* Numerous `Circuit` bugs (#765, #767, #772, #738); `Polynomial` commutativity bug (#750, #789)
+* Missing `return_basis` support for embedded ops (#592); zero-parameter model derivatives (#796, @yrasool)
+* IBMQ result retrieval with extra bits and preliminary MCM support (#679, @pcwysoc)
+* Wildcard budgets with `gaugeopt_suite=None` (#710, @enielse); cloud noise models with callable ops (#485, @sserita)
+* NumPy 2.x/2.5 compatibility (#703, #792); lazy `cvxpy` import (#803, #807, @basnijholt)
+* Many bugfixes surfaced by the revived notebook regression suite (#788, #821)
+
+### Changed
+* Python 3.10-3.13 supported; 3.9 dropped (#780)
+* Documentation rebuilt as a Jupyter Book on ReadTheDocs (#673, @sserita; #770-#781)
+* Default germ selection mode is now 'compactEVD'; `assume_real` removed and `float_type` inferred from the model basis (#812)
+* Leakage migration: `pygsti.tools.leakage` -> `pygsti.leakage`; `n_leak` retired in favor of basis-driven inference (#707)
+* `Label` modernization: `time` field removed from default subclasses, homogeneous `sslbls` types, round-trippable serialization (#692, #769, @nkoskelo)
+* `LindbladCoefficientBlock` parameterization-by-composition refactor; `coefficient_labels` removed (#701, #755, #801)
+* `errorgen_gate_contributors` moved to `errgenpolytools` (#789); `torch` moved to the opt-in `pytorch` extra (#788)
+* Gauge optimization refactor and fidelity-objective redefinition (#669)
+
+### Developer-Oriented Changes
+* CI time-to-green under 20 minutes (#780); parallel Cython build race fixed (#794); notebook regression in CI (#788)
+* Characterization/regression suites for `LindbladCoefficientBlock` (#750), `Circuit` (#768), `basis.py` (#790), `label.py` (#769)
+* `agent-docs/` orientation docs (#743); test warning burn-down (#739); `scripts/` and dead-code cleanup (#736, #744, #745)
+
+### Expired Deprecations
+* `DenseOperatorInterface` / `DenseStateInterface` / `DenseEffectInterface` removed; use `.to_dense()` / `.set_dense()` (#805)
+
+### Deprecations
+* The `n_leak` key of `construct_standard_report`'s `advanced_options` is deprecated and ignored; leakage metrics are now shown automatically based on each model's basis (#707)
+
+## [0.9.14.3] - 2025-11-25
+
+This is a bugfix release patching the following issues:
+
+* The benchmarking tool formerly named `bsqale` has been renamed to `scarab` (@ndsieki, #685)
+* Bugfix for drift report generation caused by incorrect Plotly syntax. (@liuyichao82 #688)
+* Fix for a ReadTheDocs build failure that caused the documentation generation to fail. (#691)
+
+Development-related change: Pushes to the `bugfix` branch no longer trigger automatic merges into `develop`, and these changes will need to be merged in manually going forward.
+
 ## [0.9.14.2] - 2025-11-08
 
 This is a bugfix release patching the following issues:

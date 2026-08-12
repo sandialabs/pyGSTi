@@ -1,3 +1,5 @@
+import unittest
+
 import numpy as np
 
 import platform as _platform
@@ -618,3 +620,119 @@ class CompactPolynomialTester(BaseCase):
 
         self.assertEqual(list(vout), [2, 1, 2, 2, 1, 2, 2, 1, 1, 2, 1, 1, 0, 1, 1, 1, 1, 2, 2, 3, 1, 2, 2, 2])
         self.assertEqual(list(cout), [ 2.+0.j,  6.+0.j,  2.+0.j,  3.+0.j, 10.+0.j, 12.+0.j,  6.+0.j])
+
+
+class PolynomialFeatureTester(BaseCase):
+    """Direct unit tests for additional Polynomial behavior:
+    monomial canonicalization, ``sum``, ``from_variable_and_coefficient_lists``,
+    ``to_string``, ``__eq__`` and ``__hash__``.
+    """
+
+    # ------------------------------------------------------------------
+    # monomial canonicalization (commutativity of variable indices)
+    # ------------------------------------------------------------------
+
+    def test_monomials_are_canonicalized_by_sorting_variable_indices(self):
+        # x1*x0 and x0*x1 are the same monomial; both should canonicalize to (0, 1).
+        p = poly.Polynomial({(1, 0): 2.0})
+        self.assertEqual(set(p.coeffs.keys()), {(0, 1)})
+
+    def test_equality_is_invariant_under_monomial_variable_order(self):
+        self.assertEqual(poly.Polynomial({(1, 0): 2.0}), poly.Polynomial({(0, 1): 2.0}))
+
+    # ------------------------------------------------------------------
+    # Polynomial.sum
+    # ------------------------------------------------------------------
+
+    def test_sum_accumulates_overlapping_terms(self):
+        a = poly.Polynomial({(0,): 1.0, (1,): 2.0})
+        b = poly.Polynomial({(1,): 3.0, (2,): 4.0})
+        result = poly.Polynomial.sum([a, b])
+        # evaluate rather than compare coeff dicts to stay agnostic to rep-level
+        # zero pruning differences between the compiled and pure-python paths.
+        paramvec = [5.0, 7.0, 11.0]
+        self.assertAlmostEqual(result.evaluate(paramvec),
+                               a.evaluate(paramvec) + b.evaluate(paramvec))
+        self.assertEqual(result.coeffs[(1,)], 5.0)
+
+    def test_sum_of_empty_list_is_zero_polynomial(self):
+        self.assertEqual(poly.Polynomial.sum([]), poly.Polynomial({}))
+
+    def test_sum_of_single_polynomial_returns_equal_polynomial(self):
+        a = poly.Polynomial({(0,): 1.5, (0, 1): 2.0})
+        self.assertEqual(poly.Polynomial.sum([a]), a)
+
+    def test_sum_with_exact_cancellation_evaluates_to_zero(self):
+        # NOTE: whether the cancelled term is pruned to {} (compiled rep) or kept
+        # as a 0j coefficient (pure-python fallback) is exactly the C2 divergence,
+        # so we assert on the *value* rather than the coefficient dict.
+        x = poly.Polynomial({(0,): 1.0})
+        cancelled = poly.Polynomial.sum([x, x.scalar_mult(-1.0)])
+        self.assertAlmostEqual(cancelled.evaluate([3.7]), 0.0)
+
+    def test_sum_requires_matching_max_num_vars(self):
+        a = poly.Polynomial({(0,): 1.0}, max_num_vars=10)
+        b = poly.Polynomial({(0,): 1.0}, max_num_vars=20)
+        with self.assertRaises(AssertionError):
+            poly.Polynomial.sum([a, b])
+
+    # ------------------------------------------------------------------
+    # from_variable_and_coefficient_lists
+    # ------------------------------------------------------------------
+
+    def test_from_variable_and_coefficient_lists_sums_repeated_monomials(self):
+        p = poly.Polynomial.from_variable_and_coefficient_lists(
+            [(0,), (0,), (1,)], [1.0, 2.0, 5.0]
+        )
+        self.assertEqual(p, poly.Polynomial({(0,): 3.0, (1,): 5.0}))
+
+    def test_from_variable_and_coefficient_lists_length_mismatch_raises(self):
+        with self.assertRaises(AssertionError):
+            poly.Polynomial.from_variable_and_coefficient_lists([(0,)], [1.0, 2.0])
+
+    # ------------------------------------------------------------------
+    # __eq__ / __hash__
+    # ------------------------------------------------------------------
+
+    def test_eq_distinguishes_unequal_polynomials(self):
+        self.assertNotEqual(poly.Polynomial({(0,): 1.0}), poly.Polynomial({(0,): 2.0}))
+
+    def test_eq_with_non_polynomial_operands_returns_false(self):
+        p = poly.Polynomial({(0,): 1.0})
+        # must not raise on foreign operands (the old C1 crash).
+        self.assertFalse(p == 5)
+        self.assertFalse(p == None)  # noqa: E711 - exercising __eq__, not identity
+        self.assertTrue(p != 5)
+
+    def test_polynomial_is_unhashable(self):
+        p = poly.Polynomial({(0,): 1.0})
+        with self.assertRaises(RuntimeError):
+            hash(p)
+        with self.assertRaises(RuntimeError):
+            {p: 1}  # unusable as a dict key
+
+    # ------------------------------------------------------------------
+    # to_string 
+    # ------------------------------------------------------------------
+
+    def test_to_string_default_labels(self):
+        p = poly.Polynomial({(): 3.0, (0,): 1.0, (1, 1): 2.0})
+        self.assertEqual(p.to_string(), "3.000 + 1.000x0 + 2.000x1^2")
+
+    def test_to_string_zero_polynomial(self):
+        self.assertEqual(poly.Polynomial({}).to_string(), "0")
+
+    def test_to_string_complex_coefficient(self):
+        self.assertEqual(poly.Polynomial({(0,): 1 + 2j}).to_string(), "(1.000+2.000j)x0")
+
+    def test_to_string_with_dict_var_labels(self):
+        p = poly.Polynomial({(0,): 1.0, (1,): 2.0})
+        self.assertEqual(p.to_string({0: 'a', 1: 'b'}), "1.000a + 2.000b")
+
+    def test_to_string_with_sequence_var_labels(self):
+        p = poly.Polynomial({(0,): 1.0, (1,): 2.0})
+        self.assertEqual(p.to_string(['a', 'b']), "1.000a + 2.000b")
+
+    def test_to_string_with_callable_var_labels(self):
+        p = poly.Polynomial({(0,): 1.0})
+        self.assertEqual(p.to_string(lambda i: f"r{i}"), "1.000r0")

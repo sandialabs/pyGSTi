@@ -8,7 +8,7 @@ from ..util import Namespace
 ns = Namespace()
 ns.model = smq.target_model('full TP')
 ns.max_max_length = 2
-ns.aliases = {Label(('GA1', 0)): Circuit([('Gxpi2', 0)])}
+ns.aliases = {Label(('Ga1', 0)): Circuit([('Gxpi2', 0)])}
 
 
 @ns.memo
@@ -18,7 +18,8 @@ def datagen_model(self):
 
 @ns.memo
 def circuits(self):
-    return smq.create_gst_circuits(max_max_length=self.max_max_length)
+    clists = smq.create_gst_circuitlists(max_max_length=self.max_max_length)
+    return clists[-1]
 
 
 @ns.memo
@@ -41,14 +42,14 @@ def perfect_dataset(self):
 
 @ns.memo
 def alias_circuits(self):
-    alias_list = [c.replace_layer(Label(("Gxpi2", 0)), Label(("GA1", 0))) for c in self.circuits]
+    alias_list = [c.replace_layer(Label(("Gxpi2", 0)), Label(("Ga1", 0))) for c in self.circuits]
     return CircuitList(alias_list, self.aliases)
 
 
 @ns.memo
 def alias_model(self):
     aliased_model = self.model.copy()
-    aliased_model.operations[('GA1', 0)] = self.model.operations[('Gxpi2', 0)]
+    aliased_model.operations[('Ga1', 0)] = self.model.operations[('Gxpi2', 0)]
     aliased_model.operations.pop(('Gxpi2', 0))
     return aliased_model
 
@@ -56,6 +57,6 @@ def alias_model(self):
 @ns.memo
 def alias_datagen_model(self):
     aliased_model = self.datagen_model.copy()
-    aliased_model.operations[('GA1', 0)] = self.datagen_model.operations[('Gxpi2', 0)]
+    aliased_model.operations[('Ga1', 0)] = self.datagen_model.operations[('Gxpi2', 0)]
     aliased_model.operations.pop(('Gxpi2', 0))
     return aliased_model
