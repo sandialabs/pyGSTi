@@ -36,7 +36,19 @@ def order(u: Vertex, v: Vertex) -> Edge:
 
 
 def canonical_edges(edges: Sequence[Edge]) -> List[Edge]:
-    """Reduce `edges` to one entry per undirected edge, in :func:`order`'s orientation."""
+    """
+    Reduce `edges` to one entry per undirected edge, in :func:`order`'s orientation.
+
+    Parameters
+    ----------
+    edges : sequence of tuple
+        Edges as ``(u, v)`` pairs, in either orientation, possibly with repeats.
+
+    Returns
+    -------
+    list of tuple
+        One canonically-oriented tuple per distinct undirected edge.
+    """
     # dict-as-ordered-set: dedups while preserving first-encounter order.
     return list({order(u, v): None for u, v in edges})
 
@@ -44,9 +56,6 @@ def canonical_edges(edges: Sequence[Edge]) -> List[Edge]:
 def find_neighbors(vertices: Sequence[Vertex], edges: Sequence[Edge]) -> NeighborMap:
     """
     Build the symmetric `NeighborMap` that every algorithm in this package takes.
-
-    Symmetry matters: recording only e[0]->e[1] understates deg for vertices reached
-    solely by outward-pointing edges, causing adjacent edges to be packed into one color.
     """
     # dict-as-ordered-set per vertex: dedups repeated/reversed edges while
     # preserving first-seen order.

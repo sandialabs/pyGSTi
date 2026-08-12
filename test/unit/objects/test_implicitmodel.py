@@ -15,7 +15,11 @@ from ..util import BaseCase
 
 
 class ImplicitOpModelMixin:
-    """Reusable functionality for testing ImplicitOpModel subclasses."""
+    """Reusable functionality for testing ImplicitOpModel subclasses.
+
+    TODO: migrate CloudNoiseModel tests from test_nqnoiseconstruction.py
+          to this file.
+    """
 
     def setUp(self):
         nQubits = 2
