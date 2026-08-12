@@ -107,7 +107,7 @@ class JamiolkowskiOpsTester(BaseCase):
         magsOfNeg = j.magnitudes_of_negative_choi_eigenvalues(std1Q.target_model())
         self.assertArraysAlmostEqual(magsOfNeg, np.zeros(12, 'd'))  # 3 gates * 4 evals each = 12
 
-        # Guard Opt 4: Test magnitudes_of_negative_choi_eigenvalues with a genuinely non-CP model,
+        # Test magnitudes_of_negative_choi_eigenvalues with a genuinely non-CP model,
         # verifying that it matches eigenvalues computed directly from the Choi matrices.
         non_cp_model = std1Q.target_model().copy()
         rng = np.random.default_rng(42)

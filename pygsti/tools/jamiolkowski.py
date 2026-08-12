@@ -105,12 +105,13 @@ def jamiolkowski_iso(operation_mx: Union[_np.ndarray, Expression], op_mx_basis: 
     if not is_cvxpy_expression:
         operation_mx = _np.asarray(operation_mx)
     op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
-    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.create_equivalent('std'))
+    std_equiv = op_mx_basis.create_equivalent('std')
+    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, std_equiv)
 
     #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
     #  so that we can take dot products with the BVec matrices below
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', op_mx_basis.create_equivalent(
-        'std'), op_mx_basis.create_simple_equivalent('std'))
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', std_equiv,
+                                       op_mx_basis.create_simple_equivalent('std'))
 
     N = opMxInStdBasis.shape[0]  # dimension of the full-basis (expanded) gate
     dmDim = int(round(_np.sqrt(N)))  # density matrix dimension
@@ -240,13 +241,14 @@ def jamiolkowski_iso_inv(choi_mx: Union[_np.ndarray, Expression], choi_mx_basis:
     if not isinstance(op_mx_basis, _Basis):
         op_mx_basis = _Basis.cast(op_mx_basis, N)  # make sure op_mx_basis is a Basis; we'd like dimension to be N
 
+    std_equiv = op_mx_basis.create_equivalent('std')
     #project operation matrix so it acts only on the space given by the desired state space blocks
     opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
                                        op_mx_basis.create_simple_equivalent('std'),
-                                       op_mx_basis.create_equivalent('std'))
+                                       std_equiv)
 
     #transform operation matrix into appropriate basis
-    return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
+    return _bt.change_basis(opMxInStdBasis, std_equiv, op_mx_basis)
 
 
 def fast_jamiolkowski_iso_std(operation_mx: _np.ndarray, op_mx_basis: BasisLike, normalized: bool = True) -> _np.ndarray:
@@ -282,13 +284,12 @@ def fast_jamiolkowski_iso_std(operation_mx: _np.ndarray, op_mx_basis: BasisLike,
     #first, get operation matrix into std basis
     operation_mx = _np.asarray(operation_mx)
     op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
-    temp =  op_mx_basis.create_equivalent('std')
-    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, temp)
+    std_equiv = op_mx_basis.create_equivalent('std')
+    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, std_equiv)
 
     #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-    temp1 = op_mx_basis.create_equivalent('std')
-    temp2 = op_mx_basis.create_simple_equivalent('std')
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand',temp1, temp2)
+    simple_std = op_mx_basis.create_simple_equivalent('std')
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', std_equiv, simple_std)
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = opMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
@@ -343,13 +344,14 @@ def fast_jamiolkowski_iso_std_inv(choi_mx: _np.ndarray, op_mx_basis: BasisLike, 
     opMxInStdBasis = opMxInStdBasis.reshape((N2, N2))
     op_mx_basis = _bt.create_basis_for_matrix(opMxInStdBasis, op_mx_basis)
 
+    std_equiv = op_mx_basis.create_equivalent('std')
     #project operation matrix so it acts only on the space given by the desired state space blocks
     opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
                                        op_mx_basis.create_simple_equivalent('std'),
-                                       op_mx_basis.create_equivalent('std'))
+                                       std_equiv)
 
     #transform operation matrix into appropriate basis
-    return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
+    return _bt.change_basis(opMxInStdBasis, std_equiv, op_mx_basis)
 
 def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
     """
@@ -372,7 +374,7 @@ def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
     sumOfNeg = - _np.sum(evals[evals < 0])
     return sumOfNeg
 
-def sum_of_negative_choi_eigenvalues(model, weights=None):
+def sum_of_negative_choi_eigenvalues(model, weights: dict[str, float]=None) -> float:
     """
     Compute the amount of non-CP-ness of a model.
 
@@ -446,9 +448,10 @@ def magnitudes_of_negative_choi_eigenvalues(model):
         as positive eigenvalues contribute nothing to this list.
     """
     ret = []
-    choi_basis = model.basis.create_simple_equivalent('std')
     for (_, gate) in model.operations.items():
-        J : _np.ndarray = jamiolkowski_iso(gate.to_dense('minimal'), model.basis, choi_mx_basis=choi_basis) # type: ignore
+        # The standard (matrix unit) simple equivalent basis is exactly what
+        # fast_jamiolkowski_iso_std computes (as the basis-rotation is a no-op).
+        J : _np.ndarray = fast_jamiolkowski_iso_std(gate.to_dense('minimal'), model.basis)
         evals = _mt.eigenvalues(J, assume_hermitian=True)
         for ev in evals:
             ret.append(-ev if ev < 0 else 0.0)
