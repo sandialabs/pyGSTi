@@ -11,7 +11,8 @@
 import numpy as np
 from typing import List, Optional, Union
 
-from ._common import Vertex, Edge, NeighborMap, Coloring
+from .._common import Vertex, Edge, NeighborMap
+from ._definitions import Coloring
 from ._topology import auto_edge_coloring
 from ._vizing import misra_gries_edge_coloring, vizing_edge_coloring
 from ._sinnamon import sinnamon_2d_minus_1_edge_coloring, sinnamon_euler_color_edge_coloring

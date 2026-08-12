@@ -7,10 +7,14 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-"""Shared types and small utilities used across the edge-coloring submodules."""
+"""Coloring-specific types and utilities used across the edge-coloring submodules.
+
+The graph types these build on (`Vertex`, `Edge`, `NeighborMap`) are defined once
+in :mod:`pygsti.tools.graphs._common`; import them from there directly.
+"""
 from typing import Dict, List
 
-from .._common import Vertex, Edge, NeighborMap, order
+from .._common import Edge
 
 # Color: an edge (or vertex) color, a non-negative integer.
 Color = int

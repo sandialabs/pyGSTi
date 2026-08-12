@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from pygsti.tools.graphs.coloring import switchboard_find_edge_coloring
-from pygsti.tools.graphs.coloring._common import (
+from pygsti.tools.graphs.coloring._definitions import (
     check_valid_edge_coloring,
 )
 from pygsti.tools.graphs import (
