@@ -207,13 +207,20 @@ jobs:
       # platform-specific dependency that the other ~99% of the suite has no use for -- so
       # install them only for the jobs that actually run test_packages. Without this the ml
       # tests would be silently skipped by their pytest.importorskip guard rather than run.
-      if: ${{ inputs.run-extra-tests == 'true' }}
-      run: uv pip install --system -e .[ml]
+      #
+      # Skipped on 3.14: TensorFlow has no Python 3.14 wheels yet (tracked upstream at
+      # tensorflow/tensorflow#102890), so `uv pip install .[ml]` fails outright there instead
+      # of resolving anything. Leaving TensorFlow uninstalled on 3.14 just means the ml tests
+      # fall back to their normal pytest.importorskip skip, same as any machine lacking the
+      # `ml` extra. Drop the python-version guard once that issue ships 3.14 wheels.
+      if: ${{ inputs.run-extra-tests == 'true' && inputs.python-version != '3.14' }}
+      run: |
+        uv pip install --system -e .[ml]
+        python -Ic "import tensorflow, keras; print('tensorflow', tensorflow.__version__, '/ keras', keras.__version__)"
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -Ic "import tensorflow, keras; print('tensorflow', tensorflow.__version__, '/ keras', keras.__version__)"
         python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/notebooks --durations=25 test/test_packages
     - name: Run notebook regression
       # Linux-only: this step compiles CHP with gcc and writes it to /usr/local/bin,
@@ -230,7 +237,20 @@ jobs:
         # itself so that ReadTheDocs -- which installs `.[docs]` but never executes a
         # notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't made to
         # download TensorFlow purely to render Markdown.
-        uv pip install --system -e .[docs,ml]
+        #
+        # On 3.14, TensorFlow has no wheels yet (tensorflow/tensorflow#102890): the `ml`
+        # extra is left uninstalled, and docs/markdown/ml (the QPANN tutorials, which
+        # import pygsti.extras.ml directly with no importorskip-style guard) is excluded
+        # from the nbval run below -- jupytext itself never executes cells, so syncing
+        # that directory's .md/.ipynb pair alongside the rest is still harmless. Drop
+        # this branch once that upstream issue ships 3.14 wheels.
+        NBVAL_IGNORE_ML=""
+        if [ "${{ inputs.python-version }}" = "3.14" ]; then
+          uv pip install --system -e .[docs]
+          NBVAL_IGNORE_ML="--ignore=docs/markdown/ml"
+        else
+          uv pip install --system -e .[docs,ml]
+        fi
         (cd docs && jupytext --sync 'markdown/**/*.md')
 
         # Download and compile CHP for the Clifford-simulation notebook;
@@ -239,4 +259,4 @@ jobs:
         gcc -o /usr/local/bin/chp /tmp/chp.c
 
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 docs/markdown
+        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 $NBVAL_IGNORE_ML docs/markdown
