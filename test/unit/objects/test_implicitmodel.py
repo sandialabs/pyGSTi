@@ -14,14 +14,8 @@ from pygsti.modelmembers.instruments import Instrument
 from ..util import BaseCase
 
 
-class ImplitOpModelMixin:
-    """
-    Reusable functionality for testing ImplicitOpModel subclasses. Right now
-    this file only handles the LocalNoiseModel subclass.
-    
-    TODO: migrate CloudNoiseModel tests from test_nqnoiseconstruction.py
-          to this file.
-    """
+class ImplicitOpModelMixin:
+    """Reusable functionality for testing ImplicitOpModel subclasses."""
 
     def setUp(self):
         nQubits = 2
@@ -47,7 +41,7 @@ class ImplitOpModelMixin:
         return
 
 
-class LocalNoiseModelTester(ImplitOpModelMixin, BaseCase):
+class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
     """
     Build LocalNoiseModel objects from create_crosstalk_free_model.
     """

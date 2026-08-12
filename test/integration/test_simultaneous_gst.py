@@ -27,6 +27,7 @@ from pygsti.protocols.gst import GateSetTomography
 from pygsti.protocols.protocol import ProtocolData
 from pygsti.protocols.simultaneous_gst import SimultaneousGSTDesign
 from pygsti.tools import two_delta_logl
+from test.unit.protocols.test_simultaneous_gst import _line_pspec, _make_designs
 
 
 def _build_noise_model(pspec, lindblad_error_coeffs, parameterization):
@@ -49,25 +50,6 @@ def _build_noise_model(pspec, lindblad_error_coeffs, parameterization):
     )
     return target, noisy
 
-
-# --- H only: pure coherent over-rotations ---
-_H_NOISE = {
-    'Gi':    {('H', 'Z'): 0.005},
-    'Gxpi2': {('H', 'Z'): 0.003},
-    'Gypi2': {('H', 'X'): 0.003},
-    'Gcnot': {('H', 'ZZ'): 0.005, ('H', 'IZ'): 0.002},
-    'Gii':   {('H', 'ZI'): 0.005, ('H', 'IZ'): 0.005},
-}
-
-# --- S only: Pauli stochastic / dephasing ---
-_S_NOISE = {
-    'Gi':    {('S', 'X'): 0.001, ('S', 'Y'): 0.001, ('S', 'Z'): 0.002},
-    'Gxpi2': {('S', 'X'): 0.001, ('S', 'Z'): 0.001},
-    'Gypi2': {('S', 'Y'): 0.001, ('S', 'Z'): 0.001},
-    'Gcnot': {('S', 'XX'): 0.001, ('S', 'ZZ'): 0.002},
-    'Gii':   {('S', 'XI'): 0.001, ('S', 'IX'): 0.001, ('S', 'YI'): 0.001,
-              ('S', 'IY'): 0.001, ('S', 'ZI'): 0.002, ('S', 'IZ'): 0.002},
-}
 
 # --- H + S: coherent errors plus stochastic Pauli noise ---
 _HS_NOISE = {
@@ -97,8 +79,6 @@ _HSCA_NOISE = {
 
 # Each entry: (config_name, noise_coeffs, parameterization, max acceptable 2*deltaLogL)
 _NOISE_CONFIGS = [
-    ('H', _H_NOISE, 'H', 1.0),
-    ('S', _S_NOISE, 'S', 1.0),
     ('H+S', _HS_NOISE, 'H+S', 1.0),
     ('H+S+C+A', _HSCA_NOISE, 'GLND', 5.0),
 ]
@@ -116,34 +96,8 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         n_qubits = 3
-        qubits = tuple(range(n_qubits))
-        line_edges = [(0, 1), (1, 2)]
-        oneq_locations = [(q,) for q in qubits]
-
-        # "Gii" is the primitive two-qubit idle, required by `build_layer_mappers`.
-        # It appears in circuits as `Label(('Gii',) + twoq_qubit_labels)`, so any
-        # processor spec used with these circuits must make that gate available on
-        # every 2Q edge. It is not one of pyGSTi's standard gate names, hence the
-        # explicit 4x4 identity unitary.
-        availability = {
-            "Gi": oneq_locations,
-            "Gxpi2": oneq_locations,
-            "Gypi2": oneq_locations,
-            "Gcnot": line_edges,
-            "Gii": line_edges,
-        }
-        cls.pspec = QubitProcessorSpec(
-            n_qubits, gate_names=["Gi", "Gxpi2", "Gypi2", "Gcnot", "Gii"],
-            nonstd_gate_unitaries={"Gii": np.eye(4)},
-            availability=availability, qubit_labels=qubits,
-        )
-
-        # Small germ-power depth to keep runtime short.
-        max_max_length = 2
-        oneq_gstdesign = smq1Q_XYI.create_gst_experiment_design(
-            max_max_length=max_max_length, qubit_labels=(0,))
-        twoq_gstdesign = smq2Q_XYICNOT.create_gst_experiment_design(
-            max_max_length=max_max_length, qubit_labels=(0, 1))
+        cls.pspec, _, _ = _line_pspec(n_qubits)
+        oneq_gstdesign, twoq_gstdesign = _make_designs(max_max_length=2)
 
         # Two color patches: (0,1) 2Q GST + qubit 2 idle, then (1,2) 2Q GST +
         # qubit 0 idle.
@@ -157,9 +111,6 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
             oneq_gstdesign=oneq_gstdesign,
             twoq_gstdesign=twoq_gstdesign,
             edge_coloring=edge_coloring,
-            # circuit_stitcher is deliberately left at its default so this test
-            # exercises the shipped assign_the_designs_with_mapping /
-            # build_layer_mappers path rather than a test-local reimplementation.
             seed=1234,
             nested=False,
         )

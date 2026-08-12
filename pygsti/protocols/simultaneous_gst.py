@@ -49,61 +49,34 @@ __all__ = [
 
 
 def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign: GateSetTomographyDesign) -> LayerMappers:
-    """
-    Build the ``layer_mappers`` used by ``batch_tensor`` when stitching 1Q and 2Q
-    GST circuits together.
-
-    The returned dict maps a lane size (1 or 2) to a per-label mapper that embeds
-    the 1Q/2Q labels into the full tensored state space without implicit idles.
-
-    Any implicit idles present in these designs are mapped to Labels with
-    names `Gi` and `Gii` for 1 and 2 qubits, respectively.
-
-    Parameters
-    ----------
-    oneq_gstdesign : GateSetTomographyDesign
-        Design containing the 1Q GST circuits.
-    twoq_gstdesign : GateSetTomographyDesign
-        Design containing the 2Q GST circuits.
-
-    Returns
-    -------
-    dict
-        ``{1: mapper_1q, 2: mapper_2q}``.
-    """
+    """Build the layer_mappers used by batch_tensor when stitching, mapping empty layers to explicit idles."""
     twoq_idle_label = Label(('Gii',) + twoq_gstdesign.qubit_labels)
     oneq_idle_label = Label(('Gi',)  + oneq_gstdesign.qubit_labels)
     mapper_2q: dict[Label, Label] = {twoq_idle_label: twoq_idle_label}
     mapper_1q: dict[Label, Label] = {oneq_idle_label: oneq_idle_label}
-    empty_label = Label(())
     for cl in twoq_gstdesign.circuit_lists:
         for c in cl:
-            mapper_2q.update({k:k for k in c._labels})
-            mapper_2q[empty_label] = twoq_idle_label
+            mapper_2q.update({k: k for k in c._labels})
     for cl in oneq_gstdesign.circuit_lists:
         for c in cl:
-            mapper_1q.update({k:k for k in c._labels})
-            mapper_1q[empty_label] = oneq_idle_label
+            mapper_1q.update({k: k for k in c._labels})
+    empty_label = Label(())
+    mapper_2q[empty_label] = twoq_idle_label
+    mapper_1q[empty_label] = oneq_idle_label
     assert empty_label not in mapper_2q.values()
     assert empty_label not in mapper_1q.values()
 
-    # Check for any labels in `mapper_2q` that imply a single-qubit target.
-    # For any such label, add an explicit single-qubit idle on the non-target
-    # qubit, and wrap the whole thing as a LabelTupTup.
-    m2q = mapper_2q.copy()
-    for k2 in mapper_2q:
+    # For any single-qubit targets in mapper_2q, add explicit single-qubit idle and wrap as Label
+    for k2 in list(mapper_2q.keys()):
         if k2.num_qubits == 1:
             assert isinstance(k2, LabelTup)
-            # So we are assuming k2 = Label("Gsingle", x) where x = 0,1.
             tgt = k2[1]
             assert tgt in [0,1]
             tmp = [None, None]
             tmp[tgt] = k2
             tmp[1-tgt] = Label("Gi", 1-tgt)
-            m2q[k2] = Label(tuple(tmp))
+            mapper_2q[k2] = Label(tuple(tmp))
 
-    mapper_2q = m2q # Reset here.
-    # layer mappers handles how big each lane is not the length of a circuit.
     return {1: mapper_1q, 2: mapper_2q}
 
 
@@ -151,33 +124,14 @@ def make_simultaneous_gst_design(
 
 def _normalize_coloring(coloring: Mapping[int, Sequence[Edge]]) -> Dict[int, List[Edge]]:
     """
-    An edge coloring with every edge as a tuple, per the ``Edge`` alias.
-
-    Callers may pass lists, and a JSON round trip always returns them, since JSON has
-    no tuple type. Normalizing keeps ``color_patches`` equal (and hashable) across
-    designs however they were built; nothing downstream requires it, as ``patch_lines``
-    casts each edge before use.
-
-    Only the container is normalized -- do not reach for ``order`` or
-    :func:`canonical_edges` here. ``(0, 1)`` and ``(1, 0)`` select different lanes of
-    the 2Q design, so canonicalizing orientation would silently move qubits between
-    lanes while leaving every structural check happy.
+    An edge coloring with every edge as a tuple.
+    Do not canonicalize orientation here: (0, 1) and (1, 0) select different lanes of the 2Q design.
     """
     return {patch: [tuple(edge) for edge in edge_set] for patch, edge_set in coloring.items()}
 
 
 def _stitcher_name(circuit_stitcher: CircuitStitcher) -> Optional[str]:
-    """
-    The fully-qualified ``"module.qualname"`` of a circuit stitcher, or None.
-
-    A stitcher is an arbitrary caller-supplied callable, so it cannot be serialized
-    directly. Recording where it came from lets :func:`_resolve_stitcher_name` import
-    it back, and keeps the provenance readable in 'meta.json' even when it cannot.
-
-    Callables without a ``__qualname__`` -- ``functools.partial`` objects and callable
-    class instances -- report None so that 'meta.json' records a clean null rather than
-    something like ``'functools.None'``. Both load as None with a warning either way.
-    """
+    """Return the fully-qualified "module.qualname" of a circuit stitcher, or None."""
     qualname = getattr(circuit_stitcher, '__qualname__', None)
     if qualname is None:
         return None
@@ -188,14 +142,7 @@ def _stitcher_name(circuit_stitcher: CircuitStitcher) -> Optional[str]:
 
 
 def _resolve_stitcher_name(name: Optional[str]) -> Optional[CircuitStitcher]:
-    """
-    Import the circuit stitcher recorded by :func:`_stitcher_name`.
-
-    Only a module-level callable can be restored; a lambda, closure, method, or
-    script-local function resolves to None with a warning. That is not fatal -- the
-    stitcher is only ever called during ``__init__`` -- but the loaded design then no
-    longer records how it was built, hence the warning.
-    """
+    """Import the circuit stitcher recorded by :func:`_stitcher_name`."""
     if name is None:
         _warnings.warn("Loaded a SimultaneousGSTDesign with no recorded circuit_stitcher; "
                        "setting it to None. The design's circuits are unaffected.")
@@ -561,13 +508,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         # the public methods alone would leave the in-place hooks reachable.
         raise NotImplementedError(self._NO_SUBSETTING % "Truncating to a subset of circuits")
 
-    # A parent design (e.g. CombinedExperimentDesign) recurses straight into the two hooks
-    # below, so they must refuse on their own account rather than fall through to the
-    # backstop above: CircuitListsDesign's versions mutate self.circuit_lists *first* and
-    # only then call super(), which would leave a half-truncated design behind on the way
-    # out. (Its _truncate_to_design_inplace also assumes every circuit list is a
-    # CircuitList and raises AttributeError on plain lists, masking this refusal.)
-
+    # Refuse on our own account to prevent parent design recursion from mutating lists first.
     def _truncate_to_design_inplace(self, other_design):
         raise NotImplementedError(self._NO_SUBSETTING % "Truncating to another design")
 
@@ -576,15 +517,12 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
 
     def truncate_to_lists(self, list_indices_to_keep):
         """Not supported; see :meth:`as_circuit_lists_design`."""
-        # Dropping whole germ powers keeps each list intact, but CircuitListsDesign's
-        # implementation returns a CircuitListsDesign, silently discarding the coloring
-        # and sub-designs. Refuse rather than hand back a downgraded object.
+        # Dropping germ powers is unsupported as it silently discards simultaneous structure.
         raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_lists")
 
     def merge_with(self, other_edesign, remove_duplicates=True):
         """Not supported; see :meth:`as_circuit_lists_design`."""
-        # Concatenating another design's circuit lists interleaves a second, unrelated
-        # patch structure into this one's chunks.
+        # Concatenating other designs interleaves unrelated patch structures.
         raise NotImplementedError(self._NO_SUBSETTING % "merge_with")
 
     # The three public entry points below all deepcopy `self` before reaching the backstop,
@@ -608,11 +546,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
 
 def patch_lines(edge_set: Sequence[Edge],
                 vertices: Sequence[Vertex]) -> Tuple[List[Edge], List[Vertex], List[Union[Edge, Tuple[Vertex]]]]:
-    """
-    Return the ordered tensor lines for a patch:
-      - first the 2Q edge lines
-      - then the 1Q unused-qubit lines
-    """
+    """Return the ordered tensor lines for a patch: first 2Q edge lines, then 1Q unused-qubit lines."""
     edge_set = sorted([tuple(edge) for edge in edge_set])
     used_qubits    = {q for edge in edge_set for q in edge}
     unused_qubits  = [q for q in vertices if q not in used_qubits]
@@ -623,15 +557,8 @@ def patch_lines(edge_set: Sequence[Edge],
 def make_line_mapper(source_lines: Sequence[Edge],
                      target_lines: Sequence[Edge]) -> Dict[Vertex, Vertex]:
     """
-    Construct a state-space-label mapper from source tensor lines to target
-    tensor lines.
-
-    Example:
-        source_lines = [(0, 1), (4,), (5,)]
-        target_lines = [(2, 3), (0,), (1,)]
-
-        returns:
-            {0: 2, 1: 3, 4: 0, 5: 1}
+    Construct a state-space-label mapper from source tensor lines to target tensor lines.
+    Example: [(0, 1), (4,)] to [(2, 3), (0,)] returns {0: 2, 1: 3, 4: 0}.
     """
     if len(source_lines) != len(target_lines):
         raise ValueError("Source and target line lists have different lengths.")
@@ -662,24 +589,7 @@ def make_line_mapper(source_lines: Sequence[Edge],
 def build_patch_infos(vertices: Sequence[Vertex],
                       color_patches: Dict[int, List[Edge]]
                       ) -> List[Dict[str, Any]]:
-    """
-    Describe each color patch's geometry, in ``color_patches`` order.
-
-    Parameters
-    ----------
-    vertices : list
-        All qubits on the device.
-
-    color_patches : dict[int, list[tuple]]
-        Mapping from patch identifier to the list of edges in that patch.
-
-    Returns
-    -------
-    list[dict]
-        One info dict per patch, carrying its edges, its unused (1Q) qubits,
-        the tensored line ordering, and the counts of each. Ordering follows
-        ``color_patches``, which is what fixes the patch-major output order.
-    """
+    """Describe each color patch's geometry in color_patches order, fixing patch-major output order."""
     vertices = list(vertices)
 
     patch_infos = []
@@ -688,11 +598,8 @@ def build_patch_infos(vertices: Sequence[Vertex],
         edge_set, unused_qubits, tensored_lines = patch_lines(edge_set, vertices)
 
         info = {
-            "patch": patch,
-            "edge_set": edge_set,
-            "unused_qubits": unused_qubits,
-            "tensored_lines": tensored_lines,
-            "num_edges": len(edge_set),
+            "patch": patch, "edge_set": edge_set, "unused_qubits": unused_qubits,
+            "tensored_lines": tensored_lines, "num_edges": len(edge_set),
             "num_unused_qubits": len(unused_qubits),
         }
 
@@ -705,40 +612,8 @@ def group_patches_for_scheduling(patch_infos: List[Dict[str, Any]],
                                  share_same_shape_schedules: bool = True
                                  ) -> List[List[Dict[str, Any]]]:
     """
-    Partition patches into *scheduling groups*: sets of patches that share a
-    single random circuit-index schedule.
-
-    One schedule is drawn per group, and one template circuit is tensored per
-    group per simultaneous circuit; every non-representative member of the
-    group obtains its circuits by relabelling that template onto its own lines.
-    So the grouping alone decides whether two patches get identical circuit
-    content (up to qubit relabelling) or independent draws.
-
-    Parameters
-    ----------
-    patch_infos : list[dict]
-        Patch infos from :func:`build_patch_infos`, in ``color_patches`` order.
-
-    share_same_shape_schedules : bool, optional
-        If True (the default), patches with the same *shape* -- the same number
-        of 2Q edge slots and the same number of unused 1Q qubit slots -- are
-        placed in one group and therefore share a schedule. If False, every
-        patch becomes its own singleton group and draws independently.
-
-    Returns
-    -------
-    list[list[dict]]
-        The groups, each a non-empty list of patch infos whose first element is
-        the group's representative. Groups are ordered by the first appearance
-        of a member in ``patch_infos``, so the draw order (and hence the output
-        for a given seed) is deterministic.
-
-    Notes
-    -----
-    A singleton group is exactly the degenerate case of a shared one: its
-    representative is the patch itself and there are no other members to
-    relabel onto. That is why ``share_same_shape_schedules=False`` needs no
-    separate code path downstream.
+    Partition patches into scheduling groups based on their shape (2Q edge slots and 1Q unused qubit slots).
+    A singleton group is exactly the degenerate case of a shared one (with no other members to relabel onto).
     """
     if not share_same_shape_schedules:
         return [[info] for info in patch_infos]
@@ -753,40 +628,9 @@ def group_patches_for_scheduling(patch_infos: List[Dict[str, Any]],
 
 def random_index_schedule(n: int, num_circs_at_germ_power: int, randgen: np.random.Generator) -> np.ndarray:
     """
-    A length-``num_circs_at_germ_power`` index schedule into a CircuitList of
-    size ``n``.
-
-    This is what fills a single slot (one edge, or one unused qubit) across all
-    ``num_circs_at_germ_power`` simultaneous circuits generated for one germ
-    power: entry ``j`` says which circuit of the design goes into that slot in
-    the ``j``-th simultaneous circuit.
-
-    The ``n`` real indices ``0..n-1`` are always included, so every circuit of
-    the design is used at least once. If ``n < num_circs_at_germ_power`` the
-    design is bootstrapped up to ``num_circs_at_germ_power``: the remaining
-    ``num_circs_at_germ_power - n`` entries are drawn uniformly with replacement
-    from ``0..n-1``. The whole schedule is then shuffled, so the design's own
-    (arbitrary) circuit order carries no meaning.
-
-    When ``n == num_circs_at_germ_power`` no bootstrapping happens and the
-    result is a plain random permutation of ``0..n-1``.
-
-    Parameters
-    ----------
-    n : int
-        Size of the CircuitList being scheduled into ``num_circs_at_germ_power`` slots.
-
-    num_circs_at_germ_power : int
-        Desired length of the returned schedule.
-
-    randgen : numpy.random.Generator
-        Random number generator used to draw the bootstrap indices (when
-        ``n < num_circs_at_germ_power``) and to shuffle the result.
-
-    Returns
-    -------
-    numpy.ndarray
-        A length-``num_circs_at_germ_power`` array of indices into ``0..n-1``.
+    Build a length-num_circs_at_germ_power index schedule into a CircuitList of size n.
+    Draws bootstrap indices uniformly with replacement from 0..n-1 if n < num_circs_at_germ_power,
+    then shuffles the result.
     """
     if n == num_circs_at_germ_power:
         base = np.arange(num_circs_at_germ_power)
@@ -800,27 +644,7 @@ def random_index_schedule(n: int, num_circs_at_germ_power: int, randgen: np.rand
 #region Invariant Helpers
 
 def assert_no_implicit_idles(circuit: Circuit) -> None:
-    """
-    Assert that every idle gate in ``circuit`` is explicit.
-
-    For every layer, checks that the layer's contents are unchanged by
-    filling in idles (``layer(i) == layer_with_idles(i)``), i.e. that the
-    circuit contains no implicit idle gates.
-
-    Parameters
-    ----------
-    circuit : Circuit
-        The circuit to check.
-
-    Returns
-    -------
-    None
-
-    Raises
-    ------
-    AssertionError
-        If any layer of ``circuit`` contains an implicit idle gate.
-    """
+    """Assert that every idle gate in `circuit` is explicit (no implicit idle gates)."""
     for i in range(circuit.num_layers):
         l0 = set(circuit.layer(i))
         l1 = set(circuit.layer_with_idles(i))
@@ -831,38 +655,7 @@ def assert_no_implicit_idles(circuit: Circuit) -> None:
 
 
 def assert_mapped_circuit_matches_patch(mapped_circuit: Circuit, info: Dict[str, Any]) -> None:
-    """
-    Assert that ``mapped_circuit`` was correctly remapped onto its own patch.
-
-    Checks two things:
-
-    1. ``mapped_circuit``'s line labels are exactly the qubits/edges assigned
-       to this patch (``info["tensored_lines"]``) -- no more, no fewer.
-    2. Every multi-qubit gate in ``mapped_circuit`` lands on one of this
-       patch's own edges (``info["edge_set"]``, in either orientation) --
-       not on some other patch's edge (e.g. the representative patch's edge,
-       which would indicate the mapper was applied incorrectly or never
-       applied at all).
-
-    Parameters
-    ----------
-    mapped_circuit : Circuit
-        The circuit produced by mapping a representative patch's template
-        circuit onto ``info``'s own qubits/edges.
-
-    info : dict
-        One patch's entry from ``build_patch_infos``, containing at least
-        ``"patch"``, ``"tensored_lines"``, and ``"edge_set"``.
-
-    Returns
-    -------
-    None
-
-    Raises
-    ------
-    AssertionError
-        If either check fails.
-    """
+    """Assert that `mapped_circuit`'s line labels match the patch, and its multi-qubit gates land on the patch's own edges."""
     expected_labels = {
         q
         for line in info["tensored_lines"]
@@ -991,48 +784,8 @@ def build_group_schedules(
     randgen: np.random.Generator,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Build the random circuit-index schedules for one patch-shape group at one
-    germ power.
-
-    A patch of this shape has ``num_edges`` 2Q slots and ``num_unused_qubits``
-    1Q slots. This draws one independent schedule per slot, each of length
-    ``num_circs_at_germ_power``, so that ``twoq_slot_schedules[s, j]`` names the
-    2Q circuit occupying edge slot ``s`` of the ``j``-th simultaneous circuit
-    (and likewise for the 1Q slots). Whichever design is shorter at this germ
-    power is bootstrapped up to ``num_circs_at_germ_power``; see
-    :func:`random_index_schedule`.
-
-    Independent draws per slot are the point: they are what make different edges
-    of the same patch run different 2Q circuits simultaneously.
-
-    Parameters
-    ----------
-    num_edges : int
-        Number of 2Q edge slots in this patch shape.
-
-    num_unused_qubits : int
-        Number of unused (1Q) qubit slots in this patch shape.
-
-    num_circs_at_germ_power : int
-        Number of simultaneous circuits to generate for this germ power.
-
-    twoq_len : int
-        Number of available 2Q circuits at this germ power.
-
-    oneq_len : int
-        Number of available 1Q circuits at this germ power.
-
-    randgen : numpy.random.Generator
-        Random number generator used for the index schedules.
-
-    Returns
-    -------
-    twoq_slot_schedules : numpy.ndarray, shape (num_edges, num_circs_at_germ_power)
-        Which 2Q circuit fills each edge slot, for each simultaneous circuit.
-
-    oneq_slot_schedules : numpy.ndarray, shape (num_unused_qubits, num_circs_at_germ_power)
-        Which 1Q circuit fills each unused-qubit slot, for each simultaneous
-        circuit.
+    Build the random circuit-index schedules for one patch-shape group at one germ power.
+    Independent draws per slot allow different edges to run different 2Q circuits simultaneously.
     """
     twoq_slot_schedules = np.empty((num_edges, num_circs_at_germ_power), dtype=np.int64)
     for edge_slot in range(num_edges):
@@ -1047,31 +800,8 @@ def build_group_schedules(
 
 def build_patch_mappers(infos: List[Dict[str, Any]]) -> Dict[int, Optional[Dict[Vertex, Vertex]]]:
     """
-    Build the line mappers for one scheduling group (see
-    :func:`group_patches_for_scheduling`).
-
-    Patches sharing a group are stitched only once: a template circuit is
-    tensored for the group's *representative* patch (``infos[0]``), and every
-    other patch obtains its circuit by relabelling that template onto its own
-    lines rather than re-tensoring from scratch. For a singleton group this
-    returns just ``{patch: None}``, i.e. no relabelling at all.
-
-    The mappers depend only on the patch geometry, not on the germ power or on
-    any random draw, so they can be built once and reused for every germ power.
-
-    Parameters
-    ----------
-    infos : list[dict]
-        One scheduling group's patch infos, as produced by
-        :func:`group_patches_for_scheduling`. ``infos[0]`` is the
-        representative.
-
-    Returns
-    -------
-    dict[int, Optional[dict]]
-        Mapping from patch identifier to the line mapper carrying the
-        representative's template circuit onto that patch. ``None`` for the
-        representative itself, since it needs no relabelling.
+    Build the line mappers for one scheduling group.
+    Mappers are geometry-dependent and built once to be reused across all germ powers.
     """
     representative = infos[0]
     representative_lines = representative["tensored_lines"]
@@ -1093,28 +823,7 @@ def flatten_patch_major(
     patch_buffers: Dict[int, List[Circuit]],
     patch_order: List[int],
 ) -> List[Circuit]:
-    """
-    Flatten one germ power's per-patch circuit buffers into a single list,
-    patch-major.
-
-    "Patch-major" means all of the first patch's circuits, then all of the
-    second patch's, and so on, following ``patch_order``. Combined with the
-    outer per-germ-power list, this gives the germ-power-major-then-patch-major
-    ordering that :func:`assert_circuit_lists_match_color_patches` checks.
-
-    Parameters
-    ----------
-    patch_buffers : dict[int, list[Circuit]]
-        This germ power's circuits, keyed by patch identifier.
-
-    patch_order : list[int]
-        Patch identifiers, in the desired output order.
-
-    Returns
-    -------
-    list[Circuit]
-        This germ power's circuits, ordered patch-major.
-    """
+    """Flatten one germ power's per-patch circuit buffers into a single list, patch-major."""
     output_circuits: List[Circuit] = []
     for patch in patch_order:
         output_circuits.extend(patch_buffers[patch])
@@ -1122,12 +831,7 @@ def flatten_patch_major(
 
 
 def _denest_a_circuitlist(circuitlist: list[list[Circuit]]) -> list[list[Circuit]]:
-    r"""
-        Assume circuitlist is a list of lists of circuits which are ordered by germ power.
-        Remove any circuits which were duplicated in a previous inner list.
-
-        x[a[z], b[z], c[z], ...] -> x[a[z], b[z] \ a[z], c[z] \ (b[z] | a[z]), ...]
-    """
+    """Remove any circuits which were duplicated in a previous inner list."""
     cop = [[] for _ in range(len(circuitlist))]
     if not circuitlist:
         return cop
@@ -1144,23 +848,7 @@ def _denest_a_circuitlist(circuitlist: list[list[Circuit]]) -> list[list[Circuit
 
 
 def _nest_a_circuitlist(circuitlist: list[list[Circuit]], num_patches: int = 1) -> list[list[Circuit]]:
-    r"""
-        Undo :func:`_denest_a_circuitlist`, i.e. accumulate each germ power's list
-        onto all the earlier ones::
-
-            x[a[z], b[z] \ a[z], c[z] \ (b[z] | a[z]), ...] -> x[a[z], b[z], c[z], ...]
-
-        where b[z] contains a[z], c[z] contains b[z] and so on.
-
-        Accumulation is done *per patch* so that the germ-power-major-then-patch-major
-        ordering survives. Each inner list is assumed to consist of ``num_patches``
-        contiguous, equal-size, patch-major chunks; chunk ``p`` of the output at germ
-        power ``i`` is the concatenation of chunk ``p`` of the inputs at germ powers
-        ``0..i``. Naively concatenating whole germ-power lists instead would interleave
-        patches (``[P0 P1][P0 P1]``) and break that contract.
-
-        With ``num_patches == 1`` this is exactly the plain accumulation above.
-    """
+    """Undo _denest_a_circuitlist patch-wise to preserve germ-power-major-then-patch-major ordering."""
     cop = [[] for _ in range(len(circuitlist))]
     if not circuitlist:
         return cop
@@ -1395,15 +1083,8 @@ def assign_the_designs_with_mapping(
 
         num_circs_at_germ_power = max(oneq_len, twoq_len)
 
-        # Each generated simultaneous circuit at this germ power draws one 2Q circuit
-        # per edge slot and one 1Q circuit per unused-qubit slot. We produce
-        # ``num_circs_at_germ_power`` simultaneous circuits so that every circuit in the *longer* of
-        # the two CircuitLists is used exactly once; the shorter CircuitList is
-        # bootstrapped up to ``num_circs_at_germ_power`` by resampling from itself with replacement.
-        # Circuit *depths* are equalized separately: batch_tensor pads each shorter
-        # sub-circuit with explicit idle layers (via the ``Label(()) ->
-        # explicit-idle`` entry in ``layer_mappers``). This works regardless of which
-        # CircuitList is longer.
+        # We produce max(oneq, twoq) simultaneous circuits to use every circuit of the longer design.
+        # The shorter design is bootstrapped, and batch_tensor pads shorter sub-circuits with explicit idles.
 
         # Temporary per-patch storage so output ordering remains patch-major.
         patch_buffers = {
@@ -1446,7 +1127,4 @@ def assign_the_designs_with_mapping(
 
     # Renest patch-wise, so germ-power-major-then-patch-major ordering survives.
     return _nest_a_circuitlist(circuit_lists, num_patches=len(patch_order))
-
-
-
 

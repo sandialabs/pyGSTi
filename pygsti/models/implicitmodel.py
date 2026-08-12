@@ -98,10 +98,7 @@ class ImplicitOpModel(_mdl.OpModel):
         match, or raise a KeyError if no matches are found.
         """
         key_label = _Label(key)
-        # This generic implementation is a bit inefficient. It sorts relevant dicts
-        # by length as a hueristic to identify which dicts we're more likely to need.
-        # For example, SPAM dicts are usually length O(1), as are the dicts that hold
-        # 1-qubit or 2-qubit gates that get embedded into n-qubit layers later on.
+        # Sort dicts by length as a heuristic for search efficiency (e.g. SPAM is usually O(1)).
         dicts = []
         for outer_dict in [self.prep_blks, self.povm_blks, self.operation_blks, self.instrument_blks, self.factories]:
             for inner_dict in outer_dict.values():

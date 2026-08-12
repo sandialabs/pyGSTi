@@ -8,7 +8,6 @@
 #***************************************************************************************************
 
 import copy as _copy
-import functools
 import hashlib
 import json
 import pathlib
@@ -24,8 +23,8 @@ from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.simultaneous_gst import (
     SimultaneousGSTDesign, _normalize_coloring, _resolve_stitcher_name, _stitcher_name,
     assert_circuit_lists_match_color_patches,
-    assert_mapped_circuit_matches_patch, assert_no_implicit_idles,
-    assign_the_designs_with_mapping, build_layer_mappers,
+    assert_mapped_circuit_matches_patch,
+    assign_the_designs_with_mapping,
     build_patch_infos, make_line_mapper, make_simultaneous_gst_design,
 )
 from pygsti.protocols.gst import GateSetTomographyDesign
@@ -35,13 +34,7 @@ from ..util import BaseCase, with_temp_path
 
 
 class _StubDesign:
-    """Minimal stand-in for a GateSetTomographyDesign for stitcher unit tests.
-
-    ``assign_the_designs_with_mapping`` only touches ``.circuit_lists`` and
-    ``.qubit_labels`` -- both directly and via ``build_layer_mappers``, which it
-    calls to construct the layer mappers -- so a tiny stub is enough to exercise
-    the length-pairing logic without building full GST designs.
-    """
+    """Minimal stand-in for a GateSetTomographyDesign for stitcher unit tests."""
     def __init__(self, circuit_lists, qubit_labels):
         self.circuit_lists = circuit_lists
         self.qubit_labels = qubit_labels
@@ -57,31 +50,109 @@ def _make_2q_circuits(n):
     return [Circuit([Label('Gcnot', (0, 1))] * (i + 1), line_labels=(0, 1)) for i in range(n)]
 
 
+def _stitch(oneq_lens, twoq_lens, vertices=(0, 1, 2), color_patches=None, seed=0, check=True, **kwargs):
+    if color_patches is None:
+        color_patches = {0: [(0, 1)]}
+    if isinstance(oneq_lens, int):
+        oneq_lens = [oneq_lens]
+    if isinstance(twoq_lens, int):
+        twoq_lens = [twoq_lens]
+    oneq = _StubDesign([_make_1q_circuits(n) for n in oneq_lens], (0,))
+    twoq = _StubDesign([_make_2q_circuits(n) for n in twoq_lens], (0, 1))
+    if 'randgen' not in kwargs and seed is not None:
+        kwargs['randgen'] = np.random.default_rng(seed)
+    circuit_lists = assign_the_designs_with_mapping(
+        oneq, twoq, vertices, color_patches, **kwargs
+    )
+    if check:
+        assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
+    return circuit_lists
+
+
+def _cnot_edges(circuit):
+    edges = set()
+    for i in range(circuit.num_layers):
+        for op in circuit.layer(i):
+            if op.name == 'Gcnot':
+                edges.add(tuple(op.qubits))
+    return edges
+
+
+def _gx_qubits(circuit):
+    qubits = set()
+    for i in range(circuit.num_layers):
+        for op in circuit.layer(i):
+            if op.name == 'Gx':
+                qubits.update(op.qubits)
+    return qubits
+
+
+def _line_pspec(n_qubits=3):
+    """An n_qubits-qubit line processor spec with standard gates and explicit two-qubit idles Gii."""
+    qubits = tuple(range(n_qubits))
+    line_edges = [(q, q + 1) for q in range(n_qubits - 1)]
+    oneq_locations = [(q,) for q in qubits]
+    availability = {
+        'Gi': oneq_locations,
+        'Gxpi2': oneq_locations,
+        'Gypi2': oneq_locations,
+        'Gcnot': line_edges,
+        'Gii': line_edges,
+    }
+    pspec = QubitProcessorSpec(
+        n_qubits, gate_names=['Gi', 'Gxpi2', 'Gypi2', 'Gcnot', 'Gii'],
+        nonstd_gate_unitaries={'Gii': np.eye(4)},
+        availability=availability, qubit_labels=qubits,
+    )
+    return pspec, qubits, line_edges
+
+
+def _make_designs(max_max_length=1):
+    """Small 1Q and 2Q GST designs with minimal depth to keep tests fast."""
+    oneq = smq1Q_XYI.create_gst_experiment_design(
+        max_max_length=max_max_length, qubit_labels=(0,))
+    twoq = smq2Q_XYICNOT.create_gst_experiment_design(
+        max_max_length=max_max_length, qubit_labels=(0, 1))
+    return oneq, twoq
+
+
+_STUB_CIRCUIT_LISTS = [[Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1, 2)),
+                        Circuit([Label('Gcnot', (1, 2))], line_labels=(0, 1, 2))]]
+
+
+def _tiny_dataset():
+    """A DataSet holding a couple of 3-qubit circuits, for truncation tests."""
+    dataset = pygsti.data.DataSet(outcome_labels=['000', '111'])
+    for circuit in (Circuit([Label('Gxpi2', 0)], line_labels=(0, 1, 2)),
+                    Circuit([Label('Gxpi2', 1)], line_labels=(0, 1, 2))):
+        dataset.add_count_dict(circuit, {'000': 10, '111': 10})
+    dataset.done_adding_data()
+    return dataset
+
+
+def _tee_pspec(edges):
+    """A 4-qubit T processor spec with qubit 1 as a degree-3 hub."""
+    qubits = (0, 1, 2, 3)
+    oneq_locations = [(q,) for q in qubits]
+    availability = {
+        'Gi': oneq_locations,
+        'Gxpi2': oneq_locations,
+        'Gypi2': oneq_locations,
+        'Gcnot': list(edges),
+        'Gii': list(edges),
+    }
+    return QubitProcessorSpec(
+        4, gate_names=['Gi', 'Gxpi2', 'Gypi2', 'Gcnot', 'Gii'],
+        nonstd_gate_unitaries={'Gii': np.eye(4)},
+        availability=availability, qubit_labels=qubits,
+    )
+
+
 class AssignDesignsLengthPairingTester(BaseCase):
     """Cover the pairing of 1Q and 2Q designs of differing per-L lengths."""
 
     def _run(self, oneq_len, twoq_len, seed=0):
-        oneq_lists = [_make_1q_circuits(oneq_len)]
-        twoq_lists = [_make_2q_circuits(twoq_len)]
-        oneq = _StubDesign(oneq_lists, (0,))
-        twoq = _StubDesign(twoq_lists, (0, 1))
-
-        # A single color patch: one 2Q edge (0, 1) plus one unused 1Q qubit (2),
-        # so both the edge slot and the unused-qubit slot are exercised.
-        color_patches = {0: [(0, 1)]}
-        vertices = [0, 1, 2]
-
-        circuit_lists = assign_the_designs_with_mapping(
-            oneq, twoq, vertices, color_patches,
-            randgen=np.random.default_rng(seed),
-        )
-        # assign_the_designs_with_mapping no longer verifies its own output;
-        # that's now stitcher-agnostic and lives in
-        # assert_circuit_lists_match_color_patches (normally invoked by
-        # SimultaneousGSTDesign.__init__). Run it explicitly here
-        # since this test calls the stitcher directly.
-        assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
-        return circuit_lists
+        return _stitch(oneq_len, twoq_len, seed=seed)
 
     def test_oneq_twoq_lengths(self):
         # A longer 1Q design is a legitimate input --
@@ -96,43 +167,23 @@ class AssignDesignsLengthPairingTester(BaseCase):
                 for c in circuit_lists[0]:
                     self.assertEqual(set(c.line_labels), {0, 1, 2})
 
-    def test_shorter_twoq_list_recycled_up_to_longer_oneq(self):
-        oneq_len, twoq_len = 6, 2
-        circuit_lists = self._run(oneq_len, twoq_len)
-        generated = circuit_lists[0]
-        self.assertEqual(len(generated), oneq_len)
-
-        cnot_depth_counts = {}
-        for c in generated:
-            n_cnot_layers = sum(
-                1 for i in range(c.num_layers)
-                if any(op.name == 'Gcnot' for op in c.layer(i))
-            )
-            cnot_depth_counts[n_cnot_layers] = cnot_depth_counts.get(n_cnot_layers, 0) + 1
-
-        self.assertNotIn(0, cnot_depth_counts)
-        self.assertGreaterEqual(cnot_depth_counts.get(1, 0), 1)
-        self.assertGreaterEqual(cnot_depth_counts.get(2, 0), 1)
-        self.assertEqual(sum(cnot_depth_counts.values()), oneq_len)
-
-    def test_shorter_oneq_list_recycled_up_to_longer_twoq(self):
-        oneq_len, twoq_len = 2, 6
-        circuit_lists = self._run(oneq_len, twoq_len)
-        generated = circuit_lists[0]
-        self.assertEqual(len(generated), twoq_len)
-
-        gx_depth_counts = {}
-        for c in generated:
-            n_gx_layers = sum(
-                1 for i in range(c.num_layers)
-                if any(op.name == 'Gx' and 2 in op.qubits for op in c.layer(i))
-            )
-            gx_depth_counts[n_gx_layers] = gx_depth_counts.get(n_gx_layers, 0) + 1
-
-        self.assertNotIn(0, gx_depth_counts)
-        self.assertGreaterEqual(gx_depth_counts.get(1, 0), 1)
-        self.assertGreaterEqual(gx_depth_counts.get(2, 0), 1)
-        self.assertEqual(sum(gx_depth_counts.values()), twoq_len)
+    def test_shorter_list_recycled_up_to_longer(self):
+        cases = [
+            (6, 2, lambda op: op.name == 'Gcnot', 6),
+            (2, 6, lambda op: op.name == 'Gx' and 2 in op.qubits, 6),
+        ]
+        for oneq_len, twoq_len, pred, expected in cases:
+            with self.subTest(oneq_len=oneq_len, twoq_len=twoq_len):
+                generated = self._run(oneq_len, twoq_len)[0]
+                self.assertEqual(len(generated), expected)
+                counts = {}
+                for c in generated:
+                    n_layers = sum(1 for i in range(c.num_layers) if any(pred(op) for op in c.layer(i)))
+                    counts[n_layers] = counts.get(n_layers, 0) + 1
+                self.assertNotIn(0, counts)
+                self.assertGreaterEqual(counts.get(1, 0), 1)
+                self.assertGreaterEqual(counts.get(2, 0), 1)
+                self.assertEqual(sum(counts.values()), expected)
 
     def test_shorter_circuit_depths_padded_with_explicit_idles(self):
         oneq_len, twoq_len = 4, 4
@@ -154,18 +205,7 @@ class AssignDesignsLengthPairingTester(BaseCase):
 
 
 class DefaultOutputIsStableTester(BaseCase):
-    """
-    Pin the default stitcher's output for fixed seeds.
-
-    ``share_same_shape_schedules`` was added as an option specifically so the
-    default behaviour would not move. These hashes were captured *before* that
-    option existed; if a refactor perturbs the order in which the random stream
-    is consumed, they change and this test fails loudly rather than silently
-    handing users a different (still valid-looking) experiment design.
-
-    Regenerating these is legitimate when the randomization is intentionally
-    changed -- but it should be a deliberate, reviewed act.
-    """
+    """Pin the default stitcher's output for fixed seeds."""
 
     EXPECTED = {
         'one_patch':
@@ -185,76 +225,25 @@ class DefaultOutputIsStableTester(BaseCase):
     }
 
     def test_default_output_matches_recorded_hashes(self):
-        oneq = _StubDesign([_make_1q_circuits(n) for n in (3, 5)], (0,))
-        twoq = _StubDesign([_make_2q_circuits(n) for n in (3, 5)], (0, 1))
-
         for name, (vertices, color_patches) in self.CASES.items():
             with self.subTest(case=name):
-                circuit_lists = assign_the_designs_with_mapping(
-                    oneq, twoq, vertices, color_patches,
-                    randgen=np.random.default_rng(12345),
-                )
+                circuit_lists = _stitch((3, 5), (3, 5), vertices, color_patches, seed=12345, check=False)
                 blob = json.dumps([[c.str for c in L] for L in circuit_lists])
                 digest = hashlib.sha256(blob.encode()).hexdigest()
                 self.assertEqual(digest, self.EXPECTED[name])
 
 
 class MultiplePatchesSameShapeTester(BaseCase):
-    """
-    Two color patches sharing the same shape (here, both have 1 edge and 1 unused
-    qubit) are grouped together and share a randomly-generated "template" circuit;
-    all but the first ("representative") patch in the group must have that template
-    relabeled (via `Circuit.map_state_space_labels`) onto their own lines.
-
-    This is the ``share_same_shape_schedules=True`` contract, i.e. the default.
-    See ``IndependentSchedulesTester`` for the opposite setting.
-    """
+    """Two color patches sharing the same shape are grouped together and share a randomly-generated template circuit."""
 
     def _run(self, oneq_len=4, twoq_len=4, seed=0):
-        oneq_lists = [_make_1q_circuits(oneq_len)]
-        twoq_lists = [_make_2q_circuits(twoq_len)]
-        oneq = _StubDesign(oneq_lists, (0,))
-        twoq = _StubDesign(twoq_lists, (0, 1))
-
-        # A 3-qubit line with two color patches, both of shape (1 edge, 1 unused
-        # qubit): patch 0 is edge (0, 1) with qubit 2 left over; patch 1 is edge
-        # (1, 2) with qubit 0 left over. Both patches land in the same `groups`
-        # bucket, which is exactly the scenario the bug above hits.
         color_patches = {0: [(0, 1)], 1: [(1, 2)]}
         vertices = [0, 1, 2]
-
-        circuit_lists = assign_the_designs_with_mapping(
-            oneq, twoq, vertices, color_patches,
-            randgen=np.random.default_rng(seed),
-        )
-        # assign_the_designs_with_mapping no longer verifies its own output
-        # (see assert_circuit_lists_match_color_patches); this is exactly the
-        # scenario (two same-shape patches) that the "duplicated representative
-        # patch" bug hit, so exercise the check explicitly here.
-        assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
+        circuit_lists = _stitch(oneq_len, twoq_len, vertices, color_patches, seed=seed)
         generated = circuit_lists[0]
         self.assertEqual(len(generated), max(oneq_len, twoq_len) * 2)
         half = len(generated) // 2
-        # Output is patch-major: patch 0's circuits first, then patch 1's.
         return generated[:half], generated[half:]
-
-    @staticmethod
-    def _cnot_edges(circuit):
-        edges = set()
-        for i in range(circuit.num_layers):
-            for op in circuit.layer(i):
-                if op.name == 'Gcnot':
-                    edges.add(tuple(op.qubits))
-        return edges
-
-    @staticmethod
-    def _gx_qubits(circuit):
-        qubits = set()
-        for i in range(circuit.num_layers):
-            for op in circuit.layer(i):
-                if op.name == 'Gx':
-                    qubits.update(op.qubits)
-        return qubits
 
     def test_patches_are_relabeled_not_duplicated(self):
         patch0_circuits, patch1_circuits = self._run()
@@ -264,16 +253,16 @@ class MultiplePatchesSameShapeTester(BaseCase):
         # patch-1 circuit's Gcnot must be on edge (1, 2) only -- never the other
         # patch's edge.
         for c in patch0_circuits:
-            self.assertEqual(self._cnot_edges(c), {(0, 1)})
+            self.assertEqual(_cnot_edges(c), {(0, 1)})
         for c in patch1_circuits:
-            self.assertEqual(self._cnot_edges(c), {(1, 2)})
+            self.assertEqual(_cnot_edges(c), {(1, 2)})
 
         # Patch 0's leftover 1Q circuit belongs to qubit 2; patch 1's belongs to
         # qubit 0.
         for c in patch0_circuits:
-            self.assertEqual(self._gx_qubits(c), {2})
+            self.assertEqual(_gx_qubits(c), {2})
         for c in patch1_circuits:
-            self.assertEqual(self._gx_qubits(c), {0})
+            self.assertEqual(_gx_qubits(c), {0})
 
     def test_patch1_is_exactly_patch0_relabeled(self):
         # The sharing contract in full: patch 1 is not merely "similar" to patch
@@ -294,28 +283,13 @@ class MultiplePatchesSameShapeTester(BaseCase):
 
 
 class IndependentSchedulesTester(BaseCase):
-    """
-    With ``share_same_shape_schedules=False`` every patch is its own scheduling
-    group, so same-shape patches draw independently instead of one being a
-    relabelling of the other.
+    """With share_same_shape_schedules=False same-shape patches draw schedules independently."""
 
-    Everything else -- patch-major ordering, correct stitching onto each patch's
-    own qubits, nesting, no duplicates, seed reproducibility -- must still hold.
-    """
-
-    # Two same-shape patches (2 edges + 2 unused qubits each) on 6 qubits, which
-    # under the default would collapse into a single scheduling group.
     VERTICES = [0, 1, 2, 3, 4, 5]
     COLOR_PATCHES = {0: [(0, 1), (2, 3)], 1: [(1, 2), (3, 4)]}
 
     def _run(self, share, seed=0, oneq_lens=(3, 6), twoq_lens=(3, 6)):
-        oneq = _StubDesign([_make_1q_circuits(n) for n in oneq_lens], (0,))
-        twoq = _StubDesign([_make_2q_circuits(n) for n in twoq_lens], (0, 1))
-        return assign_the_designs_with_mapping(
-            oneq, twoq, self.VERTICES, self.COLOR_PATCHES,
-            randgen=np.random.default_rng(seed),
-            share_same_shape_schedules=share,
-        )
+        return _stitch(oneq_lens, twoq_lens, self.VERTICES, self.COLOR_PATCHES, seed=seed, share_same_shape_schedules=share)
 
     def _patch_chunks(self, germ_power_list):
         half = len(germ_power_list) // 2
@@ -349,56 +323,24 @@ class IndependentSchedulesTester(BaseCase):
         for earlier, later in zip(circuit_lists, circuit_lists[1:]):
             self.assertTrue(set(earlier).issubset(set(later)))
 
-    def test_independent_schedules_are_seed_reproducible(self):
-        self.assertEqual(self._run(share=False, seed=7),
-                         self._run(share=False, seed=7))
-
-    def test_both_settings_produce_the_same_number_of_circuits(self):
-        # Sharing is a randomization choice, not a size choice.
+    def test_independent_schedules_metadata_and_plumbing(self):
+        # seed reproducibility
+        self.assertEqual(self._run(share=False, seed=7), self._run(share=False, seed=7))
+        # both settings produce the same number of circuits
         shared = self._run(share=True)
         independent = self._run(share=False)
         self.assertEqual([len(L) for L in shared], [len(L) for L in independent])
-
-    def test_default_is_to_share(self):
-        oneq = _StubDesign([_make_1q_circuits(3)], (0,))
-        twoq = _StubDesign([_make_2q_circuits(3)], (0, 1))
-        default = assign_the_designs_with_mapping(
-            oneq, twoq, self.VERTICES, self.COLOR_PATCHES,
-            randgen=np.random.default_rng(0),
-        )
-        explicit = assign_the_designs_with_mapping(
-            oneq, twoq, self.VERTICES, self.COLOR_PATCHES,
-            randgen=np.random.default_rng(0),
-            share_same_shape_schedules=True,
-        )
+        # default is to share
+        default = _stitch(3, 3, self.VERTICES, self.COLOR_PATCHES, seed=0)
+        explicit = _stitch(3, 3, self.VERTICES, self.COLOR_PATCHES, seed=0, share_same_shape_schedules=True)
         self.assertEqual(default, explicit)
 
 
 class NestingTester(BaseCase):
-    """
-    The stitcher's output is always nested: the circuit list for a higher
-    germ-power index must contain every circuit generated for any lower
-    germ-power index.
-
-    Nesting is applied patch-wise so the germ-power-major-then-patch-major
-    ordering survives: each patch's own chunk at germ power ``L`` must start
-    with the exact same circuits, in the same order, as that patch's chunk at
-    every germ power ``L' < L``. (Concatenating whole germ-power lists instead
-    would interleave patches and break that contract.)
-    """
+    """The stitcher's output is always nested patch-wise so the germ-power-major-then-patch-major ordering survives."""
 
     def _run(self, oneq_lens, twoq_lens, color_patches, vertices, seed=0):
-        oneq_lists = [_make_1q_circuits(n) for n in oneq_lens]
-        twoq_lists = [_make_2q_circuits(n) for n in twoq_lens]
-        oneq = _StubDesign(oneq_lists, (0,))
-        twoq = _StubDesign(twoq_lists, (0, 1))
-
-        circuit_lists = assign_the_designs_with_mapping(
-            oneq, twoq, vertices, color_patches,
-            randgen=np.random.default_rng(seed),
-        )
-        assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
-        return circuit_lists
+        return _stitch(oneq_lens, twoq_lens, vertices, color_patches, seed=seed)
 
     def _assert_no_duplicates(self, circuit_lists):
         # Nesting must not double-count: each germ power's list is a set of
@@ -476,44 +418,9 @@ class NestingTester(BaseCase):
         for germ_power_list in circuit_lists:
             half = len(germ_power_list) // 2
             for c in germ_power_list[:half]:
-                self.assertEqual(MultiplePatchesSameShapeTester._cnot_edges(c), {(0, 1)})
+                self.assertEqual(_cnot_edges(c), {(0, 1)})
             for c in germ_power_list[half:]:
-                self.assertEqual(MultiplePatchesSameShapeTester._cnot_edges(c), {(1, 2)})
-
-
-def _line_pspec(n_qubits=3):
-    """An `n_qubits`-qubit line processor spec usable with the SGST design.
-
-    "Gii" (the primitive two-qubit idle) is required on every 2Q edge because
-    ``build_layer_mappers`` maps a 2Q lane's implicit-idle layer onto
-    ``Label(('Gii',) + twoq_qubit_labels)``. It is not a pyGSTi standard gate
-    name, hence the explicit 4x4 identity unitary.
-    """
-    qubits = tuple(range(n_qubits))
-    line_edges = [(q, q + 1) for q in range(n_qubits - 1)]
-    oneq_locations = [(q,) for q in qubits]
-    availability = {
-        'Gi': oneq_locations,
-        'Gxpi2': oneq_locations,
-        'Gypi2': oneq_locations,
-        'Gcnot': line_edges,
-        'Gii': line_edges,
-    }
-    pspec = QubitProcessorSpec(
-        n_qubits, gate_names=['Gi', 'Gxpi2', 'Gypi2', 'Gcnot', 'Gii'],
-        nonstd_gate_unitaries={'Gii': np.eye(4)},
-        availability=availability, qubit_labels=qubits,
-    )
-    return pspec, qubits, line_edges
-
-
-def _make_designs(max_max_length=1):
-    """Small 1Q and 2Q GST designs; depth kept minimal to keep the test fast."""
-    oneq = smq1Q_XYI.create_gst_experiment_design(
-        max_max_length=max_max_length, qubit_labels=(0,))
-    twoq = smq2Q_XYICNOT.create_gst_experiment_design(
-        max_max_length=max_max_length, qubit_labels=(0, 1))
-    return oneq, twoq
+                self.assertEqual(_cnot_edges(c), {(1, 2)})
 
 
 class _SGSTFixture:
@@ -1224,46 +1131,6 @@ class UnsupportedOperationsTester(_SGSTFixture, BaseCase):
                           for i, cl in enumerate(plain.circuit_lists)])
 
 
-#: Fixed output for a stub stitcher: two circuits so they split evenly over two patches.
-_STUB_CIRCUIT_LISTS = [[Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1, 2)),
-                        Circuit([Label('Gcnot', (1, 2))], line_labels=(0, 1, 2))]]
-
-
-def _tiny_dataset():
-    """A DataSet holding a couple of 3-qubit circuits, for truncation tests."""
-    dataset = pygsti.data.DataSet(outcome_labels=['000', '111'])
-    for circuit in (Circuit([Label('Gxpi2', 0)], line_labels=(0, 1, 2)),
-                    Circuit([Label('Gxpi2', 1)], line_labels=(0, 1, 2))):
-        dataset.add_count_dict(circuit, {'000': 10, '111': 10})
-    dataset.done_adding_data()
-    return dataset
-
-
-def _tee_pspec(edges):
-    """
-    A 4-qubit "T": qubit 1 is a degree-3 hub joined to 0, 2 and 3.
-
-    ``edges`` selects how that one physical graph is *written* in availability;
-    the hardware is the same whichever way each tuple is oriented.
-
-    See :func:`_line_pspec` for why "Gii" must be available on every 2Q edge.
-    """
-    qubits = (0, 1, 2, 3)
-    oneq_locations = [(q,) for q in qubits]
-    availability = {
-        'Gi': oneq_locations,
-        'Gxpi2': oneq_locations,
-        'Gypi2': oneq_locations,
-        'Gcnot': list(edges),
-        'Gii': list(edges),
-    }
-    return QubitProcessorSpec(
-        4, gate_names=['Gi', 'Gxpi2', 'Gypi2', 'Gcnot', 'Gii'],
-        nonstd_gate_unitaries={'Gii': np.eye(4)},
-        availability=availability, qubit_labels=qubits,
-    )
-
-
 class DirectedAvailabilityTeeTester(BaseCase):
     """
     A degree-3 hub whose availability is written one-directional.
@@ -1322,42 +1189,22 @@ class DirectedAvailabilityTeeTester(BaseCase):
 
 
 class MakeLineMapperValidationTester(BaseCase):
-    """
-    Cover ``make_line_mapper``'s four rejection paths.
+    """Cover ``make_line_mapper``'s four rejection paths and valid example."""
 
-    Each guards a different way the source/target tensor lines can fail to
-    describe a well-defined relabeling, and each is reachable independently.
-    """
-
-    def test_line_count_mismatch_is_rejected(self):
-        with self.assertRaises(ValueError) as ctx:
-            make_line_mapper([(0, 1)], [(2, 3), (4,)])
-        self.assertIn('different lengths', str(ctx.exception))
-
-    def test_line_arity_mismatch_is_rejected(self):
-        # Same number of lines, but a 2Q source line paired with a 1Q target.
-        with self.assertRaises(ValueError) as ctx:
-            make_line_mapper([(0, 1)], [(2,)])
-        self.assertIn('arity mismatch', str(ctx.exception))
-
-    def test_inconsistent_mapping_for_one_label_is_rejected(self):
-        # Source label 0 appears twice, mapped to 2 the first time and 4 the
-        # second -- there is no single consistent image for it.
-        with self.assertRaises(ValueError) as ctx:
-            make_line_mapper([(0, 1), (0,)], [(2, 3), (4,)])
-        self.assertIn('Inconsistent mapping', str(ctx.exception))
-
-    def test_non_injective_mapping_is_rejected(self):
-        # Two distinct source labels collapse onto the same target label. This
-        # is consistent per-label (so it clears the check above) but not
-        # one-to-one, so it would silently merge two qubits.
-        with self.assertRaises(ValueError) as ctx:
-            make_line_mapper([(0,), (1,)], [(2,), (2,)])
-        self.assertIn('one-to-one', str(ctx.exception))
+    def test_rejections(self):
+        cases = [
+            ([(0, 1)], [(2, 3), (4,)], 'different lengths'),
+            ([(0, 1)], [(2,)], 'arity mismatch'),
+            ([(0, 1), (0,)], [(2, 3), (4,)], 'Inconsistent mapping'),
+            ([(0,), (1,)], [(2,), (2,)], 'one-to-one'),
+        ]
+        for src, tgt, msg in cases:
+            with self.subTest(msg=msg):
+                with self.assertRaises(ValueError) as ctx:
+                    make_line_mapper(src, tgt)
+                self.assertIn(msg, str(ctx.exception))
 
     def test_valid_lines_produce_the_documented_mapping(self):
-        # The docstring's own example, so the rejection tests above are
-        # anchored against a known-good input.
         self.assertEqual(
             make_line_mapper([(0, 1), (4,), (5,)], [(2, 3), (0,), (1,)]),
             {0: 2, 1: 3, 4: 0, 5: 1})
@@ -1366,25 +1213,11 @@ class MakeLineMapperValidationTester(BaseCase):
 class AssignDesignsDefaultRandgenTester(BaseCase):
     """``assign_the_designs_with_mapping`` defaults ``randgen`` to ``default_rng(0)``."""
 
-    @staticmethod
-    def _run(**kwargs):
-        oneq_lists = [_make_1q_circuits(3)]
-        twoq_lists = [_make_2q_circuits(5)]
-        oneq = _StubDesign(oneq_lists, (0,))
-        twoq = _StubDesign(twoq_lists, (0, 1))
-        return assign_the_designs_with_mapping(
-            oneq, twoq, [0, 1, 2], {0: [(0, 1)]}, **kwargs)
+    def test_default_randgen_behavior(self):
+        omitted = _stitch(3, 5, seed=None)  # no randgen/seed passed
+        explicit_zero = _stitch(3, 5, seed=0)
+        self.assertEqual(omitted, explicit_zero)
 
-    def test_omitted_randgen_matches_explicit_default_rng_zero(self):
-        omitted = self._run()
-        explicit = self._run(randgen=np.random.default_rng(0))
-        self.assertEqual(omitted, explicit)
-
-    def test_omitted_randgen_still_produces_valid_output(self):
-        circuit_lists = self._run()
-        assert_circuit_lists_match_color_patches(circuit_lists, [0, 1, 2], {0: [(0, 1)]})
-
-    def test_default_differs_from_a_different_seed(self):
-        # Confirms the default is a real generator being consumed, not an
-        # unused placeholder that would make every seed equivalent.
-        self.assertNotEqual(self._run(), self._run(randgen=np.random.default_rng(12345)))
+        # Confirms the default is a real generator being consumed
+        explicit_other = _stitch(3, 5, seed=12345)
+        self.assertNotEqual(omitted, explicit_other)

@@ -289,55 +289,25 @@ class EulerianPartitionTester(BaseCase):
 class CanonicalEdgesTester(BaseCase):
     """``canonical_edges`` dedup and orientation."""
 
-    def test_is_exported_from_the_package(self):
+    def test_canonical_edges_behavior(self):
         import pygsti.tools.graphcoloring as gc
         self.assertIn('canonical_edges', gc.__all__)
         self.assertIs(gc.canonical_edges, canonical_edges)
-
-    def test_both_orientations_collapse_to_one_entry(self):
-        self.assertEqual(canonical_edges([(0, 1), (1, 0), (1, 2), (2, 1)]),
-                         [(0, 1), (1, 2)])
-
-    def test_reversed_input_is_normalized(self):
+        
+        self.assertEqual(canonical_edges([(0, 1), (1, 0), (1, 2), (2, 1)]), [(0, 1), (1, 2)])
         self.assertEqual(canonical_edges([(1, 0), (2, 1)]), [(0, 1), (1, 2)])
-
-    def test_orientation_matches_the_coloring_convention(self):
-        # The point of canonicalizing is that these edges can be compared
-        # against a coloring's, so both must use `order`'s orientation.
+        
+        # Orientation matches order() coloring convention
         edges = canonical_edges([(3, 1), (1, 0)])
         self.assertEqual(edges, [order(3, 1), order(1, 0)])
-
-    def test_first_encounter_order_is_preserved(self):
-        # Not sorted: an already-ordered list survives intact, keeping the
-        # coloring input reproducible.
+        
+        # First encounter order is preserved, not sorted
         self.assertEqual(canonical_edges([(2, 1), (1, 0)]), [(1, 2), (0, 1)])
-
-    def test_empty_edge_list(self):
         self.assertEqual(canonical_edges([]), [])
 
 
 class TeeOrientationInvarianceTester(BaseCase):
-    """
-    Colorings must not depend on which way an edge's endpoints were written.
-
-    Naming an edge once, in either orientation, or twice all spell the same
-    graph, so all must colour it the same way. `deg` is the colour budget, and
-    an adjacency map built by walking only ``e[0] -> e[1]`` understates it for
-    vertices reached solely by outward-pointing edges; too small a budget packs
-    adjacent edges into one colour. `canonical_edges` collapses the spellings
-    before `find_neighbors` sees them, so what these really pin is that a
-    canonical -- hence one-directional -- list still yields the true degree.
-
-    Several shapes, because the failure is degree-dependent and ``auto`` has
-    branches that mask it: `detect_topology` recognises a path and takes a
-    closed form ignoring `deg` entirely, so `path_5` survives a wrong `deg` for
-    reasons that say nothing about the general case. The T is the smallest
-    shape without that reprieve. Reverting `find_neighbors` fails ten
-    assertions below.
-
-    ``test_simultaneous_gst.DirectedAvailabilityTeeTester`` covers the caller
-    this protects, where an invalid coloring means 2Q gates sharing a qubit.
-    """
+    """Colorings must not depend on which way an edge's endpoints were written."""
 
     #: (name, vertices, undirected edges) -- each edge written once.
     SHAPES = {
@@ -419,34 +389,23 @@ class TeeOrientationInvarianceTester(BaseCase):
 class FindNeighborsTester(BaseCase):
     """``find_neighbors`` adjacency construction."""
 
-    def test_is_exported_from_the_package(self):
+    def test_find_neighbors_behavior(self):
         import pygsti.tools.graphcoloring as gc
         self.assertIn('find_neighbors', gc.__all__)
         self.assertIs(gc.find_neighbors, find_neighbors)
 
-    def test_each_edge_is_recorded_from_both_endpoints(self):
-        # An edge written once still makes each endpoint a neighbor of the
-        # other, so the degree reflects the graph, not the notation.
-        vertices = (0, 1, 2)
-        edges = [(0, 1), (1, 2)]
-        self.assertEqual(find_neighbors(vertices, edges),
-                         {0: [1], 1: [0, 2], 2: [1]})
+        # Each edge is recorded from both endpoints
+        self.assertEqual(find_neighbors((0, 1, 2), [(0, 1), (1, 2)]), {0: [1], 1: [0, 2], 2: [1]})
 
-    def test_writing_both_orientations_does_not_duplicate_neighbors(self):
-        # Without dedup the repeat would inflate the degree, costing a colour.
+        # Writing both orientations does not duplicate neighbors
         one_directional = find_neighbors((0, 1, 2), [(0, 1), (1, 2)])
         two_directional = find_neighbors((0, 1, 2), [(0, 1), (1, 0), (1, 2), (2, 1)])
         self.assertEqual(two_directional, one_directional)
 
-    def test_isolated_vertices_get_empty_neighbor_lists(self):
-        # Every vertex must appear as a key even with no incident edges, since
-        # callers index `neighbors[v]` for all v when computing the max degree.
-        self.assertEqual(find_neighbors((0, 1, 2), [(0, 1)]),
-                         {0: [1], 1: [0], 2: []})
+        # Isolated vertices get empty neighbor lists
+        self.assertEqual(find_neighbors((0, 1, 2), [(0, 1)]), {0: [1], 1: [0], 2: []})
 
-    def test_multiple_neighbors_accumulate_in_edge_order(self):
-        # Each vertex's neighbors follow first-encounter order, so the result is
-        # deterministic for a given `edges` ordering.
+        # Multiple neighbors accumulate in edge order
         self.assertEqual(find_neighbors((0, 1, 2, 3), [(1, 0), (1, 2), (1, 3)]),
                          {0: [1], 1: [0, 2, 3], 2: [1], 3: [1]})
 
