@@ -181,7 +181,10 @@ def _stitcher_name(circuit_stitcher: CircuitStitcher) -> Optional[str]:
     qualname = getattr(circuit_stitcher, '__qualname__', None)
     if qualname is None:
         return None
-    return qualname
+    module_name = getattr(circuit_stitcher, '__module__', None)
+    if module_name is None:
+        return None
+    return module_name + '.' + qualname
 
 
 def _resolve_stitcher_name(name: Optional[str]) -> Optional[CircuitStitcher]:
@@ -198,14 +201,9 @@ def _resolve_stitcher_name(name: Optional[str]) -> Optional[CircuitStitcher]:
                        "setting it to None. The design's circuits are unaffected.")
         return None
 
-    # A qualname never contains a dot by the time it gets here: rpartition splits at the
-    # *last* one, so e.g. 'pkg.mod.Class.method' yields the un-importable module name
-    # 'pkg.mod.Class' -- which is the correct outcome, since a method is not restorable.
-    module_name, _, attr_name = name.rpartition('.')
     try:
-        # ValueError: empty module_name, i.e. `name` had no dot at all.
-        # ImportError: no such module.  AttributeError: no such member of it.
-        resolved = getattr(_importlib.import_module(module_name), attr_name)
+        from pygsti.io.metadir import _class_for_name as _resolve_name
+        resolved = _resolve_name(name)
     except (ImportError, AttributeError, ValueError) as e:
         _warnings.warn("Could not restore the circuit_stitcher %r of a loaded "
                        "SimultaneousGSTDesign (%s); setting it to None. This is expected for a "

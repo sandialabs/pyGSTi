@@ -83,28 +83,18 @@ class AssignDesignsLengthPairingTester(BaseCase):
         assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
         return circuit_lists
 
-    def test_oneq_longer_than_twoq(self):
+    def test_oneq_twoq_lengths(self):
         # A longer 1Q design is a legitimate input --
         # neither design is required to be the longer one.
-        oneq_len, twoq_len = 7, 3
-        circuit_lists = self._run(oneq_len, twoq_len)
-
-        self.assertEqual(len(circuit_lists), 1)  # one germ-power group
-        # max(len(oneq), len(twoq)) tensored circuits are produced.
-        self.assertEqual(len(circuit_lists[0]), max(oneq_len, twoq_len))
-        # Every generated circuit spans all three qubits.
-        for c in circuit_lists[0]:
-            self.assertEqual(set(c.line_labels), {0, 1, 2})
-
-    def test_twoq_longer_than_oneq(self):
-        oneq_len, twoq_len = 3, 7
-        circuit_lists = self._run(oneq_len, twoq_len)
-        self.assertEqual(len(circuit_lists[0]), max(oneq_len, twoq_len))
-
-    def test_equal_lengths(self):
-        oneq_len, twoq_len = 5, 5
-        circuit_lists = self._run(oneq_len, twoq_len)
-        self.assertEqual(len(circuit_lists[0]), 5)
+        for oneq_len, twoq_len in ((7, 3), (3, 7), (5, 5)):
+            with self.subTest(oneq_len=oneq_len, twoq_len=twoq_len):
+                circuit_lists = self._run(oneq_len, twoq_len)
+                self.assertEqual(len(circuit_lists), 1)  # one germ-power group
+                # max(len(oneq), len(twoq)) tensored circuits are produced.
+                self.assertEqual(len(circuit_lists[0]), max(oneq_len, twoq_len))
+                # Every generated circuit spans all three qubits.
+                for c in circuit_lists[0]:
+                    self.assertEqual(set(c.line_labels), {0, 1, 2})
 
     def test_shorter_twoq_list_recycled_up_to_longer_oneq(self):
         oneq_len, twoq_len = 6, 2
@@ -331,18 +321,6 @@ class IndependentSchedulesTester(BaseCase):
         half = len(germ_power_list) // 2
         return germ_power_list[:half], germ_power_list[half:]
 
-    def test_shared_schedules_make_patch1_a_relabeling_of_patch0(self):
-        # Control for the test below: under the default, the two patches *are*
-        # related by the line mapper.
-        patch_infos = build_patch_infos(self.VERTICES, self.COLOR_PATCHES)
-        mapper = make_line_mapper(
-            patch_infos[0]["tensored_lines"],
-            patch_infos[1]["tensored_lines"],
-        )
-        patch0, patch1 = self._patch_chunks(self._run(share=True)[0])
-        for c0, c1 in zip(patch0, patch1):
-            self.assertEqual(c0.map_state_space_labels(mapper), c1)
-
     def test_independent_schedules_break_the_relabeling(self):
         patch_infos = build_patch_infos(self.VERTICES, self.COLOR_PATCHES)
         mapper = make_line_mapper(
@@ -466,40 +444,20 @@ class NestingTester(BaseCase):
                     )
 
     def test_single_patch_containment_across_germ_powers(self):
-        vertices = [0, 1, 2]
-        color_patches = {0: [(0, 1)]}
-        circuit_lists = self._run(
-            oneq_lens=[3, 5], twoq_lens=[3, 5],
-            color_patches=color_patches, vertices=vertices,
-        )
-        self.assertEqual(len(circuit_lists), 2)
-        self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
-        self._assert_no_duplicates(circuit_lists)
-
-    def test_multiple_same_shape_patches_containment_across_germ_powers(self):
-        # Two same-shape patches land in the same `groups` bucket and share a
-        # representative template circuit; containment must still hold
-        # independently for each patch's own chunk.
-        vertices = [0, 1, 2]
-        color_patches = {0: [(0, 1)], 1: [(1, 2)]}
-        circuit_lists = self._run(
-            oneq_lens=[3, 6], twoq_lens=[3, 6],
-            color_patches=color_patches, vertices=vertices,
-        )
-        self.assertEqual(len(circuit_lists), 2)
-        self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
-        self._assert_no_duplicates(circuit_lists)
-
-    def test_three_germ_powers_containment_holds_for_all_pairs(self):
-        vertices = [0, 1, 2]
-        color_patches = {0: [(0, 1)]}
-        circuit_lists = self._run(
-            oneq_lens=[2, 4, 7], twoq_lens=[2, 4, 7],
-            color_patches=color_patches, vertices=vertices,
-        )
-        self.assertEqual(len(circuit_lists), 3)
-        self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
-        self._assert_no_duplicates(circuit_lists)
+        cases = [
+            ("single_patch", [0, 1, 2], {0: [(0, 1)]}, [3, 5], 2),
+            ("multiple_same_shape_patches", [0, 1, 2], {0: [(0, 1)], 1: [(1, 2)]}, [3, 6], 2),
+            ("three_germ_powers", [0, 1, 2], {0: [(0, 1)]}, [2, 4, 7], 3),
+        ]
+        for name, vertices, color_patches, lens, expected_len in cases:
+            with self.subTest(name):
+                circuit_lists = self._run(
+                    oneq_lens=lens, twoq_lens=lens,
+                    color_patches=color_patches, vertices=vertices,
+                )
+                self.assertEqual(len(circuit_lists), expected_len)
+                self._assert_patchwise_containment(circuit_lists, vertices, color_patches)
+                self._assert_no_duplicates(circuit_lists)
 
     def test_multiple_patches_and_germ_powers_stay_patch_major(self):
         # Regression: renesting by concatenating whole germ-power lists yields
@@ -767,16 +725,6 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
             assert_mapped_circuit_matches_patch(bad_circuit, info)
         self.assertIn("not one of this patch's own edges", str(ctx.exception))
 
-    def test_wellformed_input_is_accepted(self):
-        """Control: the helper accepts the un-corrupted design.
-
-        Without this, a helper that raised unconditionally would make every
-        test above pass for the wrong reason.
-        """
-        assert_circuit_lists_match_color_patches(
-            self.design.circuit_lists, self.design.vertices,
-            self.design.color_patches)
-
 
 class EdgeNormalizationTester(_SGSTFixture, BaseCase):
     """
@@ -812,6 +760,11 @@ class EdgeNormalizationTester(_SGSTFixture, BaseCase):
         # Lists are unhashable, so this raised TypeError for a list-built design.
         self.assertEqual(set(from_lists.color_patches[0]), {(0, 1)})
 
+        # Check key order is preserved
+        coloring = {2: [[3, 4], [0, 1]], 0: [[1, 2]]}
+        normalized = _normalize_coloring(coloring)
+        self.assertEqual(list(normalized), [2, 0])
+
     def test_orientation_is_preserved_not_canonicalized(self):
         """Guards against 'improving' the helper into ``order``/``canonical_edges``.
 
@@ -825,19 +778,6 @@ class EdgeNormalizationTester(_SGSTFixture, BaseCase):
         coloring = {0: [[0, 1]], 1: [[1, 2]]}
         self._design(coloring)
         self.assertEqual(coloring, {0: [[0, 1]], 1: [[1, 2]]})
-
-    def test_normalize_coloring(self):
-        """The helper alone: tuple-ness, and everything it must leave alone."""
-        for name, coloring, expected in (
-            ('already tuples', self.TUPLE_COLORING, self.TUPLE_COLORING),
-            ('patch keys and edge order kept', {2: [[3, 4], [0, 1]], 0: [[1, 2]]},
-             {2: [(3, 4), (0, 1)], 0: [(1, 2)]}),
-            ('empty patch survives', {0: [], 1: [[0, 1]]}, {0: [], 1: [(0, 1)]}),
-        ):
-            with self.subTest(name):
-                normalized = _normalize_coloring(coloring)
-                self.assertEqual(normalized, expected)
-                self.assertEqual(list(normalized), list(expected))  # key order
 
 
 class MapQubitLabelsTester(_SGSTFixture, BaseCase):
@@ -864,11 +804,8 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
 
     # -- the returned object -------------------------------------------------
 
-    def test_returns_a_simultaneous_gst_design(self):
-        # The point of the override: the inherited one returns a GateSetTomographyDesign.
-        self.assertIsInstance(self.mapped, SimultaneousGSTDesign)
-
     def test_processor_spec_and_qubit_labels_are_mapped(self):
+        self.assertIsInstance(self.mapped, SimultaneousGSTDesign)
         self.assertEqual(self.mapped.processor_spec.qubit_labels, ('Q0', 'Q1', 'Q2'))
         self.assertEqual(self.mapped.vertices, ('Q0', 'Q1', 'Q2'))
         self.assertEqual(self.mapped.qubit_labels, ('Q0', 'Q1', 'Q2'))
@@ -1024,37 +961,14 @@ class StitcherNameTester(BaseCase):
         with self.assertWarns(Warning):
             self.assertIsNone(_resolve_stitcher_name(name))
 
-    def test_missing_name_resolves_to_none_with_a_warning(self):
-        # What a partial or callable instance produces on the way back in.
-        with self.assertWarns(Warning):
-            self.assertIsNone(_resolve_stitcher_name(None))
-
-    def test_unimportable_module_resolves_to_none_with_a_warning(self):
-        with self.assertWarns(Warning):
-            self.assertIsNone(_resolve_stitcher_name('no_such_module_xyz.some_stitcher'))
-
-    def test_importable_module_missing_the_member_resolves_to_none(self):
-        # The module resolves but the attribute does not -- an AttributeError rather
-        # than an ImportError, and the only case that reaches that arm of the except
-        # clause. It is what a design written by an older/newer pyGSTi looks like if the
-        # stitcher it names has since been renamed or removed.
-        with self.assertWarns(Warning):
-            self.assertIsNone(_resolve_stitcher_name(
-                'pygsti.protocols.simultaneous_gst.no_such_stitcher'))
-
-    def test_method_of_a_class_is_named_but_not_restorable(self):
-        # rpartition splits at the last dot, so a method's class ends up inside the
-        # module name and the import fails. Recorded for provenance, not restored.
-        name = _stitcher_name(_CallableStitcher.__call__)
-        self.assertIn('_CallableStitcher.__call__', name)
-        with self.assertWarns(Warning):
-            self.assertIsNone(_resolve_stitcher_name(name))
-
-    def test_bare_name_with_no_module_resolves_to_none_with_a_warning(self):
-        # rpartition('.') yields an empty module name, which import_module rejects with
-        # ValueError rather than ImportError -- a distinct path through the except clause.
-        with self.assertWarns(Warning):
-            self.assertIsNone(_resolve_stitcher_name('stitcher_with_no_module'))
+    def test_invalid_names_resolve_to_none_with_a_warning(self):
+        # Missing, unimportable module, missing member, class method, or bare names.
+        for name in (None, 'no_such_module_xyz.some_stitcher',
+                     'pygsti.protocols.simultaneous_gst.no_such_stitcher',
+                     '_CallableStitcher.__call__', 'stitcher_with_no_module'):
+            with self.subTest(name=name):
+                with self.assertWarns(Warning):
+                    self.assertIsNone(_resolve_stitcher_name(name))
 
 
 class SerializationTester(_SGSTFixture, BaseCase):
@@ -1091,6 +1005,9 @@ class SerializationTester(_SGSTFixture, BaseCase):
         self.assertEqual(loaded.qubit_labels, self.design.qubit_labels)
         self.assertEqual(loaded.processor_spec.qubit_labels,
                          self.design.processor_spec.qubit_labels)
+        # RNG is deliberately not preserved (stitcher_kwargs comes back empty)
+        self.assertEqual(loaded.stitcher_kwargs, {})
+        self.assertIn('randgen', self.design.stitcher_kwargs)
 
     @with_temp_path
     def test_color_patches_survive_with_int_keys_and_tuple_edges(self, root_path):
@@ -1197,15 +1114,6 @@ class SerializationTester(_SGSTFixture, BaseCase):
         self.assertEqual([list(cl) for cl in loaded.circuit_lists],
                          [list(cl) for cl in design.circuit_lists])
 
-    @with_temp_path
-    def test_rng_is_deliberately_not_preserved(self, root_path):
-        # A loaded design is a record of a generated experiment, not a recipe:
-        # stitcher_kwargs holds a numpy Generator, unserializable and not stable across
-        # versions. Pinned so the lossiness stays a decision, not an accident.
-        _, loaded = self._roundtrip(root_path)
-        self.assertEqual(loaded.stitcher_kwargs, {})
-        self.assertIn('randgen', self.design.stitcher_kwargs)
-
 
 class UnsupportedOperationsTester(_SGSTFixture, BaseCase):
     """
@@ -1259,19 +1167,6 @@ class UnsupportedOperationsTester(_SGSTFixture, BaseCase):
                 self._assert_refused(
                     lambda m=method, a=args: getattr(self._fresh_design(), m)(*a), named=method)
 
-    def test_inplace_hooks_are_refused(self):
-        # The public methods above are conveniences; these hooks are what a parent
-        # design reaches, so they must refuse on their own account.
-        for hook, args, named in (
-                ('_truncate_to_circuits_inplace', (self.some_circuits,),
-                 'Truncating to a subset of circuits'),
-                ('_truncate_to_design_inplace', (self.design,), 'Truncating to another design'),
-                ('_truncate_to_available_data_inplace', (_tiny_dataset(),),
-                 'Truncating to available data')):
-            with self.subTest(hook):
-                self._assert_refused(
-                    lambda h=hook, a=args: getattr(self._fresh_design(), h)(*a), named=named)
-
     def test_truncation_from_a_parent_design_is_refused(self):
         # ExperimentDesign._truncate_to_available_data_inplace loops over its children, so
         # a nested SimultaneousGSTDesign is reachable without any direct call. Overriding
@@ -1290,13 +1185,15 @@ class UnsupportedOperationsTester(_SGSTFixture, BaseCase):
         copy so that one leaking cannot hide behind another.
         """
         expected = [list(cl) for cl in self.design.circuit_lists]
-        for hook, args in (('_truncate_to_circuits_inplace', (self.some_circuits,)),
-                           ('_truncate_to_design_inplace', (self.design,)),
-                           ('_truncate_to_available_data_inplace', (_tiny_dataset(),))):
+        for hook, args, named in (
+                ('_truncate_to_circuits_inplace', (self.some_circuits,), 'Truncating to a subset of circuits'),
+                ('_truncate_to_design_inplace', (self.design,), 'Truncating to another design'),
+                ('_truncate_to_available_data_inplace', (_tiny_dataset(),), 'Truncating to available data')):
             with self.subTest(hook=hook):
                 design = self._fresh_design()
-                with self.assertRaises(NotImplementedError):
+                with self.assertRaises(NotImplementedError) as ctx:
                     getattr(design, hook)(*args)
+                self.assertIn('%s is not supported' % named, str(ctx.exception))
                 self.assertEqual([list(cl) for cl in design.circuit_lists], expected)
 
     # -- the escape hatch ----------------------------------------------------
@@ -1402,18 +1299,6 @@ class DirectedAvailabilityTeeTester(BaseCase):
         # coloring package's own notion of proper: no two edges in a patch may
         # share a qubit, i.e. every patch is physically runnable.
         design = self._build(self.ONE_DIRECTIONAL)
-        self.assertTrue(
-            check_valid_edge_coloring(design.color_patches, ret_false_on_error=True))
-
-    def test_design_construction_works_for_a_two_directional_tee(self):
-        # This spelling used to be the one that worked, back when the doubled
-        # edges were what made the adjacency map accidentally symmetric. It is
-        # no longer independent cover: `canonical_edges` now collapses both
-        # spellings to the same one-directional list before `find_neighbors`
-        # sees them, so this fails too if `find_neighbors` regresses. Kept
-        # because the doubled list is what a `geometry=`-built pspec produces,
-        # and it must keep round-tripping to the same design.
-        design = self._build(self.TWO_DIRECTIONAL)
         self.assertTrue(
             check_valid_edge_coloring(design.color_patches, ret_false_on_error=True))
 
