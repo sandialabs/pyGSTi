@@ -11,22 +11,11 @@
 Edge-coloring toolkit: a name-based switchboard (`switchboard_find_edge_coloring`)
 over several edge-coloring algorithms, plus a verification helper
 (`check_valid_edge_coloring`) to validate the resulting coloring.
-
-Use `find_neighbors` to build the `neighbors` map (and the `deg`) the algorithms
-take: hand-rolled adjacency is easy to get subtly wrong, and an asymmetric map
-understates `deg` and silently yields an invalid coloring.
-
-`order` is the canonical edge orientation used throughout, and the one colorings
-are returned in; `canonical_edges` applies it to a whole list, dropping the
-duplicates that collapsing orientations exposes.
 """
 from ._dispatch import switchboard_find_edge_coloring
-from ._common import canonical_edges, check_valid_edge_coloring, find_neighbors, order
+from ._common import check_valid_edge_coloring
 
 __all__ = [
     "switchboard_find_edge_coloring",
     "check_valid_edge_coloring",
-    "canonical_edges",
-    "find_neighbors",
-    "order",
 ]

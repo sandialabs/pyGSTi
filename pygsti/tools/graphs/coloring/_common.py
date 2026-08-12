@@ -8,62 +8,15 @@
 #***************************************************************************************************
 
 """Shared types and small utilities used across the edge-coloring submodules."""
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Dict, List
 
-# Vertex: usually an int (qubit index) or string-like qubit label. Only needs
-# to support equality/hashing (as a dict key) and, for `order`, `</>`.
-Vertex = Any
+from .._common import Vertex, Edge, NeighborMap, order
 
 # Color: an edge (or vertex) color, a non-negative integer.
 Color = int
 
-# Edge: an undirected edge as a 2-tuple of vertices. Functions in this
-# package generally expect/produce *canonical* edges (v1 <= v2, see `order`);
-# where a function instead wants a symmetric edge list (both (u,v) and (v,u)
-# present), that's called out in its docstring.
-Edge = Tuple[Vertex, Vertex]
-
-# NeighborMap: vertex -> list of neighboring vertices.
-NeighborMap = Dict[Vertex, List[Vertex]]
-
 # Coloring: a (possibly partial) proper edge coloring: color -> canonical edges.
 Coloring = Dict[Color, List[Edge]]
-
-
-def order(u: Vertex, v: Vertex) -> Edge:
-    """Return (u, v) sorted so the smaller vertex comes first."""
-    return (min(u, v), max(u, v))
-
-
-def canonical_edges(edges: Sequence[Edge]) -> List[Edge]:
-    """
-    Reduce `edges` to one entry per undirected edge, in :func:`order`'s orientation.
-
-    Parameters
-    ----------
-    edges : sequence of tuple
-        Edges as ``(u, v)`` pairs, in either orientation, possibly with repeats.
-
-    Returns
-    -------
-    list of tuple
-        One canonically-oriented tuple per distinct undirected edge.
-    """
-    # dict-as-ordered-set: dedups while preserving first-encounter order.
-    return list({order(u, v): None for u, v in edges})
-
-
-def find_neighbors(vertices: Sequence[Vertex], edges: Sequence[Edge]) -> NeighborMap:
-    """
-    Build the symmetric `NeighborMap` that every algorithm in this package takes.
-    """
-    # dict-as-ordered-set per vertex: dedups repeated/reversed edges while
-    # preserving first-seen order.
-    neighbors: Dict[Vertex, Dict[Vertex, None]] = {v: {} for v in vertices}
-    for u, v in edges:
-        neighbors[u][v] = None
-        neighbors[v][u] = None
-    return {v: list(nbrs) for v, nbrs in neighbors.items()}
 
 
 def check_valid_edge_coloring(color_patches: Coloring, ret_false_on_error: bool = False) -> bool:

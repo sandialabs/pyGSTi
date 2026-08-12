@@ -28,7 +28,7 @@ from typing import Any
 
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
 from pygsti.errorgenpropagation import localstimerrorgen as _lseg
-from pygsti.extras.ml import graphtools as _graphtools
+from pygsti.tools import graphs as _graphtools
 
 
 def numberToBase(n: int, b: int) -> list[int]:
@@ -680,7 +680,7 @@ def _qubit_graph_close_matrix(qubit_graph: Any, n: int, num_hops: int) -> np.nda
     ----------
     qubit_graph : graph-like
         The qubit connectivity graph, in any of the representations accepted by
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` (a networkx/igraph/graph-tool
+        `pygsti.tools.graphs.qubit_graph_to_networkx` (a networkx/igraph/graph-tool
         graph, a pygsti `QubitGraph`/`QubitProcessorSpec`, or a raw adjacency matrix). Qubit `i`
         (matching Pauli-string position `i`) is identified with the `i`-th qubit in
         `qubit_graph`'s own native node order.
@@ -776,7 +776,7 @@ def up_to_weight_k_paulis_from_qubit_graph(
         raw adjacency matrix (`numpy.ndarray`, nested list/tuple, or `scipy.sparse` matrix).
         Qubit `i` (matching Pauli-string position `i`) is identified with the `i`-th qubit in
         `qubit_graph`'s own native node order. See
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        `pygsti.tools.graphs.qubit_graph_to_networkx` for the full list of accepted
         types and exactly how they're interpreted.
     num_hops : int
         Hop distance defining which qubit pairs are considered "close enough."
@@ -882,7 +882,7 @@ def up_to_weight_k_pauli_pairs_from_qubit_graph(
         raw adjacency matrix (`numpy.ndarray`, nested list/tuple, or `scipy.sparse` matrix).
         Qubit `i` (matching Pauli-string position `i`) is identified with the `i`-th qubit in
         `qubit_graph`'s own native node order. See
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        `pygsti.tools.graphs.qubit_graph_to_networkx` for the full list of accepted
         types and exactly how they're interpreted.
     num_hops : int
         Hop distance defining which qubit pairs are considered "close enough."
@@ -994,7 +994,7 @@ def up_to_weight_k_error_gens_from_qubit_graph(
         raw adjacency matrix (`numpy.ndarray`, nested list/tuple, or `scipy.sparse` matrix).
         Qubit `i` (matching Pauli-string position `i`) is identified with the `i`-th qubit in
         `qubit_graph`'s own native node order. See
-        `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of accepted
+        `pygsti.tools.graphs.qubit_graph_to_networkx` for the full list of accepted
         types and exactly how they're interpreted.
     num_hops : int
         The maximum graph hop distance defining allowable connectivity between
