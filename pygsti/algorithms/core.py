@@ -817,7 +817,7 @@ def validate_and_extend_optimizer(optimizer: Union[_CustomLMOptimizer, _SimplerL
     return optimizers
 
 def iterative_gst_generator(dataset, start_model, circuit_lists,
-                      optimizer: Union[_SimplerLMOptimizer, dict, list[_SimplerLMOptimizer], list[dict]],
+                      optimizer: Union[_Optimizer, dict, list[_Optimizer], list[dict]],
                         iteration_objfn_builders, final_objfn_builders,
                       resource_alloc, starting_index=0, verbosity=0):
     """
@@ -841,13 +841,9 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
         either a Circuit object or as a tuple of operation labels (but all must be specified
         using the same type).
         e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
-        
-    optimizer : Optimizer,, or dict, or list of Optimizer, or list of dict (default None), or list of Optimizer, or list of dict (default None)
+    
+    optimizer : Optimizer, or dict, or list of Optimizer, or list of dict (default None)
         The optimizer to use, or a dictionary of optimizer parameters
-        from which a default optimizer can be built. If a list, the length
-        of the list should either be 1 or equal to the number of iterations. 
-        If 1, then this optimizer is used for every iteration, otherwise
-        each optimizer is used for its corresponding iteration.
         from which a default optimizer can be built. If a list, the length
         of the list should either be 1 or equal to the number of iterations. 
         If 1, then this optimizer is used for every iteration, otherwise
@@ -918,8 +914,6 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
    
     #These lines were previously in the loop below, but we should be able to move it out from there so we can use it
     #in precomputing layouts:
-    method_names = optimizers[0].called_objective_methods
-    array_types = optimizers[0].array_types + \
     method_names = optimizers[0].called_objective_methods
     array_types = optimizers[0].array_types + \
                 _max_array_types([builder.compute_array_types(method_names, mdl.sim)
