@@ -303,7 +303,7 @@ class JamiolkowskiLeakageBasisTester(BaseCase):
 
     def setUp(self):
         # 36-dimensional qubit x qutrit tensor product basis
-        self.tp = TensorProdBasis((BuiltinBasis('pp', 4), BuiltinBasis('l2p1', 9)))
+        self.basis = TensorProdBasis((BuiltinBasis('pp', 4), BuiltinBasis('l2p1', 9)))
         self.dm_dim = 6
 
         # Build a 6x6 unitary (qubit flip x qutrit rotation mixing level 1 and 2)
@@ -317,16 +317,16 @@ class JamiolkowskiLeakageBasisTester(BaseCase):
         U = np.kron(X_qubit, R_qutrit)
 
         # Convert the unitary to a superoperator in our tensor-product basis
-        self.superop = unitary_to_superop(U, self.tp)
+        self.superop = unitary_to_superop(U, self.basis)
 
     def test_simple_equivalent_unavailable(self):
         # Precondition check: the leakage tensor-product basis does not have a same-name
         # builtin equivalent, which raises AssertionError during create_simple_equivalent().
-        self.assertRaises(AssertionError, self.tp.create_simple_equivalent)
+        self.assertRaises(AssertionError, self.basis.create_simple_equivalent)
 
     def test_iso_falls_back_to_basis_elements(self):
         # Exercises the fallback: uses choi_mx_basis.elements directly.
-        J = j.jamiolkowski_iso(self.superop, self.tp, self.tp)
+        J = j.jamiolkowski_iso(self.superop, self.basis, self.basis)
 
         self.assertEqual(J.shape, (36, 36))
         self.assertAlmostEqual(np.trace(J), 1.0)
@@ -335,28 +335,28 @@ class JamiolkowskiLeakageBasisTester(BaseCase):
 
         # Verification of correctness via reconstruction identity:
         # S_std = sum_ik J_ik * d * kron(B_i, conj(B_k))
-        B = self.tp.elements
+        B = self.basis.elements
         reconstructed = np.zeros_like(self.superop, dtype=complex)
         for i in range(36):
             for k in range(36):
                 reconstructed += J[i, k] * np.kron(B[i], np.conjugate(B[k])) * self.dm_dim
 
         # Check against standard process matrix representation
-        simple_std = self.tp.create_simple_equivalent('std')
-        expected_std = bt.change_basis(self.superop, self.tp, simple_std)
+        simple_std = self.basis.create_simple_equivalent('std')
+        expected_std = bt.change_basis(self.superop, self.basis, simple_std)
         self.assertArraysAlmostEqual(reconstructed, expected_std)
 
     def test_iso_unnormalized(self):
-        J_unnorm = j.jamiolkowski_iso(self.superop, self.tp, self.tp, normalized=False)
+        J_unnorm = j.jamiolkowski_iso(self.superop, self.basis, self.basis, normalized=False)
         self.assertAlmostEqual(np.trace(J_unnorm), float(self.dm_dim))
-        self.assertArraysAlmostEqual(J_unnorm, self.dm_dim * j.jamiolkowski_iso(self.superop, self.tp, self.tp))
+        self.assertArraysAlmostEqual(J_unnorm, self.dm_dim * j.jamiolkowski_iso(self.superop, self.basis, self.basis))
 
     def test_iso_eigenvalues_match_fast_std(self):
         # Choi eigenvalues must be basis-independent.
         # fast_jamiolkowski_iso_std does not call create_simple_equivalent on the target basis,
         # so it avoids the fallback pathway but must produce the exact same eigenvalues.
-        J = j.jamiolkowski_iso(self.superop, self.tp, self.tp)
-        Jstd = j.fast_jamiolkowski_iso_std(self.superop, self.tp)
+        J = j.jamiolkowski_iso(self.superop, self.basis, self.basis)
+        Jstd = j.fast_jamiolkowski_iso_std(self.superop, self.basis)
 
         ev = np.sort(np.linalg.eigvalsh(J))
         ev_std = np.sort(np.linalg.eigvalsh(Jstd))
@@ -366,5 +366,5 @@ class JamiolkowskiLeakageBasisTester(BaseCase):
         # jamiolkowski_iso_inv lacks the try-except fallback in line 207,
         # so it currently raises AssertionError when given the leakage basis.
         # This test documents today's behavior.
-        J = j.jamiolkowski_iso(self.superop, self.tp, self.tp)
-        self.assertRaises(AssertionError, j.jamiolkowski_iso_inv, J, self.tp, self.tp)
+        J = j.jamiolkowski_iso(self.superop, self.basis, self.basis)
+        self.assertRaises(AssertionError, j.jamiolkowski_iso_inv, J, self.basis, self.basis)
