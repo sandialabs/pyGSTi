@@ -16,6 +16,7 @@ from ._connectivity import (
     qubit_graph_adjacency_matrix,
     within_hops_matrix,
     qubits_within_hops,
+    connected_supports,
 )
 from . import coloring
 
@@ -29,5 +30,6 @@ __all__ = [
     "qubit_graph_adjacency_matrix",
     "within_hops_matrix",
     "qubits_within_hops",
+    "connected_supports",
     "coloring",
 ]

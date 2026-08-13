@@ -56,6 +56,7 @@ __all__ = [
     'qubit_graph_adjacency_matrix',
     'within_hops_matrix',
     'qubits_within_hops',
+    'connected_supports',
 ]
 
 # Absolute tolerance used when checking a bare matrix for (disallowed) negative entries, and
@@ -358,7 +359,11 @@ def qubit_graph_to_networkx(qubit_graph: Any, qubit_labels: list | None = None) 
         A = _matrix_to_adjacency(M)
         n = A.shape[0]
         orig_nodes = list(range(n))
-        edges = [(i, j) for i in range(n) for j in range(i + 1, n) if A[i, j] or A[j, i]]
+        # Symmetrize, then read off the strict upper triangle in one vectorized pass.
+        nonzero = A != 0
+        symmetric = nonzero | nonzero.T
+        rows, cols = _np.nonzero(_np.triu(symmetric, k=1))
+        edges = list(zip(rows.tolist(), cols.tolist()))
 
     nodes, edges = _reconcile_nodes(orig_nodes, edges, qubit_labels)
 
@@ -511,3 +516,133 @@ def qubits_within_hops(qubit_graph: Any, hops: int, qubit_labels: list | None = 
             indices.add(i)
         result.append(sorted(indices))
     return result
+
+
+def _connected_supports_from_close(close: _np.ndarray, max_size: int) -> list[tuple[int, ...]]:
+    """
+    Enumerate connected supports directly from a boolean "is close to" matrix.
+
+    This is the output-sensitive core of `connected_supports`: rather than testing all
+    `sum_w C(n, w)` candidate subsets for connectedness (the overwhelming majority of which are
+    disconnected once `n` is large), it *grows* connected sets one vertex at a time, so the work
+    done is proportional to the number of supports actually returned.
+
+    Each connected subset is generated exactly once by rooting it at its lowest-numbered vertex
+    and maintaining a `banned` set. The `banned` set is essential and easy to get wrong: without
+    it, a vertex dropped from the candidate list in one branch can be re-introduced later as a
+    neighbor of a vertex added further down, yielding the same subset twice.
+
+    Parameters
+    ----------
+    close : numpy.ndarray
+        Boolean `(n, n)` symmetric matrix with a False diagonal, as returned by
+        `within_hops_matrix`.
+    max_size : int
+        Maximum support size.
+
+    Returns
+    -------
+    list[tuple[int, ...]]
+        Every connected support of size `1..max_size`, each an ascending tuple of positional
+        indices, ordered by `(size, tuple)`.
+    """
+    n = close.shape[0]
+    if max_size == 1:
+        # A single qubit is trivially connected, so at max_size=1 the answer does not depend on
+        # the graph at all and there is nothing to grow. Stated directly rather than left to
+        # fall out of the recursion below, which would build neighbor lists it cannot use.
+        return [(i,) for i in range(n)]
+
+    # Ascending neighbor lists (`grow` relies on that ordering below), built with a fixed
+    # handful of numpy calls rather than one per row. `nonzero` returns row-major order, so
+    # `rows` is sorted and each row's slice of `cols` is ascending; `searchsorted` finds where
+    # each row's slice begins.
+    rows, cols = _np.nonzero(close)
+    row_starts = _np.searchsorted(rows, _np.arange(n + 1)).tolist()
+    all_neighbors = cols.tolist()
+    neighbors = [all_neighbors[row_starts[i]:row_starts[i + 1]] for i in range(n)]
+
+    supports: list[tuple[int, ...]] = []
+
+    def grow(support: list[int], extension: list[int], banned: set[int], root: int) -> None:
+        # `support` is in the order the vertices were grown, which is not ascending: a support
+        # is reached by walking outwards from its lowest-numbered vertex, so e.g. rooting at 0
+        # and stepping 0 -> 2 -> 1 builds [0, 2, 1].
+        supports.append(tuple(sorted(support)))
+        if len(support) == max_size:
+            return
+        in_support = set(support)
+        in_extension = set(extension)
+        banned = set(banned)
+        for position, vertex in enumerate(extension):
+            # The child may still use any candidate we have not tried yet at this level, plus
+            # whatever `vertex` newly brings into reach. `u > root` keeps every support rooted
+            # at its lowest-numbered vertex.
+            child_extension = extension[position + 1:] + [
+                u for u in neighbors[vertex]
+                if u > root and u not in banned and u not in in_extension and u not in in_support]
+            support.append(vertex)
+            grow(support, child_extension, banned, root)
+            support.pop()
+            # Every later sibling branch must avoid `vertex` entirely: any support containing
+            # both `vertex` and a later sibling has already been produced by this branch.
+            banned.add(vertex)
+
+    for root in range(n):
+        # Rooting each support at its lowest-numbered vertex is what makes the roots disjoint.
+        grow([root], [u for u in neighbors[root] if u > root], set(), root)
+
+    supports.sort(key=lambda s: (len(s), s))
+    return supports
+
+
+def connected_supports(qubit_graph: Any, max_size: int, hops: int,
+                       qubit_labels: list | None = None) -> list[tuple[int, ...]]:
+    """
+    Enumerate every set of at most `max_size` qubits that is *connected* under the "within
+    `hops` hops" relation on `qubit_graph` -- i.e. every support on which a multi-qubit error
+    could act without splitting into pieces that the device cannot correlate.
+
+    A support is connected when, treating "within `hops` hops of each other" as the adjacency
+    relation, the qubits in it form a single connected component *among themselves*. Note this
+    is a relation on the support only: two qubits linked solely by a path through qubits outside
+    the support are not connected for this purpose unless they are themselves within `hops`.
+
+    Parameters
+    ----------
+    qubit_graph : graph-like
+        See `qubit_graph_to_networkx`.
+    max_size : int
+        The largest support size to enumerate (weight `k`, in error-generator terms). Must be a
+        non-negative integer; sizes above the qubit count simply yield nothing extra.
+    hops : int
+        Maximum hop (graph-edge) distance defining the adjacency relation, as in
+        `within_hops_matrix`. With `hops=1` this enumerates the connected induced subgraphs of
+        `qubit_graph` itself.
+    qubit_labels : list, optional
+        See `qubit_graph_to_networkx`. Also fixes the position ordering used in the returned
+        indices (position `i` <-> `qubit_labels[i]`).
+
+    Returns
+    -------
+    list[tuple[int, ...]]
+        Each connected support exactly once, as an ascending tuple of positional qubit indices,
+        ordered by `(size, tuple)` -- i.e. all size-1 supports in ascending order, then all
+        size-2 supports in lexicographic order, and so on. This is the same order a
+        `for w in 1..max_size: itertools.combinations(range(n), w)` scan would produce, so the
+        result can be substituted for a filtered brute-force scan without reordering anything
+        downstream.
+
+    Notes
+    -----
+    The cost is proportional to the number of supports returned, not to the `sum_w C(n, w)`
+    candidates a brute-force scan would examine. That difference grows quickly: on a 10x10 grid
+    with `hops=1` and `max_size=4` there are 4,087,975 candidate subsets but only 2,137
+    connected ones.
+    """
+    if not isinstance(max_size, (int, _np.integer)) or max_size < 0:
+        raise ValueError(f"max_size must be a non-negative integer; got {max_size!r}.")
+    if max_size == 0:
+        return []
+    close = within_hops_matrix(qubit_graph, hops, qubit_labels=qubit_labels)
+    return _connected_supports_from_close(close, int(max_size))
