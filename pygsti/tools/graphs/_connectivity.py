@@ -435,9 +435,10 @@ def qubit_graph_adjacency_matrix(qubit_graph: Any, qubit_labels: list | None = N
         zero diagonal. Row/column `i` corresponds to `qubit_labels[i]` if given, else to the
         `i`-th qubit in `qubit_graph`'s own native node order.
     """
+    # `G`'s node order already *is* `qubit_labels` whenever that was given, so it is the single
+    # source of truth for the row/column order in both cases.
     G = qubit_graph_to_networkx(qubit_graph, qubit_labels=qubit_labels)
-    nodes = list(qubit_labels) if qubit_labels is not None else list(G.nodes())
-    return _nx.to_numpy_array(G, nodelist=nodes, dtype=int)
+    return _nx.to_numpy_array(G, nodelist=list(G.nodes()), dtype=int)
 
 
 def within_hops_matrix(qubit_graph: Any, hops: int, qubit_labels: list | None = None) -> _np.ndarray:
@@ -466,13 +467,12 @@ def within_hops_matrix(qubit_graph: Any, hops: int, qubit_labels: list | None = 
         raise ValueError(f"hops must be a non-negative integer; got {hops!r}.")
 
     G = qubit_graph_to_networkx(qubit_graph, qubit_labels=qubit_labels)
-    nodes = list(qubit_labels) if qubit_labels is not None else list(G.nodes())
+    nodes = list(G.nodes())            # already == qubit_labels when that was given
     n = len(nodes)
     index_of = {node: i for i, node in enumerate(nodes)}
 
     close = _np.zeros((n, n), dtype=bool)
-    for node in nodes:
-        i = index_of[node]
+    for i, node in enumerate(nodes):
         lengths = _nx.single_source_shortest_path_length(G, node, cutoff=int(hops))
         for other, distance in lengths.items():
             if distance > 0:
@@ -508,14 +508,11 @@ def qubits_within_hops(qubit_graph: Any, hops: int, qubit_labels: list | None = 
         iff `include_self` is True).
     """
     close = within_hops_matrix(qubit_graph, hops, qubit_labels=qubit_labels)
-    n = close.shape[0]
-    result = []
-    for i in range(n):
-        indices = set(_np.flatnonzero(close[i, :]).tolist())
-        if include_self:
-            indices.add(i)
-        result.append(sorted(indices))
-    return result
+    if include_self:
+        # `close` has a False diagonal by construction, so OR-ing in the identity (on a copy) is
+        # exactly "add i to i's own list", and leaves each row sorted and duplicate-free.
+        close = close | _np.eye(close.shape[0], dtype=bool)
+    return [_np.flatnonzero(row).tolist() for row in close]
 
 
 def _connected_supports_from_close(close: _np.ndarray, max_size: int) -> list[tuple[int, ...]]:
