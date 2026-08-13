@@ -322,7 +322,8 @@ class JamiolkowskiLeakageBasisTester(BaseCase):
     def test_simple_equivalent_unavailable(self):
         # Precondition check: the leakage tensor-product basis does not have a same-name
         # builtin equivalent, which raises AssertionError during create_simple_equivalent().
-        self.assertRaises(AssertionError, self.basis.create_simple_equivalent)
+        with self.assertRaises(AssertionError):
+            self.basis.create_simple_equivalent()
 
     def test_iso_falls_back_to_basis_elements(self):
         # Exercises the fallback: uses choi_mx_basis.elements directly.
@@ -367,4 +368,5 @@ class JamiolkowskiLeakageBasisTester(BaseCase):
         # so it currently raises AssertionError when given the leakage basis.
         # This test documents today's behavior.
         J = j.jamiolkowski_iso(self.superop, self.basis, self.basis)
-        self.assertRaises(AssertionError, j.jamiolkowski_iso_inv, J, self.basis, self.basis)
+        with self.assertRaises(AssertionError):
+            j.jamiolkowski_iso_inv(J, self.basis, self.basis)
