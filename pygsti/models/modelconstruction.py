@@ -45,6 +45,7 @@ from pygsti.baseobjs.basis import (
     DirectSumBasis  as _DirectSumBasis,
     TensorProdBasis as _TensorProdBasis
 )
+from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs

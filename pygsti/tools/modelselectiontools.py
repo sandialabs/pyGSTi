@@ -503,16 +503,20 @@ def create_embedder_matrix_from_trace(graph_levels, embedder_matrix = None):
     return embedder_matrix
 
 
-def custom_builder(min_prob_clip, cptp_penalty=0):
+def custom_builder(min_prob_clip):
 
-    chi2_builder = pygsti.objectivefns.Chi2Function.builder(
-        'chi2', regularization={'min_prob_clip_for_weighting': min_prob_clip}, penalties={'cptp_penalty_factor': cptp_penalty, 'spam_penalty_factor':cptp_penalty})
-    mle_builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder(
-        'logl', regularization={'min_prob_clip': min_prob_clip, 'radius': min_prob_clip}, penalties={'cptp_penalty_factor': cptp_penalty, 'spam_penalty_factor':cptp_penalty})
+    chi2_builder = pygsti.objectivefns.ObjectiveFunctionBuilder.create_from('chi2')
+    chi2_builder.regularization = {'min_prob_clip_for_weighting': min_prob_clip}
+
+    mle_builder = pygsti.objectivefns.ObjectiveFunctionBuilder.create_from('logl')
+    mle_builder.regularization = {'min_prob_clip': min_prob_clip, 'radius': min_prob_clip}
+
     iteration_builders = [chi2_builder] 
     final_builders = [mle_builder]
+
     builders = pygsti.protocols.GSTObjFnBuilders(iteration_builders, final_builders)
     return builders
+
 def custom_optimizers(maxiter=300, tol=1e-10):
     
     if isinstance(maxiter, list) or isinstance(tol, list):
