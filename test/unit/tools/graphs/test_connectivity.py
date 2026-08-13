@@ -7,6 +7,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import itertools
 import unittest
 import numpy as np
 import networkx as nx
@@ -357,3 +358,150 @@ class WithinHopsTester(BaseCase):
         for hops in integer_hops:
             np.testing.assert_array_equal(graphs.within_hops_matrix(self.LINE4, hops), expected,
                                           err_msg=f"hops={hops!r} ({type(hops).__name__})")
+
+
+class ConnectedSupportsTester(BaseCase):
+    """
+    `connected_supports` enumerates connected supports by *growing* them, so it never visits the
+    vast majority of subsets that a brute-force `combinations`-and-filter scan would reject.
+    These tests pin down both the contents and the order of that enumeration; the order matters
+    because callers (`pygsti.extras.ml.errgentools`) index error generators, and hence trained
+    network parameters, by list position.
+    """
+
+    LINE4 = np.array([[0, 1, 0, 0], [1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0]])
+
+    @staticmethod
+    def brute_force(close, max_size):
+        """The definition, spelled out: all subsets of size 1..max_size, filtered by a DFS."""
+        n = close.shape[0]
+
+        def connected(support):
+            seen, stack = {support[0]}, [support[0]]
+            while stack:
+                u = stack.pop()
+                for v in support:
+                    if v not in seen and close[u, v]:
+                        seen.add(v)
+                        stack.append(v)
+            return len(seen) == len(support)
+
+        return [s for w in range(1, max_size + 1)
+                for s in itertools.combinations(range(n), w) if connected(s)]
+
+    def test_line_graph_enumeration(self):
+        # Spelled out in full for the 4-qubit line 0-1-2-3 at hops=1.
+        self.assertEqual(graphs.connected_supports(self.LINE4, 1, 1),
+                         [(0,), (1,), (2,), (3,)])
+        self.assertEqual(graphs.connected_supports(self.LINE4, 2, 1),
+                         [(0,), (1,), (2,), (3,), (0, 1), (1, 2), (2, 3)])
+        self.assertEqual(graphs.connected_supports(self.LINE4, 3, 1),
+                         [(0,), (1,), (2,), (3,), (0, 1), (1, 2), (2, 3),
+                          (0, 1, 2), (1, 2, 3)])
+        self.assertEqual(graphs.connected_supports(self.LINE4, 4, 1),
+                         [(0,), (1,), (2,), (3,), (0, 1), (1, 2), (2, 3),
+                          (0, 1, 2), (1, 2, 3), (0, 1, 2, 3)])
+        # (0, 2) is absent at hops=1 but present at hops=2, where the relation is denser.
+        self.assertIn((0, 2), graphs.connected_supports(self.LINE4, 2, 2))
+        self.assertNotIn((0, 2), graphs.connected_supports(self.LINE4, 2, 1))
+
+    def test_ordering_is_size_then_lexicographic(self):
+        # The order is load-bearing: it must match a `for w: combinations(range(n), w)` scan, so
+        # that this can replace a filtered brute-force scan without reindexing anything.
+        grid = nx.convert_node_labels_to_integers(nx.grid_2d_graph(3, 3), ordering='sorted')
+        supports = graphs.connected_supports(grid, 4, 1)
+        self.assertEqual(supports, sorted(supports, key=lambda s: (len(s), s)))
+        # ...and each support is itself ascending, even though it was grown outwards from its
+        # lowest-numbered vertex (e.g. rooting at 0 and stepping 0 -> 3 -> 4 builds [0, 3, 4]).
+        for support in supports:
+            self.assertEqual(list(support), sorted(support))
+
+    def test_no_duplicates(self):
+        # The `banned` set in the growth recursion exists solely to prevent duplicates: a vertex
+        # dropped in one branch must not reappear as a neighbor of a vertex added later.
+        for graph in (nx.complete_graph(6), nx.petersen_graph(),
+                      nx.convert_node_labels_to_integers(nx.grid_2d_graph(3, 4))):
+            for hops in (1, 2):
+                supports = graphs.connected_supports(graph, 4, hops)
+                self.assertEqual(len(supports), len(set(supports)))
+
+    def test_matches_brute_force(self):
+        # Equality against the definition, on graphs with very different densities.
+        graph_zoo = [
+            ('path6', nx.path_graph(6)), ('cycle6', nx.cycle_graph(6)),
+            ('star6', nx.star_graph(5)), ('complete5', nx.complete_graph(5)),
+            ('grid2x3', nx.convert_node_labels_to_integers(nx.grid_2d_graph(2, 3))),
+            ('petersen', nx.petersen_graph()),
+            ('disconnected', nx.disjoint_union(nx.cycle_graph(4), nx.path_graph(3))),
+            ('edgeless5', nx.empty_graph(5)),
+        ]
+        for name, graph in graph_zoo:
+            n = graph.number_of_nodes()
+            A = nx.to_numpy_array(graph, nodelist=list(range(n)), dtype=int)
+            for hops in (0, 1, 2, 3):
+                close = graphs.within_hops_matrix(A, hops)
+                for max_size in range(1, 5):
+                    with self.subTest(graph=name, hops=hops, max_size=max_size):
+                        self.assertEqual(graphs.connected_supports(A, max_size, hops),
+                                         self.brute_force(close, max_size))
+
+    def test_disconnected_and_edgeless_graphs(self):
+        # An edgeless graph (or hops=0, which makes every graph edgeless) admits only singletons.
+        self.assertEqual(graphs.connected_supports(self.LINE4, 3, 0),
+                         [(0,), (1,), (2,), (3,)])
+        self.assertEqual(graphs.connected_supports(np.zeros((3, 3)), 3, 5),
+                         [(0,), (1,), (2,)])
+
+        # No support may ever straddle two components: 0-1 | 2-3 | 4.
+        disconnected = graphs.qubit_graph_from_edges([(0, 1), (2, 3)], list(range(5)))
+        self.assertEqual(graphs.connected_supports(disconnected, 3, 10),
+                         [(0,), (1,), (2,), (3,), (4,), (0, 1), (2, 3)])
+
+    def test_max_size_bounds(self):
+        # max_size=0 is the degenerate-but-valid empty enumeration (the empty support is not a
+        # size->=1 support and is never returned).
+        self.assertEqual(graphs.connected_supports(self.LINE4, 0, 1), [])
+        # max_size beyond the qubit count simply saturates.
+        full = graphs.connected_supports(self.LINE4, 4, 1)
+        for max_size in (5, 40, 4000):
+            self.assertEqual(graphs.connected_supports(self.LINE4, max_size, 1), full)
+
+        bad_sizes: list = [-1, -100, 1.5, np.float64(2.0), None, '2']
+        for max_size in bad_sizes:
+            with self.assertRaises(ValueError, msg=f"max_size={max_size!r} should be rejected"):
+                graphs.connected_supports(self.LINE4, max_size, 1)
+        # `hops` is validated by within_hops_matrix, and must still be rejected here.
+        with self.assertRaises(ValueError):
+            graphs.connected_supports(self.LINE4, 2, -1)
+
+    def test_qubit_labels_and_input_representations(self):
+        # Indices are positional, so qubit_labels re-indexes the enumeration.
+        G = nx.Graph()
+        G.add_nodes_from(['Q2', 'Q0', 'Q1'])  # scrambled insertion order
+        G.add_edges_from([('Q0', 'Q1'), ('Q1', 'Q2')])
+        self.assertEqual(graphs.connected_supports(G, 2, 1),
+                         [(0,), (1,), (2,), (0, 2), (1, 2)])  # position 0 is 'Q2'
+        self.assertEqual(graphs.connected_supports(G, 2, 1, qubit_labels=['Q0', 'Q1', 'Q2']),
+                         [(0,), (1,), (2,), (0, 1), (1, 2)])
+
+        # Every accepted graph representation of the same graph gives the same enumeration.
+        edges = [(0, 1), (1, 2), (2, 3)]
+        expected = graphs.connected_supports(self.LINE4, 3, 1)
+        for qubit_graph in (graphs.qubit_graph_from_edges(edges, [0, 1, 2, 3]),
+                            QubitGraph.common_graph(4, "line", directed=True,
+                                                    qubit_labels=[0, 1, 2, 3]),
+                            _ProcessorSpec(4, ['Gxpi2', 'Gypi2', 'Gcphase'], {},
+                                           {'Gcphase': edges}, qubit_labels=[0, 1, 2, 3])):
+            self.assertEqual(graphs.connected_supports(qubit_graph, 3, 1), expected,
+                             f"input type {type(qubit_graph).__name__}")
+
+    def test_counts_on_a_grid(self):
+        # Regression on the numbers that motivate the algorithm: on a 4x4 grid at hops=1 there
+        # are far fewer connected supports than the sum(C(16, w)) candidates a filtered scan
+        # would examine.
+        grid = nx.convert_node_labels_to_integers(nx.grid_2d_graph(4, 4), ordering='sorted')
+        counts = [len(graphs.connected_supports(grid, max_size, 1)) for max_size in range(1, 5)]
+        self.assertEqual(counts, [16, 40, 92, 205])
+        candidates = [sum(len(list(itertools.combinations(range(16), w)))
+                          for w in range(1, max_size + 1)) for max_size in range(1, 5)]
+        self.assertEqual(candidates, [16, 136, 696, 2516])

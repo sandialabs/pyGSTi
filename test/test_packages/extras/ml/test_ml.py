@@ -144,6 +144,150 @@ class MLSubpackageTester(unittest.TestCase):
             for p1, p2 in pairs_hop2
         ))
 
+    def test_errgentools_enumeration_order_is_stable(self):
+        # The *order* of these lists is load-bearing, not incidental: it fixes the order of the
+        # error-generator list, which in turn indexes QPANN parameters (`stochastic_mask` in
+        # qpanns.py), the last axis of encoding.py's index tensors, and the `prior_indices`
+        # incremental contract -- so reordering it silently invalidates any trained or saved
+        # network. The other tests in this file compare sets or lengths, which would not catch
+        # a reordering; these assertions pin the order itself.
+        import itertools
+
+        n = 3
+        line_adjacency = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])  # 0-1-2 line graph
+
+        # Exact expected list, weight-major then support-lexicographic then XYZ-product order.
+        # {0,2} is absent at hops=1 (0 and 2 are not adjacent), which is why there are 9 + 18
+        # entries rather than 9 + 27.
+        self.assertEqual(
+            errgentools.up_to_weight_k_paulis_from_qubit_graph(2, n, line_adjacency, 1),
+            ['XII', 'YII', 'ZII', 'IXI', 'IYI', 'IZI', 'IIX', 'IIY', 'IIZ',
+             'XXI', 'XYI', 'XZI', 'YXI', 'YYI', 'YZI', 'ZXI', 'ZYI', 'ZZI',
+             'IXX', 'IXY', 'IXZ', 'IYX', 'IYY', 'IYZ', 'IZX', 'IZY', 'IZZ'])
+
+        pairs = errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(2, n, line_adjacency, 1)
+        self.assertEqual(len(pairs), 207)
+        self.assertEqual(pairs[:9],
+                         [('XII', 'YII'), ('XII', 'ZII'), ('YII', 'ZII'),
+                          ('IXI', 'IYI'), ('IXI', 'IZI'), ('IYI', 'IZI'),
+                          ('IIX', 'IIY'), ('IIX', 'IIZ'), ('IIY', 'IIZ')])
+        self.assertEqual(pairs[-3:],
+                         [('IZX', 'IZY'), ('IZX', 'IZZ'), ('IZY', 'IZZ')])
+
+        self.assertEqual(
+            errgentools.up_to_weight_k_error_gens_from_qubit_graph(
+                1, n, line_adjacency, 1, egtypes=['H', 'S']),
+            [('H', (p,)) for p in ['XII', 'YII', 'ZII', 'IXI', 'IYI', 'IZI', 'IIX', 'IIY', 'IIZ']]
+            + [('S', (p,)) for p in ['XII', 'YII', 'ZII', 'IXI', 'IYI', 'IZI', 'IIX', 'IIY', 'IIZ']])
+
+        # The graph-restricted enumeration must agree *as an ordered list* with a brute-force
+        # "enumerate every support, keep the connected ones" scan. This is the contract that
+        # lets the supports be enumerated by growth (`graphtools.connected_supports`) rather
+        # than by filtering, and it is the thing most at risk from a future optimization.
+        def brute_force_supports(adjacency, k, hops):
+            close = graphtools.within_hops_matrix(adjacency, hops)
+            size = close.shape[0]
+
+            def connected(support):
+                seen, stack = {support[0]}, [support[0]]
+                while stack:
+                    u = stack.pop()
+                    for v in support:
+                        if v not in seen and close[u, v]:
+                            seen.add(v)
+                            stack.append(v)
+                return len(seen) == len(support)
+
+            return [s for w in range(1, k + 1)
+                    for s in itertools.combinations(range(size), w) if connected(s)]
+
+        for adjacency, size in ((line_adjacency, 3),
+                                (np.array([[0, 1, 1, 1], [1, 0, 0, 0],
+                                           [1, 0, 0, 0], [1, 0, 0, 0]]), 4)):  # star, center 0
+            for hops in (1, 2):
+                for k in (1, 2, 3):
+                    supports = brute_force_supports(adjacency, k, hops)
+                    expected_paulis = []
+                    expected_pairs = []
+                    for support in supports:
+                        base = ['I'] * size
+                        for letters in itertools.product('XYZ', repeat=len(support)):
+                            s = base[:]
+                            for q, letter in zip(support, letters):
+                                s[q] = letter
+                            expected_paulis.append(''.join(s))
+                        expected_pairs.extend(
+                            errgentools._pauli_pairs_for_support(support, size, False))
+                    self.assertEqual(
+                        errgentools.up_to_weight_k_paulis_from_qubit_graph(k, size, adjacency, hops),
+                        expected_paulis, f"paulis differ for hops={hops}, k={k}")
+                    self.assertEqual(
+                        errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(
+                            k, size, adjacency, hops),
+                        expected_pairs, f"pairs differ for hops={hops}, k={k}")
+
+        # On a complete graph every support is connected, so the graph-restricted enumeration
+        # must reduce exactly (order included) to the unrestricted one.
+        for size in (2, 3):
+            complete = np.ones((size, size), int) - np.eye(size, dtype=int)
+            for k in range(1, size + 1):
+                self.assertEqual(
+                    errgentools.up_to_weight_k_paulis_from_qubit_graph(k, size, complete, 1),
+                    errgentools.up_to_weight_k_paulis(k, size))
+                self.assertEqual(
+                    errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(k, size, complete, 1),
+                    errgentools.up_to_weight_k_pauli_pairs(k, size))
+
+    def test_errgentools_pauli_pairs_for_support(self):
+        # `_pauli_pairs_for_support` hoists its combo filtering into a per-weight cache
+        # (`_valid_pauli_pair_combos`) and assembles strings from precomputed runs of 'I'
+        # instead of per-character lists. These assertions pin the properties that rewrite
+        # must preserve, independently of the callers above.
+        for w in range(1, 5):
+            size = max(w, 5)
+            support = tuple(range(w))
+            pairs = errgentools._pauli_pairs_for_support(support, size, False)
+            # Count follows the inclusion-exclusion in the function's own docstring.
+            self.assertEqual(len(pairs), (15**w - 3**(w + 1)) // 2, f"w={w}")
+            self.assertEqual(len(set(pairs)), len(pairs), f"duplicates at w={w}")
+            for P, Q in pairs:
+                self.assertEqual(len(P), size)
+                self.assertEqual(len(Q), size)
+                self.assertLess(P, Q)  # canonically ordered, and hence distinct
+                # The union support must be the requested support EXACTLY, not a subset.
+                union = {i for i, c in enumerate(P) if c != 'I'} | {i for i, c in enumerate(Q) if c != 'I'}
+                self.assertEqual(union, set(support))
+
+        # reverse_index flips qubit q to string position n-1-q, and nothing else.
+        for w in (1, 2, 3):
+            size = 5
+            support = tuple(range(w))
+            forward = errgentools._pauli_pairs_for_support(support, size, False)
+            reversed_ = errgentools._pauli_pairs_for_support(support, size, True)
+            self.assertEqual(len(forward), len(reversed_))
+            self.assertEqual({tuple(sorted((P[::-1], Q[::-1]))) for P, Q in reversed_},
+                             {(P, Q) for P, Q in forward})
+
+        # The per-weight cache must not leak state between the two index conventions, nor
+        # between weights: recomputing after a cache clear must give identical results.
+        before = {(w, rev): errgentools._pauli_pairs_for_support(tuple(range(w)), 6, rev)
+                  for w in (1, 2, 3) for rev in (False, True)}
+        errgentools._PAULI_PAIR_COMBO_CACHE.clear()
+        after = {(w, rev): errgentools._pauli_pairs_for_support(tuple(range(w)), 6, rev)
+                 for w in (1, 2, 3) for rev in (False, True)}
+        self.assertEqual(before, after)
+
+        # Non-contiguous and offset supports place letters at the right string positions.
+        self.assertEqual(errgentools._pauli_pairs_for_support((1,), 3, False),
+                         [('IXI', 'IYI'), ('IXI', 'IZI'), ('IYI', 'IZI')])
+        self.assertEqual(errgentools._pauli_pairs_for_support((1,), 3, True),
+                         [('IXI', 'IYI'), ('IXI', 'IZI'), ('IYI', 'IZI')])
+        self.assertEqual(errgentools._pauli_pairs_for_support((0,), 3, True),
+                         [('IIX', 'IIY'), ('IIX', 'IIZ'), ('IIY', 'IIZ')])
+        self.assertEqual(len(errgentools._pauli_pairs_for_support((0, 3), 5, False)), 99)
+        self.assertTrue(all(P[1:3] == 'II' and Q[1:3] == 'II'
+                            for P, Q in errgentools._pauli_pairs_for_support((0, 3), 5, False)))
+
     def test_errgentools_error_generator_index_ca(self):
         # 'H'/'S' backward compatibility: exact same index values as before 'C'/'A' were added.
         self.assertEqual(errgentools.error_generator_index('H', ('IX',)), 1)
