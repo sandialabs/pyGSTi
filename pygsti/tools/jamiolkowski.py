@@ -366,7 +366,8 @@ def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
     Returns
     -------
     float
-        the sum of the negative eigenvalues of the Choi representation of op_mx
+        the absolute value of the sum of the negative eigenvalues
+        of the Choi representation of op_mx
     """
     sumOfNeg = 0
     J = fast_jamiolkowski_iso_std(op_mx, op_mx_basis)  # Choi mx basis doesn't matter
@@ -394,7 +395,8 @@ def sum_of_negative_choi_eigenvalues(model, weights: dict[str, float]=None) -> f
     Returns
     -------
     float
-        the sum of negative eigenvalues of the Choi matrix for each gate.
+        the scaled sum across each gate of the absolute value of the sum negative eigenvalues
+        of the Choi matrix for that gate.
     """
     sums = sums_of_negative_choi_eigenvalues(model)
     if weights is not None:
@@ -420,8 +422,8 @@ def sums_of_negative_choi_eigenvalues(model):
     Returns
     -------
     list of floats
-        each element == sum of the negative eigenvalues of the Choi matrix
-        for the corresponding gate (as ordered  by model.operations.iteritems()).
+        each element == absolute value of the sum of the negative eigenvalues of the Choi matrix
+        for the corresponding gate (as ordered by model.operations.iteritems()).
     """
     ret = []
     for (_, gate) in model.operations.items():
