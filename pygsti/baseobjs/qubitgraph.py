@@ -304,10 +304,15 @@ class QubitGraph(_NicelySerializable):
                           directed=self.directed, direction_names=self.directions)
 
     def _refresh_dists_and_predecessors(self):
+        # `self._dirty` must be set by *every* write to `self._connectivity`, which is why all
+        # such writes live in this class (__init__, __setitem__, add_edge, remove_edge). Nothing
+        # outside it touches `_connectivity`, and copy()/subgraph()/deserialization all build a
+        # new graph through __init__, so they start dirty too.
         if self._dirty:
             self._distance_matrix, self._predecessors = _fw(
                 self._connectivity, return_predecessors=True,
                 directed=self.directed, unweighted=False)  # TIM - why use unweighted=False?
+            self._dirty = False
 
     def __getitem__(self, key):
         node1, node2 = key
