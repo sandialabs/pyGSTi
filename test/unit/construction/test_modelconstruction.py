@@ -864,8 +864,7 @@ class TargetQubitOrderingTester(BaseCase):
 
     A gate placed on target qubits ``(1, 0)`` must be the ``(0, 1)`` gate conjugated by a SWAP.
     Historically this was silently skipped whenever the gate happened to span the model's whole
-    state space -- the "no need to embed" shortcut in ``_create_explicit_model`` tested only total
-    dimension, and failed to apply the permutation.
+    ``_create_explicit_model`` tested only total dimension, and failed to apply the permutation.
     """
 
     # 'auto' -- the default -- is ('static standard', 'static clifford', 'static unitary').
@@ -906,7 +905,7 @@ class TargetQubitOrderingTester(BaseCase):
 
     def test_two_qubit_gate_on_two_qubit_model_respects_target_order(self):
         # The motivating case: the gate spans the *entire* model, so every ordering of the target
-        # qubits has the right total dimension and the dimension-only shortcut fired for all of them.
+        # qubits has the right total dimension.
         for gate_name in ('Gcnot', 'Gecr'):
             unitary = std_unitaries()[gate_name]
             for gate_type in self.GATE_TYPES:
@@ -918,8 +917,6 @@ class TargetQubitOrderingTester(BaseCase):
                     self._assert_matches_reference(model, 2, gate_name, unitary, (1, 0))
 
     def test_two_qubit_gate_orderings_differ(self):
-        # A weaker but more legible statement of the same thing, and the exact symptom that was
-        # reported: the two orderings used to come out bit-identical.
         for gate_type in self.GATE_TYPES:
             with self.subTest(gate_type=gate_type):
                 if gate_type in ('auto', 'CPTPLND', 'H+S'):
@@ -930,8 +927,6 @@ class TargetQubitOrderingTester(BaseCase):
                 self.assertGreater(np.linalg.norm(forward - reverse), 1e-6)
 
     def test_symmetric_gate_orderings_agree(self):
-        # The flip side, and a large part of why this went unnoticed: SWAP *is* invariant under
-        # exchanging its targets, so it looks correct no matter what the embedding code does.
         model = self._model(2, 'Gswap', 'static')
         self.assertArraysAlmostEqual(model.operations[('Gswap', 0, 1)].to_dense('HilbertSchmidt'),
                                      model.operations[('Gswap', 1, 0)].to_dense('HilbertSchmidt'))
@@ -978,7 +973,7 @@ class TargetQubitOrderingTester(BaseCase):
     def test_permuted_gate_simulates_correctly(self):
         # End-to-end: probabilities computed through the forward simulator, not just to_dense().
         # Starting from |01>, Gcnot:1:0 (control = qubit 1) flips qubit 0 and gives |11>, while
-        # Gcnot:0:1 (control = qubit 0) leaves the state alone.  Before the fix both gave |01>.
+        # Gcnot:0:1 (control = qubit 0) leaves the state alone.
         model = self._model(2, 'Gcnot', 'static')
         prep_01 = [('Gxpi2', 1), ('Gxpi2', 1)]  # |00> -> |01>
         probs_reversed = model.probabilities(

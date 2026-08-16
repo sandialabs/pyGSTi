@@ -232,13 +232,6 @@ class ExplicitOpModel(_mdl.OpModel):
         if self.state_space is None:
             raise ValueError("Must set model state space before adding auto-embedded gates.")
 
-        # Note: a full-state-space `op_val` is taken to be *already embedded*, regardless of what
-        # `op_target_labels` says.  This is a contract, not an oversight: `ExplicitOpModel` stores
-        # every operation on its full state space, so `__setitem__`, `update` and `copy` all re-insert
-        # already-embedded operations under their original (partial or permuted) keys.  Embedding them
-        # a second time would corrupt the model on every copy and serialization round trip.  Callers
-        # that hold a *local* operation acting on `op_target_labels` must therefore either supply it on
-        # the corresponding subspace or pass `force=True`.
         if op_val.state_space == self.state_space and not force:
             return op_val  # if gate operates on full dimension, no need to embed.
 
