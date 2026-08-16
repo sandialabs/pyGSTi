@@ -49,104 +49,119 @@ class LocalNoiseModel(_ImplicitOpModel):
     This model holds as building blocks individual noisy gates
     which are trivially embedded into circuit layers as requested.
 
-    Parameters
-    ----------
-    processor_spec : ProcessorSpec
-        The processor specification to create a model for.  This object specifies the
-        gate names and unitaries for the processor, and their availability on the
-        processor.
-
-    gatedict : dict
-        A dictionary that associates gate names (e.g. `"Gx"`) with :class:`LinearOperator` or
-        `numpy.ndarray` objects. When the objects may act on fewer than the total
-        number of qudits (determined by their dimension/shape) then they are
-        repeatedly embedded into operation on the entire state space as specified
-        by their availability within `processor_spec`.  While the keys of this
-        dictionary are usually string-type gate *names*, labels that include target
-        qudits, e.g. `("Gx",0)`, may be used to override the default behavior of
-        embedding a reference or a copy of the gate associated with the same label
-        minus the target qudits (e.g. `"Gx"`).  Furthermore, :class:`OpFactory` objects
-        may be used in place of `LinearOperator` objects to allow the evaluation of labels
-        with arguments.
-
-    prep_layers : None or operator or dict or list
-        The state preparateion operations as n-qudit layer operations.  If
-        `None`, then no state preparations will be present in the created model.
-        If a dict, then the keys are labels and the values are layer operators.
-        If a list, then the elements are layer operators and the labels will be
-        assigned as "rhoX" where X is an integer starting at 0.  If a single
-        layer operation of type :class:`State` is given, then this is used as
-        the sole prep and is assigned the label "rho0".
-
-    povm_layers : None or operator or dict or list
-        The state preparateion operations as n-qudit layer operations.  If
-        `None`, then no POVMS will be present in the created model.  If a dict,
-        then the keys are labels and the values are layer operators.  If a list,
-        then the elements are layer operators and the labels will be assigned as
-        "MX" where X is an integer starting at 0.  If a single layer operation
-        of type :class:`POVM` is given, then this is used as the sole POVM and
-        is assigned the label "Mdefault".
-
-    evotype : Evotype or str, optional
-        The evolution type of this model, describing how states are
-        represented.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    simulator : ForwardSimulator or {"auto", "matrix", "map"}
-        The circuit simulator used to compute any
-        requested probabilities, e.g. from :meth:`probs` or
-        :meth:`bulk_probs`.  The default value of `"auto"` automatically
-        selects the simulation type, and is usually what you want. Other
-        special allowed values are:
-
-        - "matrix" : op_matrix-op_matrix products are computed and
-          cached to get composite gates which can then quickly simulate
-          a circuit for any preparation and outcome.  High memory demand;
-          best for a small number of (1 or 2) qubits.
-        - "map" : op_matrix-state_vector products are repeatedly computed
-          to simulate circuits.
-
-    on_construction_error : {'raise','warn',ignore'}
-        What to do when the conversion from a value in `gatedict` to a
-        :class:`LinearOperator` of the type given by `parameterization` fails.
-        Usually you'll want to `"raise"` the error.  In some cases,
-        for example when converting as many gates as you can into
-        `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
-        may be useful.
-
-    independent_gates : bool, optional
-        Whether gates are allowed independent local noise or not.  If False,
-        then all gates with the same name (e.g. "Gx") will have the *same*
-        (local) noise (e.g. an overrotation by 1 degree), and the
-        `operation_bks['gates']` dictionary contains a single key per gate
-        name.  If True, then gates with the same name acting on different
-        qudits may have different local noise, and so the
-        `operation_bks['gates']` dictionary contains a key for each gate
-        available gate placement.
-
-    ensure_composed_gates : bool, optional
-        If True then the elements of the `operation_bks['gates']` will always
-        be :class:`ComposedOp` objects.  The purpose of this is to
-        facilitate modifying the gate operations after the model is created.
-        If False, then the appropriately parameterized gate objects (often
-        dense gates) are used directly.
-
-    implicit_idle_mode : {'none', 'add_global', 'pad_1Q', 'only_global'}
-        The way idle operations are added implicitly within the created model. `"none"`
-        doesn't add any "extra" idle operations when there is a layer that contains some
-        gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
-        i.e., the operation for a global idle layer (zero gates - a completely empty layer),
-        to every layer that is simulated, using the global idle as a background idle that always
-        occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
-        exists) to all idling qubits within a circuit layer. `"only_global"` uses a global idle
-        operation, if one exists, to simulate the completely empty layer but nothing else, i.e.,
-        this idle operation is *not* added to other layers as in `"add_global"`.
     """
+
+    
 
     def __init__(self, processor_spec, gatedict, instdict=None, prep_layers=None, povm_layers=None, 
                  evotype="default", simulator="auto", on_construction_error='raise',
-                 independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="none"):
+                 independent_ops=False, ensure_composed_gates=False, implicit_idle_mode="none"):
+        """
+        Parameters
+        ----------
+        processor_spec : ProcessorSpec
+            The processor specification to create a model for.  This object specifies the
+            gate names and unitaries for the processor, and their availability on the
+            processor.
 
+        gatedict : dict
+            A dictionary that associates gate names (e.g. `"Gx"`) with :class:`LinearOperator` or
+            `numpy.ndarray` objects. When the objects may act on fewer than the total
+            number of qudits (determined by their dimension/shape) then they are
+            repeatedly embedded into operation on the entire state space as specified
+            by their availability within `processor_spec`.  While the keys of this
+            dictionary are usually string-type gate *names*, labels that include target
+            qudits, e.g. `("Gx",0)`, may be used to override the default behavior of
+            embedding a reference or a copy of the gate associated with the same label
+            minus the target qudits (e.g. `"Gx"`).  Furthermore, :class:`OpFactory` objects
+            may be used in place of `LinearOperator` objects to allow the evaluation of labels
+            with arguments.
+
+        instdict : dict, optional (default None)
+            A dictionary that associates instrument names (e.g. "Iz") with `Instrument`,
+            `TPInstrument`, or dictionaries of np.ndarrays corresponding to instrument elements
+            castable to `Instrument`s. When the objects may act on fewer than the total
+            number of qudits (determined by their dimension/shape) then they are
+            repeatedly embedded into operation on the entire state space as specified
+            by their availability within `processor_spec`.  While the keys of this
+            dictionary are usually string-type instrument *names*, labels that include target
+            qudits, e.g. `("Iz",0)`, may be used to override the default behavior of
+            embedding a reference or a copy of the instrument associated with the same label
+            minus the target qudits (e.g. `"Iz"`).
+
+        prep_layers : None or operator or dict or list
+            The state preparateion operations as n-qudit layer operations.  If
+            `None`, then no state preparations will be present in the created model.
+            If a dict, then the keys are labels and the values are layer operators.
+            If a list, then the elements are layer operators and the labels will be
+            assigned as "rhoX" where X is an integer starting at 0.  If a single
+            layer operation of type :class:`State` is given, then this is used as
+            the sole prep and is assigned the label "rho0".
+
+        povm_layers : None or operator or dict or list
+            The state preparateion operations as n-qudit layer operations.  If
+            `None`, then no POVMS will be present in the created model.  If a dict,
+            then the keys are labels and the values are layer operators.  If a list,
+            then the elements are layer operators and the labels will be assigned as
+            "MX" where X is an integer starting at 0.  If a single layer operation
+            of type :class:`POVM` is given, then this is used as the sole POVM and
+            is assigned the label "Mdefault".
+
+        evotype : Evotype or str, optional
+            The evolution type of this model, describing how states are
+            represented.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+        simulator : ForwardSimulator or {"auto", "matrix", "map"}
+            The circuit simulator used to compute any
+            requested probabilities, e.g. from :meth:`probs` or
+            :meth:`bulk_probs`.  The default value of `"auto"` automatically
+            selects the simulation type, and is usually what you want. Other
+            special allowed values are:
+
+            - "matrix" : op_matrix-op_matrix products are computed and
+            cached to get composite gates which can then quickly simulate
+            a circuit for any preparation and outcome.  High memory demand;
+            best for a small number of (1 or 2) qubits.
+            - "map" : op_matrix-state_vector products are repeatedly computed
+            to simulate circuits.
+
+        on_construction_error : {'raise','warn',ignore'}
+            What to do when the conversion from a value in `gatedict` to a
+            :class:`LinearOperator` of the type given by `parameterization` fails.
+            Usually you'll want to `"raise"` the error.  In some cases,
+            for example when converting as many gates as you can into
+            `parameterization="clifford"` gates, `"warn"` or even `"ignore"`
+            may be useful.
+
+        independent_ops : bool, optional
+            Whether gates and instruments are allowed independent local noise or not.  If False,
+            then all gates with the same name (e.g. "Gx") will have the *same*
+            (local) noise (e.g. an overrotation by 1 degree), and the
+            `operation_bks['gates']` dictionary contains a single key per gate
+            name.  If True, then gates with the same name acting on different
+            qudits may have different local noise, and so the
+            `operation_bks['gates']` dictionary contains a key for each gate
+            available gate placement.
+
+        ensure_composed_gates : bool, optional
+            If True then the elements of the `operation_bks['gates']` will always
+            be :class:`ComposedOp` objects.  The purpose of this is to
+            facilitate modifying the gate operations after the model is created.
+            If False, then the appropriately parameterized gate objects (often
+            dense gates) are used directly.
+
+        implicit_idle_mode : {'none', 'add_global', 'pad_1Q', 'only_global'}
+            The way idle operations are added implicitly within the created model. `"none"`
+            doesn't add any "extra" idle operations when there is a layer that contains some
+            gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
+            i.e., the operation for a global idle layer (zero gates - a completely empty layer),
+            to every layer that is simulated, using the global idle as a background idle that always
+            occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
+            exists) to all idling qubits within a circuit layer. `"only_global"` uses a global idle
+            operation, if one exists, to simulate the completely empty layer but nothing else, i.e.,
+            this idle operation is *not* added to other layers as in `"add_global"`.
+        """
         qudit_labels = processor_spec.qudit_labels
         state_space = _statespace.QubitSpace(qudit_labels) if isinstance(processor_spec, _QubitProcessorSpec) \
             else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
@@ -168,7 +183,6 @@ class LocalNoiseModel(_ImplicitOpModel):
             else:  # presumably a numpy array or something like it.
                 mm_gatedict[key] = _op.StaticArbitraryOp(gate, basis=None, evotype=evotype,
                                                          state_space=state_space)  # static gates by default
-
 
         for key, inst in instdict.items():
             if isinstance(inst, (_instruments.Instrument, _instruments.TPInstrument)):
@@ -200,9 +214,9 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         self._init_spam_layers(self, prep_layers, povm_layers)  # SPAM
 
-        self._init_gate_layers(independent_gates, mm_gatedict, ensure_composed_gates, on_construction_error, implicit_idle_mode)
+        self._init_gate_layers(independent_ops, mm_gatedict, ensure_composed_gates, on_construction_error, implicit_idle_mode)
         
-        self._init_instrument_layers(independent_gates, mm_instdict, on_construction_error)
+        self._init_instrument_layers(independent_ops, mm_instdict, on_construction_error)
 
         self._clean_paramvec()
 
@@ -252,7 +266,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 # Note: can't use automatic-embedding b/c we need to force embedding
                 # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qudits needs to embed)
                 allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
-                gate_nQudits = self.processor_spec.gate_num_qudits(gateName)
+                gate_nQudits = self.processor_spec.op_num_qudits(gateName)
                 embedded_op = _opfactory.EmbeddingOpFactory(self.state_space, base_gate,
                                                             num_target_labels=gate_nQudits,
                                                             allowed_sslbls_fn=allowed_sslbls_fn)
@@ -338,6 +352,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                         self._layer_rules.single_qubit_idle_layer_labels = singleQ_idle_layer_labels
 
     def _init_instrument_layers(self, independent_ops, mm_instdict, on_construction_error):
+        """Helper method for initialization of instrument layers"""
         for instname in self.processor_spec.instrument_names:
             inst_spec = self.processor_spec.instrument_specifiers[instname]
             resolved_avail = self.processor_spec.resolved_availability(instname)
@@ -349,35 +364,46 @@ class LocalNoiseModel(_ImplicitOpModel):
             else:
                 inst = None
         
-        if callable(resolved_avail) or resolved_avail == '*':
-            raise NotImplementedError() #TODO: implement this case.
-        else:
-            for inds in resolved_avail:
-                if _Lbl(instname, inds) in mm_instdict and inds is not None:
-                    base_inst = mm_instdict[_Lbl(instname, inds)]
-                    self.instrument_blks['gates'][_Lbl(instname, inds)] = base_inst
-                elif independent_ops:
-                    base_inst = mm_instdict[instname].copy()
-                    self.instrument_blks['gates'][_Lbl(instname, inds)] = base_inst
-                else:
-                     base_inst = inst
-                
-                try:
-                    if inds is None or inds == tuple(self.processor_spec.qudit_labels):
-                        embedded_inst = base_inst
+            if callable(resolved_avail) or resolved_avail == '*':
+                # then instrument has function-determined or arbitrary availability, and we just need to
+                # put it in an EmbeddingOpFactory.
+                base_inst = mm_instdict[instname]
+
+                # Note: can't use automatic-embedding b/c we need to force embedding
+                # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qudits needs to embed)
+                allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
+                inst_nQudits = self.processor_spec.op_num_qudits(instname)
+                embedded_op = _opfactory.EmbeddingOpFactory(self.state_space, base_inst,
+                                                            num_target_labels=inst_nQudits,
+                                                            allowed_sslbls_fn=allowed_sslbls_fn)
+                self.factories['layers'][_Lbl(instname)] = embedded_op
+            else:
+                for inds in resolved_avail:
+                    if _Lbl(instname, inds) in mm_instdict and inds is not None:
+                        base_inst = mm_instdict[_Lbl(instname, inds)]
+                        self.instrument_blks['gates'][_Lbl(instname, inds)] = base_inst
+                    elif independent_ops:
+                        base_inst = mm_instdict[instname].copy()
+                        self.instrument_blks['gates'][_Lbl(instname, inds)] = base_inst
                     else:
-                        embedded_instrument_members = dict()
-                        for key, member in base_inst.items():
-                            embedded_instrument_members[key] = _op.EmbeddedOp(self.state_space, inds, member)
-                        embedded_inst = _instruments.Instrument(embedded_instrument_members)
-                    self.instrument_blks['layers'][_Lbl(instname, inds)] = embedded_inst
-                except Exception as e:
-                    if on_construction_error == 'warn':
-                            _warnings.warn(f"Failed to embed {str(_Lbl(instname, inds))} gate. Dropping it.")
-                    if on_construction_error in ('warn', 'ignore'): 
-                        continue
-                    else: 
-                        raise e
+                        base_inst = inst
+                    
+                    try:
+                        if inds is None or inds == tuple(self.processor_spec.qudit_labels):
+                            embedded_inst = base_inst
+                        else:
+                            embedded_instrument_members = dict()
+                            for key, member in base_inst.items():
+                                embedded_instrument_members[key] = _op.EmbeddedOp(self.state_space, inds, member)
+                            embedded_inst = _instruments.Instrument(embedded_instrument_members)
+                        self.instrument_blks['layers'][_Lbl(instname, inds)] = embedded_inst
+                    except Exception as e:
+                        if on_construction_error == 'warn':
+                                _warnings.warn(f"Failed to embed {str(_Lbl(instname, inds))} gate. Dropping it.")
+                        if on_construction_error in ('warn', 'ignore'): 
+                            continue
+                        else: 
+                            raise e
 
     def create_processor_spec(self):
         import copy as _copy

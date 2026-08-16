@@ -739,7 +739,7 @@ class QuditProcessorSpec(ProcessorSpec):
         """
         ret = []
         for gn in self.gate_names:
-            gn_nqudits = self.gate_num_qudits(gn)
+            gn_nqudits = self.op_num_qudits(gn)
             avail_fn = self.resolved_availability(gn, tuple_or_function="function")
             if gn_nqudits > len(sslbls): continue  # gate has too many qudits to fit in sslbls
             if any((avail_fn(sslbls_subset) for sslbls_subset in _itertools.permutations(sslbls, gn_nqudits))):
@@ -763,7 +763,7 @@ class QuditProcessorSpec(ProcessorSpec):
         tuple of Labels
             The available gate labels (all with name `gate_name`).
         """
-        gate_nqudits = self.gate_num_qudits(gate_name)
+        gate_nqudits = self.op_num_qudits(gate_name)
         avail_fn = self.resolved_availability(gate_name, tuple_or_function="function")
         if gate_nqudits > len(sslbls): return ()  # gate has too many qudits to fit in sslbls
         return tuple((_Lbl(gate_name, sslbls_subset) for sslbls_subset in _itertools.permutations(sslbls, gate_nqudits)
@@ -1244,9 +1244,9 @@ class QubitProcessorSpec(QuditProcessorSpec):
         """ The number of qudits. """
         return len(self.qudit_labels)
 
-    def gate_num_qubits(self, gate_name):
+    def op_num_qubits(self, gate_name):
         """
-        The number of qubits that a given gate acts upon.
+        The number of qubits that a given gate or instrument acts upon.
 
         Parameters
         ----------
@@ -1257,7 +1257,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
         -------
         int
         """
-        return self.gate_num_qudits(gate_name)
+        return self.op_num_qudits(gate_name)
 
     def compute_ops_on_qubits(self):
         """
