@@ -1,50 +1,34 @@
-"""Pins for verified, currently-unfixed Circuit bugs (issue #757).
+"""Pins for verified, currently-unfixed Circuit bugs. None are open right now.
 
-Fixed, with the pins flipped or graduated out of this file:
-  #758 -> test_circuit_metadata_policy.py (the `add` row of the keep/drop matrix
-         plus the propagation and string-regeneration assertions below it).
+Convention:   # KNOWN BUG, pyGSTi issue #NNN -- assertions pin the *buggy* behavior,
+so the suite documents the bug and the eventual fix is forced to flip the pin in the
+same PR that fixes it. If one of these tests goes red after your change, you have
+probably fixed the referenced issue: flip or delete the pin in the same PR and note
+the issue number. Newly discovered, not-yet-filed bugs are pinned as SURPRISE
+comments in the module where they were found, and graduate here once filed.
+
+The four bugs this file was created for (#757, #758, #759, #761, pinned by PR #768
+against develop@47b3dcae5) are all fixed. Their flipped assertions live with the
+behavior they now describe:
+
+  #757 -> test_circuit_identity_contract.py (parsed circuits match constructed ones;
+         both parsers agree; `_fastinit`'s canonical-input precondition)
+  #758 -> test_circuit_metadata_policy.py (the `add` row of the keep/drop matrix,
+         plus the index propagation and string regeneration assertions)
   #759 -> test_circuit_aliasing.py (slice/copy independence under every public
-         in-place mutator; the two pins here became the flipped assertions there).
-  #761 -> the str-setter accept/reject matrix below; the truncation and extension
-         rows now assert the ValueError instead of the silent accept.
+         in-place mutator)
+  #761 -> the str-setter accept/reject matrix below, which grew out of those pins
+         and is kept here as the one complete statement of that method's contract
 
-
-Each test asserts the CURRENT (buggy) behavior, so the suite documents the bug and
-the eventual fix is forced to flip the pin in the same PR that fixes it.
-Convention:   # KNOWN BUG, pyGSTi issue #NNN — assertions pin the bug.
-Repros taken verbatim from the issue reports (verified by execution 2026-06-10
-at develop@47b3dcae5, re-verified here at 3e7dd411e).
-If one of these tests goes red after your change, you have probably fixed the
-referenced issue: flip or delete the pin in the same PR and note the issue number.
-Newly discovered, not-yet-filed bugs are pinned as SURPRISE comments in the
-module where they were found, and graduate here once filed.
+The str-setter matrix stays because it has no better home; everything else about
+`.str` is spread across the roundtrip and identity-contract files.
 """
-from pygsti.baseobjs import Label
 from pygsti.circuits import Circuit
-from pygsti.io import stdinput
 
 from ..util import BaseCase
 
 
 class CircuitKnownBugsTester(BaseCase):
-
-    # ---- KNOWN BUG, pyGSTi issue #757: _fastinit skips the inner-layer sort that
-    # ---- __init__/done_editing apply, so equality/hash depend on construction path.
-
-    def test_757_fastinit_skips_layer_sort(self):
-        c_fast = Circuit._fastinit((Label((('Gy', 1), ('Gx', 0))),), (0, 1), False)
-        c_init = Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1))
-        self.assertNotEqual(c_fast, c_init)            # KNOWN BUG #757: should be equal
-        self.assertNotEqual(hash(c_fast), hash(c_init))
-        self.assertNotEqual(c_fast.tup, c_init.tup)
-
-    def test_757_parsed_circuits_differ_from_constructed(self):
-        # production path: stdinput builds every parsed circuit via _fastinit in source order
-        sip = stdinput.StdInputParser()
-        c_parsed = sip.parse_circuit("[Gy:1Gx:0]@(0,1)", create_subcircuits=False)
-        c_built = Circuit("[Gy:1Gx:0]@(0,1)")
-        self.assertNotEqual(c_parsed, c_built)         # KNOWN BUG #757
-        self.assertNotEqual(hash(c_parsed), hash(c_built))
 
     # ---- str-setter accept/reject matrix
 

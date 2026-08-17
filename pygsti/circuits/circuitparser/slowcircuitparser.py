@@ -16,6 +16,33 @@ def _to_int_or_strip(x):
     return int(x) if x.strip().isdigit() else x.strip()
 
 
+def _layer_is_canonical(lbls_list):
+    """
+    True if `Label.with_sorted_inner_labels` would leave this layer's components alone.
+
+    Used to skip the rebuild for layers that are already canonical, which is every
+    layer of any circuit string pyGSTi wrote itself.  Only the *outer* order is
+    checked: components come from a recursive parse that already canonicalized them.
+
+    Strictly-increasing is the test, not non-decreasing -- duplicate sslbls within a
+    layer have no sorted order and must reach `with_sorted_inner_labels` so it can
+    raise, as it does for the same circuit built through `Circuit.__init__`.
+    """
+    prev = None
+    for lbl in lbls_list:
+        sslbls = lbl.sslbls
+        if sslbls is None:
+            return True  # unsortable; with_sorted_inner_labels returns self unchanged
+        if prev is not None:
+            try:
+                if not prev < sslbls:
+                    return False
+            except TypeError:
+                return False  # incomparable sslbls; let the sorter raise
+        prev = sslbls
+    return True
+
+
 def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
     if '@' in code:  # format:  <string>@<line_labels>[@<occurrence_id>]
         code, *extras = code.split('@')
@@ -130,6 +157,12 @@ def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment
             # create a layer label - a label of the labels within square brackets
             to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list)) if (time == 0.0) \
                 else _lbl.LabelTupTupWithTime(tuple(lbls_list), time)
+            # Canonicalize here rather than leaving it to the caller: `Circuit._fastinit`
+            # applies no sort, and io/stdinput.py builds every parsed circuit through it,
+            # so source order would otherwise decide equality and hash (issue #757).
+            # Must stay in lockstep with fastcircuitparser.pyx.
+            if not _layer_is_canonical(lbls_list):
+                to_exponentiate = to_exponentiate.with_sorted_inner_labels()
         else:
             to_exponentiate = lbls_list[0]
         return [to_exponentiate] * exponent, i, segment, ()
