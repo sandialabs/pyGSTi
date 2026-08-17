@@ -867,7 +867,7 @@ class TargetQubitOrderingTester(BaseCase):
     ``_create_explicit_model`` tested only total dimension, and failed to apply the permutation.
     """
 
-    # 'auto' -- the default -- is ('static unitary', 'static').
+    # 'auto' -- the default -- is ('static clifford', 'static unitary', 'static').
     GATE_TYPES = ('auto', 'static', 'static unitary', 'full', 'full TP', 'CPTPLND', 'H+S')
 
     # 'CPTPLND' is dropped from the 3-qubit sweep only because a 3-qubit CPTPLND explicit model
