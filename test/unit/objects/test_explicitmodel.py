@@ -4,13 +4,14 @@ import numpy.testing as npt
 import scipy.linalg as la
 import pytest
 
+import pygsti
 import pygsti.models.explicitmodel as mdl
 from pygsti.baseobjs import ExplicitStateSpace
 from pygsti.models.modelconstruction import create_explicit_model_from_expressions, create_operation
 from pygsti.models.explicitmodel import transform_composed_model
 from pygsti.models.gaugegroup import UnitaryGaugeGroupElement
 from pygsti.modelmembers.instruments import Instrument, TPInstrument
-from pygsti.modelmembers.operations import ComposedOp
+from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp, StaticArbitraryOp
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 import pygsti.modelpacks.smq1Q_XYI as smq1Q_XYI
 from pygsti.tools.optools import unitary_to_pauligate
@@ -288,3 +289,60 @@ class Test_TransformComposedModelInstrument(BaseCase):
             expected = invU @ orig_op @ U_mx
             npt.assert_allclose(result.instruments['Itp'][ek].to_dense(), expected,
                                 atol=1e-12, err_msg=f'TPInstrument member {ek!r}')
+
+
+class AutoEmbedTester(BaseCase):
+    """
+    Tests for `ExplicitOpModel._embed_operation`, i.e. the auto-embedding that
+    `OrderedMemberDict.__setitem__` performs when a key carries state-space labels.
+    """
+
+    CNOT_01 = unitary_to_pauligate(np.array([[1, 0, 0, 0],
+                                             [0, 1, 0, 0],
+                                             [0, 0, 0, 1],
+                                             [0, 0, 1, 0]], dtype=complex))
+    CNOT_10 = unitary_to_pauligate(np.array([[1, 0, 0, 0],
+                                             [0, 0, 0, 1],
+                                             [0, 0, 1, 0],
+                                             [0, 1, 0, 0]], dtype=complex))
+
+    def setUp(self):
+        pspec = pygsti.processors.QubitProcessorSpec(2, ('Gxpi2', 'Gypi2', 'Gcnot'),
+                                                     availability={'Gcnot': 'all-permutations'})
+        self.model = pygsti.models.modelconstruction.create_explicit_model(
+            pspec, ideal_gate_type='static', ideal_spam_type='static')
+
+    def test_subsystem_operation_is_embedded(self):
+        # A one-qubit operation assigned under a two-qubit model's ('Gy', 1) key gets embedded
+        # onto qubit 1, leaving qubit 0 alone.
+        one_qubit_y = unitary_to_pauligate(la.expm(-1j * (np.pi / 4) * np.array([[0, -1j], [1j, 0]])))
+        # Note the operation has to be handed over as a one-qubit ModelMember: a bare numpy array is
+        # cast onto the *parent's* state space by OrderedMemberDict.cast_to_model_member.
+        self.model.operations[('Gtest', 1)] = StaticArbitraryOp(
+            one_qubit_y, 'pp', 'default', ExplicitStateSpace([1], [2]))
+        stored = self.model.operations[('Gtest', 1)]
+        self.assertIsInstance(stored, EmbeddedOp)
+        npt.assert_allclose(stored.to_dense('HilbertSchmidt'),
+                            np.kron(np.eye(4), one_qubit_y), atol=1e-12)
+
+    def test_full_state_space_operation_is_stored_verbatim(self):
+        # An operation that already spans the model's full state space is taken to be *already*
+        # embedded, whatever the key's state-space labels say.  This is what lets an
+        # ExplicitOpModel round-trip through copy() and serialization: both re-insert every
+        # (already-embedded) operation under its original, possibly permuted, key.  Re-embedding
+        # here would apply the permutation a second time on each round trip.
+        self.model.operations[('Gcnot', 1, 0)] = self.CNOT_01
+        npt.assert_allclose(self.model.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt'),
+                            self.CNOT_01, atol=1e-12)
+
+    def test_construction_and_round_trips_agree(self):
+        # The corollary that actually matters to users: the value `create_explicit_model` puts
+        # under a permuted key is the correctly permuted gate, and it stays that way.
+        npt.assert_allclose(self.model.operations[('Gcnot', 0, 1)].to_dense('HilbertSchmidt'),
+                            self.CNOT_01, atol=1e-12)
+        npt.assert_allclose(self.model.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt'),
+                            self.CNOT_10, atol=1e-12)
+        for round_tripped in (self.model.copy(),
+                              pygsti.models.ExplicitOpModel.loads(self.model.dumps())):
+            npt.assert_allclose(round_tripped.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt'),
+                                self.CNOT_10, atol=1e-12)
