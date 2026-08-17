@@ -5,8 +5,12 @@ slowcircuitparser), and via the StdInputParser path that dataset/text loading us
 
 The strategy deliberately stays inside the bijective subset: integer sslbls and
 line labels, no '^' exponents, no overlapping sslbls within a layer, no time/args
-annotations. Known violations of the invariant are pinned in
-test_circuit_known_bugs.py (#758); constructs outside the subset are out of scope.
+annotations; constructs outside the subset are out of scope.
+
+Summed circuits are covered too, since `+` used to compose the result's string rep
+from the operands' cached markers while dropping the indices themselves (#758).
+Summing two circuits from this strategy cannot leave every layer compilable, so the
+result stays inside the subset -- see the note in `circuit_st` on why that matters.
 
 derandomize=True keeps CI deterministic (no flaky example discovery in PR gates).
 """
@@ -105,6 +109,20 @@ class CircuitStrRoundtripTester(BaseCase):
         sip = stdinput.StdInputParser()
         c2 = sip.parse_circuit(c.str, create_subcircuits=False)
         self.assertEqual(c2, c)
+
+    @ROUNDTRIP_SETTINGS
+    @given(a=circuit_st(), b=circuit_st())
+    def test_str_roundtrip_of_summed_circuits(self, a, b):
+        s = a + b
+        self.assertEqual(Circuit(s.str), s)
+        self.assertEqual(hash(Circuit(s.str)), hash(s))
+
+    @ROUNDTRIP_SETTINGS
+    @given(a=circuit_st(), b=circuit_st())
+    def test_add_concatenates_compilable_indices(self, a, b):
+        expected = a.compilable_layer_indices \
+            + tuple(i + len(a) for i in b.compilable_layer_indices)
+        self.assertEqual((a + b).compilable_layer_indices, expected)
 
     def test_fast_parser_extension_importable(self):
         reason = 'fast parser extension not built; the roundtrip tests above exercised only the slow parser'

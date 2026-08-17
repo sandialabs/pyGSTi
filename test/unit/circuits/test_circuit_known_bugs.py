@@ -1,6 +1,8 @@
-"""Pins for verified, currently-unfixed Circuit bugs (issues #757, #758).
+"""Pins for verified, currently-unfixed Circuit bugs (issue #757).
 
 Fixed, with the pins flipped or graduated out of this file:
+  #758 -> test_circuit_metadata_policy.py (the `add` row of the keep/drop matrix
+         plus the propagation and string-regeneration assertions below it).
   #759 -> test_circuit_aliasing.py (slice/copy independence under every public
          in-place mutator; the two pins here became the flipped assertions there).
   #761 -> the str-setter accept/reject matrix below; the truncation and extension
@@ -43,17 +45,6 @@ class CircuitKnownBugsTester(BaseCase):
         c_built = Circuit("[Gy:1Gx:0]@(0,1)")
         self.assertNotEqual(c_parsed, c_built)         # KNOWN BUG #757
         self.assertNotEqual(hash(c_parsed), hash(c_built))
-
-    # ---- KNOWN BUG, pyGSTi issue #758: __add__ drops compilable_layer_indices but
-    # ---- concatenates cached strings including '~' markers, breaking parse(c.str)==c.
-
-    def test_758_add_drops_compilable_but_leaks_markers(self):
-        a = Circuit("Gx~Gy@(0)")
-        b = Circuit("Gz@(0)")
-        s = a + b
-        self.assertEqual(s.compilable_layer_indices, ())   # metadata hard-dropped (keep/drop policy matrix: test_circuit_metadata_policy.py)
-        self.assertIn('~', s.str)                          # KNOWN BUG #758: marker leaked into cached str
-        self.assertNotEqual(Circuit(s.str), s)             # KNOWN BUG #758: round-trip broken
 
     # ---- str-setter accept/reject matrix
 
