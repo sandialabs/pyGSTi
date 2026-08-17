@@ -15,6 +15,7 @@ from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import statespace, basisconstructors as bc
 from pygsti.models.gaugegroup import FullGaugeGroupElement, UnitaryGaugeGroupElement
 from pygsti.baseobjs import Basis
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..util import BaseCase, needs_cvxpy
 
 SKIP_DIAMONDIST_ON_WIN = True
@@ -198,43 +199,62 @@ class DenseOpTester(ImmutableDenseOpBase, BaseCase):
 
 
 class StaticStdOpTester(BaseCase):
-    def test_statevec(self):
+    def test_from_standard_gate_name_static_arbitrary_op(self):
         std_unitaries = itgs.standard_gatename_unitaries()
-
         for name, U in std_unitaries.items():
             if callable(U): continue  # skip unitary functions (create factories)
-            try:
-                svop = op.StaticStandardOp(name, 'pp', 'statevec', state_space=None)
-            except ModuleNotFoundError:  # if 'statevec' isn't built (no cython)
-                svop = op.StaticStandardOp(name, 'pp', 'statevec_slow', state_space=None)
-            self.assertArraysAlmostEqual(svop._rep.to_dense('Hilbert'), U)
+            dmop = op.StaticArbitraryOp.from_standard_gate_name(name, 'pp', 'default')
+            self.assertArraysAlmostEqual(dmop.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
 
-    def test_densitymx_svterm_cterm(self):
+    def test_from_standard_gate_name_static_unitary_op(self):
         std_unitaries = itgs.standard_gatename_unitaries()
+        for name, U in std_unitaries.items():
+            if callable(U): continue  # skip unitary functions (create factories)
+            uop = op.StaticUnitaryOp.from_standard_gate_name(name, 'pp', 'default')
+            self.assertArraysAlmostEqual(uop.to_dense('Hilbert'), U)
+            self.assertArraysAlmostEqual(uop.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
 
-        for evotype in ['default']:  # 'densitymx', 'svterm', 'cterm'
-            for name, U in std_unitaries.items():
-                if callable(U): continue  # skip unitary functions (create factories)
-                dmop = op.StaticStandardOp(name, 'pp', evotype, state_space=None)
-                self.assertArraysAlmostEqual(dmop._rep.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
+    def test_static_standard_op_deprecation_warning(self):
+        with pytest.deprecated_call():
+            std_op = op.StaticStandardOp('Gxpi2', 'pp', 'default')
+        self.assertIsInstance(std_op, op.StaticArbitraryOp)
+        self.assertEqual(std_op.name, 'Gxpi2')
 
-    def test_chp(self):
-        std_chp_ops = itgs.standard_gatenames_chp_conversions()
+    def test_static_standard_op_deserialization(self):
+        mm_dict = {
+            'module': 'pygsti.modelmembers.operations.staticstdop',
+            'class': 'StaticStandardOp',
+            'submembers': [],
+            'model_parameter_indices': None,
+            'relative_submember_parameter_indices': [],
+            'parameter_labels': None,
+            'parameter_bounds': None,
+            'state_space': statespace.ExplicitStateSpace(['Q0'], [2]).to_nice_serialization(),
+            'evotype': 'default',
+            'name': 'Gxpi2',
+            'basis': Basis.cast('pp', 4).to_nice_serialization()
+        }
+        with pytest.deprecated_call():
+            deserialized = op.StaticStandardOp.from_memoized_dict(mm_dict, {}, None)
+        self.assertIsInstance(deserialized, op.StaticArbitraryOp)
+        expected_superop = gt.unitary_to_pauligate(itgs.standard_gatename_unitaries()['Gxpi2'])
+        self.assertArraysAlmostEqual(deserialized.to_dense('HilbertSchmidt'), expected_superop)
 
-        for name, ops in std_chp_ops.items():
-            if not name.startswith('G'): continue  # currently the 'h', 'p', 'm' gates aren't "standard" yet because they lack unitaries
-            chpop = op.StaticStandardOp(name, 'pp', 'chp', state_space=None)
-            op_str = '\n'.join(ops)
-            self.assertEqual('\n'.join(chpop._rep._chp_ops()), op_str)
-        
+    def test_static_standard_op_type_in_create_from_unitary_mx(self):
+        U = itgs.standard_gatename_unitaries()['Gxpi2']
+        with pytest.deprecated_call():
+            created = op.create_from_unitary_mx(U, 'static standard', 'pp')
+        self.assertIsInstance(created, (op.StaticUnitaryOp, op.StaticArbitraryOp))
+        self.assertArraysAlmostEqual(created.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
+
     def test_raises_on_bad_values(self):
         with self.assertRaises(ValueError):
-            op.StaticStandardOp('BadGate', 'pp', 'statevec')
+            op.StaticArbitraryOp.from_standard_gate_name('BadGate', 'pp', 'statevec')
         with self.assertRaises(ValueError):
-            op.StaticStandardOp('BadGate', 'pp', 'densitymx')
-
-        with self.assertRaises(ModuleNotFoundError):
-            op.StaticStandardOp('Gi', 'pp', 'not_an_evotype')
+            op.StaticUnitaryOp.from_standard_gate_name('BadGate', 'pp', 'default')
+        with pytest.deprecated_call():
+            with self.assertRaises(ValueError):
+                op.StaticStandardOp('BadGate', 'pp', 'densitymx')
 
 
 class FullOpTester(MutableDenseOpBase, BaseCase):

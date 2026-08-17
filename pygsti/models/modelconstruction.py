@@ -771,7 +771,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         custom_gates = {}
 
     if ideal_gate_type == "auto":
-        ideal_gate_type = ('static unitary',)
+        ideal_gate_type = ('static clifford', 'static unitary', 'static')
     if ideal_prep_type == "auto":
         ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
@@ -1405,7 +1405,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
 
 def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=None,
-                       ideal_gate_type=('static unitary',), basis='pp'):
+                       ideal_gate_type=('static clifford', 'static unitary', 'static'), basis='pp'):
     """
     Construct a dictionary of potentially noisy gates that act only on their target qudits.
 
@@ -1709,7 +1709,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     modelnoise.reset_access_counters()
 
     if ideal_gate_type == "auto":
-        ideal_gate_type = ('static unitary',)
+        ideal_gate_type = ('static clifford', 'static unitary', 'static')
     if ideal_prep_type == "auto":
         ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
@@ -1901,7 +1901,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
 
     #Create static ideal gates without any noise (we use `modelnoise` further down)
     gatedict = _setup_local_gates(processor_spec, evotype, None, custom_gates,
-                                  ideal_gate_type=('static unitary',),
+                                  ideal_gate_type=('static clifford', 'static unitary', 'static'),
                                   basis=basis)
     stencils = _collections.OrderedDict()
 

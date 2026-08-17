@@ -24,15 +24,16 @@ Start by installing the pure-Python version of CHP sim.
 ```{code-cell} ipython3
 import pygsti
 import numpy as np
-from pygsti.modelmembers.operations import LinearOperator, StaticStandardOp, StochasticNoiseOp, DepolarizeOp, ComposedOp, EmbeddedOp
+from pygsti.modelmembers.operations import LinearOperator, StaticCliffordOp, StochasticNoiseOp, DepolarizeOp, ComposedOp, EmbeddedOp
+from pygsti.tools.internalgates import standard_gatename_unitaries as std_unitaries
 ```
 
-## LinearOperator and StaticStandardOp
+## LinearOperator and StaticCliffordOp
 
 Now with 'chp' evotype.
 
 ```{code-cell} ipython3
-Gx = StaticStandardOp('Gxpi', evotype='chp')
+Gx = StaticCliffordOp(std_unitaries()['Gxpi'], evotype='chp')
 print(Gx)
 print(Gx._rep._chp_ops())
 ```
@@ -54,7 +55,7 @@ print(c._rep._chp_ops())
 ```
 
 ```{code-cell} ipython3
-print(StaticStandardOp('Gc20', evotype='chp'))
+print(StaticCliffordOp(std_unitaries()['Gcnot'], evotype='chp'))
 ```
 
 ## StochasticNoiseOp and DepolarizeOp
@@ -81,7 +82,7 @@ for _ in range(4): # With seed 2021, pulls Z, I (no output), X, Y
 
 ```{code-cell} ipython3
 # ComposedOp
-Gzx_composed = ComposedOp([StaticStandardOp('Gzpi', evotype='chp'), StaticStandardOp('Gxpi', evotype='chp')])
+Gzx_composed = ComposedOp([StaticCliffordOp(std_unitaries()['Gzpi'], evotype='chp'), StaticCliffordOp(std_unitaries()['Gxpi'], evotype='chp')])
 print(Gzx_composed)
 print(Gzx_composed._rep._chp_ops())
 #print(Gzx_composed.get_chp_str([2]))
@@ -89,14 +90,14 @@ print(Gzx_composed._rep._chp_ops())
 
 ```{code-cell} ipython3
 # EmbeddedOp
-Gxi_embedded = EmbeddedOp(['Q0', 'Q1'], ['Q0'], StaticStandardOp('Gxpi', evotype='chp'))
+Gxi_embedded = EmbeddedOp(['Q0', 'Q1'], ['Q0'], StaticCliffordOp(std_unitaries()['Gxpi'], evotype='chp'))
 print(Gxi_embedded)
 print(Gxi_embedded._rep._chp_ops())
 #print(Gxi_embedded.get_chp_str([5,7]))
 ```
 
 ```{code-cell} ipython3
-Gix_embedded = EmbeddedOp(['Q0', 'Q1'], ['Q1'], StaticStandardOp('Gxpi', evotype='chp'))
+Gix_embedded = EmbeddedOp(['Q0', 'Q1'], ['Q1'], StaticCliffordOp(std_unitaries()['Gxpi'], evotype='chp'))
 print(Gix_embedded)
 print(Gix_embedded._rep._chp_ops())
 #print(Gix_embedded.get_chp_str([5,7]))
@@ -122,8 +123,8 @@ model = pygsti.models.ExplicitOpModel(['Q0', 'Q1'], simulator=sim, evotype='chp'
 
 def make_2Q_op(name0, name1):
     return ComposedOp([
-        EmbeddedOp(['Q0', 'Q1'], ['Q0'], StaticStandardOp(name0, evotype='chp')),
-        EmbeddedOp(['Q0', 'Q1'], ['Q1'], StaticStandardOp(name1, evotype='chp')),
+        EmbeddedOp(['Q0', 'Q1'], ['Q0'], StaticCliffordOp(std_unitaries()[name0], evotype='chp')),
+        EmbeddedOp(['Q0', 'Q1'], ['Q1'], StaticCliffordOp(std_unitaries()[name1], evotype='chp')),
     ])
 
 #Populate the Model object with states, effects, gates
@@ -250,10 +251,9 @@ noise_2q = ComposedOp([EmbeddedOp([0, 1], [0], noise_1q), EmbeddedOp([0, 1], [1]
 # Using equivalent of XYICNOT modelpack
 gatedict = {}
 gatedict['Gi'] = noise_1q
-gatedict['Gx'] = ComposedOp([StaticStandardOp('Gxpi', evotype='chp'), noise_1q])
-gatedict['Gy'] = ComposedOp([StaticStandardOp('Gypi', evotype='chp'), noise_1q])
-# Note that first Gcnot is now key in model, whereas second Gcnot is a standard gatename known to CHPOp constructor
-gatedict['Gcnot'] = ComposedOp([StaticStandardOp('Gcnot', evotype='chp'), noise_2q])
+gatedict['Gx'] = ComposedOp([StaticCliffordOp(std_unitaries()['Gxpi'], evotype='chp'), noise_1q])
+gatedict['Gy'] = ComposedOp([StaticCliffordOp(std_unitaries()['Gypi'], evotype='chp'), noise_1q])
+gatedict['Gcnot'] = ComposedOp([StaticCliffordOp(std_unitaries()['Gcnot'], evotype='chp'), noise_2q])
 ```
 
 ```{code-cell} ipython3
@@ -328,10 +328,9 @@ noise_2q_correlated = StochasticNoiseOp(2, basis='pp', evotype='chp', initial_ra
 
 gatedict = {}
 gatedict['Gi'] = noise_1q
-gatedict['Gx'] = ComposedOp([StaticStandardOp('Gxpi', evotype='chp'), noise_1q])
-gatedict['Gy'] = ComposedOp([StaticStandardOp('Gypi', evotype='chp'), noise_1q])
-# Note that first Gcnot is now key in model, whereas second Gcnot is a standard gatename known to CHPOp constructor
-gatedict['Gcnot'] = ComposedOp([StaticStandardOp('Gcnot', evotype='chp'), noise_2q_correlated])
+gatedict['Gx'] = ComposedOp([StaticCliffordOp(std_unitaries()['Gxpi'], evotype='chp'), noise_1q])
+gatedict['Gy'] = ComposedOp([StaticCliffordOp(std_unitaries()['Gypi'], evotype='chp'), noise_1q])
+gatedict['Gcnot'] = ComposedOp([StaticCliffordOp(std_unitaries()['Gcnot'], evotype='chp'), noise_2q_correlated])
 ```
 
 ```{code-cell} ipython3

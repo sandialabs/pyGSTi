@@ -300,6 +300,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #Note: we don't compare errorgens models to a reference model yet...
 
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.pyGSTiDeprecationWarning")
     def test_reducedmod_map2(self):
         # Using sparse embedded matrices and map-based calcs
         target_model = build_XYCNOT_cloudnoise_model(self.nQubits, geometry="line", maxIdleWeight=1, maxhops=1,
@@ -341,6 +342,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #Note: we don't compare errorgens models to a reference model yet...
 
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.pyGSTiDeprecationWarning")
     def test_reducedmod_svterm(self):
         # Using term-based calcs using map-based state-vector propagation
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)
@@ -413,6 +415,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         #Note: we don't compare errorgens models to a reference model yet...
 
     @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.OverparameterizationWarning")
+    @pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.pyGSTiDeprecationWarning")
     def test_reducedmod_cterm(self):
         # Using term-based calcs using map-based stabilizer-state propagation
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)

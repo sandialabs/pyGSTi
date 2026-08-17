@@ -13,18 +13,14 @@ import numpy as _np
 import warnings as _warnings
 
 from pygsti.modelmembers.operations.staticarbitraryop import StaticArbitraryOp as _StaticArbitraryOp
-from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
-from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
-from pygsti.modelmembers import term as _term
-from pygsti.evotypes import Evotype as _Evotype
-from pygsti.baseobjs import statespace as _statespace
+from pygsti.modelmembers.operations.staticunitaryop import StaticUnitaryOp as _StaticUnitaryOp
+from pygsti.modelmembers.operations.staticcliffordop import StaticCliffordOp as _StaticCliffordOp
 from pygsti.baseobjs.basis import Basis as _Basis
-from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
-from pygsti.tools import internalgates as _itgs
-from pygsti import SpaceT
-from pygsti.modelmembers.torchable import StaticTorchable as _StaticTorchable
+from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
+from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
+from pygsti.evotypes import Evotype as _Evotype
 
 
 class StaticStandardOp(_StaticArbitraryOp):
@@ -81,11 +77,11 @@ class StaticStandardOp(_StaticArbitraryOp):
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         """
-        Deserialize legacy StaticStandardOp serialization dictionaries into StaticArbitraryOp instances.
+        Deserialize legacy StaticStandardOp serialization dictionaries into appropriate static op instances.
         """
         _warnings.warn(
             "Deserializing legacy StaticStandardOp. StaticStandardOp is deprecated and will be "
-            "removed in a future release; converting to StaticArbitraryOp.",
+            "removed in a future release; converting to static operator.",
             _pyGSTiDeprecationWarning,
             stacklevel=2,
         )
@@ -96,11 +92,25 @@ class StaticStandardOp(_StaticArbitraryOp):
             else None
         )
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        evotype_str = mm_dict.get('evotype', 'default')
+        evotype_obj = _Evotype.cast(evotype_str, state_space=state_space)
 
-        return _StaticArbitraryOp.from_standard_gate_name(
-            mm_dict['name'],
-            basis=basis,
-            evotype=mm_dict.get('evotype', 'default'),
-            state_space=state_space,
-        )
+        if str(evotype_str) == 'chp' or evotype_obj.name == 'stabilizer':
+            std_unitaries = _itgs.standard_gatename_unitaries()
+            U = std_unitaries[mm_dict['name']]
+            return _StaticCliffordOp(U, basis=basis, evotype=evotype_str, state_space=state_space)
+        elif evotype_obj.minimal_space == 'Hilbert':
+            return _StaticUnitaryOp.from_standard_gate_name(
+                mm_dict['name'],
+                basis=basis,
+                evotype=evotype_str,
+                state_space=state_space,
+            )
+        else:
+            return _StaticArbitraryOp.from_standard_gate_name(
+                mm_dict['name'],
+                basis=basis,
+                evotype=evotype_str,
+                state_space=state_space,
+            )
     
