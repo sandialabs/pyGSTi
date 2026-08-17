@@ -1357,6 +1357,27 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(sub[0], Label('Gy', 1))
         self.assertEqual(sub[1], Label('Gz', 1))
 
+    def test_clear_labels_straddler_error_names_the_option(self):
+        # issue #746: the reporter expected clearing line 0 of a two-line Gy to
+        # *restrict* the gate to line 1, and the bare "straddled by Gy!" message
+        # gave no hint that an option existed or what it actually does
+        c = circuit.Circuit('Gy@(0,1)', editable=True)
+        with self.assertRaises(ValueError) as cm:
+            c._clear_labels((0,), [0])
+        self.assertIn('clear_straddlers=True', str(cm.exception))
+        self.assertIn('removes the whole gate', str(cm.exception))
+
+    def test_clear_labels_straddlers_removes_the_whole_gate(self):
+        # issue #746, resolved as not-a-bug: `clear_straddlers=True` deletes the
+        # straddling gate outright.  It does not restrict it to the un-cleared
+        # lines, and there is no mode that does -- a genuine 2-qubit gate has no
+        # meaningful one-qubit restriction.
+        c = circuit.Circuit('Gy@(0,1)', editable=True)
+        c._clear_labels((0,), [0], clear_straddlers=True)
+        self.assertEqual(c._labels, [[]])
+        restricted = circuit.Circuit([('Gy', 1)], line_labels=[0, 1], editable=True)
+        self.assertNotEqual(c._labels, restricted._labels)
+
     def test_extract_labels_nonstrict_includes_straddlers(self):
         # issue #756: labels straddling the requested-lines boundary are kept
         # (per the docstring) and the result's line labels grow to cover them;

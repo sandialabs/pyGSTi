@@ -1942,7 +1942,12 @@ class Circuit(object):
                 if len(sslbls.intersection(lines)) == 0:
                     new_layer.append(l)
                 elif not clear_straddlers and not sslbls.issubset(lines):
-                    raise ValueError("Cannot operate on a block that is straddled by %s!" % str(_Label(l)))
+                    raise ValueError(
+                        ("Cannot operate on a block that is straddled by %s.  Pass"
+                         " `clear_straddlers=True` to remove straddling gates entirely --"
+                         " note that this removes the whole gate rather than restricting it"
+                         " to the lines that are not being cleared, which is not a"
+                         " well-defined operation in general.") % str(_Label(l)))
             self._labels[i] = new_layer
         self._compilable_layer_indices_tup = ()
 
@@ -1963,7 +1968,10 @@ class Circuit(object):
         clear_straddlers : bool, optional
             Whether or not gates which straddle cleared and non-cleared lines
             should be cleared.  If `False` and straddling gates exist, an error
-            will be raised.
+            will be raised.  If `True` a straddling gate is removed in its
+            entirety -- it is *not* restricted to the lines that were not
+            cleared, since an n-qubit gate generally has no meaningful
+            restriction to a subset of its qubits.
 
         Returns
         -------
