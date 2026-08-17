@@ -214,6 +214,18 @@ class StaticStdOpTester(BaseCase):
             self.assertArraysAlmostEqual(uop.to_dense('Hilbert'), U)
             self.assertArraysAlmostEqual(uop.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
 
+    def test_from_standard_gate_name_static_clifford_op(self):
+        # Standard Clifford gates can be constructed via from_standard_gate_name for stabilizer & chp evotypes
+        for name in ('Gi', 'Gxpi', 'Gxpi2', 'Gypi', 'Gypi2', 'Gzpi', 'Gzpi2', 'Gh', 'Gcnot', 'Gswap'):
+            cop = op.StaticCliffordOp.from_standard_gate_name(name, 'pp', evotype='stabilizer')
+            U = itgs.standard_gatename_unitaries()[name]
+            self.assertArraysAlmostEqual(cop.to_dense('Hilbert'), U)
+
+        # Test with CHP evotype
+        cop_chp = op.StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp')
+        self.assertIsInstance(cop_chp, op.StaticCliffordOp)
+        self.assertEqual(cop_chp._rep._chp_ops(), ['h 0', 'p 0', 'p 0', 'h 0'])
+
     def test_static_standard_op_deprecation_warning(self):
         with pytest.deprecated_call():
             std_op = op.StaticStandardOp('Gxpi2', 'pp', 'default')
@@ -252,6 +264,8 @@ class StaticStdOpTester(BaseCase):
             op.StaticArbitraryOp.from_standard_gate_name('BadGate', 'pp', 'statevec')
         with self.assertRaises(ValueError):
             op.StaticUnitaryOp.from_standard_gate_name('BadGate', 'pp', 'default')
+        with self.assertRaises(ValueError):
+            op.StaticCliffordOp.from_standard_gate_name('BadGate', 'pp', 'default')
         with pytest.deprecated_call():
             with self.assertRaises(ValueError):
                 op.StaticStandardOp('BadGate', 'pp', 'densitymx')

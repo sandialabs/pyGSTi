@@ -96,9 +96,12 @@ class StaticStandardOp(_StaticArbitraryOp):
         evotype_obj = _Evotype.cast(evotype_str, state_space=state_space)
 
         if str(evotype_str) == 'chp' or evotype_obj.name == 'stabilizer':
-            std_unitaries = _itgs.standard_gatename_unitaries()
-            U = std_unitaries[mm_dict['name']]
-            return _StaticCliffordOp(U, basis=basis, evotype=evotype_str, state_space=state_space)
+            return _StaticCliffordOp.from_standard_gate_name(
+                mm_dict['name'],
+                basis=basis,
+                evotype=evotype_str,
+                state_space=state_space,
+            )
         elif evotype_obj.minimal_space == 'Hilbert':
             return _StaticUnitaryOp.from_standard_gate_name(
                 mm_dict['name'],
