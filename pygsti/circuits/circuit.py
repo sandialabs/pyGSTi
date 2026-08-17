@@ -869,6 +869,12 @@ class Circuit(object):
         cparser = _CircuitParser()
         chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(value)
 
+        if len(chk) != len(self._labels):
+            # zip below stops at the shorter sequence, so without this a truncated or
+            # extended string rep would pass the layer check vacuously (issue #761)
+            raise ValueError(("Cannot set .str to %s because it evaluates to"
+                              " %d layer(s) which is != this circuit's number of layers (%d).") %
+                             (value, len(chk), len(self._labels)))
         if not all([my_layer in (chk_lbl, [chk_lbl]) for chk_lbl, my_layer in zip(chk, self._labels)]):
             raise ValueError(("Cannot set .str to %s because it doesn't"
                               " evaluate to %s (this circuit)") %

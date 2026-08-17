@@ -1,8 +1,10 @@
-"""Pins for verified, currently-unfixed Circuit bugs (issues #757, #758, #761).
+"""Pins for verified, currently-unfixed Circuit bugs (issues #757, #758).
 
-Fixed and graduated out of this file:
+Fixed, with the pins flipped or graduated out of this file:
   #759 -> test_circuit_aliasing.py (slice/copy independence under every public
          in-place mutator; the two pins here became the flipped assertions there).
+  #761 -> the str-setter accept/reject matrix below; the truncation and extension
+         rows now assert the ValueError instead of the silent accept.
 
 
 Each test asserts the CURRENT (buggy) behavior, so the suite documents the bug and
@@ -53,28 +55,27 @@ class CircuitKnownBugsTester(BaseCase):
         self.assertIn('~', s.str)                          # KNOWN BUG #758: marker leaked into cached str
         self.assertNotEqual(Circuit(s.str), s)             # KNOWN BUG #758: round-trip broken
 
-    # ---- KNOWN BUG, pyGSTi issue #761: str-setter consistency check uses zip without
-    # ---- a length check, so a TRUNCATED string rep is silently accepted.
-
-    def test_761_str_setter_accepts_truncated_string(self):
-        c = Circuit("GxGy@(0)", editable=True)
-        c.str = "Gx@(0)"                          # KNOWN BUG #761: silently accepted
-        self.assertEqual(c.str, "Gx@(0)")         # circuit now lies about itself
-        self.assertEqual(len(c), 2)
-
-    def test_761_str_setter_extended_string(self):
-        # zip also stops at self._labels: extra parsed layers are unchecked (verified)
-        c = Circuit("GxGy@(0)", editable=True)
-        c.str = "GxGyGz@(0)"                      # KNOWN BUG #761 (adjacent): silently accepted
-        self.assertEqual(c.str, "GxGyGz@(0)")
-        self.assertEqual(len(c), 2)
-
-    # ---- str-setter accept/reject matrix (the non-buggy rows, pinned for reference)
+    # ---- str-setter accept/reject matrix
 
     def test_str_setter_rejects_same_length_mismatch(self):
         c = Circuit("GxGy@(0)", editable=True)
         with self.assertRaisesRegex(ValueError, r"doesn't evaluate to GxGy@\(0\)"):
             c.str = "GxGz@(0)"
+
+    def test_str_setter_rejects_truncated_string(self):
+        # #761: zip stopped at the shorter sequence, so this was silently accepted
+        # and the circuit then reported .str == 'Gx@(0)' while len(c) == 2
+        c = Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"evaluates to 1 layer\(s\).*number of layers \(2\)"):
+            c.str = "Gx@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_rejects_extended_string(self):
+        # #761, the other direction: zip also stopped at self._labels
+        c = Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"evaluates to 3 layer\(s\).*number of layers \(2\)"):
+            c.str = "GxGyGz@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
 
     def test_str_setter_accepts_exact_match(self):
         c = Circuit("GxGy@(0)", editable=True)
