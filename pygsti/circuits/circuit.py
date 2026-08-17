@@ -129,6 +129,19 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
             for l in lbl.components]  # a *list*
 
 
+def _copy_nested_label_lists(labels):
+    """
+    Copy every list level of an editable Circuit's `_labels`, sharing the `Label` leaves.
+
+    Editable circuits store each layer as a list of components, and a compound component
+    as a further nested list (see `_label_to_nested_lists_of_simple_labels`).  Copying
+    only the outer list leaves those inner lists shared, so an in-place layer editor on
+    one circuit reaches into another's state -- see issue #759.  `Label` objects are
+    immutable, so only the lists need rebuilding.
+    """
+    return [_copy_nested_label_lists(el) if isinstance(el, list) else el for el in labels]
+
+
 def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
     """ Get state space labels from a nested lists of simple (not compound) Labels. """
     if isinstance(obj, _Label):
@@ -1131,7 +1144,7 @@ class Circuit(object):
                                       self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
             else:
                 #copy the editable labels (avoiding shallow copy issues)
-                editable_labels = [sublist.copy() for sublist in self._labels]
+                editable_labels = _copy_nested_label_lists(self._labels)
                 return ret._copy_init(editable_labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
@@ -1327,7 +1340,10 @@ class Circuit(object):
                 if not nonint_layers:
                     return self.layertup[layers]
                 if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
-                    return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+                    # copy the nested lists: the result is editable, and sharing them with
+                    # `self` lets an in-place editor on either circuit mutate the other (#759)
+                    return Circuit._fastinit(_copy_nested_label_lists(self._labels[layers]),
+                                             self._line_labels, not self._static)
         #otherwise assert both are not None:
 
 

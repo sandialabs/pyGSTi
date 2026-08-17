@@ -1,4 +1,9 @@
-"""Pins for verified, currently-unfixed Circuit bugs (issues #757, #758, #759, #761).
+"""Pins for verified, currently-unfixed Circuit bugs (issues #757, #758, #761).
+
+Fixed and graduated out of this file:
+  #759 -> test_circuit_aliasing.py (slice/copy independence under every public
+         in-place mutator; the two pins here became the flipped assertions there).
+
 
 Each test asserts the CURRENT (buggy) behavior, so the suite documents the bug and
 the eventual fix is forced to flip the pin in the same PR that fixes it.
@@ -47,24 +52,6 @@ class CircuitKnownBugsTester(BaseCase):
         self.assertEqual(s.compilable_layer_indices, ())   # metadata hard-dropped (keep/drop policy matrix: test_circuit_metadata_policy.py)
         self.assertIn('~', s.str)                          # KNOWN BUG #758: marker leaked into cached str
         self.assertNotEqual(Circuit(s.str), s)             # KNOWN BUG #758: round-trip broken
-
-    # ---- KNOWN BUG, pyGSTi issue #759: editable layer-slices share sublist objects
-    # ---- with the parent (latent aliasing; landmine, not active corruption).
-
-    def test_759_editable_slice_aliases_parent_sublists(self):
-        p = Circuit("[Gx:0Gy:1][Gz:0]", line_labels=(0, 1), editable=True)
-        s = p[0:2]
-        self.assertIs(s._labels[0], p._labels[0])       # KNOWN BUG #759: same list object
-
-    def test_759_editable_copy_shares_nested_compound_label_lists(self):
-        # KNOWN BUG #759: copy(editable=True) copies per-layer lists but the nested
-        # lists representing compound labels within a layer remain shared
-        inner = Label((('Gx', 0), ('Gy', 1)))
-        p = Circuit([[inner, ('Gz', 2)]], line_labels=(0, 1, 2), editable=True)
-        q = p.copy(editable=True)
-        self.assertIsNot(q._labels,       p._labels)        # outer list copied...
-        self.assertIsNot(q._labels[0],    p._labels[0])     # ...per-layer list copied (one level)...
-        self.assertIs(q._labels[0][0],    p._labels[0][0])  # KNOWN BUG #759: nested list shared
 
     # ---- KNOWN BUG, pyGSTi issue #761: str-setter consistency check uses zip without
     # ---- a length check, so a TRUNCATED string rep is silently accepted.
