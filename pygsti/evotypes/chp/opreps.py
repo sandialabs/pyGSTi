@@ -70,25 +70,6 @@ class OpRepClifford(OpRep):
         super(OpRepClifford, self).__init__(chp_ops, state_space)
 
 
-class OpRepStandard(OpRep):
-    def __init__(self, name, basis, state_space):
-        std_chp_ops = _itgs.standard_gatenames_chp_conversions()
-        self.name = name
-        if self.name not in std_chp_ops:
-            raise ValueError("Name '%s' not in standard CHP operations" % self.name)
-
-        chp_ops = std_chp_ops[self.name]
-        nqubits = 2 if any(['c' in n for n in chp_ops]) else 1
-
-        state_space = _StateSpace.cast(state_space)
-        assert(nqubits == state_space.num_qubits), \
-            "State space of {0} qubits doesn't match {1} expected qubits for the standard {2} gate".format(
-                state_space.num_qubits, nqubits, name)
-
-        self.basis = basis
-        super(OpRepStandard, self).__init__(chp_ops, state_space)
-
-
 class OpRepComposed(OpRep):
 
     def __init__(self, factor_op_reps, state_space):
