@@ -14,7 +14,12 @@ parts:
 - caption: Start here
   chapters:
   - file: markdown/start/Install
+  - file: markdown/start/ChooseAProtocol
   - file: markdown/start/FirstGST
+  - file: markdown/start/FirstBenchmark
+  - file: markdown/start/YourOwnData
+  - file: markdown/start/ReadingResults
+  - file: markdown/start/KeyConcepts
 
 - caption: Characterization guides
   chapters:
@@ -37,12 +42,15 @@ parts:
     - file: markdown/guides/gst/FiducialsAndGerms
     - file: markdown/guides/gst/FewerCircuits
     - file: markdown/guides/gst/CheckYourDesign
+    - file: markdown/guides/gst/JudgingTheFit
+    - file: markdown/guides/gst/BadFits
     - file: markdown/guides/gst/TwoQubitGST
     - file: markdown/guides/gst/MidCircuitMeasurement
     - file: markdown/guides/gst/Leakage
   - file: markdown/guides/rb/HowRBWorks
     sections:
     - file: markdown/guides/rb/CliffordRB
+    - file: markdown/guides/rb/InterleavedRB
     - file: markdown/guides/rb/DirectRB
     - file: markdown/guides/rb/MirrorRB
     - file: markdown/guides/rb/MirrorRB-Universal-Gate-Sets
@@ -68,6 +76,7 @@ parts:
 
 - caption: Advanced topics and internals
   chapters:
+  - file: markdown/advanced/Index
   - file: markdown/advanced/models/Operators
     sections:
     - file: markdown/advanced/models/CustomOperators
@@ -85,8 +94,9 @@ parts:
   - file: markdown/advanced/extending/LowLevelGST
     sections:
     - file: markdown/advanced/extending/GaugeOptReference
-  - file: markdown/advanced/specialist/TimeDependentGST
+  - file: markdown/advanced/specialist/Index
     sections:
+    - file: markdown/advanced/specialist/TimeDependentGST
     - file: markdown/advanced/specialist/ContextDependence
     - file: markdown/advanced/specialist/QutritGST
     - file: markdown/advanced/specialist/LeakageByHand
@@ -101,6 +111,7 @@ parts:
     - file: markdown/advanced/figures/Switchboards
   - file: markdown/advanced/ops/Parallelism
   - file: markdown/advanced/interop/Cirq
+  - file: markdown/advanced/migration/FromFunctionAPI
   - file: markdown/advanced/Citing
 
 - caption: API reference
