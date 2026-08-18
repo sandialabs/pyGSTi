@@ -24,7 +24,7 @@ The main purpose of pyGSTi is to implement QCVV techniques that analyze some, of
 
 Below are examples of how to run some of the protocols within pyGSTi.  You'll notice how, for the most part, they follow the same pattern given above.  Here's a list of the protocols for easy reference:
 
-We'll begin by setting up a `Workspace` so we can display pretty interactive figures inline (see the [intro to Workspaces tutorial](../reporting/Workspace) for more details) within this notebook.
+We'll begin by setting up a `Workspace` so we can display pretty interactive figures inline (see the [intro to Workspaces tutorial](../../advanced/figures/WorkspaceFigures) for more details) within this notebook.
 
 ```{code-cell} ipython3
 import pygsti
@@ -34,7 +34,7 @@ ws.init_notebook_mode(autodisplay=True)
 ```
 
 ## Gate set tomography
-The most common reason to use pyGSTi is to run gate set tomography (GST).  The GST protocol uses sets of periodic circuits to probe, to a precision *linear* in the maximum-circuit length (i.e. depth), the gates on one or more of the qubits in a quantum processor.  For common gate sets with "model packs" that are built into pyGSTi, you only need to specify the maximum circuit length to construct an experiment design for GST.  In the example below, data is then simulated using a model with simple depolarizing errors.  The standard GST protocol is then run to produce a results object and then generate a report.   To learn more about GST, see the [GST Overview](../gst/Overview) and [GST Protocols](../gst/Protocols) tutorials.
+The most common reason to use pyGSTi is to run gate set tomography (GST).  The GST protocol uses sets of periodic circuits to probe, to a precision *linear* in the maximum-circuit length (i.e. depth), the gates on one or more of the qubits in a quantum processor.  For common gate sets with "model packs" that are built into pyGSTi, you only need to specify the maximum circuit length to construct an experiment design for GST.  In the example below, data is then simulated using a model with simple depolarizing errors.  The standard GST protocol is then run to produce a results object and then generate a report.   To learn more about GST, see the [GST Overview](../../start/FirstGST) and [GST Protocols](../gst/RunningGST) tutorials.
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XY
@@ -43,16 +43,16 @@ from pygsti.modelpacks import smq1Q_XY
 exp_design = smq1Q_XY.create_gst_experiment_design(max_max_length=316)  
 
 # write an empty data object (creates a template to fill in)
-pygsti.io.write_empty_protocol_data('../../tutorial_files/test_gst_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../../tutorial_files/test_gst_dir', exp_design, clobber_ok=True)
 
 # fill in the template with simulated data (you would run the experiment and use actual data)
 pygsti.io.fill_in_empty_dataset_with_fake_data(
-    "../../tutorial_files/test_gst_dir/data/dataset.txt",
+    "../../../tutorial_files/test_gst_dir/data/dataset.txt",
     smq1Q_XY.target_model().depolarize(op_noise=0.01, spam_noise=0.001),
     num_samples=1000, seed=1234)
 
 # load the data object back in, now with the experimental data
-data = pygsti.io.read_data_from_dir('../../tutorial_files/test_gst_dir')
+data = pygsti.io.read_data_from_dir('../../../tutorial_files/test_gst_dir')
 
 # run the GST protocol on the data 
 results = pygsti.protocols.StandardGST().run(data)
@@ -60,11 +60,11 @@ results = pygsti.protocols.StandardGST().run(data)
 # create a report
 report = pygsti.report.construct_standard_report(
     results, title="GST Overview Tutorial Example Report")
-report.write_html("../../tutorial_files/gettingStartedReport")
+report.write_html("../../../tutorial_files/gettingStartedReport")
 ```
 
 ## Randomized benchmarking
-Randomized benchmarking (RB) can be used to estimate the average per-Clifford error rate by fitting a simple curve to the data from randomized circuits of different depths.  To create the experiment design, the user specifies a `QubitProcessorSpec` object that describes the quantum processor (see the [ProcessorSpec tutorial](../objects/ProcessorSpec)), the depths (in number of Clifford gates) to use, and the number of circuits at each depth.  The results from running the protocol are then used to create a plot of the RB decay curve along with the data.  For more information, see the [RB Overview tutorial](../rb/Overview).
+Randomized benchmarking (RB) can be used to estimate the average per-Clifford error rate by fitting a simple curve to the data from randomized circuits of different depths.  To create the experiment design, the user specifies a `QubitProcessorSpec` object that describes the quantum processor (see the [ProcessorSpec tutorial](DescribeYourDevice)), the depths (in number of Clifford gates) to use, and the number of circuits at each depth.  The results from running the protocol are then used to create a plot of the RB decay curve along with the data.  For more information, see the [RB Overview tutorial](../rb/HowRBWorks).
 
 ```{code-cell} ipython3
 # define the quantum processor (or piece of a processor) we'll be doing RB on
@@ -84,7 +84,7 @@ compilations = {'absolute': CCR.create_standard(pspec, 'absolute', ('paulis', '1
 exp_design = pygsti.protocols.CliffordRBDesign(pspec, compilations, depths, circuits_per_depth)
 
 # write an empty data object (creates a template to fill in)
-pygsti.io.write_empty_protocol_data('../../tutorial_files/test_rb_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../../tutorial_files/test_rb_dir', exp_design, clobber_ok=True)
 
 # fill in the template with simulated data (you would run the experiment and use actual data)
 # Use a model with 1% depolarization on all gates
@@ -92,10 +92,10 @@ mdl_datagen = pygsti.models.create_crosstalk_free_model(pspec, depolarization_st
     'Gxpi2': 0.01, 'Gxmpi2': 0.01, 'Gypi2': 0.01, 'Gympi2': 0.01
 }, simulator="map")
 pygsti.io.fill_in_empty_dataset_with_fake_data(
-    "../../tutorial_files/test_rb_dir/data/dataset.txt", mdl_datagen, num_samples=1000, seed=1234)
+    "../../../tutorial_files/test_rb_dir/data/dataset.txt", mdl_datagen, num_samples=1000, seed=1234)
 
 # load the data object back in, now with the experimental data
-data = pygsti.io.read_data_from_dir('../../tutorial_files/test_rb_dir')
+data = pygsti.io.read_data_from_dir('../../../tutorial_files/test_rb_dir')
 
 #Run RB protocol                                                                                                                                                                                     
 proto = pygsti.protocols.RB()
@@ -106,7 +106,7 @@ ws.RandomizedBenchmarkingPlot(rbresults)
 ```
 
 ## Model testing (see whether data agrees with a model)
-GST fits a parameterized model to a data set (see above), which can require many circuits to be run, and take a long time to analyze.  It is also possible to create a model in pyGSTi and test how well that model fits a set of data.  The circuits used to make this comparison don't need to have any special structure, and the time required to perform the analysis it greatly reduce.  In the example below we create a simple 2-qubit model and test it against the output of five hand-selected sequences.  For more information on model testing, see the [model testing tutorial](../utilities/ModelTesting).  For more information about creating explicit models, see the [explicit model tutorial](../objects/ExplicitModel).
+GST fits a parameterized model to a data set (see above), which can require many circuits to be run, and take a long time to analyze.  It is also possible to create a model in pyGSTi and test how well that model fits a set of data.  The circuits used to make this comparison don't need to have any special structure, and the time required to perform the analysis it greatly reduce.  In the example below we create a simple 2-qubit model and test it against the output of five hand-selected sequences.  For more information on model testing, see the [model testing tutorial](../analysis/ModelTesting).  For more information about creating explicit models, see the [explicit model tutorial](../models/Models).
 
 ```{code-cell} ipython3
 # create a dataset file that is just a list of circuits run and their outcomes
@@ -118,9 +118,9 @@ Gx:0Gy:1@(0,1)       20  27  23  30
 Gx:0^4@(0,1)         85   3  10   2
 Gx:0Gcnot:0:1@(0,1)  45   1   4  50
 """
-with open("../../tutorial_files/Example_Short_Dataset.txt","w") as f:
+with open("../../../tutorial_files/Example_Short_Dataset_Protocols.txt","w") as f:
     f.write(dataset_txt)
-ds = pygsti.io.read_dataset("../../tutorial_files/Example_Short_Dataset.txt")
+ds = pygsti.io.read_dataset("../../../tutorial_files/Example_Short_Dataset_Protocols.txt")
 
 # package the dataset into a data object, using the default experiment design
 #  that has essentially no structure.
@@ -140,7 +140,7 @@ print("Number of std-deviations away from expected = ", results.estimates['Model
 ```
 
 ## Robust phase estimation
-Robust Phase Estimation (RPE) determines the phase of a target gate U by iterated action of that gate on a superposition of eigenstates of U.  Upwards of 30% error in counts can be tolerated, due to any cause (e.g., statistical noise or calibration error). See the [tutorial on RPE](../protocols/RobustPhaseEstimation) for more details.
+Robust Phase Estimation (RPE) determines the phase of a target gate U by iterated action of that gate on a superposition of eigenstates of U.  Upwards of 30% error in counts can be tolerated, due to any cause (e.g., statistical noise or calibration error). See the [tutorial on RPE](../../advanced/specialist/RobustPhaseEstimation) for more details.
 
 In this example, the π/2 phase of an X rotation is determined using only noisy X_pi/2 gates (and SPAM). Additional modelpacks for characterizing different phases of different gates will be made available in the future. In the meantime, if you wish to characterize, using RPE, the phase of a gate that is neither X_pi/2 nor Y_pi/2, please email either pygsti@sandia.gov or kmrudin@sandia.gov.
 
@@ -150,16 +150,16 @@ from pygsti.modelpacks import smq1Q_Xpi2_rpe, smq1Q_XY
 exp_design = smq1Q_Xpi2_rpe.create_rpe_experiment_design(max_max_length=64)
 
 # write an empty data object (creates a template to fill in)
-pygsti.io.write_empty_protocol_data('../../tutorial_files/test_rpe_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../../tutorial_files/test_rpe_dir', exp_design, clobber_ok=True)
 
 # fill in the template with simulated data (you would run the experiment and use actual data)
 pygsti.io.fill_in_empty_dataset_with_fake_data(
-    "../../tutorial_files/test_rpe_dir/data/dataset.txt",
+    "../../../tutorial_files/test_rpe_dir/data/dataset.txt",
     smq1Q_XY.target_model().depolarize(op_noise=0.01, spam_noise=0.1),
     num_samples=1000, seed=1234)
 
 # read the data object back in, now with the experimental data
-data = pygsti.io.read_data_from_dir('../../tutorial_files/test_rpe_dir/')
+data = pygsti.io.read_data_from_dir('../../../tutorial_files/test_rpe_dir/')
 
 # Run the RPE Protocol
 results = pygsti.protocols.rpe.RobustPhaseEstimation().run(data)
@@ -168,27 +168,27 @@ print(results.angle_estimate)
 ```
 
 ## Drift Characterization
-Time-series data can be analyzed for significant indications of drift (time variance in circuit outcome probabilities).  See the [tutorial on drift characterization](../protocols/DriftCharacterization) for more details.
+Time-series data can be analyzed for significant indications of drift (time variance in circuit outcome probabilities).  See the [tutorial on drift characterization](../drift/DriftCharacterization) for more details.
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XY
 exp_design = smq1Q_XY.create_gst_experiment_design(max_max_length=4)
-pygsti.io.write_empty_protocol_data('../../tutorial_files/test_drift_dir', exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../../tutorial_files/test_drift_dir', exp_design, clobber_ok=True)
 
 # Simulate time dependent data (right now, this just uses a time-independent model so this is uninteresting)                                                       
 datagen_model = smq1Q_XY.target_model().depolarize(op_noise=0.05, spam_noise=0.1)
 datagen_model.sim = "map" # only map-type can generate time-dep data
                           # can also construct this as target_model(simulator="map") above
-pygsti.io.fill_in_empty_dataset_with_fake_data('../../tutorial_files/test_drift_dir/data/dataset.txt',
+pygsti.io.fill_in_empty_dataset_with_fake_data('../../../tutorial_files/test_drift_dir/data/dataset.txt',
                                                datagen_model, num_samples=10, seed=2020, times=range(10))
 
-gst_data = pygsti.io.read_data_from_dir('../../tutorial_files/test_drift_dir')
+gst_data = pygsti.io.read_data_from_dir('../../../tutorial_files/test_drift_dir')
 stability_protocol = pygsti.protocols.StabilityAnalysis()
 results = stability_protocol.run(gst_data)
 
 report = pygsti.report.create_drift_report(results, title='Demo Drift Report')
-report.write_html('../../tutorial_files/DemoDriftReport')
+report.write_html('../../../tutorial_files/DemoDriftReport')
 ```
 
 ## What's next?
-This concludes our overview of how to use some of the major protocols implemented by pyGSTi.  The high-level objects involved in this workflow, namely `ExperimentDesign`, `ProtocolData`, `Protocol`, and `ProtocolResults`, are essentially convenient ways of working with pyGSTi's lower-level objects.  In the [next tutorial](01-Essential-Objects) we look at several of the most important of these, and proceed to show how to use them independently of the high-level objects in the [using essential objects tutorial](02-Using-Essential-Objects).  If there's something you want to do with pyGSTi that isn't covered here, you should take a look through the table of contents in the latter tutorial.
+This concludes the overview of how the major protocols fit together. The high-level objects involved, namely `ExperimentDesign`, `ProtocolData`, `Protocol` and `ProtocolResults`, are convenient ways of working with pyGSTi's lower-level objects. The rest of this chapter takes those objects one at a time: [describing your device](DescribeYourDevice), [target models](TargetModels), [circuits](Circuits), [experiment designs](ExperimentDesigns), [data sets](DataSets), [simulating data](SimulatingData) and [files and directories](FilesAndDirectories).

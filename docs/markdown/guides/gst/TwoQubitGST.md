@@ -38,22 +38,22 @@ exp_design = smq2Q_XY.create_gst_experiment_design(max_max_length=2, fpr=True)
 Now that we have an experment design we can generate the list of experiments needed to run GST, just like in the 1-qubit case.
 
 ```{code-cell} ipython3
-#Create an empty dataset file at ../../example_files/My2QExample/data/dataset.txt, which stores the
+#Create an empty dataset file at ../../../example_files/My2QExample/data/dataset.txt, which stores the
 # list of experiments and zerod-out columns where data should be inserted.
-pygsti.io.write_empty_protocol_data("../../example_files/My2QExample", exp_design, clobber_ok=True)
+pygsti.io.write_empty_protocol_data("../../../example_files/My2QExample", exp_design, clobber_ok=True)
 ```
 
 ```{code-cell} ipython3
 #Generate some "fake" (simulated) data based on a depolarized version of the target model.  In actual
 # situations, you'd fill in dataset.txt with real data.
 mdl_datagen = target_model.depolarize(op_noise=0.1, spam_noise=0.01)
-pygsti.io.fill_in_empty_dataset_with_fake_data("../../example_files/My2QExample/data/dataset.txt",
+pygsti.io.fill_in_empty_dataset_with_fake_data("../../../example_files/My2QExample/data/dataset.txt",
                                                mdl_datagen, num_samples=1000, seed=2020)
 
 # ---- NOTE: you can stop and restart the python session at this point; everything you need is saved to disk ---- 
 
 #Load in the "data object" which packages together the dataset and experiment design
-data = pygsti.io.read_data_from_dir("../../example_files/My2QExample")
+data = pygsti.io.read_data_from_dir("../../../example_files/My2QExample")
 ```
 
 ## Step 4: Run GST
@@ -82,10 +82,10 @@ The `ModelEstimateResults` object returned from `run` can be used to generate a 
 
 report = pygsti.report.construct_standard_report(
     results, title="Example 2Q-GST Report", verbosity=2)
-report.write_html('../../example_files/easy_2q_report', verbosity=2)
+report.write_html('../../../example_files/easy_2q_report', verbosity=2)
 ```
 
-Now open [../../example_files/easy_2q_report/main.html](../../example_files/easy_2q_report/main.html) to see the results.  You've run 2-qubit GST!
+Now open [../../../example_files/easy_2q_report/main.html](../../../example_files/easy_2q_report/main.html) to see the results.  You've run 2-qubit GST!
 
 You can save the `ModelEstimateResults` object to the same directory as the data and experiment design:
 

@@ -11,6 +11,10 @@ kernelspec:
   name: python3
 ---
 
+# Leakage
+
+Data from an experiment design built for a two-level system can be used to fit a *three*-level model, which is how you detect and quantify leakage out of the computational subspace. This page shows how, and how to generate a report whose gate error metrics respect the distinguished role of the first two levels. For building a leaky-qubit model by hand instead, see [leakage modelled by hand](../../advanced/specialist/LeakageByHand).
+
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XYI as mp
 from pygsti.leakage import leaky_qubit_model_from_pspec, construct_leakage_report
@@ -19,10 +23,6 @@ from pygsti.protocols import StandardGST, ProtocolData
 import numpy as np
 import scipy.linalg as la
 ```
-
-# Leakage (Automatic)
-
-This short notebook shows how (data from) an experiment design for a two-level system can be used to fit a three-level sytem model, and how to generate a special report to provide insights for these models. The report includes special gate error metrics that reflect the distinguished role of the first two levels in the three-level system.
 
 ```{code-cell} ipython3
 def with_leaky_gate(m, gate_label, strength):
@@ -70,7 +70,7 @@ res = gst.run(pd)
 ```
 
 ```{code-cell} ipython3
-report_dir = '../../example_files/leakage-report-automagic'
+report_dir = '../../../example_files/leakage-report-automagic'
 report_object, updated_res = construct_leakage_report(res, title='easy leakage analysis!')
 # ^ Each estimate in updated_res has a new gauge-optimized model.
 #   The gauge optimization was done to reflect how our target gates

@@ -106,6 +106,6 @@ The Layout is the *shared* artifact between forward sim and the fit loop. The si
 
 ## Canonical examples
 
-- [docs/markdown/Simulation.md](../docs/markdown/Simulation.md) — top-level intro.
-- [docs/markdown/simulation/CircuitSimulation.md](../docs/markdown/simulation/CircuitSimulation.md) — circuit-simulation tutorial.
-- [docs/markdown/simulation/ForwardSimulationTypes.md](../docs/markdown/simulation/ForwardSimulationTypes.md) — per-simulator detail.
+- [docs/markdown/Simulation.md](../docs/markdown/guides/workflow/SimulatingData.md) — top-level intro.
+- [docs/markdown/simulation/CircuitSimulation.md](../docs/markdown/guides/workflow/SimulatingData.md) — circuit-simulation tutorial.
+- [docs/markdown/simulation/ForwardSimulationTypes.md](../docs/markdown/advanced/simulation/ForwardSimulators.md) — per-simulator detail.

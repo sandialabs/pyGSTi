@@ -195,10 +195,10 @@ We generate data from `mdl_noisy` exactly as we would for any other model, and w
 ```{code-cell} ipython3
 ds = pygsti.data.simulate_data(
     mdl_noisy, edesign.all_circuits_needing_data, 2000, 'multinomial', seed=2018)
-pygsti.io.write_dataset("../../tutorial_files/intermediate_meas_dataset.txt", ds)
+pygsti.io.write_dataset("../../../tutorial_files/intermediate_meas_dataset.txt", ds)
 ```
 
-Notice the format of [intermediate_meas_dataset.txt](../../tutorial_files/intermediate_meas_dataset.txt): it includes a column for each distinct outcome tuple.  Since not every circuit contains data for every outcome tuple, `"--"` is used as a placeholder.
+Notice the format of [intermediate_meas_dataset.txt](../../../tutorial_files/intermediate_meas_dataset.txt): it includes a column for each distinct outcome tuple.  Since not every circuit contains data for every outcome tuple, `"--"` is used as a placeholder.
 
 ### Running GST under two parameterizations
 

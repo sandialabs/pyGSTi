@@ -246,7 +246,7 @@ report = construct_standard_report(
     advanced_options={'skip_sections': ('colorbox',)},
     title="Total variation distance (TVD) GST", verbosity=0
 )
-report_dir = 'example_files' if os_path.exists('example_files') else '../../example_files'
+report_dir = 'example_files' if os_path.exists('example_files') else '../../../example_files'
 report_dir += '/robust-gst-report'
 print('HTML report will be written to ... ')
 import os

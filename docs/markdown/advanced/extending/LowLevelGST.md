@@ -46,8 +46,8 @@ germs = smq1Q_XYI.germs()
 
 maxLengthList = [1,2,4,8,16] #for use in iterative algorithms
 
-ds = pygsti.io.load_dataset("../../tutorial_files/Example_Dataset.txt", cache=True)
-dsLowCounts = pygsti.io.load_dataset("../../tutorial_files/Example_Dataset_LowCnts.txt", cache=True)
+ds = pygsti.io.load_dataset("../../../tutorial_files/Example_Dataset.txt", cache=True)
+dsLowCounts = pygsti.io.load_dataset("../../../tutorial_files/Example_Dataset_LowCnts.txt", cache=True)
 
 depol_model = target_model.depolarize(op_noise=0.1)
 

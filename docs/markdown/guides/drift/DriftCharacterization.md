@@ -13,7 +13,7 @@ kernelspec:
 
 # Drift Characterization
 
-This tutorial shows how to implement instability ("drift") detection and characterization on time-stamped data. This data can be from *any* quantum circuits, on *any* number of qubits, but we require around 100+ time-stamps per circuit (perhaps fewer if there are multiple measurement outcomes per time-stamp). If you only have data that is binned into a few different time periods then consider instead using the `DataComparator` object demonstrated in the [DataSetComparison](../utilities/DatasetComparison) tutorial.
+This tutorial shows how to implement instability ("drift") detection and characterization on time-stamped data. This data can be from *any* quantum circuits, on *any* number of qubits, but we require around 100+ time-stamps per circuit (perhaps fewer if there are multiple measurement outcomes per time-stamp). If you only have data that is binned into a few different time periods then consider instead using the `DataComparator` object demonstrated in the [DataSetComparison](ComparingDataSets) tutorial.
 
 Currently the gap between data collection times for each circuit is required to be approximately constant, both across the data collection times for each circuit, and across circuits. If this is not the case the code should still work, but the analysis it performs may be significantly sub-optimal, and interpretting the results is more complicated. There is beta-level capabilities within the functions used below to properly analyze unequally-spaced data, but it is untested and will not be used with the default options in the analysis code. This limitation will be addressed in a future release of pyGSTi.
 
@@ -28,7 +28,7 @@ import pygsti
 ```
 
 ## Quick and Easy Analysis
-First we need some *time-stamped* data. For more information on the mechanics of using time-stamped `DataSets` see the [TimestampedDataSets](../objects/TimestampedDataSets) tutorial. Here we use long-sequence GST circuits on $G_x$ and $G_y$ and simulate time-dependent (drifting) outcome probabilities, so the stability analysis has some genuine instability to detect.
+First we need some *time-stamped* data. For more information on the mechanics of using time-stamped `DataSets` see the [TimestampedDataSets](TimestampedData) tutorial. Here we use long-sequence GST circuits on $G_x$ and $G_y$ and simulate time-dependent (drifting) outcome probabilities, so the stability analysis has some genuine instability to detect.
 
 Below we build the GST circuit structure and then **simulate** time-stamped data in which each circuit's outcome probability slowly oscillates in time. We then build a `ProtocolData` object out of it so it can be used as input for `Protocol` objects. The stability analysis doesn't require any special structure to the circuits - it just requires the data to have timestamps - but supplying the GST experiment design lets us make the structured box plots near the end of this tutorial.
 
@@ -194,7 +194,7 @@ We can also create a report that contains all of these plots, as well as a few o
 
 ```{code-cell} ipython3
 report = pygsti.report.create_drift_report(results, title='Example Drift Report')
-report.write_html('../../tutorial_files/DriftReport')
+report.write_html('../../../tutorial_files/DriftReport')
 ```
 
-You can now open the file [../../tutorial_files/DriftReport/main.html](../../tutorial_files/DriftReport/main.html) in your browser (Firefox works best) to view the report.
+You can now open the file [../../../tutorial_files/DriftReport/main.html](../../../tutorial_files/DriftReport/main.html) in your browser (Firefox works best) to view the report.

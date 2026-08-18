@@ -109,7 +109,7 @@ The compatible two-qubit gates sampler is more involved to use, but it provides 
 sampler = 'co2Qgates'
 ```
 
-This sampler requires the user to specify sets of compatible 2-qubit gates, meaning 2-qubit gates that can applied in parallel. We specifying this as a list of lists of `Label` objects (see the [Ciruit tutorial](../objects/Circuit) for more on `Label` objects), so let's import the `Label` object:
+This sampler requires the user to specify sets of compatible 2-qubit gates, meaning 2-qubit gates that can applied in parallel. We specifying this as a list of lists of `Label` objects (see the [Ciruit tutorial](../workflow/Circuits) for more on `Label` objects), so let's import the `Label` object:
 
 ```{code-cell} ipython3
 from pygsti.baseobjs import Label as L

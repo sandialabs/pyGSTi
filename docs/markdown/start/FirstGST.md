@@ -13,7 +13,7 @@ kernelspec:
 
 # Gate Set Tomography
 
-The `pygsti` package provides multiple levels of abstraction over the core gate set tomography (GST) algorithms.  This tutorial will show you how to run gate set tomography on some simulated (generated) data, hopefully giving you an overall sense of what it takes (and how easy it is!) to run GST.  For more details and options for running GST, see the [GST circuits tutorial](CircuitConstruction) and the [tutorial covering the different protocols for running GST](Protocols).
+The `pygsti` package provides multiple levels of abstraction over the core gate set tomography (GST) algorithms.  This tutorial will show you how to run gate set tomography on some simulated (generated) data, hopefully giving you an overall sense of what it takes (and how easy it is!) to run GST.  For more details and options for running GST, see the [GST circuits tutorial](../guides/gst/GSTCircuits) and the [tutorial covering the different protocols for running GST](../guides/gst/RunningGST).
 
 There are three basic steps to running protocols in pyGSTi:
 
@@ -21,14 +21,14 @@ There are three basic steps to running protocols in pyGSTi:
 The first step is creating an object that specifies what data (from the quantum processor) will be needed to perform GST, and how it should be taken.  This is called an "experiment design" in pyGSTi.
 
 To run GST, we need the following three inputs:
-1. a "**target model**" which describes the desired, or ideal, operations we want our experimental hardware to perform.  In the example below, we use the target model from one of pyGSTi's build-in "model packs" (see the [tutorial on model packs](../objects/ModelPacks)) - which acts on a single qubit with the following operations:
+1. a "**target model**" which describes the desired, or ideal, operations we want our experimental hardware to perform.  In the example below, we use the target model from one of pyGSTi's build-in "model packs" (see the [tutorial on model packs](../guides/workflow/TargetModels)) - which acts on a single qubit with the following operations:
     - two gates: $\pi/2$ rotations around the $x$- and $y$-axes.
     - a single state preparation in the $|0\rangle$ state.
     - a 2-outcome measurement with the label "0" associated with measuring $|0\rangle$ and "1" with measuring $|1\rangle$.
     
-2. a list of circuits tailored to the target model; essentially a list of what experiments we need to run.  Using a standard model makes things especially straightforward here, since the building blocks, called *germ* and *fiducial* circuits, needed to make good GST circuits have already been computed (see the [tutorial on GST circuits](CircuitConstruction)).  In the example below, the model pack also provides the necessary germ and fiducial lists, so that all that is needed is a list of "maximum lengths" describing how long (deep) the circuits should be.
+2. a list of circuits tailored to the target model; essentially a list of what experiments we need to run.  Using a standard model makes things especially straightforward here, since the building blocks, called *germ* and *fiducial* circuits, needed to make good GST circuits have already been computed (see the [tutorial on GST circuits](../guides/gst/GSTCircuits)).  In the example below, the model pack also provides the necessary germ and fiducial lists, so that all that is needed is a list of "maximum lengths" describing how long (deep) the circuits should be.
 
-3. data, in the form of experimental outcome counts, for each of the required sequences.  In this example we'll generate "fake" or "simulated" data from a depolarized version of our ideal model.  For more information about `DataSet` objects, see the [tutorial on DataSets](../objects/DataSet).
+3. data, in the form of experimental outcome counts, for each of the required sequences.  In this example we'll generate "fake" or "simulated" data from a depolarized version of our ideal model.  For more information about `DataSet` objects, see the [tutorial on DataSets](../guides/workflow/DataSets).
 
 The first two inputs form an "experiment design", as they describe the experiment that must be performed on a quantum processor (usually running some prescribed set of circuits) in order to run the GST protocol.  The third input - the data counts - is packaged with the experiment design to create a `ProtocolData`, or "data" object.  As we will see later, a data object serves as the input to the GST protocol.
 
@@ -87,4 +87,4 @@ report.write_html("../../tutorial_files/gettingStartedReport", verbosity=2)
 
 You can now open the file [../../tutorial_files/gettingStartedReport/main.html](../../tutorial_files/gettingStartedReport/main.html) in your browser (Firefox works best) to view the report.  **That's it!  You've just run GST!** 
 
-In the cell above, `results` is a `ModelEstimateResults` object, which is used to generate a HTML report.  For more information see the [Results object tutorial](../objects/Results) and [report generation tutorial](../reporting/ReportGeneration).
+In the cell above, `results` is a `ModelEstimateResults` object, which is used to generate a HTML report.  For more information see the [Results object tutorial](../guides/analysis/Results) and [report generation tutorial](../guides/analysis/Reports).

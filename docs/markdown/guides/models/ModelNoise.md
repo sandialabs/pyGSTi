@@ -33,7 +33,7 @@ See our paper on [the taxonomy of small errors](https://arxiv.org/abs/2103.01928
 Many of the model construction functions take arguments that allow users to add these standard noise types conveniently when a model is created.  Each argument expects a dictionary, where the keys are gate names and the values specify the corresponding noise. The values are different types for each argument:
 
 - `depolarization_strengths`: Values are floats, which corresponding to strengths of a `DepolarizeOp`
-- `stochastic_error_probs`: Values are lists of length $4^{N_{qubits} - 1}$, which correspond to coefficients of a stochastic Pauli channel in a `StochasticNoiseOp`. Order of the rates is lexographical, and can be checked by looking at the elements of a `"pp"` Basis object.
+- `stochastic_error_probs`: Values are lists of length $4^{N_{qubits}} - 1$ — one rate per non-identity Pauli, so 3 for one qubit and 15 for two. These correspond to coefficients of a stochastic Pauli channel in a `StochasticNoiseOp`. Order of the rates is lexographical, and can be checked by looking at the elements of a `"pp"` Basis object.
 - `lindblad_error_coeffs`: Values are a dict where the key has the form `(<type>, <basis_elements>)` and the values are the $\alpha_i$ coefficients in the sum of Lindblad terms, which are then exponentiated to give the final noise. The type includes:
   - `'H'` for Hamiltonian errors
   - `'S'` for Pauli-stochastic errors

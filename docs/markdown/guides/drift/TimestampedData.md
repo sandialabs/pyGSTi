@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Time-dependent Data Sets
-The [DataSet tutorial](DataSet) covered the basics of how to use `DataSet` objects with time-independent counts. When your data is time-stamped, either for each individual count or by groups of counts, there are additional (richer) options for analysis.  The `DataSet` class is also capable of storing time-dependent data by holding *series* of count data rather than binned numbers-of-counts, which are added via its `add_series_data` method.  Outcome counts are input by giving at least two parallel arrays of 1) outcome labels and 2) time stamps.  Optionally, one can provide a third array of repetitions, specifying how many times the corresponding outcome occurred at the time stamp.  While in reality no two outcomes are taken at exactly the same time, a `DataSet` allows for arbitrarily *coarse-grained* time-dependent data in which multiple outcomes are all tagged with the *same* time stamp.  In fact, the "time-independent" case considered in the aforementioned tutorial is actually just a special case in which the all data is stamped at *time=0*.
+The [DataSet tutorial](../workflow/DataSets) covered the basics of how to use `DataSet` objects with time-independent counts. When your data is time-stamped, either for each individual count or by groups of counts, there are additional (richer) options for analysis.  The `DataSet` class is also capable of storing time-dependent data by holding *series* of count data rather than binned numbers-of-counts, which are added via its `add_series_data` method.  Outcome counts are input by giving at least two parallel arrays of 1) outcome labels and 2) time stamps.  Optionally, one can provide a third array of repetitions, specifying how many times the corresponding outcome occurred at the time stamp.  While in reality no two outcomes are taken at exactly the same time, a `DataSet` allows for arbitrarily *coarse-grained* time-dependent data in which multiple outcomes are all tagged with the *same* time stamp.  In fact, the "time-independent" case considered in the aforementioned tutorial is actually just a special case in which the all data is stamped at *time=0*.
 
 Below we demonstrate how to create and initialize a `DataSet` using time series data.
 
@@ -112,9 +112,9 @@ tddataset_txt = \
 Gx 111000111                                                                                                                  
 Gy 11001100                                                                                                                   
 """
-with open("../../tutorial_files/TDDataset.txt","w") as output:
+with open("../../../tutorial_files/TDDataset.txt","w") as output:
     output.write(tddataset_txt)
-tdds_fromfile = pygsti.io.read_time_dependent_dataset("../../tutorial_files/TDDataset.txt")
+tdds_fromfile = pygsti.io.read_time_dependent_dataset("../../../tutorial_files/TDDataset.txt")
 print(tdds_fromfile)
 
 print("Some tests:")
@@ -140,18 +140,18 @@ times: 0  1  2  3  4  5  6  7
 outcomes: 1  1  0  0  1  1  0  0
 
 """
-with open("../../tutorial_files/DatasetWithTimestamps.txt","w") as output:
+with open("../../../tutorial_files/DatasetWithTimestamps.txt","w") as output:
     output.write(general_tddataset_txt)
 
 #This format can be read in using the usual 'load'
-general_tdds_fromfile = pygsti.io.read_dataset("../../tutorial_files/DatasetWithTimestamps.txt")
+general_tdds_fromfile = pygsti.io.read_dataset("../../../tutorial_files/DatasetWithTimestamps.txt")
 print(general_tdds_fromfile)
 ```
 
 The `DatasetWithTimestamps.txt` file could also have been created by specifying `fixed_column_mode=False` to the usual `write_dataset` function, that is:
 
 ```{code-cell} ipython3
-pygsti.io.write_dataset("../../tutorial_files/DatasetWithTimestamps.txt", tdds_fromfile, fixed_column_mode=False)
+pygsti.io.write_dataset("../../../tutorial_files/DatasetWithTimestamps.txt", tdds_fromfile, fixed_column_mode=False)
 ```
 
 If you're recording several passes through a set of circuits, and all the data on each pass is considered to occur at the same time (i.e. a course-graining of the time-stamped data), then it may be useful to specify the repetition counts.  For example, the following data file describes data that was taken in two passes (at time 1.0 and 2.0) of 100 circuit repetitions:
@@ -174,11 +174,11 @@ outcomes:     0  1  0  1
 repetitions: 63 37 52 48
 
 """
-with open("../../tutorial_files/DatasetWith2Passes.txt","w") as output:
+with open("../../../tutorial_files/DatasetWith2Passes.txt","w") as output:
     output.write(general_tddataset_txt)
 
 #This format can be read in using the usual 'load'
-twopass_ds = pygsti.io.read_dataset("../../tutorial_files/DatasetWith2Passes.txt")
+twopass_ds = pygsti.io.read_dataset("../../../tutorial_files/DatasetWith2Passes.txt")
 print(twopass_ds)
 
 print("Some tests:")

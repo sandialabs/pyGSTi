@@ -210,18 +210,18 @@ The variances grow slowly with $k$ (and with $j$) — this weak dimension-depend
 Everything serializes with the standard pyGSTi I/O idioms. For a real experiment you would write an empty protocol data directory, run the circuits on hardware, fill in `data/dataset.txt`, and read it back — the design's Euler angles, sequence indices, and Legendre weights round-trip as JSON aux files automatically:
 
 ```{code-cell} ipython3
-pygsti.io.write_empty_protocol_data('../../tutorial_files/test_su2rb_dir', edesign, clobber_ok=True)
+pygsti.io.write_empty_protocol_data('../../../tutorial_files/test_su2rb_dir', edesign, clobber_ok=True)
 
-# -- fill in ../../tutorial_files/test_su2rb_dir/data/dataset.txt with hardware counts --
+# -- fill in ../../../tutorial_files/test_su2rb_dir/data/dataset.txt with hardware counts --
 
-loaded = pygsti.io.read_data_from_dir('../../tutorial_files/test_su2rb_dir')
+loaded = pygsti.io.read_data_from_dir('../../../tutorial_files/test_su2rb_dir')
 print(type(loaded.edesign).__name__)
 ```
 
 Results round-trip through `write` and `pygsti.io.read_results_from_dir`:
 
 ```{code-cell} ipython3
-results.write('../../tutorial_files/test_su2rb_results')
-results_from_disk = pygsti.io.read_results_from_dir('../../tutorial_files/test_su2rb_results')
+results.write('../../../tutorial_files/test_su2rb_results')
+results_from_disk = pygsti.io.read_results_from_dir('../../../tutorial_files/test_su2rb_results')
 results_from_disk.for_protocol['SU2QuditRB'].rates_dataframe()
 ```
