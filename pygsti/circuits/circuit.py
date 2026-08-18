@@ -3574,21 +3574,29 @@ class Circuit(object):
 
     def layer_label(self, j: int):
         """
-        Returns the layer, as a :class:`Label`, at depth j.
+        Returns the layer, as a :class:`Label`, at index j.
 
         This label contains as components all the (non-identity) gates in the layer..
+
+        Note that `j` indexes *top-level* layers, so it is bounded by :meth:`num_layers`,
+        not by :meth:`depth`.  The two differ when the circuit retains a
+        :class:`CircuitLabel`, in which case this returns the box itself rather than
+        descending into it.  To iterate over every executed layer, call
+        :meth:`expand_subcircuits` first, after which the two agree.
 
         Parameters
         ----------
         j : int
-            The index (depth) of the layer to be returned
+            The index of the layer to be returned
 
         Returns
         -------
         Label
         """
         assert(j >= 0 and j < self.num_layers
-               ), "Circuit layer label invalid! Circuit is only of depth {}".format(self.num_layers)
+               ), "Circuit layer index {} out of range! Circuit has only {} layer(s). (Note that " \
+                  "`depth` is {}, and counts layers inside sub-circuit blocks; use " \
+                  "`expand_subcircuits()` to index those.)".format(j, self.num_layers, self.depth)
         return self[j]
 
     def layer_with_idles(self, j, idle_gate_name: Union[str, _Label]='I'):

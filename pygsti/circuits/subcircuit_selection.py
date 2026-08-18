@@ -688,6 +688,11 @@ def _greedy_growth_subcirc(circ: _Circuit,
         # Can probably do something even better here, but this may be good enough
         remaining_qubits = set(circ.line_labels) - qubit_subset
         remaining_2q_gate_counts = {q: 0 for q in remaining_qubits}
+        # `_layer_components` indexes top-level layers (`num_layers`), but we want to count
+        # gates in every executed layer (`depth`).  Those differ only when the circuit
+        # retains a CircuitLabel, so expand just in that case.
+        if remaining_width_circ.depth != remaining_width_circ.num_layers:
+            remaining_width_circ = remaining_width_circ.expand_subcircuits()
         for layer_idx in range(remaining_width_circ.depth):
             for op in remaining_width_circ._layer_components(layer_idx):
                 for q in op.qubits:
