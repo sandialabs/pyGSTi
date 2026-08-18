@@ -196,7 +196,12 @@ def _op_seq_to_str(seq, line_labels, occurrence_id, compilable_layer_indices):
         processed_seq = list(map(process_lists, seq))
         compilable_set = set(compilable_layer_indices)
         uncompilable_set = set(range(len(processed_seq))) - set(compilable_layer_indices)
-        if len(compilable_set) <= len(uncompilable_set):
+        # Mark whichever set is smaller, to keep the string short -- but only when
+        # marking the smaller one actually writes a marker.  An all-compilable
+        # circuit has an empty uncompilable set, so the '|' branch would emit
+        # nothing at all and the reader could not tell it from a circuit with no
+        # compilable layers.  Prefer '~' in that case and mark every layer.
+        if not uncompilable_set or len(compilable_set) <= len(uncompilable_set):
             marker = '~'; marked_set = compilable_set
         else:
             marker = '|'; marked_set = uncompilable_set
