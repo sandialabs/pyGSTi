@@ -28,7 +28,7 @@ In practice you build the lists like this. Pick an increasing sequence of **maxi
 
 where `repeated_germ` is a germ repeated as many whole times as fit within length $L$. For numerical robustness, the list for a given $L$ also contains everything from the smaller values of $L$, so the lists are nested.
 
-Fiducial and germ lists come out of pyGSTi's fiducial-selection and germ-selection algorithms, described in the [fiducial and germ selection tutorial](FiducialsAndGerms). Here we use one of the built-in [model packs](../workflow/TargetModels), which ship with pre-computed fiducials and germs.
+Fiducial and germ lists come out of pyGSTi's fiducial-selection and germ-selection algorithms, described in the [fiducial and germ selection tutorial](FiducialsAndGerms). Here we use one of the built-in [model packs](../../start/TargetModels), which ship with pre-computed fiducials and germs.
 
 ## Setup
 

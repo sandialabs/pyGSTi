@@ -48,7 +48,7 @@ There are roughly four routes to an `ExplicitOpModel`:
 * Create an empty one and set its elements directly.
 * Call a `pygsti.models.modelconstruction` function, which automates the above.
 * Load from a text-format model file with `pygsti.io.read_model` (see the [File IO tutorial](../workflow/FilesAndDirectories)).
-* Load one from `pygsti.modelpacks` (see the [ModelPacks tutorial](../workflow/TargetModels)).
+* Load one from `pygsti.modelpacks` (see the [ModelPacks tutorial](../../start/TargetModels)).
 
 The first three are shown below, building the same 1-qubit model each time.
 

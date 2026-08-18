@@ -20,28 +20,19 @@ There are two ways to get there. `Protocol.run_mpi` launches the worker processe
 Both require the `mpi4py` Python package and an MPI library underneath it.
 
 ```{note}
-**This notebook requires a working system MPI launcher and is expected to fail
-in environments that do not have one.** The `run_mpi` call below shells out to
-an MPI launcher (`mpiexec`/`mpirun`/`mpiexec.hydra`) that must be discoverable on
-`PATH`. Installing the `mpi4py` Python package alone is *not* sufficient: it
-provides the Python bindings but not the launcher binary or the underlying MPI
-runtime.
+**This page will not run without a working MPI installation.** The `run_mpi` call
+below shells out to a launcher (`mpiexec` or `mpirun`) that has to be on your
+`PATH`, and the `mpi4py` package alone does not provide one: it supplies the
+Python bindings, not the launcher or the MPI runtime underneath it. Without a
+launcher you will see `FileNotFoundError: resolve_mpiexec: could not find an MPI
+launcher on PATH`.
 
-When run under the notebook regression tests (`pytest --nbval-lax`) on a machine
-without an MPI distribution, this notebook fails with
-`FileNotFoundError: resolve_mpiexec: could not find an MPI launcher on PATH`.
-This is a **known, accepted, environment-limited failure** and does not indicate
-a bug in pyGSTi. To run this notebook successfully, install a system MPI
-distribution so that `mpiexec` is on `PATH`. Any of these will do it:
+Any of these will get you one:
 
 - conda: `conda install -c conda-forge openmpi mpi4py`, which installs the launcher
   into the active environment and builds `mpi4py` against it.
 - Debian/Ubuntu: `apt install openmpi-bin`.
 - An HPC cluster: `module load openmpi`.
-
-pyGSTi's own notebook regression job runs only on the Ubuntu runners, where
-`.github/ci-scripts/before_install.sh` installs Open MPI from apt. That is the
-launcher this page is actually tested against.
 ```
 
 ## Setup
@@ -68,9 +59,9 @@ pdata = ProtocolData(exp_design, data)
 The call below passes two extra arguments for robustness across MPI setups and machines with few cores:
 
 - `env={'FI_PROVIDER': 'sockets'}` can be needed on some MPI distributions. Try without it as well, and omit it unless you need it.
-- `extra_mpi_args`, carrying `--oversubscribe`, lets the launcher start more ranks than the machine has cores. We request `num_ranks=3`, and many machines (including CI runners) have fewer than three cores; without this flag Open MPI refuses to launch and `run_mpi` raises a `CalledProcessError`.
+- `extra_mpi_args`, carrying `--oversubscribe`, lets the launcher start more ranks than the machine has cores. This flag is only needed when using Open MPI and you ask for more MPI ranks than available cores (without this flag, using Open MPI with more ranks than cores leads `run_mpi` to raise a `CalledProcessError`).
 
-`--oversubscribe` is an Open MPI spelling. MPICH and Intel MPI neither need it nor recognize it, and their launchers abort on arguments they don't know, so the flag can't simply be passed unconditionally. Ask the launcher what it is first. pyGSTi's own MPI tests use the same check (`test/integration/test_gst_run_mpi.py`).
+We inspect the environment to decide whether we need to pass `--oversubscribe`. We need that inspection because other MPI distributions (e.g., MPICH and Intel MPI) neither need nor recognize this argument.
 
 ```{code-cell} ipython3
 import shutil, subprocess

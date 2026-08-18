@@ -14,7 +14,7 @@ markdown/advanced/models/InterpolatedOperators: CustomOperators.html
 markdown/advanced/models/ModelParameterization: Operators.html
 markdown/advanced/models/OperationFactories: CustomOperators.html
 markdown/advanced/models/ParameterLabels: TyingParameters.html
-markdown/advanced/ops/MPI-RunningGST: Parallelism.html
+markdown/advanced/ops/MPI-RunningGST: ../../guides/gst/Parallelism.html
 markdown/advanced/simulation/CliffordRB-Simulation-ImplicitModel: SimulatingRBData.html
 markdown/examples/1QGST-InterpolatedOps: ../advanced/models/CustomOperators.html#interpolating-a-physical-process
 markdown/examples/2QGST-CreatingModels: ../guides/models/Models.html#two-qubit-models
@@ -27,10 +27,10 @@ markdown/examples/GOpt-NonIdealTargets: ../advanced/extending/GaugeOptReference.
 markdown/examples/Leakage-automagic: ../guides/gst/Leakage.html
 markdown/examples/Leakage-manual: ../advanced/specialist/LeakageByHand.html
 markdown/examples/MCFE-Example: ../guides/benchmarks/MirrorFidelityEstimation.html
-markdown/examples/MPI: ../advanced/ops/Parallelism.html
+markdown/examples/MPI: ../guides/gst/Parallelism.html
 markdown/examples/MPI-GermSelection: ../guides/gst/FiducialsAndGerms.html
-markdown/examples/MPI-RunningGST: ../advanced/ops/Parallelism.html
-markdown/examples/MPI-RunningGST-Automagic: ../advanced/ops/Parallelism.html
+markdown/examples/MPI-RunningGST: ../guides/gst/Parallelism.html
+markdown/examples/MPI-RunningGST-Automagic: ../guides/gst/Parallelism.html
 markdown/examples/ProceduralErrorBars: ../guides/analysis/ErrorBars.html
 markdown/examples/QutritGST: ../advanced/specialist/QutritGST.html
 markdown/examples/Reports-LGSTonly: ../guides/analysis/Reports.html#reports-from-lgst-alone
@@ -74,7 +74,7 @@ markdown/objects/InterpolatedOperators: ../advanced/models/CustomOperators.html#
 markdown/objects/MatrixBases: ../advanced/conventions/Bases.html
 markdown/objects/ModelMemberGraph: ../advanced/models/Operators.html
 markdown/objects/ModelNoise: ../guides/models/ModelNoise.html
-markdown/objects/ModelPacks: ../guides/workflow/TargetModels.html
+markdown/objects/ModelPacks: ../start/TargetModels.html
 markdown/objects/ModelParameterization: ../advanced/models/Operators.html
 markdown/objects/Models: ../guides/models/Models.html
 markdown/objects/MultiDataSet: ../guides/workflow/DataSets.html#several-passes-of-the-same-experiment-multidataset

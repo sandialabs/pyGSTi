@@ -94,7 +94,7 @@ class MyXPi2Operator(op.DenseOperator):
         raise NotImplementedError("MyXPi2Operator cannot be transformed!")
 ```
 
-Drop an instance in as the `("Gxpi2",0)` gate of pyGSTi's {Idle, $X(\pi/2)$, $Y(\pi/2)$} modelpack (see the [modelpacks tutorial](../../guides/workflow/TargetModels) for what modelpacks are).
+Drop an instance in as the `("Gxpi2",0)` gate of pyGSTi's {Idle, $X(\pi/2)$, $Y(\pi/2)$} modelpack (see the [modelpacks tutorial](../../start/TargetModels) for what modelpacks are).
 
 ```{code-cell} ipython3
 ---

@@ -21,7 +21,7 @@ This page is under construction. It covers the metrics people reach for most oft
 
 ## Setup
 
-Build three models: the ideal 1-qubit $X(\pi/2)$, $Y(\pi/2)$, idle model from a model pack, a depolarized version of it, and a version with a coherent over-rotation on every gate. Two noise types are worth carrying through the page because several metrics tell them apart. For more on building models see [Models](../models/Models); for the model packs themselves see [target models](../workflow/TargetModels).
+Build three models: the ideal 1-qubit $X(\pi/2)$, $Y(\pi/2)$, idle model from a model pack, a depolarized version of it, and a version with a coherent over-rotation on every gate. Two noise types are worth carrying through the page because several metrics tell them apart. For more on building models see [Models](../models/Models); for the model packs themselves see [target models](../../start/TargetModels).
 
 ```{code-cell} ipython3
 import numpy as np

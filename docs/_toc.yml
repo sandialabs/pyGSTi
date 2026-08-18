@@ -20,13 +20,13 @@ parts:
   - file: markdown/start/YourOwnData
   - file: markdown/start/ReadingResults
   - file: markdown/start/KeyConcepts
+  - file: markdown/start/TargetModels
 
 - caption: Characterization guides
   chapters:
   - file: markdown/guides/workflow/Workflow
     sections:
     - file: markdown/guides/workflow/DescribeYourDevice
-    - file: markdown/guides/workflow/TargetModels
     - file: markdown/guides/workflow/Circuits
     - file: markdown/guides/workflow/ExperimentDesigns
     - file: markdown/guides/workflow/DataSets
@@ -47,6 +47,7 @@ parts:
     - file: markdown/guides/gst/TwoQubitGST
     - file: markdown/guides/gst/MidCircuitMeasurement
     - file: markdown/guides/gst/Leakage
+    - file: markdown/guides/gst/Parallelism
   - file: markdown/guides/rb/HowRBWorks
     sections:
     - file: markdown/guides/rb/CliffordRB
@@ -109,7 +110,6 @@ parts:
   - file: markdown/advanced/figures/WorkspaceFigures
     sections:
     - file: markdown/advanced/figures/Switchboards
-  - file: markdown/advanced/ops/Parallelism
   - file: markdown/advanced/interop/Cirq
   - file: markdown/advanced/migration/FromFunctionAPI
   - file: markdown/advanced/Citing

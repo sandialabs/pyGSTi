@@ -33,7 +33,7 @@ You may be thinking, if the gauge doesn't matter for any observable quantities w
 In pyGSTi there are many ways to tune exactly how gauge optimization is performed.  This can be somewhat of a black art, since there's no *a priori* best way to choose the gauge of a model - it depends on what you're after.  Furthermore, **pyGSTi can only perform gauge optimization when there exists a well-defined gauge group** (see above).  Here's we'll demonstrate some of the basics of how gauge optimization works in pyGSTi.
 
 ### Gauge transformations
-Before *optimizing* the gauge, lets take a look at how to *change* the gauge.  Throughout this notebook we'll be looking at a fully-parameterized 1-qubit model whose gauge group is the set of $4 \times 4$ invertible matrices.  (The picture is essentially the same for trace-preserving (TP) parameterized models, but becomes more complicated when moving to CPTP constrainted models.)  Lets use one of the target models builtin to pyGSTi (see the [model packs tutorial](../workflow/TargetModels) for more information):
+Before *optimizing* the gauge, lets take a look at how to *change* the gauge.  Throughout this notebook we'll be looking at a fully-parameterized 1-qubit model whose gauge group is the set of $4 \times 4$ invertible matrices.  (The picture is essentially the same for trace-preserving (TP) parameterized models, but becomes more complicated when moving to CPTP constrainted models.)  Lets use one of the target models builtin to pyGSTi (see the [model packs tutorial](../../start/TargetModels) for more information):
 
 ```{code-cell} ipython3
 import numpy as np

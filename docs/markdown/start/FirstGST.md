@@ -21,7 +21,7 @@ There are three basic steps to running protocols in pyGSTi:
 The first step is creating an object that specifies what data (from the quantum processor) will be needed to perform GST, and how it should be taken.  This is called an "experiment design" in pyGSTi.
 
 To run GST, we need the following three inputs:
-1. a "**target model**" which describes the desired, or ideal, operations we want our experimental hardware to perform.  In the example below, we use the target model from one of pyGSTi's build-in "model packs" (see the [tutorial on model packs](../guides/workflow/TargetModels)) - which acts on a single qubit with the following operations:
+1. a "**target model**" which describes the desired, or ideal, operations we want our experimental hardware to perform.  In the example below, we use the target model from one of pyGSTi's build-in "model packs" (see the [tutorial on model packs](TargetModels)) - which acts on a single qubit with the following operations:
     - two gates: $\pi/2$ rotations around the $x$- and $y$-axes.
     - a single state preparation in the $|0\rangle$ state.
     - a 2-outcome measurement with the label "0" associated with measuring $|0\rangle$ and "1" with measuring $|1\rangle$.
