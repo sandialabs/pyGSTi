@@ -116,7 +116,17 @@ Yes, pyGSTi's GST implementation is pretty much agnostic to the Hilbert-space di
 
 
 ## I'd like to make a nice HTML report using only LGST results, is this possible?
-Linear gate set tomography (LGST) provides a *rough* estimate of the gate (really *layer*) operations of a system.  It's primary advantanges are that it doesn't require much data and it's very fast to compute.  If all you're looking for is a rough estimate, it's useful to be able to visualize LGST results in, for example, a HTML report.  This can now be easily done using `pygsti.run_linear_gst` in a parallel fashion to how you would use `pygsti.run_long_sequence_gst`.  `run_linear_gst` generates a `Results` object that can then be used to generate a report, as demonstrated in the [report generation tutorial](Reports). 
+Yes. Linear gate set tomography (LGST) gives a *rough* estimate of a system's gate (really *layer*) operations. Its advantages are that it needs little data and is very fast to compute, so it is worth visualizing on its own when a rough estimate is all you want.
+
+Run `pygsti.protocols.LinearGateSetTomography` the same way you would run any other protocol: build a `ProtocolData` from your experiment design and `DataSet`, then call `run` on it.
+
+```python
+from pygsti.protocols import LinearGateSetTomography, ProtocolData
+
+results = LinearGateSetTomography(target_model).run(ProtocolData(edesign, ds))
+```
+
+What comes back is a `ModelEstimateResults` carrying a single `LinearGateSetTomography` estimate, and it goes into `construct_standard_report` like the results of any other protocol. See the [report generation tutorial](Reports).
 
 ## Can I model leakage level(s) in pyGSTi?
 For certain types of "leakage", yes: PyGSTi can create models whose operations act on n-level state spaces.  For instance, a 3-level space can be interpreted as a qubit plus a leakage level.  Model operations must be constructed and interpreted accordingly, but apart from these nuances pyGSTi treats a system with leakage levels exactly as it would a larget (e.g. multi-qubit) system.  See this [example analyzing a qubit + leakage level](../gst/Leakage).

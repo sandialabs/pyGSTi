@@ -13,13 +13,9 @@ kernelspec:
 
 # Migrating from the function-based API
 
-Older pyGSTi code drives analyses through module-level *driver functions*: `run_long_sequence_gst`, `run_stdpractice_gst`, `run_model_test`, and friends. Most of them still work.
+Older pyGSTi code drives analyses through module-level *driver functions*: `run_long_sequence_gst`, `run_stdpractice_gst`, `run_model_test`, and friends. They all still work.
 
 **They are no longer the recommended way to use pyGSTi, and we expect to deprecate them in the near future.** New code should use the protocol objects instead. If you are writing something you intend to keep, write it against the protocol API; if you maintain a script built on the driver functions, this page is the translation.
-
-```{warning}
-`run_linear_gst` is currently broken: it passes a `sequenceRules` argument that `StandardGSTDesign` no longer accepts, so every call raises `TypeError`. Use `pygsti.protocols.LinearGateSetTomography` instead. The other four driver functions run.
-```
 
 ## Why the protocol objects
 
@@ -40,7 +36,6 @@ The practical wins: an experiment design can be written to disk before you take 
 |---|---|---|
 | `pygsti.run_long_sequence_gst` | `pygsti.protocols.GateSetTomography` | One GST estimate from one starting model. The starting model's parameterization *is* the constraint: pass `target_model("full TP")` to constrain the fit to TP gate sets. |
 | `pygsti.run_stdpractice_gst` | `pygsti.protocols.StandardGST` | Runs several parameterizations in one pass. The old `modes="full TP,CPTP,Target"` comma-string still parses but warns; pass a tuple, e.g. `modes=('full TP','CPTPLND','Target')`. |
-| `pygsti.run_linear_gst` | `pygsti.protocols.LinearGateSetTomography` | LGST only. The driver function is broken (see the warning above); the protocol works. |
 | `pygsti.run_model_test` | `pygsti.protocols.ModelTest` | See [model testing](../../guides/analysis/ModelTesting). |
 | `pygsti.run_long_sequence_gst_base` | `pygsti.protocols.GateSetTomography` with an explicit design | The `_base` variant existed to accept a pre-built circuit structure; build a `GSTDesign` instead. |
 
