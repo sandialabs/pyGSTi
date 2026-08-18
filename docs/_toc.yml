@@ -1,154 +1,108 @@
 # Table of contents
 # Learn more at https://jupyterbook.org/customize/toc.html
+#
+# Structure: three reader tiers, visible in the URL path.
+#   start/     the golden path -- a newcomer should need nothing else
+#   guides/    practitioner material, one chapter per characterization protocol
+#              plus the shared workflow/modeling/analysis chapters
+#   advanced/  extending pyGSTi, unusual devices, research use
+# Depth is capped at 2. Order within a chapter is by expected demand, not alphabetical.
 
 format: jb-book
-root: markdown/intro
+root: markdown/start/intro
 parts:
-- caption: Getting Started
+- caption: Start here
   chapters:
   - file: markdown/start/Install
-  - file: markdown/guides/workflow/Workflow
-  - file: markdown/overview/01-Essential-Objects
-  - file: markdown/overview/02-Using-Essential-Objects
+  - file: markdown/start/FirstGST
 
-- caption: Tutorials
+- caption: Characterization guides
   chapters:
-  - file: markdown/Protocols
+  - file: markdown/guides/workflow/Workflow
     sections:
-    - file: markdown/start/FirstGST
-      sections:
-      - file: markdown/guides/gst/RunningGST
-      - file: markdown/guides/gst/GSTCircuits
-        sections:
-        - file: markdown/guides/gst/FiducialsAndGerms
-        - file: markdown/guides/gst/FewerCircuits
-      - file: markdown/advanced/specialist/TimeDependentGST
-      - file: markdown/gst/Legacy
-        sections:
-        - file: markdown/gst/Overview-functionbased
-        - file: markdown/gst/Driverfunctions
-        - file: markdown/advanced/extending/LowLevelGST
-    - file: markdown/advanced/specialist/IdleTomography
-    - file: markdown/guides/drift/DriftCharacterization
-    - file: markdown/advanced/specialist/RobustPhaseEstimation
-    - file: markdown/guides/rb/HowRBWorks
-      sections:
-      - file: markdown/guides/rb/CliffordRB
-      - file: markdown/guides/rb/DirectRB
-      - file: markdown/guides/rb/MirrorRB
-        sections:
-        - file: markdown/guides/rb/MirrorRB-Universal-Gate-Sets
-      - file: markdown/guides/rb/Samplers
-      - file: markdown/guides/rb/SimultaneousRB
-      - file: markdown/guides/rb/BinaryRB
-      - file: markdown/advanced/specialist/SU2QuditRB
-    - file: markdown/guides/benchmarks/VolumetricBenchmarks
-      sections:
-      - file: markdown/protocols/MirrorCircuitBenchmarks
-    - file: markdown/advanced/specialist/ParityBenchmarking
-  
-  - file: markdown/Objects
-    sections:
-    - file: markdown/advanced/conventions/Bases
-    - file: markdown/guides/workflow/Circuits
-      sections:
-      - file: markdown/objects/CircuitLists
-    - file: markdown/guides/workflow/DataSets
-      sections:
-      - file: markdown/objects/MultiDataSet
-      - file: markdown/guides/drift/TimestampedData
-      - file: markdown/guides/drift/ComparingDataSets
-    - file: markdown/guides/workflow/ExperimentDesigns
-    - file: markdown/guides/analysis/GaugeFreedom
-    - file: markdown/utilities/Metrics
-      sections:
-      - file: markdown/guides/analysis/Metrics
-    - file: markdown/objects/Models
-      sections:
-      - file: markdown/guides/models/Models
-      - file: markdown/guides/models/MultiQubitModels
-      - file: markdown/advanced/conventions/StateSpaces
-      - file: markdown/objects/ModelParameterization
-      - file: markdown/guides/models/ModelNoise
-      - file: markdown/advanced/models/TyingParameters
-      - file: markdown/objects/ParameterLabels
-      - file: markdown/objects/ModelMemberGraph
-      - file: markdown/guides/analysis/ModelTesting
-        sections:
-        - file: markdown/utilities/ModelTesting-functions
-        - file: markdown/utilities/Model-Selection
-    - file: markdown/guides/workflow/TargetModels
-    - file: markdown/advanced/models/Operators
-      sections:
-      - file: markdown/advanced/models/CustomOperators
-      - file: markdown/advanced/models/CustomPOVMs
-      - file: markdown/guides/gst/MidCircuitMeasurement
-      - file: markdown/objects/OperationFactories
-      - file: markdown/objects/InterpolatedOperators
     - file: markdown/guides/workflow/DescribeYourDevice
-    - file: markdown/guides/analysis/Results
-  
-  - file: markdown/Simulation
-    sections:
-    - file: markdown/simulation/CircuitSimulation
-      sections:
-      - file: markdown/advanced/simulation/SimulatingRBData
-      - file: markdown/simulation/CliffordRB-Simulation-ImplicitModel
-      - file: markdown/advanced/simulation/StabilizerCHP
+    - file: markdown/guides/workflow/TargetModels
+    - file: markdown/guides/workflow/Circuits
+    - file: markdown/guides/workflow/ExperimentDesigns
+    - file: markdown/guides/workflow/DataSets
     - file: markdown/guides/workflow/SimulatingData
-    - file: markdown/advanced/simulation/ErrorGeneratorPropagation
-    - file: markdown/advanced/simulation/ErrorGeneratorPolynomials
-    - file: markdown/advanced/simulation/ForwardSimulators
-
-  - file: markdown/advanced/ml/QPANN
+    - file: markdown/guides/workflow/FilesAndDirectories
+  - file: markdown/guides/models/Models
     sections:
-    - file: markdown/ml/CircuitEncoding
-    - file: markdown/ml/ErrorPropagation
-    - file: markdown/ml/Training
-
-  - file: markdown/Reporting
+    - file: markdown/guides/models/MultiQubitModels
+    - file: markdown/guides/models/ModelNoise
+  - file: markdown/guides/gst/RunningGST
+    sections:
+    - file: markdown/guides/gst/GSTCircuits
+    - file: markdown/guides/gst/FiducialsAndGerms
+    - file: markdown/guides/gst/FewerCircuits
+    - file: markdown/guides/gst/CheckYourDesign
+    - file: markdown/guides/gst/TwoQubitGST
+    - file: markdown/guides/gst/MidCircuitMeasurement
+    - file: markdown/guides/gst/Leakage
+  - file: markdown/guides/rb/HowRBWorks
+    sections:
+    - file: markdown/guides/rb/CliffordRB
+    - file: markdown/guides/rb/DirectRB
+    - file: markdown/guides/rb/MirrorRB
+    - file: markdown/guides/rb/MirrorRB-Universal-Gate-Sets
+    - file: markdown/guides/rb/BinaryRB
+    - file: markdown/guides/rb/Samplers
+    - file: markdown/guides/rb/SimultaneousRB
+  - file: markdown/guides/benchmarks/VolumetricBenchmarks
+    sections:
+    - file: markdown/guides/benchmarks/MirrorFidelityEstimation
+  - file: markdown/guides/drift/DriftCharacterization
+    sections:
+    - file: markdown/guides/drift/TimestampedData
+    - file: markdown/guides/drift/ComparingDataSets
+  - file: markdown/guides/analysis/Results
     sections:
     - file: markdown/guides/analysis/Reports
-    - file: markdown/reporting/Workspace
-      sections:
-      - file: markdown/advanced/figures/Switchboards
-      - file: markdown/advanced/figures/WorkspaceFigures
-    
-  - file: markdown/guides/workflow/FilesAndDirectories
-
-- caption: Examples
-  chapters:
-  - file: markdown/guides/gst/CheckYourDesign
-  - file: markdown/advanced/specialist/ContextDependence
-  - file: markdown/examples/BootstrappedErrorBars
-  - file: markdown/guides/analysis/ErrorBars
-  - file: markdown/examples/2QGST-CreatingModels
-    sections:
-    - file: markdown/guides/gst/TwoQubitGST
-  - file: markdown/advanced/specialist/QutritGST
-    sections:
-    - file: markdown/guides/gst/Leakage
-    - file: markdown/advanced/specialist/LeakageByHand
-  - file: markdown/examples/1QGST-InterpolatedOps
-  - file: markdown/advanced/specialist/RobustGST-TVD
-  - file: markdown/examples/MPI
-    sections:
-    - file: markdown/examples/MPI-GermSelection
-    - file: markdown/examples/MPI-RunningGST
-    - file: markdown/advanced/ops/Parallelism
-  - file: markdown/advanced/extending/GaugeOptReference
-  - file: markdown/examples/GOpt-NonIdealTargets
-  - file: markdown/examples/Reports-LGSTonly
-  - file: markdown/guides/benchmarks/MirrorFidelityEstimation
+    - file: markdown/guides/analysis/Metrics
+    - file: markdown/guides/analysis/GaugeFreedom
+    - file: markdown/guides/analysis/ErrorBars
+    - file: markdown/guides/analysis/ModelTesting
+    - file: markdown/guides/analysis/Troubleshooting
   - file: markdown/guides/hardware/IBMQ
-  - file: markdown/advanced/interop/Cirq
 
-- caption: Developer Zone
-  maxdepth: 1
+- caption: Advanced topics and internals
+  chapters:
+  - file: markdown/advanced/models/Operators
+    sections:
+    - file: markdown/advanced/models/CustomOperators
+    - file: markdown/advanced/models/CustomPOVMs
+    - file: markdown/advanced/models/TyingParameters
+  - file: markdown/advanced/conventions/Bases
+    sections:
+    - file: markdown/advanced/conventions/StateSpaces
+  - file: markdown/advanced/simulation/ForwardSimulators
+    sections:
+    - file: markdown/advanced/simulation/StabilizerCHP
+    - file: markdown/advanced/simulation/SimulatingRBData
+    - file: markdown/advanced/simulation/ErrorGeneratorPropagation
+    - file: markdown/advanced/simulation/ErrorGeneratorPolynomials
+  - file: markdown/advanced/extending/LowLevelGST
+    sections:
+    - file: markdown/advanced/extending/GaugeOptReference
+  - file: markdown/advanced/specialist/TimeDependentGST
+    sections:
+    - file: markdown/advanced/specialist/ContextDependence
+    - file: markdown/advanced/specialist/QutritGST
+    - file: markdown/advanced/specialist/LeakageByHand
+    - file: markdown/advanced/specialist/SU2QuditRB
+    - file: markdown/advanced/specialist/RobustPhaseEstimation
+    - file: markdown/advanced/specialist/IdleTomography
+    - file: markdown/advanced/specialist/ParityBenchmarking
+    - file: markdown/advanced/specialist/RobustGST-TVD
+  - file: markdown/advanced/ml/QPANN
+  - file: markdown/advanced/figures/WorkspaceFigures
+    sections:
+    - file: markdown/advanced/figures/Switchboards
+  - file: markdown/advanced/ops/Parallelism
+  - file: markdown/advanced/interop/Cirq
+  - file: markdown/advanced/Citing
+
+- caption: API reference
   chapters:
   - file: api.rst
-
-- caption: Reference
-  chapters:
-  - file: markdown/guides/analysis/Troubleshooting
-  - file: markdown/advanced/Citing
