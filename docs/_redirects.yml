@@ -20,12 +20,12 @@ markdown/examples/1QGST-InterpolatedOps: ../advanced/models/CustomOperators.html
 markdown/examples/2QGST-CreatingModels: ../guides/models/Models.html#two-qubit-models
 markdown/examples/2QGST-RunningIt: ../guides/gst/TwoQubitGST.html
 markdown/examples/BootstrappedErrorBars: ../guides/analysis/ErrorBars.html
-markdown/examples/ContextDependence: ../advanced/specialist/ContextDependence.html
+markdown/examples/ContextDependence: ../guides/gst/BadFits.html
 markdown/examples/FisherInformation: ../guides/gst/CheckYourDesign.html
 markdown/examples/GOpt-AddingNewOptimizations: ../advanced/extending/GaugeOptReference.html
 markdown/examples/GOpt-NonIdealTargets: ../advanced/extending/GaugeOptReference.html#aiming-at-a-non-ideal-target
 markdown/examples/Leakage-automagic: ../guides/gst/Leakage.html
-markdown/examples/Leakage-manual: ../advanced/specialist/LeakageByHand.html
+markdown/examples/Leakage-manual: ../guides/gst/Leakage.html
 markdown/examples/MCFE-Example: ../guides/benchmarks/MirrorFidelityEstimation.html
 markdown/examples/MPI: ../guides/gst/Parallelism.html
 markdown/examples/MPI-GermSelection: ../guides/gst/FiducialsAndGerms.html

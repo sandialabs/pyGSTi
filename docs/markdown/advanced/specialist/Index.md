@@ -7,12 +7,10 @@ Read them individually — there is no reading order, and nothing here depends o
 ## Beyond a fixed gate set
 
 - [Time-dependent GST](TimeDependentGST) — when the gates themselves drift during the experiment, so a single set of process matrices cannot fit the data. Adds time dependence to the model and fits it.
-- [Context-dependent GST](ContextDependence) — when a gate behaves differently depending on what surrounds it. Introduces distinct operation labels per context and tests whether the split is warranted.
 
 ## Systems that are not qubits
 
 - [Qutrit GST](QutritGST) — GST on a three-level system.
-- [Leakage modelled by hand](LeakageByHand) — modelling a leaky qubit as an explicit three-level system, built by hand rather than through the automatic path in [leakage](../../guides/gst/Leakage).
 - [SU(2) qudit RB](SU2QuditRB) — benchmarking global SU(2) rotations on a single spin-$j$ qudit via rank-1 synthetic-SPAM RB.
 
 ## Narrow-purpose estimators

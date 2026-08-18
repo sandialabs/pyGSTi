@@ -98,9 +98,7 @@ parts:
   - file: markdown/advanced/specialist/Index
     sections:
     - file: markdown/advanced/specialist/TimeDependentGST
-    - file: markdown/advanced/specialist/ContextDependence
     - file: markdown/advanced/specialist/QutritGST
-    - file: markdown/advanced/specialist/LeakageByHand
     - file: markdown/advanced/specialist/SU2QuditRB
     - file: markdown/advanced/specialist/RobustPhaseEstimation
     - file: markdown/advanced/specialist/IdleTomography
