@@ -11,18 +11,50 @@ kernelspec:
   name: python3
 ---
 
-# Examples of tables and plots available from a `Workspace`
+# Workspace tables and plots
 
-PyGSTi's `Workspace` object is first a foremost a container and factory for plots and tables.  At the most basic level, it can be used to generate nice output based on quantities (e.g. `Model`, `DataSet`, etc. objects) that you've computed or loaded within a notebook.  For this, it's useful to call `init_notebook_mode` with `autodisplay=True` (see below) so that you don't have to `.display()` everything - `display()` gets called automatically when a plot or table is created.
+A `Workspace` is a container and factory for pyGSTi's figures. You hand it objects you've already computed or loaded (a `Model`, a `DataSet`, a `ModelEstimateResults`) and it hands back a table or a plot. Every figure in an automated pyGSTi report comes from a `Workspace`, so anything you see in a report you can also build one piece at a time in a notebook.
 
-## Getting some results
-First, let's run gate set tomography (GST) on the standard 1-qubit model to get some results to play with.  We generate a few `DataSet` objects and then call `run_long_sequence_gst` to run GST, generating a `ModelEstimateResults` object (essentially a container for `Model` objects).  For more details, see the tutorials [GST overview tutorial](../gst/Overview), the [tutorial on GST functions](../gst/Driverfunctions), and the [tutorial explaining the ModelEstimateResults object](../objects/Results).
+The figures are HTML: native HTML tables and [Plotly](https://plot.ly/python/) plots, rather than the more traditional LaTeX tables and [matplotlib](https://matplotlib.org) plots. Three reasons for that choice:
+
+1. Interactivity. HTML plots and tables can respond to the mouse; with LaTeX that's impossible and with matplotlib it's painful.
+2. Integration. HTML drops into web pages (a nicer report than a many-page PDF) and into Jupyter notebooks.
+3. Portability. Plotly figures are HTML and JS, so they store and travel more robustly than matplotlib `Figure` objects, which are hard even to pickle.
+
+The rest of this page is a gallery. Skim it for the figure you want, then read the docstring for the arguments.
+
+## Creating a workspace
 
 ```{code-cell} ipython3
 import numpy as np
 import pygsti
-from pygsti.modelpacks import smq1Q_XYI
+
+w = pygsti.report.Workspace()
+w.init_notebook_mode(connected=False, autodisplay=True)
 ```
+
+`init_notebook_mode` injects the HTML and JavaScript that make figures display. Run it once, near the top of your notebook. If it worked you'll see a green **Notebook Initialization Complete** message. A blue **Loading...** message that never resolves means one of two things: the notebook isn't "Trusted" (check the upper right corner of the Jupyter window), or you asked for web-hosted resources without a working internet connection. Fix whichever it is and reload with your *browser's* reload button, not Jupyter's.
+
+The `connected` argument controls where those resources come from. With `connected=True` they're loaded from a CDN, which keeps the notebook file small if you save it as HTML. With `connected=False` pyGSTi supplies everything except MathJax itself and writes an `offline` directory alongside your notebook. That directory has to tag along with the notebook, and with any saved-as-HTML version of it, or nothing renders.
+
+`autodisplay=True` means a figure appears as soon as you create it. Leave it `False` and you have to capture the returned object and call its `.display()` method.
+
+Figures are member functions of the workspace. Type `w.` and hit TAB to see the somewhat-descriptive names of everything it can build; hit SHIFT-TAB after the opening parenthesis, say after typing `w.GatesVsTargetTable(`, to bring up the signature in Jupyter's help window. Displayed figures have a resize handle in their lower right corner.
+
+Two quick ones, to show the shape of the thing:
+
+```{code-cell} ipython3
+w.MatrixPlot(np.array([[1, 2], [3, 4]], 'd'), color_min=0, color_max=4)
+```
+
+```{code-cell} ipython3
+from pygsti.modelpacks import smq1Q_XYI
+w.GatesTable(smq1Q_XYI.target_model())
+```
+
+## Getting some results
+
+Most of the interesting figures want GST output, so run gate set tomography on the standard 1-qubit model to get something to play with. Generate a few `DataSet` objects, then call `run_long_sequence_gst` on each to get `ModelEstimateResults` objects. For the details, see the [GST overview tutorial](../../start/FirstGST) and the [tutorial on the ModelEstimateResults object](../../guides/analysis/Results).
 
 ```{code-cell} ipython3
 #The usual GST setup: we're going to run GST on the standard XYI 1-qubit model
@@ -68,21 +100,7 @@ mdl3 = results3.estimates['GateSetTomography'].models['stdgaugeopt']
 gss = results1.circuit_lists['final']
 ```
 
-## Gallery of `Workspace` plots and tables.
-Now that we have some results, let's create a `Workspace` and make some plots and tables.
-
-To get tables and plots to display properly, one must run `init_notebook_mode`.  The `connected` argument indicates whether you want to rely on an active internet connection.  If `True`, then resources will be loaded from the web (e.g. a CDN), and if you save a notebook as HTML the file size may be smaller.  If `False`, then all the needed resources (except MathJax) are provided by pyGSTi, and an `offline` directory is automatically created in the same directory as your notebook.  This directory contains all the necessary resources, and must "tag along" with the notebook and any saved-as-HTML versions of it in order for everything to work.  The second argument, `autodisplay`, determines whether tables and plots are automatically displayed when they are created.  If `autodisplay=False`, one must call the `display()` member function of a table or plot to display it.
-
-```{code-cell} ipython3
-from pygsti.report import workspace
-w = workspace.Workspace()
-w.init_notebook_mode(connected=False, autodisplay=True) 
-```
-
-Plots and tables are created via member functions of a `Workspace` (`w` in our case).  Note that you can start typing "`w.`" and TAB-complete to see the different things a `Workspace` can make for you.  Furthermore, pressing SHIFT-TAB after the opening parenthesis of a function,  e.g. after typing "`w.GatesVsTargetTable(`", will bring up Jupyter's help window showing you the function signature (the arguments you need to give the function).
-
-### The remainder of this tutorial demonstrates some of the tables and plots you can create. 
-Note that displayed objects have a resize handle in their lower right corner.
+## Gallery
 
 ```{code-cell} ipython3
 w.ColorBoxPlot(("logl",), gss, ds1, mdl1, typ='scatter')
@@ -115,8 +133,8 @@ w.ColorBoxPlot(("chi2","logl"), gss, ds1, mdl1, box_labels=True)
 ```
 
 ```{code-cell} ipython3
-#This one requires knowng that each Results object holds a list of models
-# from each GST intation along with the corresponding operation sequences that were used.
+#This one requires knowing that each Results object holds a list of models
+# from each GST iteration along with the corresponding circuit lists that were used.
 iteration_estimates = [results1.estimates['GateSetTomography'].models['iteration %d estimate' % i]
                        for i in range(results1.estimates['GateSetTomography'].num_iterations)]
 w.FitComparisonTable(gss, results1.circuit_lists['iteration'], iteration_estimates, ds1)
@@ -224,35 +242,41 @@ w.DatasetComparisonSummaryPlot(dsLabels, dscmps)
 w.DatasetComparisonHistogramPlot(dscmps[(1,2)])
 ```
 
-### Saving figures to file
-You can also save plot and figures to separate files using their `saveas` method.  The output format is determined by the file extension, and allowed extensions are:
+## Saving figures to file
 
-- 'pdf': Adobe portable document format
-- 'tex': LaTeX source (uncompiled, *tables only*)
-- 'pkl': Python pickle (of a pandas `DataFrame` for tables, a dict for plots)
-- 'html': A stand-alone HTML document
+Tables and plots have a `saveas` method. The output format comes from the file extension:
+
+- `pdf`: Adobe portable document format
+- `tex`: LaTeX source, uncompiled, *tables only*
+- `pkl`: Python pickle, of a pandas `DataFrame` for tables and a dict for plots
+- `html`: a stand-alone HTML document
 
 ```{code-cell} ipython3
 import os
-if not os.path.exists("../../tutorial_files/tempTest"):
-    os.mkdir("../../tutorial_files/tempTest")
+if not os.path.exists("../../../tutorial_files/tempTest"):
+    os.mkdir("../../../tutorial_files/tempTest")
 
 obj = w.GatesVsTargetTable(mdl1, tgt)
 #obj = w.ErrgenTable(mdl3,tgt)
 #obj = w.ColorBoxPlot(("logl",), gss, ds1, mdl1, typ='boxes')
 
-obj.saveas("../../tutorial_files/tempTest/testSave.tex")
-obj.saveas("../../tutorial_files/tempTest/testSave.pkl")
-obj.saveas("../../tutorial_files/tempTest/testSave.html")
+obj.saveas("../../../tutorial_files/tempTest/testSave.tex")
+obj.saveas("../../../tutorial_files/tempTest/testSave.pkl")
+obj.saveas("../../../tutorial_files/tempTest/testSave.html")
 ```
 
-Saving as a pdf requires having pdflatex installed and on the system path.
+Saving a *table* as a pdf requires `pdflatex` installed and on the system path: tables render to LaTeX first, then get compiled. Plots take a different route, converting the Plotly figure to a matplotlib one, so plot pdfs need no LaTeX.
 
 ```{code-cell} ipython3
 :tags: [nbval-skip]
 
-obj.saveas("../../tutorial_files/tempTest/testSave.pdf")
+obj.saveas("../../../tutorial_files/tempTest/testSave.pdf")
 ```
 
 ## Exporting notebooks to HTML
-If you want, you can save figure-containing notebooks (like this one) as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file will retain all of the plot interactivity, so long as its in a directory with an `offline` folder (because we set `connected=False` above).
+
+You can save a figure-containing notebook like this one as an HTML file with **File => Download As => HTML** in the Jupyter menu. The plots stay interactive, so long as the file sits in a directory with an `offline` folder, which is why we passed `connected=False` above.
+
+## Where to go next
+
+Screen real estate runs out fast once you start stacking figures. The [switchboard tutorial](Switchboards) shows how to put dropdowns, buttons, and sliders in front of a set of workspace figures so you can flip between them instead of scrolling. The [report generation tutorial](../../guides/analysis/Reports) shows the other end of the same machinery: pyGSTi driving a `Workspace` for you to produce a standalone HTML report.

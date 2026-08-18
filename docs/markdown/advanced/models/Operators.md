@@ -13,22 +13,45 @@ kernelspec:
 
 # Operators
 
-This tutorial explains the objects that represent state preparation, measurement, gate, and layer operations in pyGSTi.  These objects form the essential components of `Model` objects in pyGSTi, and are therefore an important topic to understand if you're creating your own models or just need to know how to extract specific information from a `Model`.  We use the term *operator* generically all such objects, even when gate or layer operators act on vectorized density matrices and are therefore *super-operators*. 
+State preparations, measurements, and gate or layer operations are the components a `Model` is built from, and each one carries a set of real-valued *parameters* that say how it is allowed to vary.  This page covers what those objects are, how parameterization works, how to combine small operators into large ones, and how to pick parameterization types when you construct a model.  You need this if you're building your own models, or if you just want to pull specific information out of an existing one.  We use the word *operator* generically for all of these objects, even though gate and layer operators act on vectorized density matrices and are therefore *super-operators*.
 
-State preparations and POVM effects are represented as *vectors* in pyGSTi.  For $n$ qubits, these can be either length-$2^n$ complex vectors representing pure states/projections or length-$4^n$ real vectors representing mixed states (in the Liouville picture, where we vectorize a $2^n\times 2^n$ density matrix into a column or row vector).  Gate and layer operations are represented as *linear maps* on the space of state vectors.  As such these can be viewed as $2^n\times 2^n$ complex matrices (in the pure-state case) or $4^n \times 4^n$ real matrices (in the mixed-state case).
+State preparations and POVM effects are represented as *vectors*.  For $n$ qubits, these can be either length-$2^n$ complex vectors representing pure states and projections, or length-$4^n$ real vectors representing mixed states (in the Liouville picture, where a $2^n\times 2^n$ density matrix is vectorized into a column or row vector).  Gate and layer operations are represented as *linear maps* on the space of state vectors.  As such they can be viewed as $2^n\times 2^n$ complex matrices in the pure-state case, or $4^n \times 4^n$ real matrices in the mixed-state case.
 
-State and effect vectors are subclasses of `pygsti.modelmembers.states.State` and `pygsti.modelmembers.povms.POVMEffect` respectively.  In both cases the vector is stored as a *column* vector even though effect (co-)vectors are perhaps more properly row vectors (this improves code reuse).  Measurement (POVM) objects, which are basically dictionaries of effect vectors, are subclasses of `pygsti.modelmembers.povms.POVM`.  Gate and layer operator objects are subclasses of `pygsti.modelmembers.operations.LinearOperator`.  All of these classes (`State`, `POVMEffect`, `POVM`, and `LinearOperator`) are derived from `ModelMember` which forms the base for all of pyGSTi's model components.  All `ModelMember` objects have a `state_space` attribute, which specifies the Hilbert or Hilbert-Schmidt space that they act upon.  A state space can describe this space in multiple ways: by a number of qubits $n$ (`num_qubits` attribute), a unitary operator dimension $2^n$ (`udim`) or a superoperator dimension $4^n$ (`dim`).
+State and effect vectors are subclasses of `pygsti.modelmembers.states.State` and `pygsti.modelmembers.povms.POVMEffect` respectively.  In both cases the vector is stored as a *column* vector even though effect (co-)vectors are perhaps more properly row vectors; this improves code reuse.  Measurement (POVM) objects, which are basically dictionaries of effect vectors, are subclasses of `pygsti.modelmembers.povms.POVM`.  Gate and layer operator objects are subclasses of `pygsti.modelmembers.operations.LinearOperator`.  All of these classes derive from `ModelMember`, the base for every one of pyGSTi's model components.  Every `ModelMember` has a `state_space` attribute specifying the Hilbert or Hilbert-Schmidt space it acts on.  A state space can describe that space in several ways: by a number of qubits $n$ (`num_qubits`), a unitary operator dimension $2^n$ (`udim`), or a superoperator dimension $4^n$ (`dim`).
 
-Let's begin with some familiar imports.
+## Parameters are the whole point
+
+The fundamental job of a `Model` is to simulate circuits, mapping circuits to outcome probability distributions.  That mapping is *parameterized*: it depends on the values of a vector of real numbers.  A `Model` has a `num_params` attribute holding its parameter count, plus `to_vector` and `from_vector` methods that get and set the parameter vector.  `ModelMember` objects have exactly the same three, and for models that hold members to implement their operations (both explicit and implicit models do), the model's parameterization is the result of combining the parameterizations of its members.  In the simplest case each gate and SPAM vector in an `ExplicitOpModel` is parameterized independently, and the model's parameter vector is just the concatenation of its members' parameter vectors, usually ordered: state preparations, then measurements, then gates.
+
+For an explicit model the parameterization is a mapping from the model's parameter space into the space of $d^2 \times d^2$ operation matrices and length-$d^2$ SPAM vectors.  A model's contents always correspond to some valid set of parameters, and can always be reinitialized from a parameter vector.  The parameter count need not equal, and usually doesn't equal, the total number of matrix and vector elements.  In a TP-parameterized model, for instance, the first row of every operation matrix is pinned at `[1,0,...,0]` no matter what the underlying parameters are.
+
+This matters because one of pyGSTi's primary capabilities is model optimization: fitting a function (often the log-likelihood) over the parameter space of a starting model, often the target model.  Specifying a parameterization specifies the constraints the optimization runs under, or equivalently the space of circuit-to-outcome-distribution mappings that gets searched for a best fit.
+
+## How the classes are organized
+
+Most classes in `pygsti.modelmembers.operations` represent a unique combination of two things:
+
+a. a category of operation that can be represented, and
+b. a parameterization of that category.
+
+`FullArbitraryOp` can represent an arbitrary (Markovian) operation and "fully" parameterizes it, exposing every element of the dense process matrix as a parameter.  `StaticCliffordOp` can only represent Clifford operations, and is "static": it exposes no parameters, so an optimizer cannot change it.  The classes in `pygsti.modelmembers.states` and `pygsti.modelmembers.povms` run parallel to these.  `FullState` and `TPState` mirror `FullArbitraryOp` and `FullTPOp`, with `TPState` freezing its first element at $1/\sqrt{d}$ (where the vector has length $d^2$), the value that makes the represented density matrix have unit trace in the Pauli or Gell-Mann basis.
+
+A separate group of classes combines or modifies other operations rather than representing a category of its own; those inherit category and parameterization from whatever they act on.  They're covered further down, under composing and embedding.
+
+## Setup
 
 ```{code-cell} ipython3
+import pprint
+
 import numpy as np
 
 import pygsti
 from pygsti.modelmembers import states, povms, operations as ops
+from pygsti.models import modelconstruction as mc
+from pygsti.processors import QubitProcessorSpec
 ```
 
-Before getting into the pyGSTi objects, let's generate some example state vectors and gate matrix.  These are just NumPy arrays, and we use the `stdmx_to_ppvec` function to convert a standard $2^n \times 2^n$ complex Hermitian densiy matrix to a length $4^n$ "state vector" of real numbers giving the decomposition of this density matrix in the Pauli basis.  The `gate_mx` describes how a 1-qubit $X(\pi/2)$ rotation transforms a state vector in the Pauli basis.
+Before touching the pyGSTi objects, generate some example state vectors and a gate matrix.  These are plain NumPy arrays.  `stdmx_to_ppvec` converts a standard $2^n \times 2^n$ complex Hermitian density matrix into a length-$4^n$ "state vector" of real numbers giving that density matrix's decomposition in the Pauli basis.  `gate_mx` describes how a 1-qubit $X(\pi/2)$ rotation transforms a state vector in the Pauli basis.
 
 ```{code-cell} ipython3
 gate_mx = np.array([[1,   0,   0,   0],
@@ -48,12 +71,13 @@ print(state_vec0.dtype) # of *real* numbers
 
 ## Dense operators
 
-The simplest kind of operators look very similar to numpy arrays (like those we created above) in which some of the elements are read-only.  These operators derive from `DenseOperator` or `DenseState` and hold a *dense* representation, meaning the a dense vector or matrix is stored in memory.  **SPAM, gate, and layer operators have parameters which describe how they can be varied**, essentially the "knobs" which you can turn.  `Model` objects also have *parameters* that are essentially inherited from their contained operators.  How an operator is parameterized is particularly relevant for protocols which optimize a `Model` over its parameter space (e.g. gate set tomography).  See the tutorial on [model parameterization](ModelParameterization) for more information.  Three common parameterizations are:
-- **static**: the object has *no* (zero) parameters, so the object cannot be changed at all.  Static operators are like read-only NumPy arrays.
-- **full**: the object has one independent parameter for each element of its (dense) vector or matrix.  Fully parameterized objects are like normal NumPy arrays.
-- **trace-preserving (TP)**: similar to full, except the top row of gate/layer matrices and the first element of state preparation vectors is fixed and these elements are therefore not parameters.  (A POVM that is trace preserving must have all of its effect vectors sum to the identity.)
+The simplest operators look a lot like NumPy arrays in which some elements are read-only.  These derive from `DenseOperator` or `DenseState` and hold a *dense* representation, meaning an actual vector or matrix sits in memory.  Three parameterizations show up constantly:
 
-Here's a 1-qubit example of creating dense-operator objects:
+- **static**: zero parameters, so the object cannot be changed at all.  Static operators are like read-only NumPy arrays.
+- **full**: one independent parameter per element of the dense vector or matrix.  Fully parameterized objects behave like ordinary NumPy arrays.
+- **trace-preserving (TP)**: like full, except the top row of gate and layer matrices, and the first element of state preparation vectors, is fixed and therefore not a parameter.  A POVM that is trace preserving must have all its effect vectors sum to the identity.
+
+Here's a 1-qubit example of building dense-operator objects:
 
 ```{code-cell} ipython3
 #Prep vectors
@@ -77,9 +101,9 @@ for op in (tpSV,staticSV,staticOp,fullOp,tpOp,staticEV,fullEV,povm,tppovm):
     print("%s object has %d parameters" % (str(type(op)), op.num_params))
 ```
 
-Although there are certain exceptions, the usual way you set the value of a `State`, `POVM` or `LinearOperator` object is by setting the values of its parameters.  Parameters must be real-valued and are typically allowed to range over all real numbers, so updating an operator's parameter-values is accomplished by passing a real-valued NumPy array of parameter values - a *parameter vector* - to the operators `from_vector` method.  Note that the length of the parameter vector must match the operator's number of parameters (returned by `num_params` as demonstrated above).  
+There are exceptions, but the usual way to set the value of a `State`, `POVM`, or `LinearOperator` is to set its parameter values.  Parameters must be real-valued and are typically allowed to range over all the reals, so you update an operator by passing a real-valued NumPy array (a *parameter vector*) to its `from_vector` method.  The length of that array has to match the operator's `num_params`.
 
-We'll now set new parameter values for several of the operators we created above.  Since for dense operators there's a direct correspondence between parameters and matrix or vector elements, the parameter vector may be a flattened version of a 2d array of the parameterized element values.
+Now set new parameter values on several of the objects created above.  Dense operators have a direct correspondence between parameters and matrix or vector elements, so the parameter vector can be a flattened version of a 2d array of the parameterized element values.
 
 ```{code-cell} ipython3
 new_vec = np.array([1/np.sqrt(2),0,0],'d')
@@ -116,20 +140,20 @@ print(tppovm)
 
 ## Lindblad (CPTP-constrained) operations
 
-That a gate or layer operation is completely-positive and trace-preserving (CPTP) can be guaranteed if the operation is given by $\hat{O} = \exp{\mathcal{L}}$ where $\mathcal{L}$ takes the Lindblad form:
+A gate or layer operation is guaranteed completely positive and trace preserving (CPTP) if it has the form $\hat{O} = \exp{\mathcal{L}}$ where $\mathcal{L}$ takes the Lindblad form:
 $$\mathcal{L}: \rho \rightarrow \sum_i -i\lambda_i[\rho,B_i] + \sum_{ij} \eta_{ij} \left( B_i \rho B_j^\dagger - \frac{1}{2}\left\{ B_i^\dagger B_j, \rho \right\} \right) $$
-where $B_i$ range over the non-identity elements of the ($n$-qubit) Pauli basis, $\lambda_i$ is real, and $\eta \ge 0$ (i.e. the matrix $\eta_{ij}$ is Hermitian and positive definite).  We call the $\lambda_i$ terms *Hamiltonian error* terms, and the (real) $\lambda_i$s the *error rates* or *error coefficients*.  Likewise, the $\eta_{ij}$ terms are referred to generically as *non-Hamiltonian error* terms.  In the special case where the $\eta$ matrix is diagonal, the terms are called *Pauli stochastic error* terms and the (real) $\eta_{ii} > 0$ are error rates.  **Technical note:** While all maps of the above form ($\hat{O}$) are CPTP, not all CPTP maps are of this form.  $\hat{O}$ is the form of all *infinitesimally-generated* CPTP maps.  
+where $B_i$ ranges over the non-identity elements of the ($n$-qubit) Pauli basis, $\lambda_i$ is real, and $\eta \ge 0$ (the matrix $\eta_{ij}$ is Hermitian and positive semidefinite).  The $\lambda_i$ terms are *Hamiltonian error* terms, and the real $\lambda_i$ are *error rates* or *error coefficients*.  The $\eta_{ij}$ terms are *non-Hamiltonian error* terms.  When $\eta$ is diagonal the terms are called *Pauli stochastic error* terms and the real $\eta_{ii} \ge 0$ are error rates.  A caveat worth stating plainly: while every map of the form $\hat{O}$ is CPTP, not every CPTP map has this form.  $\hat{O}$ is the form of all *infinitesimally-generated* CPTP maps.
 
-Say we want to repsent an operation $e^{\mathcal{L}} U_0$, where $U_0$ is a unitary (super-)operator and $\mathcal{L}$ takes the Lindblad form given above.  The way to do this is using a `LindbladErrorgen` object that encapsulates the Lindbladian exponent $\mathcal{L}$, an `ExpErrorgenOp` to do the exponentiation, and a `ComposedOp` to combine it with the target unitary $U_0$ (more on the `ComposedOp` below). Lindblad operators are among the most complicated of all the operators in pyGSTi, so bear with us as we try to present things in an organized and comprehensible way. 
+Say you want to represent an operation $e^{\mathcal{L}} U_0$, where $U_0$ is a unitary (super-)operator and $\mathcal{L}$ takes the Lindblad form above.  You need three objects: a `LindbladErrorgen` encapsulating the Lindbladian exponent $\mathcal{L}$, an `ExpErrorgenOp` to do the exponentiation, and a `ComposedOp` to combine it with the target unitary $U_0$ (more on `ComposedOp` below).  Lindblad operators are among the most complicated things in pyGSTi, so this section moves slowly.
 
-Let's start by assuming $U_0 = I$ and making a CPTP operation using `LindbladErrorgen` and `ExpErrorgenOp` from a dense gate matrix:
+Start by assuming $U_0 = I$ and making a CPTP operation from a dense gate matrix:
 
 ```{code-cell} ipython3
 cptpGens = ops.LindbladErrorgen.from_operation_matrix(gate_mx)
 cptpOp = ops.ExpErrorgenOp(cptpGens)
 ```
 
-A `LindbladOp` does *not* necessarily hold a dense representation of its process matrix (it's not a `DenseOperator`), and so you cannot access it like a Numpy array.  If you want a dense representation, you can call the `to_dense()` method (which works on dense operators too!):
+An `ExpErrorgenOp` does *not* necessarily hold a dense representation of its process matrix (it isn't a `DenseOperator`), so you cannot index into it like a NumPy array.  For a dense representation, call `to_dense()`, which works on dense operators too:
 
 ```{code-cell} ipython3
 print(cptpOp)
@@ -137,63 +161,69 @@ print("dense representation = ")
 pygsti.tools.print_mx(cptpOp.to_dense()) # see this equals `gate_mx`
 ```
 
-Now let's look at the parameters of `cptpOp`.  By default, the $\mathcal{L}$ of a `LindbladErrorgen` is parameterized such that $\eta \ge 0$ and the `LindbladOp` map is CPTP.  There are several other ways a $\mathcal{L}$ can be parameterized, and these are specified by the values of the `parameterization` argument of construction functions like `from_operation_matrix` we used above.  Here's a quick rundown on these options:
+Now look at the parameters.  By default, the $\mathcal{L}$ of a `LindbladErrorgen` is parameterized so that $\eta \ge 0$ and the resulting map is CPTP.  Several other parameterizations are available, selected by the `parameterization` argument of construction functions like the `from_operation_matrix` used above:
 
 - `"H"` : Hamiltonian ($\lambda_i$) parameters are allowed.  These model coherent errors.
 - `"S"` : Pauli stochastic ($\eta_{ii}$) parameters are allowed, with the constraint $\eta_{ii} \ge 0$ (required to keep the map completely positive).
-- `"s"` : Pauli stochastic ($\eta_{ii}$) parameters are allowed without non-negativivty constraint.
-- `"D"` and `"d"` : Same as `"S"` and `"s"` except all of the parameters are constrained to be equal to one another, as they would be for depolarizing errors.
-- `"A"` : affine parameters are allowed.  These are particular linear combinations of the $\eta_ij$ that produce affine errors.  These must be accompanied by Pauli stochastic (`"S"`-type) errors.
+- `"s"` : Pauli stochastic ($\eta_{ii}$) parameters are allowed without the non-negativity constraint.
+- `"D"` and `"d"` : Same as `"S"` and `"s"` except all the parameters are constrained equal to one another, as they would be for depolarizing errors.
+- `"A"` : affine parameters are allowed.  These are particular linear combinations of the $\eta_{ij}$ that produce affine errors, generators of the form $$A_i : \rho \rightarrow \mathrm{Tr}(\rho_{target})B_i \otimes \rho_{non-target}$$ where the *target* and *non-target* parts of $\rho$ are the qubits on which $B_i$ is nontrivial and trivial respectively (in an `IXI` term, qubit 2 is the target space and qubits 1 and 3 are the non-target space).  Such an $A_i$ is a linear combination of the non-Hamiltonian ($\eta_{ij}$) terms: since $\rho \rightarrow I$ can be written as $\rho \rightarrow \frac{1}{d^2} \sum_i B_i \rho B_i$ with the sum over *all* Paulis including the identity, a map $\rho \rightarrow B_k$ can be written $\rho \rightarrow \frac{1}{d^2} \sum_i B_i B_k \rho B_i B_k$.  Affine parameters must be accompanied by Pauli stochastic (`"S"`-type) errors.
 - `"CPTP"` : All Lindblad parameters ($\lambda_i$ and $\eta_{ij}$) are allowed.  The Hermitian matrix $\eta$ is constrained to be positive semidefinite (required to keep the map completely positive).
-- `"GLND"` : All Lindblad parameters ($\lambda_i$ and $\eta_{ij}$) are allowed.  No constraints other than that $\eta$ be Hermitian.
-- Combinations of the single-letter options above, joined with a plus (+) sign combine these types.  For example, `"H+S"` allows Hamiltonian and Pauli stochastic errors.  As stated above `"A"` can only be used along with `"S"` or `"s"`, so `"H+A"` is an invalid parameterization but `"H+S+A"` or `"s+A"`, for example, are fine.
+- `"GLND"` : All Lindblad parameters ($\lambda_i$ and $\eta_{ij}$) are allowed, with no constraint other than $\eta$ being Hermitian.
+- Combinations of the single-letter options above, joined with a plus sign.  `"H+S"` allows Hamiltonian and Pauli stochastic errors.  Since `"A"` can only be used alongside `"S"` or `"s"`, `"H+A"` is invalid while `"H+S+A"` and `"s+A"` are fine.
 
-Let's get these parameters using `cptpOp.to_vector()` and print them:
+Pull the parameters out with `to_vector()`:
 
 ```{code-cell} ipython3
 print("params (%d) = " % cptpOp.num_params, cptpOp.to_vector(),'\n')
 ```
 
-All 12 parameters are essentially 0 because `gate_mx` represents a (unitary) $X(\pi/2)$ rotation and $U_0$ is automatically set to this unitary so that $\exp\mathcal{L} = \mathbb{1}$.  This means that all the error coefficients are zero, and this translates into all the parameters being zero.  Note, however, that error coefficients are not always the same as parameters. The `errorgen_coefficients` retrieves the error coefficients, which is often more useful than the raw parameter values:
+One parameter is $\pi/4$ and the other eleven are zero.  `from_operation_matrix` finds the error generator whose exponential *is* `gate_mx`; it does not factor out an ideal $U_0$ for you.  The $X(\pi/2)$ rotation therefore lands inside $\mathcal{L}$ as a single Hamiltonian term, which is why `to_dense()` above reproduced `gate_mx` exactly.  If you want an ideal gate with small errors on top, build the $U_0$ factor yourself with a `ComposedOp`, as further down.
+
+Parameters and error coefficients are not the same thing in general.  `errorgen_coefficients` retrieves the coefficients, which is usually more useful than raw parameter values:
 
 ```{code-cell} ipython3
-import pprint
 coeff_dict, basis = cptpOp.errorgen_coefficients(return_basis=True)
 print("Coefficients in (<type>,<basis_labels>) : value form:"); pprint.pprint(coeff_dict)
 print("\nBasis containing elements:"); pprint.pprint(basis.labels)
 ```
 
-`errorgen_coefficients` returns a dictionary (and a basis if `return_basis=True`).  The dictionary maps a shorthand description of the error term to value of the term's coefficient (rate).  This shorthand description is a tuple starting with `"H"`, `"S"`, or `"A"` to indicate the *type* of error term: Hamiltonian, non-Hamiltonian/stochastic, or affine.  Additional elements in the tuple are basis-element labels (often strings of I, X, Y, and Z), which reference basis matrices in the `Basis` that is returned when `return_basis=True`.  Hamiltonian (`"H"`) errors are described by a single basis element (the single index of $\lambda_i$). The non-Hamiltonian (`"S"`) errors in the Lindblad expansion can be described either by a single basis element (indicating a diagonal element $\eta_{ii}$, also referred to as a *stochastic* error rate) or by two basis elements (the two indices of $\eta_{ij}$).  The affine (`"A"`) errors correspond to particular linear combinations of the non-Hamiltonian errors, and can only be used in conjuction with diagonal non-Hamiltonian errors. 
+`errorgen_coefficients` returns a dictionary, plus a basis if `return_basis=True`.  The keys name individual *elementary* error generators and the values are their coefficients (rates).  Each key printed above is a three-part tuple `(<type>, <basis labels>, <state space labels>)`.  The type is one of four letters, following arXiv:2103.01928, and it determines how the generator acts on a density matrix.  With $P$ and $Q$ the Pauli basis elements named by the basis labels:
 
-If we write the above expansion for $\mathcal{L}$ compactly as $\mathcal{L} = \sum_i \lambda_i F_i + \sum_{ij} \eta_{ij}F_{ij}$, then the elements of the error-coefficient dictionary returned from `errorgen_coefficients` correspond to:
+- `"H"` (Hamiltonian), one basis label: $$\rho \rightarrow -i[P,\rho]$$
+- `"S"` (stochastic), one basis label: $$\rho \rightarrow P \rho P^\dagger - \tfrac{1}{2}\{P^\dagger P, \rho\}$$
+- `"C"` (correlation), two basis labels: $$\rho \rightarrow P \rho Q^\dagger + Q \rho P^\dagger - \tfrac{1}{2}\{P^\dagger Q + Q^\dagger P, \rho\}$$
+- `"A"` (active), two basis labels: $$\rho \rightarrow i\left(P \rho Q^\dagger - Q \rho P^\dagger + \tfrac{1}{2}\{P^\dagger Q - Q^\dagger P, \rho\}\right)$$
 
-- Hamiltonian (e.g. `("H","X")`) elements specify $\lambda_i$, the coefficients of $$F_i : \rho \rightarrow -i[B_i,\rho]$$
-- Stochastic, i.e. diagonal non-Hamiltonian, elements (e.g. `("S","X")`) specify $\eta_{ii}$, the coefficients of $$F_{ii} : \rho \rightarrow B_i \rho B_i - \rho$$
-- Off-diagonal non-Hamiltonian elements (e.g. `("S","X","Y")`) specify $\eta_{ij}$, the potentially complex coefficients of: $$F_{ij} : \rho \rightarrow B_i \rho B_j^\dagger - \frac{1}{2}\left\{ B_i^\dagger B_j, \rho \right\}$$
-- Affine elements (e.g. `("A","X")`) specify the coefficients of: $$A_i : \rho \rightarrow \mathrm{Tr}(\rho_{target})B_i \otimes \rho_{non-target}.$$  Here the *target* vs *non-target* parts of $\rho$ refer to the qubits on $B_i$ is nontrivial and trivial respectively (e.g. in `("A","IXI")` the second qubit is the "target" space and qubits 1 and 3 are the "non-target" space).  This $A_i$ can be written as a linear combination of the $F_{ij}$. Because the map $\rho \rightarrow I$ can be written as $\rho \rightarrow \frac{1}{d^2} \sum_i B_i \rho B_i$, where the sum loops over *all* the Paulis (including the identity), this means that a map like $\rho \rightarrow B_k$ can be written as $\rho \rightarrow \frac{1}{d^2} \sum_i B_i B_k \rho B_i B_k$, which can be expressed as a sum of the $F_{ij}$ terms.
+The `"H"` and `"S"` coefficients are the $\lambda_i$ and $\eta_{ii}$ of the Lindblad expansion above; `"C"` and `"A"` together carry the real and imaginary parts of the off-diagonal $\eta_{ij}$, giving a real-valued coordinate system for the Hermitian $\eta$ matrix.  The basis labels are strings over I, X, Y, and Z referencing matrices in the `Basis` that `return_basis=True` gives you.  The state-space labels record which qudits the generator acts on nontrivially.
 
-The `set_errorgen_coefficients` function does the reverse of `errorgen_coefficients`: it sets the values of a `LindbladOp`'s parameters based on a description of the errors in terms of the above-described dictionary and a `Basis` object that can resolve the basis labels.
+Be careful with the letter `"A"`: in an elementary error generator label it means *active*, as above, but in a `parameterization` string like `"H+S+A"` it means *affine*.  The two are unrelated.
 
-Finally, we can also initialize a `LindbladErrorgen` using a dictionary in this format.  Below we construct a `LindbladErrorgen` with 
+Most functions that consume these labels also accept a shorter "local" form that drops the state-space labels, so `("H","X")` and `("C","X","Y")` work as input.  A tuple like `("S","X","X")` is a trap: it parses as a stochastic label with two basis elements, which no `LindbladErrorgen` block manages, and the term is silently dropped instead of raising.  Write `("S","X")`.
+
+`set_errorgen_coefficients` does the reverse of `errorgen_coefficients`: it sets parameter values from a dictionary in this format.
+
+You can also initialize a `LindbladErrorgen` directly from such a dictionary.  Below, build one with
 $$\mathcal{L} = 0.1 H_X + 0.1 S_X$$
-where $H_X: \rho \rightarrow -i[\rho,X]$ and $S_X: \rho \rightarrow X\rho X - \rho$ are Hamiltonian and Pauli-stochastic errors, respectively.  We then use this error generator to create, using a `ExpErrogenOp` and `ComposedOp`, an operator corresponding to $e^{\mathcal{L}}U_0$, where $U_0$ is a $X(\pi/2)$ rotation.
+then use it with an `ExpErrorgenOp` and a `ComposedOp` to get an operator corresponding to $e^{\mathcal{L}}U_0$ with $U_0$ an $X(\pi/2)$ rotation.
 
 ```{code-cell} ipython3
-staticOp = ops.StaticStandardOp('Gxpi2')
-cptpGen2 = ops.LindbladErrorgen.from_elementary_errorgens({('H','X'): 0.1, ('S','X','X'): 0.1}, state_space=1)
+stdXOp = ops.StaticStandardOp('Gxpi2')
+cptpGen2 = ops.LindbladErrorgen.from_elementary_errorgens({('H','X'): 0.1, ('S','X'): 0.1}, state_space=1)
 cptpOp2 = ops.ExpErrorgenOp(cptpGen2)
-composedOp = ops.ComposedOp([staticOp, cptpOp2])
+noisyXOp = ops.ComposedOp([stdXOp, cptpOp2])
 print(cptpOp2)
-pygsti.tools.print_mx(cptpOp2.to_dense())
+print("exp(L) = "); pygsti.tools.print_mx(cptpOp2.to_dense())
+print("exp(L) U0 = "); pygsti.tools.print_mx(noisyXOp.to_dense())
 ```
 
-We can check that this operator has the right error generator coefficients.  This time we do things slightly differently by accessing the `errorgen` member of the operator of the `ExpErrorgenOp`:
+Check that the operator has the intended error generator coefficients.  This time reach through the `errorgen` member of the `ExpErrorgenOp`:
 
 ```{code-cell} ipython3
 cptpOp2.errorgen.coefficients() # same as cptpOp2.errorgen_coefficients()
 ```
 
-An inconvenience arises because an error generator is *exponentiated* to form a map.  This means that the coefficients of the stochastic generators don't exactly correspond to error rates of the final map as they're often thought of.  Take a simple example where we want to construct a depolarizing map with a process fidelity of 90%.  One might think that this would achieve that:
+An inconvenience arises because an error generator gets *exponentiated* to form a map.  The coefficients of the stochastic generators therefore don't correspond exactly to the error rates of the final map as people usually think of them.  Take a simple case: construct a depolarizing map with a process fidelity of 90%.  You might think this would do it:
 
 ```{code-cell} ipython3
 test_depol_op = ops.ComposedOp([
@@ -206,7 +236,7 @@ test_depol_op = ops.ComposedOp([
 pygsti.tools.entanglement_fidelity(test_depol_op.to_dense(), np.identity(4))
 ```
 
-But as we see, the fidelity isn't quite $0.9$.  This is because the error rate of the *map* whose error generator has  all stochastic-term coefficients equal to $C$ is $(1 - e^{-d^2 C}) / d^2$, not just $C$.  This transformation is accounted for in the `error_rates` and `set_error_rates` Lindblad operator methods, which behave just like `errorgen_coefficients` and `set_errorgen_coefficients` except that they internally transform the S-values between coefficients and (map) error rates.  Our simple example is fixed by using `set_error_rates`:
+The fidelity isn't quite $0.9$.  The error rate of the *map* whose error generator has all stochastic-term coefficients equal to $C$ is $(1 - e^{-d^2 C}) / d^2$, not $C$.  The `error_rates` and `set_error_rates` methods account for this transformation; they behave like `errorgen_coefficients` and `set_errorgen_coefficients` except that they convert S-values between coefficients and map error rates internally.  Using `set_error_rates` fixes the example:
 
 ```{code-cell} ipython3
 test_depol_op.set_error_rates({('S','X'): 0.1/3, ('S','Y'): 0.1/3, ('S','Z'): 0.1/3})
@@ -220,7 +250,7 @@ test_depol_op.errorgen_coefficients()
 
 ### Lindblad state preparations and POVMs
 
-It is possible to create state preparations and POVMs that use error generators by replacing `ComposedOp` in the construction above with `ComposedState` or `ComposedPOVM`.  These simply compose an operations (e.g. a $\exp\mathcal{L}$ factor from a `ExpErrorgenOp` and `LindbladErrorgen`) with an existing "base" state preparation or POVM.  That is, state preparations are $e^{\mathcal{L}} |\rho_0\rangle\rangle$, where $|\rho_0\rangle\rangle$ represents a "base" pure state, and effect vectors are $\langle\langle E_i | e^{\mathcal{L}}$ where $\langle\langle E_i|$ are the effects of a "base" POVM.
+State preparations and POVMs can use error generators too: swap `ComposedOp` for `ComposedState` or `ComposedPOVM`.  These compose an operation (say an $\exp\mathcal{L}$ factor from an `ExpErrorgenOp` and a `LindbladErrorgen`) with an existing "base" state preparation or POVM.  State preparations become $e^{\mathcal{L}} |\rho_0\rangle\rangle$ for a base pure state $|\rho_0\rangle\rangle$, and effect vectors become $\langle\langle E_i | e^{\mathcal{L}}$ for the effects $\langle\langle E_i|$ of a base POVM.
 
 ```{code-cell} ipython3
 #Spam vectors and POVM
@@ -229,15 +259,22 @@ cptpSpamVec = states.ComposedState(staticSV, errorgen) # staticSV is the "base" 
 cptpPOVM = povms.ComposedPOVM(ops.ExpErrorgenOp(errorgen)) # by default uses the computational-basis POVM
 ```
 
-## Embedded and Composed operations
+## Composing and embedding operators
 
-PyGSTi makes it possible to build up "large" (e.g. complex or many-qubit) operators from other "smaller" ones. We have already seen a modest example of this above when an `ExpErrorgenOp` was constructed from a `LindbladErrorgen` object.  Two common and useful actions for building large operators are:
-1. **Composition**: A `ComposedOp` composes zero or more other operators, and therefore it's action is the sequential application of each of its *factors*.  The dense representation of a `ComposedOp` is equal to the product (in reversed order!) of the dense representations of its factors.  Note that a `ComposedOp` does not, however, require that its factors have dense representations - they can be *any* `LinearOperator` objects. The dense versions of operators can sometimes result in faster calculations when the system size (qubit number) is small.
+pyGSTi builds "large" operators (complex, or many-qubit) out of smaller ones.  You saw a modest example above when an `ExpErrorgenOp` was built from a `LindbladErrorgen`.  These classes don't represent a category of operation of their own; they inherit category and parameterization from whatever they wrap:
 
-2. **Embedding**: An `EmbeddedOp` maps an operator on a subsystem of a state space to the full state space.  For example, it could take a 1-qubit $X(\pi/2)$ rotation and make a 3-qubit operation in which this operation is applied to the 2nd qubit.  Embedded operators are very useful for constructing layer operations in multi-qubit models, where we naturally prefer to work with the lower-dimensional (typically 1- and 2-qubit) operations and need to build up $n$-qubit *layer* operations.
+- `ComposedOp` combines zero or more operations by acting them one after the other.  Its process matrix is the product (in reversed order) of the factors' process matrices.  It does not require its factors to have dense representations; the factors can be *any* `LinearOperator` objects.  Dense versions can be faster when the qubit count is small.
+- `ComposedErrorgen` combines zero or more error generators by summing them.
+- `EmbeddedOp` maps an operation on a subsystem of a state space into the full state space, taking, for instance, a 1-qubit $X(\pi/2)$ rotation and making a 3-qubit operation that applies it to the second qubit.  This is how layer operations get built in multi-qubit models, where you naturally want to work with 1- and 2-qubit operations and assemble $n$-qubit layers from them.
+- `EmbeddedErrorgen` embeds a lower-dimensional error generator into a higher-dimensional space.
+- `ExpErrorgenOp` exponentiates an error generator, turning it into a map on quantum states.
+- `RepeatedOp` repeats a single operation $k$ times.
+
+The same combinators exist for states, POVMs, and the rest under the other subpackages of `pygsti.modelmembers`.
 
 ### Composed operations
-We'll being by creating an operation that composes several of the dense operations we made earlier:
+
+Compose several of the dense operations from earlier:
 
 ```{code-cell} ipython3
 composedOp = ops.ComposedOp((staticOp,tpOp,fullOp))
@@ -245,10 +282,11 @@ print(composedOp)
 print("Before interacting w/Model:",composedOp.num_params,"params")
 ```
 
-This all looks good.  As we expect, there are $0+12+16=28$ parameters (the sum of the parameter-counts of the factors).
+As expected there are $0+12+16=28$ parameters, the sum of the factors' parameter counts.
 
 ### Embedded operations
-Here's how to embed a single-qubit operator (`fullOp`, created above) into a 3-qubit state space, and have `fullOp` act on the second qubit (labelled `"Q1"`).  Note that the parameters of an `EmbeddedOp` are just those of the underlying operator (the one that has been embedded).
+
+Here's how to embed a single-qubit operator (`fullOp`, from above) into a 3-qubit state space so that it acts on the second qubit, labelled `"Q1"`.  The parameters of an `EmbeddedOp` are just those of the operator being embedded.
 
 ```{code-cell} ipython3
 embeddedOp = ops.EmbeddedOp(['Q0','Q1','Q2'],['Q1'],fullOp)
@@ -258,7 +296,8 @@ print("Number of parameters =",embeddedOp.num_params)
 ```
 
 ### Better together
-We can design even more complex operations using combinations of composed and embedded objects.  For example, here's a 3-qubit operation that performs three separate 1-qubit operations (`staticOp`, `fullOp`, and `tpOp`) on each of the three qubits.  (These three operations *happen* to all be $X(\pi/2)$ gates because we're lazy and didn't bother to use `gate_mx` values in our examples above, but they *could* be entirely different.)  The resulting `combinedOp` might represent a layer in which all three gates occur simultaneously.
+
+Combinations of composed and embedded objects give you more complex operations.  Here's a 3-qubit operation that performs three separate 1-qubit operations (`staticOp`, `fullOp`, and `tpOp`) on the three qubits.  These three all *happen* to be $X(\pi/2)$ gates because the examples above were lazy about varying `gate_mx`, but they *could* be entirely different.  The resulting `combinedOp` might represent a layer in which all three gates occur simultaneously.
 
 ```{code-cell} ipython3
 # use together
@@ -273,5 +312,132 @@ print(combinedOp)
 print("Number of parameters =",combinedOp.num_params)
 ```
 
-## More coming (soon?) ...
-While this tutorial covers the main ones, there're even more model-building-related objects that we haven't had time to cover here.  We plan to update this tutorial, making it more comprehensive, in future versions of pyGSTi.
+## Choosing types when you build a model
+
+Most of the time you don't construct modelmembers by hand.  The model construction functions take arguments naming the type of modelmember to create, and by choosing a gate's type you select both how it is represented (Clifford gates can be represented much more efficiently than arbitrary ones) and how it is parameterized, which in turn fixes how the whole model is parameterized.
+
+Below is an incomplete list of type strings and the classes they map to.  Most start with `"full"` or `"static"`, indicating whether the members have parameters or not; a type with no prefix is "full" by default.  See the [forward simulation tutorial](../simulation/ForwardSimulators) for how each parameterization relates to the forward simulation types pyGSTi supports.
+
+- gate types, in `pygsti.modelmembers.operations`:
+  - `"static"` $\rightarrow$ `StaticArbitraryOp`
+  - `"full"` $\rightarrow$ `FullArbitraryOp`
+  - `"static standard"` $\rightarrow$ `StaticStandardOp`
+  - `"static clifford"` $\rightarrow$ `StaticCliffordOp`
+  - `"static unitary"` $\rightarrow$ `StaticUnitaryOp`
+  - `"full unitary"` $\rightarrow$ `FullUnitaryOp`
+  - `"full TP"` $\rightarrow$ `FullTPOp`
+  - `"CPTP"`, `"H+S"`, etc. $\rightarrow$ `ExpErrorgenOp` + `LindbladErrorgen`
+
+
+- state preparation types, in `pygsti.modelmembers.states`:
+  - `"computational"` $\rightarrow$ `ComputationalBasisState`
+  - `"static pure"` $\rightarrow$ `StaticPureState`
+  - `"full pure"` $\rightarrow$ `FullPureState`
+  - `"static"` $\rightarrow$ `StaticState`
+  - `"full"` $\rightarrow$ `FullState`
+  - `"full TP"` $\rightarrow$ `TPState`
+
+
+- POVM types, in `pygsti.modelmembers.povms`:
+  - `"computational"` $\rightarrow$ `ComputationalBasisPOVM`
+  - `"static pure"` $\rightarrow$ `UnconstrainedPOVM` + `StaticPOVMPureEffect`
+  - `"full pure"` $\rightarrow$ `UnconstrainedPOVM` + `FullPOVMPureEffect`
+  - `"static"` $\rightarrow$ `UnconstrainedPOVM` + `StaticPOVMEffect`
+  - `"full"` $\rightarrow$ `UnconstrainedPOVM` + `FullPOVMEffect`
+  - `"full TP"` $\rightarrow$ `TPPOVM`
+
+Which argument carries which of these depends on the function.  `ExplicitOpModel.set_all_parameterizations` and `create_explicit_model_from_expressions` take separate `gate_type`, `prep_type`, `povm_type`, and `instrument_type` arguments.  `create_explicit_model` and `create_crosstalk_free_model` instead take `ideal_gate_type` and a single `ideal_spam_type` covering both preps and POVMs, because they build operations as compositions of an ideal part and a noise part, and these arguments set the type of the ideal part only (see the [model noise tutorial](../../guides/models/ModelNoise)).
+
+The `prep_type` and `povm_type` arguments also accept `"auto"`, which picks a parameterization from the given gate type.  An incomplete list of that mapping:
+
+- `"auto"`, `"static standard"`, `"static clifford"` $\rightarrow$ `"computational"`
+- `"static unitary"` $\rightarrow$ `"static pure"`, `"full unitary"` $\rightarrow$ `"full pure"`
+- All others map directly
+
+### Explicit models
+
+```{code-cell} ipython3
+pspec = QubitProcessorSpec(1, ['Gi', 'Gxpi2', 'Gypi2'])  # simple single qubit processor
+model = mc.create_explicit_model(pspec)
+model.print_modelmembers()
+print("%d parameters" % model.num_params)
+```
+
+By default an explicit model creates static (zero-parameter) operations.  For gates named in the standard gate set, as here, the default `ideal_gate_type='auto'` lands on `StaticStandardOp`.  Specify an `ideal_gate_type` to change that:
+
+```{code-cell} ipython3
+model = mc.create_explicit_model(pspec, ideal_gate_type="full TP")
+model.print_modelmembers()
+print("%d parameters" % model.num_params)
+```
+
+`set_all_parameterizations` converts an existing model's contents wholesale.  Switching to `"CPTP"` changes the gate type accordingly.  This conversion works best when you supply an `ideal_model` of unitary gates and pure states to target, which avoids branch cuts in the conversion; here that's the default static-unitary model built from the same processor spec.
+
+```{code-cell} ipython3
+ideal_model = mc.create_explicit_model(pspec)  # static, unitary ideal gates/SPAM
+model.set_all_parameterizations('CPTP', ideal_model=ideal_model)
+model.print_modelmembers()
+print("%d parameters" % model.num_params)
+```
+
+To change an *individual* gate or SPAM vector's parameterization, construct a replacement object of the type you want and assign it into the model.
+
+```{code-cell} ipython3
+# Turning ComposedOp into a dense matrix for conversion into a dense FullTPOp
+newOp = pygsti.modelmembers.operations.FullTPOp(model[('Gi', 0)].to_dense())
+model['Gi'] = newOp
+print("model['Gi'] =",model['Gi'])
+```
+
+Assignment behaves differently depending on what you assign.  A `ModelMember`-derived object (a `LinearOperator`, `State`, or `POVM`) *replaces* whatever was stored under that key, as above.  Anything else, a bare NumPy array for example, is used to initialize or update the existing object in place rather than replacing it:
+
+```{code-cell} ipython3
+numpy_array = np.array( [[1, 0, 0, 0],
+                         [0, 0.5, 0, 0],
+                         [0, 0, 0.5, 0],
+                         [0, 0, 0, 0.5]], 'd')
+model['Gi'] = numpy_array # after assignment with a numpy array...
+print("model['Gi'] =",model['Gi']) # this is STILL a FullTPOp object
+
+#If you try to assign a gate to something that is either invalid or it doesn't know how
+# to deal with, it will raise an exception
+invalid_TP_array = np.array( [[2, 1, 3, 0],
+                              [0, 0.5, 0, 0],
+                              [0, 0, 0.5, 0],
+                              [0, 0, 0, 0.5]], 'd')
+try:
+    model['Gi'] = invalid_TP_array
+except ValueError as e:
+    print("ERROR!! " + str(e))
+```
+
+### Implicit models
+
+The story is similar for implicit models.  Operations are compositions of ideal operations and noise, and `ideal_gate_type` and friends set the type of the ideal part.  Here's a `LocalNoiseModel` with the default static operation type:
+
+```{code-cell} ipython3
+mdl_locnoise = pygsti.models.create_crosstalk_free_model(pspec)
+mdl_locnoise.print_modelmembers()
+```
+
+To modify the gate operations you need parameters, so build the model with `ideal_gate_type="full"` and get `FullArbitraryOp` objects:
+
+```{code-cell} ipython3
+mdl_locnoise = pygsti.models.create_crosstalk_free_model(pspec, ideal_gate_type='full')
+mdl_locnoise.print_modelmembers()
+```
+
+Those can be modified by matrix assignment, since their parameters let them take on any process matrix.  Set the process matrix of `"Gxpi2"` (more precisely, the Pauli transfer matrix of the gate) to include some depolarization:
+
+```{code-cell} ipython3
+mdl_locnoise.operation_blks['gates']['Gxpi2'] = np.array([[1,   0,   0,   0],
+                                                          [0, 0.9,   0,   0],
+                                                          [0,   0,-0.9,   0],
+                                                          [0,   0,   0,-0.9]],'d')
+```
+
+`CloudNoiseModel` objects work differently.  All of the parameterization is inherited from the noise operations, so `create_cloud_crosstalk_model` has no `ideal_gate_type` argument at all; the ideal operations in a cloud noise model are always static.  The [model noise tutorial](../../guides/models/ModelNoise) covers how to set the types of the noise objects.
+
+## What this page doesn't cover
+
+There are more model-building objects than fit here, and the coverage above is not exhaustive even for the classes it names.  For writing your own operator classes see the [custom operator tutorial](CustomOperators); for parameter sharing between members see [tying parameters](TyingParameters).
