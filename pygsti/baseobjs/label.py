@@ -168,6 +168,32 @@ class Label(object):
     integers or sector-names specifying which qubits, or
     more generally, parts of the Hilbert space that is
     acted upon by an object so-labeled.
+
+    Notes
+    -----
+    A label's optional `time` attribute is a **duration** -- how long the labeled
+    operation takes -- not a timestamp saying when it occurs.  Durations aggregate
+    the way elapsed time does:
+
+    - a parallel layer (:class:`LabelTupTupWithTime`) takes the `max` of its
+      components' durations, since they run simultaneously;
+    - a sequential composition (:class:`CircuitLabel`) takes the `sum` of its
+      layers' durations, multiplied by its `reps`;
+    - :meth:`pygsti.circuits.Circuit.duration` sums its layers' durations.
+
+    Time-resolved *data* is a separate concept with a separate mechanism: a
+    :class:`~pygsti.data.DataSet` row carries its own timestamps, and that is what
+    the time-dependent forward simulators consume.  `time` is not an absolute start
+    time; see `issue #754 <https://github.com/sandialabs/pyGSTi/issues/754>`_.
+
+    `time` does not participate in `__eq__` or `__hash__` -- these defer to the
+    native `str`/`tuple` implementations, a deliberate speed choice on one of the
+    hottest paths in pyGSTi -- but it *is* preserved by :meth:`to_native` and by the
+    circuit string grammar.  Two labels differing only in `time` therefore compare
+    equal, hash equal, and serialize differently, and a `set` or `dict` of labels
+    silently keeps whichever duration it encountered first.  This asymmetry is known
+    and deliberate for now; changing it would change the identity contract that
+    `DataSet` keys, layout builders, and pickled artifacts all depend on.
     """
 
     IS_SIMPLE = True
@@ -198,7 +224,9 @@ class Label(object):
             containing the passed object.
 
         time : float
-            The time at which this label occurs (can be relative or absolute)
+            The duration of the labeled operation -- how long it takes, not when
+            it occurs.  See the :class:`Label` class docstring for how durations
+            aggregate across layers and circuits.
 
         args : iterable of hashable types, optional
             A list of "arguments" for this label.  Having arguments makes the
@@ -785,7 +813,9 @@ class LabelTupWithTime(LabelTup, tuple):
             containing the passed object.
 
         time : float
-            The time at which this label occurs (can be relative or absolute)
+            The duration of the labeled operation -- how long it takes, not when
+            it occurs.  See the :class:`Label` class docstring for how durations
+            aggregate across layers and circuits.
 
         Returns
         -------
@@ -900,7 +930,9 @@ class LabelStr(Label, str):
             The item name. E.g., 'CNOT' or 'H'.
 
         time : float
-            The time at which this label occurs (can be relative or absolute)
+            The duration of the labeled operation -- how long it takes, not when
+            it occurs.  See the :class:`Label` class docstring for how durations
+            aggregate across layers and circuits.
 
         Returns
         -------
@@ -1309,8 +1341,9 @@ class LabelTupTupWithTime(LabelTupTup, tuple):
             which labels a parallel layer/level of a circuit.
 
         time : float, optional
-            A time value associated with this label.  Often this is the
-            duration of the object or operation labeled.
+            The duration of this layer.  If not given, it is taken to be the `max`
+            of the components' durations, since a layer's components run in
+            parallel.  See the :class:`Label` class docstring.
 
         Returns
         -------
@@ -1467,7 +1500,10 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
             repeated.
 
         time : float
-            The time at which this label occurs (can be relative or absolute)
+            The duration of this block -- how long it takes, not when it occurs.  If
+            not given, it is taken to be the `sum` of the layers' durations times
+            `reps`, since the layers run in sequence and the block runs `reps` times.
+            See the :class:`Label` class docstring.
         """
         assert (isinstance(reps, _numbers.Integral) and isinstance(name, str)
                 ), "Invalid name or reps: %s %s" % (str(name), str(reps))
@@ -1482,8 +1518,10 @@ class CircuitLabel(LabelTupTupWithTime, tuple):
 
         ret = tuple.__new__(cls, (name, state_space_labels, reps) + tupOfLabels)
         if time is None:
-            ret.time = sum((getattr(lbl, 'time', 0.0) for lbl in tupOfLabels), start=0.0)
-            # ^ sum b/c components are *layers* of sub-circuit
+            ret.time = reps * sum((getattr(lbl, 'time', 0.0) for lbl in tupOfLabels), start=0.0)
+            # ^ sum b/c components are *layers* of sub-circuit, executed in sequence;
+            #   times `reps` b/c the whole block is executed that many times.  This
+            #   matches `depth`, which is likewise summed over layers and scaled by reps.
         else:
             ret.time = time
         ret._is_sorted = False
@@ -1670,7 +1708,9 @@ class LabelTupWithArgs(LabelTupWithTime, tuple):
             containing the passed object.
 
         time : float
-            The time at which this label occurs (can be relative or absolute)
+            The duration of the labeled operation -- how long it takes, not when
+            it occurs.  See the :class:`Label` class docstring for how durations
+            aggregate across layers and circuits.
 
         args : iterable of hashable types
             A list of "arguments" for this label.
@@ -1821,7 +1861,9 @@ class LabelTupTupWithArgs(LabelTupTupWithTime, tuple):
             which labels a parallel layer/level of a circuit.
 
         time : float
-            The time at which this label occurs (can be relative or absolute)
+            The duration of the labeled operation -- how long it takes, not when
+            it occurs.  See the :class:`Label` class docstring for how durations
+            aggregate across layers and circuits.
 
         args : iterable of hashable types
             A list of "arguments" for this label.

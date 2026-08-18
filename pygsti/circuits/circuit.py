@@ -645,7 +645,6 @@ class Circuit(object):
                 self._hashable_tup = self.tup
                 self._hash = hash(self._hashable_tup)
 
-
     def to_label(self, nreps:int=1) -> _CircuitLabel:
         """
         Construct and return this entire circuit as a :class:`CircuitLabel`.
@@ -732,8 +731,8 @@ class Circuit(object):
         if self._static:
             return self._labels
         else:
-            return tuple([layer_lbl if isinstance(layer_lbl, _Label)
-                          else _Label(layer_lbl) for layer_lbl in self._labels])
+            return tuple([_Label(layer_lbl) for layer_lbl in self._labels])
+
     @property
     def tup(self):
         """
@@ -3786,6 +3785,25 @@ class Circuit(object):
 
     @property
     def duration(self):
+        """
+        How long this circuit takes to execute.
+
+        The sum of the layers' durations, i.e. of their `time` attributes.  A
+        :class:`Label`'s `time` is a duration rather than a timestamp; see the
+        :class:`~pygsti.baseobjs.label.Label` class docstring for how durations
+        aggregate, including the `max` taken across a parallel layer's components.
+
+        Layers carrying no `time` contribute zero, so this is `0.0` for the
+        untimed circuits that most of pyGSTi deals in.
+
+        Note that this is unrelated to the timestamps on a
+        :class:`~pygsti.data.DataSet` row, which record *when* outcomes were
+        observed and are what the time-dependent forward simulators consume.
+
+        Returns
+        -------
+        float
+        """
         # similar to depth()
         if self._static:
             return sum([getattr(lbl, "time", 0) for lbl in self._labels])
@@ -4820,7 +4838,6 @@ class Circuit(object):
 
         return quil
 
-
     def convert_to_qiskit(self,
                           num_qubits: Optional[int] = None,
                           qubit_conversion: Union[None, str, Dict[str, Union[int, qiskit.circuit.Qubit]]] = None,
@@ -4960,7 +4977,6 @@ class Circuit(object):
                               'ordered_data_indices': ordered_data_indices}
 
         return qiskit_qc
-
 
     def convert_to_openqasm(self, num_qubits=None,
                             standard_gates_version='u3',
