@@ -215,7 +215,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_depol1.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticStandardOp))
+        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticUnitaryOp))
         self.assertTrue(isinstance(Gi_op.factorops[1], op.DepolarizeOp))
         self.assertEqual(mdl_depol1.num_params, 1)
 
@@ -226,7 +226,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_depol2.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticStandardOp))
+        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticUnitaryOp))
         self.assertTrue(isinstance(Gi_op.factorops[1], op.StochasticNoiseOp))
         self.assertEqual(mdl_depol2.num_params, 3) 
 
@@ -287,7 +287,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_sto1.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticStandardOp))
+        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticUnitaryOp))
         self.assertTrue(isinstance(Gi_op.factorops[1], op.StochasticNoiseOp))
         self.assertEqual(mdl_sto1.num_params, 3)
 
@@ -867,9 +867,7 @@ class TargetQubitOrderingTester(BaseCase):
     ``_create_explicit_model`` tested only total dimension, and failed to apply the permutation.
     """
 
-    # 'auto' -- the default -- is ('static standard', 'static clifford', 'static unitary').
-    # Standard-named gates with 'auto' construct StaticStandardOp directly from their name,
-    # which is handled separately.
+    # 'auto' -- the default -- is ('static clifford', 'static unitary', 'static').
     GATE_TYPES = ('auto', 'static', 'static unitary', 'full', 'full TP', 'CPTPLND', 'H+S')
 
     # 'CPTPLND' is dropped from the 3-qubit sweep only because a 3-qubit CPTPLND explicit model
@@ -910,8 +908,6 @@ class TargetQubitOrderingTester(BaseCase):
             unitary = std_unitaries()[gate_name]
             for gate_type in self.GATE_TYPES:
                 with self.subTest(gate=gate_name, gate_type=gate_type):
-                    if gate_type in ('auto', 'CPTPLND', 'H+S'):
-                        pytest.xfail(f"gate_type={gate_type!r} for standard gates requires standard-op resolution")
                     model = self._model(2, gate_name, gate_type)
                     self._assert_matches_reference(model, 2, gate_name, unitary, (0, 1))
                     self._assert_matches_reference(model, 2, gate_name, unitary, (1, 0))
@@ -919,8 +915,6 @@ class TargetQubitOrderingTester(BaseCase):
     def test_two_qubit_gate_orderings_differ(self):
         for gate_type in self.GATE_TYPES:
             with self.subTest(gate_type=gate_type):
-                if gate_type in ('auto', 'CPTPLND', 'H+S'):
-                    pytest.xfail(f"gate_type={gate_type!r} for standard gates requires standard-op resolution")
                 model = self._model(2, 'Gcnot', gate_type)
                 forward = model.operations[('Gcnot', 0, 1)].to_dense('HilbertSchmidt')
                 reverse = model.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt')
@@ -960,8 +954,6 @@ class TargetQubitOrderingTester(BaseCase):
         # Re-embedding them there would permute the gate again on every round trip.
         for gate_type in ('static', 'CPTPLND'):
             with self.subTest(gate_type=gate_type):
-                if gate_type == 'CPTPLND':
-                    pytest.xfail("gate_type='CPTPLND' for standard gates requires standard-op resolution")
                 model = self._model(2, 'Gcnot', gate_type)
                 original = model.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt').copy()
                 self.assertArraysAlmostEqual(
