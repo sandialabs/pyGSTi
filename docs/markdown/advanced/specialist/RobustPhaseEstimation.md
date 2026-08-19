@@ -18,7 +18,6 @@ This notebook demonstrates how to use Robust Phase Estimation (RPE) to estimate 
 #Import relevant namespaces.
 
 import pygsti
-from pygsti.modelpacks.legacy import std1Q_XY as Std1Q_XY
 from pygsti.extras import rpe
 
 import numpy as np
@@ -34,7 +33,8 @@ rpeconfig_inst = rpe.rpeconfig_GxPi2_GyPi2_00
 ```{code-cell} ipython3
 #Declare a variety of relevant parameters
 
-target_model = Std1Q_XY.target_model()
+target_model = pygsti.models.create_explicit_model_from_expressions([('Q0',)], ['Gx','Gy'],
+                                  [ "X(pi/2,Q0)", "Y(pi/2,Q0)"])
 target_model.set_all_parameterizations('full TP')
 maxLengths_1024 = [1,2,4,8,16,32,64,128,256,512,1024]
 

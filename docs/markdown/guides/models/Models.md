@@ -30,7 +30,7 @@ import pygsti
 import pygsti.modelmembers as mm
 from pygsti.models import modelconstruction as mc
 from pygsti.processors import QubitProcessorSpec
-from pygsti.modelpacks.legacy import std2Q_XYICNOT
+from pygsti.modelpacks import smq2Q_XYICNOT
 ```
 
 ## State spaces and bases
@@ -282,7 +282,9 @@ mdl_targetB = mc.create_explicit_model_from_expressions(
 assert(abs(target_model.frobeniusdist(mdl_targetB)) < 1e-6)
 ```
 
-If your 2-qubit gate happens to be one the expression parser already knows, you're done: add it and skip the rest of this section. The parser covers any controlled $X$, $Y$, or $Z$ rotation via `CX`, `CY`, `CZ`, plus the standard `CNOT` and `CPHASE`. Adding `CNOT(Q0,Q1)` here reproduces `pygsti.modelpacks.legacy.std2Q_XYICNOT.target_model()` exactly.
+If your 2-qubit gate happens to be one the expression parser already knows, you're done: add it and skip the rest of this section. The parser covers any controlled $X$, $Y$, or $Z$ rotation via `CX`, `CY`, `CZ`, plus the standard `CNOT` and `CPHASE`. Adding `CNOT(Q0,Q1)` here reproduces the `smq2Q_XYICNOT` model pack exactly.
+
+The two use different label conventions, which is worth seeing side by side. Models built from expressions take whatever operation labels you hand them, so the gates above are `Gix`, `Gxi` and so on. Model packs instead name a gate and the qubits it acts on, giving `('Gxpi2', 1)`, `('Gxpi2', 0)` and `('Gcnot', 0, 1)`. The superoperators are the same objects under either naming, so comparing the two means comparing gate by gate through that correspondence rather than calling `frobeniusdist` on the models, which would not find matching keys.
 
 ```{code-cell} ipython3
 mdl_withCNOT = mc.create_explicit_model_from_expressions( 
@@ -290,16 +292,24 @@ mdl_withCNOT = mc.create_explicit_model_from_expressions(
             [ "I(Q0):I(Q1)", "I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CNOT(Q0,Q1)" ],
             effect_labels=['00','01','10','11'], effect_expressions=["0","1","2","3"])
 
-#Note this is the same model as one of pyGSTi's standard models:
-assert(abs(mdl_withCNOT.frobeniusdist(std2Q_XYICNOT.target_model())) < 1e-6)
+#Note this is the same model as one of pyGSTi's standard model packs:
+import numpy as np
+to_modelpack = {'Gii': (), 'Gix': ('Gxpi2', 1), 'Giy': ('Gypi2', 1),
+                'Gxi': ('Gxpi2', 0), 'Gyi': ('Gypi2', 0), 'Gcnot': ('Gcnot', 0, 1)}
+mdl_pack = smq2Q_XYICNOT.target_model()
+assert all(np.allclose(mdl_withCNOT.operations[ours].to_dense(),
+                       mdl_pack.operations[theirs].to_dense())
+           for ours, theirs in to_modelpack.items())
 ```
 
-That equivalence runs backwards too. Since `target_model` holds exactly the 1-qubit gates of the standard model, a third route to it is to load the modelpack and delete `Gcnot`.
+That equivalence runs backwards too. Since `target_model` holds exactly the 1-qubit gates of the model pack, a third route to it is to load the pack and delete the two-qubit gate.
 
 ```{code-cell} ipython3
-mdl_targetC = std2Q_XYICNOT.target_model()
-del mdl_targetC.operations['Gcnot']
-assert(abs(target_model.frobeniusdist(mdl_targetC)) < 1e-6)
+mdl_targetC = smq2Q_XYICNOT.target_model()
+del mdl_targetC.operations[('Gcnot', 0, 1)]
+assert all(np.allclose(target_model.operations[ours].to_dense(),
+                       mdl_targetC.operations[theirs].to_dense())
+           for ours, theirs in to_modelpack.items() if ours != 'Gcnot')
 ```
 
 ### A custom two-qubit gate
@@ -337,7 +347,7 @@ print(target_model)
 
 ### Running GST on it
 
-To run 2-qubit GST against a custom model you would ideally generate fiducials and germs specifically for it. In this case the 1-qubit gates match the standard 2Q model packs, and the fiducial sequences for those packs contain only 1-qubit gates, so you can reuse a standard fiducial set such as `std2Q_XYICNOT`'s. Germs are the harder part. They should be computed, but in practice you can often take the germ set of a standard model and substitute your custom gate for its 2-qubit gate; check whether the resulting set is amplificationally complete before committing to a full germ-selection run. With fiducials and germs in hand, 2-qubit GST proceeds exactly as it does for a built-in 2Q model.
+To run 2-qubit GST against a custom model you would ideally generate fiducials and germs specifically for it. In this case the 1-qubit gates match the standard 2Q model packs, and the fiducial sequences for those packs contain only 1-qubit gates, so you can reuse a standard fiducial set such as `smq2Q_XYICNOT`'s. Germs are the harder part. They should be computed, but in practice you can often take the germ set of a standard model and substitute your custom gate for its 2-qubit gate; check whether the resulting set is amplificationally complete before committing to a full germ-selection run. With fiducials and germs in hand, 2-qubit GST proceeds exactly as it does for a built-in 2Q model.
 
 ## Next steps
 
