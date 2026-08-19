@@ -16,7 +16,7 @@ The circuits used in standard Long Sequence GST are more than what are needed to
 
 $$S = F_i (g_k)^n F_j $$
 
-where $F_i$ is a "preparation fiducial" sequence, $F_j$ is a "measurement fiducial" sequence, and "g_k" is a "germ" sequence.  The repeated germ sequence $(g_k)^n$ we refer to as a "germ-power".  There are currently three different ways to reduce a standard set of GST operation sequences within pyGSTi, each of which removes certain $(F_i,F_j)$ fiducial pairs for certain germ-powers.
+where $F_i$ is a "preparation fiducial" sequence, $F_j$ is a "measurement fiducial" sequence, and "g_k" is a "germ" sequence.  The repeated germ sequence $(g_k)^n$ we refer to as a "germ-power".  There are currently four different ways to reduce a standard set of GST operation sequences within pyGSTi, each of which removes certain $(F_i,F_j)$ fiducial pairs for certain germ-powers.
 
 - **Global fiducial pair reduction (GFPR)** removes the same intelligently-selected set of fiducial pairs for all germ-powers.  This is a conceptually simple method of reducing the operation sequences, but it is the most computationally intensive since it repeatedly evaluates the number of amplified parameters for en *entire germ set*.  In practice, while it can give very large sequence reductions, its long run can make it prohibitive, and the "per-germ" reduction discussed next is used instead. 
 <span style="color:red">Note: this form of FPR is deprecated on the latest versions of pygsti's develop branch. We now recommend using per-germ FPR instead. Also note that the current implementation of per-germ FPR will in most cases return smaller experiment designs than the legacy global FPR does.</span>
@@ -52,7 +52,7 @@ print("Gate operation labels = ", opLabels)
 
 ## Sequence Reduction
 
-Now let's generate a list of all the operation sequences for each maximum length - so a list of lists.  We'll generate the full lists (without any reduction) and the lists for each of the three reduction types listed above.  In the random reduction case, we'll keep 30% of the fiducial pairs, removing 70% of them.
+Now let's generate a list of all the operation sequences for each maximum length - so a list of lists.  We'll generate the full lists (without any reduction) and the lists for each of the four reduction types listed above.  In the random reduction case, we'll keep 30% of the fiducial pairs, removing 70% of them.
 
 ### No Reduction ("standard" GST)
 
@@ -209,20 +209,28 @@ print("\n%d experiments to run GST." % len(rfprExperiments))
 ```
 
 ## Running GST
-In each case above, we constructed (1) a list-of-lists giving the GST operation sequences for each maximum-length stage, and (2) a list of the experiments.  In what follows, we'll use the experiment list to generate some simulated ("fake") data for each case, and then run GST on it.  Since this is done in exactly the same way for all three cases, we'll put all of the logic in a function.  Note that the use of fiducial pair redution requires the use of `run_long_sequence_gst_base`, since `run_long_sequence_gst` internally builds a *complete* list of operation sequences.
+In each case above, we constructed (1) a list-of-lists giving the GST operation sequences for each maximum-length stage, and (2) a list of the experiments.  In what follows, we'll use the experiment list to generate some simulated ("fake") data for each case, and then run GST on it.  Since this is done in exactly the same way in each case, we'll put all of the logic in a function.
+
+We already built each reduced circuit-structure list by hand above, so there's no need to have GST regenerate it: a `GateSetTomographyDesign` accepts a list of circuit structures directly, without insisting on a set of fiducials, germs, and a fiducial-pair-reduction scheme to derive them from (that derivation is what a `StandardGSTDesign` is for). We pair that experiment design with the simulated dataset in a `ProtocolData` object, and hand the pair to the `GateSetTomography` protocol. This sidesteps the old two-driver split between `run_long_sequence_gst`, which always builds a *complete* list of operation sequences, and `run_long_sequence_gst_base`, the "base" variant that fiducial pair reduction relied on for accepting an explicit circuit-structure list. The Protocol API takes an explicit experiment design either way, so there's only one code path to learn.
 
 ```{code-cell} ipython3
 #use a depolarized version of the target gates to generate the data
 mdl_datagen = target_model.depolarize(op_noise=0.1, spam_noise=0.001)
 
+#GateSetTomographyDesign is built around a processor spec, which any
+#model can produce.
+pspec = target_model.create_processor_spec()
+
 def runGST(gstStructs, exptList):
     #Use list of experiments, expList, to generate some data
     ds = pygsti.data.simulate_data(mdl_datagen, exptList,
             num_samples=1000,sample_error="binomial", seed=1234)
-    
-    #Use "base" driver to directly pass list of circuit structures
-    return pygsti.run_long_sequence_gst_base(
-        ds, target_model, gstStructs, verbosity=1)
+
+    #Wrap the already-built circuit structures in an experiment design,
+    #pair it with the data, and run GateSetTomography on the pair.
+    design = pygsti.protocols.GateSetTomographyDesign(pspec, gstStructs)
+    data = pygsti.protocols.ProtocolData(design, ds)
+    return pygsti.protocols.GateSetTomography(target_model, verbosity=1).run(data)
 
 print("\n------ GST with standard (full) sequences ------")
 full_results = runGST(fullStructs, fullExperiments)

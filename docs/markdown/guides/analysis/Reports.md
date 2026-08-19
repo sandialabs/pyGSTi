@@ -19,7 +19,7 @@ PyGSTi's reports are stand-alone HTML documents that cannot run Python.  Everyth
 
 ## Get some `ModelEstimateResults`
 
-Start by performing GST to create a `ModelEstimateResults` object (you could also just load one from file).  The calls below use the older `run_long_sequence_gst` driver function; see [migrating from the function-based API](../../advanced/migration/FromFunctionAPI) for the protocol-object equivalent, which is what new code should use.
+Start by performing GST to create a `ModelEstimateResults` object (you could also just load one from file).  The calls below use the protocol-object API — an experiment design paired with data and run through a protocol — described in [migrating from the function-based API](../../advanced/migration/FromFunctionAPI).
 
 ```{code-cell} ipython3
 import pygsti
@@ -34,8 +34,11 @@ ds = pygsti.io.read_dataset("../../../tutorial_files/Example_Dataset.txt", cache
 
 #Run GST
 target_model.set_all_parameterizations("full TP") #TP-constrained
-results = pygsti.run_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials, germs,
-                                      maxLengths, verbosity=3)
+edesign = pygsti.protocols.StandardGSTDesign(target_model.create_processor_spec(), prep_fiducials,
+                                             meas_fiducials, germs, maxLengths)
+data = pygsti.protocols.ProtocolData(edesign, ds)
+
+results = pygsti.protocols.GateSetTomography(target_model, verbosity=3).run(data)
 ```
 
 ## Make a report
@@ -66,15 +69,14 @@ Several remarks about these reports are worth noting:
 
 ## Multiple estimates in a single report
 
-Next, analyze the same data two different ways: with and without the TP constraint (that is, whether the gates *must* be trace-preserving), gauge optimizing each case using several different SPAM weights.  In each case we call `run_long_sequence_gst` with `gauge_opt_suite_name='none'`, so that no gauge optimization is done, then perform several gauge optimizations separately and add these to the `Results` object via its `add_gaugeoptimized` method.  Each run gets a distinct `estimate_label` so the two estimates can later live side by side in a single `Results` object.
+Next, analyze the same data two different ways: with and without the TP constraint (that is, whether the gates *must* be trace-preserving), gauge optimizing each case using several different SPAM weights.  In each case we run `GateSetTomography` with `gaugeopt_suite=None`, so that no gauge optimization is done, then perform several gauge optimizations separately and add these to the `Results` object via its `add_gaugeoptimized` method.  Each run gets a distinct `name` so the two estimates can later live side by side in a single `Results` object.  Both cases fit the same circuits collected in `ds`, so both reuse the `edesign`/`data` pair built above.
 
 ```{code-cell} ipython3
 #Case1: TP-constrained GST
 tpTarget = target_model.copy()
 tpTarget.set_all_parameterizations("full TP")
-results_tp = pygsti.run_long_sequence_gst(ds, tpTarget, prep_fiducials, meas_fiducials, germs,
-                                      maxLengths, gauge_opt_suite_name='none',
-                                      advanced_options={'estimate_label': 'full TP'}, verbosity=1)
+results_tp = pygsti.protocols.GateSetTomography(tpTarget, gaugeopt_suite=None, name='full TP',
+                                               verbosity=1).run(data)
 
 #Gauge optimize
 est = results_tp.estimates['full TP']
@@ -89,9 +91,8 @@ for spamWt in [1e-4,1e-2,1.0]:
 #Case2: "Full" GST
 fullTarget = target_model.copy()
 fullTarget.set_all_parameterizations("full")
-results_full = pygsti.run_long_sequence_gst(ds, fullTarget, prep_fiducials, meas_fiducials, germs,
-                                           maxLengths, gauge_opt_suite_name='none',
-                                           advanced_options={'estimate_label': 'Full'}, verbosity=1)
+results_full = pygsti.protocols.GateSetTomography(fullTarget, gaugeopt_suite=None, name='Full',
+                                                 verbosity=1).run(data)
 
 #Gauge optimize
 est = results_full.estimates['Full']
@@ -130,14 +131,14 @@ pygsti.report.construct_standard_report(
 ).write_html("../../../tutorial_files/exampleMultiEstimateReport2", auto_open=False, verbosity=2)
 ```
 
-## Multiple estimates and `run_stdpractice_gst`
+## Multiple estimates and `StandardGST`
 
-It's no coincidence that a `Results` object containing multiple estimates from the same data is precisely what `run_stdpractice_gst` returns (and its protocol-object replacement, `StandardGST`).  This lets you run GST several times, creating different "standard" estimates and gauge optimizations, and plot them all in a single HTML report.
+It's no coincidence that a `Results` object containing multiple estimates from the same data is precisely what the `StandardGST` protocol returns.  It runs GST several times, creating different "standard" estimates and gauge optimizations, so you can plot them all in a single HTML report.
 
 ```{code-cell} ipython3
-results_std = pygsti.run_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials, germs,
-                                        maxLengths, verbosity=4, modes=('full TP', 'CPTP', 'Target'),
-                                        gaugeopt_suite=('stdgaugeopt','toggleValidSpam'))
+results_std = pygsti.protocols.StandardGST(modes=('full TP', 'CPTPLND', 'Target'),
+                                           gaugeopt_suite=('stdgaugeopt','toggleValidSpam'),
+                                           target_model=target_model, verbosity=4).run(data)
 
 # Generate a report with "TP", "CPTP", and "Target" estimates
 pygsti.report.construct_standard_report(
@@ -156,7 +157,7 @@ Constructing a factory often means computing a Hessian, which can be time consum
 
 ```{code-cell} ipython3
 #Construct and initialize a "confidence region factory" for the CPTP estimate
-crfact = results_std.estimates["CPTP"].add_confidence_region_factory('Spam 0.001', 'final')
+crfact = results_std.estimates["CPTPLND"].add_confidence_region_factory('Spam 0.001', 'final')
 crfact.compute_hessian(comm=None) #we could use more processors
 crfact.project_hessian('intrinsic error')
 
@@ -185,9 +186,12 @@ circuit_list = pygsti.circuits.create_lsgst_circuits(
     smq1Q_XYI.germs(), maxLengths)
 ds2 = pygsti.data.simulate_data(datagen_gateset, circuit_list, num_samples=1000,
                                              sample_error='binomial', seed=2018)
-results_std2 = pygsti.run_stdpractice_gst(ds2, target_model, prep_fiducials, meas_fiducials, germs,
-                                     maxLengths, verbosity=3, modes=('full TP', 'Target'),
-                                     gaugeopt_suite=('stdgaugeopt','toggleValidSpam'))
+
+#Same circuits as `edesign`, just paired with the new dataset
+data2 = pygsti.protocols.ProtocolData(edesign, ds2)
+results_std2 = pygsti.protocols.StandardGST(modes=('full TP', 'Target'),
+                                            gaugeopt_suite=('stdgaugeopt','toggleValidSpam'),
+                                            target_model=target_model, verbosity=3).run(data2)
 
 pygsti.report.construct_standard_report(
     {'DS1': results_std, 'DS2': results_std2},
@@ -199,7 +203,7 @@ pygsti.report.construct_standard_report(
 
 Reports aren't restricted to long-sequence GST.  *Linear* GST (LGST) takes substantially less data and computation time, so when a rough estimate of your gates is all you're after, it's worth knowing that its output feeds the same report machinery.  The experiment design below uses `max_max_length=1`, which is all LGST requires.
 
-This workflow also differs from the ones above in that it uses protocol objects rather than the `run_*_gst` driver functions: write an empty data directory from an experiment design, fill it in, read it back, then run the protocol.
+This workflow differs from the ones above in how the data arrives: instead of pairing an existing `DataSet` with an experiment design, write an empty data directory from the experiment design, fill it in (standing in for actually collecting data), read the completed directory back, then run the protocol.
 
 ```{code-cell} ipython3
 #Get experiment design (for now, just max_max_length=1 GST sequences)
@@ -213,12 +217,12 @@ pygsti.io.fill_in_empty_dataset_with_fake_data("../../../example_files/lgst_only
                                                mdl_datagen, num_samples=1000, seed=2020)
 
 #load in the data
-data = pygsti.io.read_data_from_dir("../../../example_files/lgst_only_example")
+lgst_data = pygsti.io.read_data_from_dir("../../../example_files/lgst_only_example")
 ```
 
 ```{code-cell} ipython3
-#Run LGST.  Pass gaugeopt_suite=None to skip the gauge optimization step.
-results_lgst = pygsti.protocols.LGST(smq1Q_XYI.target_model()).run(data)
+#Run LGST on the data written above.
+results_lgst = pygsti.protocols.LGST(smq1Q_XYI.target_model()).run(lgst_data)
 ```
 
 ```{code-cell} ipython3

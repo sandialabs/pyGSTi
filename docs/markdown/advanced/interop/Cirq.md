@@ -233,10 +233,12 @@ for pygsti_circuit, trial_result in zip(pygsti_circuits, results):
     dataset.add_cirq_trial_result(pygsti_circuit, trial_result, key='result')
 ```
 
-Perform GST.
+Perform GST. `StandardGSTDesign` rebuilds the circuit list from the fiducials, germs and max lengths, pairs it with the dataset we just built, and the `StandardGST` protocol runs on the pair.
 
 ```{code-cell} ipython3
-gst_results = pygsti.run_stdpractice_gst(dataset, target_model, preps, effects, germs, max_lengths, modes=["full TP","Target"], verbosity=1)
+design = pygsti.protocols.StandardGSTDesign(target_model, preps, effects, germs, max_lengths)
+data = pygsti.protocols.ProtocolData(design, dataset)
+gst_results = pygsti.protocols.StandardGST(modes=["full TP", "Target"], target_model=target_model, verbosity=1).run(data)
 ```
 
 See what if finds.

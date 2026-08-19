@@ -109,11 +109,11 @@ print(mdl)
 
 ### Running GST with it
 
-Nothing about the custom class needs special handling downstream, so run gate set tomography on the model directly (the [GST overview tutorial](../../start/FirstGST) covers what each of these calls does).
+Nothing about the custom class needs special handling downstream, so run gate set tomography on the model directly with the `GateSetTomography` protocol (the [GST overview tutorial](../../start/FirstGST) covers the same design-and-data pattern, though it runs `StandardGST` rather than `GateSetTomography`).
 
-There is one wrinkle. GST by default gauge optimizes its final estimate toward the target model, and that requires every operator in the model to implement `transform`. `MyXPi2Operator` deliberately doesn't, so turn gauge optimization off with `gauge_opt_suite_name='none'`. See the [gauge optimization tutorial](../../guides/analysis/GaugeFreedom) for why you'd normally want it.
+There is one wrinkle. GST by default gauge optimizes its final estimate toward the target model, and that requires every operator in the model to implement `transform`. `MyXPi2Operator` deliberately doesn't, so turn gauge optimization off by passing `gaugeopt_suite=None`. See the [gauge optimization tutorial](../../guides/analysis/GaugeFreedom) for why you'd normally want it.
 
-`gauge_opt_suite_name='none'` is not the same as `gauge_opt_suite_name=None`. The string explicitly skips gauge optimization; `None` defers the decision to downstream functions.
+Passing `gaugeopt_suite=None` explicitly is not the same as leaving the argument out. The explicit `None` produces an empty gauge-optimization suite, so none runs; omitting the argument falls back to the default `'stdgaugeopt'` suite.
 
 ```{code-cell} ipython3
 # Generate "fake" data from a depolarized version of the target (ideal) model
@@ -125,8 +125,10 @@ ds = pygsti.data.simulate_data(mdl_datagen, listOfExperiments, num_samples=1000,
                                             sample_error="binomial", seed=1234)
 
 #Run GST *without* gauge optimization
-results = pygsti.run_long_sequence_gst(ds, mdl, smq1Q_XYI.prep_fiducials(), smq1Q_XYI.meas_fiducials(),
-                                      smq1Q_XYI.germs(), maxLengths, gauge_opt_suite_name='none')
+design = pygsti.protocols.StandardGSTDesign(mdl, smq1Q_XYI.prep_fiducials(), smq1Q_XYI.meas_fiducials(),
+                                            smq1Q_XYI.germs(), maxLengths)
+data = pygsti.protocols.ProtocolData(design, ds)
+results = pygsti.protocols.GateSetTomography(mdl, gaugeopt_suite=None).run(data)
 ```
 
 That's it. GST just ran with a custom operation.

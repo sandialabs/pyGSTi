@@ -41,11 +41,14 @@ ds2 = pygsti.data.simulate_data(mdl_datagen2, listOfExperiments, num_samples=100
                                             sample_error="binomial", seed=1234)
 ds3 = ds1.copy_nonstatic(); ds3.add_counts_from_dataset(ds2); ds3.done_adding_data()
 
-#Run GST on all three datasets
+#One experiment design serves all three datasets, since they answer the same
+#circuits; only the counts differ from one run to the next.
 target_model.set_all_parameterizations("full TP")
-results1 = pygsti.run_long_sequence_gst(ds1, target_model, prep_fiducials, meas_fiducials, germs, maxLengths, verbosity=0)
-results2 = pygsti.run_long_sequence_gst(ds2, target_model, prep_fiducials, meas_fiducials, germs, maxLengths, verbosity=0)
-results3 = pygsti.run_long_sequence_gst(ds3, target_model, prep_fiducials, meas_fiducials, germs, maxLengths, verbosity=0)
+edesign = pygsti.protocols.StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+gst = pygsti.protocols.GateSetTomography(target_model, verbosity=0)
+results1 = gst.run(pygsti.protocols.ProtocolData(edesign, ds1))
+results2 = gst.run(pygsti.protocols.ProtocolData(edesign, ds2))
+results3 = gst.run(pygsti.protocols.ProtocolData(edesign, ds3))
 
 #make some shorthand variable names for later
 tgt = results1.estimates['GateSetTomography'].models['target']

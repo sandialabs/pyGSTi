@@ -54,7 +54,7 @@ w.GatesTable(smq1Q_XYI.target_model())
 
 ## Getting some results
 
-Most of the interesting figures want GST output, so run gate set tomography on the standard 1-qubit model to get something to play with. Generate a few `DataSet` objects, then call `run_long_sequence_gst` on each to get `ModelEstimateResults` objects. For the details, see the [GST overview tutorial](../../start/FirstGST) and the [tutorial on the ModelEstimateResults object](../../guides/analysis/Results).
+Most of the interesting figures want GST output, so run gate set tomography on the standard 1-qubit model to get something to play with. Generate a few `DataSet` objects, then run each one through the `GateSetTomography` protocol to get `ModelEstimateResults` objects. For the details, see the [GST overview tutorial](../../start/FirstGST) and the [tutorial on the ModelEstimateResults object](../../guides/analysis/Results).
 
 ```{code-cell} ipython3
 #The usual GST setup: we're going to run GST on the standard XYI 1-qubit model
@@ -82,9 +82,15 @@ ds3 = ds1.copy_nonstatic(); ds3.add_counts_from_dataset(ds2); ds3.done_adding_da
 ```{code-cell} ipython3
 #Run GST on all three datasets
 target_model.set_all_parameterizations("full TP")
-results1 = pygsti.run_long_sequence_gst(ds1, target_model, prep_fiducials, meas_fiducials, germs, maxLengths, verbosity=0)
-results2 = pygsti.run_long_sequence_gst(ds2, target_model, prep_fiducials, meas_fiducials, germs, maxLengths, verbosity=0)
-results3 = pygsti.run_long_sequence_gst(ds3, target_model, prep_fiducials, meas_fiducials, germs, maxLengths, verbosity=0)
+
+# One experiment design covers all three datasets, since they all answer the
+# same circuits.
+edesign = pygsti.protocols.StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
+gst = pygsti.protocols.GateSetTomography(target_model, verbosity=0)
+
+results1 = gst.run(pygsti.protocols.ProtocolData(edesign, ds1))
+results2 = gst.run(pygsti.protocols.ProtocolData(edesign, ds2))
+results3 = gst.run(pygsti.protocols.ProtocolData(edesign, ds3))
 
 #make some shorthand variable names for later
 tgt = results1.estimates['GateSetTomography'].models['target']
