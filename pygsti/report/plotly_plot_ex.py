@@ -260,10 +260,16 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
 
 def init_notebook_mode_ex(connected=False):
     """
-    Similar to `init_notebook_mode` in `plotly.offline`.
+    Return HTML that makes `window.Plotly` available in a Jupyter notebook.
 
-    The main difference is that this function loads the pyGSTi-customized plotly library
-    when `connected=False` (which contains fixes relevant to pyGSTi plots).
+    This used to register plotly as a RequireJS (AMD) module, which no longer
+    works: JupyterLab >= 3 and Notebook >= 7 have no RequireJS, and the RequireJS
+    that nbconvert's HTML template loads cannot resolve the module.  It now emits
+    a plain <script> tag instead, matching what `plotly.io` itself does.
+
+    `Workspace.init_notebook_mode` does not call this -- it loads plotly along
+    with jQuery and KaTeX via `pygsti.report.notebook_setup`.  It is kept for
+    callers that only need plotly.
 
     Parameters
     ----------
@@ -277,36 +283,23 @@ def init_notebook_mode_ex(connected=False):
     global __PLOTLY_OFFLINE_INITIALIZED
 
     if connected:
-        # Inject plotly.js into the output cell
         script_inject = (
-            ''
-            '<script>'
-            'requirejs.config({'
-            'paths: { '
-            # Note we omit the extension .js because require will include it.
-            '\'plotly\': [\'https://cdn.plot.ly/plotly-3.0.1.min.js\']},'
-            '});'
-            'if(!window.Plotly) {{'
-            'require([\'plotly\'],'
-            'function(plotly) {window.Plotly=plotly;});'
-            '}}'
-            '</script>'
+            "<script type='text/javascript'>"
+            "if(!window.Plotly) {"
+            "  var _pygsti_plotly_el = document.createElement('script');"
+            "  _pygsti_plotly_el.src = 'https://cdn.plot.ly/plotly-3.0.1.min.js';"
+            "  _pygsti_plotly_el.async = false;"
+            "  document.head.appendChild(_pygsti_plotly_el);"
+            "}"
+            "</script>"
         )
     else:
-        # Inject plotly.js into the output cell
+        # Inline the pyGSTi-customized plotly bundle directly into the cell.
         script_inject = (
-            ''
-            '<script type=\'text/javascript\'>'
-            'if(!window.Plotly){{'
-            'define(\'plotly\', function(require, exports, module) {{'
-            '{script}'
-            '}});'
-            'require([\'plotly\'], function(Plotly) {{'
-            'window.Plotly = Plotly;'
-            '}});'
-            '}}'
-            '</script>'
-            '').format(script=format_plotlylib_inclusion_js())  # EGN changed to _ex
+            "<script type='text/javascript'>\n"
+            "{script}\n"
+            "</script>\n"
+        ).format(script=format_plotlylib_inclusion_js())
 
     #ORIG: ipython_display.display(ipython_display.HTML(script_inject))
     __PLOTLY_OFFLINE_INITIALIZED = True

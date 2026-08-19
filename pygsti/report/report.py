@@ -208,10 +208,9 @@ class Report:
         who want to tinker with the standard analysis presented in the static
         HTML or LaTeX format reports.
 
-        Note that interactive cells in report notebooks require JavaScript,
-        and therefore do not work with JupyterLab. Please continue to use
-        classic Jupyter notebooks for PyGSTi report notebooks. To track this issue,
-        see https://github.com/pyGSTio/pyGSTi/issues/205.
+        Note that interactive cells in report notebooks are driven by JavaScript,
+        so the notebook must be "Trusted" before its figures will render: JupyterLab
+        and Notebook 7 do not run scripts in an untrusted notebook.
 
         Parameters
         ----------
@@ -259,11 +258,12 @@ class Report:
         nb.add_markdown('# {title}\n(Created on {date})'.format(
             title=title, date=_time.strftime("%B %d, %Y")))
         
-        nb.add_markdown("## JupyterLab Incompatibility Warning\n" + 
-        "<font color='red'>Note that interactive cells in report notebooks require JavaScript, " +
-        "and therefore do not work with JupyterLab. Please continue to use " +
-        "classic Jupyter notebooks for PyGSTi report notebooks. To track this issue, " +
-        "see https://github.com/pyGSTio/pyGSTi/issues/205.</font>")
+        nb.add_markdown("## Before you run this\n" +
+        "The figures below are drawn by JavaScript, so this notebook has to be "
+        "**Trusted** before they will appear. JupyterLab and Notebook 7 do not run "
+        "scripts in an untrusted notebook. Run `jupyter trust` on this file, or use "
+        "the Trusted indicator in the toolbar, then reload with your browser's "
+        "reload button.")
 
         nb.add_code("""
         import pygsti
@@ -373,10 +373,8 @@ class Report:
 
         printer.log("Report Notebook created as %s" % path)
 
-        printer.warning("""Note that interactive cells in report notebooks require JavaScript,
-         and therefore do not work with JupyterLab. Please continue to use
-         classic Jupyter notebooks for PyGSTi report notebooks. To track this issue,
-         see https://github.com/pyGSTio/pyGSTi/issues/205.""")
+        printer.log("Note: the figures in a report notebook are drawn by JavaScript,"
+                    " so the notebook must be \"Trusted\" before they will render.")
 
         if auto_open:
             port = "auto" if auto_open is True else int(auto_open)
