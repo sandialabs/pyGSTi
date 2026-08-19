@@ -176,7 +176,7 @@ The protocol embodies a standard *set* of GST protocols to be run on a set of da
  - `"Target"`  : use the target (ideal) gates as the estimate
  - any key in the `models_to_test` argument
 
-Other parameterization names accepted by `set_all_parameterizations`, such as `"GLND"` and `"H+D"`, work here too.  `"CPTP"` still runs but raises a deprecation warning; use `"CPTPLND"` instead.  The default is `("full TP", "CPTPLND", "Target")`.
+The default is `("full TP", "CPTPLND", "Target")`.  `"CPTP"` still runs but raises a deprecation warning; use `"CPTPLND"` instead.  A mode that is neither `"Target"` nor a `models_to_test` key is handed to `set_all_parameterizations`, so other Lindblad parameterization names it accepts will also run, though they are off the path this protocol is set up for.
 
 Gauge optimization is controlled by the `gaugeopt_suite` argument, just as in `GateSetTomography`.  Neither protocol takes a `gaugeopt_target` argument.  To gauge optimize toward something other than the experiment design's (typically ideal) target gates, build a `GSTGaugeOptSuite` with its own `gaugeopt_target=` and pass that in as the suite, which is what the last example on this page does.
 
