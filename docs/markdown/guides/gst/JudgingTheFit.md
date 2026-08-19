@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Judging the fit
+# Judging GST fits
 
 A GST estimate is a set of gate matrices and a number saying how well those matrices explain your counts. The second half gets skipped a lot, and skipping it is how people end up quoting a process fidelity from an estimate that does not describe their device. This page is about the number: what $2\Delta\log\mathcal{L}$ is, where its degrees of freedom come from, how $N_\sigma$ is built out of the two, and how to pull all of it out of a `ModelEstimateResults` object.
 

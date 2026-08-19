@@ -38,21 +38,26 @@ parts:
     sections:
     - file: markdown/guides/models/MultiQubitModels
     - file: markdown/guides/models/ModelNoise
-  - file: markdown/guides/gst/RunningGST
+  - file: markdown/guides/gst/GSTDesigns
     sections:
     - file: markdown/guides/gst/GSTCircuits
     - file: markdown/guides/gst/FiducialsAndGerms
     - file: markdown/guides/gst/FewerCircuits
     - file: markdown/guides/gst/CheckYourDesign
-    - file: markdown/guides/gst/JudgingTheFit
+  - file: markdown/guides/gst/RunningGST
+    sections:
+    - file: markdown/guides/gst/TwoQubitGST
+    - file: markdown/guides/gst/Parallelism
+  - file: markdown/guides/gst/JudgingTheFit
+    sections:
     - file: markdown/guides/gst/BadFits
     - file: markdown/guides/gst/RobustGST-TVD
-    - file: markdown/guides/gst/TwoQubitGST
+  - file: markdown/guides/gst/RicherDeviceModels
+    sections:
     - file: markdown/guides/gst/MidCircuitMeasurement
-    - file: markdown/guides/gst/Leakage
     - file: markdown/guides/gst/QutritGST
+    - file: markdown/guides/gst/Leakage
     - file: markdown/guides/gst/TimeDependentGST
-    - file: markdown/guides/gst/Parallelism
   - file: markdown/guides/rb/HowRBWorks
     sections:
     - file: markdown/guides/rb/CliffordRB
