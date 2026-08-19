@@ -1607,3 +1607,70 @@ class CircuitBugfixRegressionTester(BaseCase):
         c = circuit.Circuit("GxGy@(0)")
         with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit"):
             c.str = "GxGy@(0)"
+
+
+class CircuitDepthVsNumLayersTester(BaseCase):
+    """
+    `depth` and `num_layers` deliberately differ for circuits retaining a CircuitLabel:
+    `depth` counts executed layers (descending into boxes), `num_layers` counts top-level
+    slots.  Per-layer accessors are bounded by `num_layers`, so callers wanting every
+    executed layer must expand first.  These pin that contract and the fixed callers.
+    """
+
+    @staticmethod
+    def _boxed_circuit():
+        # a box survives into the static form only via the editable path; constructing
+        # `Circuit([cl], ...)` directly flattens it (default_expand_subcircuits is True)
+        sub = circuit.Circuit([Label('Gcnot', (0, 1))] * 5, line_labels=(0, 1))
+        c = circuit.Circuit([sub.to_label(nreps=3)], line_labels=(0, 1), editable=True)
+        c.done_editing()
+        return c
+
+    def test_depth_and_num_layers_differ_for_a_retained_box(self):
+        c = self._boxed_circuit()
+        self.assertEqual(c.depth, 15)
+        self.assertEqual(c.num_layers, 1)
+        self.assertIsInstance(c.layer_label(0), CircuitLabel)
+
+    def test_layer_label_is_bounded_by_num_layers_and_says_so(self):
+        c = self._boxed_circuit()
+        with self.assertRaises(AssertionError) as ctx:
+            c.layer_label(1)
+        msg = str(ctx.exception)
+        # the message used to read "Circuit is only of depth 1" while checking num_layers
+        self.assertIn('num_layers', msg.replace('layer(s)', 'num_layers'))
+        self.assertIn('expand_subcircuits', msg)
+
+    def test_expanding_reconciles_depth_and_num_layers(self):
+        c = self._boxed_circuit().expand_subcircuits()
+        self.assertEqual(c.depth, 15)
+        self.assertEqual(c.num_layers, 15)
+        self.assertEqual([c.layer_label(i) for i in range(c.depth)],
+                         [Label('Gcnot', (0, 1))] * 15)
+
+    def test_directly_constructed_static_circuit_flattens_the_box(self):
+        sub = circuit.Circuit([Label('Gcnot', (0, 1))] * 5, line_labels=(0, 1))
+        c = circuit.Circuit([sub.to_label(nreps=3)], line_labels=(0, 1))
+        self.assertEqual(c.depth, 15)
+        self.assertEqual(c.num_layers, 15)
+
+    def test_wildcard_budget_handles_a_retained_box(self):
+        # regression: budget_for_label looped `range(depth)` calling `layer_label`, which
+        # raised at i == 1 on any circuit retaining a box
+        from pygsti.objectivefns.wildcardbudget import PrimitiveOpsWildcardBudget
+        c = self._boxed_circuit()
+        budget = PrimitiveOpsWildcardBudget([Label('Gcnot', (0, 1))], start_budget=0.01)
+        # 15 executed Gcnot layers, each drawing the same per-op budget
+        self.assertAlmostEqual(budget.circuit_budget(c), 15 * 0.01)
+
+    def test_oplessmodel_circuit_cache_handles_a_retained_box(self):
+        # regression: _circuit_cache looped `range(depth)` calling layer_label_with_idles
+        from pygsti.models.oplessmodel import ErrorRatesModel
+        c = self._boxed_circuit()
+        model = ErrorRatesModel({'gates': {'Gcnot': 0.01}, 'readout': {0: 0.01, 1: 0.01}},
+                                num_qubits=2, state_space_labels=[0, 1],
+                                idle_name=None)
+        width, depth, _, _, inds_by_layer = model._circuit_cache(c)
+        self.assertEqual(width, 2)
+        self.assertEqual(depth, 15)
+        self.assertEqual(len(inds_by_layer), 16)  # one per executed layer, plus readout

@@ -158,6 +158,23 @@ Additionally, the path-3 behaviour is arguably surprising to callers: `copy.deep
 
 **Tracker.** [sandialabs/pyGSTi#804](https://github.com/sandialabs/pyGSTi/issues/804)
 
+## 19. `Label.IS_SIMPLE` conflates "layer-atom" with "primitive op"
+
+**What it is.** [pygsti/baseobjs/label.py:173](../pygsti/baseobjs/label.py#L173) defines one class flag, read via the `is_simple` property ([label.py:464](../pygsti/baseobjs/label.py#L464)), that is asked two independent questions:
+
+- **A — is this a layer-atom?** Does it occupy a single layer slot as an opaque unit, so the within-layer machinery must *not* splay its `.components` out as parallel co-layer siblings? This is what `circuit.py` wants.
+- **B — is this a primitive op?** Is it one operation with no nested sub-label structure, reconstructible from `name`/`sslbls`(/`args`) and resolvable as a single op in a model? This is what the model, objective-function, and budget layers want.
+
+The two agree for every label class except [`CircuitLabel`](../pygsti/baseobjs/label.py#L1419), which is a genuine hybrid: a sub-circuit box occupies one layer slot (A = true) but wraps a whole subcircuit (B = false). One boolean cannot hold both, so `CircuitLabel.IS_SIMPLE = True` ([label.py:1430](../pygsti/baseobjs/label.py#L1430)) is right for A and wrong for B — and note it flips the flag back to `True` under a `LabelTupTup` ancestry whose whole branch is `False`, so the True/False boundary does not follow the type hierarchy and no consumer can reason from the class alone.
+
+**Where it bites.** Any B-consumer needs an `isinstance(..., CircuitLabel)` bypass or carries a latent bug. It has already shipped one silent data-loss bug: `map_names_inplace` / `map_state_space_labels_inplace` took the simple-label branch and rebuilt a box as a bare `Label(name, sslbls)`, *discarding the subcircuit*; commit `2aff09799` patched it with explicit `isinstance` guards ([circuit.py:3064](../pygsti/circuits/circuit.py#L3064), [:3109](../pygsti/circuits/circuit.py#L3109)) — a workaround, not a resolution. Two guards remain mis-aimed for the same reason: [wildcardbudget.py:598](../pygsti/objectivefns/wildcardbudget.py#L598)/[:658](../pygsti/objectivefns/wildcardbudget.py#L658) and [oplessmodel.py:408](../pygsti/models/oplessmodel.py#L408) all do `assert(not lbl.is_simple)` before recursing into `.components`, so a `CircuitLabel` that isn't a model-registered primitive raises instead of decomposing. Separately, the metrics family (`size`, `num_gates`, `num_nq_gates`, `num_multiq_gates`) short-circuits on `IS_SIMPLE` while `depth` is hand-overridden to descend, so a box of five 2-qubit layers × 3 reps reports `size == 2`, `num_gates == 1`, `depth == 15` — an inconsistency that is a side effect of the flag rather than a decision.
+
+To see any of this you must retain a box in a static circuit, which means the editable path: `Circuit.default_expand_subcircuits` is `True`, so `Circuit([cl], ...)` flattens it. Build with `editable=True` and call `done_editing()`.
+
+**Don't** add new `is_simple` consumers without deciding which axis you mean. If you want "won't corrupt a layer if I don't descend," that's A and `is_simple` is correct today. If you want "I can look this up as one op," that's B and `is_simple` will lie to you about boxes.
+
+**Tracker.** [sandialabs/pyGSTi#766](https://github.com/sandialabs/pyGSTi/issues/766) has the full analysis, the per-class A/B table, and the proposed `IS_LAYER_ATOM` / `IS_PRIMITIVE_OP` split with a call-site migration table. The design is accepted; implementation is deliberately held for the `Circuit`/`Label` rewrite, because the metrics-family row is a policy decision that would move the golden characterization fixtures under `test/unit/circuits/golden/`.
+
 ## 17. POVM inheritance structure refactor
 
 **What it is.** [pygsti/modelmembers/povms/povm.py](../pygsti/modelmembers/povms/povm.py)'s `POVM` base class and `_BasePOVM` have inverted-ish roles: `POVM` actually implements a fully-wired-up zero-parameter POVM, but most concrete subclasses do have parameters. This forces awkward overrides.

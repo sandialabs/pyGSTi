@@ -104,6 +104,11 @@ class CircuitEncoder(object):
                 "CircuitEncoder.__call__ pads circuits up to padded_depth, it does not (and cannot) "
                 "truncate a circuit's real layers. Pass padded_depth=None or a value >= circuit.depth."
             )
+        # `layer` indexes top-level layers (`num_layers`), but we encode every executed
+        # layer (`depth`), which is also what the padding above is measured against.
+        # Those differ only when the circuit retains a CircuitLabel; expand just then.
+        if circuit.depth != circuit.num_layers:
+            circuit = circuit.expand_subcircuits()
         circuit_array: list[Any] = []
         circuit_array += self.initialization_encoding(circuit)
         circuit_array += [self.layer_encoding(circuit.layer(i)) for i in range(circuit.depth)]
