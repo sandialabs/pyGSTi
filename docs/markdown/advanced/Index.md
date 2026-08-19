@@ -1,6 +1,6 @@
-# Advanced topics and internals
+# Do I need any of this?
 
-Nothing in this part is required to run a characterization protocol and read the answer. If that is what you came for, [Start here](../start/intro) and the [characterization guides](../guides/workflow/Workflow) are the whole path, and you can leave this part unread.
+Nothing in this part is required to run a characterization protocol and read the answer. If that is what you came for, [Start here](../start/Index) and the [characterization guides](../guides/Index) are the whole path, and you can leave this part unread.
 
 What lives here is the machinery underneath that path, plus the corners of pyGSTi that only some readers need.
 
@@ -14,4 +14,4 @@ What lives here is the machinery underneath that path, plus the corners of pyGST
 
 **Specialist protocols.** [Time-dependent GST](specialist/TimeDependentGST) and the pages under it cover protocols with a narrow audience: idle tomography, robust phase estimation, qudit and qutrit work, parity benchmarking, and hand-built leakage models.
 
-**Everything else.** Machine-learned error models ([QPANN](ml/QPANN)), the [figure and report internals](figures/WorkspaceFigures), [running GST under MPI](ops/Parallelism), [Cirq interoperability](interop/Cirq), and the [migration table](migration/FromFunctionAPI) for the old function-based API.
+**Everything else.** Machine-learned error models ([QPANN](ml/QPANN)), the [figure and report internals](figures/WorkspaceFigures), [Cirq interoperability](interop/Cirq), and the [migration table](migration/FromFunctionAPI) for the old function-based API.

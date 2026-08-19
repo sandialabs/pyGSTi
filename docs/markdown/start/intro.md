@@ -46,11 +46,9 @@ model.probabilities(circuit)                        # ~ {('0',): 0.5, ('1',): 0.
 
 This documentation is arranged in three tiers, and which one you want depends on what you are doing rather than on how much you already know.
 
-**Start here** is a short guided path, and it is the whole of what most people need. If you have a device and want a characterization out of it, read it in order: [choosing a protocol](ChooseAProtocol) to decide what to run, [your first GST run](FirstGST) or [your first benchmark](FirstBenchmark) to run it end to end on simulated data, [getting your own data in](YourOwnData) to swap in your real counts, and [reading your results](ReadingResults) to interpret what comes back. [Key concepts](KeyConcepts) is prose-only and explains gauge freedom, error generators and the fit statistics that the rest of the documentation assumes.
-
-**Characterization guides** is the practitioner layer, one chapter per protocol — [gate set tomography](../guides/gst/RunningGST), [randomized benchmarking](../guides/rb/HowRBWorks), [volumetric benchmarks](../guides/benchmarks/VolumetricBenchmarks), [drift](../guides/drift/DriftCharacterization), [running on real hardware](../guides/hardware/IBMQ) — plus the shared chapters those all draw on: [the measurement workflow](../guides/workflow/Workflow), [modeling a noisy device](../guides/models/Models), and [reading and reporting results](../guides/analysis/Results).
-
-**Advanced topics and internals** is for extending pyGSTi, working with unusual devices, or research use. If you are characterizing a device with one of the protocols above, you do not need anything in that part.
+- **[Start here](Index)** is a short guided path from a fresh install to a characterization result you can read. It is the whole of what most people need.
+- **[Characterization guides](../guides/Index)** is the practitioner layer: one chapter per protocol, plus the workflow, modeling and analysis chapters that all of them draw on.
+- **[Advanced topics and internals](../advanced/Index)** is for extending pyGSTi, working with unusual devices, or research use. If you are characterizing a device with one of the protocols above, you do not need any of it.
 
 If you have a specific problem and want to know which few lines of Python solve it, try [troubleshooting](../guides/analysis/Troubleshooting). If that does not cover it, email us at pygsti@sandia.gov or open an issue on [GitHub](https://github.com/sandialabs/pyGSTi).
 

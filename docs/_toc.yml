@@ -13,6 +13,7 @@ root: markdown/start/intro
 parts:
 - caption: Start here
   chapters:
+  - file: markdown/start/Index
   - file: markdown/start/Install
   - file: markdown/start/ChooseAProtocol
   - file: markdown/start/FirstGST
@@ -24,6 +25,7 @@ parts:
 
 - caption: Characterization guides
   chapters:
+  - file: markdown/guides/Index
   - file: markdown/guides/workflow/Workflow
     sections:
     - file: markdown/guides/workflow/DescribeYourDevice
