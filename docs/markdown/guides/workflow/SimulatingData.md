@@ -117,10 +117,12 @@ print("3Q implicit_3q will simulate probabilities using the '%s' forward-simulat
 implicit_3q.probabilities(c)
 ```
 
+Switching is a one-line assignment.  We do it on the two-qubit model rather than the three-qubit one deliberately: `"matrix"` composes a dense process matrix for the entire circuit, so it can pay off at one or two qubits and [should not be pointed at a many-qubit model](../../advanced/simulation/ForwardSimulators).
+
 ```{code-cell} ipython3
-implicit_3q.sim = 'matrix'
-print("3Q implicit_3q will simulate probabilities using the '%s' forward-simulation method." % implicit_3q.sim)
-implicit_3q.probabilities(c)
+mdl_2q.sim = 'matrix'
+print("2Q mdl_2q will now simulate probabilities using the '%s' forward-simulation method." % mdl_2q.sim)
+mdl_2q.probabilities(c)
 ```
 
 ## Simulating experimental data

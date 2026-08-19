@@ -23,7 +23,7 @@ import numpy as np
 ```
 
 ## Time dependent models
-To make a time-dependent `Model`, you create a time dependent gate or operation and add this to any of the models in pyGSTi.  (**Expert note**: this isn't quite true - currently, only models with `sim_type="map"` support time-dependent evaluation of circuit outcomes, so we're currently limited to using this simulation type.)  Here's an example of how to make a custom idle operation that depolarizes its input state more and more over time:
+To make a time-dependent `Model`, you create a time dependent gate or operation and add this to any of the models in pyGSTi.  (**Expert note**: this isn't quite true. Only models built with `simulator="map"` support time-dependent evaluation of circuit outcomes, so that is what this page uses throughout.)  Here's an example of how to make a custom idle operation that depolarizes its input state more and more over time:
 
 ```{code-cell} ipython3
 class MyTimeDependentIdle(pygsti.modelmembers.operations.DenseOperator):
