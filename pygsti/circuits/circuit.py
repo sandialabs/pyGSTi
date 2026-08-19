@@ -1310,6 +1310,9 @@ class Circuit(object):
         integer then a :class:`Label` is returned (representing a layer or a
         part of a layer), otherwise a :class:`Circuit` is returned.
 
+        If the returned object is a Circuit, it won't retain any of this Circuit's
+        metadata (such as the compilable layer indices or occurrence id).
+
         Parameters
         ----------
         layers : int, slice, or list/tuple of ints
@@ -1348,8 +1351,6 @@ class Circuit(object):
             `layers` is a single integer and as a `Circuit` otherwise.
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
-            Note that the returned circuit doesn't retain any original
-            metadata, such as the compilable layer indices or occurrence id.
         """
         nonint_layers = not isinstance(layers, int)
 
