@@ -28,47 +28,18 @@ from cython.operator cimport dereference as deref, preincrement as inc
 cimport cython
 
 
-#from cpython.ref cimport PyObject
-#cdef extern from "Python.h":
-#    Py_UCS4* PyUnicode_4BYTE_DATA(PyObject* o)
-
 from ...baseobjs import label as _lbl
+
+# Shared with the pure-Python parser rather than reimplemented here.  Neither helper
+# has anything Cython can type -- both are generic operations on Python objects, so a
+# compiled copy runs no faster than the imported one and only invites the two
+# definitions to drift apart.
+from .slowcircuitparser import _layer_is_canonical, _to_int_or_strip
 
 
 #Use 64-bit integers
 ctypedef long long INT
 ctypedef unsigned long long UINT
-
-
-def _to_int_or_strip(x):
-    return int(x) if x.strip().isdigit() else x.strip()
-
-
-def _layer_is_canonical(lbls_list):
-    """
-    True if `Label.with_sorted_inner_labels` would leave this layer's components alone.
-
-    Used to skip the rebuild for layers that are already canonical, which is every
-    layer of any circuit string pyGSTi wrote itself.  Only the *outer* order is
-    checked: components come from a recursive parse that already canonicalized them.
-
-    Strictly-increasing is the test, not non-decreasing -- duplicate sslbls within a
-    layer have no sorted order and must reach `with_sorted_inner_labels` so it can
-    raise, as it does for the same circuit built through `Circuit.__init__`.
-    """
-    prev = None
-    for lbl in lbls_list:
-        sslbls = lbl.sslbls
-        if sslbls is None:
-            return True  # unsortable; with_sorted_inner_labels returns self unchanged
-        if prev is not None:
-            try:
-                if not prev < sslbls:
-                    return False
-            except TypeError:
-                return False  # incomparable sslbls; let the sorter raise
-        prev = sslbls
-    return True
 
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
@@ -101,10 +72,6 @@ def parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls)
     result = []; interlayer_marker_inds = []
     code = code.replace(u'*',u'')  # multiplication is implicit (no need for '*' ops)
     i = 0; end = len(code); segment = 0
-    #print "DB -FASTPARSE: ", code
-
-    #cdef Py_UCS4* codep = PyUnicode_4BYTE_DATA(<PyObject*>code)
-
     while i < end:
         if code[i] == interlayer_marker:
             interlayer_marker_inds.append(len(result) - 1); i += 1
@@ -225,7 +192,6 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
     cdef Py_UCS4 c
     cdef double time
     cdef bool is_int
-    #cdef Py_UCS4* sp = PyUnicode_4BYTE_DATA(<PyObject*>s)
 
     i = start
     c = s[i]
@@ -354,7 +320,6 @@ cdef parse_exponent(unicode s, INT i, INT end):
     cdef Py_UCS4 c
     cdef INT last
     cdef INT exponent = 1
-    #cdef Py_UCS4* sp = PyUnicode_4BYTE_DATA(<PyObject*>s)
 
     if i < end and s[i] == u'^':
         i += 1

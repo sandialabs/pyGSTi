@@ -1151,7 +1151,8 @@ class CompressedCircuitTester(BaseCase):
 
 
 class CircuitBugfixRegressionTester(BaseCase):
-    """Regression tests for the batch of circuit.py bug fixes (issues #756, #760, #762, #763, #764)."""
+    """Regression tests for the batches of circuit.py bug fixes (issues #746, #756, #760, #761,
+    #762, #763, #764)."""
 
     def test_map_names_inplace_with_callable(self):
         # regression test for issue #763
@@ -1569,3 +1570,40 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(len(tensored_c.saved_auxinfo["lanes"]), len(l2q))
         for lane_idx, key in l2q.items():
             self.assertEqual(tensored_c.saved_auxinfo["lanes"][tuple(sorted(key))], fresh_sub_cirs[lane_idx])
+
+    # ---- the `.str` setter's accept/reject matrix (#761)
+    #
+    # The setter's contract is that the assigned string must evaluate to exactly the
+    # circuit's own layers.  Kept together as one matrix because the interesting cases
+    # are the near-misses: same length but different content, and right content but
+    # wrong length in either direction.
+
+    def test_str_setter_rejects_same_length_mismatch(self):
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"doesn't evaluate to GxGy@\(0\)"):
+            c.str = "GxGz@(0)"
+
+    def test_str_setter_rejects_truncated_string(self):
+        # #761: zip stopped at the shorter sequence, so this was silently accepted
+        # and the circuit then reported .str == 'Gx@(0)' while len(c) == 2
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"evaluates to 1 layer\(s\).*number of layers \(2\)"):
+            c.str = "Gx@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_rejects_extended_string(self):
+        # #761, the other direction: zip also stopped at self._labels
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"evaluates to 3 layer\(s\).*number of layers \(2\)"):
+            c.str = "GxGyGz@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_accepts_exact_match(self):
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        c.str = "GxGy@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_refuses_static_circuit(self):
+        c = circuit.Circuit("GxGy@(0)")
+        with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit"):
+            c.str = "GxGy@(0)"

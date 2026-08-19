@@ -927,7 +927,8 @@ class Circuit(object):
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
             # our layers all shift right by len(x), so our compilable indices shift with them
-            shifted = tuple(i + len(x) for i in self._compilable_layer_indices_tup)
+            lenx = len(x)
+            shifted = tuple(i + lenx for i in self._compilable_layer_indices_tup)
             return Circuit._fastinit(x + self.layertup, self._line_labels, editable=False,
                                      compilable_layer_indices_tup=shifted)
         return x.__add__(self)

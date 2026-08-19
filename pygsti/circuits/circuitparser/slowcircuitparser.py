@@ -12,6 +12,8 @@ from pygsti.baseobjs import label as _lbl
 import sys
 
 
+# The two helpers below are imported by fastcircuitparser.pyx as well; a change here
+# changes the Cython parser's behavior too.
 def _to_int_or_strip(x):
     return int(x) if x.strip().isdigit() else x.strip()
 
