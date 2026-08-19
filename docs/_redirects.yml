@@ -21,9 +21,9 @@ markdown/examples/MPI-GermSelection: ../guides/gst/FiducialsAndGerms.html
 markdown/examples/MPI-RunningGST: ../guides/gst/Parallelism.html
 markdown/examples/MPI-RunningGST-Automagic: ../guides/gst/Parallelism.html
 markdown/examples/ProceduralErrorBars: ../guides/analysis/ErrorBars.html
-markdown/examples/QutritGST: ../advanced/specialist/QutritGST.html
+markdown/examples/QutritGST: ../guides/gst/QutritGST.html
 markdown/examples/Reports-LGSTonly: ../guides/analysis/Reports.html#reports-from-lgst-alone
-markdown/examples/Robust-GST: ../advanced/specialist/RobustGST-TVD.html
+markdown/examples/Robust-GST: ../guides/gst/RobustGST-TVD.html
 markdown/gst/CircuitConstruction: ../guides/gst/GSTCircuits.html
 markdown/gst/Driverfunctions: ../advanced/migration/FromFunctionAPI.html
 markdown/gst/FiducialAndGermSelection: ../guides/gst/FiducialsAndGerms.html
@@ -33,7 +33,7 @@ markdown/gst/LowLevel: ../advanced/extending/LowLevelGST.html
 markdown/gst/Overview: ../start/FirstGST.html
 markdown/gst/Overview-functionbased: ../advanced/migration/FromFunctionAPI.html
 markdown/gst/Protocols: ../guides/gst/RunningGST.html
-markdown/gst/TimeDependent: ../advanced/specialist/TimeDependentGST.html
+markdown/gst/TimeDependent: ../guides/gst/TimeDependentGST.html
 markdown/interfaces/CirqIntegration: ../advanced/interop/Cirq.html
 markdown/interfaces/FileIO: ../guides/workflow/FilesAndDirectories.html
 markdown/interfaces/IBMQExperiment: ../guides/hardware/IBMQ.html
@@ -83,7 +83,7 @@ markdown/rb/MirrorRB: ../guides/rb/MirrorRB.html
 markdown/rb/MirrorRB-Universal-Gate-Sets: ../guides/rb/MirrorRB-Universal-Gate-Sets.html
 markdown/rb/MultiRBExperiments: ../guides/rb/SimultaneousRB.html
 markdown/rb/Overview: ../guides/rb/HowRBWorks.html
-markdown/rb/SU2QuditRB: ../advanced/specialist/SU2QuditRB.html
+markdown/rb/SU2QuditRB: ../guides/rb/SU2QuditRB.html
 markdown/rb/Samplers: ../guides/rb/Samplers.html
 markdown/reporting/ReportGeneration: ../guides/analysis/Reports.html
 markdown/reporting/Workspace: ../advanced/figures/WorkspaceFigures.html

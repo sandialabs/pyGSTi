@@ -46,9 +46,12 @@ parts:
     - file: markdown/guides/gst/CheckYourDesign
     - file: markdown/guides/gst/JudgingTheFit
     - file: markdown/guides/gst/BadFits
+    - file: markdown/guides/gst/RobustGST-TVD
     - file: markdown/guides/gst/TwoQubitGST
     - file: markdown/guides/gst/MidCircuitMeasurement
     - file: markdown/guides/gst/Leakage
+    - file: markdown/guides/gst/QutritGST
+    - file: markdown/guides/gst/TimeDependentGST
     - file: markdown/guides/gst/Parallelism
   - file: markdown/guides/rb/HowRBWorks
     sections:
@@ -60,6 +63,7 @@ parts:
     - file: markdown/guides/rb/BinaryRB
     - file: markdown/guides/rb/Samplers
     - file: markdown/guides/rb/SimultaneousRB
+    - file: markdown/guides/rb/SU2QuditRB
   - file: markdown/guides/benchmarks/VolumetricBenchmarks
     sections:
     - file: markdown/guides/benchmarks/MirrorFidelityEstimation
@@ -99,13 +103,9 @@ parts:
     - file: markdown/advanced/extending/GaugeOptReference
   - file: markdown/advanced/specialist/Index
     sections:
-    - file: markdown/advanced/specialist/TimeDependentGST
-    - file: markdown/advanced/specialist/QutritGST
-    - file: markdown/advanced/specialist/SU2QuditRB
     - file: markdown/advanced/specialist/RobustPhaseEstimation
     - file: markdown/advanced/specialist/IdleTomography
     - file: markdown/advanced/specialist/ParityBenchmarking
-    - file: markdown/advanced/specialist/RobustGST-TVD
   - file: markdown/advanced/ml/QPANN
   - file: markdown/advanced/figures/WorkspaceFigures
     sections:

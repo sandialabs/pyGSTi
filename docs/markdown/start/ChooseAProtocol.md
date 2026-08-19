@@ -27,7 +27,7 @@ RB is not one protocol. For the multi-qubit flavours the main difference is how 
 | [Direct RB](../guides/rb/DirectRB) | more than Clifford RB | your native gates, directly |
 | [Mirror RB](../guides/rb/MirrorRB) | tens to hundreds | your native gates, via mirror circuits |
 | [Binary RB](../guides/rb/BinaryRB) | tens to hundreds | your native gates, via a gate-efficient SPAM method |
-| [SU(2) qudit RB](../advanced/specialist/SU2QuditRB) | one spin-$j$ qudit | global SU(2) rotations, per noise component |
+| [SU(2) qudit RB](../guides/rb/SU2QuditRB) | one spin-$j$ qudit | global SU(2) rotations, per noise component |
 
 Clifford RB is the one most people mean by "RB." It stops being practical at one or two qubits because each sampled $n$-qubit Clifford must be compiled into native gates, and both the compilation and the resulting circuit grow quickly with $n$. Direct RB drops the Clifford layer and benchmarks native gates directly. Mirror RB streamlines further, which is what buys it the qubit count.
 
