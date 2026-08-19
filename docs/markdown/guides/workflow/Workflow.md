@@ -24,13 +24,9 @@ The main purpose of pyGSTi is to implement QCVV techniques that analyze some, of
 
 Below are examples of how to run some of the protocols within pyGSTi.  You'll notice how, for the most part, they follow the same pattern given above.  Here's a list of the protocols for easy reference:
 
-We'll begin by setting up a `Workspace` so we can display pretty interactive figures inline (see the [intro to Workspaces tutorial](../../advanced/figures/WorkspaceFigures) for more details) within this notebook.
-
 ```{code-cell} ipython3
 import pygsti
 import numpy as np
-ws = pygsti.report.Workspace()
-ws.init_notebook_mode(autodisplay=True)
 ```
 
 ## Gate set tomography
@@ -102,7 +98,7 @@ proto = pygsti.protocols.RB()
 rbresults = proto.run(data)
 
 #Create a RB plot
-ws.RandomizedBenchmarkingPlot(rbresults)
+rbresults.plot()
 ```
 
 ## Model testing (see whether data agrees with a model)

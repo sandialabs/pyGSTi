@@ -296,16 +296,9 @@ for key in data.keys():
 ```{code-cell} ipython3
 :tags: [nbval-skip]
 
-ws = pygsti.report.Workspace()
-ws.init_notebook_mode(autodisplay=True)
-```
-
-```{code-cell} ipython3
-:tags: [nbval-skip]
-
 for i in data.keys(): 
     print(i)
-    ws.RandomizedBenchmarkingPlot(results[i])
+    results[i].plot(title=str(i))
 ```
 
 

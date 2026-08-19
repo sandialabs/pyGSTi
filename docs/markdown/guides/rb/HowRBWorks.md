@@ -86,9 +86,7 @@ Now we just instantiate an `RB` protocol and `.run` it on our data object. This 
 # To run Mirror RB, set datatype = 'adjusted_success_probabilities' in this init.
 protocol = pygsti.protocols.RB()
 results = protocol.run(data)
-ws = pygsti.report.Workspace()
-ws.init_notebook_mode(autodisplay=True)
-ws.RandomizedBenchmarkingPlot(results)
+results.plot()
 ```
 
 By default, pyGSTi uses an RB error rate ($r$) convention whereby

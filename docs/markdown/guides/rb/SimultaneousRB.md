@@ -128,10 +128,8 @@ for i in [('Q0',),('Q1',),('Q2',),('Q3',)]:
 ```
 
 ```{code-cell} ipython3
-ws = pygsti.report.Workspace()
-ws.init_notebook_mode(autodisplay=True)
 for i in ['1Q-RB', '2Q-RB', '3Q-RB' , '4Q-RB']:
-    ws.RandomizedBenchmarkingPlot(results[i].for_protocol['RB'])
+    results[i].for_protocol['RB'].plot(title=i)
 ```
 
 **For more information** and examples on running multiple benchmarking protocols on a processor, check out the [volumetric benchmarking tutorial](../benchmarks/VolumetricBenchmarks).
