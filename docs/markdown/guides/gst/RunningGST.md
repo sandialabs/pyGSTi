@@ -13,7 +13,7 @@ kernelspec:
 
 # Running GST
 
-The `pygsti` package provides multiple ways to use its core gate set tomography (GST) algorithms.  This  tutorial will show you how to work with pyGSTi's GST protocol objects to perform GST in different ways with a minimial amount of effort.  In order to run the GST protocol there are 3 essential ingredients: 1) an "experiment design" specifying the structure of the GST circuits and how the data should be collected, 2) the outcome counts for the circuits specified by the experiment design, and 3) a desired, or "target", `Model`.  The [GST overview tutorial](../../start/FirstGST), gave an end-to-end example of how to construct a GST experiment design, run GST, and generate a report.  This tutorial focuses on the first and second steps in more detail; related information about circuit construction and report generation can be found in the [GST circuits tutorial](GSTCircuits) and [report generation tutorial](../analysis/Reports).
+The `pygsti` package provides multiple ways to use its core gate set tomography (GST) algorithms.  This tutorial will show you how to work with pyGSTi's GST protocol objects to perform GST in different ways with a minimal amount of effort.  In order to run the GST protocol there are 3 essential ingredients: 1) an "experiment design" specifying the structure of the GST circuits and how the data should be collected, 2) the outcome counts for the circuits specified by the experiment design, and 3) a desired, or "target", `Model`.  The [GST overview tutorial](../../start/FirstGST), gave an end-to-end example of how to construct a GST experiment design, run GST, and generate a report.  This tutorial focuses on the first and second steps in more detail; related information about circuit construction and report generation can be found in the [GST circuits tutorial](GSTCircuits) and [report generation tutorial](../analysis/Reports).
 
 There are two different `Protocol` objects within pyGSTi for running GST:
 
@@ -29,7 +29,7 @@ import os
 ```
 
 ## Setup
-In the [DataSet tutorial](../workflow/DataSets) we simulate the circuits required by a GST experiment design and save the results.  In this tutorial, we'll be analyzing that data.  This illustrates a typical workflow where at some earlier time you setup an experiment (a "GST experiment in this case) and save the experiment design to disk and at some later time (after the data has been collected) you want to analyze it.  Now *is* that later time, and we start by reading the the data we've collected.
+In the [DataSet tutorial](../workflow/DataSets) we simulate the circuits required by a GST experiment design and save the results.  In this tutorial, we'll be analyzing that data.  This illustrates a typical workflow where at some earlier time you setup an experiment (a "GST experiment" in this case) and save the experiment design to disk and at some later time (after the data has been collected) you want to analyze it.  Now *is* that later time, and we start by reading the data we've collected.
 
 ```{code-cell} ipython3
 data_dir = "../../../tutorial_files/Example_GST_Data"
@@ -50,13 +50,13 @@ data = pygsti.io.read_data_from_dir(data_dir)
 ## `GateSetTomography`
 This protocol performs a single model optimization, and so computes a **single GST estimate** given a `DataSet`, a target `Model`, and other parameters.  (The returned `ModelEstimateResults` object may sometimes contain multiple related estimates in certain cases, but in these cases all the estimates are closely related.)  The experiment design provides all of the information about the GST circuits, in this case a *standard*  (*prep_fiducial + germ^power + meas_fiducial*) set, so the only thing needed by the protocol is an initial `Model` to optimize.  Thus, the `GateSetTomography` protocol is essentially just a model optimizer that you give an initial point.  Importantly, this initial point (a `Model`) also specifies the *parameterization*, i.e. the space of parameters that are optimized over.
 
-Minimally, when using `GateSetTomography` you should set the parameterization of the initial model.  This can be viewed as setting the constraints on the optimization.  For instance, when the gates in the model are parameterized as trace-preserving (TP) maps, the optimization will be constrained to trying gate sets with TP gates (because every set of parameters corresponds to a set of TP gates).  In the cell below, we constrain the optimization to TP gate sets by using `.target_model("full TP")`, which returns a version of the target model where all the gates are TP-parameterized, the state preparation has trace = 1, and the POVM effects always add to the identity.  This could also be done by calling `set_all_parameterizations("TP")` on the fully-parameterized target model returned by `.target_model()`.  See the [tutorial on explicit models](../models/Models) for more information on setting a model's parameterization.
+Minimally, when using `GateSetTomography` you should set the parameterization of the initial model.  This can be viewed as setting the constraints on the optimization.  For instance, when the gates in the model are parameterized as trace-preserving (TP) maps, the optimization will be constrained to trying gate sets with TP gates (because every set of parameters corresponds to a set of TP gates).  In the cell below, we constrain the optimization to TP gate sets by using `.target_model("full TP")`, which returns a version of the target model where all the gates are TP-parameterized, the state preparation has trace = 1, and the POVM effects always add to the identity.  This could also be done by calling `set_all_parameterizations("full TP")` on the fully-parameterized target model returned by `.target_model()`.  See the [tutorial on explicit models](../models/Models) for more information on setting a model's parameterization.
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq1Q_XYI
 target_model_TP = smq1Q_XYI.target_model("full TP")
 proto = pygsti.protocols.GateSetTomography(target_model_TP)
-results_TP = proto.run(data)
+results_TP = proto.run(data, disable_checkpointing=True)
 ```
 
 A summary of what's inside a Results object is obtained by printing it
@@ -69,11 +69,11 @@ print(results_TP)
 ### Gauge optimization parameters
 The `gaugeopt_suite` argument specifies a set of gauge optimizations to be performed on the final GST estimate.  It is a dictionary whose keys are gauge-optimization names (these can be whatever you want) and whose values are dictionaries of arguments ultimately to be passed to the `gaugeopt_to_target` function (which provides full documentation).  (For example, by specifying `item_weights` we can set the ratio of the state preparation and measurement (SPAM) weighting to the gate weighting when performing a gauge optimization.)  In lieu of a dictionary of `gaugeopt_to_target` arguments, the elements of `gaugeopt_suite` may also be strings which name a built-in set of gauge optimizations (e.g. `"stdgaugeopt"` is the name of the standard gauge optimization).
 
-If `gaugeopt_suite` is set to a string, this is the same as passing a dictionary with a single key-value pair where both key and value are equal to the string.  Thus, the default `"stdgaugeopt"` is equivalent to specifying the dictionary `{"stdgaugeopt": "stdgagueopt"}`.
+If `gaugeopt_suite` is set to a string, this is the same as passing a dictionary with a single key-value pair where both key and value are equal to the string.  Thus, the default `"stdgaugeopt"` is equivalent to specifying the dictionary `{"stdgaugeopt": "stdgaugeopt"}`.
 
-The example below performs a customized gauge-optimization where the gate parameters are weighted 1000 times more relative to the SPAM parameters.  Mathematically this corresponds to a multiplicative factor of 0.001 preceding the sum-of-squared-difference terms corresponding to SPAM elements in the model.   Typically it is good to weight the gates parameters more heavily since GST amplifies gate parameter errors via long operation sequences but cannot amplify SPAM parameter errors.  For more details on the arguments of `gaugeopt_to_target`, see the previous tutorial on low-level algorithms.  For more infomation, see the [gauge optimization tutorial](../analysis/GaugeFreedom).
+The example below performs a customized gauge-optimization where the gate parameters are weighted 1000 times more relative to the SPAM parameters.  Mathematically this corresponds to a multiplicative factor of 0.001 preceding the sum-of-squared-difference terms corresponding to SPAM elements in the model.   Typically it is good to weight the gates parameters more heavily since GST amplifies gate parameter errors via long operation sequences but cannot amplify SPAM parameter errors.  For more details on the arguments of `gaugeopt_to_target`, see the [low-level algorithms tutorial](../../advanced/extending/LowLevelGST).  For more information, see the [gauge optimization tutorial](../analysis/GaugeFreedom).
 
-The cell below also illustrates how you can create a TP target model by calling `set_all_parameterizations` explicitly instead of using the equivalent and more condensed `.target_model("TP")`.
+The cell below also illustrates how you can create a TP target model by calling `set_all_parameterizations` explicitly instead of using the equivalent and more condensed `.target_model("full TP")`.
 
 ```{code-cell} ipython3
 target_model_TP2 = smq1Q_XYI.target_model() # a "fully parameterized" (unconstrained) model
@@ -93,7 +93,7 @@ custom_gauge_opt_model = results_TP2.estimates['GSTwithMyGO'].models['my_gauge_o
 
 ### Wildcard parameters
 
-TODO
+When a fit is bad, one response is to report a *wildcard* error budget: an amount of unmodeled error, distributed over the operations, large enough to account for the gap between what the model predicts and what the data say.  [When the fit is bad](BadFits) covers what a wildcard budget means and when reaching for one is the right move.  This section is about the `badfit_options` that produce them, and about the three ways the budget can be parameterized.
 
 ```{code-cell} ipython3
 proto = pygsti.protocols.GateSetTomography(
@@ -101,7 +101,8 @@ proto = pygsti.protocols.GateSetTomography(
     badfit_options={'actions': ['wildcard']}
     )
 
-# Artifically unset threshold so that wildcard runs. YOU WOULD NOT DO THIS IN PRODUCTION RUNS
+# Force the wildcard to run even though this fit is not bad enough to trigger it.
+# YOU WOULD NOT DO THIS IN A PRODUCTION RUN.
 proto.badfit_options.threshold = None
 
 results_pergate_wildcard = proto.run(data, disable_checkpointing=True)
@@ -119,11 +120,11 @@ op_label_dict = {k:0 for k in target_model_TP.operations} # Assign all gates to 
 op_label_dict['SPAM'] = 1 # Assign SPAM to value 1
 
 proto = pygsti.protocols.GateSetTomography(
-    target_model_TP, name="GSTwithPerGateWildcard",
+    target_model_TP, name="GSTwithSpamGateWildcard",
     badfit_options={'actions': ['wildcard'], 'wildcard_primitive_op_labels': op_label_dict}
     )
 
-# Artifically unset threshold so that wildcard runs. YOU WOULD NOT DO THIS IN PRODUCTION RUNS
+# Same threshold override as above, for the same reason.
 proto.badfit_options.threshold = None
 
 results_globalgate_wildcard = proto.run(data, disable_checkpointing=True)
@@ -135,18 +136,18 @@ In order to avoid this, we have also introduced a 1D wildcard solution. This tak
 
 ```{code-cell} ipython3
 proto = pygsti.protocols.GateSetTomography(
-    target_model_TP, name="GSTwithPerGateWildcard",
+    target_model_TP, name="GSTwith1DWildcard",
     badfit_options={'actions': ['wildcard1d']}
     )
 
-# Artifically unset threshold so that wildcard runs. YOU WOULD NOT DO THIS IN PRODUCTION RUNS
+# Same threshold override as above, for the same reason.
 proto.badfit_options.threshold = None
 
 results_1d_wildcard = proto.run(data, disable_checkpointing=True)
 ```
 
 ### running GST using a custom set of circuits
-So far we've giving the `GateSetTomography.run` method an "standard" experiment design containing circuits chosen to amplify all of a standard TP (or CPTP) model's parameters (see the `StandardGSTExpermentDesign` used in the [DataSet tutorial](../workflow/DataSets)).  A `GateSetTomography` protocol can be run on more general experiment designs, namely those that specify the circuits to use as either a list of lists of `Circuit` objects or a list of or single `CircuitStructure` object(s).  A `CircuitStructure` is preferable as it allows the structured plotting of the sequences in report figures.  In this example, we'll just generate a standard set of circuit structures, but with some of the sequences randomly dropped (see the [tutorial on GST circuit reduction](FewerCircuits)).
+So far we've given the `GateSetTomography.run` method a "standard" experiment design containing circuits chosen to amplify all of a standard TP (or CPTP) model's parameters (see the `StandardGSTDesign` used in the [DataSet tutorial](../workflow/DataSets)).  A `GateSetTomography` protocol can be run on more general experiment designs, namely those that specify the circuits to use as either a list of lists of `Circuit` objects or a list of or single `CircuitStructure` object(s).  A `CircuitStructure` is preferable as it allows the structured plotting of the sequences in report figures.  In this example, we'll just generate a standard set of circuit structures, but with some of the sequences randomly dropped (see the [tutorial on GST circuit reduction](FewerCircuits)).
 
 ```{code-cell} ipython3
 # Create the same sequences but drop 50% of them randomly for each repeated-germ block.
@@ -167,17 +168,20 @@ results_reduced = proto.run(reduced_data, disable_checkpointing=True)
 
 ## `StandardGST`
 The protocol embodies a standard *set* of GST protocols to be run on a set of data.  It essentially runs multiple `GateSetTomography` protocols on the given data which use different parameterizations of an `ExplicitOpModel`  (the `StandardGST` protocol doesn't work with other types of `Model` objects, e.g. *implicit* models, which don't implement `set_all_parameterizations`).  The `modes` argument is a list strings corresponding to the parameterization types that should be run (e.g. `["full TP","CPTPLND"]` will compute a Trace-Preserving estimate *and* a Completely-Positive & Trace-Preserving estimate). The currently available modes are:
- - "full" : unconstrained gates (fully parameterized)                                                                 
- - "TP"   : TP-constrained gates and state preparations
- - "CPTP" : CPTP-constrained gates and TP-constrained state preparations               
- - "H+S"  : Only Hamiltonian and Pauli stochastic errors allowed (CPTP)                                             
- - "S"    : Only Pauli-stochastic errors allowed (CPTP)                                                           
- - "Target" : use the target (ideal) gates as the estimate     
+ - `"full"`    : unconstrained gates (fully parameterized)
+ - `"full TP"` : TP-constrained gates and state preparations (`"TP"` is accepted as a synonym)
+ - `"CPTPLND"` : Lindbladian CPTP-constrained gates
+ - `"H+S"`     : only Hamiltonian and Pauli-stochastic errors allowed (CPTP)
+ - `"S"`       : only Pauli-stochastic errors allowed (CPTP)
+ - `"Target"`  : use the target (ideal) gates as the estimate
+ - any key in the `models_to_test` argument
 
-Gauge optimization(s) are controlled by the `gaugeopt_suite` and `gaugeopt_target` arguments, jsut as in `GateSetTomography`.  The `gaugeopt_target` argument may be set to a `Model` that is used as the target for gauge optimization, overriding the (typically ideal) target gates given by within the experiment design.
+Other parameterization names accepted by `set_all_parameterizations`, such as `"GLND"` and `"H+D"`, work here too.  `"CPTP"` still runs but raises a deprecation warning; use `"CPTPLND"` instead.  The default is `("full TP", "CPTPLND", "Target")`.
+
+Gauge optimization is controlled by the `gaugeopt_suite` argument, just as in `GateSetTomography`.  Neither protocol takes a `gaugeopt_target` argument.  To gauge optimize toward something other than the experiment design's (typically ideal) target gates, build a `GSTGaugeOptSuite` with its own `gaugeopt_target=` and pass that in as the suite, which is what the last example on this page does.
 
 ```{code-cell} ipython3
-results_stdprac = pygsti.protocols.StandardGST().run(data)
+results_stdprac = pygsti.protocols.StandardGST().run(data, disable_checkpointing=True)
 ```
 
 ```{code-cell} ipython3
@@ -189,7 +193,7 @@ Next, we'll perform the same analysis but with a **non-default standard suite of
 
 ```{code-cell} ipython3
 proto = pygsti.protocols.StandardGST(gaugeopt_suite="varySpam", name="StdGST_varySpam")
-results_stdprac_nondefaultgo = proto.run(data)
+results_stdprac_nondefaultgo = proto.run(data, disable_checkpointing=True)
 ```
 
 ```{code-cell} ipython3
@@ -197,7 +201,7 @@ print("Estimates: ", ", ".join(results_stdprac_nondefaultgo.estimates.keys()))
 print("TP Estimate's gauge optimized models: ", ", ".join(results_stdprac_nondefaultgo.estimates["full TP"].goparameters.keys()))
 ```
 
-Finally, we'll demonstrate how to specify a fully custom set of gauge optimization parameters and how to use a **separately-specified target model for gauge optimization**.  You can get a more intuitive gauge-optimized `Model` when by placing as much expected noise as possible into the gauge-optimization target, as this essentially tells the algorithm "this is what I think the estimated model should look like".  If you just use the perfect or ideal model for this (the default), then the gauge optimizer may make tradeoffs which don't reflect the expected physics (remember, all gauge-equivalent models product the same observables!).  For example, it may spread error across all your gate operations when you expect just the 2-qubit operations are noisy.
+Finally, we'll demonstrate how to specify a fully custom set of gauge optimization parameters and how to use a **separately-specified target model for gauge optimization**.  You can get a more intuitive gauge-optimized `Model` by placing as much expected noise as possible into the gauge-optimization target, as this essentially tells the algorithm "this is what I think the estimated model should look like".  If you just use the perfect or ideal model for this (the default), then the gauge optimizer may make tradeoffs which don't reflect the expected physics (remember, all gauge-equivalent models produce the same observables!).  For example, it may spread error across all your gate operations when you expect just the 2-qubit operations are noisy.
 
 ```{code-cell} ipython3
 my_goparams = { 'item_weights': {'gates': 1.0, 'spam': 0.001} }
@@ -208,7 +212,7 @@ my_gaugeopt_suite = pygsti.protocols.GSTGaugeOptSuite(gaugeopt_argument_dicts={'
 
 proto = pygsti.protocols.StandardGST(gaugeopt_suite=my_gaugeopt_suite,
                                      name="StdGST_myGO")
-results_stdprac_nondefaultgo = proto.run(data)
+results_stdprac_nondefaultgo = proto.run(data, disable_checkpointing=True)
 ```
 
 ```{code-cell} ipython3
@@ -216,10 +220,10 @@ print("Estimates: ", ", ".join(results_stdprac_nondefaultgo.estimates.keys()))
 print("TP Estimate's gauge optimized models: ", ", ".join(results_stdprac_nondefaultgo.estimates["full TP"].goparameters.keys()))
 ```
 
-To finish up, we'll write the results for processing in other tutorials.  We do this by calling `.write` on the results objects, optionally specifying the root diretory under which the results should be written.  This is the *same* root directory that the experiment design and data are written to, as subdirectories beneath this directory separate these quantities.
+To finish up, we'll write the results for processing in other tutorials.  We do this by calling `.write` on the results objects, optionally specifying the root directory under which the results should be written.  This is the *same* root directory that the experiment design and data are written to, as subdirectories beneath this directory separate these quantities.
 
 Two remarks are in order:
-1. When results are from running a protocol on data that was loaded with the `load_data_from_dir` method (see the beginning of this notebook), then knowledge of this directory is remembered and you don't need to give a directory to `write` (this is the case for all except `results_reduced`, which created a new experiment design containing less experiments).
+1. When results are from running a protocol on data that was loaded with the `read_data_from_dir` method (see the beginning of this notebook), then knowledge of this directory is remembered and you don't need to give a directory to `write` (this is the case for all except `results_reduced`, which created a new experiment design containing less experiments).
 
 2. Notice how the `name=` arguments given to protocols above are used as sub-directory names, e.g. under the "../../../tutorial_files/Example_GST_Data/results" parent directory.
 
@@ -245,7 +249,7 @@ proto = pygsti.protocols.GateSetTomography(target_model_TP)
 results_TP = proto.run(data, checkpoint_path = '../../../tutorial_files/gst_checkpoints/GateSetTomography')
 ```
 
-Note that in the example above we have specified a value for an additional kwarg called `checkpoint_path`. This allows for overriding the default behavior for the save location and naming of checkpoint files. The expected format is `{path}/{name}` where path is the directory to save the checkpoint files to (with that directory being created is required) and where name is the stem of the checkpoint file names `{name}_iteration_{i}.json`. Inspecting the contents of the directory we just specified, we can see that it is now populated by 8 new checkpoint files.
+Note that in the example above we have specified a value for an additional kwarg called `checkpoint_path`. This allows for overriding the default behavior for the save location and naming of checkpoint files. The expected format is `{path}/{name}` where path is the directory to save the checkpoint files to (that directory is created if it does not exist) and where name is the stem of the checkpoint file names `{name}_iteration_{i}.json`. Inspecting the contents of the directory we just specified, we can see that it is now populated by 8 new checkpoint files.
 
 ```{code-cell} ipython3
 import os
@@ -292,7 +296,7 @@ results_stdprac_warmstart= proto_standard_gst.run(data, checkpoint= standard_gst
 
 Notice that we've indeed skipped past the previously completed full TP mode and jumped straight to the 6th iteration of the CPTPLND fit as expected. 
 
-As for the GateSetTomographyCheckpoint object described above, the `StandardGSTCheckpoint` can often be useful to inspect as a debugging/diagnostic tool. `StandardGSTCheckpoints` are essentially structured as container object that hold a set of child `GateSetTomographyCheckpoint` and `ModelTestCheckpoint` (more on these in the ModelTest tutorial) objects for each of the modes being run (and potentially more types of chile checkpoints in the future as we add additional functionality). These children can be accessed using the `children` attribute of a `StandardGSTCheckpoint` instance which is a dictionary with keys given by the mode names contained therein.
+As for the GateSetTomographyCheckpoint object described above, the `StandardGSTCheckpoint` can often be useful to inspect as a debugging/diagnostic tool. `StandardGSTCheckpoints` are essentially structured as container object that hold a set of child `GateSetTomographyCheckpoint` and `ModelTestCheckpoint` (more on these in the [model testing tutorial](../analysis/ModelTesting)) objects for each of the modes being run (and potentially more types of child checkpoints in the future as we add additional functionality). These children can be accessed using the `children` attribute of a `StandardGSTCheckpoint` instance which is a dictionary with keys given by the mode names contained therein.
 
 ```{code-cell} ipython3
 print(standard_gst_checkpoint.children['CPTPLND'])
