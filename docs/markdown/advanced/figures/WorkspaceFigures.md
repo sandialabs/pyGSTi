@@ -33,9 +33,11 @@ w = pygsti.report.Workspace()
 w.init_notebook_mode(connected=False, autodisplay=True)
 ```
 
-`init_notebook_mode` injects the HTML and JavaScript that make figures display. Run it once, near the top of your notebook. If it worked you'll see a green **Notebook Initialization Complete** message. A blue **Loading...** message that never resolves means one of two things: the notebook isn't "Trusted" (check the upper right corner of the Jupyter window), or you asked for web-hosted resources without a working internet connection. Fix whichever it is and reload with your *browser's* reload button, not Jupyter's.
+`init_notebook_mode` injects the HTML and JavaScript that make figures display. Run it once, near the top of your notebook. If it worked you'll see a green **Notebook Initialization Complete** message.
 
-The `connected` argument controls where those resources come from. With `connected=True` they're loaded from a CDN, which keeps the notebook file small if you save it as HTML. With `connected=False` pyGSTi supplies everything except MathJax itself and writes an `offline` directory alongside your notebook. That directory has to tag along with the notebook, and with any saved-as-HTML version of it, or nothing renders.
+A blue **Loading...** message that never resolves almost always means the notebook isn't "Trusted". JupyterLab and Notebook 7 refuse to run scripts in an untrusted notebook, and every workspace figure is driven by a script. Trust it (`jupyter trust yournotebook.ipynb`, or the Trusted indicator in the toolbar) and reload with your *browser's* reload button, not Jupyter's. The other cause is `connected=True` without a working internet connection, which leaves the same message behind.
+
+The `connected` argument controls where those resources come from. With `connected=True` they're loaded from a CDN: the notebook file stays small, and figures need a network connection every time someone opens it. With `connected=False` pyGSTi inlines everything except MathJax into the notebook itself, so it renders offline and travels as a single file, at the cost of several megabytes per notebook. Neither setting writes anything alongside your notebook; earlier versions of pyGSTi dropped an `offline` directory next to it, and that is no longer the case.
 
 `autodisplay=True` means a figure appears as soon as you create it. Leave it `False` and you have to capture the returned object and call its `.display()` method.
 
@@ -281,7 +283,7 @@ obj.saveas("../../../tutorial_files/tempTest/testSave.pdf")
 
 ## Exporting notebooks to HTML
 
-You can save a figure-containing notebook like this one as an HTML file with **File => Download As => HTML** in the Jupyter menu. The plots stay interactive, so long as the file sits in a directory with an `offline` folder, which is why we passed `connected=False` above.
+You can save a figure-containing notebook like this one as an HTML file with **File => Download As => HTML** in the Jupyter menu. The plots stay interactive in the exported file. Because we passed `connected=False` above, the export is self-contained and needs no network connection; export a `connected=True` notebook and the figures will only appear for a reader who is online.
 
 ## Where to go next
 

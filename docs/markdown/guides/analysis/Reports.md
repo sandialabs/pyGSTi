@@ -254,8 +254,8 @@ pygsti.report.construct_standard_report(
 
 Besides the standard HTML-page reports demonstrated above, pyGSTi can generate a Jupyter notebook containing the Python commands that create the figures and tables of a general report.  `Workspace` objects, being factories for figures and tables, make this possible.  Calling `Report.write_notebook` dumps all of the relevant `Workspace` initialization and calls to a new notebook file, which you can then run fully or partially at your convenience.  The advantage is that you can insert Python code amidst the figure and table generation calls to inspect or modify what's displayed.  The disadvantages: report notebooks require a running Jupyter server, and nothing is displayed until you run the notebook.
 
-```{warning}
-Interactive cells in report notebooks require JavaScript, and therefore do not work with JupyterLab.  To track this issue, see https://github.com/pyGSTio/pyGSTi/issues/205.
+```{note}
+Interactive cells in report notebooks are driven by JavaScript, so a report notebook has to be "Trusted" before its figures will appear: JupyterLab and Notebook 7 refuse to run scripts in an untrusted notebook.  Run `jupyter trust yournotebook.ipynb`, or use the Trusted indicator in the toolbar.  Older versions of pyGSTi could not render these cells under JupyterLab at all (https://github.com/pyGSTio/pyGSTi/issues/205); that limitation is gone, and classic Jupyter Notebook is no longer required.
 ```
 
 The line below creates a report notebook with `write_notebook`.  The argument list is very similar to the other `Report` output methods.

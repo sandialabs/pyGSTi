@@ -61,8 +61,9 @@ results = idt.do_idle_tomography(n_qubits, ds, max_lengths, paulidicts)
 ## Viewing the results
 That's basically it - now all we need to do is visualize the results.  Lets begin by creating a pyGSTi `Workspace` object to display plots inline.
 
-NOTE: it's possible that the plots fail to render correctly in a Jupyter notebook. 
-If that happens to you, please inspect the HTML report generated in the final
+If the figures below don't appear, the notebook is probably not "Trusted"; see the
+[workspace figures tutorial](../figures/WorkspaceFigures) for that and the other causes.
+The same plots are in the HTML report generated in the final
 cell of this example.
 
 ```{code-cell} ipython3

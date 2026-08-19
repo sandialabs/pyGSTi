@@ -13,7 +13,15 @@ kernelspec:
 
 # Workspace `Switchboards`
 
-"This tutorial introduces the `Switchboard` workspace object and demonstrates its use.  You may have gotten the sense from the last tutorial that screen real estate can quickly be taken up by plots and tables.  Wouldn't it me nice if we could interactively switch between plots or figures using buttons or sliders instead of having to scroll through endless pages of plots?  `Switchboard` to the rescue!
+Stacking workspace figures runs out of screen fast, as the [previous tutorial](WorkspaceFigures) will have made clear. A `Switchboard` puts buttons, dropdowns and sliders in front of a set of figures so you can flip between them in place instead of scrolling past all of them. This tutorial introduces the object and demonstrates its use.
+
+```{note}
+**This page is built without its output.** The switchboards below are driven by live
+JavaScript, and executing the page produces about 25 MB of it, most of that hover text
+inside the color box plots. That is more than belongs on a docs page, so what you see
+here is the code alone. To watch the switches actually work, run the notebook: use the
+launch buttons at the top of the page, or download it and run it locally.
+```
 
 First though, let's run GST on the standard 1Q model to get some results (the same ones as the first tutorial).
 
@@ -64,7 +72,7 @@ mdl3 = results3.estimates['GateSetTomography'].models['stdgaugeopt']
 circuits = results1.circuit_lists['final']
 ```
 
-Next we create the workspace, as before.  This time, we'll leave `autodisplay=False` (the default), to demonstrate how this gives us more control over when workspace items are displayed.  In particular, we'll build up a several workspace objects and display them all at once.  **NOTE that setting `connected=True` means you need to have an internet connection!**
+Next we create the workspace, as before.  This time we'll leave `autodisplay=False` (the default), to demonstrate how this gives us more control over when workspace items are displayed: we'll build up several workspace objects and display them all at once.  We pass `connected=False`, so the JavaScript is inlined and nothing here needs a network connection.
 
 ```{code-cell} ipython3
 w = pygsti.report.Workspace()  #create a new workspace
@@ -216,5 +224,5 @@ otherView.display()
 ```
 
 ## Exporting to HTML
-Again, you can save this notebook as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file will retain all of the plot *and switch* interactivity, and in this case doesn't need the `offline` folder (because we set `connected=True` in `init_notebook_mode` above) but does need an internet connection.
+Again, you can save this notebook as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file retains all of the plot *and switch* interactivity, and because we passed `connected=False` above it needs no network connection to render.
 
