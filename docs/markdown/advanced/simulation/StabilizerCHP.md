@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# CHP Interface (legacy)
+# CHP interface (legacy)
 
 ```{warning} This notebook is under construction and will have more description in the near future.```
 

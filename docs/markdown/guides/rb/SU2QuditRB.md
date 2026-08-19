@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# SU(2) Qudit RB
+# SU(2) qudit RB
 
 This tutorial shows how to benchmark the group of global $\text{SU}(2)$ rotations acting on a single spin-$j$ qudit, using the *rank-1 synthetic-SPAM randomized benchmarking* protocol (abbreviated SSR1RB, or just R1RB) introduced in [*Randomized Benchmarking with Synthetic Quantum Circuits*](https://arxiv.org/abs/2412.18578) by Fan, Murray, Ladd, Young, and Blume-Kohout.
 

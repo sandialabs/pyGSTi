@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Robust GST using Total Variation Distance (TVD)
+# Robust GST using total variation distance (TVD)
 
 This notebook demonstrates a robustness feature in pyGSTi: performing long-sequence GST using different final-stage objective functions.
 

@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Processor Specifications
+# Processor specifications
 This tutorial covers the creation and use of processor specification objects.  These objects are used to define the application programming interface (API) exposed by a quantum information processor (QIP).  Currently, processor specifications in pyGSTi are restricted to QIPs with a given number of *qubits* (`QubitProcessorSpec`), though in the future support may be added for more exotic processor types containing, for example qudits or a mix of qubits and classical bits.  Often a processor specification is created for the "primitive" gates of the device, though it can be useful to create processor specifications for "compiled" gates as well.
 
 ```{code-cell} ipython3

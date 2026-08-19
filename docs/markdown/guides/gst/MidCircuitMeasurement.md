@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Instruments and Intermediate Measurements
+# Instruments and intermediate measurements
 
 This tutorial demonstrates how to model, simulate, and perform tomography on quantum *instruments*: maps that act on a qudit state (density matrix) and produce a qudit state *together with* a classical outcome.  Formally, an instrument is a map from $\mathcal{B}(\mathcal{H})$, the space of density matrices, to $\mathcal{B}(\mathcal{H}) \otimes K(n)$, where $K(n)$ is a classical space of $n$ elements.  Instruments are the natural model for **mid-circuit measurements** (MCMs): operations that read out a qudit partway through a circuit and leave behind a (possibly disturbed) post-measurement state.
 

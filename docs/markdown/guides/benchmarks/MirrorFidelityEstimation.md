@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Mirror Circuit Fidelity Estimation
+# Mirror circuit fidelity estimation
 
 ```{code-cell} ipython3
 !pip install qiskit-aer -q  # qiskit-aer is REQUIRED by this notebook. This makes sure you have it.

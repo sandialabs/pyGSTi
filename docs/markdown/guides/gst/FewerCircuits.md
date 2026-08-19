@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Fiducial Pair Reduction
+# Fiducial pair reduction
 The circuits used in standard Long Sequence GST are more than what are needed to amplify every possible gate error.  (Technically, this is due to the fact that the informationaly complete fiducial sub-sequences allow extraction of each germ's *entire* process matrix, when all that is needed is the part describing the amplified directions in model space.) Because of this over-completeness, fewer sequences, i.e. experiments, may be used whilst retaining the desired Heisenberg-like scaling ($\sim 1/L$, where $L$ is the maximum length sequence).  The over-completeness can still be desirable, however, as it makes the GST optimization more robust to model violation and so can serve to stabilize the GST parameter optimization in the presence of significant non-Markovian noise.  Recall that the form of a GST gate sequence is
 
 $$S = F_i (g_k)^n F_j $$

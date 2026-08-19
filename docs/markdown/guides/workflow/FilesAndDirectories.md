@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# File Input and Output
+# File input and output
 
 This tutorial describes how different pyGSTi objects can be saved to and read back from files.  There are four  main ways of doing this, depending on the type of object you're wanting to save.
 

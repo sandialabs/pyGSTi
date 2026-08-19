@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Experiment Designs
+# Experiment designs
 In `pygsti`, an experiment design object specifies how to produce the data needed by a characterization protocol.  In its simplest form, it consists entirely of a list of `Circuit` objects, but for some protocols (e.g. GST) additional meta-data is needed regarding the structure and intent for these circuits (e.g. the germ and fiducial circuits and maximum lengths used to build a set of final GST circuits).
 
 ```{code-cell} ipython3

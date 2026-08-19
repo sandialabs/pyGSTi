@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Error Generator Propagation
+# Error generator propagation
 In this tutorial we will provide an overview of the core functionality available through pyGSTi's error generator propagation module.
 
 Error generator propagation is a technique which leverages the analytical properties of the error generator formalism to enable efficient forward simulation by propagating general markovian error channels through Clifford circuits. Efficiency of this technique relies on two conditions:

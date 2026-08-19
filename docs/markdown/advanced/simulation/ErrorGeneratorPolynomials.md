@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Error Generator Polynomials
+# Error generator polynomials
 In this tutorial we provide an introduction to the functionality available through pyGSTi's `errgenpolytools` module.
 
 The error generator propagation framework described in the companion tutorial {doc}`ErrorGeneratorPropagation` makes it possible to propagate sparse Markovian error generators through Clifford circuits and to construct efficient approximations to the resulting noisy dynamics. The `errgenpolytools` module builds directly on top of that framework and allows one to go one step further: instead of working only with *numerical* propagated error generator rates, we can construct **symbolic polynomial representations** of quantities of interest such as

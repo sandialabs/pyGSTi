@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Drift Characterization
+# Drift characterization
 
 This tutorial shows how to implement instability ("drift") detection and characterization on time-stamped data. This data can be from *any* quantum circuits, on *any* number of qubits, but we require around 100+ time-stamps per circuit (perhaps fewer if there are multiple measurement outcomes per time-stamp). If you only have data that is binned into a few different time periods then consider instead using the `DataComparator` object demonstrated in the [DataSetComparison](ComparingDataSets) tutorial.
 

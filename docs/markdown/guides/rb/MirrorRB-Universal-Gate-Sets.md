@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# MRB with Universal Gate Sets
+# MRB with universal gate sets
 
 This tutorial contains a few details on how to run *Mirror randomized benchmarking* with universal gate sets, that are not covered in the [RB overview tutorial](HowRBWorks) or the [Clifford MRB tutorial](MirrorRB).
 

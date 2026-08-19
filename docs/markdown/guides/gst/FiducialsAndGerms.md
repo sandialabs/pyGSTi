@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Fiducial and Germ Selection
+# Fiducial and germ selection
 
 This notebook demonstrates how to generate sets of fiducial and germ sequences which form the building blocks of the operation sequences used by long-sequence GST.  As described in [GST circuits tutorial](GSTCircuits), by structuring the GST sequences as
 

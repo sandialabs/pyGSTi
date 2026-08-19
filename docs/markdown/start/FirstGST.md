@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Gate Set Tomography
+# Gate set tomography
 
 The `pygsti` package provides multiple levels of abstraction over the core gate set tomography (GST) algorithms.  This tutorial will show you how to run gate set tomography on some simulated (generated) data, hopefully giving you an overall sense of what it takes (and how easy it is!) to run GST.  For more details and options for running GST, see the [GST circuits tutorial](../guides/gst/GSTCircuits) and the [tutorial covering the different protocols for running GST](../guides/gst/RunningGST).
 

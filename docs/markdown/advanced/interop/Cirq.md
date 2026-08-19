@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Cirq Integration
+# Cirq integration
 
 This notebook shows a simple example of how to use pyGSTi with Cirq. It has three sections:
 

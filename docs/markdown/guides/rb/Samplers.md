@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Random Circuit Samplers
+# Random circuit samplers
 
 This tutorial introduces the different random circuit layer samplers in-built into `pyGSTi`.
 

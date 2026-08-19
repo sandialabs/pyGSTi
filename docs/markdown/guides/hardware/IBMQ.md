@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Running experiments on IBM Q Processors
+# Running experiments on IBM Q processors
 This tutorial will demonstrate how to run an experiment on IBM Q Processors. To do so you will need [QisKit](https://qiskit.org/) installed and an [IBM Q account](https://quantum-computing.ibm.com/).
 
 ```{warning}

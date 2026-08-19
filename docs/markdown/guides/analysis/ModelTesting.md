@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Model Testing
+# Model testing
 This tutorial covers different methods of **comparing data to given (fixed) QIP models**.  This is distinct from model-based *tomography*, which finds the best-fitting model for a data set within a space of models set by a `Model` object's parameterization.  You might use this as a tool alongside or separate from GST.  Perhaps you suspect that a given noisy QIP model is compatible with your data - model *testing* is the way to find out. Because there is no optimization involved, model testing requires much less time than GST does, and doens't place any requirements on which circuits are used in performing the test (though some circuits will give a more precise result).
 
 ## Setup

@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Randomized Benchmarking
+# Randomized benchmarking
 
 This tutorial is an overview of randomized benchmarking (RB) in pyGSTi. The are multiple flavours of RB, that have different strengths and weaknesses. pyGSTi contains end-to-end methods for:
 

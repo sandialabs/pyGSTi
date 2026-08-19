@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Frequently Asked Questions
+# Frequently asked questions
 This notebook contains a list of frequently asked questions and their answers.  If the answer is short, example code is given directly in this notebook; if not, then the reader is referred to other pyGSTi tutorials and examples.
 
 ## What is GST?

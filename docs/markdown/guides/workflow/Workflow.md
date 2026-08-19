@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Running QCVV Protocols
+# Running QCVV protocols
 The main purpose of pyGSTi is to implement QCVV techniques that analyze some, often specific, experimental data to learn about a quantum processor.  Each such technique is called a "protocol" in pyGSTi, and this term roughly corresponds to its use in the literature.  To run a protocol on some data in pyGSTi, here's the general workflow:
 
 1. Create an `ExperimentDesign` object.  An "experiment design" is just a description of a set of experiments.  It tells you **what circuits you need to run on your quantum processor**.  Most protocols require a certain structure to their circuits, or knowledge that their circuits have been drawn from a certain distribution, and thus have a corresponding experiment design type suited to them, e.g. `StandardGSTDesign` and `CliffordRBDesign`. 

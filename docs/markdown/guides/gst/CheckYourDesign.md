@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Evaluating Experiment Designs Using Fisher Information
+# Evaluating experiment designs using Fisher information
 In this notebook we step through an example of using the Fisher information matrix of an experiment design to evaluate its theoretical performance. This sort of analysis was done in these two papers : [1](https://arxiv.org/abs/2307.15767) [2](https://arxiv.org/abs/2308.08781).
 
 ```{code-cell} ipython3

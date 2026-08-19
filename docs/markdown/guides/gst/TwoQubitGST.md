@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# 2Q-GST Fitting
+# 2Q-GST fitting
 
 This example gives an overview of the typical steps used to perform an end-to-end (i.e. experimental-data-to-report) gate set tomography analysis on a 2-qubit system.  The steps are very similar to the single-qubit case described in the tutorials, but we thought 2Q-GST is an important enough topic to deserve a separate example.
 

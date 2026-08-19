@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-# Implicit Models
+# Implicit models
 This tutorial explains how to create and use the implicit-layer-operation models present in pyGSTi.  It *doesn't* show you how to build your own custom model class, which will be the topic of a future tutorial.
 
 "Implicit models", as we'll refer to implicit-layer-operation models from now on, store building blocks needed to construct layer operations but not usually the layer operations themselves.  When simulating a circuit, an implicit model creates on the fly, from its building blocks, an operator for each circuit layer.  It therefore only creates operators for the layers that are actually needed for the circuit simulation.   Simulating a circuit with an implicit model is similar to first building an *explicit* model on the fly that contains just operations for the present circuit layers.  These layers are based on the implicit model's **building blocks** and **layer rules**.
