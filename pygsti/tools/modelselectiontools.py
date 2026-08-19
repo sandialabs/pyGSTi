@@ -133,6 +133,11 @@ class AMSGreedyResult(_NicelySerializable):
         Args:
             results2 (_type_): _description_
         """
+        
+        for k,label in enumerate(self.full_model.parameter_labels):
+            for result in other_results:
+                assert label == result.full_model.parameter_labels[k]
+
         if not isinstance(other_results, list):
             other_results = [other_results]
         num_results = 1 + len(other_results)
@@ -169,6 +174,8 @@ class AMSGreedyResult(_NicelySerializable):
             ev_ratios = [ev_ratio for [_,ev_ratio, _] in result.trace[1:]]
             logl = result.trace[0][1] - _np.sum(ev_ratios )
             numparams = result.embedder_matrix.shape[1]
+            params_kept = []
+            
             params_kept = result.full_model_params_kept
             params_removed = list(set(all_params) - (set(all_params) & set(params_kept)))
             avg_ev_ratio = _np.average(ev_ratios)
@@ -253,8 +260,12 @@ class AMSGreedyResult(_NicelySerializable):
                 
 
             for result in other_results:
-                projectors.append(result.embedder_matrix @ result.embedder_matrix.T)
-                embedded_param_vecs.append(result.embedder_matrix @ result.model.to_vector())
+                projector_matrix = result.embedder_matrix @ result.embedder_matrix.T
+                projectors.append(projector_matrix)
+
+                embedded_param_vec = result.embedder_matrix @ result.model.to_vector()
+                embedded_param_vecs.append(embedded_param_vec)
+
                 if self.ev_ratio_costs != []:
                     embedded_ev_ratios.append(result.embedder_matrix @ result.ev_ratio_costs)
 
