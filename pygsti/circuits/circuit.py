@@ -129,6 +129,19 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
             for l in lbl.components]  # a *list*
 
 
+def _copy_nested_label_lists(labels):
+    """
+    Copy every list level of an editable Circuit's `_labels`, sharing the `Label` leaves.
+
+    Editable circuits store each layer as a list of components, and a compound component
+    as a further nested list (see `_label_to_nested_lists_of_simple_labels`).  Copying
+    only the outer list leaves those inner lists shared, so an in-place layer editor on
+    one circuit reaches into another's state -- see issue #759.  `Label` objects are
+    immutable, so only the lists need rebuilding.
+    """
+    return [_copy_nested_label_lists(el) if isinstance(el, list) else el for el in labels]
+
+
 def _sslbls_of_nested_lists_of_simple_labels(obj, labels_to_ignore=None):
     """ Get state space labels from a nested lists of simple (not compound) Labels. """
     if isinstance(obj, _Label):
@@ -183,7 +196,12 @@ def _op_seq_to_str(seq, line_labels, occurrence_id, compilable_layer_indices):
         processed_seq = list(map(process_lists, seq))
         compilable_set = set(compilable_layer_indices)
         uncompilable_set = set(range(len(processed_seq))) - set(compilable_layer_indices)
-        if len(compilable_set) <= len(uncompilable_set):
+        # Mark whichever set is smaller, to keep the string short -- but only when
+        # marking the smaller one actually writes a marker.  An all-compilable
+        # circuit has an empty uncompilable set, so the '|' branch would emit
+        # nothing at all and the reader could not tell it from a circuit with no
+        # compilable layers.  Prefer '~' in that case and mark every layer.
+        if not uncompilable_set or len(compilable_set) <= len(uncompilable_set):
             marker = '~'; marked_set = compilable_set
         else:
             marker = '|'; marked_set = uncompilable_set
@@ -855,6 +873,12 @@ class Circuit(object):
         cparser = _CircuitParser()
         chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(value)
 
+        if len(chk) != len(self._labels):
+            # zip below stops at the shorter sequence, so without this a truncated or
+            # extended string rep would pass the layer check vacuously (issue #761)
+            raise ValueError(("Cannot set .str to %s because it evaluates to"
+                              " %d layer(s) which is != this circuit's number of layers (%d).") %
+                             (value, len(chk), len(self._labels)))
         if not all([my_layer in (chk_lbl, [chk_lbl]) for chk_lbl, my_layer in zip(chk, self._labels)]):
             raise ValueError(("Cannot set .str to %s because it doesn't"
                               " evaluate to %s (this circuit)") %
@@ -901,7 +925,11 @@ class Circuit(object):
     def __radd__(self, x: Union[Circuit, Sequence[_Label]]):
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
-            return Circuit._fastinit(x + self.layertup, self._line_labels, editable=False)
+            # our layers all shift right by len(x), so our compilable indices shift with them
+            lenx = len(x)
+            shifted = tuple(i + lenx for i in self._compilable_layer_indices_tup)
+            return Circuit._fastinit(x + self.layertup, self._line_labels, editable=False,
+                                     compilable_layer_indices_tup=shifted)
         return x.__add__(self)
 
     def __add__(self, x: Union[Circuit, Sequence[_Label]]):
@@ -928,7 +956,9 @@ class Circuit(object):
                                       self._line_labels)) #trick for concatenating multiple tuples
             #new_line_labels.update(self._line_labels)
             new_line_labels = sorted(new_line_labels)
-            return Circuit._fastinit(self.layertup + x, new_line_labels, editable=False)
+            # x's layers are appended after ours, so our indices keep their positions
+            return Circuit._fastinit(self.layertup + x, new_line_labels, editable=False,
+                                     compilable_layer_indices_tup=self._compilable_layer_indices_tup)
 
         #Add special line label handling to deal with the special global idle circuits (which have no line labels
         # associated with them typically).
@@ -961,7 +991,19 @@ class Circuit(object):
                     +" standard line labels)."
             raise ValueError(msg)
 
+        # compilability is a per-layer property, and concatenation doesn't invalidate it:
+        # keep both operands' indices, shifting x's past our layers (#758)
+        new_compilable_indices = self._compilable_layer_indices_tup \
+            + tuple(i + len(self) for i in x._compilable_layer_indices_tup)
+
         if self._str is None or x._str is None:
+            s = None
+        elif new_compilable_indices:
+            # Don't splice the operands' cached strings: each chose '~' (mark the
+            # compilable layers) or '|' (mark the uncompilable ones) for its own layer
+            # count, so the concatenation can carry both markers, which is unparseable.
+            # Leaving the string rep unset regenerates it from the combined indices on
+            # first access, which is canonical by construction.
             s = None
         else:
             mystr, _ = self._labels_lines_str()
@@ -987,7 +1029,8 @@ class Circuit(object):
             s += _op_seq_str_suffix(new_line_labels, occurrence_id=None)  # don't maintain occurrence_id
 
         return Circuit._fastinit(self.layertup + x.layertup, new_line_labels, editable=False, name='',
-                                 stringrep=s, occurrence=None)
+                                 stringrep=s, occurrence=None,
+                                 compilable_layer_indices_tup=new_compilable_indices)
 
     def sandwich(self, x, y) -> Circuit:
         """
@@ -1130,7 +1173,7 @@ class Circuit(object):
                                       self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
             else:
                 #copy the editable labels (avoiding shallow copy issues)
-                editable_labels = [sublist.copy() for sublist in self._labels]
+                editable_labels = _copy_nested_label_lists(self._labels)
                 return ret._copy_init(editable_labels, self._line_labels, editable,
                                       self._name, self._str, self._occurrence_id,
                                       self._compilable_layer_indices_tup, saved_aux=self.saved_auxinfo)
@@ -1266,6 +1309,9 @@ class Circuit(object):
         integer then a :class:`Label` is returned (representing a layer or a
         part of a layer), otherwise a :class:`Circuit` is returned.
 
+        If the returned object is a Circuit, it won't retain any of this Circuit's
+        metadata (such as the compilable layer indices or occurrence id).
+
         Parameters
         ----------
         layers : int, slice, or list/tuple of ints
@@ -1304,8 +1350,6 @@ class Circuit(object):
             `layers` is a single integer and as a `Circuit` otherwise.
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
-            Note that the returned circuit doesn't retain any original
-            metadata, such as the compilable layer indices or occurrence id.
         """
         nonint_layers = not isinstance(layers, int)
 
@@ -1326,7 +1370,10 @@ class Circuit(object):
                 if not nonint_layers:
                     return self.layertup[layers]
                 if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
-                    return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+                    # copy the nested lists: the result is editable, and sharing them with
+                    # `self` lets an in-place editor on either circuit mutate the other (#759)
+                    return Circuit._fastinit(_copy_nested_label_lists(self._labels[layers]),
+                                             self._line_labels, not self._static)
         #otherwise assert both are not None:
 
 
@@ -1901,7 +1948,12 @@ class Circuit(object):
                 if len(sslbls.intersection(lines)) == 0:
                     new_layer.append(l)
                 elif not clear_straddlers and not sslbls.issubset(lines):
-                    raise ValueError("Cannot operate on a block that is straddled by %s!" % str(_Label(l)))
+                    raise ValueError(
+                        ("Cannot operate on a block that is straddled by %s.  Pass"
+                         " `clear_straddlers=True` to remove straddling gates entirely --"
+                         " note that this removes the whole gate rather than restricting it"
+                         " to the lines that are not being cleared, which is not a"
+                         " well-defined operation in general.") % str(_Label(l)))
             self._labels[i] = new_layer
         self._compilable_layer_indices_tup = ()
 
@@ -1922,7 +1974,10 @@ class Circuit(object):
         clear_straddlers : bool, optional
             Whether or not gates which straddle cleared and non-cleared lines
             should be cleared.  If `False` and straddling gates exist, an error
-            will be raised.
+            will be raised.  If `True` a straddling gate is removed in its
+            entirety -- it is *not* restricted to the lines that were not
+            cleared, since an n-qubit gate generally has no meaningful
+            restriction to a subset of its qubits.
 
         Returns
         -------
