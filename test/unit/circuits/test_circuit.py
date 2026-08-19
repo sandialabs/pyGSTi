@@ -1151,7 +1151,8 @@ class CompressedCircuitTester(BaseCase):
 
 
 class CircuitBugfixRegressionTester(BaseCase):
-    """Regression tests for the batch of circuit.py bug fixes (issues #756, #760, #762, #763, #764)."""
+    """Regression tests for the batches of circuit.py bug fixes (issues #746, #756, #760, #761,
+    #762, #763, #764)."""
 
     def test_map_names_inplace_with_callable(self):
         # regression test for issue #763
@@ -1357,6 +1358,27 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(sub[0], Label('Gy', 1))
         self.assertEqual(sub[1], Label('Gz', 1))
 
+    def test_clear_labels_straddler_error_names_the_option(self):
+        # issue #746: the reporter expected clearing line 0 of a two-line Gy to
+        # *restrict* the gate to line 1, and the bare "straddled by Gy!" message
+        # gave no hint that an option existed or what it actually does
+        c = circuit.Circuit('Gy@(0,1)', editable=True)
+        with self.assertRaises(ValueError) as cm:
+            c._clear_labels((0,), [0])
+        self.assertIn('clear_straddlers=True', str(cm.exception))
+        self.assertIn('removes the whole gate', str(cm.exception))
+
+    def test_clear_labels_straddlers_removes_the_whole_gate(self):
+        # issue #746, resolved as not-a-bug: `clear_straddlers=True` deletes the
+        # straddling gate outright.  It does not restrict it to the un-cleared
+        # lines, and there is no mode that does -- a genuine 2-qubit gate has no
+        # meaningful one-qubit restriction.
+        c = circuit.Circuit('Gy@(0,1)', editable=True)
+        c._clear_labels((0,), [0], clear_straddlers=True)
+        self.assertEqual(c._labels, [[]])
+        restricted = circuit.Circuit([('Gy', 1)], line_labels=[0, 1], editable=True)
+        self.assertNotEqual(c._labels, restricted._labels)
+
     def test_extract_labels_nonstrict_includes_straddlers(self):
         # issue #756: labels straddling the requested-lines boundary are kept
         # (per the docstring) and the result's line labels grow to cover them;
@@ -1548,3 +1570,40 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(len(tensored_c.saved_auxinfo["lanes"]), len(l2q))
         for lane_idx, key in l2q.items():
             self.assertEqual(tensored_c.saved_auxinfo["lanes"][tuple(sorted(key))], fresh_sub_cirs[lane_idx])
+
+    # ---- the `.str` setter's accept/reject matrix (#761)
+    #
+    # The setter's contract is that the assigned string must evaluate to exactly the
+    # circuit's own layers.  Kept together as one matrix because the interesting cases
+    # are the near-misses: same length but different content, and right content but
+    # wrong length in either direction.
+
+    def test_str_setter_rejects_same_length_mismatch(self):
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"doesn't evaluate to GxGy@\(0\)"):
+            c.str = "GxGz@(0)"
+
+    def test_str_setter_rejects_truncated_string(self):
+        # #761: zip stopped at the shorter sequence, so this was silently accepted
+        # and the circuit then reported .str == 'Gx@(0)' while len(c) == 2
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"evaluates to 1 layer\(s\).*number of layers \(2\)"):
+            c.str = "Gx@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_rejects_extended_string(self):
+        # #761, the other direction: zip also stopped at self._labels
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"evaluates to 3 layer\(s\).*number of layers \(2\)"):
+            c.str = "GxGyGz@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_accepts_exact_match(self):
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        c.str = "GxGy@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_refuses_static_circuit(self):
+        c = circuit.Circuit("GxGy@(0)")
+        with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit"):
+            c.str = "GxGy@(0)"
