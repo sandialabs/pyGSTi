@@ -39,7 +39,12 @@ def dem_to_dict(dem: stim.DetectorErrorModel) -> dict:
         dem_dict: dict representation of dem
     """
     dem_dict = {}
-    for event in dem:
+    # Flatten so `repeat` blocks are expanded, and keep only `error`
+    # instructions: `detector`/`logical_observable` declarations carry
+    # coordinates (or nothing) in args, not a probability.
+    for event in dem.flattened():
+        if event.type != "error":
+            continue
         p = event.args_copy()[0]
         targets = event.targets_copy()
         # Only detector targets contribute to the bitmask; logical-observable
