@@ -28,10 +28,10 @@ target_model = smq2Q_XY.target_model('full TP')
 ```
 
 ## Step 2: create an experiment design
-An experiment design is a object containing all the information needed to perform and later interpret the data from a set of circuits.  In the case of GST, lists of fiducial and germ sub-circuits are the building blocks of the circuits performed in the experiment. Typically, these lists are either provided by pyGSTi because you're using a "standard" model (as we are here), or computed using the "fiducial selection" and "germ selection" algorithms which are a part of pyGSTi and covered in the tutorials.  As an additional input, we'll need a list of lengths indicating the maximum length circuits to use on each successive GST iteration.  Since 2Q-GST can take a while, only use short sequences (`max_max_lengths=1`) with fiducial-pair reduction (`fpr=True`) to demonstrate 2Q-GST more quickly (because we know you have important stuff to do).
+An experiment design is a object containing all the information needed to perform and later interpret the data from a set of circuits.  In the case of GST, lists of fiducial and germ sub-circuits are the building blocks of the circuits performed in the experiment. Typically, these lists are either provided by pyGSTi because you're using a "standard" model (as we are here), or computed using the "fiducial selection" and "germ selection" algorithms which are a part of pyGSTi and covered in the tutorials.  As an additional input, we'll need a list of lengths indicating the maximum length circuits to use on each successive GST iteration.  Since 2Q-GST can take a while, only use short sequences (`max_max_length=4`) with fiducial-pair reduction (`fpr=True`) to demonstrate 2Q-GST more quickly (because we know you have important stuff to do).
 
 ```{code-cell} ipython3
-exp_design = smq2Q_XY.create_gst_experiment_design(max_max_length=2, fpr=True)
+exp_design = smq2Q_XY.create_gst_experiment_design(max_max_length=4, fpr=True)
 ```
 
 ## Step 3: Data generation
@@ -57,11 +57,11 @@ data = pygsti.io.read_data_from_dir("../../../example_files/My2QExample")
 ```
 
 ## Step 4: Run GST
-Just like for 1-qubit GST, we use the `StandardGST` protocol to compute the GST estimates.  Usually for two qubits this could take a long time (hours on a single cpu) based on the number of operation sequences used, and running on multiple processors is a good idea (see the MPI example).  Here, we set the tolerance to a high value ($10^{-3}$) so that it only takes around 30 minutes to run.
+Just like for 1-qubit GST, we use the `StandardGST` protocol to compute the GST estimates.  For the short sequence length considered here things should run in less than one minute. Runtime materially increases with sequence length. If you feel like your fits are taking too long then you should use our support for MPI-acceleration. See the next tutorial for info on that.
 
 Some notes about the options/arguments here that are particularly relevant to 2-qubit GST:
-  - `memlimit` gives an estimate of how much memory is available to use on your system (in bytes).  This is currently *not* a hard limit, and pyGSTi may require slightly more memory than this "limit".  So you'll need to be conservative in the value you place here: if your machine has 10GB of RAM, set this to 6 or 8 GB initially and increase it as you see how much memory is actually used using a separate OS performance monitor tool.  If you're running on multiple processors, this should be the memory available *per processor*.
-  - `verbosity` tells the routine how much detail to print to stdout.  If you don't mind waiting a while without getting any output, you can leave this at its default value (2).  If you can't standing wondering whether GST is still running or has locked up, set this to 3.
+  - `memlimit` gives an estimate of how much memory is available to use on your system (in bytes).  This is currently *not* a hard limit, and pyGSTi may require slightly more memory than this "limit".  So you'll need to be conservative in the value you place here: if your machine has 10GB of RAM, set this to 6 or 8 GB initially. Then, use some standalone OS performance monitor tool to see how much memory is actually used when you run.  If you're running on multiple processors, this should be the memory available *per processor*.
+  - `verbosity` tells the routine how much detail to print to stdout. The default value is 2. Increase this value if you're worried that pyGSTi is stuck and you want evidence to the contrary.
 
 ```{code-cell} ipython3
 :tags: [nbval-skip]
@@ -71,7 +71,7 @@ start = time.time()
 protocol = pygsti.protocols.StandardGST("CPTPLND", optimizer={'tol': 1e-3}, verbosity=2)
 results = protocol.run(data, memlimit=5*(1024)**3)
 end = time.time()
-print("Total time=%f hours" % ((end - start) / 3600.0))
+print("Total time=%f minutes" % ((end - start) / 60.0))
 ```
 
 ## Step 5: Create report(s) using the returned `ModelEstimateResults` object

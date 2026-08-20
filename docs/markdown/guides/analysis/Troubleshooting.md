@@ -30,7 +30,7 @@ Constraint on the gates (and SPAM operations) in pyGSTi are imposed via the "par
 ---
 jupyter:
   outputs_hidden: true
-tags: [nbval-skip]
+tags: [nbval-skip, skip-execution]
 ---
 my_target_model.set_all_parameterizations("TP")
 ```
@@ -45,7 +45,7 @@ Similar to the above question, you simply set the parameterization of your targe
 ---
 jupyter:
   outputs_hidden: true
-tags: [nbval-skip]
+tags: [nbval-skip, skip-execution]
 ---
 my_target_model.set_all_parameterizations("CPTP")
 ```
@@ -81,7 +81,7 @@ Currently there aren't many options for speeding up the core computation require
 **`Report` objects cache the various tables and plots within a report.** This can be used to generate multiple similar versions of the same report, but with different parameters. For instance, you might want to generate one "full" version (with `brevity=0`, the default) and one "brief" version of the same report. Furthermore, **report factory functions such as `construct_standard_report` take an optional `Workspace` as an argument that caches the various tables and plots within a report as an argument.**  This `Workspace` can be stored and shared between multiple report factories to utilize the cache within that `Workspace`.  This is useful if you want to construct two version of the same, *or similar*, reports.  For instance, you might want to generate one "full" report (with `brevity=0`, the default) and one "brief" report from the same results. This functionality can be used to generate a `Workspace` on a large and fast multi-processor machine (which ran the main GST analysis).  For example, using a workspace as shown below would dramatically speed up the 2nd and 3rd `construct_standard_report` calls.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 #On large & fast computer
 results = pygsti.run_long_sequence_gst(..., comm=my_comm)

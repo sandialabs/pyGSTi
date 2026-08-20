@@ -35,7 +35,7 @@ from pygsti.processors import CliffordCompilationRules as CCR
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 from qiskit_ibm_runtime import QiskitRuntimeService
 from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
@@ -54,21 +54,21 @@ First, load you IBM Q account, get your `provider` and select a device. To do th
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 # Once credentials are saved, the service can be loaded each time:
 service = QiskitRuntimeService(channel="ibm_quantum")
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 # You can list all the available backends to ensure your instance is running properly
 service.backends()
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 # Can use a physical device...
 #backend = service.backend('ibm_sherbrooke')
@@ -81,7 +81,7 @@ sim_backend = FakeSherbrooke()
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 # Let's see which backend is the least busy!
 print(backend)
@@ -94,7 +94,7 @@ Next we create a ProcessorSpec for the device you're going to run on. This Proce
 In `v0.9.12`, the `pygsti.extras.devices` module has been updated. You can still use the existing files in `pygsti.extras.devices` if you are offline, and thus may still want to add your own device files. However, you can now also simply use the IBMQ backend to create an `ExperimentalDevice` which is compatible with ProcessorSpecs and Models.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 # Using the configuration files in pygsti.extras.devices (legacy and may not be up-to-date)
 #device = ExperimentalDevice.from_legacy_device('ibmq_bogota')
@@ -104,7 +104,7 @@ device = ExperimentalDevice.from_qiskit_backend(backend)
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 pspec = device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcnot'])
 ```
@@ -115,7 +115,7 @@ Next we create an `ExperimentDesign` that specifies the circuits you want to run
 First we pick the circuit design parameters:
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 #circuit design parameters
 depths = [0, 2, 4, 16]
@@ -163,14 +163,14 @@ if 1 in widths: twoQmean[1] = 0 # No two-qubit gates in one-qubit circuits.
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 # In order to do Mirror RB, we need some Clifford compilations. See the RB-MirrorRB tutorial for more details.
 compilations = {'absolute': CCR.create_standard(pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0)}
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 edesigns_dict = {}
 edesign_index = 1
@@ -191,7 +191,7 @@ We're now ready to run on the IBM Q processor. We do this using an `IBMQExperime
 We can enable checkpointing for `IBMQExperiment` objects by providing a path. This is the default and is recommended! We are also overriding old checkpoints here to ensure we have a clean starting point.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 exp = ibmq.IBMQExperiment(combined_edesign, pspec, circuits_per_batch=75, num_shots=1024, seed=20231201,
                           checkpoint_path='test_ibmq', checkpoint_override=True)
@@ -202,13 +202,13 @@ First we convert pyGSTi circuits into jobs that can be submitted to IBM Q. **Thi
 This can now be done in parallel (with progress bars) using the `max_workers` kwarg!
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 exp.transpile(backend, num_workers=4)
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 # We can simulate having been interrupted by removing the last few transpiled batches
 del exp.qiskit_isa_circuit_batches[3:]
@@ -221,7 +221,7 @@ exp.transpile(backend)
 If the `IBMQExperiment` object is lost and needs to be reloaded (i.e. notebook restarts), it can be loaded from file now.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 exp2 = ibmq.IBMQExperiment.from_dir('test_ibmq')
 ```
@@ -229,7 +229,7 @@ exp2 = ibmq.IBMQExperiment.from_dir('test_ibmq')
 We're now ready to submit this experiment to IBM Q.Note that we can submit using a different backend than what was used to generate the experiment design. In general, it is not a good idea to mix and match backends for physical devices unless they have the exact same connectivity and qubit labeling; however, it **is** often useful for debugging purposes to use the simulator backend rather than a physical device.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 exp2.submit(backend)
 ```
@@ -237,7 +237,7 @@ exp2.submit(backend)
 You can then monitor the jobs. If get an error message, you can query the error using `exp.qjobs[i].error_message()` for batch `i`.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 exp2.monitor()
 ```
@@ -245,13 +245,13 @@ exp2.monitor()
 Again, the `IBMQExperiment` can be loaded from file if checkpointing is being used. The Qiskit RuntimeJobs are not serialized; however, they can be retrieved from the IBMQ service from their job ids. In order to do this, pass `regen_jobs=True` and a `service` to the `from_dir()` call.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 exp3 = ibmq.IBMQExperiment.from_dir('test_ibmq', regen_jobs=True, service=service)
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 exp3.monitor()
 ```
@@ -259,7 +259,7 @@ exp3.monitor()
 You can then grab the results, **Once you see that all the jobs are complete** (`.retrieve_results()` will just hang if the jobs have not yet completed).
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 exp3.retrieve_results()
 ```
@@ -267,7 +267,7 @@ exp3.retrieve_results()
 This `IBMQExperiment` object now contains the results of your experiment. It contains much of the information about exactly what was submitted to IBM Q, and raw results objects that IBM Q returned.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 display(exp3.qjobs)
 display(exp3.batch_results)
@@ -276,7 +276,7 @@ display(exp3.batch_results)
 But, most importantly, it contains the data formatted into a pyGSTi `ProtocolData` object, which is the packaged-up data that pyGSTi analysis proctols use.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 data = exp3.data
 ```
@@ -285,7 +285,7 @@ data = exp3.data
 Because `retrieve_results()` has formatted the data into a `ProctocolData` object, we can just hand this to the analysis protocol(s) that are designed for analyzing this type of data. Here we'll analyze this data using a standard RB curve-fitting analysis.
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 rb = pygsti.protocols.RandomizedBenchmarking(datatype='adjusted_success_probabilities', defaultfit='A-fixed')
 results = {}
@@ -294,7 +294,7 @@ for key in data.keys():
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 for i in data.keys(): 
     print(i)

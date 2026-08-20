@@ -98,10 +98,13 @@ sphinx:
     #   - pygsti.drivers.longsequence  the longsequence driver module + its functions
     #   - pygsti.evotypes.*          ~191 pages of internal evolution-type rep machinery
     exclude_patterns:
-    # Treat .md as the source for each page; the paired .ipynb (committed only on
-    # the develop-with-notebooks build branch) must not be picked up as a
-    # duplicate source document. The launch-button rewrite still sees it on disk.
-    - "**/*.ipynb"
+    # Keep the build tree out of source discovery. Jupyter Book only injects its
+    # own defaults (_build, Thumbs.db, ...) when `exclude_patterns` is a TOP-LEVEL
+    # key; ours lives under sphinx.config, so we must list _build ourselves.
+    # Without it, myst-nb's `_build/**/jupyter_execute/*.ipynb` copies are
+    # discovered as source documents and each build nests another copy one level
+    # deeper -- unbounded growth across incremental builds.
+    - "_build"
     - "_autosummary/pygsti.report.*"
     - "_autosummary/pygsti.modelpacks.*"
     - "_autosummary/pygsti.drivers.longsequence*"

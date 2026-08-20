@@ -54,7 +54,7 @@ report.write_html("../../../tutorial_files/exampleReport", auto_open=False, verb
 ```
 
 ```{code-cell} ipython3
-:tags: [nbval-skip]
+:tags: [nbval-skip, skip-execution]
 
 #PDF
 report.write_pdf("../../../tutorial_files/exampleReport.pdf", auto_open=False, verbosity=1)
