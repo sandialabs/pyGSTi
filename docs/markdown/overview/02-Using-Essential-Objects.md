@@ -222,7 +222,7 @@ Here's an example of how to generate a report (it will auto-open in a new tab; i
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(
     results, title="Example GST Report", verbosity=1
-).write_html("tutorial_files/myFirstGSTReport", auto_open=False, verbosity=1)
+).write_html("../../tutorial_files/myFirstGSTReport", auto_open=False, verbosity=1)
 ```
 
 ## Idle tomography

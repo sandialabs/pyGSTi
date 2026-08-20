@@ -14,6 +14,7 @@ import numpy as _np
 import scipy as _scipy
 
 from pygsti.optimize.arraysinterface import DistributedArraysInterface as _DistributedArraysInterface
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 
@@ -77,11 +78,6 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
     -------
     None
     """
-
-    #DEBUG
-    #for i in range(a.shape[1]):
-    #    print(i, " = ", _np.linalg.norm(a[:,i]))
-    #assert(False), "STOP"
 
     pivot_row_indices = []
     #potential_pivot_indices = list(range(a.shape[0]))  # *local* row indices of rows not already chosen as pivot rows
@@ -223,10 +219,6 @@ def _find_pivot(
         buf2, buf3, best_host_indices, best_host_vals
     ):
     
-    #print(f'Length potential_pivot_inds {len(potential_pivot_inds)}')
-    #print(f'potential_pivot_inds: {potential_pivot_inds}')
-    #print(f'best_host_indices: {best_host_indices}')
-    
     if len(potential_pivot_inds) > 0:
         best_abs_local_potential_pivot, ibest_local = _restricted_abs_argmax(a[:, icol], potential_pivot_inds)
         #abs_local_potential_pivots = _np.abs(a[potential_pivot_inds, icol])
@@ -295,7 +287,6 @@ def _find_pivot(
         buf1b[0] = ibest_local_as_global
         best_local_gindices = best_host_indices  # each proc is a "host"
         
-        #print(f'rank {comm.rank} best_local_gindices before gather: {best_local_gindices}')
         comm.Gather(buf1b, best_local_gindices, root=0)
 
         # root proc determines best global pivot and broadcasts row# to others (& it's recorded for later)
@@ -381,7 +372,7 @@ def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, ari, resource_a
     #    #x_values[ii] = xval
 
     # now need to send the x-values we computed locally to the appropriate processor
-    # i.e. *we* need to recive the x-values for x-indices == my_row_slice.
+    # i.e. *we* need to receive the x-values for x-indices == my_row_slice.
     # Algorithm: all procs loop through *global* list of indices by destination processor.
     #    If this proc *is* the destination processor, then (if it isn't also the source)
     #    it needs to receive from the source processor.  If this proc is the source, it
@@ -485,7 +476,7 @@ def _tallskinny_custom_solve(a, b, resource_alloc):
         displacements = _np.concatenate(([0], _np.cumsum(sizes)))
         Rprime = _np.empty(displacements[-1], 'd')
         comm.Gatherv(Ri, [Rprime, sizes, displacements[0:-1], MPI.DOUBLE], root=0)
-        Rprime.shape = (displacements[-1] // nColsPerProc, nColsPerProc)
+        Rprime = _compat.reshape_no_copy(Rprime, (displacements[-1] // nColsPerProc, nColsPerProc))
         Q2, R = _scipy.linalg.qr(Rprime, mode='economic', check_finite=True)
         Q2 = _np.ascontiguousarray(Q2)
         Q2_sizes = _np.array([(s // nColsPerProc) * Q2.shape[1] for s in sizes], 'd')

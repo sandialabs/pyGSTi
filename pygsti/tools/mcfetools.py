@@ -24,7 +24,7 @@ def success_probability_to_polarization(s: float, n: int) -> float:
     """
     Utility function for MCFE VBDataFrame creation.
 
-    Maps a success probablity `s` for an n-qubit circuit to
+    Maps a success probability `s` for an n-qubit circuit to
     the polarization `s`, defined by `p = (s - 1/2^n)/(1 - 1/2^n)`.
     For large n, the difference between `p` and `s` is negligible
     and the calculation of 2**n is prohibitive, so we impose
@@ -305,12 +305,6 @@ def rc_predicted_process_fidelity(bare_rc_effective_pols: _np.ndarray,
     b = _np.mean(rc_rc_effective_pols)
     c = _np.mean(reference_effective_pols)
 
-    # print(a)
-
-    # print(b)
-
-    # print(c)
-    
     if c <= 0.:
         return _np.nan  # raise ValueError("Reference effective polarization zero or smaller! Cannot estimate the process fidelity")
     elif b <= 0:
@@ -413,8 +407,6 @@ def rc_bootstrap_predicted_pfid(brs: _np.ndarray,
 
     if rand_state is None:
         rand_state = _np.random.RandomState()
-
-    # print(num_bootstraps)
 
     pfid_samples = []
     for _ in range(num_bootstraps):

@@ -1,10 +1,19 @@
 
+import warnings
+
 import numpy as np
 from scipy.interpolate import LinearNDInterpolator as _linND
 
 import pygsti
-import pygsti.extras.interpygate as interp
-from pygsti.extras.interpygate.core import use_csaps as USE_CSAPS
+# Importing interpygate fires MissingDependencyWarning at module-load time
+# if csaps is not installed (spline interpolation falls back to linear);
+# csaps is an optional dep that pgdev313 currently lacks. Suppress the
+# noise here — tests gate spline-specific paths via USE_CSAPS already.
+from pygsti.tools.exceptions import MissingDependencyWarning as _MissingDependencyWarning
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", _MissingDependencyWarning)
+    import pygsti.extras.interpygate as interp
+    from pygsti.extras.interpygate.core import use_csaps as USE_CSAPS
 from pygsti.tools.basistools import change_basis
 from pygsti.modelpacks import smq1Q_XY
 from pathlib import Path
@@ -119,7 +128,7 @@ class InterpygateConstructionTester(BaseCase):
                                 interpolator_and_args='linear')
         op = opfactory_linear.create_op([0,np.pi/4])
         op.from_vector([1])
-        self.assertArraysAlmostEqual(op, self.static_target)
+        self.assertArraysAlmostEqual(op.to_dense(), self.static_target)
 
         if USE_CSAPS: 
             opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
@@ -128,7 +137,7 @@ class InterpygateConstructionTester(BaseCase):
                                     interpolator_and_args='spline')
             op = opfactory_spline.create_op([0,np.pi/4])
             op.from_vector([1])
-            self.assertArraysAlmostEqual(op, self.static_target)
+            self.assertArraysAlmostEqual(op.to_dense(), self.static_target)
 
         interpolator_and_args = (_linND, {'rescale': True})
         opfactory_custom = opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
@@ -137,7 +146,7 @@ class InterpygateConstructionTester(BaseCase):
                                 interpolator_and_args=interpolator_and_args)
         op = opfactory_custom.create_op([0,np.pi/4])
         op.from_vector([1])
-        self.assertArraysAlmostEqual(op, self.static_target)
+        self.assertArraysAlmostEqual(op.to_dense(), self.static_target)
 
 
 

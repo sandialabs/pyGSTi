@@ -11,6 +11,15 @@ Defines the ComputationalBasisPOVM class
 #***************************************************************************************************
 
 
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
+
 import collections as _collections
 import itertools as _itertools
 import functools as _functools
@@ -19,11 +28,12 @@ import numpy as _np
 from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers.povms.computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
 from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.evotypes import Evotype as _Evotype
 
 
-class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface):
+class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface, _Torchable):
     """
     A POVM that "measures" states in the computational "Z" basis.
 
@@ -169,6 +179,19 @@ class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface):
         simplified = _collections.OrderedDict(
             [(prefix + k, self[k]) for k in self.keys()])
         return simplified
+
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[_torch.Tensor]:
+        # A ComputationalBasisPOVM has zero free parameters, so its torch_base is a constant: one
+        # row per effect (in self.keys() order, the order TorchForwardSimulator multiplies against
+        # the super-ket), each row the effect's dual super-bra.  Computational effects have no
+        # to_dense() of their own, so we stack the per-effect denses here.
+        rows = _np.stack([self[k].to_dense('HilbertSchmidt') for k in self.keys()])
+        t_rows = _torch.from_numpy(_np.ascontiguousarray(rows)).to(dtype=real_dtype, device=device)
+        return (t_rows,)
+
+    @staticmethod
+    def torch_base(sd: Tuple[_torch.Tensor], t_param: _torch.Tensor) -> _torch.Tensor:
+        return sd[0]
 
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.

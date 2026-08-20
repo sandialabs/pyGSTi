@@ -28,7 +28,6 @@ parts:
         - file: markdown/gst/Overview-functionbased
         - file: markdown/gst/Driverfunctions
         - file: markdown/gst/LowLevel
-    - file: markdown/protocols/InterpolatedOperators
     - file: markdown/protocols/IdleTomography
     - file: markdown/protocols/DriftCharacterization
     - file: markdown/protocols/RobustPhaseEstimation
@@ -42,6 +41,7 @@ parts:
       - file: markdown/rb/Samplers
       - file: markdown/rb/MultiRBExperiments
       - file: markdown/rb/BinaryRB
+      - file: markdown/rb/SU2QuditRB
     - file: markdown/protocols/VolumetricBenchmarks
       sections:
       - file: markdown/protocols/MirrorCircuitBenchmarks
@@ -84,6 +84,7 @@ parts:
       - file: markdown/objects/CustomPOVM
       - file: markdown/objects/Instruments
       - file: markdown/objects/OperationFactories
+      - file: markdown/objects/InterpolatedOperators
     - file: markdown/objects/ProcessorSpec
     - file: markdown/objects/Results
   
@@ -96,8 +97,15 @@ parts:
       - file: markdown/simulation/CircuitSimulation-CHP
     - file: markdown/simulation/DataSimulation
     - file: markdown/simulation/ErrorGeneratorPropagation
+    - file: markdown/simulation/ErrorGeneratorPolynomials
     - file: markdown/simulation/ForwardSimulationTypes
-  
+
+  - file: markdown/ml/Overview
+    sections:
+    - file: markdown/ml/CircuitEncoding
+    - file: markdown/ml/ErrorPropagation
+    - file: markdown/ml/Training
+
   - file: markdown/Reporting
     sections:
     - file: markdown/reporting/ReportGeneration
@@ -117,7 +125,6 @@ parts:
   - file: markdown/examples/2QGST-CreatingModels
     sections:
     - file: markdown/examples/2QGST-RunningIt
-    - file: markdown/examples/2QGST-ErrorBars
   - file: markdown/examples/QutritGST
     sections:
     - file: markdown/examples/Leakage-automagic

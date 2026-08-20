@@ -97,30 +97,46 @@ class MatrixToolsTester(BaseCase):
             mt.real_matrix_log(M, action_if_imaginary="foobar", tol=1e-6)
 
     def test_matrix_log_raise_on_no_real_log(self):
+        import warnings
         a = np.array([[1, 1], [1, 1]])
         with self.assertRaises(AssertionError):
-            mt.real_matrix_log(a)
+            with warnings.catch_warnings():
+                warnings.filterwarnings(action="ignore", 
+                    message="divide by zero encountered in log", category=RuntimeWarning
+                )
+                warnings.filterwarnings(action='ignore',
+                    message='invalid value encountered in dot', category=RuntimeWarning
+                )
+                mt.real_matrix_log(a)
 
     def test_minweight_match(self):
         a = np.array([1, 2, 3, 4], 'd')
         b = np.array([3.1, 2.1, 4.1, 1.1], 'd')
         expectedPairs = [(0, 3), (1, 1), (2, 0), (3, 2)]  # (i,j) indices into a & b
 
+        # Every matched pair in this fixture differs by exactly 0.1, so the weights
+        # are as diagnostic as the pairs -- assert them, not just the matching.
+        expectedWeights = np.full(len(a), 0.1)
+
         wts = mt.minweight_match(a, b, metricfn=None, return_pairs=False,
                                  pass_indices_to_metricfn=False)
+        self.assertArraysAlmostEqual(wts, expectedWeights)
         wts, pairs = mt.minweight_match(a, b, metricfn=None, return_pairs=True,
                                         pass_indices_to_metricfn=False)
         self.assertEqual(set(pairs), set(expectedPairs))
+        self.assertArraysAlmostEqual(wts, expectedWeights)
 
         def fn(x, y): return abs(x - y)
         wts, pairs = mt.minweight_match(a, b, metricfn=fn, return_pairs=True,
                                         pass_indices_to_metricfn=False)
         self.assertEqual(set(pairs), set(expectedPairs))
+        self.assertArraysAlmostEqual(wts, expectedWeights)
 
         def fn(i, j): return abs(a[i] - b[j])
         wts, pairs = mt.minweight_match(a, b, metricfn=fn, return_pairs=True,
                                         pass_indices_to_metricfn=True)
         self.assertEqual(set(pairs), set(expectedPairs))
+        self.assertArraysAlmostEqual(wts, expectedWeights)
 
     def test_fancy_assignment(self):
         a = np.zeros((4, 4, 4), 'd')
@@ -192,3 +208,173 @@ class MatrixToolsTester(BaseCase):
         self.assertEqual(mt.prime_factors(7), [7])
         self.assertEqual(mt.prime_factors(10), [2, 5])
         self.assertEqual(mt.prime_factors(12), [2, 2, 3])
+
+    def test_eigendecomposition_assume_normal(self):
+        # A non-Hermitian but normal matrix: a unitary conjugate of a diagonal matrix.
+        rng = np.random.default_rng(0)
+        diag = np.array([1 + 2j, 3 - 1j, 0.5j])
+        Q = spl.qr(rng.standard_normal((3, 3)) + 1j * rng.standard_normal((3, 3)))[0]
+        M = Q @ np.diag(diag) @ Q.conj().T
+        evecs, evals, inv_evecs = mt.eigendecomposition(M, assume_normal=True)
+        self.assertArraysAlmostEqual(evecs @ np.diag(evals) @ inv_evecs, M)
+        self.assertArraysAlmostEqual(evecs @ evecs.conj().T, np.eye(3))
+        self.assertArraysAlmostEqual(inv_evecs, evecs.conj().T)
+
+    def test_eigendecomposition_assume_normal_matches_assume_hermitian_for_hermitian_input(self):
+        rng = np.random.default_rng(0)
+        A = rng.standard_normal((4, 4)) + 1j * rng.standard_normal((4, 4))
+        H = A + A.conj().T
+        evecs_n, evals_n, _ = mt.eigendecomposition(H, assume_normal=True)
+        recon_n = evecs_n @ np.diag(evals_n) @ evecs_n.conj().T
+        self.assertArraysAlmostEqual(recon_n, H)
+
+    def test_eigendecomposition_assume_normal_raises_on_non_normal_input(self):
+        N = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0.5]], dtype=complex)
+        # N is not normal: N @ N.conj().T != N.conj().T @ N
+        self.assertFalse(np.allclose(N @ N.conj().T, N.conj().T @ N))
+        with self.assertRaises(ValueError):
+            mt.eigendecomposition(N, assume_normal=True)
+
+    def test_eigenvalues_assume_normal_matches_full_eig(self):
+        # Regression test: eigenvalues(assume_normal=True)'s Schur-decomposition path
+        # used to read diag(Z) (the Schur decomposition's unitary factor) instead of
+        # diag(T) (the triangular factor whose diagonal actually holds the
+        # eigenvalues) -- a pre-existing bug on develop, independent of the
+        # assume_hermitian-vs-assume_normal inference fixed in eigendecomposition
+        # above. Use a normal, non-Hermitian matrix so assume_normal=True actually
+        # exercises the Schur path (a Hermitian input would take the eigh path
+        # instead, per eigenvalues' own Hermiticity-first inference).
+        rng = np.random.default_rng(1)
+        diag = np.array([1 + 2j, 3 - 1j, 0.5j])
+        Q = spl.qr(rng.standard_normal((3, 3)) + 1j * rng.standard_normal((3, 3)))[0]
+        M = Q @ np.diag(diag) @ Q.conj().T
+        self.assertFalse(np.allclose(M, M.conj().T))
+
+        actual = mt.eigenvalues(M, assume_normal=True)
+        expected = np.linalg.eigvals(M)
+
+        def sort_key(z):
+            return (round(z.real, 8), round(z.imag, 8))
+
+        self.assertArraysAlmostEqual(
+            np.array(sorted(actual, key=sort_key)), np.array(sorted(expected, key=sort_key)))
+
+
+def _pp_computational_superket(zvals):
+    """
+    Independent reference for the Pauli-product super-ket of a computational
+    basis state, built by explicit Kronecker product.
+
+    |z><z| = (I + (-1)**z Z) / 2, whose Pauli-product coefficient vector
+    (normalized so the PP basis is orthonormal) is [1, 0, 0, (-1)**z]/sqrt(2).
+    Deliberately does not share any code with the routines under test.
+    """
+    vec = np.array([1.0])
+    for z in zvals:
+        vec = np.kron(vec, np.array([1, 0, 0, 1 - 2 * z], 'd') / np.sqrt(2))
+    return vec
+
+
+def _zvals_to_int(zvals):
+    """Encode z-values little-endian, matching EffectRepComputational."""
+    return sum(z << i for i, z in enumerate(zvals))
+
+
+class ZvalsInt64Tester(BaseCase):
+    """
+    Cover ``zvals_int64_to_dense`` / ``zvals_int64_probability``.
+
+    ``zvals_int64_probability`` is an O(2**N) sparse inner product that replaces
+    densifying the (mostly zero) effect vector to length 4**N and taking a full
+    dense dot product. These tests check that optimization against an
+    independently constructed dense reference, since being fast is not by itself
+    evidence of being right.
+    """
+
+    ALL_ZVALS = [(), (0,), (1,), (0, 0), (0, 1), (1, 0), (1, 1),
+                 (0, 1, 0), (1, 1, 0), (1, 0, 1), (1, 1, 1)]
+
+    def test_to_dense_matches_kron_reference(self):
+        for zvals in self.ALL_ZVALS:
+            with self.subTest(zvals=zvals):
+                actual = mt.zvals_int64_to_dense(_zvals_to_int(zvals), len(zvals))
+                self.assertArraysAlmostEqual(actual, _pp_computational_superket(zvals))
+
+    def test_probability_matches_kron_reference(self):
+        rng = np.random.default_rng(0)
+        for zvals in self.ALL_ZVALS:
+            with self.subTest(zvals=zvals):
+                state = rng.standard_normal(4 ** len(zvals))
+                actual = mt.zvals_int64_probability(_zvals_to_int(zvals), len(zvals), state)
+                expected = np.dot(_pp_computational_superket(zvals), state)
+                self.assertAlmostEqual(actual, expected)
+
+    def test_probability_agrees_with_densifying_then_dotting(self):
+        # The specific claim the optimization makes: same answer as the O(4**N)
+        # densify-then-dot it replaced.
+        rng = np.random.default_rng(1)
+        for zvals in self.ALL_ZVALS:
+            with self.subTest(zvals=zvals):
+                zvals_int, nq = _zvals_to_int(zvals), len(zvals)
+                state = rng.standard_normal(4 ** nq)
+                dense = mt.zvals_int64_to_dense(zvals_int, nq)
+                self.assertAlmostEqual(mt.zvals_int64_probability(zvals_int, nq, state),
+                                       np.dot(dense, state))
+
+    def test_zero_qubits_is_the_scalar_case(self):
+        # N == 0 is special-cased in both routines: the super-ket is the length-1
+        # vector [1] and the "inner product" is just the single state element.
+        self.assertArraysAlmostEqual(mt.zvals_int64_to_dense(0, 0), np.array([1.0]))
+        self.assertAlmostEqual(mt.zvals_int64_probability(0, 0, np.array([2.5])), 2.5)
+
+    def test_zero_qubits_honors_abs_elval(self):
+        self.assertArraysAlmostEqual(mt.zvals_int64_to_dense(0, 0, None, False, 0.25),
+                                     np.array([0.25]))
+        self.assertAlmostEqual(mt.zvals_int64_probability(0, 0, np.array([2.0]), 0.25), 0.5)
+
+    def test_omitted_abs_elval_matches_explicit_value(self):
+        # abs_elval is a caller-supplied cache of 1/sqrt(2)**nqubits; omitting it
+        # must compute the same thing.
+        zvals = (1, 0, 1)
+        zvals_int, nq = _zvals_to_int(zvals), len(zvals)
+        state = np.random.default_rng(2).standard_normal(4 ** nq)
+        abs_elval = 1 / (np.sqrt(2) ** nq)
+        self.assertArraysAlmostEqual(mt.zvals_int64_to_dense(zvals_int, nq),
+                                     mt.zvals_int64_to_dense(zvals_int, nq, None, False, abs_elval))
+        self.assertAlmostEqual(mt.zvals_int64_probability(zvals_int, nq, state),
+                               mt.zvals_int64_probability(zvals_int, nq, state, abs_elval))
+
+    def test_to_dense_allocates_a_new_array_when_outvec_is_none(self):
+        out = mt.zvals_int64_to_dense(0b01, 2, None)
+        self.assertEqual(out.shape, (16,))
+        # Successive calls must not alias one another (the internal index cache is
+        # shared across calls, but the output buffer must not be).
+        other = mt.zvals_int64_to_dense(0b10, 2, None)
+        self.assertIsNot(out, other)
+        self.assertFalse(np.allclose(out, other))
+
+    def test_to_dense_clears_a_dirty_caller_supplied_outvec(self):
+        # Without trust_outvec_sparsity, leftover data in the caller's buffer must
+        # be zeroed; otherwise stale values survive at the structurally-zero indices.
+        expected = mt.zvals_int64_to_dense(0b01, 2)
+        dirty = np.full(16, 99.0)
+        out = mt.zvals_int64_to_dense(0b01, 2, dirty, False)
+        self.assertIs(out, dirty)
+        self.assertArraysAlmostEqual(out, expected)
+
+    def test_to_dense_trusts_sparsity_when_asked(self):
+        expected = mt.zvals_int64_to_dense(0b01, 2)
+        zeroed = np.zeros(16)
+        out = mt.zvals_int64_to_dense(0b01, 2, zeroed, True)
+        self.assertIs(out, zeroed)
+        self.assertArraysAlmostEqual(out, expected)
+
+    def test_index_cache_reuse_across_calls_is_correct(self):
+        # The (r, final_indices) arrays are cached by nqubits and reused, so a
+        # second call with the same nqubits but different zvals must not inherit
+        # the first call's signs.
+        mt._zvals_int64_to_dense_cache.clear()
+        first = mt.zvals_int64_to_dense(0b01, 2)
+        second = mt.zvals_int64_to_dense(0b10, 2)
+        self.assertArraysAlmostEqual(first, _pp_computational_superket((1, 0)))
+        self.assertArraysAlmostEqual(second, _pp_computational_superket((0, 1)))

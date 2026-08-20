@@ -13,9 +13,10 @@ Defines the ImplicitOpModel class and supporting functionality.
 import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
-import numpy as _np
 
 from pygsti.models import model as _mdl
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict, LabelLike as _LabelLike
+from pygsti.modelmembers import ModelMember as _ModelMember
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
@@ -44,7 +45,7 @@ class ImplicitOpModel(_mdl.OpModel):
     layer_rules : LayerRules
         The "layer rules" used for constructing operators for circuit
         layers.  This functionality is essential to using this model to
-        simulate ciruits, and is typically supplied by derived classes.
+        simulate circuits, and is typically supplied by derived classes.
 
     basis : Basis
         The basis used for the state space by dense operator representations.
@@ -89,6 +90,30 @@ class ImplicitOpModel(_mdl.OpModel):
     @property
     def _primitive_instrument_label_dict(self):
         return self.instrument_blks['layers']
+
+    def __getitem__(self, key: _LabelLike) -> _ModelMember:
+        """
+        Search for `key` among this ImplicitOpModel's OrderedMemberDict objects for
+        gates, SPAM, instruments, and factories. Return the `value` from the first
+        match, or raise a KeyError if no matches are found.
+        """
+        key_label = _Label(key)
+        # Sort dicts by length as a heuristic for search efficiency (e.g. SPAM is usually O(1)).
+        dicts = []
+        for outer_dict in [self.prep_blks, self.povm_blks, self.operation_blks, self.instrument_blks, self.factories]:
+            for inner_dict in outer_dict.values():
+                if isinstance(inner_dict, _OrderedMemberDict) and inner_dict:
+                    dicts.append((len(inner_dict), inner_dict))
+        dicts.sort(key=lambda k: k[0])
+        for _, d in dicts:
+            try:
+                out = d[key_label]
+                return out
+            except KeyError:
+                continue
+        msg = f"Key {key} does not appear in any OrderedMemberDict\n"
+        msg += "belonging to this ImplicitOpModel."
+        raise KeyError(msg)
 
     #Functions required for base class functionality
 
@@ -151,55 +176,68 @@ class ImplicitOpModel(_mdl.OpModel):
             fdict.parent = self
             for o in fdict.values(): o.relink_parent(self)
 
-    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
+    def _iter_ops_for_clifford_symplectic_reps(self):
+        for gl in self.primitive_op_labels:
+            yield gl, self.operation_blks['layers'][gl]
+
+    def to_explicit_model(self):
         """
-        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
+        Build an :class:`ExplicitOpModel` equivalent to this implicit model.
 
-        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
-        from the returned dictionary.
+        Each primitive layer member stored in this model's
+        ``prep_blks['layers']``, ``povm_blks['layers']``,
+        ``operation_blks['layers']``, and ``instrument_blks['layers']``
+        dictionaries is copied into the returned model as an explicitly-stored
+        member.  The result therefore reproduces this model's circuit-layer
+        operators for any layer that this model builds by a direct lookup of
+        these primitives -- which is what report generation and other
+        explicit-model-only code paths require.
 
-        Parameters
-        ----------
-        oplabel_filter : iterable, optional
-            A list, tuple, or set of operation labels whose symplectic
-            representations should be returned (if they exist).
+        The members' parameterizations are *preserved*: the actual
+        :class:`ModelMember` objects are copied rather than densified, so a
+        low-weight error-generator (Lindblad), TP, CPTP, etc. operation remains
+        that type in the returned model.  Parameter *sharing* between primitives
+        (such as a single base gate embedded on several qubits in a
+        ``independent_gates=False`` model) is preserved as well, so the returned
+        model should have the same number of parameters as this one.
 
         Returns
         -------
-        dict
-            keys are operation labels and/or just the root names of gates
-            (without any state space indices/labels).  Values are
-            `(symplectic_matrix, phase_vector)` tuples.
+        ExplicitOpModel
+
+        Notes
+        -----
+        This function does not support ImplicitOpModel's with `factories`.
         """
-        gfilter = set(oplabel_filter) if oplabel_filter is not None \
-            else None
+        from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 
-        srep_dict = {}
+        factory_labels = ['%s:%s' % (blk_lbl, lbl) for blk_lbl, fdict in self.factories.items()
+                          for lbl in fdict]
+        if factory_labels:
+            raise ValueError(("Cannot convert an implicit model with op-factories to an explicit"
+                              " model: factories generate operations on-demand and have no fixed"
+                              " representation.  Offending factories: %s")
+                             % ", ".join(factory_labels))
 
-        for gl in self.primitive_op_labels:
-            gate = self.operation_blks['layers'][gl]
-            if (gfilter is not None) and (gl not in gfilter): continue
+        ret = _ExplicitOpModel(self.state_space, self.basis,
+                               simulator='auto', evotype=self.evotype)
 
-            if isinstance(gate, _op.EmbeddedOp):
-                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
-                    "EmbeddedClifforGate contains a non-StaticCliffordOp!"
-                lbl = gl.name  # strip state space labels off since this is a
-                # symplectic rep for the *embedded* gate
-                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
-            elif isinstance(gate, _op.StaticCliffordOp):
-                lbl = gl.name
-                srep = (gate.smatrix, gate.svector)
-            else:
-                lbl = srep = None
+        # Copy the actual ModelMember objects (rather than dense arrays) so that
+        # each member's parameterization is retained.  A single shared `memo`
+        # preserves parameter-sharing between primitives (e.g. one base gate
+        # embedded on multiple qubits): a sub-member encountered a second time is
+        # returned from the memo instead of being copied again.
+        memo = {}
+        for lbl, prep in self.prep_blks.get('layers', {}).items():
+            ret.preps[lbl] = prep.copy(ret, memo)
+        for lbl, povm in self.povm_blks.get('layers', {}).items():
+            ret.povms[lbl] = povm.copy(ret, memo)
+        for lbl, op in self.operation_blks.get('layers', {}).items():
+            ret.operations[lbl] = op.copy(ret, memo)
+        for lbl, inst in self.instrument_blks.get('layers', {}).items():
+            ret.instruments[lbl] = inst.copy(ret, memo)
 
-            if srep:
-                if lbl in srep_dict:
-                    assert(srep == srep_dict[lbl]), \
-                        "Inconsistent symplectic reps for %s label!" % lbl
-                else:
-                    srep_dict[lbl] = srep
-
-        return srep_dict
+        return ret
 
     def to_explicit_model(self):
         """
@@ -373,7 +411,7 @@ class ImplicitOpModel(_mdl.OpModel):
                 for k, g in inst.simplify_operations(inst_lbl).items():
                     simplified_op_blks['op-' + inst_dict_lbl][k] = g
 
-        #FUTURE: allow cache "cateogories"?  Now we just flatten the work we did above:
+        #FUTURE: allow cache "categories"?  Now we just flatten the work we did above:
         self._opcaches.update(simplified_effect_blks)
         self._opcaches.update(simplified_op_blks)
         self._opcaches['complete-layers'] = {}  # used to hold final layers (of any type) if needed

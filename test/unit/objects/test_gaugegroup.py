@@ -156,3 +156,36 @@ class DirectSumGaugeGroupTester(GaugeGroupBase, BaseCase):
         g1 = ggrp.TrivialGaugeGroup(ExplicitStateSpace(['T0']))
         g2 = ggrp.UnitaryGaugeGroup(QubitSpace(1), 'pp')
         self.gg = ggrp.DirectSumUnitaryGroup((g1, g2), 'std')
+
+
+class U1GroupTester(GaugeGroupBase, BaseCase):
+    n_params = 1
+    element_type = ggrp.U1GroupElement
+    HAS_DERIV_WRT_PARAMS = False
+
+    def setUp(self):
+        GaugeGroupBase.setUp(self)
+        self.gg = ggrp.U1Group()
+
+    def test_identity_transform(self):
+        el = self.gg.compute_element(np.array([0.0]))
+        self.assertArraysAlmostEqual(el.transform_matrix, np.array([[1.0 + 0.0j]]))
+
+    def test_transform_matrix_is_unitary(self):
+        el = self.gg.compute_element(np.array([1.2]))
+        M = el.transform_matrix
+        self.assertArraysAlmostEqual(M @ M.conj().T, np.eye(1, dtype=complex))
+
+    def test_angle_wrapping(self):
+        angle = 0.5
+        el = self.gg.compute_element(self.gg.initial_params)
+        el.from_vector(np.array([angle]))
+        mx1 = el.transform_matrix.copy()
+        el.from_vector(np.array([angle + 2 * np.pi]))
+        mx2 = el.transform_matrix.copy()
+        self.assertArraysAlmostEqual(mx1, mx2)
+
+    def test_inverse_gives_identity(self):
+        el = self.gg.compute_element(np.array([0.7]))
+        product = el.transform_matrix @ el.inverse().transform_matrix
+        self.assertArraysAlmostEqual(product, np.eye(1, dtype=complex))

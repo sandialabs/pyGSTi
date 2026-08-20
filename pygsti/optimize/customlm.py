@@ -37,7 +37,7 @@ class CustomLMOptimizer(Optimizer):
     Parameters
     ----------
     maxiter : int, optional
-        The maximum number of (outer) interations.
+        The maximum number of (outer) iterations.
 
     maxfev : int, optional
         The maximum function evaluations.
@@ -339,7 +339,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
         `d(|x|)/|x| < rel_xtol` then mark converged.
 
     max_iter : int, optional
-        The maximum number of (outer) interations.
+        The maximum number of (outer) iterations.
 
     num_fd_iters : int optional
         Internally compute the Jacobian using a finite-difference method
@@ -510,10 +510,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     if len(global_x) == 0:  # a model with 0 parameters - nothing to optimize
         msg = "No parameters to optimize"; converged = True
 
-    # DB: from ..tools import matrixtools as _mt
-    # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
-    #num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
-    # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
     last_accepted_dx = None
     min_norm_f = 1e100  # sentinel
     best_x = ari.allocate_jtf()
@@ -551,8 +547,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     mu, nu, norm_f, f[:], spow, _ = best_x_state
                     continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
-            #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
-
             if profiler: profiler.memory_check("custom_leastsq: begin outer iter *before de-alloc*")
             Jac = None
 
@@ -578,23 +572,12 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
                 Jac = fdJac
 
-            #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
-            #Jac_analytic = jac_fn(x)
-            #if _np.linalg.norm(Jac_analytic-Jac) > 1e-6:
-            #    print("JACDIFF = ",_np.linalg.norm(Jac_analytic-Jac)," per el=",
-            #          _np.linalg.norm(Jac_analytic-Jac)/Jac.size," sz=",Jac.size)
-
-            # DB: from ..tools import matrixtools as _mt
-            # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)
             if profiler: profiler.memory_check("custom_leastsq: after jacobian:"
                                                + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                                         Jac.nbytes / (1024.0**3)))
             Jnorm = _np.sqrt(ari.norm2_jac(Jac))
             xnorm = _np.sqrt(ari.norm2_x(x))
             printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |x|=%g, |J|=%g" % (k, norm_f, mu, xnorm, Jnorm))
-
-            #assert(_np.isfinite(Jac).all()), "Non-finite Jacobian!" # NaNs tracking
-            #assert(_np.isfinite(_np.linalg.norm(Jac))), "Finite Jacobian has inf norm!" # NaNs tracking
 
             tm = _time.time()
 
@@ -608,10 +591,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             ari.fill_jtf(Jac, f, JTf)  # 'P'-type
 
             if profiler: profiler.add_time("custom_leastsq: dotprods", tm)
-            #assert(not _np.isnan(JTJ).any()), "NaN in JTJ!" # NaNs tracking
-            #assert(not _np.isinf(JTJ).any()), "inf in JTJ! norm Jac = %g" % _np.linalg.norm(Jac) # NaNs tracking
-            #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ!" # NaNs tracking
-            #assert(_np.isfinite(JTf).all()), "Non-finite JTf!" # NaNs tracking
 
             idiag = ari.jtj_diag_indices(JTJ)
             norm_JTf = ari.infnorm_x(JTf)
@@ -638,20 +617,9 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     ari.scatter_jtj(None, Jac_V)
                     global_Jac_s2 = comm.bcast(None, root=0)
 
-                #print("Rank %d: min s2 = %g" % (comm.rank, min(global_Jac_s2)))
-                #if min(global_Jac_s2) < -1e-4 and (comm is None or comm.rank == 0):
-                #    print("WARNING: min Jac s^2 = %g (max = %g)" % (min(global_Jac_s2), max(global_Jac_s2)))
                 assert(min(global_Jac_s2) / abs(max(global_Jac_s2)) > -1e-6), "JTJ should be positive!"
                 global_Jac_s = _np.sqrt(_np.clip(global_Jac_s2, 1e-12, None))  # eigvals of JTJ must be >= 0
                 global_Jac_VT_mJTf = ari.global_svd_dot(Jac_V, minus_JTf)  # = dot(Jac_V.T, minus_JTf)
-
-                #DEBUG
-                #num_large_svals = _np.count_nonzero(Jac_s > _np.max(Jac_s) / 1e2)
-                #Jac_Uproj = Jac_U[:,0:num_large_svals]
-                #JTJ_evals, JTJ_U = _np.linalg.eig(JTJ)
-                #printer.log("JTJ (dim=%d) eval min/max=%g, %g; %d large svals (of %d)" % (
-                #    JTJ.shape[0], _np.min(_np.abs(JTJ_evals)), _np.max(_np.abs(JTJ_evals)),
-                #                          num_large_svals, len(Jac_s)))
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
@@ -687,11 +655,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     rawJTJ_scratch[idiag] = undamped_JTJ_diag  # no damping; the "raw" JTJ
                     best_x_state = best_x_state[0:5] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
 
-            #determing increment using adaptive damping
+            #determining increment using adaptive damping
             while True:  # inner loop
 
                 if profiler: profiler.memory_check("custom_leastsq: begin inner iter")
-                #print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
                 if damping_mode == 'identity':
                     assert(damping_clip is None), "damping_clip cannot be used with damping_mode == 'identity'"
@@ -900,8 +867,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         norm_dx = norm_dx_lst[1]  # just use center value for printing & checks below
 
                     printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
-                    #MEM if profiler: profiler.memory_check("custom_leastsq: mid inner loop")
-                    #print("DB: new_x = ", new_x)
 
                     if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
                         if oob_check_interval <= 1:
@@ -936,7 +901,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                         in_bounds.append(True)
                                         new_f_lst.append(new_f.copy())
                             else:
-                                #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
                                 # MEM if profiler: profiler.memory_check("custom_leastsq: before oob_check obj_fn")
                                 ari.allgather_x(new_x, global_new_x)
                                 try:
@@ -1080,7 +1044,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                             if oob_check_mode == 1 and oob_check_interval > 0 and k % oob_check_interval == 0:
                                 #Check to see if objective function is out of bounds
                                 try:
-                                    #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
                                     # MEM if profiler:
                                     # MEM    profiler.memory_check("custom_leastsq: before oob_check obj_fn mode 1")
                                     obj_fn(global_new_x, oob_check=True)  # don't actually need return val (== new_f)
@@ -1136,15 +1099,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                                         # ^ Note: we use rawJTJ=None above because the current `JTJ` was evaluated
                                         #   at the *last* x-value -- we need to wait for the next outer loop
                                         #   to compute the JTJ for this best_x_state
-
-                                #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
-                                #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
-
-                                ##Check to see if we *would* switch to Q-N method in a hybrid algorithm
-                                #new_Jac = jac_fn(new_x)
-                                #new_JTf = _np.dot(new_Jac.T,new_f)
-                                #print(" CHECK: %g < %g ?" % (_np.linalg.norm(new_JTf,
-                                #    ord=_np.inf),0.02 * _np.linalg.norm(new_f)))
 
                                 break  # exit inner loop normally
                             else:
@@ -1297,7 +1251,7 @@ def custom_leastsq_wikip(obj_fn, jac_fn, x0, f_norm_tol=1e-6, jac_norm_tol=1e-6,
             mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
         #mu = tau #* _np.max(undampled_JTJ_diag) # initial damping element
 
-        #determing increment using adaptive damping
+        #determining increment using adaptive damping
         while True:  #inner loop
 
             ### Evaluate with mu' = mu / nu

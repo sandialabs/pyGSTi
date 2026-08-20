@@ -75,7 +75,6 @@ def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_d
         MULT = 2                                                                                                    # noqa
         probe = wvec_init.copy()
         for i in range(len(wvec_init)):
-            #print("-------- Index ----------", i)
             wv = wvec_init.copy()
             #See how big Wv[i] needs to get before penalty stops decreasing
             last_penalty = 1e100; fit_penalty = 0.9e100
@@ -84,17 +83,14 @@ def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_d
                 wv[i] = delta
                 last_penalty = fit_penalty
                 fit_penalty = _wildcard_fit_criteria(wv)
-                #print("  delta=%g  => penalty = %g" % (delta, penalty))
                 delta *= MULT
             probe[i] = delta / MULT**2
-            #print(" ==> Probe[%d] = %g" % (i, probe[i]))
 
         probe /= len(wvec_init)  # heuristic: set as new init point
         budget.from_vector(probe)
         wvec_init = budget.to_vector()
 
     printer.log("Beginning Nelder-Mead wildcard budget optimization.")
-    #printer.log("Initial budget (smart_init=%s) = %s" % (str(smart_init), str(budget)))
 
     # Find a value of eta that is small enough that the "first terms" are 0.
     eta = initial_eta  # some default starting value - this *shouldn't* really matter
@@ -132,7 +128,6 @@ def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_d
                          verbosity=printer)
         wvec = soln.x
         fit_penalty = _wildcard_fit_criteria(wvec)
-        #printer.log("  Firstterms value = %g" % firstTerms)
         meets_conditions = bool(fit_penalty < 1e-4)  # some zero-tolerance here
         if meets_conditions:  # try larger eta
             break
@@ -243,7 +238,7 @@ def _agg_dlogl_deriv(current_probs, objfn, percircuit_budget_deriv, probs_deriv_
     layout = objfn.layout
     num_circuits = len(layout.circuits)
 
-    # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
+    # derivative of firstterms wrt per-circuit wildcard budgets - namely if that budget goes up how to most efficiently
     # reduce firstterms in doing so, this computes how the per-circuit budget should be allocated to probabilities
     # (i.e. how probs should be updated) to achieve this decrease in firstterms
     agg_dlogl_deriv_wrt_percircuit_budgets = _np.zeros(num_circuits, 'd')
@@ -283,7 +278,7 @@ def _agg_dlogl_hessian(current_probs, objfn, percircuit_budget_deriv, probs_deri
     layout = objfn.layout
     num_circuits = len(layout.circuits)
 
-    # derivative of firstterms wrt per-circuit wilcard budgets - namely if that budget goes up how to most efficiently
+    # derivative of firstterms wrt per-circuit wildcard budgets - namely if that budget goes up how to most efficiently
     # reduce firstterms. In doing so, this computes how the per-circuit budget should be allocated to probabilities
     # (i.e. how probs should be updated) to achieve this decrease in firstterms
     #TOL = 1e-6
@@ -586,12 +581,6 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
     while i < max_iters:
         if fn_with_derivs:
             obj, Dobj, Hobj = fn_with_derivs(x)
-            #DEBUG - check against finite diff
-            #obj_chk = fn(x)
-            #Dobj_chk, Hobj_chk = _compute_fd(x, fn)
-            #print("Chks = ",_np.linalg.norm(obj - obj_chk),
-            #      _np.linalg.norm(Dobj - Dobj_chk) / _np.linalg.norm(Dobj),
-            #      _np.linalg.norm(Hobj - Hobj_chk) / _np.linalg.norm(Hobj))
         else:
             obj = fn(x)
             Dobj, Hobj = _compute_fd(x, fn)
@@ -610,27 +599,18 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
         else:
             dx = - _np.dot((1 - lmbda) * _np.linalg.inv(Hobj) + lmbda * I, Dobj)
 
-        #if debug and i == 0:
-        #    print(" initial newton iter: f=%g, |Df|=%g, |Hf|=%g" % (obj, norm_Dobj, _np.linalg.norm(Hobj)))
-        #    print(" dx = ",dx)
         if test_obj is not None:
             assert(_np.isclose(obj, test_obj))  # Sanity check
 
-        #downhill_direction = - Dobj / _np.linalg.norm(Dobj)
-        #dx_before_backtrack = dx.copy()
-
-        #print("DB: last obj = ",obj)
         orig_err = _np.geterr()
         _np.seterr(divide='ignore', invalid='ignore')
         while(_np.linalg.norm(dx) >= dx_tol):
             test_x = _np.clip(x + dx, 0, None)
 
             test_obj = fn(test_x)
-            #print("DB: test obj = ",test_obj, " (dx = ",_np.linalg.norm(dx),")")
             if test_obj < obj: break
             else:
                 dx *= 0.1  # backtrack
-                #if debug: print("Backtrack |dx| = ",_np.linalg.norm(dx))
         else:
             # if debug: print("Can't step in Newton direction and reduce objective - trying gradient descent")
             #
@@ -655,13 +635,6 @@ def NewtonSolve(initial_x, fn, fn_with_derivs=None, dx_tol=1e-6, max_iters=20, p
         if printer:
             printer.log(" newton iter %d: f=%g, |x|=%g |Df|=%g, |dx|=%g |Hf|=%g" %
                         (i, obj, norm_x, norm_Dobj, norm_dx, _np.linalg.norm(Hobj)))
-            #print("   downhill = ", list(downhill_direction.flat))
-            #print("   dx_before_backtrack = ", list(dx_before_backtrack.flat))
-            #print("   dx = ", list(dx.flat))
-            #print("   new_x = ", list((x + dx).flat))
-            #print("   H evals = ", evalsH)
-            #print("   H eigenvecs = \n", eigvecsH)
-            #print("   H = \n", Hobj)
         x += dx
         x = _np.clip(x, 0, None)
         x_list.append(x.copy())

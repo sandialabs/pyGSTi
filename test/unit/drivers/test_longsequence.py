@@ -302,6 +302,12 @@ class CPTPGatesTester(LongSequenceGSTBase):
         self.model.set_all_parameterizations("CPTPLND")
 
 
+# 'S' (Stochastic) is intentionally under-parameterised for the test POVM,
+# which trips PrepareThyself in pygsti.modelmembers.povms.convert. The test
+# is checking that GST still produces a sensible result via the
+# parameterisation's approximate representation — emitted warning is part of
+# the setup contract, so silence it for this class.
+@pytest.mark.filterwarnings("ignore::pygsti.tools.exceptions.PrepareThyself")
 class SGatesTester(LongSequenceGSTBase):
     def setUp(self):
         super(SGatesTester, self).setUp()

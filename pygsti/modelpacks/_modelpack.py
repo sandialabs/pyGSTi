@@ -360,7 +360,8 @@ class GSTModelPack(ModelPack):
         """
         for k in kwargs.keys():
             if k not in ('germ_length_limits', 'keep_fraction', 'keep_seed', 'include_lgst', 'nest', 'circuit_rules',
-                         'op_label_aliases', 'dscheck', 'action_if_missing', 'verbosity', 'add_default_protocol'):
+                         'op_label_aliases', 'dscheck', 'action_if_missing', 'verbosity', 'add_default_protocol',
+                         'germs'):
                 raise ValueError("Invalid argument '%s' to StandardGSTDesign constructor" % k)
 
         if qubit_labels is None: qubit_labels = self._sslbls
@@ -380,11 +381,13 @@ class GSTModelPack(ModelPack):
         else:
             max_lengths_list = list(_gen_max_length(max_max_length))
 
+        germs = kwargs.get('germs', self.germs(qubit_labels, lite))
+
         return _gst.StandardGSTDesign(
             self.processor_spec(qubit_labels),
             self.prep_fiducials(qubit_labels),
             self.meas_fiducials(qubit_labels),
-            self.germs(qubit_labels, lite),
+            germs,
             max_lengths_list,
             kwargs.get('germ_length_limits', None),
             fidpairs,

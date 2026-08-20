@@ -28,9 +28,9 @@ import pygsti
 ```
 
 ## Quick and Easy Analysis
-First we import some *time-stamped* data. For more information on the mechanics of using time-stamped `DataSets` see the [TimestampedDataSets](../objects/TimestampedDataSets) tutorial. The data we are importing is from long-sequence GST on $G_x$, and $G_y$ with time-dependent coherent errors on the gates.
+First we need some *time-stamped* data. For more information on the mechanics of using time-stamped `DataSets` see the [TimestampedDataSets](../objects/TimestampedDataSets) tutorial. Here we use long-sequence GST circuits on $G_x$ and $G_y$ and simulate time-dependent (drifting) outcome probabilities, so the stability analysis has some genuine instability to detect.
 
-We load the time-dependent data from the `timestamped_dataset.txt` file included with pyGSTi, and then build a `ProtocolData` object out of it so it can be used as input for `Protocol` objects.  We can pass `None` as the experiment design when constructing `data` because the stability analysis doesn't require any special structure to the circuits - it just requires the data to have timestamps.
+Below we build the GST circuit structure and then **simulate** time-stamped data in which each circuit's outcome probability slowly oscillates in time. We then build a `ProtocolData` object out of it so it can be used as input for `Protocol` objects. The stability analysis doesn't require any special structure to the circuits - it just requires the data to have timestamps - but supplying the GST experiment design lets us make the structured box plots near the end of this tutorial.
 
 ```{code-cell} ipython3
 # Initialize the circuit structure details of the imported data.
@@ -54,8 +54,21 @@ germs = [pygsti.circuits.Circuit(g) for g in germ_strs]
 max_lengths = [2**i for i in range(0,log2maxL+1)]
 exp_design = pygsti.protocols.StandardGSTDesign(model, prep_fiducials, meas_fiducials, germs, max_lengths)
 
-ds = pygsti.io.load_dataset("../../tutorial_files/timestamped_dataset.txt")  # a DataSet
-ds = ds.truncate(list(exp_design.all_circuits_needing_data))
+# Simulate time-stamped data with injected drift. For each circuit we generate a
+# single-shot time series whose probability of the '0' outcome slowly oscillates
+# in time, so the stability analysis below has some genuine instability to detect.
+# (Earlier versions of pyGSTi shipped a ~12 MB `timestamped_dataset.txt` fixture
+# for this tutorial; we generate comparable data on the fly so it stays self-contained.)
+import numpy as np
+num_times = 100
+times = np.arange(num_times)
+rng = np.random.RandomState(2023)
+ds = pygsti.data.DataSet(outcome_labels=['0', '1'])
+for i, circ in enumerate(exp_design.all_circuits_needing_data):
+    prob0 = 0.5 + 0.25 * np.sin(2 * np.pi * (1 + i % 5) * times / num_times)
+    clicks = (rng.rand(num_times) < prob0).astype(int)
+    ds.add_raw_series_data(circ, [('0',) if c else ('1',) for c in clicks], list(times))
+ds.done_adding_data()
 data = pygsti.protocols.ProtocolData(exp_design, ds)
 ```
 

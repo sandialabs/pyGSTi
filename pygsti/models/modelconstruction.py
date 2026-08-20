@@ -39,18 +39,25 @@ from pygsti.models.localnoisemodel import LocalNoiseModel as _LocalNoiseModel
 from pygsti.models.cloudnoisemodel import CloudNoiseModel as _CloudNoiseModel
 from pygsti.baseobjs import label as _label
 from pygsti.baseobjs import statespace as _statespace
-from pygsti.baseobjs.basis import Basis as _Basis
-from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
-from pygsti.baseobjs.basis import DirectSumBasis as _DirectSumBasis
+from pygsti.baseobjs.basis import (
+    Basis           as _Basis, 
+    ExplicitBasis   as _ExplicitBasis,
+    DirectSumBasis  as _DirectSumBasis,
+    TensorProdBasis as _TensorProdBasis
+)
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+
+from typing import Dict
+ordereddict = Dict
 
 
 #############################################
@@ -63,7 +70,7 @@ def create_spam_vector(vec_expr, state_space, basis):
     Parameters
     ----------
     vec_expr : string
-        the expression which determines which vector to build.  Currenlty, only
+        the expression which determines which vector to build.  Currently, only
         integers are allowed, which specify a the vector for the pure state of
         that index.  For example, "1" means return vectorize(``|1><1|``).  The
         index labels the absolute index of the state within the entire state
@@ -227,7 +234,6 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
     # -- End Helper Functions ------------------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------------------------------------------
 
-    #FUTURE?: type_preferences = ('static standard', 'static clifford', 'static unitary')
     build_evotype = 'default'
     superop_mxs_in_basis = []
     exprTerms = op_expr.split(':')
@@ -244,11 +250,6 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             stateSpaceUDim = int(_np.prod([state_space.label_udimension(l) for l in labels]))
             # a complex 2x2 mx unitary for the identity in Pauli-product basis
             Uop = _op.StaticUnitaryOp(_np.identity(stateSpaceUDim, 'complex'), 'pp', build_evotype)
-
-            #FUTURE?:
-            # stdname = 'Gi' if (stateSpaceUDim == 2) else None
-            # Uop = _op.create_from_unitary_mx(_np.identity(stateSpaceUDim, complex), type_preferences, 'pp',
-            #                                  stdname=stdname, evotype=evotype)
 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, labels, Uop)
@@ -290,12 +291,6 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
 
             # complex 2x2 unitary matrix operating on single qubit in Pauli-product basis
             Uop = _op.StaticUnitaryOp(_spl.expm(ex), 'pp', build_evotype)
-
-            #FUTURE?:
-            #stdname = None
-            #if _np.isclose(theta, _np.pi): stdname = 'G%spi' % opName.lower()
-            #elif _np.isclose(theta, _np.pi/2): stdname = 'G%spi2' % opName.lower()
-            # Uop = _op.create_from_unitary_mx(_spl.expm(ex), type_preferences, 'pp', stdname=stdname, evotype=evotype)
 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space in Pauli-product basis
             Uop_embed = _op.EmbeddedOp(state_space, (label,), Uop)
@@ -353,12 +348,6 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
                 "%s gate must act on qubits!" % opName
             # complex 4x4 unitary matrix operating on two-qubit in Pauli-product basis
             Uop = _op.StaticUnitaryOp(U, 'pp', build_evotype)
-
-            #FUTURE?:
-            # if opName == "CNOT": stdname = "Gcnot"
-            # elif opName == "CPHASE": stdname = "Gcphase"
-            # else: stdname = None
-            # Uop = _op.create_from_unitary_mx(U, type_preferences, 'pp', stdname=stdname, evotype=evotype)
 
             # a complex 2*num_qubits x 2*num_qubits mx unitary on full space
             Uop_embed = _op.EmbeddedOp(state_space, [label1, label2], Uop)
@@ -569,7 +558,10 @@ def _create_explicit_model_from_expressions(state_space, basis,
 
     from pygsti.circuits.circuitparser import parse_label
 
-    parsed_op_labels = [parse_label(str(opLabel)) for opLabel in op_labels]
+    # Canonicalize non-string labels through Label first, since e.g. str(('Gxpi2', 0)) and
+    # str(()) (the idle layer) are not directly parseable, whereas str(Label(...)) is.
+    parsed_op_labels = [parse_label(opLabel if isinstance(opLabel, str) else str(_label.Label(opLabel)))
+                        for opLabel in op_labels]
     if len(set(parsed_op_labels)) != len(op_labels):
         msg = f"""
         There are fewer unique Label objects after parsing op_labels than
@@ -663,7 +655,7 @@ def create_explicit_model_from_expressions(state_space,
 
         - "std" = operation matrix operates on density mx expressed as sum of matrix
           units
-        - "gm"  = operation matrix operates on dentity mx expressed as sum of
+        - "gm"  = operation matrix operates on density mx expressed as sum of
           normalized Gell-Mann matrices
         - "pp"  = operation matrix operates on density mx expresses as sum of
           tensor-product of Pauli matrices
@@ -779,7 +771,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         custom_gates = {}
 
     if ideal_gate_type == "auto":
-        ideal_gate_type = ('static standard', 'static clifford', 'static unitary')
+        ideal_gate_type = ('static clifford', 'static unitary', 'static')
     if ideal_prep_type == "auto":
         ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
@@ -802,7 +794,8 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     elif (global_idle_name is not None) and global_idle_name.startswith('(') and global_idle_name.endswith(')'):
         # For backward compatibility
         _warnings.warn(("Use of parenthesized gate names (e.g. '%s') is deprecated!  Processor spec gate names"
-                        " should be updated to use curly braces.") % str(global_idle_name))
+                        " should be updated to use curly braces.") % str(global_idle_name),
+                       _pyGSTiDeprecationWarning)
         gn_to_make_emptytup = global_idle_name
     else:
         gn_to_make_emptytup = None
@@ -812,18 +805,6 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         gate_is_factory = callable(gate_unitary)
         resolved_avail = processor_spec.resolved_availability(gn)
 
-        #Note: same logic for setting stdname as in _setup_local_gates (consolidate?)
-        if ((gn not in processor_spec.nonstd_gate_unitaries)
-            or (not callable(processor_spec.nonstd_gate_unitaries[gn]) and (gn in std_gate_unitaries)
-                and processor_spec.nonstd_gate_unitaries[gn].shape == std_gate_unitaries[gn].shape
-                and _np.allclose(processor_spec.nonstd_gate_unitaries[gn], std_gate_unitaries[gn]))):
-            stdname = gn  # setting `stdname` != None means we can try to create a StaticStandardOp below
-        #if gate_unitary is an integer we'll be creating an n-qubit idle gate and won't associate a standard name to it
-        elif isinstance(gate_unitary, (int, _np.int64)):
-            stdname=None    
-        else:    
-            stdname = _itgs.unitary_to_standard_gatename(gate_unitary)  # possibly None
-        
         if callable(resolved_avail) or resolved_avail == '*':
             assert (embed_gates), "Cannot create factories with `embed_gates=False` yet!"
             key = _label.Label(gn) if (gn != gn_to_make_emptytup) else _label.Label(())
@@ -867,7 +848,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                             ideal_gate = _op.ComposedOp([], evotype, state_space)  # (identity gate on *all* qudits)
                         else:
                             ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, basis,
-                                                                    stdname, evotype, state_space)
+                                                                    None, evotype, state_space)
                     else:
                         if embed_gates:
                             ideal_gate = local_gates[gn]
@@ -875,12 +856,13 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                         else:
                             if isinstance(gate_unitary, (int, _np.int64)):  # interpret gate_unitary as identity
                                 gate_unitary = _np.identity(2**gate_unitary, 'd')  # turn into explicit identity op
-                            if gate_unitary.shape[0] == state_space.udim:  # no need to embed!
-                                embedded_unitary = gate_unitary
-                            else:
-                                embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
+                            # Note: we're in the `else` of `inds is None or inds == tuple(qudit_labels)`, so
+                            # `inds` is guaranteed to be a *non-trivial* ordering of target qudits.  Embedding
+                            # is therefore required even when the gate already spans the entire state space,
+                            # since in that case the embedding is a (nonidentity) permutation of the qudits.
+                            embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
                             ideal_gate = _op.create_from_unitary_mx(embedded_unitary, ideal_gate_type, basis,
-                                                                    stdname, evotype, state_space)
+                                                                    None, evotype, state_space)
 
                     #TODO: check for modelnoise on *local* gate, i.e. create_errormap(gn, ...)??
                     #Note: set target_labels=None (NOT target_labels=inds) below so that n-qubit noise can
@@ -1423,8 +1405,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
 
 def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=None,
-                       ideal_gate_type=('static standard', 'static clifford', 'static unitary'),
-                       basis='pp'):
+                       ideal_gate_type=('static clifford', 'static unitary', 'static'), basis='pp'):
     """
     Construct a dictionary of potentially noisy gates that act only on their target qudits.
 
@@ -1466,6 +1447,19 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
     gatedict : dict
         A dictionary mapping gate names to local gate operations.
     """
+    if isinstance(basis, _TensorProdBasis):
+        b0 : _Basis = basis.component_bases[0]
+        if all(b0.name == bi.name for bi in basis.component_bases[1:]):
+            basis = b0.name
+        else:
+            raise NotImplementedError(
+                "Cannot construct local gate operations for a TensorProdBasis whose "
+                "component bases have different names "
+                f"({[bi.name for bi in basis.component_bases]}). Local gates are built "
+                "in a per-qudit basis, which is only well-defined when every component "
+                "basis has the same name."
+            )
+
     std_gate_unitaries = _itgs.standard_gatename_unitaries()
     if custom_gates is None: custom_gates = {}
     if modelnoise is None: modelnoise = _OpModelPerOpNoise({})
@@ -1480,7 +1474,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
     ideal_gates = {}
     ideal_factories = {}
 
-    gatedict = _collections.OrderedDict()
+    gatedict: ordereddict = dict()
     for key in all_keys:
         # Use custom gate directly as error gate
         if key in custom_gates:
@@ -1496,16 +1490,6 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
         name = label.name
 
         U = processor_spec.gate_unitaries[name]  # all gate names must be in the processorspec
-        if ((name not in processor_spec.nonstd_gate_unitaries)
-                or (not callable(processor_spec.nonstd_gate_unitaries[name]) and (name in std_gate_unitaries)
-                    and processor_spec.nonstd_gate_unitaries[name].shape == std_gate_unitaries[name].shape
-                    and _np.allclose(processor_spec.nonstd_gate_unitaries[name], std_gate_unitaries[name]))):
-            stdname = name  # setting `stdname` != None means we can try to create a StaticStandardOp below
-        elif name in processor_spec.gate_unitaries and not isinstance(U, (int, _np.int64)):
-            stdname = _itgs.unitary_to_standard_gatename(U)  # possibly None
-        else:
-            stdname = None
-
         if isinstance(U, (int, _np.int64)):  # signals that the gate is an identity on `U` qubits
             ideal_gate_state_space = _statespace.default_space_for_num_qubits(U)
             noiseop = modelnoise.create_errormap(key, evotype, ideal_gate_state_space, target_labels=None)
@@ -1517,7 +1501,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
         elif not callable(U):  # normal operation (not a factory)
             ideal_gate = ideal_gates.get(name, None)
             if ideal_gate is None:
-                ideal_gate = _op.create_from_unitary_mx(U, ideal_gate_type, basis, stdname, evotype, state_space=None)
+                ideal_gate = _op.create_from_unitary_mx(U, ideal_gate_type, basis, None, evotype, state_space=None)
                 ideal_gates[name] = ideal_gate
             noiseop = modelnoise.create_errormap(key, evotype, ideal_gate.state_space, target_labels=None)
             # Note: above line creates a *local* noise op, working entirely in the ideal gate's target space.
@@ -1725,7 +1709,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     modelnoise.reset_access_counters()
 
     if ideal_gate_type == "auto":
-        ideal_gate_type = ('static standard', 'static clifford', 'static unitary')
+        ideal_gate_type = ('static clifford', 'static unitary', 'static')
     if ideal_prep_type == "auto":
         ideal_prep_type = _state.state_type_from_op_type(ideal_gate_type)
     if ideal_povm_type == "auto":
@@ -1854,7 +1838,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         available gate placement.
 
     independent_spam : bool, optional
-        Similar to `indepenent_gates` but for SPAM operations.
+        Similar to `independent_gates` but for SPAM operations.
 
     errcomp_type : {'gates', 'errorgens'}
         Whether errors should be combined by composing error maps (`gates`) or by
@@ -1917,7 +1901,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
 
     #Create static ideal gates without any noise (we use `modelnoise` further down)
     gatedict = _setup_local_gates(processor_spec, evotype, None, custom_gates,
-                                  ideal_gate_type=('static standard', 'static clifford', 'static unitary'),
+                                  ideal_gate_type=('static clifford', 'static unitary', 'static'),
                                   basis=basis)
     stencils = _collections.OrderedDict()
 
@@ -2062,7 +2046,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qudits (taken as a "base
+        Additional weight, beyond the number of target qudits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qudit gates can have up to weight-2
         errors and 2-qudit gates can have up to weight-3 errors.
@@ -2307,8 +2291,14 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
     if lindblad_error_coeffs is not None:
 
         if not allow_nonlocal:  # the easy case
-            modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, lindblad_parameterization)
-                                                   for lbl, val in lindblad_error_coeffs.items()}))
+            # Normalize any string error-generator keys (e.g. "HX") to the tuple form
+            # (e.g. ("H", "X")) understood by LindbladErrorgen.from_elementary_errorgens.
+            def _normalize_local_key(k):
+                return (k[0], k[1:]) if isinstance(k, str) else k
+            modelnoises.append(_OpModelPerOpNoise(
+                {lbl: _LindbladNoise({_normalize_local_key(k): v for k, v in val.items()},
+                                     lindblad_parameterization)
+                 for lbl, val in lindblad_error_coeffs.items()}))
         else:  # then need to process labels like ('H', 'XX:0,1') or 'HXX:0,1'
             def process_stencil_labels(flat_lindblad_errs):
                 nonlocal_errors = _collections.OrderedDict()
@@ -2415,7 +2405,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
+        Additional weight, beyond the number of target qubits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
@@ -2434,7 +2424,7 @@ def _nparams_xycnot_cloudnoise_model(num_qubits, geometry="line", max_idle_weigh
 
     bidirectional_cnots : bool
         Whether CNOT gates can be performed in either direction (and each direction should
-        be treated as an indepedent gate)
+        be treated as an independent gate)
 
     verbosity : int, optional
         An integer >= 0 dictating how much output to send to stdout.

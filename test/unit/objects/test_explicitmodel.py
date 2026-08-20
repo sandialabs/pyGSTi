@@ -1,16 +1,30 @@
+import warnings
 import numpy as np
+import numpy.testing as npt
+import scipy.linalg as la
+import pytest
 
+import pygsti
 import pygsti.models.explicitmodel as mdl
 from pygsti.baseobjs import ExplicitStateSpace
 from pygsti.models.modelconstruction import create_explicit_model_from_expressions, create_operation
+from pygsti.models.explicitmodel import transform_composed_model
+from pygsti.models.gaugegroup import UnitaryGaugeGroupElement
+from pygsti.modelmembers.instruments import Instrument, TPInstrument
+from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp, StaticArbitraryOp
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+import pygsti.modelpacks.smq1Q_XYI as smq1Q_XYI
+from pygsti.tools.optools import unitary_to_pauligate
 from ..util import BaseCase
 
 
 class ExplicitOpModelStrictAccessTester(BaseCase):
     def setUp(self):
-        mdl.ExplicitOpModel._strict = True
         self.model = std.target_model().randomize_with_unitary(0.001, seed=1234)
+        # Enable strict mode on this model instance only, so the test doesn't
+        # mutate shared ExplicitOpModel class state (which would race with /
+        # leak into other tests under parallel execution).
+        self.model._strict = True
 
     def test_strict_access(self):
         #test strict mode, which forbids all these accesses
@@ -55,10 +69,10 @@ class ExplicitOpModelToolTester(BaseCase):
         rotXPiOv2 = create_operation("X(pi/2,Q0)", sslbls, "pp")
         rotYPiOv2 = create_operation("Y(pi/2,Q0)", sslbls, "pp")
         gateset_rot = self.model.rotate((np.pi / 2, 0, 0))  # rotate all gates by pi/2 about X axis
-        self.assertArraysAlmostEqual(gateset_rot['Gi'], rotXPiOv2)
-        self.assertArraysAlmostEqual(gateset_rot['Gx'], rotXPi)
-        self.assertArraysAlmostEqual(gateset_rot['Gx'], np.dot(rotXPiOv2, rotXPiOv2))
-        self.assertArraysAlmostEqual(gateset_rot['Gy'], np.dot(rotXPiOv2, rotYPiOv2))
+        self.assertArraysAlmostEqual(gateset_rot['Gi'].to_dense(), rotXPiOv2.to_dense())
+        self.assertArraysAlmostEqual(gateset_rot['Gx'].to_dense(), rotXPi.to_dense())
+        self.assertArraysAlmostEqual(gateset_rot['Gx'].to_dense(), np.dot(rotXPiOv2.to_dense(), rotXPiOv2.to_dense()))
+        self.assertArraysAlmostEqual(gateset_rot['Gy'].to_dense(), np.dot(rotXPiOv2.to_dense(), rotYPiOv2.to_dense()))
 
     def test_rotate_2q(self):
         gateset_2q_rot = self.gateset_2q.rotate(rotate=list(np.zeros(15, 'd')))
@@ -81,9 +95,9 @@ class ExplicitOpModelToolTester(BaseCase):
                            [0, 0, 0.9, 0],
                            [0, -0.9, 0, 0]], 'd')
         gateset_dep = self.model.depolarize(op_noise=0.1)
-        self.assertArraysAlmostEqual(gateset_dep['Gi'], Gi_dep)
-        self.assertArraysAlmostEqual(gateset_dep['Gx'], Gx_dep)
-        self.assertArraysAlmostEqual(gateset_dep['Gy'], Gy_dep)
+        self.assertArraysAlmostEqual(gateset_dep['Gi'].to_dense(), Gi_dep)
+        self.assertArraysAlmostEqual(gateset_dep['Gx'].to_dense(), Gx_dep)
+        self.assertArraysAlmostEqual(gateset_dep['Gy'].to_dense(), Gy_dep)
 
     def test_depolarize_with_spam_noise(self):
         gateset_spam = self.model.depolarize(spam_noise=0.1)
@@ -153,3 +167,182 @@ class ExplicitOpModelToolTester(BaseCase):
             self.model.depolarize(op_noise=0.1, max_op_noise=0.1, spam_noise=0)  # can't specify both
         with self.assertRaises(ValueError):
             self.model.depolarize(spam_noise=0.1, max_spam_noise=0.1)  # can't specify both
+
+
+def _make_cptplnd_model_with_instrument():
+    """Build a 1Q CPTPLND model (has ComposedState/ComposedPOVM) with one Instrument."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        base = smq1Q_XYI.target_model('CPTPLND')
+    # Two instrument members with distinct dense matrices (not particularly meaningful,
+    # but they just need to be different from each other and from the gates).
+    G0 = np.diag([0.5,  0.25, 0.0,  0.5])
+    G1 = np.diag([0.5, -0.25, 0.0,  0.5])
+    base.instruments['Iz'] = Instrument({'0': G0, '1': G1})
+    return base
+
+
+def _unitary_ggel(theta: float) -> UnitaryGaugeGroupElement:
+    U = la.expm(theta * 1j * np.array([[1, -1],[-1, 1]]))
+    return UnitaryGaugeGroupElement(unitary_to_pauligate(U))
+
+
+class Test_TransformComposedModelInstrument(BaseCase):
+    """Tests for transform_composed_model focusing on Instrument support."""
+
+    def setUp(self):
+        self.mdl = _make_cptplnd_model_with_instrument()
+        self.ggel = _unitary_ggel(0.3)
+        self.orig_inst = {
+            ek: self.mdl.instruments['Iz'][ek].to_dense().copy()
+            for ek in self.mdl.instruments['Iz'].keys()
+        }
+
+    # ------------------------------------------------------------------
+    # Structural checks
+    # ------------------------------------------------------------------
+
+    def test_instrument_keys_preserved(self):
+        result = transform_composed_model(self.mdl, self.ggel)
+        self.assertEqual(
+            list(result.instruments['Iz'].keys()),
+            list(self.mdl.instruments['Iz'].keys()),
+        )
+
+    def test_instrument_members_are_composed_ops(self):
+        result = transform_composed_model(self.mdl, self.ggel)
+        for ek in result.instruments['Iz'].keys():
+            self.assertIsInstance(result.instruments['Iz'][ek], ComposedOp)
+
+    def test_instrument_readonly_restored(self):
+        # transform_composed_model temporarily clears _readonly and must restore it.
+        result = transform_composed_model(self.mdl, self.ggel)
+        self.assertTrue(result.instruments['Iz']._readonly)
+
+    # ------------------------------------------------------------------
+    # Correctness: ComposedOp([U, op, invU]) evaluates as invU @ op @ U
+    # ------------------------------------------------------------------
+
+    def test_instrument_member_matrices_correct(self):
+        result = transform_composed_model(self.mdl, self.ggel)
+        U_mx   = self.ggel.transform_matrix
+        invU   = self.ggel.transform_matrix_inverse
+        for ek, orig_op in self.orig_inst.items():
+            expected     = invU @ orig_op @ U_mx
+            result_dense = result.instruments['Iz'][ek].to_dense()
+            npt.assert_allclose(result_dense, expected, atol=1e-12,
+                                err_msg=f'instrument member {ek!r}')
+
+    def test_identity_transform_leaves_instruments_unchanged(self):
+        ggel_id = UnitaryGaugeGroupElement(np.eye(4))
+        result = transform_composed_model(self.mdl, ggel_id)
+        for ek, orig_op in self.orig_inst.items():
+            npt.assert_allclose(result.instruments['Iz'][ek].to_dense(), orig_op,
+                                atol=1e-12, err_msg=f'instrument member {ek!r}')
+
+    # ------------------------------------------------------------------
+    # Non-mutation: the original model must be untouched.
+    # ------------------------------------------------------------------
+
+    def test_original_model_unchanged(self):
+        transform_composed_model(self.mdl, self.ggel)
+        for ek, orig_op in self.orig_inst.items():
+            npt.assert_allclose(self.mdl.instruments['Iz'][ek].to_dense(), orig_op,
+                                atol=1e-12, err_msg=f'instrument member {ek!r}')
+
+    # ------------------------------------------------------------------
+    # Multiple instruments: all must be transformed.
+    # ------------------------------------------------------------------
+
+    def test_multiple_instruments_all_transformed(self):
+        G2 = np.eye(4) * 0.3
+        G3 = np.eye(4) * 0.7
+        self.mdl.instruments['Iw'] = Instrument({'a': G2, 'b': G3})
+        orig_iw = {
+            ek: self.mdl.instruments['Iw'][ek].to_dense().copy()
+            for ek in self.mdl.instruments['Iw'].keys()
+        }
+        result = transform_composed_model(self.mdl, self.ggel)
+        U_mx = self.ggel.transform_matrix
+        invU = self.ggel.transform_matrix_inverse
+        for ek, orig_op in orig_iw.items():
+            expected = invU @ orig_op @ U_mx
+            npt.assert_allclose(result.instruments['Iw'][ek].to_dense(), expected,
+                                atol=1e-12, err_msg=f'second instrument member {ek!r}')
+
+    # ------------------------------------------------------------------
+    # TPInstrument: uses transform_inplace rather than ComposedOp wrapping,
+    # because TPInstrument's constrained parameterization (TPInstrumentOp
+    # members with _construct_matrix) is incompatible with member replacement.
+    # ------------------------------------------------------------------
+
+    def test_tp_instrument_member_matrices_correct(self):
+        G0 = np.diag([0.5, 0.0, 0.0,  0.5])
+        G1 = np.diag([0.5, 0.0, 0.0, -0.5])
+        self.mdl.instruments['Itp'] = TPInstrument({'0': G0, '1': G1})
+        orig = {ek: self.mdl.instruments['Itp'][ek].to_dense().copy()
+                for ek in self.mdl.instruments['Itp'].keys()}
+        result = transform_composed_model(self.mdl, self.ggel)
+        invU = self.ggel.transform_matrix_inverse
+        U_mx = self.ggel.transform_matrix
+        for ek, orig_op in orig.items():
+            expected = invU @ orig_op @ U_mx
+            npt.assert_allclose(result.instruments['Itp'][ek].to_dense(), expected,
+                                atol=1e-12, err_msg=f'TPInstrument member {ek!r}')
+
+
+class AutoEmbedTester(BaseCase):
+    """
+    Tests for `ExplicitOpModel._embed_operation`, i.e. the auto-embedding that
+    `OrderedMemberDict.__setitem__` performs when a key carries state-space labels.
+    """
+
+    CNOT_01 = unitary_to_pauligate(np.array([[1, 0, 0, 0],
+                                             [0, 1, 0, 0],
+                                             [0, 0, 0, 1],
+                                             [0, 0, 1, 0]], dtype=complex))
+    CNOT_10 = unitary_to_pauligate(np.array([[1, 0, 0, 0],
+                                             [0, 0, 0, 1],
+                                             [0, 0, 1, 0],
+                                             [0, 1, 0, 0]], dtype=complex))
+
+    def setUp(self):
+        pspec = pygsti.processors.QubitProcessorSpec(2, ('Gxpi2', 'Gypi2', 'Gcnot'),
+                                                     availability={'Gcnot': 'all-permutations'})
+        self.model = pygsti.models.modelconstruction.create_explicit_model(
+            pspec, ideal_gate_type='static', ideal_spam_type='static')
+
+    def test_subsystem_operation_is_embedded(self):
+        # A one-qubit operation assigned under a two-qubit model's ('Gy', 1) key gets embedded
+        # onto qubit 1, leaving qubit 0 alone.
+        one_qubit_y = unitary_to_pauligate(la.expm(-1j * (np.pi / 4) * np.array([[0, -1j], [1j, 0]])))
+        # Note the operation has to be handed over as a one-qubit ModelMember: a bare numpy array is
+        # cast onto the *parent's* state space by OrderedMemberDict.cast_to_model_member.
+        self.model.operations[('Gtest', 1)] = StaticArbitraryOp(
+            one_qubit_y, 'pp', 'default', ExplicitStateSpace([1], [2]))
+        stored = self.model.operations[('Gtest', 1)]
+        self.assertIsInstance(stored, EmbeddedOp)
+        npt.assert_allclose(stored.to_dense('HilbertSchmidt'),
+                            np.kron(np.eye(4), one_qubit_y), atol=1e-12)
+
+    def test_full_state_space_operation_is_stored_verbatim(self):
+        # An operation that already spans the model's full state space is taken to be *already*
+        # embedded, whatever the key's state-space labels say.  This is what lets an
+        # ExplicitOpModel round-trip through copy() and serialization: both re-insert every
+        # (already-embedded) operation under its original, possibly permuted, key.  Re-embedding
+        # here would apply the permutation a second time on each round trip.
+        self.model.operations[('Gcnot', 1, 0)] = self.CNOT_01
+        npt.assert_allclose(self.model.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt'),
+                            self.CNOT_01, atol=1e-12)
+
+    def test_construction_and_round_trips_agree(self):
+        # The corollary that actually matters to users: the value `create_explicit_model` puts
+        # under a permuted key is the correctly permuted gate, and it stays that way.
+        npt.assert_allclose(self.model.operations[('Gcnot', 0, 1)].to_dense('HilbertSchmidt'),
+                            self.CNOT_01, atol=1e-12)
+        npt.assert_allclose(self.model.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt'),
+                            self.CNOT_10, atol=1e-12)
+        for round_tripped in (self.model.copy(),
+                              pygsti.models.ExplicitOpModel.loads(self.model.dumps())):
+            npt.assert_allclose(round_tripped.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt'),
+                                self.CNOT_10, atol=1e-12)

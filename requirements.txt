@@ -7,3 +7,4 @@ networkx
 stim
 tqdm
 jupytext>=0.16
+hypothesis

@@ -57,12 +57,12 @@ For a brief overview of the available options, here is an incomplete list of par
 - `gate_type` for `modelmember.operations`:
   - `"static"` $\rightarrow$ `StaticArbitraryOp`
   - `"full"` $\rightarrow$ `FullArbitraryOp`
-  - `"static standard"` $\rightarrow$ `StaticStandardOp`
-  - `"static clifford"` $\rightarrow$ `StaticCliffordOp`
   - `"static unitary"` $\rightarrow$ `StaticUnitaryOp`
+  - `"static clifford"` $\rightarrow$ `StaticCliffordOp`
   - `"full unitary"` $\rightarrow$ `FullUnitaryOp`
   - `"full TP"` $\rightarrow$ `FullTPOp`
   - `"CPTP"`, `"H+S"`, etc. $\rightarrow$ `ExpErrorgenOp` + `LindbladErrorgen`
+  - `"static standard"` $\rightarrow$ [Deprecated] aliases `('static unitary', 'static')`
 
 
 - `prep_type` for `modelmember.states`:
@@ -84,7 +84,7 @@ For a brief overview of the available options, here is an incomplete list of par
   
 For convenience, the `prep_type` and `povm_type` arguments also accept `"auto"`, which will try to set the parameterization based on the given `gate_type`. An incomplete list of this `gate_type` $\rightarrow$ `prep_type` / `povm_type` mapping is:
 
-- `"auto"`, `"static standard"`, `"static clifford"` $\rightarrow$ `"computational"`
+- `"auto"`, `"static unitary"`, `"static clifford"` $\rightarrow$ `"computational"`
 - `"unitary"` $\rightarrow$ `"pure"`
 - All others map directly
 
@@ -112,10 +112,11 @@ model.print_modelmembers()
 print("%d parameters" % model.num_params)
 ```
 
-Switching the parameterizatio to "CPTP" gates changes the gate type accordingly:
+Switching the parameterizatio to "CPTP" gates changes the gate type accordingly.  Converting to a CPTP-based parameterization works best when we supply an `ideal_model` of unitary gates and pure states to target (this avoids branch cuts in the conversion); here we use the default static-unitary model built from the same processor spec.
 
 ```{code-cell} ipython3
-model.set_all_parameterizations('CPTP')
+ideal_model = mc.create_explicit_model(pspec)  # static, unitary ideal gates/SPAM
+model.set_all_parameterizations('CPTP', ideal_model=ideal_model)
 model.print_modelmembers()
 print("%d parameters" % model.num_params)
 ```

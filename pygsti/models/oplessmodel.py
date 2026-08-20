@@ -200,7 +200,7 @@ class SuccessFailModel(OplessModel):
         raise NotImplementedError("Derived classes should implement this!")
 
     def _success_dprob(self, circuit, param_slice, cache):
-        """ Derived classes can override this.  Default implemntation is to use finite difference. """
+        """ Derived classes can override this.  Default implementation is to use finite difference. """
         eps = 1e-7
         orig_pvec = self.to_vector()
         wrtIndices = _slct.indices(param_slice) if (param_slice is not None) else list(range(self.num_params))
@@ -367,6 +367,12 @@ class ErrorRatesModel(SuccessFailModel):
     def _circuit_cache(self, circuit):
         if not isinstance(circuit, _Circuit):
             circuit = _Circuit.from_tuple(circuit)
+
+        # `layer_label_with_idles` below indexes top-level layers (`num_layers`), but we
+        # want an error rate for every executed layer (`depth`).  Those differ only when
+        # the circuit retains a CircuitLabel, so expand just in that case.
+        if circuit.depth != circuit.num_layers:
+            circuit = circuit.expand_subcircuits()
 
         depth = circuit.depth
         width = circuit.width

@@ -56,7 +56,7 @@ def distribute_indices(indices, comm, allow_split_comm=True):
         A dictionary mapping the elements of `indices` to integer ranks, such
         that `owners[el]` gives the rank of the processor responsible for
         communicating that element's results to the other processors.  Note that
-        in the case when `allow_split_comm=True` and multiple procesors have
+        in the case when `allow_split_comm=True` and multiple processors have
         computed the results for a given element, only a single (the first)
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
@@ -145,7 +145,7 @@ def distribute_indices_base(indices, nprocs, rank, allow_split_comm=True):
         A dictionary mapping the elements of `indices` to integer ranks, such
         that `owners[el]` gives the rank of the processor responsible for
         communicating that element's results to the other processors.  Note that
-        in the case when `allow_split_comm=True` and multiple procesors have
+        in the case when `allow_split_comm=True` and multiple processors have
         computed the results for a given element, only a single (the first)
         processor rank "owns" the element, and is thus responsible for sharing
         the results.  This notion of ownership is useful when gathering the
@@ -394,7 +394,7 @@ def gather_slices(slices, slice_owners, ar_to_fill,
         `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentially like
         passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
@@ -452,9 +452,6 @@ def gather_slices(slices, slice_owners, ar_to_fill,
     my_rank = comm.Get_rank()
 
     axes = (axes,) if _compat.isint(axes) else axes
-
-    #print("DB: Rank %d (%d): BEGIN GATHER SLICES: interhost=%s, group=%s" %
-    #      (my_rank, broadcast_comm.rank, str(my_interhost_ranks), str(broadcast_comm.Get_group())))
 
     # # if ar_to_fill_inds only contains slices (or is empty), then we can slice ar_to_fill once up front
     # # and not use generic arIndx in loop below (slower, especially with lots of procs)
@@ -517,12 +514,9 @@ def gather_slices(slices, slice_owners, ar_to_fill,
             buf = _findx(ar_to_fill, arIndx, True) if (my_rank == owner) \
                 else _np.empty(_findx_shape(ar_to_fill, arIndx), ar_to_fill.dtype)
             if my_interhost_ranks is None or len(my_interhost_ranks) > 1:
-                #print("DB: Rank %d (%d) Broadcast: arIndx = %s, owner=%d root=%d" %
-                #      (my_rank, broadcast_comm.rank, str(arIndx), owner, broadcast_rank_map[owner]))
                 broadcast_comm.Bcast(buf, root=broadcast_rank_map[owner])
                 if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
             buf = None  # free buffer mem asap
-    #print("DB: Rank %d: END GATHER SLICES" % my_rank)
 
     # Important: wait for everything to finish before proceeding
     #  (when broadcast_comm != comm some procs may run ahead - see comment above)
@@ -557,7 +551,7 @@ def gather_slices_by_owner(current_slices, ar_to_fill, ar_to_fill_inds,
         `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentially like
         passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
@@ -674,7 +668,7 @@ def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
         `ar_to_fill_inds` are taken to be indices for the leading dimension
         first, and any unspecified dimensions or `None` elements are
         assumed to be unrestricted (as if `slice(None,None)`).  Note that
-        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentally like
+        the combination of `ar_to_fill` and `ar_to_fill_inds` is essentially like
         passing `ar_to_fill[ar_to_fill_inds]` to this function, except it will
         work with index arrays as well as slices.
 
@@ -782,7 +776,7 @@ def gather_indices(indices, index_owners, ar_to_fill, ar_to_fill_inds,
 
 def distribute_for_dot(a_shape, b_shape, comm):
     """
-    Prepares for one or muliple distributed dot products given the dimensions to be dotted.
+    Prepares for one or multiple distributed dot products given the dimensions to be dotted.
 
     The returned values should be passed as `loc_slices` to :func:`mpidot`.
 
@@ -877,7 +871,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         same type of array (size, and whether it's shared or not) as this
         function would have created if `out` were `None`.
 
-    out_shm : multiprocessing.shared_memory.SharedMemory, optinal
+    out_shm : multiprocessing.shared_memory.SharedMemory, optional
         The shared memory object corresponding to `out` when it uses
         shared memory.
 
@@ -913,7 +907,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
 
     rshape = (_slct.length(loc_row_slice), _slct.length(loc_col_slice))
     loc_result_flat = _np.empty(rshape[0] * rshape[1], a.dtype)
-    loc_result = loc_result_flat.view(); loc_result.shape = rshape
+    loc_result = loc_result_flat.view(); loc_result = _compat.reshape_no_copy(loc_result, rshape)
     loc_result[:, :] = _np.dot(a[loc_row_slice, :], b[:, loc_col_slice])
 
     # broadcast_com defines the group of processors this processor communicates with.
@@ -930,7 +924,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         cur_shape = (_slct.length(cur_row_slice), _slct.length(cur_col_slice))
         buf = loc_result_flat if (broadcast_comm.rank == r) else _np.empty(cur_shape[0] * cur_shape[1], a.dtype)
         broadcast_comm.Bcast(buf, root=r)
-        if broadcast_comm.rank != r: buf.shape = cur_shape
+        if broadcast_comm.rank != r: buf = _compat.reshape_no_copy(buf, cur_shape)
         else: buf = loc_result  # already of correct shape
         result[cur_row_slice, cur_col_slice] = buf
     comm.barrier()  # wait for all ranks to finish writing to result
@@ -989,7 +983,7 @@ def sum_across_procs(x, comm):
     Parameters
     ----------
     x : object
-        Local value - the current processor's contrubution to the sum.
+        Local value - the current processor's contribution to the sum.
 
     comm : mpi4py.MPI.Comm
         MPI communicator
@@ -1206,7 +1200,7 @@ def write_mpi_runner_artifacts(
     * ``protocol/`` — the serialized protocol (via ``protocol_obj.write``).
 
     * ``volatile_run_kwargs.pkl`` — pickled keyword arguments for ``protocol.run``.
-        The "volatile" prfix indicates that this file's contents shouldn't be
+        The "volatile" prefix indicates that this file's contents shouldn't be
         treated as portable or long-lived.
 
     * ``mpi_runner.py`` — a stand-alone Python script that each MPI worker
