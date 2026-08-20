@@ -49,11 +49,11 @@ flowchart TD
 
 - **`data` is a dangerously ambiguous variable name.** A [`ProtocolData`](../pygsti/protocols/protocol.py#L2255) and a [`DataSet`](../pygsti/data/dataset.py#L807) are *very* different objects, but both routinely get named `data` in tutorials and call sites. Always check the type — `isinstance(data, ProtocolData)` vs. `isinstance(data, DataSet)`. When you find a confusing `data` variable, consider renaming it (`pdata` for `ProtocolData`, `dataset` or `ds` for `DataSet`).
 
-- **Gauge optimization is cross-cutting.** Reports run gauge opt before rendering metrics; Protocols run gauge opt after their fit loop. See [AGENTS.md cross-cutting](AGENTS.md#gauge-freedom-and-gauge-optimization), and [gst.md](04-orchestration/gst.md) for the `gaugeopt_suite` representation duality.
+- **Gauge optimization is cross-cutting.** Reports run gauge opt before rendering metrics; Protocols run gauge opt after their fit loop. See [AGENTS.md cross-cutting](../AGENTS.md#gauge-freedom-and-gauge-optimization), and [gst.md](04-orchestration/gst.md) for the `gaugeopt_suite` representation duality.
 
 ## Architectural debt
 
-- [`gaugeopt_suite` representation duality](known-debt.md#14-gaugeopt_suite-representation-duality).
+- [`gaugeopt_suite` representation duality](known-debt.md#12-gaugeopt_suite-representation-duality).
 - General GST refactor threads in [#715](https://github.com/sandialabs/pyGSTi/issues/715) (subpackage restructuring).
 - [#620](https://github.com/sandialabs/pyGSTi/issues/620) — parameterization-preserving gauge optimization.
 

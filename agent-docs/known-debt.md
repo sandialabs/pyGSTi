@@ -20,19 +20,17 @@ If you find one not listed below, please update this file.
 
 ## 1. `tools/` misplacement and namespace pollution
 
-**What it is.** Several files under [pygsti/tools/](../pygsti/tools/) are domain features, not utilities — they import "upward" from `models`, `protocols`, `report`, etc. Concretely: `leakage.py`, `chi2fns.py`, `likelihoodfns.py`, `rbtheory.py`, `edesigntools.py` are the main offenders. Separately, no `tools/` module defines `__all__`, so `pygsti.tools.*` re-exports every public name from every file with no curation.
+**What it is.** Several files under [pygsti/tools/](../pygsti/tools/) are domain features, not utilities — they import "upward" from `models`, `protocols`, `report`, etc. Concretely: `chi2fns.py`, `likelihoodfns.py`, `rbtheory.py`, `edesigntools.py` are the main offenders (`leakage.py` was the worst, and has since been moved out — see item 2). Separately, almost no `tools/` module defines `__all__`, so `pygsti.tools.*` re-exports every public name from every file with no curation.
 
 **Where it bites.** Adding "just one more utility" to `tools/` tends to deepen the coupling; touching a `tools/` file can pull `models` or `protocols` along for the ride at import time. The lack of `__all__` makes it hard to deprecate names — you can't tell what's actually part of the public API.
 
 **Tracker.** Partially covered by the broader subpackage-restructuring discussion in [sandialabs/pyGSTi#715](https://github.com/sandialabs/pyGSTi/issues/715). A focused `tools/` issue would be welcome — please open one if you start work here.
 
-## 2. `tools/leakage.py` → `pygsti.leakage` move
+## 2. RESOLVED — `tools/leakage.py` → `pygsti.leakage` move
 
-**What it is.** `tools/leakage.py` is the most flagrant of the misplaced-module offenders: it contains complete domain features (leaky-qubit GST + LAGO gauge optimization + report generation), with lazy imports from `models`, `protocols`, and `report`. There is an in-flight plan to extract it into a top-level `pygsti.leakage` subpackage.
+**Status.** Done. `tools/leakage.py` was extracted into the top-level [pygsti/leakage/](../pygsti/leakage/) subpackage (`core`, `gaugeopt`, `metrics`, `models`, `reports`), which `pygsti/__init__.py` imports. [pygsti/tools/_leakage.py](../pygsti/tools/_leakage.py) keeps call-time deprecation shims for the old `pygsti.tools` names. New leakage code goes in `pygsti.leakage`.
 
-**Where it bites.** Don't add new code to `tools/leakage.py` — anything you write will need to be migrated. New leakage-related code should land in the new subpackage layout once it exists.
-
-**Tracker.** No standalone tracker issue — please open one if you're picking up the migration.
+*(Heading number retained deliberately — other agent-docs deep-link this anchor.)*
 
 ## 3. `baseobjs` ↔ `protocols` circular import
 

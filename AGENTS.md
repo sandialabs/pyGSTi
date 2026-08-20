@@ -2,11 +2,11 @@
 
 > **NOTE FOR HUMANS:** these docs use [Mermaid](https://mermaid.js.org/) diagrams. To view them rendered, install a Mermaid-aware Markdown viewer — e.g., the **"Markdown Preview Mermaid Support"** extension in VS Code, or read the files on GitHub (which renders Mermaid in `.md` files natively). Without one, the diagram code blocks will display as plain text.
 
-This folder is hierarchical orientation material for agents (and new group developers) working on **pyGSTi** itself. It covers architecture, key abstractions, and non-obvious gotchas. It does *not* teach pyGSTi as a library — for that, read the jupyter-book at [docs/markdown/](docs/markdown/) in the source tree.
+This file and the [agent-docs/](agent-docs/) folder beside it are hierarchical orientation material for agents (and new group developers) working on **pyGSTi** itself. It covers architecture, key abstractions, and non-obvious gotchas. It does *not* teach pyGSTi as a library — for that, read the jupyter-book at [docs/markdown/](docs/markdown/) in the source tree.
 
 Read this file first, then jump into the subsystem doc(s) relevant to your task.
 
-> **A note to agents on doc accuracy.** These docs are intentionally maintained at a "not overtly wrong" bar, not at a "perfectly accurate" one — they're a hint system to reduce trial-and-error, not a contract. **If, while doing real work, you find that what these docs say contradicts what the code actually does, treat the code as authoritative and flag the discrepancy to the user.** Be specific: name the file, the section, the claim, and the contradicting code path. Don't silently work around it, and don't edit the docs yourself unless the user asks you to.
+> **A note to agents on doc accuracy.** These docs are intentionally maintained at a "not overtly wrong" bar, not at a "perfectly accurate" one — they're a hint system to reduce trial-and-error, not a contract. **If, while doing real work, you find that what these docs say contradicts what the code actually does, treat the code as authoritative and flag the discrepancy to the user.** Be specific: name the file, the section, the claim, and the contradicting code path. Don't silently work around it, and don't edit the docs yourself unless the user asks you to — if they do, read [agent-docs/META.md](agent-docs/META.md) first.
 
 ## What pyGSTi is
 
@@ -39,6 +39,7 @@ If you internalize that triad and the Protocol-on-top picture, the rest of the s
 | [07-tools-library.md](agent-docs/07-tools-library.md) | `tools` | reach for a basis transform, channel conversion, MPI helper, or other utility |
 | [08-domain-plugins.md](agent-docs/08-domain-plugins.md) | `extras`, `errorgenpropagation` | work on RB / RPE / drift / error-generator propagation |
 | [known-debt.md](agent-docs/known-debt.md) | — | the area you're touching has a known smell or in-flight redesign |
+| [META.md](agent-docs/META.md) | — | you've been asked to **update these docs** — the correctness bar, the invariants that break silently, and the link checker |
 
 Files are numbered for stable referencing only — not as a recommended reading order.
 
@@ -54,7 +55,7 @@ Before reporting, comparing, or extracting metrics from a `Model`, you almost al
 
 If you find yourself writing code that compares two Models, computes a fidelity, or surfaces an error rate, **check whether gauge optimization has been applied first**. Forgetting this produces meaningless numbers.
 
-The representation of a gauge-optimization suite is itself complicated — sometimes a `list[list[dict]]`, sometimes a [`GSTGaugeOptSuite`](pygsti/protocols/gst.py#L857) object. See doc 04 for the patterns, and [known-debt.md](agent-docs/known-debt.md#14-gaugeopt_suite-representation-duality) for the rough edge.
+The representation of a gauge-optimization suite is itself complicated — sometimes a `list[list[dict]]`, sometimes a [`GSTGaugeOptSuite`](pygsti/protocols/gst.py#L857) object. See doc 04 for the patterns, and [known-debt.md](agent-docs/known-debt.md#12-gaugeopt_suite-representation-duality) for the rough edge.
 
 ### Parameterization modes
 
@@ -66,7 +67,7 @@ Gauge optimization interacts nontrivially with model parameterizations. There ar
 
 ### MPI / parallelization
 
-Many code paths fork on `comm is None` vs. an `mpi4py.MPI.Comm`. The object that gets sharded across MPI ranks is the [`Layout`](02-forward-simulation.md), which both flattens `(circuit, outcome)` pairs into a 1-D array *and* plans memory for forward simulation. Helpers live in [pygsti/tools/mpitools.py](pygsti/tools/mpitools.py). MPI is opt-in but the plumbing is everywhere — most fit and forward-sim entry points accept a `comm` kwarg.
+Many code paths fork on `comm is None` vs. an `mpi4py.MPI.Comm`. The object that gets sharded across MPI ranks is the [`Layout`](agent-docs/02-forward-simulation.md), which both flattens `(circuit, outcome)` pairs into a 1-D array *and* plans memory for forward simulation. Helpers live in [pygsti/tools/mpitools.py](pygsti/tools/mpitools.py). MPI is opt-in but the plumbing is everywhere — most fit and forward-sim entry points accept a `comm` kwarg.
 
 ### Optional dependencies
 
