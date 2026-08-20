@@ -5,3 +5,4 @@ from . import lattice
 from . import estimation
 from . import compressed_sensing
 from . import singleton
+from . import model_selection
