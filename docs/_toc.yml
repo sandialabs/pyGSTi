@@ -140,6 +140,9 @@ parts:
   - file: markdown/examples/GOpt-NonIdealTargets
   - file: markdown/examples/Reports-LGSTonly
   - file: markdown/examples/MCFE-Example
+  - file: markdown/examples/DEMEstimation
+    sections:
+    - file: markdown/examples/DEMEstimation-LassoAndCompressedSensing
   - file: markdown/interfaces/IBMQExperiment
   - file: markdown/interfaces/CirqIntegration
 
