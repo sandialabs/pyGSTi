@@ -56,7 +56,6 @@ from typing import Union, Literal
 from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
 
 
-
 class ExplicitOpModel(_mdl.OpModel):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
@@ -250,7 +249,7 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]):
+    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]) -> None:
         """
         The default gauge group.
         """
@@ -496,6 +495,7 @@ class ExplicitOpModel(_mdl.OpModel):
             indicates the maximum amount of truncation induced deviation from the original operations
             (measured by frobenius distance) we're willing to accept without marking the conversion
             as failed.
+
         spam_cp_penalty : float, optional (default 0.5)
             Converting SPAM operations to an error generator representation may 
             introduce trivial gauge degrees of freedom. These gauge degrees of freedom 

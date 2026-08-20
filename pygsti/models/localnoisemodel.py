@@ -13,27 +13,21 @@ Defines the LocalNoiseModel class and supporting functions
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
+
 import numpy as _np
 
 from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel, _init_spam_layers
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
-from pygsti.baseobjs import qubitgraph as _qgraph, statespace as _statespace
+from pygsti.baseobjs import statespace as _statespace
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
-from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
-from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
-from pygsti.modelmembers import states as _state
 from pygsti.modelmembers.operations import opfactory as _opfactory
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
-from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
-from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
 from pygsti.circuits.circuitparser import parse_label as _parse_label
-from pygsti.tools import basistools as _bt
-from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.tools import listtools as _lt
 from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec, QubitProcessorSpec as _QubitProcessorSpec
@@ -183,6 +177,12 @@ class LocalNoiseModel(_ImplicitOpModel):
         self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
         self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
+        # ^ Unclear why instrument_blks should only be keyed by `layers`.
+        #
+        #     I'll grant that it seems weird to key by `gates`, but the things
+        #     stored in operation_blks['gates'] have direct instrument analogs
+        #     that aren't suitable for instrument_blks['layers'].
+        #
         self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
         self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
 

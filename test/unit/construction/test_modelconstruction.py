@@ -3,6 +3,7 @@ import scipy
 import unittest
 import itertools
 from functools import reduce
+import pytest
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI
@@ -11,6 +12,8 @@ import pygsti.models.modelconstruction as mc
 import pygsti.modelmembers.operations as op
 import pygsti.modelmembers.states as st
 import pygsti.tools.basistools as bt
+import pygsti.tools.optools as ot
+from pygsti.tools.internalgates import standard_gatename_unitaries as std_unitaries
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as GEEL
 from ..util import BaseCase
@@ -212,7 +215,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_depol1.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticStandardOp))
+        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticUnitaryOp))
         self.assertTrue(isinstance(Gi_op.factorops[1], op.DepolarizeOp))
         self.assertEqual(mdl_depol1.num_params, 1)
 
@@ -223,7 +226,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_depol2.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticStandardOp))
+        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticUnitaryOp))
         self.assertTrue(isinstance(Gi_op.factorops[1], op.StochasticNoiseOp))
         self.assertEqual(mdl_depol2.num_params, 3) 
 
@@ -284,7 +287,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_sto1.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticStandardOp))
+        self.assertTrue(isinstance(Gi_op.factorops[0], op.StaticUnitaryOp))
         self.assertTrue(isinstance(Gi_op.factorops[1], op.StochasticNoiseOp))
         self.assertEqual(mdl_sto1.num_params, 3)
 
@@ -817,3 +820,157 @@ class GellMannGateConstructionTester(GateConstructionBase, BaseCase):
 
         self._test_CnotA()
         self._test_CnotB()
+
+
+def _embed_unitary_by_hand(num_qubits, unitary, target_qubits):
+    """
+    Reference implementation of unitary embedding onto an n-qubit space.
+
+    Places `unitary` on the first k qubits (with identity on spectator qubits)
+    and conjugates by the basis permutation operator that maps standard qubit ordering
+    (0, 1, ..., n-1) to the layout (target_qubits + spectators).
+    """
+    k = len(target_qubits)
+    num_spectators = num_qubits - k
+    spectators = [q for q in range(num_qubits) if q not in target_qubits]
+    qubit_order = list(target_qubits) + spectators
+
+    # 1. Place unitary on first k qubits, identity on spectator qubits
+    u_full = np.kron(unitary, np.eye(2 ** num_spectators, dtype=complex))
+
+    # Single-qubit computational basis states |0> and |1>
+    e0 = np.array([1, 0], dtype=complex)
+    e1 = np.array([0, 1], dtype=complex)
+    basis = {0: e0, 1: e1}
+
+    def kron_all(vectors):
+        return reduce(np.kron, vectors)
+
+    # 2. Build permutation operator P = sum |b_perm><b_std|
+    dim = 2 ** num_qubits
+    P = np.zeros((dim, dim), dtype=complex)
+    for bits in itertools.product((0, 1), repeat=num_qubits):
+        std_basis_state = kron_all([basis[b] for b in bits])
+        perm_basis_state = kron_all([basis[bits[q]] for q in qubit_order])
+        P += np.outer(perm_basis_state, std_basis_state)
+
+    # 3. Conjugate: U_embedded = P.T @ u_full @ P
+    return P.T @ u_full @ P
+
+
+class TargetQubitOrderingTester(BaseCase):
+    """
+    Regression tests for gates whose target qubits are listed in a non-default order.
+
+    A gate placed on target qubits ``(1, 0)`` must be the ``(0, 1)`` gate conjugated by a SWAP.
+    Historically this was silently skipped whenever the gate happened to span the model's whole
+    ``_create_explicit_model`` tested only total dimension, and failed to apply the permutation.
+    """
+
+    # 'auto' -- the default -- is ('static clifford', 'static unitary', 'static').
+    GATE_TYPES = ('auto', 'static', 'static unitary', 'full', 'full TP', 'CPTPLND', 'H+S')
+
+    # 'CPTPLND' is dropped from the 3-qubit sweep only because a 3-qubit CPTPLND explicit model
+    # takes ~40s to build; 'H+S' covers the same Lindblad code path in well under a second.
+    GATE_TYPES_3Q = ('auto', 'static', 'static unitary', 'full', 'full TP', 'H+S')
+
+    _model_cache = {}
+
+    def setUp(self):
+        pygsti.models.ExplicitOpModel._strict = False
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._model_cache.clear()
+
+    def _model(self, num_qubits, gate_name, gate_type, nonstd_gate_unitaries=None):
+        # Models are built once and shared: nothing below mutates them, and a 2-qubit CPTPLND
+        # model isn't free.
+        key = (num_qubits, gate_name, gate_type,
+               None if nonstd_gate_unitaries is None else tuple(sorted(nonstd_gate_unitaries)))
+        if key not in self._model_cache:
+            pspec = _ProcessorSpec(num_qubits, ('Gxpi2', 'Gypi2', gate_name),
+                                   availability={gate_name: 'all-permutations'},
+                                   nonstd_gate_unitaries=nonstd_gate_unitaries)
+            self._model_cache[key] = mc.create_explicit_model(pspec, ideal_gate_type=gate_type,
+                                                              ideal_spam_type='static')
+        return self._model_cache[key]
+
+    def _assert_matches_reference(self, model, num_qubits, gate_name, unitary, targets):
+        expected = ot.unitary_to_superop(_embed_unitary_by_hand(num_qubits, unitary, targets), 'pp')
+        actual = model.operations[(gate_name,) + tuple(targets)].to_dense('HilbertSchmidt')
+        self.assertArraysAlmostEqual(actual, expected)
+
+    def test_two_qubit_gate_on_two_qubit_model_respects_target_order(self):
+        # The motivating case: the gate spans the *entire* model, so every ordering of the target
+        # qubits has the right total dimension.
+        for gate_name in ('Gcnot', 'Gecr'):
+            unitary = std_unitaries()[gate_name]
+            for gate_type in self.GATE_TYPES:
+                with self.subTest(gate=gate_name, gate_type=gate_type):
+                    model = self._model(2, gate_name, gate_type)
+                    self._assert_matches_reference(model, 2, gate_name, unitary, (0, 1))
+                    self._assert_matches_reference(model, 2, gate_name, unitary, (1, 0))
+
+    def test_two_qubit_gate_orderings_differ(self):
+        for gate_type in self.GATE_TYPES:
+            with self.subTest(gate_type=gate_type):
+                model = self._model(2, 'Gcnot', gate_type)
+                forward = model.operations[('Gcnot', 0, 1)].to_dense('HilbertSchmidt')
+                reverse = model.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt')
+                self.assertGreater(np.linalg.norm(forward - reverse), 1e-6)
+
+    def test_symmetric_gate_orderings_agree(self):
+        model = self._model(2, 'Gswap', 'static')
+        self.assertArraysAlmostEqual(model.operations[('Gswap', 0, 1)].to_dense('HilbertSchmidt'),
+                                     model.operations[('Gswap', 1, 0)].to_dense('HilbertSchmidt'))
+
+    def test_three_qubit_model_respects_target_order(self):
+        # The control case: with a spectator qubit present the dimensions no longer coincide, so
+        # this path was always correct.  Kept so that a future "simplification" can't break it.
+        unitary = std_unitaries()['Gcnot']
+        for gate_type in self.GATE_TYPES_3Q:
+            model = self._model(3, 'Gcnot', gate_type)
+            for targets in ((0, 1), (1, 0), (0, 2), (2, 0), (1, 2), (2, 1)):
+                with self.subTest(gate_type=gate_type, targets=targets):
+                    self._assert_matches_reference(model, 3, 'Gcnot', unitary, targets)
+
+    def test_nonstandard_gate_respects_target_order(self):
+        # Exercises the `stdname is None` path through create_from_unitary_mx: an asymmetric
+        # two-qubit unitary that isn't in the standard gate table at all.
+        unitary = np.array([[1, 0, 0, 0],
+                            [0, 1, 0, 0],
+                            [0, 0, 0, 1],
+                            [0, 0, 1j, 0]], dtype=complex)
+        for gate_type in self.GATE_TYPES:
+            with self.subTest(gate_type=gate_type):
+                model = self._model(2, 'Gtest', gate_type, nonstd_gate_unitaries={'Gtest': unitary})
+                self._assert_matches_reference(model, 2, 'Gtest', unitary, (0, 1))
+                self._assert_matches_reference(model, 2, 'Gtest', unitary, (1, 0))
+
+    def test_permuted_gate_survives_copy_and_serialization(self):
+        # `ExplicitOpModel` stores fully-embedded operations under partial/permuted keys, and both
+        # copy() and load-from-serialization re-insert them through OrderedMemberDict.__setitem__.
+        # Re-embedding them there would permute the gate again on every round trip.
+        for gate_type in ('static', 'CPTPLND'):
+            with self.subTest(gate_type=gate_type):
+                model = self._model(2, 'Gcnot', gate_type)
+                original = model.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt').copy()
+                self.assertArraysAlmostEqual(
+                    model.copy().operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt'), original)
+                reloaded = pygsti.models.ExplicitOpModel.loads(model.dumps())
+                self.assertArraysAlmostEqual(
+                    reloaded.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt'), original)
+
+    def test_permuted_gate_simulates_correctly(self):
+        # End-to-end: probabilities computed through the forward simulator, not just to_dense().
+        # Starting from |01>, Gcnot:1:0 (control = qubit 1) flips qubit 0 and gives |11>, while
+        # Gcnot:0:1 (control = qubit 0) leaves the state alone.
+        model = self._model(2, 'Gcnot', 'static')
+        prep_01 = [('Gxpi2', 1), ('Gxpi2', 1)]  # |00> -> |01>
+        probs_reversed = model.probabilities(
+            pygsti.circuits.Circuit(prep_01 + [('Gcnot', 1, 0)], line_labels=(0, 1)))
+        self.assertAlmostEqual(probs_reversed['11'], 1.0, places=6)
+        probs_forward = model.probabilities(
+            pygsti.circuits.Circuit(prep_01 + [('Gcnot', 0, 1)], line_labels=(0, 1)))
+        self.assertAlmostEqual(probs_forward['01'], 1.0, places=6)

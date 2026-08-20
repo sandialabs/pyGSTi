@@ -337,6 +337,7 @@ Protocol objects (GST, RB, RPE, drift, …) with their inputs, data, and results
    pygsti.protocols.rb
    pygsti.protocols.rpe
    pygsti.protocols.scarab
+   pygsti.protocols.simultaneous_gst
    pygsti.protocols.stability
    pygsti.protocols.treenode
    pygsti.protocols.vb

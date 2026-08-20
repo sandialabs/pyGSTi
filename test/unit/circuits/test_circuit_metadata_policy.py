@@ -3,10 +3,14 @@ metadata fields that participate in identity (occurrence, compilable_layer_indic
 
 The CASES table below is the behavioral contract. It was pinned from code reading
 at develop@3e7dd411e and reconciled by execution. Pin convention: KNOWN BUG pins
-(behavior with a filed issue, e.g. __add__ dropping metadata while leaking string
-markers) live in test_circuit_known_bugs.py; SURPRISE pins (newly found,
-not-yet-filed behavior, like the mul-with-occurrence ValueError crash below) are
-pinned in the module where they were found and recorded for issue filing.
+(behavior with a filed issue) live in test_circuit_known_bugs.py; SURPRISE pins
+(newly found, not-yet-filed behavior, like the mul-with-occurrence ValueError
+crash below) are pinned in the module where they were found and recorded for
+issue filing.
+
+`add` used to drop compilable_layer_indices while leaving the '~'/'|' markers in
+the composed string rep, so a summed circuit disagreed with its own string (#758).
+It now propagates them; the shifting semantics are asserted below the table.
 """
 from pygsti.baseobjs import Label
 from pygsti.circuits import Circuit
@@ -28,7 +32,7 @@ def _add_tail(c):
 CASES = [
     ('copy_static',             lambda c: c.copy(),                         True,    True ),
     ('copy_editable_roundtrip', _copy_editable_roundtrip,                   True,    True ),
-    ('add',                     _add_tail,                                  False,   False),
+    ('add',                     _add_tail,                                  False,   True ),
     ('getitem_layer_slice',     lambda c: c[0:2],                           False,   False),
     ('serialize',               lambda c: c.serialize(),                    True,    False),
     ('parallelize',             lambda c: c.parallelize(),                  True,    False),
@@ -54,6 +58,48 @@ class CircuitMetadataPolicyTester(BaseCase):
                 out = operation(self._base())
                 self.assertEqual(out.occurrence, 7 if occ_kept else None)
                 self.assertEqual(out.compilable_layer_indices, (1,) if cmp_kept else ())
+
+    # ---- how `+` propagates compilable_layer_indices (#758) ----
+
+    def test_add_shifts_the_right_operands_indices(self):
+        a = Circuit("Gx~Gy@(0)")   # 2 layers, layer 0 compilable
+        b = Circuit("Gz~Gi@(0)")   # 2 layers, layer 0 compilable
+        self.assertEqual((a + b).compilable_layer_indices, (0, 2))
+        self.assertEqual((a + b + a).compilable_layer_indices, (0, 2, 4))
+
+    def test_add_with_label_tuple_propagates_on_both_sides(self):
+        c = Circuit("Gx~Gy@(0)")
+        self.assertEqual((c + (Label('Gz', 0),)).compilable_layer_indices, (0,))
+        self.assertEqual(((Label('Gz', 0),) + c).compilable_layer_indices, (1,))
+
+    def test_summed_circuit_agrees_with_its_own_string_rep(self):
+        # #758: the composed string kept the '~' marker while the object dropped the
+        # indices, so re-parsing produced a different circuit
+        a = Circuit("Gx~Gy@(0)")
+        b = Circuit("Gz@(0)")
+        s = a + b
+        self.assertEqual(Circuit(s.str), s)
+        self.assertEqual(hash(Circuit(s.str)), hash(s))
+
+    def test_add_regenerates_string_rather_than_splicing_mixed_markers(self):
+        # _op_seq_to_str marks whichever set is smaller, so one operand can render
+        # with '~' and the other with '|'; splicing those yields a string the parser
+        # rejects outright ("contains both barrier and compilable layer joining")
+        a = Circuit([('Gx', 0), ('Gy', 0)], line_labels=(0,), compilable_layer_indices=(0,))
+        b = Circuit([('Gz', 0), ('Gi', 0), ('Gx', 0)], line_labels=(0,),
+                    compilable_layer_indices=(0, 1))
+        self.assertIn('~', a.str)
+        self.assertIn('|', b.str)
+        s = a + b
+        self.assertEqual(s.compilable_layer_indices, (0, 2, 3))
+        self.assertEqual(Circuit(s.str), s)
+
+    def test_add_without_compilable_indices_keeps_the_spliced_string(self):
+        # the common path is unchanged: no indices means no markers to reconcile,
+        # so the operands' cached strings are still concatenated verbatim
+        u = Circuit("GxGy@(0)")
+        v = Circuit("GzGi@(0)")
+        self.assertEqual((u + v).str, "GxGyGzGi@(0)")
 
     def test_mul_repeat_raises_when_occurrence_is_set(self):
         # SURPRISE: Circuit.repeat (hence __mul__) parses self.str via str.split('@')

@@ -36,6 +36,15 @@ on:
         required: false
         type: string
         default: 'false'
+      # Branch to diff HEAD against to decide whether the slow graphcoloring
+      # scaling tests should run (see the "Detect graphcoloring net changes"
+      # step below). Leave unset/empty to always skip that diff check (e.g.
+      # for direct pushes to protected branches, where these tests are never
+      # opted into automatically).
+      graphcoloring-diff-base:
+        required: false
+        type: string
+        default: ''
 
 env:
   SKIP_DEAP: 1
@@ -115,6 +124,7 @@ jobs:
         flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
+
     - name: Run unit tests
       if: ${{ inputs.run-unit-tests == 'true' }}
       # bash on every runner (Git Bash on Windows) so $COV_FLAG expands portably.
@@ -123,7 +133,66 @@ jobs:
         COV_FLAG: ${{ inputs.run-coverage == 'true' && '--cov=pygsti' || '' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --dist loadscope $COV_FLAG --durations=25 test/unit
+        # Wall-clock-sensitive suites live under test/performance/ and so are not
+        # collected here at all; the graphcoloring scaling suite is run
+        # conditionally in its own step below, where a slow run can't eat into or
+        # fail the main unit-test budget. The `-m "not slow"` filter is kept as a
+        # backstop in case a benchmark-style test lands under test/unit again.
+        python -m pytest -n auto --dist loadscope -m "not slow" $COV_FLAG --durations=25 test/unit
+    - name: Detect graphcoloring net changes
+      # The graphcoloring scaling tests are slow, so only run them when this branch
+      # has a net diff against `graphcoloring-diff-base` in the graphcoloring
+      # toolkit or its tests.
+      #
+      # This is intentionally independent of *how* this run was triggered (push vs.
+      # pull_request): callers that care (currently just feature-branches.yml) pass
+      # graphcoloring-diff-base explicitly, so this works the same whether CI was
+      # kicked off by a push to a branch or by an actual pull_request event -- the
+      # older implementation kept re-deriving the base from
+      # github.event.pull_request.base.sha, which is empty on ordinary push events.
+      # Since same-repo (non-fork) PRs only ever get a push event here (see the
+      # pull_request trigger filter in feature-branches.yml), that meant this step
+      # silently always reported changed=false for those PRs, e.g. #848.
+      #
+      # This uses a real git diff, not a "files touched" list, so if a branch
+      # changes graphcoloring and then reverts those changes, this reports
+      # changed=false. We only want to run the scaling tests once.
+      id: graphcoloring
+      if: ${{ inputs.run-unit-tests == 'true' }}
+      shell: bash
+      env:
+        DIFF_BASE: ${{ inputs.graphcoloring-diff-base }}
+      run: |
+        set -euo pipefail
+
+        # Callers that don't opt in (e.g. direct pushes to develop/beta/master/
+        # bugfix) leave this empty, so never run the slow graphcoloring tests there.
+        if [ -z "${DIFF_BASE}" ]; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        git fetch --no-tags --depth=1 origin "${DIFF_BASE}"
+
+        if git diff --quiet "origin/${DIFF_BASE}" HEAD -- \
+          pygsti/tools/graphcoloring \
+          test/unit/tools/test_graphcoloring.py \
+          test/performance/test_graphcoloring_scaling.py \
+          test/helpers/graphcoloring_graphs.py
+        then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Run graphcoloring slow (scaling) tests
+      if: ${{ inputs.run-extra-tests == 'true' && steps.graphcoloring.outputs.changed == 'true' }}
+      timeout-minutes: 30
+      shell: bash
+      env:
+        GRAPHCOLORING_CHANGED: ${{ steps.graphcoloring.outputs.changed }}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -m slow --durations=25 test/performance/test_graphcoloring_scaling.py
     - name: Run workflow tests
       if: ${{ inputs.run-integration-tests == 'true' }}
       shell: bash
@@ -132,6 +201,22 @@ jobs:
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -n auto --dist loadscope $COV_FLAG test/integration
+    - name: Install ml extra (TensorFlow/Keras) for test_packages
+      # test/test_packages/extras/ml exercises pygsti.extras.ml, which needs TensorFlow and
+      # Keras. Those are deliberately not in the `testing` extra -- TensorFlow is a heavy,
+      # platform-specific dependency that the other ~99% of the suite has no use for -- so
+      # install them only for the jobs that actually run test_packages. Without this the ml
+      # tests would be silently skipped by their pytest.importorskip guard rather than run.
+      #
+      # Skipped on 3.14: TensorFlow has no Python 3.14 wheels yet (tracked upstream at
+      # tensorflow/tensorflow#102890), so `uv pip install .[ml]` fails outright there instead
+      # of resolving anything. Leaving TensorFlow uninstalled on 3.14 just means the ml tests
+      # fall back to their normal pytest.importorskip skip, same as any machine lacking the
+      # `ml` extra. Drop the python-version guard once that issue ships 3.14 wheels.
+      if: ${{ inputs.run-extra-tests == 'true' && inputs.python-version != '3.14' }}
+      run: |
+        uv pip install --system -e .[ml]
+        python -Ic "import tensorflow, keras; print('tensorflow', tensorflow.__version__, '/ keras', keras.__version__)"
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
@@ -146,7 +231,26 @@ jobs:
         # .md with an .ipynb sitting NEXT TO IT in the same directory (see
         # docs/jupytext.toml), so the materialized notebooks land back under
         # docs/markdown/ for nbval to consume.
-        uv pip install --system -e .[docs]
+        #
+        # The `ml` extra is needed for docs/markdown/ml/* (the QPANN tutorials), which
+        # import pygsti.extras.ml. It is pulled in here rather than added to `docs`
+        # itself so that ReadTheDocs -- which installs `.[docs]` but never executes a
+        # notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't made to
+        # download TensorFlow purely to render Markdown.
+        #
+        # On 3.14, TensorFlow has no wheels yet (tensorflow/tensorflow#102890): the `ml`
+        # extra is left uninstalled, and docs/markdown/ml (the QPANN tutorials, which
+        # import pygsti.extras.ml directly with no importorskip-style guard) is excluded
+        # from the nbval run below -- jupytext itself never executes cells, so syncing
+        # that directory's .md/.ipynb pair alongside the rest is still harmless. Drop
+        # this branch once that upstream issue ships 3.14 wheels.
+        NBVAL_IGNORE_ML=""
+        if [ "${{ inputs.python-version }}" = "3.14" ]; then
+          uv pip install --system -e .[docs]
+          NBVAL_IGNORE_ML="--ignore=docs/markdown/ml"
+        else
+          uv pip install --system -e .[docs,ml]
+        fi
         (cd docs && jupytext --sync 'markdown/**/*.md')
 
         # Download and compile CHP for the Clifford-simulation notebook;
@@ -155,4 +259,4 @@ jobs:
         gcc -o /usr/local/bin/chp /tmp/chp.c
 
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 docs/markdown
+        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 $NBVAL_IGNORE_ML docs/markdown
