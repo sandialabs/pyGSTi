@@ -38,6 +38,11 @@ try:
 except ImportError:  # pragma: no cover - exercised only without pymatching
     _pymatching = None
 
+try:
+    from tesseract_decoder import tesseract as _tesseract
+except ImportError:  # pragma: no cover - exercised only without tesseract
+    _tesseract = None
+
 
 def dem_to_check_matrix(dem, num_detectors=None):
     """
@@ -337,13 +342,154 @@ def build_matcher(dem, num_detectors=None, min_probability=1e-12):
     return matcher, masks
 
 
-def decode_event_indicators(matcher, detector_samples):
+def _dem_for_decoding(masks, probs, num_detectors, min_probability=1e-12):
+    """
+    Build a canonical stim DEM (events in sorted-bitmask order, probabilities
+    clipped away from 0 and 0.5) padded to span `num_detectors` detectors.
+    """
+    p = np.clip(probs, min_probability, 0.5 - min_probability)
+    lines = []
+    for mask, pi in zip(masks, p):
+        targets = " ".join(f"D{d}" for d in range(num_detectors) if (int(mask) >> d) & 1)
+        lines.append(f"error({pi}) {targets}")
+    # Declare the highest detector so dem.num_detectors matches the data even
+    # when the learned events do not touch it.
+    lines.append(f"detector D{num_detectors - 1}")
+    return dem_from_str("\n".join(lines) + "\n")
+
+
+def _error_detectors(error):
+    """Best-effort extraction of the detector indices of a tesseract error."""
+    symptom = getattr(error, "symptom", None)
+    if symptom is not None:
+        detectors = getattr(symptom, "detectors", None)
+        if detectors is not None:
+            return [int(d) for d in detectors]
+    import re
+    found = re.findall(r"D(\d+)", str(error))
+    if found:
+        return [int(d) for d in found]
+    return None
+
+
+class _TesseractEventDecoder:
+    """
+    Wraps a compiled tesseract decoder so that decoding a shot yields the
+    per-event indicator row over the DEM events (sorted-bitmask order).
+    """
+
+    def __init__(self, decoder, column_map, n_events):
+        self._decoder = decoder
+        self._column_map = column_map
+        self.n_events = n_events
+
+    def decode_event_indicators(self, detector_samples):
+        shots = np.asarray(detector_samples, dtype=bool)
+        B = np.zeros((shots.shape[0], self.n_events), dtype=np.uint8)
+        for i in range(shots.shape[0]):
+            self._decoder.decode_to_errors(shots[i])
+            for error_index in self._decoder.predicted_errors_buffer:
+                col = self._column_map[error_index]
+                if col >= 0:
+                    B[i, col] ^= 1
+        return B
+
+
+def build_tesseract_decoder(dem, num_detectors=None, min_probability=1e-12):
+    """
+    Build a tesseract (most-likely-error) decoder from a DEM.
+
+    Unlike the pymatching path, the DEM does not need to be graph-like:
+    tesseract natively decodes hyperedge events (any number of detectors).
+
+    Parameters:
+        dem: stim.DetectorErrorModel
+        num_detectors: int, optional
+            Number of detectors in the syndrome data (default dem.num_detectors).
+        min_probability: float
+            Probabilities are clipped to [min_probability, 0.5 - min_probability].
+
+    Returns:
+        decoder: _TesseractEventDecoder
+            Object whose `decode_event_indicators(detector_samples)` returns
+            the (n_shots x n_events) indicator matrix.
+        masks: np.ndarray
+            Integer event bitmasks aligned with the indicator columns.
+    """
+    if _tesseract is None:
+        raise ImportError(
+            "tesseract-decoder is required for decoder='tesseract'; "
+            "pip install tesseract-decoder (no aarch64-linux wheels exist on "
+            "PyPI as of 2026-08; a source build via bazel may be required)."
+        )
+    H, probs, masks = dem_to_check_matrix(dem, num_detectors=num_detectors)
+    n_det = H.shape[0]
+    decode_dem = _dem_for_decoding(masks, probs, n_det, min_probability)
+    config = _tesseract.TesseractConfig(dem=decode_dem)
+    decoder = config.compile_decoder()
+
+    # Map tesseract's internal error indices to our event columns. The DEM is
+    # built in sorted-bitmask order, so positional alignment is the fallback;
+    # when the decoder exposes each error's detectors we verify explicitly.
+    mask_to_col = {int(m): j for j, m in enumerate(masks)}
+    errors = getattr(decoder, "errors", None)
+    if errors is not None:
+        column_map = []
+        for k, error in enumerate(errors):
+            detectors = _error_detectors(error)
+            if detectors is None:
+                column_map = None
+                break
+            error_mask = sum(1 << d for d in detectors)
+            column_map.append(mask_to_col.get(error_mask, -1))
+        if column_map is not None and len(column_map) != len(errors):
+            column_map = None
+    else:
+        column_map = None
+    if column_map is None:
+        column_map = list(range(len(masks)))
+
+    return _TesseractEventDecoder(decoder, column_map, len(masks)), masks
+
+
+def build_decoder(dem, decoder="pymatching", num_detectors=None, min_probability=1e-12):
+    """
+    Build a decoder backend from a DEM.
+
+    Parameters:
+        dem: stim.DetectorErrorModel
+        decoder: str
+            'pymatching' (minimum-weight perfect matching; DEM must be
+            graph-like) or 'tesseract' (most-likely-error; supports
+            hyperedge events).
+        num_detectors: int, optional
+            Number of detectors in the syndrome data (default dem.num_detectors).
+        min_probability: float
+            Probability clipping used when converting to decoder weights.
+
+    Returns:
+        decoder_object: pymatching.Matching or _TesseractEventDecoder
+        masks: np.ndarray
+            Integer event bitmasks aligned with decode output columns.
+    """
+    if decoder == "pymatching":
+        return build_matcher(dem, num_detectors=num_detectors,
+                             min_probability=min_probability)
+    if decoder == "tesseract":
+        return build_tesseract_decoder(dem, num_detectors=num_detectors,
+                                       min_probability=min_probability)
+    raise ValueError("decoder must be 'pymatching' or 'tesseract'.")
+
+
+def decode_event_indicators(decoder_object, detector_samples):
     """
     Decode a batch of shots into per-event indicator rows.
 
     Parameters:
-        matcher: pymatching.Matching
-            Matcher built with an identity faults matrix (see `build_matcher`).
+        decoder_object: pymatching.Matching or _TesseractEventDecoder
+            A pymatching matcher built with an identity faults matrix (see
+            `build_matcher`) or a tesseract decoder (see
+            `build_tesseract_decoder` / `build_decoder`).
         detector_samples: np.ndarray
             (n_shots x n_detectors) binary array; column d is detector d
             (stim sampling convention).
@@ -352,8 +498,10 @@ def decode_event_indicators(matcher, detector_samples):
         B: np.ndarray
             (n_shots x n_events) binary indicator matrix.
     """
+    if isinstance(decoder_object, _TesseractEventDecoder):
+        return decoder_object.decode_event_indicators(detector_samples)
     shots = np.asarray(detector_samples, dtype=np.uint8) % 2
-    return np.asarray(matcher.decode_batch(shots), dtype=np.uint8) % 2
+    return np.asarray(decoder_object.decode_batch(shots), dtype=np.uint8) % 2
 
 
 def assign_logical_flags(
@@ -361,6 +509,7 @@ def assign_logical_flags(
     detector_samples,
     logical_outcomes,
     num_detectors=None,
+    decoder="pymatching",
     on_nongraphlike="drop",
     residual_threshold=1e-3,
     max_ransac_iterations=200,
@@ -369,9 +518,9 @@ def assign_logical_flags(
     """
     Decorate a learned DEM with logical-flip flags inferred from shot data.
 
-    Builds a pymatching matcher from the learned DEM, decodes every shot to
-    obtain the event indicator matrix B, and solves Y = B L over GF(2)
-    (robustly, via `solve_gf2_robust`) for the per-event logical flags L.
+    Builds a decoder from the learned DEM, decodes every shot to obtain the
+    event indicator matrix B, and solves Y = B L over GF(2) (robustly, via
+    `solve_gf2_robust`) for the per-event logical flags L.
 
     Parameters:
         dem: stim.DetectorErrorModel
@@ -384,10 +533,14 @@ def assign_logical_flags(
             (0 = no logical flip, 1 = logical flip).
         num_detectors: int, optional
             Defaults to detector_samples.shape[1].
+        decoder: str
+            'pymatching' (default; minimum-weight perfect matching, requires
+            graph-like events) or 'tesseract' (most-likely-error decoder;
+            handles hyperedge events, so nothing is dropped).
         on_nongraphlike: str
-            What to do with events flipping more than two detectors:
-            'drop' (default; they are excluded from matching and left
-            undecorated) or 'raise'.
+            pymatching only: what to do with events flipping more than two
+            detectors: 'drop' (default; they are excluded from matching and
+            left undecorated) or 'raise'.
         residual_threshold: float
             Acceptable fraction of inconsistent rows (see `solve_gf2_robust`).
         max_ransac_iterations: int
@@ -403,11 +556,11 @@ def assign_logical_flags(
         residual_fraction: float
             Fraction of shots inconsistent with the returned flags.
         diagnostics: dict
-            GF(2) solver diagnostics plus 'masks' (all event bitmasks, sorted),
-            'decoded_masks' (events used in matching), 'dropped_masks'
-            (non-graph-like events excluded from matching and flag inference),
-            and 'undetermined_masks' (events whose flag the data does not
-            determine).
+            GF(2) solver diagnostics plus 'decoder', 'masks' (all event
+            bitmasks, sorted), 'decoded_masks' (events used in decoding),
+            'dropped_masks' (non-graph-like events excluded by the pymatching
+            path; always empty for tesseract), and 'undetermined_masks'
+            (events whose flag the data does not determine).
     """
     detector_samples = np.asarray(detector_samples, dtype=np.uint8) % 2
     if detector_samples.ndim != 2:
@@ -419,35 +572,48 @@ def assign_logical_flags(
         raise ValueError("logical_outcomes must have one entry per shot.")
 
     H, probs, masks = dem_to_check_matrix(dem, num_detectors=num_detectors)
-    col_weights = H.sum(axis=0)
-    graphlike = col_weights <= 2
-    dropped_masks = masks[~graphlike]
-    if len(dropped_masks) > 0:
-        if on_nongraphlike == "raise":
-            raise ValueError(
-                f"DEM is not graph-like: events {dropped_masks.tolist()} flip "
-                "more than two detectors."
-            )
-        if on_nongraphlike != "drop":
-            raise ValueError("on_nongraphlike must be 'drop' or 'raise'.")
-        warnings.warn(
-            f"assign_logical_flags: dropping {len(dropped_masks)} non-graph-like "
-            f"event(s) {dropped_masks.tolist()} from matching; they are left "
-            "undecorated."
-        )
 
-    if _pymatching is None:
-        raise ImportError(
-            "pymatching is required for logical decoration; pip install pymatching."
+    if decoder == "pymatching":
+        col_weights = H.sum(axis=0)
+        graphlike = col_weights <= 2
+        dropped_masks = masks[~graphlike]
+        if len(dropped_masks) > 0:
+            if on_nongraphlike == "raise":
+                raise ValueError(
+                    f"DEM is not graph-like: events {dropped_masks.tolist()} flip "
+                    "more than two detectors."
+                )
+            if on_nongraphlike != "drop":
+                raise ValueError("on_nongraphlike must be 'drop' or 'raise'.")
+            warnings.warn(
+                f"assign_logical_flags: dropping {len(dropped_masks)} non-graph-like "
+                f"event(s) {dropped_masks.tolist()} from matching; they are left "
+                "undecorated."
+            )
+
+        if _pymatching is None:
+            raise ImportError(
+                "pymatching is required for decoder='pymatching'; "
+                "pip install pymatching."
+            )
+        kept = np.nonzero(graphlike)[0]
+        p = np.clip(probs[kept], 1e-12, 0.5 - 1e-12)
+        matcher = _pymatching.Matching(
+            scipy.sparse.csc_matrix(H[:, kept]),
+            weights=np.log((1.0 - p) / p),
+            faults_matrix=scipy.sparse.eye(len(kept), dtype=np.uint8, format="csc"),
         )
-    kept = np.nonzero(graphlike)[0]
-    p = np.clip(probs[kept], 1e-12, 0.5 - 1e-12)
-    matcher = _pymatching.Matching(
-        scipy.sparse.csc_matrix(H[:, kept]),
-        weights=np.log((1.0 - p) / p),
-        faults_matrix=scipy.sparse.eye(len(kept), dtype=np.uint8, format="csc"),
-    )
-    B = np.asarray(matcher.decode_batch(detector_samples), dtype=np.uint8) % 2
+        B = np.asarray(matcher.decode_batch(detector_samples), dtype=np.uint8) % 2
+    elif decoder == "tesseract":
+        # Tesseract decodes hyperedges natively: keep every event.
+        kept = np.arange(len(masks))
+        dropped_masks = masks[:0]
+        tesseract_decoder, _ = build_tesseract_decoder(
+            dem, num_detectors=num_detectors
+        )
+        B = tesseract_decoder.decode_event_indicators(detector_samples)
+    else:
+        raise ValueError("decoder must be 'pymatching' or 'tesseract'.")
 
     L_kept, residual_fraction, diagnostics = solve_gf2_robust(
         B,
@@ -460,6 +626,7 @@ def assign_logical_flags(
     flags = np.zeros(len(masks), dtype=np.uint8)
     flags[kept] = L_kept
     decoded_masks = masks[kept]
+    diagnostics["decoder"] = decoder
     diagnostics["masks"] = masks
     diagnostics["decoded_masks"] = decoded_masks
     diagnostics["dropped_masks"] = dropped_masks

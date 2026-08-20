@@ -19,10 +19,16 @@ Pipeline:
      (inconsistent-row) fraction, and rank/determinacy diagnostics.
 
 Run with:
-    python example_logical_decoration.py [n_shots] [seed]
+    python example_logical_decoration.py [--shots N] [--seed S]
+        [--decoder pymatching|tesseract]
+
+The decoder used in step 4 is selectable: pymatching (minimum-weight perfect
+matching; graph-like DEMs only) or tesseract (most-likely-error decoding;
+also handles hyperedge events with more than two detectors).
 """
 
-import sys
+import argparse
+import time
 
 import numpy as np
 
@@ -74,7 +80,7 @@ def simulate(masks, probs, flags, n_shots, rng):
     return syndromes, y
 
 
-def main(n_shots=4000, seed=2026):
+def main(n_shots=4000, seed=2026, decoder="pymatching"):
     rng = np.random.default_rng(seed)
     true_masks, true_probs, true_flags = build_ground_truth()
     true_flag_of = dict(zip(true_masks.tolist(), true_flags.tolist()))
@@ -111,11 +117,16 @@ def main(n_shots=4000, seed=2026):
     print(f"Max |p_learned - p_true| over found events: {max(prob_errs):.4f}")
 
     # --- Assign logical flags to the learned DEM ----------------------------
+    t0 = time.perf_counter()
     decorated_dem, flags, residual, diag = assign_logical_flags(
-        learned_dem, syndromes, y, num_detectors=N_DETECTORS, seed=seed
+        learned_dem, syndromes, y, num_detectors=N_DETECTORS,
+        decoder=decoder, seed=seed
     )
+    elapsed = time.perf_counter() - t0
 
     print("\n--- Logical flag assignment ---")
+    print(f"Decoder backend: {decoder}  "
+          f"(decode + GF(2) solve took {elapsed:.2f} s for {n_shots} shots)")
     print(f"Residual (inconsistent-row) fraction: {residual:.5f} "
           f"({int(round(residual * n_shots))} of {n_shots} shots)")
     print(f"GF(2) solve method: {diag['method']} "
@@ -160,6 +171,10 @@ def main(n_shots=4000, seed=2026):
 
 
 if __name__ == "__main__":
-    n_shots = int(sys.argv[1]) if len(sys.argv) > 1 else 4000
-    seed = int(sys.argv[2]) if len(sys.argv) > 2 else 2026
-    sys.exit(main(n_shots, seed))
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1])
+    parser.add_argument("--shots", type=int, default=4000)
+    parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--decoder", choices=["pymatching", "tesseract"],
+                        default="pymatching")
+    args = parser.parse_args()
+    raise SystemExit(main(args.shots, args.seed, args.decoder))

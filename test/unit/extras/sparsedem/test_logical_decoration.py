@@ -8,11 +8,21 @@ from pygsti.extras.sparsedem.logical_decoration import (
     decorate_dem_with_logical_flags,
     solve_gf2_robust,
     build_matcher,
+    build_decoder,
+    build_tesseract_decoder,
     decode_event_indicators,
     assign_logical_flags,
 )
 
 pymatching = pytest.importorskip("pymatching")
+
+DECODERS = ["pymatching", "tesseract"]
+
+
+def _require_decoder(name):
+    """Skip cleanly when the requested decoder backend is not installed."""
+    if name == "tesseract":
+        pytest.importorskip("tesseract_decoder")
 
 
 def _random_solvable_system(rng, n_shots, n_events, density=0.3):
@@ -137,14 +147,16 @@ def test_build_matcher_rejects_nongraphlike():
         build_matcher(dem)
 
 
-def test_decode_event_indicators():
+@pytest.mark.parametrize("decoder", DECODERS)
+def test_decode_event_indicators(decoder):
+    _require_decoder(decoder)
     dem = dem_from_str("""
     error(0.01) D0
     error(0.01) D0 D1
     error(0.01) D1 D2
     error(0.01) D2
     """)
-    matcher, masks = build_matcher(dem)
+    decoder_obj, masks = build_decoder(dem, decoder=decoder)
     assert list(masks) == [1, 3, 4, 6]
     syndromes = np.array([
         [0, 0, 0],
@@ -152,7 +164,7 @@ def test_decode_event_indicators():
         [1, 1, 0],  # -> D0 D1
         [0, 1, 1],  # -> D1 D2
     ], dtype=np.uint8)
-    B = decode_event_indicators(matcher, syndromes)
+    B = decode_event_indicators(decoder_obj, syndromes)
     expected = np.array([
         [0, 0, 0, 0],
         [1, 0, 0, 0],  # mask 1 = D0
@@ -169,7 +181,9 @@ def _simulate_shots(rng, H, probs, flags, n_shots):
     return syndromes.astype(np.uint8), y.astype(np.uint8)
 
 
-def test_assign_logical_flags_end_to_end():
+@pytest.mark.parametrize("decoder", DECODERS)
+def test_assign_logical_flags_end_to_end(decoder):
+    _require_decoder(decoder)
     # Line of 5 detectors: boundary (single-detector) events on each detector
     # plus nearest-neighbor pair events. Logical flags form a cut between
     # detectors {0, 1} and {2, 3, 4} + boundary.
@@ -191,7 +205,7 @@ def test_assign_logical_flags_end_to_end():
     syndromes, y = _simulate_shots(rng, H, probs, true_flags, 3000)
 
     decorated, recovered, residual, diag = assign_logical_flags(
-        dem, syndromes, y, seed=11
+        dem, syndromes, y, decoder=decoder, seed=11
     )
     assert diag["undetermined_indices"] == []
     assert residual < 1e-2
@@ -232,3 +246,72 @@ def test_assign_logical_flags_drops_nongraphlike():
 
     with pytest.raises(ValueError, match="graph-like"):
         assign_logical_flags(dem, syndromes, y, on_nongraphlike="raise")
+
+
+def test_assign_logical_flags_tesseract_hyperedge():
+    # A 3-detector hyperedge event carries the logical flag. The tesseract
+    # path decodes it natively and recovers its flag; the pymatching path is
+    # forced to drop it and cannot explain the shots where it fired.
+    pytest.importorskip("tesseract_decoder")
+    dem = dem_from_str("""
+    error(0.005) D0
+    error(0.005) D1
+    error(0.005) D2
+    error(0.02) D0 D1 D2
+    """)
+    H, probs, sorted_masks = dem_to_check_matrix(dem)
+    assert list(sorted_masks) == [1, 2, 4, 7]
+    true_flags = np.array([0, 0, 0, 1], dtype=np.uint8)  # flag on the triple
+    rng = np.random.default_rng(9)
+    syndromes, y = _simulate_shots(rng, H, probs, true_flags, 3000)
+    assert y.sum() > 0  # the hyperedge fired
+
+    # Tesseract: hyperedge kept, flag recovered.
+    _, recovered, residual, diag = assign_logical_flags(
+        dem, syndromes, y, decoder="tesseract", seed=13
+    )
+    assert len(diag["dropped_masks"]) == 0
+    assert 7 in diag["decoded_masks"]
+    assert 7 not in diag["undetermined_masks"]
+    assert residual < 5e-3
+    assert np.array_equal(recovered, true_flags)
+
+    # pymatching: hyperedge dropped, its shots are unexplained.
+    with pytest.warns(UserWarning):
+        _, _, residual_pm, diag_pm = assign_logical_flags(
+            dem, syndromes, y, decoder="pymatching", seed=13,
+            max_ransac_iterations=20,
+        )
+    assert 7 in diag_pm["dropped_masks"]
+    assert 7 in diag_pm["undetermined_masks"]
+    assert residual_pm > residual
+
+
+def test_build_tesseract_decoder_accepts_hyperedges():
+    pytest.importorskip("tesseract_decoder")
+    dem = dem_from_str("""
+    error(0.01) D0
+    error(0.01) D1 D2 D3
+    """)
+    decoder_obj, masks = build_tesseract_decoder(dem)
+    assert list(masks) == [1, 14]
+    syndromes = np.array([
+        [0, 0, 0, 0],
+        [1, 0, 0, 0],  # -> D0
+        [0, 1, 1, 1],  # -> hyperedge D1 D2 D3
+        [1, 1, 1, 1],  # -> both
+    ], dtype=np.uint8)
+    B = decode_event_indicators(decoder_obj, syndromes)
+    expected = np.array([
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+    ], dtype=np.uint8)
+    assert np.array_equal(B, expected)
+
+
+def test_build_decoder_rejects_unknown_backend():
+    dem = dem_from_str("error(0.01) D0\n")
+    with pytest.raises(ValueError, match="decoder"):
+        build_decoder(dem, decoder="unionfind")
