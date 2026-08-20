@@ -117,7 +117,7 @@ If you're new to `report/` and have a change to make:
 
 ## Output formats and templates
 
-Templates live in [pygsti/report/templates/](../pygsti/report/templates/). They are **plain HTML with string substitution** — *not* Jinja2 (despite the appearance). The substitution is done in [html.py](../pygsti/report/html.py).
+Templates live in [pygsti/report/templates/](../pygsti/report/templates/). They are **Jinja2** (`{% macro %}` / `{{ }}` / `{% if %}`), rendered by the `merge_jinja_template*` helpers in [merge_helpers.py](../pygsti/report/merge_helpers.py). The per-figure HTML fragments those templates interpolate are produced by [html.py](../pygsti/report/html.py).
 
 - **HTML** (primary, fully interactive): Plotly JSON embedded directly, JS for switchboard interaction.
 - **PDF** (static, single-variant): Plotly → matplotlib conversion, then LaTeX, then `pdflatex`. **Requires `pdflatex` on PATH**; will fail noisily if missing.
@@ -141,7 +141,7 @@ This subpackage is small (~600 lines, 2 files) and stable. You only need to touc
 
 ## Architectural debt
 
-- [`Report` "needs rewrite" note](known-debt.md#12-reportreportpy-needs-rewrite-note) — comment at the top of [report.py](../pygsti/report/report.py) flags that `Report` should arguably be a base class with derived classes per report type rather than one class configured many ways.
+- [`Report` "needs rewrite" note](known-debt.md#10-reportreportpy-needs-rewrite-note) — comment at the top of [report.py](../pygsti/report/report.py) flags that `Report` should arguably be a base class with derived classes per report type rather than one class configured many ways.
 - [`io/metadir.py` deprecated formats](known-debt.md#6-iometadirpy-deprecated-formats).
 - Tangentially, [#205](https://github.com/sandialabs/pyGSTi/issues/205) — JupyterLab-compatibility rethink for the report-system inline JavaScript.
 

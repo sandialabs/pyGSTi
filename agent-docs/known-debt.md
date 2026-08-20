@@ -20,19 +20,17 @@ If you find one not listed below, please update this file.
 
 ## 1. `tools/` misplacement and namespace pollution
 
-**What it is.** Several files under [pygsti/tools/](../pygsti/tools/) are domain features, not utilities — they import "upward" from `models`, `protocols`, `report`, etc. Concretely: `leakage.py`, `chi2fns.py`, `likelihoodfns.py`, `rbtheory.py`, `edesigntools.py` are the main offenders. Separately, no `tools/` module defines `__all__`, so `pygsti.tools.*` re-exports every public name from every file with no curation.
+**What it is.** Several files under [pygsti/tools/](../pygsti/tools/) are domain features, not utilities — they import "upward" from `models`, `protocols`, `report`, etc. Concretely: `chi2fns.py`, `likelihoodfns.py`, `rbtheory.py`, `edesigntools.py` are the main offenders (`leakage.py` was the worst, and has since been moved out — see item 2). Separately, almost no `tools/` module defines `__all__`, so `pygsti.tools.*` re-exports every public name from every file with no curation.
 
 **Where it bites.** Adding "just one more utility" to `tools/` tends to deepen the coupling; touching a `tools/` file can pull `models` or `protocols` along for the ride at import time. The lack of `__all__` makes it hard to deprecate names — you can't tell what's actually part of the public API.
 
 **Tracker.** Partially covered by the broader subpackage-restructuring discussion in [sandialabs/pyGSTi#715](https://github.com/sandialabs/pyGSTi/issues/715). A focused `tools/` issue would be welcome — please open one if you start work here.
 
-## 2. `tools/leakage.py` → `pygsti.leakage` move
+## 2. RESOLVED — `tools/leakage.py` → `pygsti.leakage` move
 
-**What it is.** `tools/leakage.py` is the most flagrant of the misplaced-module offenders: it contains complete domain features (leaky-qubit GST + LAGO gauge optimization + report generation), with lazy imports from `models`, `protocols`, and `report`. There is an in-flight plan to extract it into a top-level `pygsti.leakage` subpackage.
+**Status.** Done. `tools/leakage.py` was extracted into the top-level [pygsti/leakage/](../pygsti/leakage/) subpackage (`core`, `gaugeopt`, `metrics`, `models`, `reports`), which `pygsti/__init__.py` imports. [pygsti/tools/_leakage.py](../pygsti/tools/_leakage.py) keeps call-time deprecation shims for the old `pygsti.tools` names. New leakage code goes in `pygsti.leakage`.
 
-**Where it bites.** Don't add new code to `tools/leakage.py` — anything you write will need to be migrated. New leakage-related code should land in the new subpackage layout once it exists.
-
-**Tracker.** No standalone tracker issue — please open one if you're picking up the migration.
+*(Heading number retained deliberately — other agent-docs deep-link this anchor.)*
 
 ## 3. `baseobjs` ↔ `protocols` circular import
 
@@ -92,19 +90,7 @@ If you find one not listed below, please update this file.
 
 **Tracker.** No standalone tracker — please open one.
 
-## 10. RESOLVED ~~`MatrixForwardSimulator` is being eclipsed by `MapForwardSimulator`~~
-
-## 11. Cython extension silent fallback to `_slow` Python
-
-**What it is.** Compiled evotypes (`densitymx`, `statevec`, `stabilizer`) try to import a C extension at module load; on failure they silently fall back to a pure-Python `_slow` implementation. The two implementations have the same asymptotic cost but very different constants.
-
-**Where it bites.** Silent dispatch means callers don't know which path is running, and the relative speed of compiled vs. `_slow` depends on workload and hardware. The C++ implementation tends to win on small or dense workloads, but the numpy-driven `_slow` implementation can win — sometimes by a wide margin — on workloads with many idle qubits, particularly on Apple Silicon. The benchmark data that surfaced this (for `densitymx` / `densitymx_slow` applying embedded ops as `n_noop` grows) is in the discussion at [sandialabs/pyGSTi#713](https://github.com/sandialabs/pyGSTi/issues/713), especially [this comment](https://github.com/sandialabs/pyGSTi/issues/713#issuecomment-4087958138).
-
-The practical issue is therefore *not* "the fallback is slow." It is that silent dispatch hides which implementation is being benchmarked, so a `_slow`-vs-compiled difference in either direction can mask or invert expected scaling.
-
-**Tracker.** [sandialabs/pyGSTi#713](https://github.com/sandialabs/pyGSTi/issues/713) covers the embedded-op performance work that exposed this. No standalone tracker for the separate question of whether the fallback should warn loudly at import — please open one if you want to drive that decision.
-
-## 12. `report/report.py` "needs rewrite" note
+## 10. `report/report.py` "needs rewrite" note
 
 **What it is.** [pygsti/report/report.py](../pygsti/report/report.py) carries an inline comment near the top of the file noting "this whole thing needs to be rewritten with different reports as derived classes." Today `Report` is one class instantiated by several factory functions in [pygsti/report/factory.py](../pygsti/report/factory.py); the comment is suggesting subclassing instead.
 
@@ -112,7 +98,7 @@ The practical issue is therefore *not* "the fallback is slow." It is that silent
 
 **Tracker.** No standalone tracker for the per-report-type subclassing refactor — please open one.
 
-## 13. `LogLOptions`-style parameter bundling not yet implemented
+## 11. `LogLOptions`-style parameter bundling not yet implemented
 
 **What it is.** Likelihood/chi-squared function signatures in [pygsti/tools/likelihoodfns.py](../pygsti/tools/likelihoodfns.py) and [pygsti/tools/chi2fns.py](../pygsti/tools/chi2fns.py) still pass `min_prob_clip`, `prob_clip_interval`, `radius`, `op_label_aliases`, `comm` individually — repeatedly, across many functions. A `LogLOptions` (or similar) dataclass would consolidate the bag.
 
@@ -120,7 +106,7 @@ The practical issue is therefore *not* "the fallback is slow." It is that silent
 
 **Tracker.** No standalone tracker — please open one.
 
-## 14. `gaugeopt_suite` representation duality
+## 12. `gaugeopt_suite` representation duality
 
 **What it is.** A gauge-optimization suite is variously represented as a `list[list[dict]]` *or* as a [pygsti/protocols/gst.py:857](../pygsti/protocols/gst.py#L857) `GSTGaugeOptSuite` object. Different entry points accept different shapes; some accept both.
 
@@ -128,19 +114,25 @@ The practical issue is therefore *not* "the fallback is slow." It is that silent
 
 **Tracker.** No standalone tracker for the duality itself — please open one.
 
-## 15. `extras/idletomography/` is broken
+## 13. `extras/idletomography/` is broken
 
 **What it is.** The idle-tomography subsystem under [pygsti/extras/idletomography/](../pygsti/extras/idletomography/) is known-broken. Maintainers are aware. **Do not attempt to introspect, run, or fix it as part of unrelated work** — it has its own scope.
 
 **Tracker.** Related open issues: [#711](https://github.com/sandialabs/pyGSTi/issues/711) (IDT with custom qubit labels), [#737](https://github.com/sandialabs/pyGSTi/issues/737) (error simulating IDT circuits), [#576](https://github.com/sandialabs/pyGSTi/issues/576) (view IDT results).
 
-## 16. Towards 1.0: subpackage restructuring meta-thread
+## 14. Towards 1.0: subpackage restructuring meta-thread
 
 **What it is.** A meta-discussion of pyGSTi's maintainability and the structural changes needed before a 1.0 release. Motivated explicitly by making the codebase tractable for LLM-based coding agents — i.e., the same goal as `agent-docs/`. Several proposals (move `pygsti.layouts` under `pygsti.forwardsims`, etc.) live in the issue body.
 
 **Tracker.** [sandialabs/pyGSTi#715](https://github.com/sandialabs/pyGSTi/issues/715).
 
-## 18. Inconsistent ModelMember copy/deepcopy/pickle semantics around `_parent`
+## 15. POVM inheritance structure refactor
+
+**What it is.** [pygsti/modelmembers/povms/povm.py](../pygsti/modelmembers/povms/povm.py)'s `POVM` base class and `_BasePOVM` have inverted-ish roles: `POVM` actually implements a fully-wired-up zero-parameter POVM, but most concrete subclasses do have parameters. This forces awkward overrides.
+
+**Tracker.** [sandialabs/pyGSTi#727](https://github.com/sandialabs/pyGSTi/issues/727).
+
+## 16. Inconsistent ModelMember copy/deepcopy/pickle semantics around `_parent`
 
 **What it is.** Three distinct code paths handle `_parent` differently when copying a `ModelMember`:
 
@@ -158,7 +150,7 @@ Additionally, the path-3 behaviour is arguably surprising to callers: `copy.deep
 
 **Tracker.** [sandialabs/pyGSTi#804](https://github.com/sandialabs/pyGSTi/issues/804)
 
-## 19. `Label.IS_SIMPLE` conflates "layer-atom" with "primitive op"
+## 17. `Label.IS_SIMPLE` conflates "layer-atom" with "primitive op"
 
 **What it is.** [pygsti/baseobjs/label.py:173](../pygsti/baseobjs/label.py#L173) defines one class flag, read via the `is_simple` property ([label.py:464](../pygsti/baseobjs/label.py#L464)), that is asked two independent questions:
 
@@ -174,9 +166,3 @@ To see any of this you must retain a box in a static circuit, which means the ed
 **Don't** add new `is_simple` consumers without deciding which axis you mean. If you want "won't corrupt a layer if I don't descend," that's A and `is_simple` is correct today. If you want "I can look this up as one op," that's B and `is_simple` will lie to you about boxes.
 
 **Tracker.** [sandialabs/pyGSTi#766](https://github.com/sandialabs/pyGSTi/issues/766) has the full analysis, the per-class A/B table, and the proposed `IS_LAYER_ATOM` / `IS_PRIMITIVE_OP` split with a call-site migration table. The design is accepted; implementation is deliberately held for the `Circuit`/`Label` rewrite, because the metrics-family row is a policy decision that would move the golden characterization fixtures under `test/unit/circuits/golden/`.
-
-## 17. POVM inheritance structure refactor
-
-**What it is.** [pygsti/modelmembers/povms/povm.py](../pygsti/modelmembers/povms/povm.py)'s `POVM` base class and `_BasePOVM` have inverted-ish roles: `POVM` actually implements a fully-wired-up zero-parameter POVM, but most concrete subclasses do have parameters. This forces awkward overrides.
-
-**Tracker.** [sandialabs/pyGSTi#727](https://github.com/sandialabs/pyGSTi/issues/727).

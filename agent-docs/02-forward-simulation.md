@@ -45,12 +45,13 @@ The recommended default is `'auto'`, which resolves to **`MapForwardSimulator`**
 | [`TermForwardSimulator`](../pygsti/forwardsims/termforwardsim.py#L40) | Truncated path-integral / Taylor-expansion of each operation; works with `statevec` / `stabilizer` evotypes. | Specialized; rarely surfaced in user-facing examples. |
 | [`SimpleMapForwardSimulator`](../pygsti/forwardsims/mapforwardsim.py#L41) | Non-distributable variant of MapForwardSimulator (no MPI). | Subclassed by `MapForwardSimulator`. |
 | [`SimpleMatrixForwardSimulator`](../pygsti/forwardsims/matrixforwardsim.py#L45) | Non-distributable Matrix variant. | Subclassed by `MatrixForwardSimulator`. |
-| `'chp'` simulator (via [pygsti/evotypes/chp/](../pygsti/evotypes/chp/)) | Hooks the external CHP program for stabilizer simulation. There is no dedicated `chpforwardsim.py` — selecting `'chp'` works through the regular `ForwardSimulator` infrastructure plus chp-evotype reps. | Specialized. |
+| [`WeakForwardSimulator`](../pygsti/forwardsims/weakforwardsim.py) + `evotype='chp'` ([pygsti/evotypes/chp/](../pygsti/evotypes/chp/)) | Clifford simulation by **sampling shots**, not by computing exact probabilities. `'chp'` is an evotype, not a selectable simulator name — there is no `chpforwardsim.py`. | Specialized. |
+| [`TorchForwardSimulator`](../pygsti/forwardsims/torchfwdsim.py) | PyTorch-backed; builds probabilities as a torch graph so they can be autodifferentiated. Written against `ExplicitOpModel`. | Optional `torch` dependency. |
 | Cython kernels: [`mapforwardsim_calc_densitymx.pyx`](../pygsti/forwardsims/mapforwardsim_calc_densitymx.pyx), [`termforwardsim_calc_stabilizer.pyx`](../pygsti/forwardsims/termforwardsim_calc_stabilizer.pyx), [`termforwardsim_calc_statevec.pyx`](../pygsti/forwardsims/termforwardsim_calc_statevec.pyx) | C-extension hot paths. | Compiled at install time. |
 
 ### History note
 
-Earlier versions of pyGSTi defaulted `'auto'` on a qubit-count rule (matrix for ≤2, map for ≥3), and several notebook passages and docstrings carried that wording long after the source code changed. The mismatched prose was corrected in commit `74133fc6f`. If you find residual mentions of the old rule, replace them with "`'auto'` selects `'map'`." Tracked in [known-debt.md #10](known-debt.md#10-matrixforwardsimulator-is-being-eclipsed-by-mapforwardsimulator).
+Earlier versions of pyGSTi defaulted `'auto'` on a qubit-count rule (matrix for ≤2, map for ≥3), and several notebook passages and docstrings carried that wording long after the source code changed. The mismatched prose was corrected in commit `74133fc6f`. If you find residual mentions of the old rule, replace them with "`'auto'` selects `'map'`."
 
 ## Key abstractions
 
@@ -91,18 +92,11 @@ The Layout is the *shared* artifact between forward sim and the fit loop. The si
 
 - **`model.sim` ↔ `sim.model` two-way sync.** Both pointers must always agree after the simulator is attached. The most common offenders are: code that copies a Model (must update `model_copy.sim.model = model_copy`), code that constructs a Simulator and never wires it up properly, and serialization that round-trips one half of the pair without the other.
 
-- **Forward-simulator swap can change which fit-loop wrapper runs.** Most simulators (Map, Matrix, CHP) compute outcome probabilities essentially exactly, and the fit loop calls them through the generic [`_do_runopt`](../pygsti/algorithms/core.py#L1025). The `TermForwardSimulator` is different — its probabilities are an approximate truncated path integral that depends on which paths are retained — so the fit loop wraps it in [`_do_term_runopt`](../pygsti/algorithms/core.py#L1078), an outer loop that grows the path set between optimizer iterations until it's sufficient. If you swap to or from `TermForwardSimulator` mid-pipeline, you silently change which wrapper runs and pick up (or drop) that path-set machinery. See doc 03 for details.
+- **Forward-simulator swap can change which fit-loop wrapper runs.** Map, Matrix and Torch compute outcome probabilities essentially exactly, and the fit loop calls them through the generic [`_do_runopt`](../pygsti/algorithms/core.py#L1025). The `TermForwardSimulator` is different — its probabilities are an approximate truncated path integral that depends on which paths are retained — so the fit loop wraps it in [`_do_term_runopt`](../pygsti/algorithms/core.py#L1078), an outer loop that grows the path set between optimizer iterations until it's sufficient. If you swap to or from `TermForwardSimulator` mid-pipeline, you silently change which wrapper runs and pick up (or drop) that path-set machinery. See doc 03 for details.
 
 - **Layout sharing across objective functions.** Iterative GST evaluates many objective functions sequentially over the same circuit family. Rebuilding the Layout for each iteration is wasteful. `ModelDatasetCircuitsStore.__init__()` ([`pygsti/objectivefns/objectivefns.py:936`](../pygsti/objectivefns/objectivefns.py#L936)) takes a `precomp_layout` kwarg that lets callers pass in a pre-built layout. Use it when you can.
 
-- **Cython `_slow` fallback applies here.** The Map simulator's hot paths depend on `mapforwardsim_calc_densitymx.so` (and parallel Cython kernels for statevec/stabilizer Term sim). When the C build is missing, dispatch silently falls back to the Python `_slow` implementation. Don't assume that's slower — on some workloads / hardware (notably Apple Silicon, with many idle qubits) it has been measured to be *faster* than the C path ([#713 comment](https://github.com/sandialabs/pyGSTi/issues/713#issuecomment-4087958138)). The real gotcha is that the dispatch is silent, so you may not know which one your benchmark is exercising. See [AGENTS.md cross-cutting](AGENTS.md#cython-_slow-fallback) and [known-debt.md #11](known-debt.md#11-cython-extension-silent-fallback-to-_slow-python).
-
 - **MPI plumbing.** `DistributableCOPALayout` carries a partition over the global outcome index. The simulator dispatches per-rank work via the partition; the objective function fills its 1-D output vector using only its rank's slice and then `Allreduce`s. Most code paths that involve `comm` are in [`distforwardsim.py`](../pygsti/forwardsims/distforwardsim.py) and [`distlayout.py`](../pygsti/layouts/distlayout.py).
-
-## Architectural debt
-
-- [Cython silent fallback to `_slow`](known-debt.md#11-cython-extension-silent-fallback-to-_slow-python).
-- [#713](https://github.com/sandialabs/pyGSTi/issues/713) — efficiency of embedded ops in densitymx evotype(s), the most actively tracked forward-sim performance issue.
 
 ## Canonical examples
 
