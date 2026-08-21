@@ -10,6 +10,7 @@ Sub-package containing protocol objects and related inputs, data, and results
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from .cgst import *
 from .freeformsim import *
 from .gst import *
 from .modeltest import *

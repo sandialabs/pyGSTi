@@ -31,6 +31,7 @@ parts:
     - file: markdown/protocols/IdleTomography
     - file: markdown/protocols/DriftCharacterization
     - file: markdown/protocols/RobustPhaseEstimation
+    - file: markdown/protocols/CharacterGST
     - file: markdown/rb/Overview
       sections:
       - file: markdown/rb/CliffordRB

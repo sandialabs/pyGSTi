@@ -11,6 +11,7 @@ pyGSTi Tools Python Package
 #***************************************************************************************************
 
 from .basistools import *
+from .chartools import *
 from .chi2fns import *
 from .edesigntools import *
 from .exceptions import *
