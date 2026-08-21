@@ -4,7 +4,7 @@ from scipy.stats import norm
 from scipy.linalg import hadamard
 import stim 
 
-from .utils import build_masked_hadamard
+from .utils import build_masked_hadamard, masked_hadamard_dot
 from .io import dem_from_event_probabilities
 
 
@@ -212,8 +212,10 @@ def fit_specified_dem(
 
     # Apply transformations
     syndrome_masks = [int(synd, 2) for synd in syndrome_counts.keys()]
-    H_sub = build_masked_hadamard(pol_masks, syndrome_masks)
-    polarizations = H_sub @ counts / n_runs
+    # Streamed product: the dense (pol_masks x syndromes) Hadamard submatrix
+    # is only materialized when the covariance (which needs the full
+    # Jacobian) is requested.
+    polarizations = masked_hadamard_dot(pol_masks, syndrome_masks, counts) / n_runs
     depolarizations = -np.log(polarizations)
     W = (np.ones((len(pol_masks), len(dem_masks))) - build_masked_hadamard(pol_masks, dem_masks)) / 2
     Winv = np.linalg.pinv(W)
@@ -228,7 +230,7 @@ def fit_specified_dem(
         d_event_d_att = 0.5 * np.exp(-attenuations)
         d_att_d_dep = Winv
         d_dep_d_pol = -np.diag(1 / polarizations)
-        d_pol_d_prob = H_sub
+        d_pol_d_prob = build_masked_hadamard(pol_masks, syndrome_masks)
 
         # Compute covariance of input probabilities (multinomial)
         cov_input = np.diag(probabilities) - np.outer(probabilities, probabilities)

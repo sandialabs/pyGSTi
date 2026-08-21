@@ -187,6 +187,39 @@ def parity_dot(batch_bits: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """
     return (batch_bits @ (mask % 2)) % 2
 
+def masked_hadamard_dot(row_masks, col_masks, vector):
+    """
+    Compute build_masked_hadamard(row_masks, col_masks) @ vector without
+    materializing the (rows x cols) submatrix.
+
+    Parameters:
+        row_masks: list[int] or np.ndarray
+            Row bitmask integers.
+        col_masks: list[int] or np.ndarray
+            Column bitmask integers, aligned with vector.
+        vector: np.ndarray
+            Values to contract against the columns.
+
+    Returns:
+        product: np.ndarray
+            Length len(row_masks) result of the streamed matrix-vector
+            product.
+    """
+    vector = np.asarray(vector, dtype=float)
+    largest_mask = max(max(row_masks), max(col_masks))
+    n_bits = len(f"{largest_mask:0b}")
+    row_bits = np.array([[int(bit) for bit in f"{m:0{n_bits}b}"]
+                         for m in row_masks], dtype=np.int32)
+    result = np.zeros(len(row_bits))
+    step = max(1, 2 ** 24 // max(len(row_bits), 1))
+    for j0 in range(0, len(col_masks), step):
+        col_bits = np.array([[int(bit) for bit in f"{m:0{n_bits}b}"]
+                             for m in col_masks[j0:j0 + step]], dtype=np.int32)
+        signs = 1.0 - 2.0 * ((row_bits @ col_bits.T) & 1)
+        result += signs @ vector[j0:j0 + step]
+    return result
+
+
 def build_masked_hadamard(row_masks, col_masks=None):
     """
     Build a submatrix of the (unnormalized) Hadamard matrix.
@@ -207,12 +240,18 @@ def build_masked_hadamard(row_masks, col_masks=None):
     largest_mask = max(max(row_masks), max(col_masks))
     n_bits = len(f"{largest_mask:0b}")
 
-    row_mask_bits = [[int(bit) for bit in f"{m:0{n_bits}b}"] for m in row_masks]
-    col_mask_bits = [[int(bit) for bit in f"{n:0{n_bits}b}"] for n in col_masks]
+    def _bit_matrix(masks):
+        return np.array([[int(bit) for bit in f"{m:0{n_bits}b}"] for m in masks],
+                        dtype=np.int32)
 
-    H_submatrix = [
-        [(-1) ** np.dot(row, col) for col in col_mask_bits]
-        for row in row_mask_bits
-    ]
+    row_bits = _bit_matrix(row_masks)
+    col_bits = _bit_matrix(col_masks)
 
-    return np.array(H_submatrix, dtype=int)
+    # (-1)**(row . col) = 1 - 2 * parity(row . col), computed blockwise so the
+    # integer product never exceeds ~2**24 elements at a time.
+    H_submatrix = np.empty((len(row_bits), len(col_bits)), dtype=np.int8)
+    step = max(1, 2 ** 24 // max(len(row_bits), 1))
+    for j0 in range(0, len(col_bits), step):
+        parity = (row_bits @ col_bits[j0:j0 + step].T) & 1
+        H_submatrix[:, j0:j0 + step] = (1 - 2 * parity).astype(np.int8)
+    return H_submatrix
