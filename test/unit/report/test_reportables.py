@@ -49,7 +49,7 @@ def _damped(model, target, rates=(0.01, 0.02, 0.03)):
     noisy = model.copy()
     for gl in list(noisy.operations.keys()):
         noisy.operations[gl] = FullArbitraryOp(
-            damping @ np.asarray(target.operations[gl].to_dense('HilbertSchmidt')))
+            damping @ target.operations[gl].to_dense('HilbertSchmidt'))
     return noisy
 
 

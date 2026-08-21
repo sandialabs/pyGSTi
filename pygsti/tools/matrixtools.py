@@ -983,10 +983,6 @@ def approximate_matrix_log_BCH(m: _np.ndarray, target: _np.ndarray, mx_basis: Un
 
     log_target = unitary_superoperator_matrix_log(target, mx_basis)
 
-    # Note: `target` is a unitary superoperator, so its conjugate transpose is its inverse. Using the
-    # conjugate transpose rather than an explicit inverse/solve matters: LU-based routines make discrete
-    # pivoting choices which are not smooth functions of their input, and this logarithm is finite
-    # differenced with respect to model parameters when computing error bars.
     E = target.conj().T@m
     log_E = near_identity_matrix_log(E)
 
