@@ -6913,8 +6913,8 @@ def pairwise_bch_numerical(mat1: _np.ndarray, mat2: _np.ndarray, order: Literal[
     Helper function for doing the numerical BCH in a pairwise fashion. Note this function is primarily intended
     for numerical validations as part of testing infrastructure.
     """
-    if order > 5:
-        raise ValueError('Maximum supported BCH order is 5')
+    if not 1 <= order <= 5:
+        raise ValueError('BCH order must be between 1 and 5 (inclusive), got %s' % str(order))
 
     bch_result = _np.zeros(mat1.shape, dtype=_np.complex128)
     if order >= 1:

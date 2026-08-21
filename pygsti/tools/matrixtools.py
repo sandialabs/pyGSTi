@@ -949,13 +949,13 @@ def approximate_matrix_log_BCH(m: _np.ndarray, target: _np.ndarray, mx_basis: Un
     Notes
     -----
     In this brief note we'll make the use of the BCH expansion more explicit.
-    Let T be the target unitary superoperator. Observe that m = T@T^-1@m. Let E= T^-1@m.
-    The we have that log(m) = log(T@E). T = exp(log(T)), E = exp(log(E)), so
+    Let T be the target unitary superoperator. Observe that m = T@T^-1@m. Let E = T^-1@m.
+    Then we have that log(m) = log(T@E). T = exp(log(T)), E = exp(log(E)), so
     log(m) = log( exp(log(T)) @ exp(log(E) ) ~  log(T) + log(E) + (1/2)[log(T), log(E)] + ...
 
     The gymnastics here are useful because log(T) can be computed leveraging the fact that T is a
-    unitary matrix. And because m is close to T, E is close to the identity, meaning log(E) should
-    have a well-defined real-valued logarithm. 
+    unitary matrix. And because m is close to T, E is close to the identity, meaning E should
+    have a well-defined real-valued logarithm.
 
     Parameters
     ----------    
@@ -964,9 +964,9 @@ def approximate_matrix_log_BCH(m: _np.ndarray, target: _np.ndarray, mx_basis: Un
 
     target : numpy array
         The target superoperator matrix. Should correspond to unitary superoperator, but this is not
-        explicitly enforced and must be enfored by callers.
+        explicitly enforced and must be enforced by callers.
 
-    mx_basis : stf or Basis object
+    mx_basis : str or Basis object
         Basis for m and target. Allowed values are strings castable to a basis, e.g.
         Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt), see `Basis` documentation
         for more. Or a custom `Basis` object.
@@ -977,18 +977,29 @@ def approximate_matrix_log_BCH(m: _np.ndarray, target: _np.ndarray, mx_basis: Un
     Returns
     -------
     logM : numpy array
-        An matrix of the same shape as `m`.
+        A matrix of the same shape as `m`.
     """
     from pygsti.tools.errgenproptools import pairwise_bch_numerical
 
     log_target = unitary_superoperator_matrix_log(target, mx_basis)
 
+    # Note: `target` is a unitary superoperator, so its conjugate transpose is its inverse. Using the
+    # conjugate transpose rather than an explicit inverse/solve matters: LU-based routines make discrete
+    # pivoting choices which are not smooth functions of their input, and this logarithm is finite
+    # differenced with respect to model parameters when computing error bars.
     E = target.conj().T@m
     log_E = near_identity_matrix_log(E)
 
     approx_log_m = pairwise_bch_numerical(log_target, log_E, order)
 
-    return approx_log_m
+    # Both log_target and log_E are real, so the BCH result should be too (pairwise_bch_numerical
+    # allocates a complex array regardless). Validate before discarding the imaginary part.
+    imag_norm = _np.linalg.norm(approx_log_m.imag)
+    if imag_norm > 1e-8:
+        raise ValueError("BCH approximation to the matrix logarithm was not real-valued "
+                         "(norm of imaginary part is %g)!" % imag_norm)
+
+    return approx_log_m.real
 
 def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None,
                 assume_normal: bool = False) -> _np.ndarray:
