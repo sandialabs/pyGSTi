@@ -131,3 +131,6 @@ pygsti/_version.py
 # committed golden fixtures for the Circuit characterization tests
 !test/unit/circuits/golden/*.pkl
 !test/unit/circuits/golden/*.pkl.gz
+
+# Local tutorial notebooks (kept out of the repo)
+/notebooks/
