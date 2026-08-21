@@ -143,6 +143,7 @@ parts:
   - file: markdown/examples/DEMEstimation
     sections:
     - file: markdown/examples/DEMEstimation-LassoAndCompressedSensing
+  - file: markdown/examples/DEMValidation
   - file: markdown/interfaces/IBMQExperiment
   - file: markdown/interfaces/CirqIntegration
 
