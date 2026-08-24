@@ -169,21 +169,20 @@ def test_high_rank_distribution_exclusive_blocks():
 
 def test_high_rank_distribution_exclusivity_zeroes_outcomes():
     # Only event source is one exclusive block, so D0 and D1 can never both fire.
-    blocks = [[(0.3, (0,)), (0.2, (1,))]]
+    blocks = [[(0.3, (0,)), (0.15, (1,))]]
     probs = compute_outcome_distribution_from_high_rank_dem(blocks, num_detectors=2)
     assert probs[0b01] == pytest.approx(0.3)
-    assert probs[0b10] == pytest.approx(0.2)
+    assert probs[0b10] == pytest.approx(0.15)
     assert probs[0b11] == pytest.approx(0.0, abs=1e-12)
-    assert probs[0b00] == pytest.approx(0.5)
+    assert probs[0b00] == pytest.approx(0.55)
 
 
-def test_high_rank_distribution_negative_polarization_block():
-    # Odd-overlap mass > 1/2 gives a negative polarization factor; the direct
-    # product handles it where -log(1 - 2q) would fail.
+def test_high_rank_distribution_rejects_odd_overlap_mass_over_half():
+    # The log-space (attenuation) pipeline requires q(s) < 1/2 for every
+    # block and parity mask.
     blocks = [[(0.6, (0,)), (0.3, (1,))]]
-    probs = compute_outcome_distribution_from_high_rank_dem(blocks, num_detectors=2)
-    expected = _brute_force_block_distribution(blocks, 2)
-    assert np.allclose(probs, expected)
+    with pytest.raises(ValueError, match="q\\(s\\)"):
+        compute_outcome_distribution_from_high_rank_dem(blocks, num_detectors=2)
 
 
 def test_high_rank_distribution_rejects_bad_blocks():

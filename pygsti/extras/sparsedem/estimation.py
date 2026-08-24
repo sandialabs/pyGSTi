@@ -229,10 +229,11 @@ def compute_outcome_distribution_from_high_rank_dem(dem, num_detectors=None) -> 
         pol(s) = prod_blocks (1 - 2 * sum_{branches i with <s, f_i> odd} p_i)
 
     where f_i is the branch's detector-flip vector. For a single-branch block
-    this reduces to the familiar independent-event factor (1 - 2 p)^{<s, f>},
-    i.e. exp(-attenuation) as used by compute_outcome_distribution_from_dem.
-    The product is taken directly rather than via -log, so blocks with
-    zero or negative polarization (odd-overlap mass >= 1/2) are handled too.
+    this reduces to the familiar independent-event factor (1 - 2 p)^{<s, f>}.
+    As in compute_outcome_distribution_from_dem, the product is accumulated in
+    log space via per-block attenuations -log(1 - 2 q(s)), where q(s) is the
+    block's odd-overlap probability mass at mask s. This requires q(s) < 1/2
+    for every block and mask; a ValueError is raised otherwise.
 
     Logical observable targets, if present, are ignored; the returned
     distribution is over detector outcomes only.
@@ -256,14 +257,21 @@ def compute_outcome_distribution_from_high_rank_dem(dem, num_detectors=None) -> 
         for i in range(size)
     ])
 
-    polarizations = np.ones(size, dtype=float)
+    attenuations = np.zeros(size, dtype=float)
     for block in blocks:
         odd_overlap_mass = np.zeros(size, dtype=float)
         for prob, dets in block:
             event_vec = [1 if (n - idx - 1) in dets else 0 for idx in range(n)]
             odd_overlap_mass += prob * (1 - (-1) ** np.dot(all_bitstrings, event_vec)) / 2
-        polarizations *= 1 - 2 * odd_overlap_mass
+        if np.any(odd_overlap_mass >= 0.5):
+            raise ValueError(
+                "block has odd-overlap probability mass q(s) >= 1/2 for some "
+                "parity mask; only blocks with q(s) < 1/2 are supported"
+            )
+        attenuations += -np.log(1 - 2 * odd_overlap_mass)
 
+    polarizations = np.exp(-attenuations)
+    polarizations[0] = 1
     probabilities = hadamard(size) @ polarizations / size
     return probabilities
 
