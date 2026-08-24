@@ -114,14 +114,14 @@ Only the root rank writes results to disk. Every rank holds the same answer, so 
 
 ```{code-cell} ipython3
 mpiScript = """
-import time
 import pygsti
 
 #get MPI comm
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
 
-print("Rank %d started" % comm.Get_rank())
+if comm.Get_rank() == 0:
+    print("Running on %d ranks" % comm.Get_size())
 
 #load in data
 data = pygsti.io.read_data_from_dir("../../../example_files/mpi_gst_example")
@@ -131,11 +131,8 @@ memLim = 2.1*(1024)**3  # 2.1 GB
 
 #Perform TP-constrained GST
 protocol = pygsti.protocols.StandardGST("full TP")
-start = time.time()
 results = protocol.run(data, memlimit=memLim, comm=comm)
-end = time.time()
 
-print("Rank %d finished in %.1fs" % (comm.Get_rank(), end-start))
 if comm.Get_rank() == 0:
     results.write()  #write results (within same directory as data was loaded from)
 

@@ -64,6 +64,10 @@ sphinx:
     # Emits HTML redirect stubs from `_redirects.yml` for the pages relocated by
     # the documentation restructure, so previously-published URLs keep resolving.
     page_redirects: _ext
+    # Collapses the duplicate <script> tags that sphinx_thebe and
+    # sphinx_togglebutton emit, one of which is a `const` redeclaration that
+    # throws a SyntaxError on every page. Upstream bug; see the module docstring.
+    dedupe_js: _ext
   extra_extensions:
   - 'sphinx.ext.napoleon'
   - 'sphinx.ext.autodoc'
@@ -85,6 +89,15 @@ sphinx:
       logo:
         image_light: pyGSTi_icon_blk.png
         image_dark: pyGSTi_icon_wht.png
+      # "Show source" for each page. Set here rather than under the `repository:`
+      # block above, because jupyter-book 1.x's config_schema.json has no
+      # use_source_button key -- it exposes use_repository_button,
+      # use_issues_button and use_edit_page_button, but not this one -- so setting
+      # it there is silently dropped. It is a sphinx_book_theme option
+      # (theme.conf: use_source_button = False), so it has to be passed straight
+      # through to the theme. The edit_button_branch extension repoints the URL at
+      # `pygsti_edit_branch` and swaps .ipynb for the .md that exists there.
+      use_source_button: true
     autosummary_generate: True
     autoclass_content: "both"
     autodoc_typehints: "description"

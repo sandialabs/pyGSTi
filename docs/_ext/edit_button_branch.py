@@ -10,7 +10,17 @@ next sync).
 
 This extension rewrites only the source/edit button URLs back to the canonical
 source branch named by the ``pygsti_edit_branch`` config value, leaving the
-launch buttons on the build branch. It is a no-op when:
+launch buttons on the build branch.
+
+Retargeting the branch is not sufficient on its own. The build branch renders each
+notebook page from its ``.ipynb``, so that is the suffix sphinx-book-theme puts in
+the URL -- but ``.ipynb`` is gitignored on the canonical branch, where the page
+exists only as the jupytext-paired ``.md`` it was generated from. A branch-only
+rewrite would therefore point every notebook page's Show source / Suggest edit
+button at a 404. The suffix is swapped along with the branch, which is the same
+translation: build-branch URL to edit-branch URL.
+
+It is a no-op when:
   * ``pygsti_edit_branch`` is unset, or
   * the build branch already equals ``pygsti_edit_branch`` (e.g. local builds or
     a plain ``develop`` build), or
@@ -26,8 +36,21 @@ LOGGER = logging.getLogger(__name__)
 _BRANCHED_BUTTON_LABELS = ("source-file-button", "source-edit-button")
 
 
+def _to_paired_source(url):
+    """Point an ``.ipynb`` URL at the ``.md`` it is generated from.
+
+    The suffix sits at the end of the path, which may be followed by a query
+    (sphinx-book-theme appends ``?plain=1`` to Show source URLs), so split the
+    query off before touching it.
+    """
+    path, sep, query = url.partition("?")
+    if path.endswith(".ipynb"):
+        path = path[: -len(".ipynb")] + ".md"
+    return path + sep + query
+
+
 def _rewrite(buttons, build_branch, edit_branch):
-    """Recursively rewrite branch segments in source/edit button URLs."""
+    """Recursively rewrite branch and suffix in source/edit button URLs."""
     for button in buttons:
         if button.get("type") == "group":
             _rewrite(button.get("buttons", []), build_branch, edit_branch)
@@ -37,7 +60,7 @@ def _rewrite(buttons, build_branch, edit_branch):
                 url = url.replace(
                     f"{segment}{build_branch}/", f"{segment}{edit_branch}/"
                 )
-            button["url"] = url
+            button["url"] = _to_paired_source(url)
 
 
 def _on_html_page_context(app, pagename, templatename, context, doctree):
