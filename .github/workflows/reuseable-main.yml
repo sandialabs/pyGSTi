@@ -237,28 +237,30 @@ jobs:
       run: |
         set -euo pipefail
 
-        # The `ml` extra is needed for docs/markdown/advanced/ml/QPANN, which imports
-        # pygsti.extras.ml. It is pulled in here rather than added to `docs` itself so
-        # that ReadTheDocs -- which installs `.[docs]` but never executes a notebook
-        # (docs/_config.yml sets execute_notebooks: 'off') -- isn't made to download
-        # TensorFlow purely to render Markdown.
+        # The `ml` extra (TensorFlow + Keras) backs docs/markdown/advanced/ml/QPANN,
+        # which imports pygsti.extras.ml. It is pulled in here rather than added to
+        # `docs` itself so that ReadTheDocs -- which installs `.[docs]` but never
+        # executes a notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't
+        # made to download TensorFlow purely to render Markdown.
+        uv pip install --system -e .[docs]
+        uv pip install --system -e .[ml] \
+          || echo "::warning::ml extra would not install on Python ${{ inputs.python-version }}"
+
+        # Whether QPANN can run is decided by *probing for TensorFlow*, not by testing
+        # inputs.python-version against a hardcoded string. TensorFlow lags new Python
+        # releases by months (no 3.14 wheels yet: tensorflow/tensorflow#102890), and the
+        # version that lags moves every year, so a pinned-version guard is wrong by
+        # default between rollforwards. The predecessor of this line demonstrated the
+        # failure mode: it passed `--ignore=docs/markdown/ml` to nbval, a path that
+        # matched nothing -- the tutorial is at docs/markdown/advanced/ml -- and stayed
+        # broken indefinitely because its 3.14 branch was unreachable and so never ran.
         #
-        # On 3.14, TensorFlow has no wheels yet (tensorflow/tensorflow#102890), so the
-        # `ml` extra is left uninstalled and QPANN is excluded from execution. This is
         # --exclude-also, not --exclude: --exclude REPLACES the driver's built-in list
-        # and would silently start executing the two pages that ship outputless by
-        # design. Drop this branch once that upstream issue ships 3.14 wheels.
-        #
-        # (The predecessor of this branch passed `--ignore=docs/markdown/ml` to nbval,
-        # which matched nothing -- the QPANN tutorial is at docs/markdown/advanced/ml.
-        # It was never exercised: both callers that enable notebook tests pin them to
-        # 3.13.)
+        # and would silently start executing the two pages that ship outputless by design.
         NB_EXCLUDE_ML=""
-        if [ "${{ inputs.python-version }}" = "3.14" ]; then
-          uv pip install --system -e .[docs]
+        if ! python -Ic "import tensorflow, keras" >/dev/null 2>&1; then
+          echo "::warning::TensorFlow/Keras unavailable; advanced/ml/QPANN will ship without output"
           NB_EXCLUDE_ML="--exclude-also advanced/ml/QPANN"
-        else
-          uv pip install --system -e .[docs,ml]
         fi
 
         # Tutorials live as MyST Markdown under docs/markdown/; jupytext pairs each
