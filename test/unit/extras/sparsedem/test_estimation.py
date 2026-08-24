@@ -9,6 +9,7 @@ from pygsti.extras.sparsedem.estimation import (
     fit_specified_dem,
     threshold_probabilities,
     compute_outcome_distribution_from_dem,
+    compute_outcome_distribution_from_high_rank_dem,
 )
 
 
@@ -121,3 +122,72 @@ def test_fit_specified_dem_covariance():
     assert probs.shape[0] == len(masks)
     assert cov.shape == (len(masks), len(masks))
     assert np.all(np.diag(cov) >= 0)
+
+
+def _brute_force_block_distribution(blocks, n):
+    """Enumerate all block-branch combinations to get the exact distribution."""
+    import itertools
+
+    probs = np.zeros(2 ** n)
+    for combo in itertools.product(*(range(len(b) + 1) for b in blocks)):
+        p = 1.0
+        outcome = 0
+        for choice, block in zip(combo, blocks):
+            if choice < len(block):
+                branch_p, dets = block[choice]
+                p *= branch_p
+                for d in dets:
+                    outcome ^= 1 << d
+            else:
+                p *= 1 - sum(branch_p for branch_p, _ in block)
+        probs[outcome] += p
+    return probs
+
+
+def test_high_rank_distribution_matches_independent_case():
+    dem = dem_from_str("""
+    error(0.01) D0
+    error(0.02) D1
+    error(0.03) D0 D1 D2
+    """)
+    probs = compute_outcome_distribution_from_high_rank_dem(dem)
+    expected = compute_outcome_distribution_from_dem(dem)
+    assert np.allclose(probs, expected)
+
+
+def test_high_rank_distribution_exclusive_blocks():
+    blocks = [
+        [(0.01, (0, 1))],                       # independent event
+        [(0.05, (0,)), (0.07, (1, 2))],         # rank-3 exclusive event
+        [(0.1, (2,)), (0.2, (0, 2)), (0.15, (1,))],  # rank-4 exclusive event
+    ]
+    probs = compute_outcome_distribution_from_high_rank_dem(blocks, num_detectors=3)
+    expected = _brute_force_block_distribution(blocks, 3)
+    assert np.allclose(probs, expected)
+    assert probs.sum() == pytest.approx(1.0)
+
+
+def test_high_rank_distribution_exclusivity_zeroes_outcomes():
+    # Only event source is one exclusive block, so D0 and D1 can never both fire.
+    blocks = [[(0.3, (0,)), (0.2, (1,))]]
+    probs = compute_outcome_distribution_from_high_rank_dem(blocks, num_detectors=2)
+    assert probs[0b01] == pytest.approx(0.3)
+    assert probs[0b10] == pytest.approx(0.2)
+    assert probs[0b11] == pytest.approx(0.0, abs=1e-12)
+    assert probs[0b00] == pytest.approx(0.5)
+
+
+def test_high_rank_distribution_negative_polarization_block():
+    # Odd-overlap mass > 1/2 gives a negative polarization factor; the direct
+    # product handles it where -log(1 - 2q) would fail.
+    blocks = [[(0.6, (0,)), (0.3, (1,))]]
+    probs = compute_outcome_distribution_from_high_rank_dem(blocks, num_detectors=2)
+    expected = _brute_force_block_distribution(blocks, 2)
+    assert np.allclose(probs, expected)
+
+
+def test_high_rank_distribution_rejects_bad_blocks():
+    with pytest.raises(ValueError):
+        compute_outcome_distribution_from_high_rank_dem(
+            [[(0.7, (0,)), (0.4, (1,))]], num_detectors=2
+        )

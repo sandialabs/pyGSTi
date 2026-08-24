@@ -169,6 +169,105 @@ def compute_outcome_distribution_from_dem(dem: stim.DetectorErrorModel) -> np.nd
     probabilities = hadamard(2 ** dem.num_detectors) @ polarizations / (2 ** dem.num_detectors)
     return probabilities
 
+def _as_exclusive_blocks(dem, num_detectors=None):
+    """
+    Normalize a DEM-with-exclusive-events description to a list of blocks.
+
+    Each block is a list of (probability, detector_indices) branches; a block
+    with a single branch is an ordinary independent event. Accepts a
+    stim.DetectorErrorModel (all events independent), an object with
+    ``.instructions`` / ``.num_detectors`` attributes (e.g. a
+    HighRankDetectorErrorModel, whose instructions are events with
+    ``.probability`` / ``.detectors`` or exclusive blocks with ``.events``),
+    or a raw iterable of blocks of (probability, detector_indices) pairs.
+
+    Returns:
+        blocks: list[list[tuple[float, tuple[int, ...]]]]
+        num_detectors: int
+    """
+    if isinstance(dem, stim.DetectorErrorModel):
+        blocks = []
+        for inst in dem.flattened():
+            if inst.type == "error":
+                dets = tuple(t.val for t in inst.targets_copy() if t.is_relative_detector_id())
+                blocks.append([(inst.args_copy()[0], dets)])
+        num_detectors = num_detectors or dem.num_detectors
+    elif hasattr(dem, "instructions"):
+        blocks = []
+        for inst in dem.instructions:
+            branches = inst.events if hasattr(inst, "events") else (inst,)
+            blocks.append([(ev.probability, tuple(ev.detectors)) for ev in branches])
+        num_detectors = num_detectors or dem.num_detectors
+    else:
+        blocks = [[(float(p), tuple(dets)) for p, dets in block] for block in dem]
+        if num_detectors is None:
+            num_detectors = 1 + max(
+                (d for block in blocks for _, dets in block for d in dets), default=-1
+            )
+
+    for block in blocks:
+        total = sum(p for p, _ in block)
+        if any(p < 0 for p, _ in block) or total > 1 + 1e-9:
+            raise ValueError(
+                f"branch probabilities of an exclusive block must be nonnegative "
+                f"and sum to <= 1 (got sum {total})"
+            )
+    return blocks, num_detectors
+
+
+def compute_outcome_distribution_from_high_rank_dem(dem, num_detectors=None) -> np.ndarray:
+    """
+    Compute the outcome distribution of a DEM that may contain exclusive
+    (high-rank) events, using the Hadamard/Fourier transform.
+
+    An exclusive block with branch probabilities p_1..p_k applies at most one
+    of its branches per shot (branch i with probability p_i, nothing with
+    probability 1 - sum p_i). Distinct blocks and independent events act
+    independently, so the syndrome distribution is their XOR-convolution and
+    its Walsh-Hadamard transform factorizes into per-block polarizations:
+
+        pol(s) = prod_blocks (1 - 2 * sum_{branches i with <s, f_i> odd} p_i)
+
+    where f_i is the branch's detector-flip vector. For a single-branch block
+    this reduces to the familiar independent-event factor (1 - 2 p)^{<s, f>},
+    i.e. exp(-attenuation) as used by compute_outcome_distribution_from_dem.
+    The product is taken directly rather than via -log, so blocks with
+    zero or negative polarization (odd-overlap mass >= 1/2) are handled too.
+
+    Logical observable targets, if present, are ignored; the returned
+    distribution is over detector outcomes only.
+
+    Parameters:
+        dem: stim.DetectorErrorModel, or HighRankDetectorErrorModel-like
+            object, or iterable of blocks of (probability, detector_indices)
+            branches (see _as_exclusive_blocks).
+        num_detectors: int, optional
+            Overrides / provides the number of detectors.
+
+    Returns:
+        probabilities: np.ndarray
+            Array of 2^n probabilities, in increasing binary order (D0 is the
+            least significant bit of the outcome index).
+    """
+    blocks, n = _as_exclusive_blocks(dem, num_detectors)
+    size = 2 ** n
+    all_bitstrings = np.array([
+        [int(bit) for bit in format(i, f"0{n}b")]
+        for i in range(size)
+    ])
+
+    polarizations = np.ones(size, dtype=float)
+    for block in blocks:
+        odd_overlap_mass = np.zeros(size, dtype=float)
+        for prob, dets in block:
+            event_vec = [1 if (n - idx - 1) in dets else 0 for idx in range(n)]
+            odd_overlap_mass += prob * (1 - (-1) ** np.dot(all_bitstrings, event_vec)) / 2
+        polarizations *= 1 - 2 * odd_overlap_mass
+
+    probabilities = hadamard(size) @ polarizations / size
+    return probabilities
+
+
 def fit_specified_dem(
     syndrome_counts,
     masks,
