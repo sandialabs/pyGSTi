@@ -208,15 +208,30 @@ jobs:
       # install them only for the jobs that actually run test_packages. Without this the ml
       # tests would be silently skipped by their pytest.importorskip guard rather than run.
       #
-      # Skipped on 3.14: TensorFlow has no Python 3.14 wheels yet (tracked upstream at
-      # tensorflow/tensorflow#102890), so `uv pip install .[ml]` fails outright there instead
-      # of resolving anything. Leaving TensorFlow uninstalled on 3.14 just means the ml tests
-      # fall back to their normal pytest.importorskip skip, same as any machine lacking the
-      # `ml` extra. Drop the python-version guard once that issue ships 3.14 wheels.
-      if: ${{ inputs.run-extra-tests == 'true' && inputs.python-version != '3.14' }}
+      # TensorFlow lags new Python releases by months -- today it publishes cp310 through
+      # cp313 and no cp314 (tracked upstream at tensorflow/tensorflow#102890) -- and which
+      # release it lags moves every year. So this asks the index which case we are in
+      # rather than testing inputs.python-version against a hardcoded string.
+      #
+      # A pinned version guard is wrong in both directions, and this step used to have one.
+      # Too new: it hard-fails the job the day a Python it has not heard of enters the
+      # matrix, since `uv pip install .[ml]` then fails outright. Too old: once wheels
+      # finally ship it keeps skipping, silently dropping the ml coverage this step exists
+      # to guarantee, until someone notices and deletes the line.
+      #
+      # The probe is on bare `tensorflow`, not on `.[ml]`, so it isolates "does this
+      # interpreter have wheels" from "is our extra healthy". When it resolves, the install
+      # and the import check below must BOTH succeed -- a broken `ml` extra still fails the
+      # job rather than degrading to a skip.
+      if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
-        uv pip install --system -e .[ml]
-        python -Ic "import tensorflow, keras; print('tensorflow', tensorflow.__version__, '/ keras', keras.__version__)"
+        set -euo pipefail
+        if uv pip install --system --dry-run tensorflow >/dev/null 2>&1; then
+          uv pip install --system -e .[ml]
+          python -Ic "import tensorflow, keras; print('tensorflow', tensorflow.__version__, '/ keras', keras.__version__)"
+        else
+          echo "::warning::No TensorFlow wheel for Python ${{ inputs.python-version }}; test/test_packages/extras/ml will importorskip"
+        fi
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
