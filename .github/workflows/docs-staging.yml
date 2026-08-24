@@ -14,6 +14,25 @@
 name: Stage docs preview on ReadTheDocs
 
 on:
+  # A push trigger, not just workflow_dispatch, and that is not redundant.
+  # GitHub only offers the "Run workflow" button for workflows whose file is on
+  # the DEFAULT branch (master here), so a dispatch-only version of this file
+  # would be unreachable until it had shipped all the way through
+  # develop -> beta -> master -- which is backwards, since its whole purpose is
+  # previewing docs that have not merged yet. qiskit-interop.yml is the cautionary
+  # case already in this repo: it has lived on develop with schedule +
+  # workflow_dispatch triggers and has never once run, because neither trigger
+  # fires off the default branch.
+  #
+  # Push events have no such restriction -- GitHub reads .github/workflows from
+  # the pushed commit -- so pushing a branch to `stage-docs` stages it, whatever
+  # branch this file currently lives on. To preview: push whatever you are working
+  # on to `stage-docs` (force-push is fine, it is a scratch ref), then point RTD at
+  # the branch this produces.
+  push:
+    branches:
+    - 'stage-docs'
+    - 'stage-docs/**'
   workflow_dispatch:
     inputs:
       target-branch:
@@ -51,7 +70,7 @@ jobs:
     name: Execute the docs notebooks
     with:
       os: ubuntu-latest
-      python-version: ${{ inputs.python-version }}
+      python-version: ${{ inputs.python-version || '3.13' }}
       use-cython: 'true'
       run-unit-tests: 'false'
       run-integration-tests: 'false'
@@ -64,12 +83,15 @@ jobs:
     # always() so a notebook failure can still produce a preview when asked for.
     # The artifact upload in reuseable-main.yml is itself always(), so the
     # executed notebooks -- tracebacks and all -- are there to download either way.
-    if: ${{ always() && (needs.execute.result == 'success' || inputs.stage-on-notebook-failure) }}
+    # `github.event_name == 'push'` before the input, because on a push event the
+    # `inputs` context is empty and would read as "do not stage" -- inverting the
+    # documented default for the trigger people will actually use.
+    if: ${{ always() && (needs.execute.result == 'success' || github.event_name == 'push' || inputs.stage-on-notebook-failure) }}
     uses: ./.github/workflows/stage-docs-branch.yml
     name: Stage the RTD source branch
     with:
       source-sha: ${{ github.sha }}
-      target-branch: ${{ inputs.target-branch }}
+      target-branch: ${{ inputs.target-branch || 'docs-preview' }}
       edit-branch: ${{ inputs.edit-branch || github.ref_name }}
     secrets:
       PYGSTI_TOKEN: ${{ secrets.PYGSTI_TOKEN }}
