@@ -307,11 +307,15 @@ def marginal_distribution(dem: Union[stim.DetectorErrorModel, dict],
         )
     dem_dict = dem if isinstance(dem, dict) else dem_to_dict(dem)
     projected = project_event_probabilities(dem_dict, subset)
-    outcomes = np.arange(2 ** k, dtype=np.uint64)
-    attenuations = np.zeros(2 ** k, dtype=float)
+
+    # attenuation(o) = sum_e w_e [|o & e| odd] = (S - (W a)[o]) / 2, where a is
+    # the sparse vector of event attenuations w_e = -log1p(-2 p_e), S = sum_e
+    # w_e and W is the Walsh-Hadamard matrix. One transform of the sparse
+    # coefficient vector therefore replaces one full parity pass per event.
+    coefficients = np.zeros(2 ** k, dtype=float)
     for local_mask, prob in projected.items():
-        parity = (np.bitwise_count(outcomes & np.uint64(local_mask)) & 1).astype(float)
-        attenuations += -np.log1p(-2 * min(prob, 0.5 - 1e-15)) * parity
+        coefficients[local_mask] += -np.log1p(-2 * min(prob, 0.5 - 1e-15))
+    attenuations = 0.5 * (coefficients.sum() - _fwht(coefficients))
     probs = _fwht(np.exp(-attenuations)) / (2 ** k)
     return np.clip(probs, 0.0, 1.0)
 

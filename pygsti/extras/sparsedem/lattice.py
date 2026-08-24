@@ -6,8 +6,14 @@ import numpy as np
 from collections import Counter
 from scipy.stats import norm
 
-from .estimation import estimate_dem_and_covariance, fit_specified_dem
-from .utils import counts_to_arrays
+from .estimation import (
+    _ALL_PAIRS_POL_LIMIT,
+    default_polarization_masks,
+    estimate_dem_and_covariance,
+    estimate_dem_and_covariance_from_probabilities,
+    fit_specified_dem,
+)
+from .utils import counts_to_arrays, counts_to_detector_arrays
 
 
 def marginalize_syndrome_counts(syndrome_counts, bitmask):
@@ -83,16 +89,20 @@ def bitmask_trie_search(n, check_flip):
     """
     valid_events = set()
 
-    def dfs(current_mask, bit_index):
-        if bit_index == n:
-            return
-        next_mask = current_mask | (1 << bit_index)
-        if check_flip(next_mask):
-            valid_events.add(next_mask)
-            dfs(next_mask, bit_index + 1)
-        dfs(current_mask, bit_index + 1)
-
-    dfs(0, 0)
+    # Iterative depth-first traversal (an explicit stack instead of
+    # recursion, which would exceed the interpreter recursion limit for
+    # hundreds of bits). Each stack entry continues a prefix mask from a
+    # given bit index; extensions are only pushed when the check passes, so
+    # entire subtrees are pruned exactly as in the recursive formulation.
+    stack = [(0, 0)]
+    while stack:
+        current_mask, bit_index = stack.pop()
+        while bit_index < n:
+            next_mask = current_mask | (1 << bit_index)
+            bit_index += 1
+            if check_flip(next_mask):
+                valid_events.add(next_mask)
+                stack.append((next_mask, bit_index))
     return valid_events
 
 
@@ -275,6 +285,60 @@ def bitmask_frontier_search(n, batch_checker, closure="prefix"):
     return valid_events
 
 
+def make_fast_event_check(syndrome_counts, alpha=0.05):
+    """
+    Build a vectorized version of `check_event_mask` bound to a dataset.
+
+    The syndrome-count dict is converted once into a (distinct syndromes x
+    detectors) sample matrix with per-row weights; each subsequent check
+    marginalizes by array indexing and a weighted bincount instead of
+    re-scanning bitstring keys, computing the identical z-statistic. This
+    turns the per-mask cost from O(shots x detectors) string work into a few
+    vectorized passes, which is what makes the trie search tractable at
+    hundreds of detectors.
+
+    Parameters:
+        syndrome_counts: dict
+            Observed n-bit syndrome data (bitstring keys, sparsedem
+            convention).
+        alpha: float
+            Statistical confidence level, as in `check_event_mask`.
+
+    Returns:
+        check: Callable[[int], bool]
+            check(mask) -> True if there is statistically significant
+            evidence of an event flipping exactly the bits in the mask.
+    """
+    samples, weights = counts_to_detector_arrays(syndrome_counts)
+    n_runs = int(weights.sum())
+    z_threshold = norm.ppf(1 - alpha)
+
+    def check(mask: int) -> bool:
+        dets = []
+        mm = int(mask)
+        while mm:
+            low = mm & -mm
+            dets.append(low.bit_length() - 1)
+            mm ^= low
+        k = len(dets)
+        # Marginal outcome index: bit j of the value is the j-th smallest
+        # detector in the subset (matches `marginalize_syndrome_counts`).
+        values = samples[:, dets].astype(np.int64) @ (1 << np.arange(k, dtype=np.int64))
+        probabilities = np.bincount(values, weights=weights,
+                                    minlength=2 ** k) / n_runs
+        with np.errstate(all="ignore"):
+            event_probs, cov_matrix = \
+                estimate_dem_and_covariance_from_probabilities(probabilities, n_runs)
+        p_hat = event_probs[-1]
+        var = cov_matrix[-1, -1]
+        if not np.isfinite(var) or var <= 0:
+            return False
+        z = p_hat / np.sqrt(var)
+        return z > z_threshold
+
+    return check
+
+
 def lattice_pruning_dem_estimation(syndrome_counts, confidence=0.95,
                                    return_covariance=False, n_jobs=1,
                                    closure="prefix"):
@@ -335,5 +399,10 @@ def lattice_pruning_dem_estimation(syndrome_counts, confidence=0.95,
                 return np.concatenate(list(pool.map(_pool_check, chunks)))
             masks = bitmask_frontier_search(n_bits, checker, closure=closure)
 
+    pol_masks = None
+    if n_bits > _ALL_PAIRS_POL_LIMIT:
+        pol_masks = default_polarization_masks(masks, n_bits)
+
     return fit_specified_dem(syndrome_counts, masks,
-                             return_covariance=return_covariance)
+                             return_covariance=return_covariance,
+                             pol_masks=pol_masks)
