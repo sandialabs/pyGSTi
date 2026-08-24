@@ -712,7 +712,7 @@ class EmbeddedOp(_LinearOperator, _Torchable):
                     new_bels = []
                     for bel in lbl.basis_element_labels:
                         base_label = [identity_label for _ in range(self.state_space.num_qudits)]
-                        for pos, pauli in zip(target_positions, bel):
+                        for pos, pauli in zip(target_positions, bel, strict=True):
                             base_label[pos] = pauli
                         new_bels.append(''.join(base_label))
                     embedded_labels.append(_LocalElementaryErrorgenLabel(lbl.errorgen_type, tuple(new_bels)))

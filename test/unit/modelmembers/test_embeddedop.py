@@ -30,7 +30,7 @@ def test_errorgen_coefficient_labels_local_integer_qubit_labels_control():
     ss = QubitSpace(3)
     embedded = EmbeddedOp(ss, [1], _h_errorgen_op('X'))
     labels = embedded.errorgen_coefficient_labels(label_type='local')
-    assert labels == (LEEL('H', ('IXI',)),)
+    assert labels == (LEEL('H', ('IXI',)),), f'Expected IXI-embedded label, got {labels}'
 
 
 def test_errorgen_coefficient_labels_local_string_qubit_labels():
@@ -40,7 +40,7 @@ def test_errorgen_coefficient_labels_local_string_qubit_labels():
     ss = QubitSpace(['q2', 'q16', 'q22'])
     embedded = EmbeddedOp(ss, ['q16'], _h_errorgen_op('X'))
     labels = embedded.errorgen_coefficient_labels(label_type='local')
-    assert labels == (LEEL('H', ('IXI',)),)
+    assert labels == (LEEL('H', ('IXI',)),), f'Expected IXI-embedded label, got {labels}'
 
 
 def test_errorgen_coefficient_labels_local_permuted_integer_qubit_labels():
@@ -51,7 +51,7 @@ def test_errorgen_coefficient_labels_local_permuted_integer_qubit_labels():
     ss = QubitSpace([2, 0, 1])
     embedded = EmbeddedOp(ss, [2], _h_errorgen_op('X'))  # qubit label 2 is at position 0
     labels = embedded.errorgen_coefficient_labels(label_type='local')
-    assert labels == (LEEL('H', ('XII',)),)
+    assert labels == (LEEL('H', ('XII',)),), f'Expected XII-embedded label, got {labels}'
 
 
 def test_errorgen_coefficient_labels_local_two_qubit_target_out_of_order():
@@ -65,7 +65,7 @@ def test_errorgen_coefficient_labels_local_two_qubit_target_out_of_order():
     embedded = EmbeddedOp(ss, ['q5', 'q2'], ExpErrorgenOp(eg))
     labels = embedded.errorgen_coefficient_labels(label_type='local')
     # 'q5' ('X') is at position 2; 'q2' ('Y') is at position 0; 'q16' untouched.
-    assert labels == (LEEL('H', ('YIX',)),)
+    assert labels == (LEEL('H', ('YIX',)),), f'Expected YIX-embedded label, got {labels}'
 
 
 def test_errorgen_coefficients_local_string_qubit_labels_end_to_end():
@@ -76,8 +76,8 @@ def test_errorgen_coefficients_local_string_qubit_labels_end_to_end():
     ss = QubitSpace(['q2', 'q16', 'q22'])
     embedded = EmbeddedOp(ss, ['q16'], _h_errorgen_op('X', rate=0.15))
     coeffs = embedded.errorgen_coefficients(label_type='local')
-    assert set(coeffs.keys()) == {LEEL('H', ('IXI',))}
-    assert np.isclose(coeffs[LEEL('H', ('IXI',))], 0.15)
+    assert set(coeffs.keys()) == {LEEL('H', ('IXI',))}, f'Expected only IXI-embedded label, got {coeffs.keys()}'
+    assert np.isclose(coeffs[LEEL('H', ('IXI',))], 0.15), f'Expected rate 0.15, got {coeffs[LEEL("H", ("IXI",))]}'
 
 
 def test_embeddederrorgen_coefficient_labels_local_string_qubit_labels():
@@ -89,4 +89,4 @@ def test_embeddederrorgen_coefficient_labels_local_string_qubit_labels():
     ss = QubitSpace(['q2', 'q16', 'q22'])
     embedded = EmbeddedErrorgen(ss, ['q16'], eg)
     labels = embedded.coefficient_labels(label_type='local')
-    assert labels == (LEEL('H', ('IXI',)),)
+    assert labels == (LEEL('H', ('IXI',)),), f'Expected IXI-embedded label, got {labels}'
