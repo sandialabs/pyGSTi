@@ -32,6 +32,7 @@ import scipy.sparse
 import stim
 
 from .io import dem_to_dict, dem_from_str
+from .utils import pack_detector_samples
 
 try:
     import pymatching as _pymatching
@@ -42,6 +43,18 @@ try:
     from tesseract_decoder import tesseract as _tesseract
 except ImportError:  # pragma: no cover - exercised only without tesseract
     _tesseract = None
+
+
+def _mask_array(masks):
+    """
+    Integer bitmasks as a numpy array: int64 when every mask fits, object
+    dtype otherwise (masks of DEMs with more than 63 detectors overflow
+    int64, which previously raised on large devices).
+    """
+    masks = [int(m) for m in masks]
+    if masks and max(masks) > np.iinfo(np.int64).max:
+        return np.array(masks, dtype=object)
+    return np.array(masks, dtype=np.int64)
 
 
 def dem_to_check_matrix(dem, num_detectors=None):
@@ -78,14 +91,17 @@ def dem_to_check_matrix(dem, num_detectors=None):
             np.array([], dtype=np.int64),
         )
     items = sorted(dem_dict.items())
-    masks = np.array([m for m, _ in items], dtype=np.int64)
-    if masks[-1] >= (1 << num_detectors):
+    masks = _mask_array([m for m, _ in items])
+    if int(masks[-1]) >= (1 << num_detectors):
         raise ValueError("DEM events touch detectors beyond num_detectors.")
     probs = np.array([p for _, p in items], dtype=float)
     H = np.zeros((num_detectors, len(items)), dtype=np.uint8)
     for j, mask in enumerate(masks):
-        for d in range(num_detectors):
-            H[d, j] = (int(mask) >> d) & 1
+        mm = int(mask)
+        while mm:
+            low = mm & -mm
+            H[low.bit_length() - 1, j] = 1
+            mm ^= low
     return H, probs, masks
 
 
@@ -198,22 +214,146 @@ def _residual_fraction(B, Y, x):
     return float(np.mean(mismatch))
 
 
+def _gf2_eliminate_packed(R_packed, y, n_cols):
+    """
+    Row-reduce a bit-packed augmented system [A | y] over GF(2) in place.
+
+    Same pivot selection and row operations as `_gf2_eliminate`, but rows are
+    packed 64 bits per uint64 word, which makes the elimination practical for
+    tens of thousands of shots by thousands of events.
+
+    Parameters:
+        R_packed: np.ndarray
+            (m, ceil(n/64)) uint64 packed rows; MODIFIED IN PLACE.
+        y: np.ndarray
+            m-vector of binary values; MODIFIED IN PLACE.
+        n_cols: int
+            Number of (unpacked) columns.
+
+    Returns:
+        pivot_cols: list[int]
+            Columns containing pivots; row i has its pivot in pivot_cols[i].
+    """
+    m = R_packed.shape[0]
+    pivot_cols = []
+    r = 0
+    for c in range(n_cols):
+        if r >= m:
+            break
+        w, b = divmod(c, 64)
+        bit = np.uint64(1) << np.uint64(b)
+        below = (R_packed[r:, w] & bit) != 0
+        nonzero = np.nonzero(below)[0]
+        if len(nonzero) == 0:
+            continue
+        pr = r + int(nonzero[0])
+        if pr != r:
+            R_packed[[r, pr]] = R_packed[[pr, r]]
+            y[[r, pr]] = y[[pr, r]]
+        elim = (R_packed[:, w] & bit) != 0
+        elim[r] = False
+        if elim.any():
+            R_packed[elim] ^= R_packed[r]
+            y[elim] ^= y[r]
+        pivot_cols.append(c)
+        r += 1
+    return pivot_cols
+
+
+def _packed_column_bits(R_packed, col, num_rows):
+    """Extract (unpacked) column `col` of the first `num_rows` packed rows."""
+    w, b = divmod(col, 64)
+    return ((R_packed[:num_rows, w] >> np.uint64(b)) & np.uint64(1)).astype(np.uint8)
+
+
+def _packed_residual_fraction(B_packed, Y, x_packed):
+    """Fraction of rows where parity(row & x) != Y, on packed data."""
+    if B_packed.shape[0] == 0:
+        return 0.0
+    parity = (np.bitwise_count(B_packed & x_packed).sum(axis=1,
+                                                        dtype=np.int64)
+              & 1).astype(np.uint8)
+    return float(np.mean(parity ^ Y))
+
+
+def _bitflip_refine(B_csc, Y, x, col_totals, max_flips=None):
+    """
+    Greedy single-bit descent on the number of violated rows of Y = B x.
+
+    Flipping flag j toggles the consistency of every row that contains event
+    j, so the change in violated-row count is (satisfied_j - violated_j).
+    Repeatedly flip the flag with the largest strictly positive improvement
+    until none remains. The true flag vector is a strong local minimum in
+    the low-logical-error regime (most rows containing an event agree with
+    its correct flag), which is what makes this effective where plain
+    elimination cannot avoid pivoting on corrupted rows.
+
+    Parameters:
+        B_csc: scipy.sparse.csc_matrix
+            (n_shots x n_events) indicator matrix.
+        Y: np.ndarray
+            n_shots binary outcomes.
+        x: np.ndarray
+            Starting flag vector; MODIFIED IN PLACE.
+        col_totals: np.ndarray
+            Number of rows containing each event (column sums of B).
+        max_flips: int, optional
+            Safety cap (default 10 * n_events).
+
+    Returns:
+        flips: int
+            Number of flips applied.
+    """
+    n_shots, n_events = B_csc.shape
+    if n_shots == 0 or n_events == 0:
+        return 0
+    if max_flips is None:
+        max_flips = 10 * n_events
+    viol = ((B_csc @ x.astype(np.int64)) % 2).astype(np.uint8) ^ Y
+    flips = 0
+    while flips < max_flips:
+        violated_per_event = B_csc.T @ viol.astype(np.int64)
+        improvement = 2 * violated_per_event - col_totals
+        j = int(np.argmax(improvement))
+        if improvement[j] <= 0:
+            break
+        x[j] ^= 1
+        rows = B_csc.indices[B_csc.indptr[j]:B_csc.indptr[j + 1]]
+        viol[rows] ^= 1
+        flips += 1
+    return flips
+
+
 def solve_gf2_robust(
     B,
     Y,
     residual_threshold=1e-3,
     max_ransac_iterations=200,
     seed=None,
+    row_order=None,
+    refine=True,
 ):
     """
-    Solve Y = B L over GF(2), robustly against a small fraction of bad rows.
+    Solve Y = B L over GF(2), robustly against a fraction of bad rows.
 
-    First computes a candidate solution by GF(2) Gaussian elimination and
-    checks the Hamming-weight residual of B L xor Y over all rows. If the
-    residual is nonzero (the naive elimination may then have pivoted on a
-    corrupted row), a RANSAC-style loop re-solves from random row orderings
-    (equivalent to solving from random independent row subsets) and keeps the
-    solution minimizing the residual.
+    First computes a candidate solution by GF(2) Gaussian elimination
+    (bit-packed, so tens of thousands of shots by thousands of events are
+    practical) and checks the Hamming-weight residual of B L xor Y over all
+    rows. When the residual exceeds `residual_threshold`, two escalations
+    engage:
+
+      * a greedy **bit-flip refinement** (`refine=True`, the default): flip
+        the single flag that most reduces the number of violated rows, until
+        no flip helps. In the regime where a non-negligible fraction of rows
+        is corrupted (e.g. decoder logical errors at the percent level or
+        above), every Gaussian elimination pivots on some corrupted rows and
+        RANSAC re-orderings cannot avoid them either; the bit-flip descent
+        repairs the resulting flag errors because each event's flag is
+        vouched for by the majority of the (many) rows containing it.
+      * a **RANSAC-style loop** over random row orderings (equivalent to
+        solving from random independent row subsets), keeping the solution
+        minimizing the residual; each candidate is also refined when
+        `refine=True`.
 
     Parameters:
         B: array-like
@@ -221,12 +361,22 @@ def solve_gf2_robust(
         Y: array-like
             n_shots binary vector of observed logical outcomes.
         residual_threshold: float
-            Fraction of inconsistent rows considered acceptable; used only to
-            set the `converged` diagnostic (the minimizer is always returned).
+            Fraction of inconsistent rows considered acceptable: below it the
+            solve is `converged` and no RANSAC re-solves are attempted. Set
+            it to the decoder logical-error rate you expect from the data.
         max_ransac_iterations: int
             Maximum number of RANSAC re-solves.
         seed: int, optional
             Seed for the RANSAC row shuffles.
+        row_order: str, optional
+            None (default): eliminate rows in the order given. "confidence":
+            eliminate rows in order of increasing row weight (shots whose
+            correction involves fewer events are less likely to be decoder
+            logical errors, so pivots land on more trustworthy rows).
+        refine: bool
+            Enable the bit-flip refinement stage (default True). Refinement
+            only ever lowers the residual; it is skipped when the initial
+            solve is already consistent.
 
     Returns:
         L: np.ndarray
@@ -237,7 +387,7 @@ def solve_gf2_robust(
         diagnostics: dict
             Keys: 'rank', 'n_events', 'n_shots', 'undetermined_indices',
             'null_space', 'initial_residual_fraction', 'ransac_iterations',
-            'method', 'converged'.
+            'method', 'converged', 'refine_flips', 'row_order'.
     """
     B = np.asarray(B, dtype=np.uint8) % 2
     if B.ndim != 2:
@@ -246,27 +396,70 @@ def solve_gf2_robust(
     n_shots, n_events = B.shape
     if len(Y) != n_shots:
         raise ValueError("Y must have one entry per row of B.")
+    if row_order not in (None, "given", "confidence"):
+        raise ValueError("row_order must be None, 'given' or 'confidence'.")
 
-    R, z, pivot_cols = _gf2_eliminate(B, Y)
+    B_packed = pack_detector_samples(B) if n_events else \
+        np.zeros((n_shots, 1), dtype=np.uint64)
+
+    if row_order == "confidence" and n_shots:
+        order = np.argsort(B.sum(axis=1), kind="stable")
+    else:
+        order = np.arange(n_shots)
+
+    R_packed = B_packed[order].copy()
+    z = Y[order].copy()
+    pivot_cols = _gf2_eliminate_packed(R_packed, z, n_events)
     rank = len(pivot_cols)
-    null_space = _gf2_null_space(R, pivot_cols, n_events)
-    undetermined = sorted(set(range(n_events)) - set(pivot_cols))
 
-    best = _gf2_particular_solution(R, z, pivot_cols, n_events)
-    best_residual = _residual_fraction(B, Y, best)
+    # Null space and free variables of the reduced system.
+    undetermined = sorted(set(range(n_events)) - set(pivot_cols))
+    null_space = np.zeros((len(undetermined), n_events), dtype=np.uint8)
+    for k, f in enumerate(undetermined):
+        null_space[k, f] = 1
+        null_space[k, pivot_cols] = _packed_column_bits(R_packed, f, rank)
+
+    best = np.zeros(n_events, dtype=np.uint8)
+    best[pivot_cols] = z[:rank]
+    best_packed = pack_detector_samples(best[None, :])[0] if n_events else \
+        np.zeros(1, dtype=np.uint64)
+    best_residual = _packed_residual_fraction(B_packed, Y, best_packed)
     initial_residual = best_residual
     method = "gaussian_elimination"
 
+    B_csc = None
+    col_totals = None
+    refine_flips = 0
+
+    def _refine_inplace(x):
+        nonlocal B_csc, col_totals
+        if B_csc is None:
+            B_csc = scipy.sparse.csc_matrix(B)
+            col_totals = np.asarray(B_csc.sum(axis=0)).ravel().astype(np.int64)
+        return _bitflip_refine(B_csc, Y, x, col_totals)
+
+    if refine and best_residual > 0:
+        refine_flips += _refine_inplace(best)
+        best_packed = pack_detector_samples(best[None, :])[0]
+        best_residual = _packed_residual_fraction(B_packed, Y, best_packed)
+
     ransac_iterations = 0
-    if best_residual > 0 and n_shots > rank and max_ransac_iterations > 0:
+    if (best_residual > residual_threshold and n_shots > rank
+            and max_ransac_iterations > 0):
         rng = np.random.default_rng(seed)
         method = "ransac"
         for _ in range(max_ransac_iterations):
             ransac_iterations += 1
             perm = rng.permutation(n_shots)
-            Rp, zp, pivots_p = _gf2_eliminate(B[perm], Y[perm])
-            candidate = _gf2_particular_solution(Rp, zp, pivots_p, n_events)
-            residual = _residual_fraction(B, Y, candidate)
+            Rp = B_packed[perm].copy()
+            zp = Y[perm].copy()
+            pivots_p = _gf2_eliminate_packed(Rp, zp, n_events)
+            candidate = np.zeros(n_events, dtype=np.uint8)
+            candidate[pivots_p] = zp[:len(pivots_p)]
+            if refine:
+                refine_flips += _refine_inplace(candidate)
+            cand_packed = pack_detector_samples(candidate[None, :])[0]
+            residual = _packed_residual_fraction(B_packed, Y, cand_packed)
             if residual < best_residual:
                 best = candidate
                 best_residual = residual
@@ -283,6 +476,8 @@ def solve_gf2_robust(
         "ransac_iterations": ransac_iterations,
         "method": method,
         "converged": best_residual <= residual_threshold,
+        "refine_flips": refine_flips,
+        "row_order": row_order or "given",
     }
     if not diagnostics["converged"]:
         warnings.warn(
@@ -514,6 +709,8 @@ def assign_logical_flags(
     residual_threshold=1e-3,
     max_ransac_iterations=200,
     seed=None,
+    row_order=None,
+    refine=True,
 ):
     """
     Decorate a learned DEM with logical-flip flags inferred from shot data.
@@ -543,10 +740,18 @@ def assign_logical_flags(
             left undecorated) or 'raise'.
         residual_threshold: float
             Acceptable fraction of inconsistent rows (see `solve_gf2_robust`).
+            Set this to roughly the decoder logical-error rate you expect on
+            this data; rows are inconsistent exactly when the decoder makes a
+            logical error.
         max_ransac_iterations: int
             Maximum RANSAC re-solves in the GF(2) solver.
         seed: int, optional
             Seed for the RANSAC row shuffles.
+        row_order: str, optional
+            Row ordering for the GF(2) elimination; see `solve_gf2_robust`.
+            "confidence" is recommended when the logical error rate is high.
+        refine: bool
+            Enable bit-flip refinement in the GF(2) solver (default True).
 
     Returns:
         decorated_dem: stim.DetectorErrorModel
@@ -621,6 +826,8 @@ def assign_logical_flags(
         residual_threshold=residual_threshold,
         max_ransac_iterations=max_ransac_iterations,
         seed=seed,
+        row_order=row_order,
+        refine=refine,
     )
 
     flags = np.zeros(len(masks), dtype=np.uint8)
@@ -630,11 +837,11 @@ def assign_logical_flags(
     diagnostics["masks"] = masks
     diagnostics["decoded_masks"] = decoded_masks
     diagnostics["dropped_masks"] = dropped_masks
-    diagnostics["undetermined_masks"] = np.concatenate([
-        decoded_masks[diagnostics["undetermined_indices"]].astype(np.int64)
-        if diagnostics["undetermined_indices"] else np.array([], dtype=np.int64),
-        dropped_masks.astype(np.int64),
-    ])
+    diagnostics["undetermined_masks"] = _mask_array(
+        ([int(m) for m in decoded_masks[diagnostics["undetermined_indices"]]]
+         if diagnostics["undetermined_indices"] else [])
+        + [int(m) for m in dropped_masks]
+    )
     diagnostics["event_indicator_matrix"] = B
 
     decorated_dem = decorate_dem_with_logical_flags(dem, flags)
