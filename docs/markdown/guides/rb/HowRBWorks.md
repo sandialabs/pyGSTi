@@ -23,7 +23,6 @@ This tutorial is an overview of randomized benchmarking (RB) in pyGSTi. The are 
 - [Synthetic-SPAM rank-1 randomized benchmarking](https://arxiv.org/abs/2412.18578) of the global $\text{SU}(2)$ rotations on a single spin-$j$ qudit. This protocol extracts a separate, SPAM-robust decay rate for each irreducible component of the noise, rather than a single error rate, and it follows a different work-flow than the multiqubit protocols above. It is covered in the [SU(2) qudit RB tutorial](SU2QuditRB).
 
 ```{code-cell} ipython3
-from __future__ import print_function #python 2 & 3 compatibility
 import pygsti
 from pygsti.processors import QubitProcessorSpec as QPS
 from pygsti.processors import CliffordCompilationRules as CCR
@@ -55,9 +54,15 @@ We can also specify the qubits to be benchmarked (if this is not specified then 
 depths = [0,1,2,4,8,16,32,64]
 k = 10
 qubits = ['Q0','Q1']
-# To run direct / mirror RB change CliffordRBDesign -> DirectRBDesign / MirrorRBDesign
 exp_design = pygsti.protocols.CliffordRBDesign(pspec, compilations, depths, k, qubit_labels=qubits)
 ```
+
+This page runs Clifford RB throughout. Each of the other protocols has its own page with a
+complete worked example of its own — [Direct RB](DirectRB), [Binary RB](BinaryRB),
+[Mirror RB](MirrorRB) and [MRB with universal gate sets](MirrorRB-Universal-Gate-Sets) —
+and it is worth starting from those rather than substituting a class name here. The design
+classes do not all take the same arguments in the same order: `MirrorRBDesign` in particular
+takes `depths` second, where the others take the compilations.
 
 ## Step 2: collect data as specified by the experiment design
 Next, we just follow the instructions in the experiment design to collect data from the quantum processor.  In this example, we'll generate the data using a depolarizing noise model since we don't have a real quantum processor lying around.  The call to `simulate_taking_data` function should be replaced with the user filling out the empty "template" data set file with real data.  Note also that we set `clobber_ok=True`; this is so the tutorial can be run multiple times without having to manually remove the dataset.txt file - we recommend you leave this set to False (the default) when using it in your own scripts.
@@ -106,5 +111,3 @@ rAfixstd = results.fits['A-fixed'].stds['r']
 print("r = {0:1.2e} +/- {1:1.2e} (fit with a free asymptote)".format(r, 2*rstd))
 print("r = {0:1.2e} +/- {1:1.2e} (fit with the asymptote fixed to 1/2^n)".format(rAfix, 2*rAfixstd))
 ```
-
-
