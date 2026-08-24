@@ -64,11 +64,13 @@ The call below passes two extra arguments for robustness across MPI setups and m
 We inspect the environment to decide whether we need to pass `--oversubscribe`. We need that inspection because other MPI distributions (e.g., MPICH and Intel MPI) neither need nor recognize this argument.
 
 ```{code-cell} ipython3
-import shutil, subprocess
+import shutil
 
 launcher = shutil.which('mpiexec') or shutil.which('mpirun')
-banner = subprocess.run([launcher, '--version'], capture_output=True, text=True) if launcher else None
-is_openmpi = banner is not None and 'Open MPI' in (banner.stdout + banner.stderr)
+# `ompi_info` ships with Open MPI and with no other MPI distribution, which makes it
+# a more dependable test than the launcher's --version banner: invoked as `mpiexec`,
+# Open MPI 4.x brands itself "OpenRTE" and never prints the string "Open MPI" at all.
+is_openmpi = shutil.which('ompi_info') is not None
 extra_args = ['--oversubscribe'] if is_openmpi else []
 
 print("launcher:", launcher)
