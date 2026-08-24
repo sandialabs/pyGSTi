@@ -61,9 +61,6 @@ sphinx:
     # built from the auto-generated `develop-with-notebooks` branch (whose
     # repository.branch is rewritten by CI so Colab launch links resolve).
     edit_button_branch: _ext
-    # Emits HTML redirect stubs from `_redirects.yml` for the pages relocated by
-    # the documentation restructure, so previously-published URLs keep resolving.
-    page_redirects: _ext
     # Collapses the duplicate <script> tags that sphinx_thebe and
     # sphinx_togglebutton emit, one of which is a `const` redeclaration that
     # throws a SyntaxError on every page. Upstream bug; see the module docstring.
