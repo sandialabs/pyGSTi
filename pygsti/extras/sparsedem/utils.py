@@ -170,6 +170,149 @@ def rows_to_tuples(Y: np.ndarray) -> list[tuple[int, ...]]:
     return [tuple(row.tolist()) for row in Y]
 
 
+def counts_to_detector_arrays(counts: dict) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert a Counter-like dict of bitstring keys into detector-order arrays.
+
+    The keys follow the sparsedem convention (reversed stim rows, so the
+    string reads as a binary number whose bit d is detector d); the returned
+    sample matrix is back in stim column order: column d is detector d.
+
+    Parameters:
+        counts: dict
+            Mapping from bitstring keys to counts.
+
+    Returns:
+        samples: np.ndarray
+            (K, n) uint8 matrix of distinct syndromes, column d = detector d.
+        weights: np.ndarray
+            Counts aligned with the rows of `samples`.
+    """
+    keys, values = counts_to_arrays(counts)
+    return np.ascontiguousarray(keys[:, ::-1]), values
+
+
+def pack_detector_samples(samples: np.ndarray) -> np.ndarray:
+    """
+    Pack a (K, n) {0,1} sample matrix into (K, ceil(n/64)) uint64 words.
+
+    Bit d of a row lives in word d // 64 at bit position d % 64, matching
+    the integer-bitmask convention (bit d = detector d).
+
+    Parameters:
+        samples: np.ndarray
+            (K, n) array with entries in {0,1}, column d = detector d.
+
+    Returns:
+        packed: np.ndarray
+            (K, ceil(n/64)) uint64 array.
+    """
+    samples = np.asarray(samples, dtype=np.uint8) % 2
+    if samples.ndim != 2:
+        raise ValueError("samples must be a 2D (rows, bits) array.")
+    n = samples.shape[1]
+    n_words = max((n + 63) // 64, 1)
+    padded = np.zeros((samples.shape[0], n_words * 64), dtype=np.uint8)
+    padded[:, :n] = samples
+    # Little-endian within each 64-bit word so bit d sits at position d % 64.
+    packed_bytes = np.packbits(padded, axis=1, bitorder="little")
+    words = packed_bytes.reshape(samples.shape[0], n_words, 8).astype(np.uint64)
+    shifts = (np.uint64(8) * np.arange(8, dtype=np.uint64))
+    return (words << shifts).sum(axis=2, dtype=np.uint64)
+
+
+def masks_to_packed(masks, n_bits: int) -> np.ndarray:
+    """
+    Pack integer bitmasks (arbitrary-precision Python ints) into uint64 words.
+
+    Parameters:
+        masks: Iterable[int]
+            Integer bitmasks (bit d = detector d); may exceed 64 bits.
+        n_bits: int
+            Number of bits spanned by the masks.
+
+    Returns:
+        packed: np.ndarray
+            (len(masks), ceil(n_bits/64)) uint64 array, aligned with
+            `pack_detector_samples`.
+    """
+    masks = list(masks)
+    n_words = max((int(n_bits) + 63) // 64, 1)
+    packed = np.zeros((len(masks), n_words), dtype=np.uint64)
+    word_mask = (1 << 64) - 1
+    for i, m in enumerate(masks):
+        m = int(m)
+        w = 0
+        while m:
+            packed[i, w] = np.uint64(m & word_mask)
+            m >>= 64
+            w += 1
+    return packed
+
+
+def weighted_odd_counts(packed_samples: np.ndarray, weights: np.ndarray,
+                        packed_masks: np.ndarray) -> np.ndarray:
+    """
+    Weighted number of odd-parity rows for each mask, on packed bit data.
+
+    For each mask M, returns sum of weights[r] over rows r with
+    popcount(row_r & M) odd. This is the exact integer numerator of a Walsh
+    polarization: pol(M) = (total - 2 * odd) / total.
+
+    Parameters:
+        packed_samples: np.ndarray
+            (K, W) uint64 packed samples (see `pack_detector_samples`).
+        weights: np.ndarray
+            (K,) integer weights (counts) per row.
+        packed_masks: np.ndarray
+            (M, W) uint64 packed masks (see `masks_to_packed`).
+
+    Returns:
+        odd: np.ndarray
+            (M,) int64 weighted odd-parity counts.
+    """
+    packed_samples = np.asarray(packed_samples, dtype=np.uint64)
+    packed_masks = np.asarray(packed_masks, dtype=np.uint64)
+    weights = np.asarray(weights, dtype=np.int64)
+    out = np.empty(len(packed_masks), dtype=np.int64)
+    for i, mask in enumerate(packed_masks):
+        parity = np.bitwise_count(packed_samples & mask).sum(
+            axis=1, dtype=np.int64) & 1
+        out[i] = int(weights[parity.astype(bool)].sum())
+    return out
+
+
+def packed_parity_matrix(packed_row_masks: np.ndarray,
+                         packed_col_masks: np.ndarray,
+                         chunk: int = 256) -> np.ndarray:
+    """
+    Parity-of-overlap matrix between two packed mask collections.
+
+    Entry (i, j) is popcount(row_mask_i & col_mask_j) mod 2 -- the exponent
+    in the masked Hadamard matrix: H[i, j] = (-1)**parity.
+
+    Parameters:
+        packed_row_masks: np.ndarray
+            (R, W) uint64 packed masks.
+        packed_col_masks: np.ndarray
+            (C, W) uint64 packed masks.
+        chunk: int
+            Row chunk size bounding peak memory.
+
+    Returns:
+        parity: np.ndarray
+            (R, C) uint8 array in {0, 1}.
+    """
+    rows = np.asarray(packed_row_masks, dtype=np.uint64)
+    cols = np.asarray(packed_col_masks, dtype=np.uint64)
+    out = np.empty((rows.shape[0], cols.shape[0]), dtype=np.uint8)
+    for i0 in range(0, rows.shape[0], chunk):
+        block = rows[i0:i0 + chunk, None, :] & cols[None, :, :]
+        out[i0:i0 + chunk] = (np.bitwise_count(block).sum(
+            axis=2, dtype=np.int64) & 1).astype(np.uint8)
+    return out
+
+
 def parity_dot(batch_bits: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """
     Compute (batch_bits @ mask) mod 2 for batch_bits in {0,1}^{m x n}, mask in {0,1}^n.
