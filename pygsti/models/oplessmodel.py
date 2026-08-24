@@ -368,6 +368,12 @@ class ErrorRatesModel(SuccessFailModel):
         if not isinstance(circuit, _Circuit):
             circuit = _Circuit.from_tuple(circuit)
 
+        # `layer_label_with_idles` below indexes top-level layers (`num_layers`), but we
+        # want an error rate for every executed layer (`depth`).  Those differ only when
+        # the circuit retains a CircuitLabel, so expand just in that case.
+        if circuit.depth != circuit.num_layers:
+            circuit = circuit.expand_subcircuits()
+
         depth = circuit.depth
         width = circuit.width
         g_inds = self._gate_error_rate_indices

@@ -40,7 +40,6 @@ class Evotype(object):
         'sum': 'OpRepSum',
         'clifford': 'OpRepClifford',
         'repeated': 'OpRepRepeated',
-        'standard': 'OpRepStandard',
         'sparse superop': 'OpRepSparse',
         'lindblad errorgen': 'OpRepLindbladErrorgen',
         'dense state': 'StateRepDense',
@@ -174,9 +173,6 @@ class Evotype(object):
 
     def create_repeated_rep(self, rep_to_repeat, num_repetitions, state_space):
         return self.module.OpRepRepeated(rep_to_repeat, num_repetitions, state_space)
-
-    def create_standard_rep(self, standard_name, super_basis, state_space):
-        return self.module.OpRepStandard(standard_name, super_basis, state_space)
 
     def create_sparse_rep(self, data, indices, indptr, state_space):
         return self.module.OpRepSparse(data, indices, indptr, state_space)

@@ -17,13 +17,14 @@ Subpackages under `extras/` are loosely affiliated with the rest of pyGSTi; some
 |---|---|---|
 | [`rpe/`](../pygsti/extras/rpe/) | **Robust Phase Estimation** — protocol for high-precision phase/rotation characterization. | Active. |
 | [`drift/`](../pygsti/extras/drift/) | **Drift detection and characterization** via the `StabilityAnalyzer` framework. Time-resolved analysis of gate drift. | Active. |
-| [`idletomography/`](../pygsti/extras/idletomography/) | Idle tomography — characterizing idle-channel errors. | **BROKEN — known. Do not introspect, run, or attempt to fix as part of unrelated work.** See [known-debt.md #15](known-debt.md#15-extrasidletomography-is-broken). |
-| [`interpygate/`](../pygsti/extras/interpygate/) | Interpolated gate operators — gate-parameter sweeps interpolated from process tomography. | Active, but with deprecated names still exported (`vec`/`unvec`). |
+| [`idletomography/`](../pygsti/extras/idletomography/) | Idle tomography — characterizing idle-channel errors. | **BROKEN — known. Do not introspect, run, or attempt to fix as part of unrelated work.** See [known-debt.md #13](known-debt.md#13-extrasidletomography-is-broken). |
+| [`interpygate/`](../pygsti/extras/interpygate/) | Interpolated gate operators — gate-parameter sweeps interpolated from process tomography. | Active. |
 | [`crosstalk/`](../pygsti/extras/crosstalk/) | Multi-qubit crosstalk characterization. | Minimal / underdeveloped. |
 | [`lfh/`](../pygsti/extras/lfh/) | Low-Frequency Hamiltonian — slow drift parameterization. | Minimal / underdeveloped. |
 | [`paritybenchmarking/`](../pygsti/extras/paritybenchmarking/) | Parity benchmarking — error-disturbance quantification. | Minimal / underdeveloped. |
 | [`ibmq/`](../pygsti/extras/ibmq/) | IBM Quantum backend integration. | Experimental. |
-| [`devices/`](../pygsti/extras/devices/) | Hardware-device specs (IBMQ, Rigetti, etc.) — ~40 small data files. | Data-only, no logic. |
+| [`devices/`](../pygsti/extras/devices/) | Hardware-device specs (IBMQ, Rigetti, etc.) — ~40 small data files, plus `experimentaldevice.py` (`ExperimentalDevice`), which is the current API. | Mostly data. |
+| [`ml/`](../pygsti/extras/ml/) | **QPANNs** — quantum physics-aware neural networks for capability learning. Hard TensorFlow dependency, so not installable everywhere. | New (added #835); not yet covered in depth below. |
 
 ### 2. `extras/` imports are commented out in `__init__.py`
 
@@ -48,7 +49,7 @@ This subpackage is too small to spend much time on architecturally. If you need 
 |---|---|---|
 | `StabilityAnalyzer` | [extras/drift/stabilityanalyzer.py](../pygsti/extras/drift/stabilityanalyzer.py) | Drift-characterization workhorse. |
 | RPE protocol + helpers | [extras/rpe/](../pygsti/extras/rpe/) | Robust phase estimation. |
-| Interpolated gate API | [extras/interpygate/](../pygsti/extras/interpygate/) | `vec`/`unvec` are deprecated but still exported (see `__init__.py:14`). Use `unvec_square` instead. |
+| Interpolated gate API | [extras/interpygate/](../pygsti/extras/interpygate/) | Exports `PhysicalProcess`, `InterpolatedDenseOp`, `InterpolatedOpFactory`, `run_process_tomography`. |
 | `ErrorGeneratorPropagator` | [errorgenpropagation/errorpropagator.py](../pygsti/errorgenpropagation/errorpropagator.py) | End-of-circuit error channel via error-generator propagation. |
 
 ## Cross-subpackage relationships
@@ -69,17 +70,15 @@ flowchart TD
 
 ## Pitfalls and gotchas
 
-- **Do not investigate, run, or attempt to fix `extras/idletomography/`.** The subsystem is known-broken and out of scope for general maintenance work. See [known-debt.md #15](known-debt.md#15-extrasidletomography-is-broken).
+- **Do not investigate, run, or attempt to fix `extras/idletomography/`.** The subsystem is known-broken and out of scope for general maintenance work. See [known-debt.md #13](known-debt.md#13-extrasidletomography-is-broken).
 - **Full module paths required for `extras/` imports.** `import pygsti.extras.rpe.rpetools` is the form that works; `import pygsti.extras.rpetools` is not (no such module).
-- **`extras/interpygate/__init__.py:14`** exports deprecated `vec` and `unvec` for backward compatibility. Use `unvec_square` instead.
 - **`errorgenpropagation/` needs `stim`.** If `stim` is missing, expect informative `ImportError`s at function-call time, not at import time (try-imported with a warning).
-- **`extras/devices/` is just data files** — not a place to put new code.
+- **`extras/devices/` is mostly data files**, but `experimentaldevice.py` (`ExperimentalDevice`) is the live API there — the ~40 `ibmq_*`/`rigetti_*` specs are the data it reads.
 
 ## Architectural debt
 
 - [`extras/__init__.py` imports commented out](known-debt.md#8-extras__init__py-imports-commented-out).
-- [`extras/idletomography/` is broken](known-debt.md#15-extrasidletomography-is-broken) — related issues: [#711](https://github.com/sandialabs/pyGSTi/issues/711), [#737](https://github.com/sandialabs/pyGSTi/issues/737), [#576](https://github.com/sandialabs/pyGSTi/issues/576).
-- `interpygate/` partial deprecation (`vec`/`unvec`).
+- [`extras/idletomography/` is broken](known-debt.md#13-extrasidletomography-is-broken) — related issues: [#711](https://github.com/sandialabs/pyGSTi/issues/711), [#737](https://github.com/sandialabs/pyGSTi/issues/737), [#576](https://github.com/sandialabs/pyGSTi/issues/576).
 
 ## Canonical examples
 

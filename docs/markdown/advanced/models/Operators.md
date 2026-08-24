@@ -208,7 +208,7 @@ $$\mathcal{L} = 0.1 H_X + 0.1 S_X$$
 then use it with an `ExpErrorgenOp` and a `ComposedOp` to get an operator corresponding to $e^{\mathcal{L}}U_0$ with $U_0$ an $X(\pi/2)$ rotation.
 
 ```{code-cell} ipython3
-stdXOp = ops.StaticStandardOp('Gxpi2')
+stdXOp = ops.StaticUnitaryOp.from_standard_gate_name('Gxpi2')
 cptpGen2 = ops.LindbladErrorgen.from_elementary_errorgens({('H','X'): 0.1, ('S','X'): 0.1}, state_space=1)
 cptpOp2 = ops.ExpErrorgenOp(cptpGen2)
 noisyXOp = ops.ComposedOp([stdXOp, cptpOp2])
@@ -321,12 +321,12 @@ Below is an incomplete list of type strings and the classes they map to.  Most s
 - gate types, in `pygsti.modelmembers.operations`:
   - `"static"` $\rightarrow$ `StaticArbitraryOp`
   - `"full"` $\rightarrow$ `FullArbitraryOp`
-  - `"static standard"` $\rightarrow$ `StaticStandardOp`
   - `"static clifford"` $\rightarrow$ `StaticCliffordOp`
   - `"static unitary"` $\rightarrow$ `StaticUnitaryOp`
   - `"full unitary"` $\rightarrow$ `FullUnitaryOp`
   - `"full TP"` $\rightarrow$ `FullTPOp`
   - `"CPTP"`, `"H+S"`, etc. $\rightarrow$ `ExpErrorgenOp` + `LindbladErrorgen`
+  - `"static standard"` $\rightarrow$ [Deprecated] aliases `("static unitary", "static")`
 
 
 - state preparation types, in `pygsti.modelmembers.states`:
@@ -363,7 +363,7 @@ model.print_modelmembers()
 print("%d parameters" % model.num_params)
 ```
 
-By default an explicit model creates static (zero-parameter) operations.  For gates named in the standard gate set, as here, the default `ideal_gate_type='auto'` lands on `StaticStandardOp`.  Specify an `ideal_gate_type` to change that:
+By default an explicit model creates static (zero-parameter) operations.  For gates named in the standard gate set, as here, the default `ideal_gate_type='auto'` lands on `StaticUnitaryOp`.  Specify an `ideal_gate_type` to change that:
 
 ```{code-cell} ipython3
 model = mc.create_explicit_model(pspec, ideal_gate_type="full TP")
