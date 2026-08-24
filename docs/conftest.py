@@ -52,9 +52,14 @@ def _generate_shared_fixtures():
     pygsti.io.write_dataset(str(_TUT / "Example_Dataset_LowCnts.txt"), ds_low)
 
     # --- GateSetTomography results read back by the Results tutorial -------------
+    # ``disable_checkpointing`` because this runs from a sessionstart hook, so the
+    # default checkpoint dir would be resolved against pytest's invocation directory
+    # (the repo root) rather than anything under docs/.  We only want the final
+    # results here; nothing resumes this run, so the checkpoints are pure litter.
     data = pygsti.io.read_data_from_dir(str(gst_data_dir))
     results = pygsti.protocols.GateSetTomography(
-        smq1Q_XYI.target_model("full TP"), verbosity=0).run(data)
+        smq1Q_XYI.target_model("full TP"), verbosity=0).run(
+            data, disable_checkpointing=True)
     results.write()  # -> Example_GST_Data/results/GateSetTomography
 
 
