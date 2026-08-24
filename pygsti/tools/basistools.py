@@ -193,14 +193,20 @@ def change_basis(mx, from_basis, to_basis, expect_real=True):
 
     isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
     if isMx:
-        # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
-        # with some/all args being sparse:
         ret = toMx @ (mx @ fromMx)
     else:  # isVec
         ret = toMx @ mx
 
     if not to_basis.real:
         return ret
+
+    if is_cvxpy_expression(ret):
+        # A symbolic expression has no numerically-inspectable imaginary part, so the
+        # `expect_real` check below cannot be performed (and would silently pass, since
+        # `numpy.imag` returns 0 for objects with no `.imag`).  `to_basis.real` says the
+        # result is real for any Hermiticity-preserving input, so project symbolically.
+        import cvxpy as _cp
+        return _cp.real(ret) if ret.is_complex() else ret
 
     if expect_real and _mt.safe_norm(ret, 'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %

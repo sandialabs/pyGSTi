@@ -29,6 +29,18 @@ class CircuitTester(BaseCase):
         self.assertEqual(c.num_lines, 5)
         self.assertEqual(c.line_labels, tuple(range(5)))
 
+    def test_quil_string_helpers(self):
+        # Test the helper functions for creating quil strings.
+        num_to_str = circuit._num_to_rqc_str
+        self.assertEqual(num_to_str(1.0), '1.0')
+        self.assertEqual(num_to_str(1+2j), '1.0+2.0i')
+        self.assertEqual(num_to_str(1-2j), '1.0-2.0i')
+        self.assertEqual(num_to_str(3j), '0.0+3.0i')
+
+        np_to_def = circuit._np_to_quil_def_str
+        expected_def = 'DEFGATE FOO:\n    1.0, 0.0\n    0.0, 1.0\n'
+        self.assertEqual(np_to_def('FOO', np.identity(2)), expected_def)
+
     def test_construct_from_label(self):
         # Test initializing a circuit from a non-empty circuit that is a list
         # containing Label objects. Also test that it can have non-integer line_labels
@@ -324,6 +336,41 @@ class CircuitMethodTester(BaseCase):
         self.c.replace_layer_with_circuit_inplace(self.c.copy(), 1)
         self.assertEqual(self.c.depth, 2 * 5 - 1)
 
+    def test_set_line_labels_editable(self):
+        # Test setting line labels on an editable circuit, ensuring non-specified lines (active or idling) are removed.
+
+        # Initial labels are ('Q0', 'Q1'). Add an idling line 'Q2'.
+        self.c._append_idling_lines(['Q2'])
+        self.assertEqual(self.c.line_labels, ('Q0', 'Q1', 'Q2'))
+        self.assertEqual(set(self.c.idling_lines()), {'Q2'})
+
+        # New labels: keep 'Q0', remove active 'Q1', remove idling 'Q2', add new 'Q3'
+        new_line_labels = ('Q0', 'Q3')
+        self.c.line_labels = new_line_labels
+
+        # Assert the final labels are *exactly* the new labels.
+        # This confirms that 'Q1' and 'Q2' were removed.
+        self.assertEqual(self.c.line_labels, new_line_labels)
+
+        # 'Q0' should still have gates. 'Q3' is new and should be idling.
+        self.assertEqual(set(self.c.idling_lines()), {'Q3'})
+
+    def test_set_line_labels_non_editable(self):
+        # Test that setting line labels on a non-editable circuit raises an AssertionError
+        non_editable_circuit = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1'], editable=False)
+        with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit!"):
+            non_editable_circuit.line_labels = ('Qalpha', 'Qbeta')
+
+    def test_set_occurrence(self):
+        # Test setting occurrence id on an editable circuit
+        self.c.occurrence = 123
+        self.assertEqual(self.c.occurrence, 123)
+
+        # Test that setting occurrence id on a non-editable circuit raises an AssertionError
+        non_editable_circuit = circuit.Circuit(layer_labels=self.labels, line_labels=['Q0', 'Q1'], editable=False)
+        with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit!"):
+            non_editable_circuit.occurrence = 456
+
     def test_delete_layers(self):
         # Test layer deletion
         layer = [Label('Gx', 'Q1'), ]
@@ -442,6 +489,29 @@ class CircuitMethodTester(BaseCase):
         self.c.tensor_circuit_inplace(c2)
         self.assertEqual(self.c.depth, max(self.c.depth, c2.depth))
 
+    def test_insert_implicit_idles_inplace_all_layers(self):
+        c = circuit.Circuit([('Gx', 0), Label(())], line_labels=(0, 1), editable=True)
+        c.insert_implicit_idles_inplace(idle_gate_name='Gi')
+        c.done_editing()
+        self.assertEqual(c[0], Label([('Gx', 0), ('Gi', 1)]))
+        self.assertEqual(c[1], Label([('Gi', 0), ('Gi', 1)]))
+
+    def test_insert_implicit_idles_inplace_selected_layers(self):
+        c = circuit.Circuit([('Gx', 0), Label(()), Label(())], line_labels=(0, 1), editable=True)
+        # Only materialize idles on layer 1; layers 0 and 2 should be untouched.
+        c.insert_implicit_idles_inplace(layers=[1], idle_gate_name='Gi')
+        c.done_editing()
+        self.assertEqual(c[0], Label(('Gx', 0)))
+        self.assertEqual(c[1], Label([('Gi', 0), ('Gi', 1)]))
+        self.assertEqual(c[2], Label(()))
+
+    def test_insert_implicit_idles_noninplace_returns_copy(self):
+        c = circuit.Circuit([('Gx', 0)], line_labels=(0, 1))
+        padded = c.insert_implicit_idles(idle_gate_name='Gi')
+        # original circuit is untouched
+        self.assertEqual(c[0], Label(('Gx', 0)))
+        self.assertEqual(padded[0], Label([('Gx', 0), ('Gi', 1)]))
+
     def test_replace_gatename_inplace(self):
         # Test changing a gate name
         self.c.replace_gatename_inplace('Gx', 'Gz')
@@ -517,6 +587,63 @@ class CircuitMethodTester(BaseCase):
         s = str(self.c)
         self.assertEqual(test_s, s)
 
+    def test_serialize_increases_depth_when_labeltuptup(self):
+        from pygsti.baseobjs.label import Label as L, CircuitLabel
+        labels = [
+            L('Gx', 0),  # a LabelTup
+            L('Gx', (0, 1)),  # a LabelTup
+            L(('Gx', 0, 1)),  # a LabelTup
+            L('Gx'),  # a LabelStr
+            L('Gx', None),  # still a LabelStr
+            L([('Gx', 0), ('Gy', 1)]),  # a LabelTupTup of LabelTup objs
+            L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
+            L([('Gx', 0)]),  # just a LabelTup b/c only one component
+            L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
+            L(L('Gx')),  # Init from another label
+            CircuitLabel('circuit', [("Gx", 1), ("Gz", 2)], None, 1, None)
+        ]
+
+        circs = [circuit.Circuit([lbl], expand_subcircuits=False) for lbl in labels]
+        contain_labeltuptup = [5,6,8]
+
+        for i,circ in enumerate(circs):
+            serial = circ.serialize()
+            with_expansion = circ.serialize(True)
+            if i in contain_labeltuptup:
+                self.assertGreater(serial.num_layers, circ.num_layers)
+            else:
+                self.assertEqual(serial.num_layers, circ.num_layers, f"Test case {i} failed with a label {circ[0].__repr__()}")
+
+            if i not in [len(circs) -1]:
+                self.assertEqual(serial.depth, with_expansion.depth)
+                self.assertEqual(serial.num_layers, with_expansion.num_layers)
+            else:
+                self.assertLess(serial.num_layers, with_expansion.num_layers)
+
+    def test_parallelize_serialize_inverse(self):
+        # Test that with adjacent_only=True, serialize is the inverse of parallelize
+        serial_c = circuit.Circuit("Gx:0Gy:1Gx:0", line_labels=(0, 1))
+        parallel_c = serial_c.parallelize(adjacent_only=True)
+        serial_c_from_parallel = parallel_c.serialize()
+        self.assertEqual(serial_c, serial_c_from_parallel)
+
+    def test_parallelize_serialize_not_inverse(self):
+        # Test that with adjacent_only=False, serialize is NOT the inverse of parallelize
+        serial_c = circuit.Circuit([('Gx', 0), ('Gy', 0), ('Gx', 1)], num_lines=2)
+        parallel_c = serial_c.parallelize(adjacent_only=False)  # default
+        serial_c_from_parallel = parallel_c.serialize()
+        self.assertNotEqual(serial_c, serial_c_from_parallel)
+
+    def test_str_props(self):
+        c_with_labels = circuit.Circuit('Gx:0@(0,1)', line_labels=(0, 1))
+        self.assertEqual(c_with_labels.layerstr, 'Gx:0')
+        self.assertEqual(c_with_labels.linesstr, '(0,1)')
+
+        c_no_labels = circuit.Circuit('Gx')
+        self.assertEqual(c_no_labels.layerstr, 'Gx')
+        self.assertEqual(c_no_labels.linesstr, None)
+
+
     def test_compress_depth(self):
         ls = [Label('H', 1), Label('P', 1), Label('P', 1), Label(()), Label('CNOT', (2, 3))]
         ls += [Label('HP', 1), Label('PH', 1), Label('CNOT', (1, 2))]
@@ -533,9 +660,13 @@ class CircuitMethodTester(BaseCase):
     def test_logically_equivalent_circuits_are_equal(self):
         circ1 = circuit.Circuit([[("Gxpi2", 0), ("Gypi2", 1)]])
         circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]], editable=True)
+        from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
 
         self.assertTrue(circ1 == circ2)
-        self.assertTrue(hash(circ1) == hash(circ2))
+
+        circ2 = circuit.Circuit([[("Gypi2", 1), ("Gxpi2", 0)]], editable=True)
+        with self.assertWarns(ImplicitlyDoneEditingCircuitWarning):
+            self.assertTrue(hash(circ1) == hash(circ2))
 
         circ3 = circuit.Circuit([("Gxpi2", 0), ("Gypi2", 1)])  # initialize circ1 as a new circuit with 2 layers.
         circ4 = circuit.Circuit([("Gypi2", 1), ("Gxpi2", 0)])
@@ -733,9 +864,53 @@ MEASURE 2 ro[2]
         expected_mapping = {i: f'Q{i}' for i in range(4)}
 
         self.assertEqual(expected_ps_circ, observed_ps_circ)
-        self.assertEqual(expected_mapping, observed_mapping)   
+        self.assertEqual(expected_mapping, observed_mapping)
 
-        
+
+    def test_convert_to_qiskit_measurement_options(self):
+        try:
+            import qiskit
+        except ImportError:
+            self.skipTest('Qiskit is required for this operation, and does not appear to be installed.')
+
+        ps_circ = circuit.Circuit([Label([Label('Gxpi', 'Q0'), Label('Gh', 'Q2')]),
+                                   Label('Gcnot', ('Q0', 'Q1'))], line_labels=('Q0', 'Q1', 'Q2'))
+
+        def num_measures(qk_circ):
+            return sum(1 for inst in qk_circ.data if inst.operation.name == 'measure')
+
+        # default: no measurements, empty classical register
+        qk_circ = ps_circ.convert_to_qiskit(qubit_conversion='remove-Q')
+        self.assertEqual(qk_circ.num_clbits, 0)
+        self.assertEqual(num_measures(qk_circ), 0)
+        self.assertIsNone(qk_circ.metadata['ordered_data_indices'])
+
+        # 'all' measures every qubit of the register, which may be larger than the circuit width
+        qk_circ = ps_circ.convert_to_qiskit(qubit_conversion='remove-Q', num_qubits=5,
+                                            qubits_to_measure='all')
+        self.assertEqual(qk_circ.num_qubits, 5)
+        self.assertEqual(qk_circ.num_clbits, 5)
+        self.assertEqual(num_measures(qk_circ), 5)
+
+        # 'active' measures only the qubits with a conversion entry
+        qk_circ = ps_circ.convert_to_qiskit(qubit_conversion='remove-Q', num_qubits=5,
+                                            qubits_to_measure='active')
+        self.assertEqual(qk_circ.num_qubits, 5)
+        self.assertEqual(qk_circ.num_clbits, 3)
+        self.assertEqual(num_measures(qk_circ), 3)
+
+        # an explicit list of pyGSTi line labels
+        qk_circ = ps_circ.convert_to_qiskit(qubit_conversion='remove-Q',
+                                            qubits_to_measure=['Q0', 'Q2'])
+        self.assertEqual(qk_circ.num_clbits, 2)
+        self.assertEqual(num_measures(qk_circ), 2)
+        self.assertEqual(qk_circ.metadata['ordered_data_indices'], [0, 2])
+
+        # unknown string option
+        with self.assertRaises(ValueError):
+            ps_circ.convert_to_qiskit(qubit_conversion='remove-Q', qubits_to_measure='bogus')
+
+
     def test_convert_to_stim_tableau(self):
         #TODO: Add correctness checks for generated Tableaus.
         #these tests (with the exception of two explicitly meant to raise caught exceptions)
@@ -976,7 +1151,8 @@ class CompressedCircuitTester(BaseCase):
 
 
 class CircuitBugfixRegressionTester(BaseCase):
-    """Regression tests for the batch of circuit.py bug fixes (issues #756, #760, #762, #763, #764)."""
+    """Regression tests for the batches of circuit.py bug fixes (issues #746, #756, #760, #761,
+    #762, #763, #764)."""
 
     def test_map_names_inplace_with_callable(self):
         # regression test for issue #763
@@ -1131,6 +1307,47 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(c.line_labels, (0, 1))
         self.assertEqual(c.depth, 3)
 
+    def test_tensor_circuit_tail_padding_with_idles_ok(self):
+        c1 = circuit.Circuit("Gx:0", line_labels=(0,), editable=True)
+        c2 = circuit.Circuit("Gy:1Gy:1Gy:1", line_labels=(1,), editable=True)
+        c1.tensor_circuit_inplace(c2, idle_gate_name='Gi')
+        c1.done_editing()
+        self.assertEqual(c1.depth, 3)
+        self.assertEqual(c1.line_labels, (0, 1))
+        # Layer 0: Gx:0, Gy:1 (concatenated)
+        # Layer 1: Gy:1, Gi:0 (padded with explicit Gi:0)
+        # Layer 2: Gy:1, Gi:0 (padded with explicit Gi:0)
+        self.assertEqual(c1[0], Label([('Gx', 0), ('Gy', 1)]))
+        self.assertEqual(c1[1], Label([('Gi', 0), ('Gy', 1)]))
+        self.assertEqual(c1[2], Label([('Gi', 0), ('Gy', 1)]))
+
+        # Also test with self being longer than incoming circuit
+        c1_long = circuit.Circuit("Gy:1Gy:1Gy:1", line_labels=(1,), editable=True)
+        c2_short = circuit.Circuit("Gx:0", line_labels=(0,), editable=True)
+        c1_long.tensor_circuit_inplace(c2_short, idle_gate_name='Gi')
+        c1_long.done_editing()
+        self.assertEqual(c1_long.depth, 3)
+        self.assertEqual(c1_long.line_labels, (1, 0))
+        self.assertEqual(c1_long[0], Label([('Gx', 0), ('Gy', 1)]))
+        self.assertEqual(c1_long[1], Label([('Gi', 0), ('Gy', 1)]))
+        self.assertEqual(c1_long[2], Label([('Gi', 0), ('Gy', 1)]))
+
+    def test_tensor_circuit_rejects_placeholder_line_labels(self):
+        # regression test: `self._line_labels == '*'` never matches because
+        # `_line_labels` is stored as the tuple `('*',)`, not the bare string
+        # '*', so this guard against tensoring underspecified circuits was
+        # dead code.
+        c1 = circuit.Circuit([[]])  # placeholder ('*',) line labels
+        self.assertEqual(c1.line_labels, ('*',))
+        c2 = circuit.Circuit("Gy:0", line_labels=(0,))
+        with self.assertRaises(ValueError):
+            c1.tensor_circuit(c2)
+
+        c3 = circuit.Circuit("Gx:0", line_labels=(0,))
+        c4 = circuit.Circuit([[]])  # placeholder ('*',) line labels
+        with self.assertRaises(ValueError):
+            c3.tensor_circuit(c4)
+
     def test_extract_labels_nonstrict_filters_and_line_labels(self):
         # regression test for issue #756: the non-strict membership test was
         # always true (so no filtering happened) and the result's line labels
@@ -1140,6 +1357,27 @@ class CircuitBugfixRegressionTester(BaseCase):
         self.assertEqual(sub.line_labels, (1,))
         self.assertEqual(sub[0], Label('Gy', 1))
         self.assertEqual(sub[1], Label('Gz', 1))
+
+    def test_clear_labels_straddler_error_names_the_option(self):
+        # issue #746: the reporter expected clearing line 0 of a two-line Gy to
+        # *restrict* the gate to line 1, and the bare "straddled by Gy!" message
+        # gave no hint that an option existed or what it actually does
+        c = circuit.Circuit('Gy@(0,1)', editable=True)
+        with self.assertRaises(ValueError) as cm:
+            c._clear_labels((0,), [0])
+        self.assertIn('clear_straddlers=True', str(cm.exception))
+        self.assertIn('removes the whole gate', str(cm.exception))
+
+    def test_clear_labels_straddlers_removes_the_whole_gate(self):
+        # issue #746, resolved as not-a-bug: `clear_straddlers=True` deletes the
+        # straddling gate outright.  It does not restrict it to the un-cleared
+        # lines, and there is no mode that does -- a genuine 2-qubit gate has no
+        # meaningful one-qubit restriction.
+        c = circuit.Circuit('Gy@(0,1)', editable=True)
+        c._clear_labels((0,), [0], clear_straddlers=True)
+        self.assertEqual(c._labels, [[]])
+        restricted = circuit.Circuit([('Gy', 1)], line_labels=[0, 1], editable=True)
+        self.assertNotEqual(c._labels, restricted._labels)
 
     def test_extract_labels_nonstrict_includes_straddlers(self):
         # issue #756: labels straddling the requested-lines boundary are kept
@@ -1208,3 +1446,231 @@ class CircuitBugfixRegressionTester(BaseCase):
         with self.assertWarns(UserWarning) as cm:
             c.replace_gatename_inplace('Gx', 123)
         self.assertIn('new_gatename', str(cm.warning))
+
+    def test_mutation_clears_lanes_cache(self):
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        # The lanes cache is only trusted/populated for static (read-only) circuits.
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)")
+        # First build/cache lanes
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertIn("lanes", c.saved_auxinfo)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+        # Mutate the circuit via an editable copy
+        c = c.copy(editable=True)
+        c.replace_gatename_with_idle_inplace("Gx")
+        # finalization (done_editing) must clear lanes cache to {}
+        c.done_editing()
+        self.assertEqual(c.saved_auxinfo["lanes"], {})
+
+        # Verify that we can successfully compute subcircuits and cache again
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_editable_circuit_does_not_use_or_populate_lanes_cache(self):
+        # Regression test: editable circuits can be mutated in-place without going
+        # through done_editing()/map_state_space_labels_inplace (the only two places
+        # that invalidate the lanes cache), so the cache must never be trusted for,
+        # or populated on, an editable circuit -- otherwise a subsequent in-place
+        # mutation could cause split_into_tensor_lanes to silently return stale results.
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        c = circuit.Circuit("Gx:0Gy:1", line_labels=(0, 1), editable=True)
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+
+        out1 = split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertIn(Label('Gx', 0), out1[0])
+        # No cache should have been written since the circuit is editable.
+        self.assertEqual(c.saved_auxinfo.get("lanes", {}), {})
+
+        # Mutate in place (no done_editing() call) and confirm the *fresh* content
+        # is reflected, not stale cached content.
+        c[0] = Label('Gz', 0)
+        out2 = split_into_tensor_lanes(c, q2l, l2q)
+        self.assertIn(Label('Gz', 0), out2[0])
+        self.assertNotIn(Label('Gx', 0), out2[0])
+
+    def test_rebuild_lanes_cache_when_empty(self):
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)")
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertIn("lanes", c.saved_auxinfo)
+
+        # Manually clear to empty (simulate post-mutation/done_editing empty state)
+        c.saved_auxinfo["lanes"] = {}
+        # split_into_tensor_lanes should notice empty cache, fall back to compute, and successfully cache again
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_map_state_space_labels_clears_lanes_cache(self):
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        c = circuit.Circuit("[Gx:0][Gy:1]@(0,1)")
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(c)
+        split_into_tensor_lanes(c, q2l, l2q, cache_lanes_in_circuit=True)
+        self.assertNotEqual(c.saved_auxinfo["lanes"], {})
+
+        c = c.copy(editable=True)
+        c.map_state_space_labels_inplace({0: 10, 1: 11})
+        c.done_editing()
+        self.assertEqual(c.saved_auxinfo["lanes"], {})
+
+    def test_copy_does_not_share_saved_auxinfo(self):
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        c1 = circuit.Circuit("Gx:0Gy:1", line_labels=(0, 1), editable=True)
+        c1.done_editing()
+
+        c2 = c1.copy(editable=True)
+        self.assertIsNot(c1.saved_auxinfo, c2.saved_auxinfo)
+
+        # Mutate c2 so that it is different from c1
+        c2[0] = Label('Gz', 1)
+        c2.done_editing()
+
+        # Cache lanes for c2
+        q2l_c2, l2q_c2 = compute_qubit_lane_mappings_for_circuit(c2)
+        split_into_tensor_lanes(c2, q2l_c2, l2q_c2, cache_lanes_in_circuit=True)
+
+        # Confirm c1's lanes cache did not get contaminated
+        # (It should still be empty or contain the original Gx/Gy representation, NOT Gz)
+        self.assertNotIn((1,), c1.saved_auxinfo.get("lanes", {}))
+
+        # Calling split_into_tensor_lanes on c1 should produce correct results representing Gx/Gy
+        q2l_c1, l2q_c1 = compute_qubit_lane_mappings_for_circuit(c1)
+        subs_c1 = split_into_tensor_lanes(c1, q2l_c1, l2q_c1)
+        self.assertIn(Label('Gx', 0), subs_c1[0])
+        self.assertNotIn(Label('Gz', 1), subs_c1[1])
+
+    def test_batch_tensor_populates_cache(self):
+        from pygsti.circuits.split_circuits_into_lanes import batch_tensor
+        c1 = circuit.Circuit("Gx:0", line_labels=(0,))
+        c2 = circuit.Circuit("Gy:0", line_labels=(0,))
+        idle_label = Label(())
+        labels_in_circuits = [Label('Gx', (0,)), Label('Gy', (0,)), idle_label]
+        map_d = {l: l for l in labels_in_circuits}
+        map_d[idle_label] = Label("Gi", 0)
+        layer_mappers = {1: map_d, 2: map_d}
+
+        # batch_tensor should return a static circuit with a non-empty, fully populated lanes cache
+        tensored_c = batch_tensor([c1, c2], layer_mappers, target_lines=((0,), (1,)))
+        self.assertIn("lanes", tensored_c.saved_auxinfo)
+        self.assertNotEqual(tensored_c.saved_auxinfo["lanes"], {})
+        # Verify that we can query split_into_tensor_lanes without recomputing or "lbl cache miss"
+        from pygsti.circuits.split_circuits_into_lanes import split_into_tensor_lanes, compute_qubit_lane_mappings_for_circuit
+        q2l, l2q = compute_qubit_lane_mappings_for_circuit(tensored_c)
+        # Should execute successfully using cache
+        split_into_tensor_lanes(tensored_c, q2l, l2q)
+
+        # Ensure that the manually built lanes cache in tensored_c is identical to a freshly computed one
+        c_no_cache = tensored_c.copy()
+        c_no_cache.saved_auxinfo = {}
+        fresh_sub_cirs = split_into_tensor_lanes(c_no_cache, q2l, l2q)
+        # Check matching structures
+        self.assertEqual(len(tensored_c.saved_auxinfo["lanes"]), len(l2q))
+        for lane_idx, key in l2q.items():
+            self.assertEqual(tensored_c.saved_auxinfo["lanes"][tuple(sorted(key))], fresh_sub_cirs[lane_idx])
+
+    # ---- the `.str` setter's accept/reject matrix (#761)
+    #
+    # The setter's contract is that the assigned string must evaluate to exactly the
+    # circuit's own layers.  Kept together as one matrix because the interesting cases
+    # are the near-misses: same length but different content, and right content but
+    # wrong length in either direction.
+
+    def test_str_setter_rejects_same_length_mismatch(self):
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"doesn't evaluate to GxGy@\(0\)"):
+            c.str = "GxGz@(0)"
+
+    def test_str_setter_rejects_truncated_string(self):
+        # #761: zip stopped at the shorter sequence, so this was silently accepted
+        # and the circuit then reported .str == 'Gx@(0)' while len(c) == 2
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"evaluates to 1 layer\(s\).*number of layers \(2\)"):
+            c.str = "Gx@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_rejects_extended_string(self):
+        # #761, the other direction: zip also stopped at self._labels
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        with self.assertRaisesRegex(ValueError, r"evaluates to 3 layer\(s\).*number of layers \(2\)"):
+            c.str = "GxGyGz@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_accepts_exact_match(self):
+        c = circuit.Circuit("GxGy@(0)", editable=True)
+        c.str = "GxGy@(0)"
+        self.assertEqual(c.str, "GxGy@(0)")
+
+    def test_str_setter_refuses_static_circuit(self):
+        c = circuit.Circuit("GxGy@(0)")
+        with self.assertRaisesRegex(AssertionError, "Cannot edit a read-only circuit"):
+            c.str = "GxGy@(0)"
+
+
+class CircuitDepthVsNumLayersTester(BaseCase):
+    """
+    `depth` and `num_layers` deliberately differ for circuits retaining a CircuitLabel:
+    `depth` counts executed layers (descending into boxes), `num_layers` counts top-level
+    slots.  Per-layer accessors are bounded by `num_layers`, so callers wanting every
+    executed layer must expand first.  These pin that contract and the fixed callers.
+    """
+
+    @staticmethod
+    def _boxed_circuit():
+        # a box survives into the static form only via the editable path; constructing
+        # `Circuit([cl], ...)` directly flattens it (default_expand_subcircuits is True)
+        sub = circuit.Circuit([Label('Gcnot', (0, 1))] * 5, line_labels=(0, 1))
+        c = circuit.Circuit([sub.to_label(nreps=3)], line_labels=(0, 1), editable=True)
+        c.done_editing()
+        return c
+
+    def test_depth_and_num_layers_differ_for_a_retained_box(self):
+        c = self._boxed_circuit()
+        self.assertEqual(c.depth, 15)
+        self.assertEqual(c.num_layers, 1)
+        self.assertIsInstance(c.layer_label(0), CircuitLabel)
+
+    def test_layer_label_is_bounded_by_num_layers_and_says_so(self):
+        c = self._boxed_circuit()
+        with self.assertRaises(AssertionError) as ctx:
+            c.layer_label(1)
+        msg = str(ctx.exception)
+        # the message used to read "Circuit is only of depth 1" while checking num_layers
+        self.assertIn('num_layers', msg.replace('layer(s)', 'num_layers'))
+        self.assertIn('expand_subcircuits', msg)
+
+    def test_expanding_reconciles_depth_and_num_layers(self):
+        c = self._boxed_circuit().expand_subcircuits()
+        self.assertEqual(c.depth, 15)
+        self.assertEqual(c.num_layers, 15)
+        self.assertEqual([c.layer_label(i) for i in range(c.depth)],
+                         [Label('Gcnot', (0, 1))] * 15)
+
+    def test_directly_constructed_static_circuit_flattens_the_box(self):
+        sub = circuit.Circuit([Label('Gcnot', (0, 1))] * 5, line_labels=(0, 1))
+        c = circuit.Circuit([sub.to_label(nreps=3)], line_labels=(0, 1))
+        self.assertEqual(c.depth, 15)
+        self.assertEqual(c.num_layers, 15)
+
+    def test_wildcard_budget_handles_a_retained_box(self):
+        # regression: budget_for_label looped `range(depth)` calling `layer_label`, which
+        # raised at i == 1 on any circuit retaining a box
+        from pygsti.objectivefns.wildcardbudget import PrimitiveOpsWildcardBudget
+        c = self._boxed_circuit()
+        budget = PrimitiveOpsWildcardBudget([Label('Gcnot', (0, 1))], start_budget=0.01)
+        # 15 executed Gcnot layers, each drawing the same per-op budget
+        self.assertAlmostEqual(budget.circuit_budget(c), 15 * 0.01)
+
+    def test_oplessmodel_circuit_cache_handles_a_retained_box(self):
+        # regression: _circuit_cache looped `range(depth)` calling layer_label_with_idles
+        from pygsti.models.oplessmodel import ErrorRatesModel
+        c = self._boxed_circuit()
+        model = ErrorRatesModel({'gates': {'Gcnot': 0.01}, 'readout': {0: 0.01, 1: 0.01}},
+                                num_qubits=2, state_space_labels=[0, 1],
+                                idle_name=None)
+        width, depth, _, _, inds_by_layer = model._circuit_cache(c)
+        self.assertEqual(width, 2)
+        self.assertEqual(depth, 15)
+        self.assertEqual(len(inds_by_layer), 16)  # one per executed layer, plus readout

@@ -208,6 +208,22 @@ Circuit/COPA layouts that organize (and distribute) the computation behind forwa
    pygsti.layouts.prefixtable
    pygsti.layouts.termlayout
 
+``pygsti.leakage``
+~~~~~~~~~~~~~~~~~~
+
+Leakage-aware modeling, gauge optimization, metrics, and reporting for QIPs with leakage levels.
+
+.. autosummary::
+   :toctree: _autosummary
+   :template: custom-module-template.rst
+   :recursive:
+
+   pygsti.leakage.core
+   pygsti.leakage.gaugeopt
+   pygsti.leakage.metrics
+   pygsti.leakage.models
+   pygsti.leakage.reports
+
 ``pygsti.modelmembers``
 ~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -321,6 +337,7 @@ Protocol objects (GST, RB, RPE, drift, …) with their inputs, data, and results
    pygsti.protocols.rb
    pygsti.protocols.rpe
    pygsti.protocols.scarab
+   pygsti.protocols.simultaneous_gst
    pygsti.protocols.stability
    pygsti.protocols.treenode
    pygsti.protocols.vb

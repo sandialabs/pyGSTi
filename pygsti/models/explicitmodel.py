@@ -56,7 +56,6 @@ from typing import Union, Literal
 from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
 
 
-
 class ExplicitOpModel(_mdl.OpModel):
     """
     Encapsulates a set of gate, state preparation, and POVM effect operations.
@@ -250,7 +249,7 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]):
+    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]) -> None:
         """
         The default gauge group.
         """
@@ -496,6 +495,7 @@ class ExplicitOpModel(_mdl.OpModel):
             indicates the maximum amount of truncation induced deviation from the original operations
             (measured by frobenius distance) we're willing to accept without marking the conversion
             as failed.
+
         spam_cp_penalty : float, optional (default 0.5)
             Converting SPAM operations to an error generator representation may 
             introduce trivial gauge degrees of freedom. These gauge degrees of freedom 
@@ -1526,54 +1526,8 @@ class ExplicitOpModel(_mdl.OpModel):
         #Note: does not alter instruments!
         return kicked_gs
 
-    def compute_clifford_symplectic_reps(self, oplabel_filter=None):
-        """
-        Constructs a dictionary of the symplectic representations for all the Clifford gates in this model.
-
-        Non-:class:`StaticCliffordOp` gates will be ignored and their entries omitted
-        from the returned dictionary.
-
-        Parameters
-        ----------
-        oplabel_filter : iterable, optional
-            A list, tuple, or set of operation labels whose symplectic
-            representations should be returned (if they exist).
-
-        Returns
-        -------
-        dict
-            keys are operation labels and/or just the root names of gates
-            (without any state space indices/labels).  Values are
-            `(symplectic_matrix, phase_vector)` tuples.
-        """
-        gfilter = set(oplabel_filter) if oplabel_filter is not None \
-            else None
-
-        srep_dict = {}
-
-        for gl, gate in self.operations.items():
-            if (gfilter is not None) and (gl not in gfilter): continue
-
-            if isinstance(gate, _op.EmbeddedOp):
-                assert(isinstance(gate.embedded_op, _op.StaticCliffordOp)), \
-                    "EmbeddedClifforGate contains a non-StaticCliffordOp!"
-                lbl = gl.name  # strip state space labels off since this is a
-                # symplectic rep for the *embedded* gate
-                srep = (gate.embedded_op.smatrix, gate.embedded_op.svector)
-            elif isinstance(gate, _op.StaticCliffordOp):
-                lbl = gl.name
-                srep = (gate.smatrix, gate.svector)
-            else:
-                lbl = srep = None
-
-            if srep:
-                if lbl in srep_dict:
-                    assert(srep == srep_dict[lbl]), \
-                        "Inconsistent symplectic reps for %s label!" % lbl
-                else:
-                    srep_dict[lbl] = srep
-
-        return srep_dict
+    def _iter_ops_for_clifford_symplectic_reps(self):
+        return self.operations.items()
 
     @_deprecated_fn
     def print_info(self):

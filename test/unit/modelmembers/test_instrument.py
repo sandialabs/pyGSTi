@@ -12,6 +12,15 @@ from ..util import BaseCase
 from .test_operation import ImmutableDenseOpBase
 
 
+def z_measurement_projectors(model):
+    """Ideal Z-measurement effect projectors built from `model`'s Mdefault POVM: each returned
+    array is the outer product of a POVM effect with itself, i.e. a rank-1 Kraus operator for
+    that outcome (used across this file, and by test_forwardsim.py's instrument fixtures)."""
+    E0 = np.asarray(model.povms['Mdefault']['0'].to_dense()).reshape(-1)
+    E1 = np.asarray(model.povms['Mdefault']['1'].to_dense()).reshape(-1)
+    return E0, E1, np.outer(E0, E0), np.outer(E1, E1)
+
+
 def _noisy_z_op_arrays(gamma=0.05, theta=np.deg2rad(10), eps=0.02):
     """Dense CPTR superops for a noisy Z measurement whose members have Kraus rank 2.
 
@@ -58,10 +67,7 @@ class InstrumentTestBase(BaseCase):
     def setUp(self):
         self.n_elements = 32
         self.model = std.target_model()
-        E = self.model.povms['Mdefault']['0'].to_dense().ravel()
-        Erem = self.model.povms['Mdefault']['1'].to_dense().ravel()
-        self.Gmz_plus = np.outer(E, E)
-        self.Gmz_minus = np.outer(Erem, Erem)
+        _, _, self.Gmz_plus, self.Gmz_minus = z_measurement_projectors(self.model)
         self.instrument: Instrument = self.constructor({'plus': self.Gmz_plus, 'minus': self.Gmz_minus})
         self.model.instruments['Iz'] = self.instrument
 
@@ -126,10 +132,7 @@ class FromCptrSuperopsTester(BaseCase):
 
     def setUp(self):
         model = std.target_model()
-        self.E0 = np.asarray(model.povms['Mdefault']['0'].to_dense()).reshape(-1)
-        self.E1 = np.asarray(model.povms['Mdefault']['1'].to_dense()).reshape(-1)
-        self.Gmz_plus = np.outer(self.E0, self.E0)
-        self.Gmz_minus = np.outer(self.E1, self.E1)
+        self.E0, self.E1, self.Gmz_plus, self.Gmz_minus = z_measurement_projectors(model)
         self.basis = model.basis
         # The default fixture is an ideal projective Z measurement: each effect is a
         # rank-1 projector (singular E_k), which exercises the gate kernel completion.
@@ -305,12 +308,8 @@ class FromEffectsTester(BaseCase):
 
     def setUp(self):
         model = std.target_model()
-        self.E0 = np.asarray(model.povms['Mdefault']['0'].to_dense()).reshape(-1)
-        self.E1 = np.asarray(model.povms['Mdefault']['1'].to_dense()).reshape(-1)
+        self.E0, self.E1, self.Gmz_plus, self.Gmz_minus = z_measurement_projectors(model)
         self.basis = model.basis
-        # Manual reference members for an ideal projective Z measurement.
-        self.Gmz_plus = np.outer(self.E0, self.E0)
-        self.Gmz_minus = np.outer(self.E1, self.E1)
 
     def _members(self, instrument):
         return {k: v.to_dense('HilbertSchmidt') for k, v in instrument.items()}

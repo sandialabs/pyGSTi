@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.19.3
+    jupytext_version: 1.19.4
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -14,6 +14,24 @@ kernelspec:
 # "Automagic" parallel GST using MPI
 This tutorial demonstrates how to compute GST estimates in parallel using MPI. 
 This requires the `mpi4py` python package, which must be able to connect to an underlying MPI library (say, openmpi).
+
+```{note}
+**This notebook requires a working system MPI launcher and is expected to fail
+in environments that do not have one.** The `run_mpi` call below shells out to
+an MPI launcher (`mpiexec`/`mpirun`/`mpiexec.hydra`) that must be discoverable on
+`PATH`. Installing the `mpi4py` Python package alone is *not* sufficient: it
+provides the Python bindings but not the launcher binary or the underlying MPI
+runtime.
+
+When run under the notebook regression tests (`pytest --nbval-lax`) on a machine
+without an MPI distribution, this notebook fails with
+`FileNotFoundError: resolve_mpiexec: could not find an MPI launcher on PATH`.
+This is a **known, accepted, environment-limited failure** and does not indicate
+a bug in pyGSTi. To run this notebook successfully, install a system MPI
+distribution (e.g. `openmpi-bin` on Debian/Ubuntu, or `module load openmpi` on
+an HPC cluster) so that `mpiexec` is on `PATH`. pyGSTi's CI does exactly this via
+its `before_install.sh` setup script.
+```
 
 We'll start by setting the stage.
 

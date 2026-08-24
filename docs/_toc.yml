@@ -41,6 +41,7 @@ parts:
       - file: markdown/rb/Samplers
       - file: markdown/rb/MultiRBExperiments
       - file: markdown/rb/BinaryRB
+      - file: markdown/rb/SU2QuditRB
     - file: markdown/protocols/VolumetricBenchmarks
       sections:
       - file: markdown/protocols/MirrorCircuitBenchmarks
@@ -98,7 +99,13 @@ parts:
     - file: markdown/simulation/ErrorGeneratorPropagation
     - file: markdown/simulation/ErrorGeneratorPolynomials
     - file: markdown/simulation/ForwardSimulationTypes
-  
+
+  - file: markdown/ml/Overview
+    sections:
+    - file: markdown/ml/CircuitEncoding
+    - file: markdown/ml/ErrorPropagation
+    - file: markdown/ml/Training
+
   - file: markdown/Reporting
     sections:
     - file: markdown/reporting/ReportGeneration
@@ -133,6 +140,10 @@ parts:
   - file: markdown/examples/GOpt-NonIdealTargets
   - file: markdown/examples/Reports-LGSTonly
   - file: markdown/examples/MCFE-Example
+  - file: markdown/examples/DEMEstimation
+    sections:
+    - file: markdown/examples/DEMEstimation-LassoAndCompressedSensing
+  - file: markdown/examples/DEMValidation
   - file: markdown/interfaces/IBMQExperiment
   - file: markdown/interfaces/CirqIntegration
 

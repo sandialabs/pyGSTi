@@ -1,11 +1,28 @@
+import itertools
+import warnings
+
 import numpy as np
 import scipy as sp
 from scipy.stats import norm
 from scipy.linalg import hadamard
-import stim 
+import stim
 
-from .utils import build_masked_hadamard
+from .utils import (
+    build_masked_hadamard,
+    counts_to_detector_arrays,
+    masked_hadamard_dot,
+    masks_to_packed,
+    pack_detector_samples,
+    packed_parity_matrix,
+    weighted_odd_counts,
+)
 from .io import dem_from_event_probabilities
+
+#: fit_specified_dem includes every detector pair among its polarization
+#: masks by default; above this many detectors that set is quadratically
+#: large and a restricted mask set is used instead (with a warning if the
+#: caller did not supply one explicitly).
+_ALL_PAIRS_POL_LIMIT = 48
 
 
 def dense_dem_estimation(syndrome_counts: dict) -> np.ndarray:
@@ -45,30 +62,33 @@ def dense_dem_estimation(syndrome_counts: dict) -> np.ndarray:
     return event_probabilities
 
 
-def estimate_dem_and_covariance(syndrome_counts: dict) -> tuple[np.ndarray, np.ndarray]:
+def estimate_dem_and_covariance_from_probabilities(
+    probabilities: np.ndarray,
+    n_runs: int,
+) -> tuple[np.ndarray, np.ndarray]:
     """
-    Estimate a dense DEM from syndrome counts using log and Hadamard transforms.
-    Also computes covariance matrix from standard error formula using Jacobian.
+    Dense DEM estimate and covariance from a full outcome-probability vector.
+
+    This is the computational core of `estimate_dem_and_covariance`, exposed
+    separately so callers that already hold the (marginal) outcome
+    distribution as an array -- e.g. the vectorized lattice-pruning checks --
+    can skip the bitstring-dict round trip.
 
     Parameters:
-        syndrome_counts: dict
-            Mapping bitstrings (e.g., '0011') to counts
+        probabilities: np.ndarray
+            2**n outcome probabilities in increasing binary order.
+        n_runs: int
+            Number of shots behind the probabilities (sets the multinomial
+            covariance scale).
 
     Returns:
         event_probabilities: ndarray
-            Estimated probabilities
+            Estimated probabilities.
         covariance_matrix: ndarray
-            Covariance matrix of estimated probabilities
+            Covariance matrix of estimated probabilities.
     """
-    n = len(next(iter(syndrome_counts)))
-    n_runs = sum(syndrome_counts.values())
-    size = 2 ** n
-
-    # Estimate bitstring probabilities from input bitstrings
-    probabilities = np.zeros(size)
-    for i in range(size):
-        bitstring = format(i, f"0{n}b")
-        probabilities[i] = syndrome_counts.get(bitstring, 0) / n_runs
+    probabilities = np.asarray(probabilities, dtype=float)
+    size = probabilities.size
 
     # Transform to event probabilities
     H = hadamard(size)
@@ -96,6 +116,34 @@ def estimate_dem_and_covariance(syndrome_counts: dict) -> tuple[np.ndarray, np.n
     covariance_matrix = J @ cov_input @ J.T
 
     return event_probabilities, covariance_matrix
+
+
+def estimate_dem_and_covariance(syndrome_counts: dict) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Estimate a dense DEM from syndrome counts using log and Hadamard transforms.
+    Also computes covariance matrix from standard error formula using Jacobian.
+
+    Parameters:
+        syndrome_counts: dict
+            Mapping bitstrings (e.g., '0011') to counts
+
+    Returns:
+        event_probabilities: ndarray
+            Estimated probabilities
+        covariance_matrix: ndarray
+            Covariance matrix of estimated probabilities
+    """
+    n = len(next(iter(syndrome_counts)))
+    n_runs = sum(syndrome_counts.values())
+    size = 2 ** n
+
+    # Estimate bitstring probabilities from input bitstrings
+    probabilities = np.zeros(size)
+    for i in range(size):
+        bitstring = format(i, f"0{n}b")
+        probabilities[i] = syndrome_counts.get(bitstring, 0) / n_runs
+
+    return estimate_dem_and_covariance_from_probabilities(probabilities, n_runs)
 
 
 def threshold_probabilities(
@@ -169,12 +217,235 @@ def compute_outcome_distribution_from_dem(dem: stim.DetectorErrorModel) -> np.nd
     probabilities = hadamard(2 ** dem.num_detectors) @ polarizations / (2 ** dem.num_detectors)
     return probabilities
 
+def _as_exclusive_blocks(dem, num_detectors=None):
+    """
+    Normalize a DEM-with-exclusive-events description to a list of blocks.
+
+    Each block is a list of (probability, detector_indices) branches; a block
+    with a single branch is an ordinary independent event. Accepts a
+    stim.DetectorErrorModel (all events independent), an object with
+    ``.instructions`` / ``.num_detectors`` attributes (e.g. a
+    HighRankDetectorErrorModel, whose instructions are events with
+    ``.probability`` / ``.detectors`` or exclusive blocks with ``.events``),
+    or a raw iterable of blocks of (probability, detector_indices) pairs.
+
+    Returns:
+        blocks: list[list[tuple[float, tuple[int, ...]]]]
+        num_detectors: int
+    """
+    if isinstance(dem, stim.DetectorErrorModel):
+        blocks = []
+        for inst in dem.flattened():
+            if inst.type == "error":
+                dets = tuple(t.val for t in inst.targets_copy() if t.is_relative_detector_id())
+                blocks.append([(inst.args_copy()[0], dets)])
+        num_detectors = num_detectors or dem.num_detectors
+    elif hasattr(dem, "instructions"):
+        blocks = []
+        for inst in dem.instructions:
+            branches = inst.events if hasattr(inst, "events") else (inst,)
+            blocks.append([(ev.probability, tuple(ev.detectors)) for ev in branches])
+        num_detectors = num_detectors or dem.num_detectors
+    else:
+        blocks = [[(float(p), tuple(dets)) for p, dets in block] for block in dem]
+        if num_detectors is None:
+            num_detectors = 1 + max(
+                (d for block in blocks for _, dets in block for d in dets), default=-1
+            )
+
+    for block in blocks:
+        total = sum(p for p, _ in block)
+        if any(p < 0 for p, _ in block) or total > 1 + 1e-9:
+            raise ValueError(
+                f"branch probabilities of an exclusive block must be nonnegative "
+                f"and sum to <= 1 (got sum {total})"
+            )
+    return blocks, num_detectors
+
+
+def compute_outcome_distribution_from_high_rank_dem(dem, num_detectors=None) -> np.ndarray:
+    """
+    Compute the outcome distribution of a DEM that may contain exclusive
+    (high-rank) events, using the Hadamard/Fourier transform.
+
+    An exclusive block with branch probabilities p_1..p_k applies at most one
+    of its branches per shot (branch i with probability p_i, nothing with
+    probability 1 - sum p_i). Distinct blocks and independent events act
+    independently, so the syndrome distribution is their XOR-convolution and
+    its Walsh-Hadamard transform factorizes into per-block polarizations:
+
+        pol(s) = prod_blocks (1 - 2 * sum_{branches i with <s, f_i> odd} p_i)
+
+    where f_i is the branch's detector-flip vector. For a single-branch block
+    this reduces to the familiar independent-event factor (1 - 2 p)^{<s, f>}.
+    As in compute_outcome_distribution_from_dem, the product is accumulated in
+    log space via per-block attenuations -log(1 - 2 q(s)), where q(s) is the
+    block's odd-overlap probability mass at mask s. This requires q(s) < 1/2
+    for every block and mask; a ValueError is raised otherwise.
+
+    Logical observable targets, if present, are ignored; the returned
+    distribution is over detector outcomes only.
+
+    Parameters:
+        dem: stim.DetectorErrorModel, or HighRankDetectorErrorModel-like
+            object, or iterable of blocks of (probability, detector_indices)
+            branches (see _as_exclusive_blocks).
+        num_detectors: int, optional
+            Overrides / provides the number of detectors.
+
+    Returns:
+        probabilities: np.ndarray
+            Array of 2^n probabilities, in increasing binary order (D0 is the
+            least significant bit of the outcome index).
+    """
+    blocks, n = _as_exclusive_blocks(dem, num_detectors)
+    size = 2 ** n
+    all_bitstrings = np.array([
+        [int(bit) for bit in format(i, f"0{n}b")]
+        for i in range(size)
+    ])
+
+    attenuations = np.zeros(size, dtype=float)
+    for block in blocks:
+        odd_overlap_mass = np.zeros(size, dtype=float)
+        for prob, dets in block:
+            event_vec = [1 if (n - idx - 1) in dets else 0 for idx in range(n)]
+            odd_overlap_mass += prob * (1 - (-1) ** np.dot(all_bitstrings, event_vec)) / 2
+        if np.any(odd_overlap_mass >= 0.5):
+            raise ValueError(
+                "block has odd-overlap probability mass q(s) >= 1/2 for some "
+                "parity mask; only blocks with q(s) < 1/2 are supported"
+            )
+        attenuations += -np.log(1 - 2 * odd_overlap_mass)
+
+    polarizations = np.exp(-attenuations)
+    polarizations[0] = 1
+    probabilities = hadamard(size) @ polarizations / size
+    return probabilities
+
+
+def default_polarization_masks(dem_masks, n_bits: int) -> list:
+    """
+    A restricted polarization-mask set for fitting a sparse DEM at scale.
+
+    Contains every single-detector mask, every pair of detectors that
+    co-occur within some DEM event, and the event masks themselves. This
+    grows linearly with the number of detectors and events (unlike the
+    all-pairs default of `fit_specified_dem`, which is quadratic in the
+    detector count) while still constraining every event locally.
+
+    Parameters:
+        dem_masks: Iterable[int]
+            Integer bitmasks of the DEM events being fit.
+        n_bits: int
+            Number of detectors.
+
+    Returns:
+        pol_masks: list[int]
+            Sorted, deduplicated polarization masks.
+    """
+    pol = set(int(m) for m in dem_masks if int(m) != 0)
+    pol.update(1 << i for i in range(n_bits))
+    for m in dem_masks:
+        mm = int(m)
+        bits = []
+        while mm:
+            low = mm & -mm
+            bits.append(low.bit_length() - 1)
+            mm ^= low
+        for a, b in itertools.combinations(bits, 2):
+            pol.add((1 << a) | (1 << b))
+    return sorted(pol)
+
+
+def _fit_specified_dem_packed(
+    syndrome_counts,
+    dem_masks,
+    pol_masks,
+    n_bits,
+    return_covariance,
+    cov_chunk=4096,
+):
+    """
+    Bit-packed implementation of the `fit_specified_dem` math.
+
+    Identical statistics to the legacy dense path: exact integer
+    polarizations, the same (1 - H)/2 design matrix, pseudoinverse solve and
+    Jacobian-propagated multinomial covariance -- but never materializes the
+    (num_pol_masks x num_syndromes) Hadamard submatrix, so it scales to
+    hundreds of detectors.
+    """
+    samples, weights = counts_to_detector_arrays(syndrome_counts)
+    n_runs = int(weights.sum())
+    packed = pack_detector_samples(samples)
+
+    pol_list = sorted(set(int(m) for m in pol_masks))
+    pol_packed = masks_to_packed(pol_list, n_bits)
+    dem_packed = masks_to_packed(dem_masks, n_bits)
+
+    # Exact integer polarizations: pol = (N - 2 * weighted odd count) / N.
+    odd = weighted_odd_counts(packed, weights, pol_packed)
+    polarizations = (n_runs - 2 * odd) / n_runs
+
+    usable = polarizations > 0
+    if not usable.all():
+        warnings.warn(
+            f"fit_specified_dem: dropping {int((~usable).sum())} polarization "
+            "mask(s) with non-positive observed polarization (their "
+            "log-polarizations are undefined)."
+        )
+        pol_list = [m for m, u in zip(pol_list, usable) if u]
+        pol_packed = pol_packed[usable]
+        polarizations = polarizations[usable]
+
+    depolarizations = -np.log(polarizations)
+    W = packed_parity_matrix(pol_packed, dem_packed).astype(float)
+    Winv = np.linalg.pinv(W)
+    attenuations = Winv @ depolarizations
+    event_probs = 0.5 - 0.5 * np.exp(-attenuations)
+
+    if not return_covariance:
+        return event_probs, None
+
+    # J = diag(0.5 e^{-att}) @ Winv @ (-diag(1/pol)) @ H_sub with
+    # cov_input = (diag(p) - p p^T) / n; accumulate J diag(p) J^T and J p in
+    # syndrome chunks so H_sub never exists in full.
+    A = (0.5 * np.exp(-attenuations))[:, None] * Winv
+    A = A * (-1.0 / polarizations)[None, :]
+
+    n_events = len(dem_masks)
+    probabilities = weights / n_runs
+    pol_bits = np.zeros((len(pol_list), n_bits), dtype=np.float32)
+    for i, m in enumerate(pol_list):
+        mm = int(m)
+        while mm:
+            low = mm & -mm
+            pol_bits[i, low.bit_length() - 1] = 1.0
+            mm ^= low
+
+    S1 = np.zeros((n_events, n_events), dtype=float)
+    v = np.zeros(n_events, dtype=float)
+    sample_bits = samples.astype(np.float32)
+    for i0 in range(0, samples.shape[0], cov_chunk):
+        chunk_bits = sample_bits[i0:i0 + cov_chunk]
+        # Overlap counts are exact small integers in float32.
+        parity = (pol_bits @ chunk_bits.T).astype(np.int64) & 1
+        H_c = 1.0 - 2.0 * parity
+        K_c = A @ H_c
+        p_c = probabilities[i0:i0 + cov_chunk]
+        S1 += (K_c * p_c) @ K_c.T
+        v += K_c @ p_c
+    covariance_matrix = (S1 - np.outer(v, v)) / n_runs
+    return event_probs, covariance_matrix
+
+
 def fit_specified_dem(
     syndrome_counts,
     masks,
     atol=1e-4,
     return_probs=False,
     return_covariance=False,
+    pol_masks=None,
 ):
     """
     Given a set of DEM events (as integer bitmasks), find the best-fit error rates.
@@ -191,6 +462,14 @@ def fit_specified_dem(
             Return event probabilities instead of a DEM.
         return_covariance: bool
             Return covariance matrix for event probabilities.
+        pol_masks: Optional[Sequence[int]]
+            Polarization masks used to constrain the fit. Default (None)
+            uses the event masks plus every single and every pair of
+            detectors when the detector count is at most
+            `_ALL_PAIRS_POL_LIMIT`; above that the quadratic all-pairs set is
+            replaced by `default_polarization_masks(masks, n_bits)` (with a
+            warning). Pass an explicit sequence to control the trade-off
+            yourself.
 
     Returns:
         stim.DetectorErrorModel or np.ndarray
@@ -198,44 +477,63 @@ def fit_specified_dem(
     if isinstance(masks, set):
         masks = sorted(list(masks))
     masks = np.array(masks)
-    counts = np.fromiter(syndrome_counts.values(), dtype=float)
-    n_runs = sum(counts)
     n_bits = len(next(iter(syndrome_counts)))
-    probabilities = counts/n_runs
-
-    # Compute polarizations
     dem_masks = masks
-    pol_masks = set(masks)
-    pol_masks.update([1 << i for i in range(n_bits)])
-    pol_masks.update([1 << i | 1 << j for i in range(1, n_bits) for j in range(i)])
-    pol_masks = np.array(list(pol_masks))
 
-    # Apply transformations
-    syndrome_masks = [int(synd, 2) for synd in syndrome_counts.keys()]
-    H_sub = build_masked_hadamard(pol_masks, syndrome_masks)
-    polarizations = H_sub @ counts / n_runs
-    depolarizations = -np.log(polarizations)
-    W = (np.ones((len(pol_masks), len(dem_masks))) - build_masked_hadamard(pol_masks, dem_masks)) / 2
-    Winv = np.linalg.pinv(W)
-    attenuations = Winv @ depolarizations
-    event_probs = 0.5 - 0.5 * np.exp(-attenuations)
+    if pol_masks is None and n_bits <= _ALL_PAIRS_POL_LIMIT:
+        # Legacy dense path: all singles and pairs.
+        counts = np.fromiter(syndrome_counts.values(), dtype=float)
+        n_runs = sum(counts)
+        probabilities = counts / n_runs
 
-    if return_covariance:
-        # Compute the Jacobian of event_probabilities w.r.t. input probabilities
-        # # Chain rule: d(event_probs)/d(probabilities)
-        # # J = d(event_probs)/d(attenuations) * d(attenuations)/d(depolarizations)
-        # #     * d(depolarizations)/d(polarizations) * d(polarizations)/d(probabilities)       
-        d_event_d_att = 0.5 * np.exp(-attenuations)
-        d_att_d_dep = Winv
-        d_dep_d_pol = -np.diag(1 / polarizations)
-        d_pol_d_prob = H_sub
+        pol_mask_set = set(masks)
+        pol_mask_set.update([1 << i for i in range(n_bits)])
+        pol_mask_set.update([1 << i | 1 << j for i in range(1, n_bits)
+                             for j in range(i)])
+        pol_mask_arr = np.array(list(pol_mask_set))
 
-        # Compute covariance of input probabilities (multinomial)
-        cov_input = np.diag(probabilities) - np.outer(probabilities, probabilities)
-        cov_input /= n_runs
+        syndrome_masks = [int(synd, 2) for synd in syndrome_counts.keys()]
+        # Streamed product: the dense (pol_masks x syndromes) Hadamard
+        # submatrix is only materialized when the covariance (which needs
+        # the full Jacobian) is requested.
+        polarizations = masked_hadamard_dot(pol_mask_arr, syndrome_masks,
+                                            counts) / n_runs
+        depolarizations = -np.log(polarizations)
+        W = (np.ones((len(pol_mask_arr), len(dem_masks)))
+             - build_masked_hadamard(pol_mask_arr, dem_masks)) / 2
+        Winv = np.linalg.pinv(W)
+        attenuations = Winv @ depolarizations
+        event_probs = 0.5 - 0.5 * np.exp(-attenuations)
 
-        J = np.diag(d_event_d_att) @ d_att_d_dep @ d_dep_d_pol @ d_pol_d_prob
-        covariance_matrix = J @ cov_input @ J.T
+        covariance_matrix = None
+        if return_covariance:
+            # Compute the Jacobian of event_probabilities w.r.t. input probabilities
+            # # Chain rule: d(event_probs)/d(probabilities)
+            # # J = d(event_probs)/d(attenuations) * d(attenuations)/d(depolarizations)
+            # #     * d(depolarizations)/d(polarizations) * d(polarizations)/d(probabilities)
+            d_event_d_att = 0.5 * np.exp(-attenuations)
+            d_att_d_dep = Winv
+            d_dep_d_pol = -np.diag(1 / polarizations)
+            d_pol_d_prob = build_masked_hadamard(pol_mask_arr, syndrome_masks)
+
+            # Compute covariance of input probabilities (multinomial)
+            cov_input = np.diag(probabilities) - np.outer(probabilities, probabilities)
+            cov_input /= n_runs
+
+            J = np.diag(d_event_d_att) @ d_att_d_dep @ d_dep_d_pol @ d_pol_d_prob
+            covariance_matrix = J @ cov_input @ J.T
+    else:
+        if pol_masks is None:
+            warnings.warn(
+                f"fit_specified_dem: {n_bits} detectors exceed "
+                f"_ALL_PAIRS_POL_LIMIT={_ALL_PAIRS_POL_LIMIT}; using the "
+                "restricted default_polarization_masks set instead of all "
+                "detector pairs. Pass pol_masks explicitly to control this."
+            )
+            pol_masks = default_polarization_masks(dem_masks, n_bits)
+        event_probs, covariance_matrix = _fit_specified_dem_packed(
+            syndrome_counts, dem_masks, pol_masks, n_bits, return_covariance,
+        )
 
     if return_probs:
         if return_covariance:

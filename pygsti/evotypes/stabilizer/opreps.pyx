@@ -18,6 +18,7 @@ import copy as _copy
 from ...baseobjs.statespace import QubitSpace as _QubitSpace
 
 from ...baseobjs.statespace import StateSpace as _StateSpace
+from ...pgtypes import SpaceT
 from ...tools import internalgates as _itgs
 from ...tools import symplectic as _symp
 from ...tools import basistools as _bt
@@ -98,7 +99,7 @@ cdef class OpRepClifford(OpRep):
                                          <INT*>self.smatrix_inv.data, <INT*>self.svector_inv.data,
                                          <double complex*>self.unitary_dagger.data, self.state_space.num_qubits)
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space in ('minimal', 'Hilbert'):
             return self.unitary
         elif on_space == 'HilbertSchmidt':
@@ -108,16 +109,6 @@ cdef class OpRepClifford(OpRep):
 
     def __reduce__(self):
         return (OpRepClifford, (self.unitary, (self.smatrix, self.svector), self.basis, self.state_space))
-
-
-cdef class OpRepStandard(OpRepClifford):   # TODO
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        super(OpRepStandard, self).__init__(U, None, basis, state_space)
 
 
 cdef class OpRepComposed(OpRep):

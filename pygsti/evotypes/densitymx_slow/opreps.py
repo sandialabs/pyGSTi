@@ -80,7 +80,7 @@ class OpRepDenseSuperop(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx_slow' evotype cannot produce Hilbert-space ops!")
         return self.base
@@ -115,7 +115,7 @@ class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         self.superop_base[:, :] = _ot.unitary_to_superop(self.base, self.basis)
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space in ('minimal', 'HilbertSchmidt'):
             return self.to_dense_superop()
         else:  # 'Hilbert'
@@ -167,27 +167,10 @@ class OpRepSparse(OpRep):
         Aadj = self.A.conjugate(copy=True).transpose()
         return _StateRepDense(Aadj.dot(state.data), state.state_space, None)
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx_slow' evotype cannot produce Hilbert-space ops!")
         return self.A.toarray()
-
-
-class OpRepStandard(OpRepDenseSuperop):
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        self.name = name
-        self.basis = basis
-
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        superop = _ot.unitary_to_superop(U, basis)
-        state_space = _StateSpace.cast(state_space)
-        assert(superop.shape[0] == state_space.dim)
-
-        super(OpRepStandard, self).__init__(superop, basis, state_space)
 
 
 class OpRepKraus(OpRep):
@@ -212,7 +195,7 @@ class OpRepKraus(OpRep):
     def copy(self):
         return OpRepKraus(self.basis, list(self.kraus_reps), self.state_space)
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         assert(on_space in ('minimal', 'HilbertSchmidt')), \
             'Can only compute OpRepKraus.to_dense on HilbertSchmidt space!'
         return sum([rep.to_dense(on_space) for rep in self.kraus_reps])
@@ -245,7 +228,7 @@ class OpRepRandomUnitary(OpRep):
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    def to_dense(self, on_space: SpaceT):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         assert(on_space in ('minimal', 'HilbertSchmidt'))  # below code only works in this case
         return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
 

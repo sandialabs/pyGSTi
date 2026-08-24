@@ -12,6 +12,7 @@ Symplectic representation utility functions
 #***************************************************************************************************
 import numpy as _np
 import copy as _copy
+from collections.abc import Mapping as _Mapping
 
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.smartcache import smart_cached
@@ -687,8 +688,6 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
     # columns of state_s rather than the last n.
 
     a = qubit_index
-    #print("DB: pauli Z_%d meas on state:" % a) #DEBUG
-    #print(state_s); print(state_p) #DEBUG
 
     # Let A be the Pauli op being measured
     #Step1: determine if all stabilizer elements commute with Z_a
@@ -698,17 +697,13 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
     for col in range(n):
         if state_s[a, col] == 1:
             p = col
-            #print("Column %d anticommutes with Z_%d" % (p,a)) #DEBUG
 
             # p is first stabilizer that anticommutes w/Z_a. Outcome is random,
             # and we just need to update the state (if requested).
             s_out = state_s.copy(); p_out = state_p.copy()
             for i in range(two_n):
                 if i != p and state_s[a, i] == 1:
-                    #print("COLSUM ",i,p) #DEBUG
                     colsum(i, p, s_out, p_out, n)
-                    #print(s_out); print(p_out) #DEBUG
-                    #print("-----") #DEBUG
             s_out[:, p + n] = s_out[:, p]; p_out[p + n] = p_out[p]  # set p-th col -> (p+n)-th col
             s_out[:, p] = 0; s_out[a + n, p] = 1  # p-th col = I*...Z_a*...I stabilizer
 
@@ -716,8 +711,6 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
             p_out0 = p_out.copy(); p_out0[p] = (4 - (icount % 4)) % 4  # so overall phase is 0
             p_out1 = p_out.copy(); p_out1[p] = (p_out0[p] + 2) % 4    # so overall phase is -1
             return 0.5, 0.5, s_out, s_out, p_out0, p_out1  # Note: s is same for 0 and 1 outcomes
-
-    #print("Nothing anticommutes!") #DEBUG
 
     # no break ==> all commute, so outcome is deterministic, so no
     # state update; just determine whether Z_a or -Z_a is in the stabilizer,
@@ -730,10 +723,8 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
     icount = acc_p[0] + sum([3 if (acc_s[i] == acc_s[i + n] == 1) else 0 for i in range(n)])  # 11 = -iY convention
     icount = icount % 4
     if icount == 0:  # outcome is always zero
-        #print("Always 0!") #DEBUG
         return (1.0, 0.0, state_s, state_s, state_p, state_p)
     else:  # outcome is always 1
-        #print("Always 1!") #DEBUG
         assert(icount == 2)  # should never get 1 or 3 (low bit should always be 0)
         return (0.0, 1.0, state_s, state_s, state_p, state_p)
 
@@ -1058,6 +1049,25 @@ def compute_internal_gate_symplectic_representations(gllist=None):
     return srep_dict
 
 
+def _lookup_clifford_srep_for_label(gate_label: _Label, srep_dict: _Mapping, pspec=None):
+    """Resolve the symplectic representation for a full operation label.
+
+    Symplectic representation dictionaries historically used gate names as
+    keys.  Argumented or otherwise label-dependent gates need finer-grained
+    lookup, so exact :class:`Label` keys and label-aware callable values are
+    checked before falling back to the legacy name-based lookup.
+    """
+    if gate_label in srep_dict:
+        srep = srep_dict[gate_label]
+        return srep(gate_label) if callable(srep) else srep
+    if gate_label.name in srep_dict:
+        srep = srep_dict[gate_label.name]
+        return srep(gate_label) if callable(srep) else srep
+    if pspec is not None:
+        return pspec.clifford_symplectic_rep_of(gate_label)
+    raise KeyError("No symplectic representation for Clifford gate label %s" % str(gate_label))
+
+
 def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     """
     Returns the symplectic representation of the composite Clifford implemented by the specified Clifford circuit.
@@ -1111,7 +1121,7 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         layer = circuit.layer_label(i)
         # future : update so that we don't use this function, because it slower than necessary (possibly much slower).
         layer_s, layer_p = symplectic_rep_of_clifford_layer(layer, n, circuit.line_labels, srep_dict,
-                                                            add_internal_sreps=False)
+                                                            add_internal_sreps=False, pspec=pspec)
         #s, p = compose_cliffords(s, p, layer_s, layer_p, do_checks=False)
         if _fastcalc is not None:
             s, p = _fastcalc.fast_compose_cliffords(s, p, layer_s, layer_p)
@@ -1121,7 +1131,8 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
     return s, p
 
 
-def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=None, add_internal_sreps=True):
+def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=None, add_internal_sreps=True,
+                                     pspec=None):
     """
     Constructs the symplectic representation of the n-qubit Clifford implemented by a single quantum circuit layer.
 
@@ -1157,6 +1168,11 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         If True, the symplectic reps for internal gates are calculated and added to srep_dict.
         For speed, calculate these reps once, store them in srep_dict, and set this to False.
 
+    pspec : QubitProcessorSpec, optional
+        A processor specification that can supply label-aware symplectic
+        representations when `srep_dict` does not contain a matching exact
+        label or gate name entry.
+
     Returns
     -------
     s : numpy array
@@ -1188,7 +1204,7 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
         layer = _Label(layer)
 
     for sub_lbl in layer.components:
-        matrix, phase = srep_dict[sub_lbl.name]
+        matrix, phase = _lookup_clifford_srep_for_label(sub_lbl, srep_dict, pspec)
         nforgate = sub_lbl.num_qubits
         sub_lbl_qubits = sub_lbl.qubits if (sub_lbl.qubits is not None) else q_labels
         for ind1, qlabel1 in enumerate(sub_lbl_qubits):
