@@ -4,6 +4,7 @@
 
 ### Added
 * Character gate set tomography (cGST): `pygsti.protocols.cgst` (`CharacterGSTGermDesign`, `CharacterGSTDesign`, `CharacterDecay`, `CharacterGST`, and a 1Q {S, sqrt(Y)} design builder with standard-gauge parameter extraction), abelian character utilities (`pygsti.tools.chartools`), character-weighted decay fitting (`pygsti.algorithms.cgstfit`), and a tutorial (`docs/markdown/protocols/CharacterGST.md`)
+* Character phase estimation (CPE): `pygsti.protocols.cpe` (`CharacterPhaseEstimationDesign`, `CharacterPhaseEstimation`, a non-degenerate diagonal 2Q demonstration gate/model/design with IZ/ZI/ZZ generator-angle extraction), combining cGST's character projectors with RPE's geometric-depth unwinding, and a tutorial (`docs/markdown/protocols/CharacterPhaseEstimation.md`)
 
 ## [0.10.1] - 2026-07-06
 

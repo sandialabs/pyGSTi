@@ -11,6 +11,7 @@ Sub-package containing protocol objects and related inputs, data, and results
 #***************************************************************************************************
 
 from .cgst import *
+from .cpe import *
 from .freeformsim import *
 from .gst import *
 from .modeltest import *
