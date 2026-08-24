@@ -292,7 +292,13 @@ def main() -> int:
                     help="notebooks touching shared state, in dependency order")
     ap.add_argument("--exclude", nargs="*", default=EXCLUDE,
                     help="notebooks to leave outputless (paths under docs/markdown, "
-                         "no .ipynb suffix); pass with no values to execute everything")
+                         "no .ipynb suffix); pass with no values to execute everything. "
+                         "REPLACES the built-in list -- to add to it, use --exclude-also")
+    ap.add_argument("--exclude-also", nargs="*", default=[],
+                    help="additional notebooks to leave outputless, on top of whatever "
+                         "--exclude resolved to. For environment-driven exclusions (a "
+                         "missing optional dependency, say) that should not silently "
+                         "drop the deliberate ones")
     ap.add_argument("--repo-root", default=os.environ.get("GITHUB_WORKSPACE") or os.getcwd())
     a = ap.parse_args()
 
@@ -302,6 +308,10 @@ def main() -> int:
     # different ordering every run -- observed in advanced/models/Operators,
     # where elementary error-generator labels came out in a different order.
     os.environ["PYTHONHASHSEED"] = "0"
+
+    # A caller's environment-driven exclusions add to the deliberate ones rather
+    # than replacing them; see --exclude-also.
+    a.exclude = list(dict.fromkeys(list(a.exclude) + list(a.exclude_also)))
 
     scrubs = path_scrubs(a.repo_root)
 

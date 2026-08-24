@@ -53,11 +53,11 @@ jobs:
 
   docs-notebooks: # Rebuild the ReadTheDocs "develop-with-notebooks" branch
     # ReadTheDocs builds the hosted docs from `develop-with-notebooks`, NOT from
-    # `develop`. That branch is `develop` plus jupytext-generated *.ipynb
-    # companions committed next to each notebook *.md, so the Colab/Binder launch
-    # buttons (which fetch from GitHub) resolve to real notebooks. We regenerate
-    # the whole branch as a single atomic, force-pushed commit so RTD never sees
-    # a half-built state.
+    # `develop`. That branch is `develop` with each notebook page's *.md replaced by
+    # an *.ipynb carrying that page's executed output -- so the hosted pages show
+    # results rather than bare source, and the Colab/Binder launch buttons (which
+    # fetch from GitHub) resolve to real notebooks. We regenerate the whole branch as
+    # a single atomic, force-pushed commit so RTD never sees a half-built state.
     runs-on: ubuntu-latest
 
     # Only after tests pass on a push to develop.
@@ -69,30 +69,62 @@ jobs:
       with:
         fetch-depth: 0
         token: ${{ secrets.PYGSTI_TOKEN }}
-    - uses: actions/setup-python@v5
+    # Nothing is generated here. The executed .ipynb come from the notebook step in
+    # the `build` matrix (reuseable-main.yml), which ran against this same commit, so
+    # this job needs neither Python nor jupytext -- it only rearranges files and commits.
+    - name: Download executed notebooks
+      uses: actions/download-artifact@v4
       with:
-        python-version: '3.11'
-    - name: Install jupytext
-      run: pip install 'jupytext>=1.16'
+        name: executed-notebooks
+        path: docs/markdown
     - name: Build develop-with-notebooks branch
       run: |
+        set -euo pipefail
         git config --global user.name 'PyGSTi'
         git config --global user.email 'pygsti@noreply.github.com'
-        # Start the branch from the exact develop commit that just passed tests.
+
+        # upload-artifact roots its archive at the least-common ancestor of the files
+        # it matched -- docs/markdown, since notebooks live under advanced/, guides/
+        # and start/. Check the shape survived rather than trusting it: a mis-rooted
+        # download would push a branch with no notebooks at all, and RTD would render
+        # prose-only pages with nothing anywhere reporting a problem.
+        n=$(find docs/markdown -name '*.ipynb' -not -path '*/.ipynb_checkpoints/*' | wc -l)
+        echo "downloaded ${n} executed notebooks"
+        if [ "${n}" -lt 70 ]; then
+          echo "::error::expected ~76 executed notebooks under docs/markdown, found ${n}"
+          exit 1
+        fi
+
+        # Start the branch from the exact develop commit that just passed tests. The
+        # downloaded .ipynb are gitignored on develop, so they survive this untouched.
         git checkout -B develop-with-notebooks ${GITHUB_SHA}
-        # Generate an .ipynb next to each notebook .md. --sync honors
-        # docs/jupytext.toml (formats = "ipynb,md:myst") and skips plain-markdown
-        # pages that lack a jupytext header (index/landing pages).
-        shopt -s globstar
-        jupytext --sync docs/markdown/**/*.md
+
+        # Render from the .ipynb, not the .md. Sphinx picks ONE source per document,
+        # and jupyter-book warns "multiple files found for the document" -- 74 times --
+        # when both exist. That warning is logged without a type=, so suppress_warnings
+        # cannot silence it and any -W build fails on it. Dropping the superseded .md
+        # also removes the dependence on the undocumented accident that "ipynb" sorts
+        # before "md", which is the only reason the .ipynb would win otherwise.
+        #
+        # Plain-markdown pages -- index and landing pages, which carry no jupytext
+        # header and so have no paired .ipynb -- are left alone. This uses find rather
+        # than a `docs/markdown/**/*.ipynb` glob so it does not depend on `shopt -s
+        # globstar`, which the previous version of this job set and which silently
+        # matches only one directory level deep on any shell that lacks it.
+        find docs/markdown -name '*.ipynb' -not -path '*/.ipynb_checkpoints/*' -print0 \
+          | while IFS= read -r -d '' nb; do rm -f "${nb%.ipynb}.md"; done
+
         # Point the hosted build's launch links at this branch (the
-        # edit_button_branch extension keeps Show source / Suggest edit on develop).
-        # Only the repository.branch key (2-space indent) is rewritten; the
+        # edit_button_branch extension keeps Show source / Suggest edit on develop,
+        # where the .md this page was written from still exists). Only the
+        # repository.branch key (2-space indent) is rewritten; the
         # pygsti_edit_branch value stays on develop. The trailing comment is kept.
         sed -i -E 's|^(  branch: )develop\b(.*)$|\1develop-with-notebooks\2|' docs/_config.yml
         grep -q '^  branch: develop-with-notebooks' docs/_config.yml  # fail loudly if the rewrite missed
-        # Force-add the generated notebooks (gitignored on develop) + config change.
-        git add -f docs/markdown
+        # -A so the .md deletions stage, -f because .ipynb is gitignored on develop.
+        # Only .ipynb was downloaded, so the offline/ asset dirs and *_checkpoints/
+        # trees that executing the tutorials leaves behind are not here to be swept in.
+        git add -A -f docs/markdown
         git add docs/_config.yml
         git commit -m "Auto-build notebooks for ReadTheDocs [skip ci]"
         git push --force origin develop-with-notebooks
