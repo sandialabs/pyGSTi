@@ -1,0 +1,149 @@
+# Assemble and force-push a ReadTheDocs source branch.
+#
+# ReadTheDocs does not execute notebooks (docs/_config.yml sets
+# `execute_notebooks: 'off'`), so the branch it builds from has to already carry
+# the executed output. This workflow builds such a branch: it takes a source
+# commit plus the `executed-notebooks` artifact produced by reuseable-main.yml's
+# "Execute the docs notebooks" step, replaces each notebook page's *.md with the
+# *.ipynb holding that page's output, retargets the config, and force-pushes the
+# result as a single atomic commit so RTD never sees a half-built state.
+#
+# Two callers:
+#   * develop.yml -- the production path, staging `develop-with-notebooks` on
+#     every green push to develop.
+#   * docs-staging.yml -- a manual preview of any branch, staged under whatever
+#     name you pass, so a docs change can be seen rendered on RTD before it merges.
+#
+# Both share this file precisely so the preview exercises the production code
+# path rather than a lookalike of it.
+
+name: Stage a ReadTheDocs source branch
+
+on:
+  workflow_call:
+    inputs:
+      source-sha:
+        description: 'Commit to build the staging branch from.'
+        required: true
+        type: string
+      target-branch:
+        description: 'Branch to force-push. Overwritten without warning.'
+        required: true
+        type: string
+      edit-branch:
+        description: >-
+          Branch the "Show source" / "Suggest edit" buttons point at -- i.e. where
+          the human-editable .md lives. For the production build that is `develop`.
+          For a preview of an unmerged branch it must be that branch, since the
+          pages being previewed do not exist on develop yet.
+        required: false
+        type: string
+        default: 'develop'
+      min-notebooks:
+        description: 'Fail if fewer than this many executed notebooks arrive.'
+        required: false
+        type: number
+        default: 70
+    secrets:
+      PYGSTI_TOKEN:
+        description: 'Token with push access to target-branch.'
+        required: true
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.PYGSTI_TOKEN }}
+    # Nothing is generated here. The executed .ipynb come from the notebook step in
+    # the caller's `build` job (reuseable-main.yml), which ran against this same
+    # commit; artifacts are scoped to a workflow run and a reusable workflow shares
+    # its caller's run, so this download resolves to that upload. This job therefore
+    # needs neither Python nor jupytext -- it only rearranges files and commits.
+    - name: Download executed notebooks
+      uses: actions/download-artifact@v4
+      with:
+        name: executed-notebooks
+        path: docs/markdown
+    - name: Assemble and push ${{ inputs.target-branch }}
+      env:
+        SOURCE_SHA: ${{ inputs.source-sha }}
+        TARGET_BRANCH: ${{ inputs.target-branch }}
+        EDIT_BRANCH: ${{ inputs.edit-branch }}
+        MIN_NOTEBOOKS: ${{ inputs.min-notebooks }}
+      run: |
+        set -euo pipefail
+        git config --global user.name 'PyGSTi'
+        git config --global user.email 'pygsti@noreply.github.com'
+
+        # upload-artifact roots its archive at the least-common ancestor of the files
+        # it matched -- docs/markdown, since notebooks live under advanced/, guides/
+        # and start/. Check the shape survived rather than trusting it: a mis-rooted
+        # download would push a branch with no notebooks at all, and RTD would render
+        # prose-only pages with nothing anywhere reporting a problem.
+        n=$(find docs/markdown -name '*.ipynb' -not -path '*/.ipynb_checkpoints/*' | wc -l)
+        echo "downloaded ${n} executed notebooks"
+        if [ "${n}" -lt "${MIN_NOTEBOOKS}" ]; then
+          echo "::error::expected >=${MIN_NOTEBOOKS} executed notebooks under docs/markdown, found ${n}"
+          exit 1
+        fi
+
+        # Start the branch from the exact commit that was tested. The downloaded
+        # .ipynb are gitignored on the source branch, so they survive this untouched.
+        git checkout -B "${TARGET_BRANCH}" "${SOURCE_SHA}"
+
+        # Render from the .ipynb, not the .md. Sphinx picks ONE source per document,
+        # and jupyter-book warns "multiple files found for the document" -- 74 times --
+        # when both exist. That warning is logged without a type=, so suppress_warnings
+        # cannot silence it and any -W build fails on it. Dropping the superseded .md
+        # also removes the dependence on the undocumented accident that "ipynb" sorts
+        # before "md", which is the only reason the .ipynb would win otherwise.
+        #
+        # Plain-markdown pages -- index and landing pages, which carry no jupytext
+        # header and so have no paired .ipynb -- are left alone. This uses find rather
+        # than a `docs/markdown/**/*.ipynb` glob so it does not depend on `shopt -s
+        # globstar`, which an earlier version of this job set and which silently
+        # matches only one directory level deep on any shell that lacks it.
+        find docs/markdown -name '*.ipynb' -not -path '*/.ipynb_checkpoints/*' -print0 \
+          | while IFS= read -r -d '' nb; do rm -f "${nb%.ipynb}.md"; done
+
+        # Point the built docs' launch buttons (Binder/Colab, which fetch from GitHub)
+        # at this branch, where the .ipynb actually exist, and the source/edit buttons
+        # at the branch carrying the .md they were written from. The edit_button_branch
+        # extension reads the latter and also swaps the .ipynb suffix back to .md.
+        #
+        # Both substitutions match on the KEY and replace whatever value is there,
+        # rather than matching the old value: the source branch is a parameter now, so
+        # a rewrite anchored on the literal `develop` would silently no-op when staging
+        # from anywhere else and leave the buttons pointing at the wrong branch. The
+        # indent distinguishes them -- `  branch:` is repository.branch, four-space
+        # `pygsti_edit_branch:` is under sphinx.config -- and each is unique in the
+        # file. Trailing comments are preserved.
+        sed -i -E "s|^(  branch: )[^ #]+(.*)$|\1${TARGET_BRANCH}\2|" docs/_config.yml
+        sed -i -E "s|^(    pygsti_edit_branch: )[^ #]+(.*)$|\1${EDIT_BRANCH}\2|" docs/_config.yml
+        # Fail loudly if either rewrite missed, rather than shipping a site whose
+        # buttons 404 in a way only a human clicking them would ever notice.
+        grep -q "^  branch: ${TARGET_BRANCH}\b" docs/_config.yml
+        grep -q "^    pygsti_edit_branch: ${EDIT_BRANCH}\b" docs/_config.yml
+
+        # -A so the .md deletions stage, -f because .ipynb is gitignored on the source
+        # branch. Only .ipynb was downloaded, so the offline/ asset dirs and
+        # *_checkpoints/ trees that executing the tutorials leaves behind are not here
+        # to be swept in.
+        git add -A -f docs/markdown
+        git add docs/_config.yml
+
+        # [skip ci] matters: feature-branches.yml triggers on every branch except
+        # beta/develop/master/bugfix, which includes every branch this job pushes, so
+        # without it each staging push would kick off a full test matrix on a branch
+        # whose only change is generated notebook output.
+        git commit -m "Auto-build notebooks for ReadTheDocs [skip ci]"
+        git push --force origin "${TARGET_BRANCH}"
+
+        echo "### Staged \`${TARGET_BRANCH}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "- source commit: \`${SOURCE_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "- executed notebooks: ${n}" >> "$GITHUB_STEP_SUMMARY"
+        echo "- source/edit buttons point at: \`${EDIT_BRANCH}\`" >> "$GITHUB_STEP_SUMMARY"

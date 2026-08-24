@@ -1,0 +1,75 @@
+# Manually stage any branch as a ReadTheDocs source branch.
+#
+# The hosted docs are only ever assembled by CI -- executing the notebooks takes
+# ~40 minutes and the result is committed to a generated branch -- so there is
+# otherwise no way to see how a docs change will actually render on RTD until it
+# has already merged to develop. This workflow closes that gap: dispatch it from
+# a branch, point RTD at the staging branch it pushes, and you get the real site.
+#
+# It runs the same notebook execution and the same staging logic as the
+# production path in develop.yml, differing only in what it does NOT do: no test
+# matrix, one Linux job instead of sixteen. Run it from the Actions tab with
+# "Run workflow", having selected the branch you want staged.
+
+name: Stage docs preview on ReadTheDocs
+
+on:
+  workflow_dispatch:
+    inputs:
+      target-branch:
+        description: 'Staging branch to force-push (overwritten without warning). Point RTD here.'
+        required: false
+        type: string
+        default: 'docs-preview'
+      edit-branch:
+        description: >-
+          Branch the Show source / Suggest edit buttons should point at.
+          Defaults to the branch you dispatched from, which is almost always what
+          you want: the pages being previewed may not exist on develop yet.
+        required: false
+        type: string
+        default: ''
+      python-version:
+        description: 'Python version to execute the notebooks under.'
+        required: false
+        type: string
+        default: '3.13'
+      stage-on-notebook-failure:
+        description: >-
+          Stage the branch even if some notebook cell errored. On by default: with
+          --allow-errors the traceback is captured in the notebook itself, so the
+          rendered preview is usually the fastest way to see what broke.
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  execute:
+    # One job -- Linux, Cython, no test suites. The notebook step is Linux-only
+    # (it compiles CHP into /usr/local/bin) and is the only thing being asked for.
+    uses: ./.github/workflows/reuseable-main.yml
+    name: Execute the docs notebooks
+    with:
+      os: ubuntu-latest
+      python-version: ${{ inputs.python-version }}
+      use-cython: 'true'
+      run-unit-tests: 'false'
+      run-integration-tests: 'false'
+      run-extra-tests: 'false'
+      run-coverage: 'false'
+      run-notebook-tests: 'true'
+
+  stage:
+    needs: execute
+    # always() so a notebook failure can still produce a preview when asked for.
+    # The artifact upload in reuseable-main.yml is itself always(), so the
+    # executed notebooks -- tracebacks and all -- are there to download either way.
+    if: ${{ always() && (needs.execute.result == 'success' || inputs.stage-on-notebook-failure) }}
+    uses: ./.github/workflows/stage-docs-branch.yml
+    name: Stage the RTD source branch
+    with:
+      source-sha: ${{ github.sha }}
+      target-branch: ${{ inputs.target-branch }}
+      edit-branch: ${{ inputs.edit-branch || github.ref_name }}
+    secrets:
+      PYGSTI_TOKEN: ${{ secrets.PYGSTI_TOKEN }}
