@@ -8,3 +8,4 @@ from . import singleton
 from . import model_selection
 from . import logical_decoration
 from . import validation
+from . import circuit_noise
