@@ -183,10 +183,26 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
         // Poll on animation frames rather than a fixed 200ms timer.  The widths
 	// normally settle within a frame or two, but the old timer needed three
 	// equal readings 200ms apart, imposing a ~600ms floor before any plot
-	// could be created.  The deadline keeps a safety net for browsers whose
-	// widths never settle.
-	var settleStart = performance.now();
-	var settleDeadline = 3000; //ms, after which we give up and proceed anyway
+	// could be created.
+	//
+	// Sampling per frame makes "unchanged for N samples" a much weaker signal
+	// than it was at 200ms spacing, and web fonts are the async width source
+	// that matters here: a late-arriving face changes text metrics and so
+	// changes cell widths.  So don't call anything settled until font loading
+	// has finished.  document.fonts.ready resolves promptly when the faces are
+	// already loaded (or have already failed), so this costs nothing in the
+	// common case.
+	var fontsReady = true;
+	if(document.fonts && document.fonts.ready) {
+	    fontsReady = false;
+	    document.fonts.ready.then( function() { fontsReady = true; } );
+	}
+
+	// Budget in frames, not wall-clock.  requestAnimationFrame doesn't fire
+	// while the page is hidden, so a wall-clock deadline would be burned by
+	// time spent in a background tab and fire on the first frame after the
+	// user returns, before any width had been observed as stable.
+	var framesLeft = 180; //~3s of visible time, then proceed regardless
 	var settleStep = function() {
 	    if(TDtoCheck === null) {
 		wstable.trigger("after_widths_settle");
@@ -195,14 +211,14 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	    var w = TDtoCheck.width();
 	    if(last_w == parseFloat(w)) {
 		if(cnt < nSettle) cnt += 1;
-		else {
+		else if(fontsReady) {
 		    wstable.trigger("after_widths_settle");
 		    return;
 		}
 	    }
 	    else { last_w = parseFloat(w); cnt = 0; }
 
-	    if(performance.now() - settleStart > settleDeadline) {
+	    if(--framesLeft <= 0) {
 		console.log("Width settling timed out for " + id + "; proceeding anyway.");
 		wstable.trigger("after_widths_settle");
 		return;
@@ -553,7 +569,6 @@ function pex_resize_slaves(el, orig_width, orig_height) {
 function PlotManager(){
     this.queue = [];
     this.labelqueue = [];
-    this.busy = false;
     this.processor = null;
 }
 
@@ -571,17 +586,31 @@ PlotManager.prototype.run = function(){
     // between plots and made a tab of N plots take 200*N ms regardless of how
     // little work each one was.
     var step = function() {
-	var t0 = performance.now();
-	while (pm.queue.length && (performance.now() - t0) < BUDGET_MS) {
-	    var label = pm.labelqueue.shift();
-	    var callback = pm.queue.shift();
-	    $("#status").text(label + " (" + pm.queue.length + " remaining)");
-	    console.log("PLOTMANAGER: " + label + " (" + pm.queue.length + " remaining)");
-	    try {
-		callback();
-	    } catch(err) {
-		console.error("PLOTMANAGER: " + label + " failed", err); //don't block the queue
+	try {
+	    var t0 = performance.now();
+	    while (pm.queue.length && (performance.now() - t0) < BUDGET_MS) {
+		var label = pm.labelqueue.shift();
+		var callback = pm.queue.shift();
+		$("#status").text(label + " (" + pm.queue.length + " remaining)");
+		console.log("PLOTMANAGER: " + label + " (" + pm.queue.length + " remaining)");
+		try {
+		    callback();
+		} catch(err) {
+		    // Keep draining, but don't let the failure pass silently:
+		    // rethrow out-of-band so it reaches window.onerror the way it
+		    // did before the queue was wrapped.
+		    console.error("PLOTMANAGER: " + label + " failed", err);
+		    setTimeout( function(){ throw err; }, 0);
+		}
 	    }
+	} catch(fatal) {
+	    // A throw from the loop scaffolding itself would otherwise leave
+	    // pm.processor non-null forever, and enqueue() only restarts the
+	    // drain when it is null -- i.e. the report would stop rendering
+	    // silently.  Release it before rethrowing.
+	    pm.processor = null;
+	    $("#status").hide();
+	    throw fatal;
 	}
 
 	if (pm.queue.length) {
