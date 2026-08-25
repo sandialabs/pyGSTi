@@ -19,6 +19,20 @@ function get_wsobj_group(id) {
     }
 }
 
+/* Set a <figure>'s caption width from the content div it describes.
+
+   Deferred to the next animation frame and guarded against a zero measurement:
+   on a switch change the content div is measured in the same frame it's shown,
+   before layout has run, which used to write width:0px and leave the caption
+   collapsed until the plot queue happened to drain. */
+function pygsti_set_caption_width(caption, contentEl) {
+    if(caption.length == 0) return;
+    requestAnimationFrame( function() {
+	var w = contentEl.width();
+	if(w > 0) { caption.css('width', Math.round(w*0.9) + 'px'); }
+    });
+}
+
 function make_wstable_resizable(id) {
     wsgroup = get_wsobj_group(id);
     if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
@@ -143,23 +157,36 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	//  waits for this settling to occur before proceeding to step 2.
 	last_w = 0; cnt = 0; 
 	nSettle = 2; //number of times we need to get the same width to call it "settled"
-        var intervalFn = setInterval( function() {
+        // Poll on animation frames rather than a fixed 200ms timer.  The widths
+	// normally settle within a frame or two, but the old timer needed three
+	// equal readings 200ms apart, imposing a ~600ms floor before any plot
+	// could be created.  The deadline keeps a safety net for browsers whose
+	// widths never settle.
+	var settleStart = performance.now();
+	var settleDeadline = 3000; //ms, after which we give up and proceed anyway
+	var settleStep = function() {
 	    if(TDtoCheck === null) {
-		clearInterval(intervalFn);
 		wstable.trigger("after_widths_settle");
+		return;
 	    }
-	    else {
-		w = TDtoCheck.width();
-		if(last_w == parseFloat(w)) {
-		    if(cnt < 2) cnt += 1;
-		    else {
-			clearInterval(intervalFn);
-			wstable.trigger("after_widths_settle");
-		    }
+	    w = TDtoCheck.width();
+	    if(last_w == parseFloat(w)) {
+		if(cnt < nSettle) cnt += 1;
+		else {
+		    wstable.trigger("after_widths_settle");
+		    return;
 		}
-		else last_w = parseFloat(w);
 	    }
-	}, 200);
+	    else { last_w = parseFloat(w); cnt = 0; }
+
+	    if(performance.now() - settleStart > settleDeadline) {
+		console.log("Width settling timed out for " + id + "; proceeding anyway.");
+		wstable.trigger("after_widths_settle");
+		return;
+	    }
+	    requestAnimationFrame(settleStep);
+	};
+	requestAnimationFrame(settleStep);
     });
     
     $("#"+id).on("after_widths_settle", function(event) {
@@ -242,9 +269,7 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	// 6) If this table is within a <figure> tag try to set
 	//    caption detail's width based on rendered table width
 	caption = wstable.closest('figure').children('figcaption:first');
-	if(caption.length > 0) {
-            caption.css('width', Math.round(wstable.width()*0.9) + 'px');
-	}
+	pygsti_set_caption_width(caption, wstable);
 
 	// 7) Remove the hard-set width and height of the plot-containing
 	//   div used to prevent initial auto-sizing.
@@ -325,9 +350,7 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
     // 6) If this table is within a <figure> tag try to set
     //    caption detail's width based on rendered table width
     caption = wsplotgroup.closest('figure').children('figcaption:first');
-    if(caption.length > 0) {
-        caption.css('width', Math.round(wsplotgroup.width()*0.9) + 'px');
-    }
+    pygsti_set_caption_width(caption, wsplotgroup);
 
 }
 
@@ -515,36 +538,40 @@ function PlotManager(){
 
 PlotManager.prototype.run = function(){
     console.log("PLOTMANAGER: starting run queue execution");
-    
-    if (this.processor !== null) {
-	clearInterval(processor);
-    }
+
+    if (this.processor !== null) return; //already draining
+
     $("#status").show();
-    this.processor = setInterval(function(pm) {
-	if (!pm.busy) {
-	    pm.busy = true;
-	    if (pm.queue.length){
-		var label = pm.labelqueue.shift(); //pop();
-		var callback = pm.queue.shift(); //pop();
-		$("#status").text(label + " (" + pm.queue.length + " remaining)");
-		console.log("PLOTMANAGER: " + label + " (" + pm.queue.length + " remaining)");
-		try {
-		    callback();
-		} finally {
-		    pm.busy = false; // in case an error occurs, don't block queue
-		}
-	    }
-	    else {
-		pm.busy = false;
+    var pm = this;
+    var BUDGET_MS = 16; //one frame's worth of work before yielding
+
+    // Drain as many queued plots as fit in a frame, then yield.  This used to
+    // create exactly one plot per 200ms tick, which left the browser idle
+    // between plots and made a tab of N plots take 200*N ms regardless of how
+    // little work each one was.
+    var step = function() {
+	var t0 = performance.now();
+	while (pm.queue.length && (performance.now() - t0) < BUDGET_MS) {
+	    var label = pm.labelqueue.shift();
+	    var callback = pm.queue.shift();
+	    $("#status").text(label + " (" + pm.queue.length + " remaining)");
+	    console.log("PLOTMANAGER: " + label + " (" + pm.queue.length + " remaining)");
+	    try {
+		callback();
+	    } catch(err) {
+		console.error("PLOTMANAGER: " + label + " failed", err); //don't block the queue
 	    }
 	}
-	if (pm.queue.length <= 0) {
+
+	if (pm.queue.length) {
+	    pm.processor = requestAnimationFrame(step);
+	} else {
 	    console.log("PLOTMANAGER: queue empty!");
-            clearInterval(pm.processor);
 	    pm.processor = null;
-            $("#status").hide();
+	    $("#status").hide();
 	}
-    }, 200, this); //pass this as "pm" argument to function
+    };
+    pm.processor = requestAnimationFrame(step);
 }
 
 PlotManager.prototype.enqueue = function(callback, label, autostart=true){

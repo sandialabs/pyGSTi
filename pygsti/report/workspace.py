@@ -1911,7 +1911,7 @@ class WorkspaceOutput(object):
             handler_js += "  divToShow.show();\n"
             handler_js += "  divToShow.parentsUntil('#%s').show();\n" % id
             handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "  pygsti_set_caption_width(caption, divToShow);\n"
         else:
             handler_js += "  if( divToShow.children().length == 0 ) {\n"
             handler_js += "    $(`#${idToShow}`).load(`figures/${idToShow}.html`, function() {\n"
@@ -1928,14 +1928,14 @@ class WorkspaceOutput(object):
                 handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
                 handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
             handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "        caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "        pygsti_set_caption_width(caption, divToShow);\n"
             handler_js += "    });\n"  # end load-complete handler
             handler_js += "  }\n"
             handler_js += "  else {\n"
             handler_js += "    divToShow.show();\n"
             handler_js += "    divToShow.parentsUntil('#%s').show();\n" % id
             handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "    pygsti_set_caption_width(caption, divToShow);\n"
             handler_js += "  }\n"
         handler_js += "}\n"  # end <id>_onchange function
 
