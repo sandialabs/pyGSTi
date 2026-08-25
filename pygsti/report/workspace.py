@@ -993,8 +993,12 @@ class Switchboard(_collections.OrderedDict):
 
                 if view_suffix:
                     js += "\n".join((
+                        "var connected_%s_base = false;" % ID,
                         "function connect_%s_to_base(){" % ID,
+                        "  if(connected_%s_base) return;" % ID,  # re-entrant: event and timer may both fire
                         "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    connected_%s_base = true;" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s');" % ID,
                         "    $('#%s').on('change', function(event, ui) {" % baseID,
                         "      var v = $(\"#%s > input[name='%s']:checked\").val();" % (baseID, baseID),
                         "      var el = $(\"#%s > input[name='%s'][value=\" + v + \"]\");" % (ID, ID),
@@ -1012,7 +1016,9 @@ class Switchboard(_collections.OrderedDict):
                         "    $('#%s').trigger('change');" % baseID,
                         "  }",
                         "  else {",  # need to wait for base switch
-                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s')" % ID +
+                        ".one('pygsti-switch-initialized.%s', connect_%s_to_base);" % (ID, ID),
+                        "    setTimeout(connect_%s_to_base, 500); //backstop" % ID,
                         "    console.log('%s base NOT initialized: Waiting...');" % ID,
                         "  }",
                         "};",
@@ -1032,8 +1038,12 @@ class Switchboard(_collections.OrderedDict):
 
                 if view_suffix:
                     js += "\n".join((
+                        "var connected_%s_base = false;" % ID,
                         "function connect_%s_to_base(){" % ID,
+                        "  if(connected_%s_base) return;" % ID,  # re-entrant: event and timer may both fire
                         "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    connected_%s_base = true;" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s');" % ID,
                         "    $('#%s').on('selectmenuchange', function(event, ui) {" % baseID,
                         "      var v = $('#%s').val();" % baseID,
                         "      var el = $('#%s');" % ID,
@@ -1052,7 +1062,9 @@ class Switchboard(_collections.OrderedDict):
                         "    console.log('%s connected to base');\n" % ID,
                         "  }",
                         "  else {",  # need to wait for base switch
-                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s')" % ID +
+                        ".one('pygsti-switch-initialized.%s', connect_%s_to_base);" % (ID, ID),
+                        "    setTimeout(connect_%s_to_base, 500); //backstop" % ID,
                         "    console.log('%s base NOT initialized: Waiting...');" % ID,
                         "  }",
                         "};",
@@ -1145,8 +1157,12 @@ class Switchboard(_collections.OrderedDict):
                     # which causes a change event to fire.  Views handle this event
                     # to update their own slider values.
                     js += "\n".join((
+                        "var connected_%s_base = false;" % ID,
                         "function connect_%s_to_base(){" % ID,
+                        "  if(connected_%s_base) return;" % ID,  # re-entrant: event and timer may both fire
                         "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    connected_%s_base = true;" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s');" % ID,
                         "    $('#%s').on('slidechange', function(event, ui) {" % baseID,
                         "      $('#%s').slider('value', ui.value);" % ID,
                         "      $('#%s-handle').text( $('#%s-handle').text() );" % (ID, baseID),
@@ -1155,7 +1171,9 @@ class Switchboard(_collections.OrderedDict):
                         "    $('#%s').trigger('slidechange', mock_ui);" % baseID,
                         "  }",
                         "  else {",  # need to wait for base switch
-                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s')" % ID +
+                        ".one('pygsti-switch-initialized.%s', connect_%s_to_base);" % (ID, ID),
+                        "    setTimeout(connect_%s_to_base, 500); //backstop" % ID,
                         "    console.log('%s base NOT initialized: Waiting...');" % ID,
                         "  }",
                         "};",
@@ -1166,6 +1184,9 @@ class Switchboard(_collections.OrderedDict):
                 raise ValueError("Unknown switch type: %s" % styp)
 
             js += "$('#%s').addClass('initializedSwitch');\n" % ID
+            #let anything waiting on this switch connect immediately rather than
+            #discovering it on its next 500ms poll
+            js += "$(document).trigger('pygsti-switch-initialized');\n"
 
             switch_html.append(html)
             switch_js.append(js)
@@ -1886,8 +1907,12 @@ class WorkspaceOutput(object):
 
         #define fn to "connect" output object to switchboard, i.e.
         #  register event handlers for relevant switches so output object updates
+        js += "var connected_%s = false;\n" % id
         js += "function connect_%s_to_switches(){\n" % id
+        js += "  if(connected_%s) return;\n" % id  # re-entrant: event and timer may both fire
         js += "  if(%s) {\n" % cnd  # "if switches are ready"
+        js += "    connected_%s = true;\n" % id
+        js += "    $(document).off('pygsti-switch-initialized.%s');\n" % id
         # loop below adds event bindings to the body of this if-block
 
         #build a handler function to get all of the relevant switch positions,
@@ -1957,7 +1982,9 @@ class WorkspaceOutput(object):
         js += "    $( '#%s' ).show()\n" % id  # visibility updates are done: show parent container
         js += "  }\n"  # ends if-block
         js += "  else {\n"  # switches aren't ready - so wait
-        js += "    setTimeout(connect_%s_to_switches, 500);\n" % id
+        js += "    $(document).off('pygsti-switch-initialized.%s')" % id
+        js += ".one('pygsti-switch-initialized.%s', connect_%s_to_switches);\n" % (id, id)
+        js += "    setTimeout(connect_%s_to_switches, 500); //backstop\n" % id
         js += "    console.log('%s switches NOT initialized: Waiting...');\n" % id
         js += "  }\n"
         js += "};\n"  # end of connect function

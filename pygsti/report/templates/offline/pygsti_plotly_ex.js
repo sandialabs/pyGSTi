@@ -10,6 +10,28 @@ function max_height(els) {
     return Math.max.apply(null, hs);
 }
 
+/* Pin each element's current `prop` ("width"/"height") as an explicit style.
+
+   Reads every element before writing any of them.  Reading a geometry property
+   flushes pending layout and writing one invalidates it again, so interleaving
+   the two costs a forced reflow per element -- and these loops run over every
+   cell of every switch value of every table.
+
+   `only_simple` restricts the operation to cells with exactly one child, which
+   is what the pre-plot-creation pass wants. */
+function lock_cell_sizes(els, prop, only_simple) {
+    var targets = [], values = [];
+    els.each( function(i, el) {
+	var $el = $(el);
+	if(only_simple && $el.children().length != 1) return;
+	targets.push($el);
+	values.push(prop == "width" ? $el.width() : $el.height());
+    });
+    for(var i = 0; i < targets.length; i++) {
+	targets[i].css(prop, values[i]);
+    }
+}
+
 function get_wsobj_group(id) {
     var obj = $("#" + id);
     if(obj.hasClass("pygsti-wsoutput-group")) {
@@ -34,7 +56,7 @@ function pygsti_set_caption_width(caption, contentEl) {
 }
 
 function make_wstable_resizable(id) {
-    wsgroup = get_wsobj_group(id);
+    var wsgroup = get_wsobj_group(id);
     if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
     
     wsgroup.resizable({
@@ -66,7 +88,7 @@ function make_wstable_resizable(id) {
 }
 
 function make_wsplot_resizable(id) {
-    wsgroup = get_wsobj_group(id);
+    var wsgroup = get_wsobj_group(id);
     if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
     
     wsgroup.resizable({
@@ -106,14 +128,11 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	var fnForSingleTableDivs = function(k,div) {
             var was_visible = $(div).css('display') != 'none'; //is(":visible");
             $(div).show();
-            $(div).find("td").not(".plotContainingTD").each(
-                function(i,el){
-		    if($(el).children().length == 1) {
-			$(el).css("width", $(el).width()); } });
-	    $(div).find("th").each(
-		function(i,el){
-		    if($(el).children().length == 1) {
-			$(el).css("height", $(el).height()); } });
+	    // Read every cell first, then write.  Interleaving a .width() read with
+	    // a .css() write forces a synchronous reflow per cell; a large report
+	    // has thousands of cells and this loop runs once per switch value.
+	    lock_cell_sizes($(div).find("td").not(".plotContainingTD"), "width", true);
+	    lock_cell_sizes($(div).find("th"), "height", true);
             if(!was_visible) { $(div).hide(); }
         }
 	if(wstable.hasClass("single_switched_value")) {
@@ -125,14 +144,14 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 
 	//1) set widths & heights of plot-containing TDs to the
 	//   "desired" or "native" values
-	TDtoCheck = null; // the TD element used to check for width settling
+	var TDtoCheck = null; // the TD element used to check for width settling
 	wstable.find("td.plotContainingTD").each( function(k,td) {
 	    var plots = $(td).find(".plotly-graph-div");
 	    var padding = $(td).css("padding-left");
 	    if(padding == "") { padding = 0; }
 	    else { padding = parseFloat(padding); }
-	    desiredW =	max_width(plots)+2*padding;
-            desiredH =	max_height(plots)+2*padding
+	    var desiredW = max_width(plots)+2*padding;
+            var desiredH = max_height(plots)+2*padding
             $(td).css("min-width", desiredW);
             $(td).css("height", desiredH);
         console.log("desired width: ", desiredW)
@@ -141,7 +160,7 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	    if(TDtoCheck === null) TDtoCheck = $(td); //just take the first one
 
 	    if(!initial_autosize) {
-		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
+		var firstChild = $(td).children("div.pygsti-wsoutput-group").first()
 		firstChild.css("width", max_width(plots)+2*padding);  // these don't seem to do 
 		firstChild.css("height", max_height(plots)+2*padding);// anything... (?)
 		//console.log("DEBUG: SETTING width/height CSS of first child! ID=" + firstChild.attr("id"))
@@ -155,8 +174,12 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	//  it takes some time for the browser to respond to the desired withs set above
 	//  and update the widths of the TD elements in the table.  The code below
 	//  waits for this settling to occur before proceeding to step 2.
-	last_w = 0; cnt = 0; 
-	nSettle = 2; //number of times we need to get the same width to call it "settled"
+	// Per-table state read across animation frames.  These used to be implicit
+	// globals, so two tables initializing at once (the Raw Estimates tab has
+	// two) clobbered each other's settling state and one could settle on the
+	// other's width.
+	var last_w = 0, cnt = 0;
+	var nSettle = 2; //number of times we need to get the same width to call it "settled"
         // Poll on animation frames rather than a fixed 200ms timer.  The widths
 	// normally settle within a frame or two, but the old timer needed three
 	// equal readings 200ms apart, imposing a ~600ms floor before any plot
@@ -169,7 +192,7 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 		wstable.trigger("after_widths_settle");
 		return;
 	    }
-	    w = TDtoCheck.width();
+	    var w = TDtoCheck.width();
 	    if(last_w == parseFloat(w)) {
 		if(cnt < nSettle) cnt += 1;
 		else {
@@ -208,10 +231,8 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	var fnForSingleTableDivs = function(k,div) {
             var was_visible = $(div).css('display') != 'none'; //is(":visible");
             $(div).show();
-            $(div).find("td").not(".plotContainingTD").each(
-                function(i,el){ $(el).css("width", $(el).width()); });
-	    $(div).find("th").each(
-		function(i,el){ $(el).css("height", $(el).height()); });
+	    lock_cell_sizes($(div).find("td").not(".plotContainingTD"), "width", false);
+	    lock_cell_sizes($(div).find("th"), "height", false);
             if(!was_visible) { $(div).hide(); }
         }
 
@@ -268,14 +289,14 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 
 	// 6) If this table is within a <figure> tag try to set
 	//    caption detail's width based on rendered table width
-	caption = wstable.closest('figure').children('figcaption:first');
+	var caption = wstable.closest('figure').children('figcaption:first');
 	pygsti_set_caption_width(caption, wstable);
 
 	// 7) Remove the hard-set width and height of the plot-containing
 	//   div used to prevent initial auto-sizing.
 	if(!initial_autosize) {
 	    wstable.find("td.plotContainingTD").each( function(k,td) {
-		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
+		var firstChild = $(td).children("div.pygsti-wsoutput-group").first()
 		firstChild.css("width", "");
 		firstChild.css("height", "");
 	    });
@@ -329,7 +350,7 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
     console.log("Max desired size = " + maxDesiredWidth + ", " + maxDesiredHeight);
 
     //3) update the max-height of this container based on the maximum desired height
-    existing_max_height = wsplotgroup.css("max-height");
+    var existing_max_height = wsplotgroup.css("max-height");
     if(existing_max_height != "none") {
 	wsplotgroup.css("max-height",Math.min(maxDesiredHeight,parseFloat(existing_max_height)));
     } else { wsplotgroup.css("max-height", maxDesiredHeight); }
@@ -349,7 +370,7 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
 
     // 6) If this table is within a <figure> tag try to set
     //    caption detail's width based on rendered table width
-    caption = wsplotgroup.closest('figure').children('figcaption:first');
+    var caption = wsplotgroup.closest('figure').children('figcaption:first');
     pygsti_set_caption_width(caption, wsplotgroup);
 
 }
@@ -412,10 +433,10 @@ function pex_update_plotdiv_size(el, aspect_ratio, frac_width, frac_height, orig
     var	minfrac	= 0.0; //maybe adjust this later as a possible option?
     if(el.hasClass("pygsti-group-slave")) {
 	//just set requested fractional widths and height
-        fw = Math.max(minfrac, frac_width);
-        fh = Math.max(minfrac, frac_height);
-        ow = parseFloat(orig_width);
-        oh = parseFloat(orig_height);
+        var fw = Math.max(minfrac, frac_width);
+        var fh = Math.max(minfrac, frac_height);
+        var ow = parseFloat(orig_width);
+        var oh = parseFloat(orig_height);
         el.css("width", fw*ow);
         el.css("height",fh*oh);
         //console.log("SLAVE Updating orig (" + ow + "," + oh + ") => ("
