@@ -52,10 +52,6 @@ This documentation is arranged in three tiers, and which one you want depends on
 
 If you have a specific problem and want to know which few lines of Python solve it, try [troubleshooting](../guides/analysis/Troubleshooting). If that does not cover it, email us at pygsti@sandia.gov or open an issue on [GitHub](https://github.com/sandialabs/pyGSTi).
 
-```{tip}
-**Running these notebooks.** This site renders the source MyST Markdown without executing cells, so you will not see outputs (plots, tables) inline. To run a page yourself: use the rocket icon at the top right to launch it in Binder or Colab, or use the download dropdown to grab the `.ipynb` and run it in your own Jupyter environment.
-```
-
 ## Citing pyGSTi
 
 If pyGSTi contributed to work you are publishing, please see [citing pyGSTi](../advanced/Citing) for the references to use.
