@@ -93,5 +93,8 @@ Finally, if you'd like to see these same plots in an HTML report that you can se
 
 ```{code-cell} ipython3
 idt.create_idletomography_report(results, "../../../tutorial_files/IDTTestReport",
-                                 "Test idle tomography example report", auto_open=False)
+                                 "Test idle tomography example report", auto_open=False,
+                                 advanced_options={'connected': True})
 ```
+
+Served with these docs: [IDTTestReport](../../../reports/IDTTestReport.html).

@@ -21,6 +21,13 @@ The full local recipe, from a clean checkout of the branch you want staged::
     python docs/collect-reports.py collect
     python docs/stage-rtd-branch.py --target-branch docs-preview --push
 
+Edit a page after the execution step and do not reach for ``jupytext --sync``
+to propagate it: sync picks a direction by mtime, execution has just rewritten
+every ``.ipynb``, and so it copies the notebook back over your edit. Push the
+other way explicitly, which keeps the outputs already in the notebook::
+
+    jupytext --update --to notebook docs/markdown/<page>.md
+
 Prerequisites for the execution step, beyond ``pip install -e .[docs]``:
 ``.[chp]`` for the Clifford-simulation page, an MPI launcher for the Parallelism
 page, and ``.[ml]`` for the QPANN page. Anything missing costs you that page's
