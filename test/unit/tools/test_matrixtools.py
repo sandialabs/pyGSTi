@@ -373,15 +373,14 @@ class ApproximateMatrixLogBCHTester(BaseCase):
         errs = [np.linalg.norm(
             spl.expm(mt.approximate_matrix_log_BCH(self.HADAMARD_ESTIMATE, self.HADAMARD_TARGET, 'pp', order=o))
             - self.HADAMARD_ESTIMATE) for o in (1, 2, 3, 4, 5)]
-        # These are pinned only to 4 places. The reference values were recorded against OpenBLAS;
-        # Accelerate (the BLAS behind the macOS CI wheels) disagrees by up to 1.3e-05 because
-        # log(HADAMARD_TARGET) sits on the branch cut of the principal logarithm -- the target has an
-        # eigenvalue of exactly -1, log(-1) = +/- i*pi, and the two backends pick opposite signs. The
-        # sign choice is not a rounding difference, and it survives to whatever precision we ask for;
-        # 4 places is the tightest pin that admits both branches. See the monotonicity checks below,
-        # which are branch-independent and remain exact.
-        for expected, actual in zip([7.6994e-03, 4.4667e-03, 2.1074e-03, 2.1073e-03, 1.9894e-03], errs):
-            self.assertAlmostEqual(actual, expected, places=4)
+        # log(HADAMARD_TARGET) sits on the branch cut of the principal logarithm (the target has an
+        # eigenvalue of exactly -1), so unitary_superoperator_matrix_log's branch convention decides
+        # these values. OpenBLAS and Accelerate now agree to ~1e-14; the pin is tight on purpose, so
+        # that losing the convention (e.g. reverting to scipy.linalg.logm, where the backends pick
+        # opposite signs of i*pi and these values move by up to 1.3e-05) fails loudly.
+        expected = [7.6994089126e-03, 4.4666983901e-03, 2.1073765900e-03, 2.1072954417e-03, 1.9893895605e-03]
+        for exp_err, actual in zip(expected, errs):
+            self.assertAlmostEqual(actual, exp_err, places=8)
         self.assertLess(errs[1], errs[0])
         self.assertLess(errs[2], errs[1])
 
