@@ -8,53 +8,7 @@ import pygsti.tools.matrixtools as mt
 from ..util import BaseCase
 
 
-# Hamiltonian generators in the normalized Pauli-product basis, as real superoperator generators.
-_HX = np.zeros((4, 4)); _HX[2, 3] = -1; _HX[3, 2] = 1
-_HZ = np.zeros((4, 4)); _HZ[1, 2] = -1; _HZ[2, 1] = 1
-
-
-def _pi_rotation_superop():
-    """X(pi) as a superoperator in the normalized Pauli-product basis: eigenvalues (1, 1, -1, -1)."""
-    return np.diag([1.0, 1.0, -1.0, -1.0])
-
-
-def _pi_over_2_rotation_superop():
-    """Z(pi/2) as a superoperator; eigenvalues (1, 1, +i, -i), so its real logarithm is unique."""
-    return spl.expm((np.pi / 2) * _HZ)
-
-
-def _anisotropically_damped(target, rates=(0.01, 0.02, 0.03)):
-    """Damp the three Pauli axes at *different* rates.
-
-    Applied to a pi-rotation this splits the doubly-degenerate -1 eigenvalue into two distinct
-    negative real eigenvalues, so the result has no real matrix logarithm at all.
-    """
-    return np.diag([1.0] + [1.0 - r for r in rates]) @ target
-
-
-def _coherently_perturbed(target, scale=1.0):
-    """Apply a real, trace-preserving error generator with a coherent part that does not commute
-    with log(target), so that the BCH truncation error is actually visible."""
-    L = scale * (0.3 * _HZ + 0.15 * _HX + np.diag([0.0, -0.01, -0.02, -0.03]))
-    return spl.expm(L) @ target
-
-
-# A Hadamard gate estimate and its target, taken from a failing case reported by an end user. The
-# estimate has two distinct real negative eigenvalues and so has no real matrix logarithm.
-_HADAMARD_ESTIMATE = np.array([
-    [1.0, 0.0, 0.0, 0.0],
-    [0.0005827386057873005, -1.596081539413828e-06, 0.0026842386726460437, 0.9931235460359923],
-    [-0.00047897732274857033, -0.0026434875205955393, -0.9881533456738786, -0.0028483281874282394],
-    [-0.000516711221855366, 0.9890358028125664, 0.0028055709936753892, 0.00026052111853187057]])
-
-_HADAMARD_TARGET = np.array([
-    [1.0, 0.0, 0.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0],
-    [0.0, 0.0, -1.0, 0.0],
-    [0.0, 1.0, 0.0, 0.0]])
-
-
-class MatrixToolsTester(BaseCase):
+class GeneralMatrixToolsTester(BaseCase):
 
     def test_is_hermitian(self):
         herm_mx = np.array([[ 1, 1+2j],
@@ -156,100 +110,6 @@ class MatrixToolsTester(BaseCase):
                     message='invalid value encountered in dot', category=RuntimeWarning
                 )
                 mt.real_matrix_log(a)
-
-    def test_approximate_matrix_log_BCH_exact_at_target(self):
-        # When m == target the error map is the identity, so the BCH result should be exactly log(target).
-        target = _pi_rotation_superop()
-        log_target = mt.unitary_superoperator_matrix_log(target, 'pp')
-        for order in (1, 2, 3, 4, 5):
-            logM = mt.approximate_matrix_log_BCH(target, target, 'pp', order=order)
-            self.assertArraysAlmostEqual(logM, log_target)
-            self.assertArraysAlmostEqual(spl.expm(logM), target)
-
-    def test_approximate_matrix_log_BCH_returns_real(self):
-        target = _pi_rotation_superop()
-        m = _anisotropically_damped(target)
-        logM = mt.approximate_matrix_log_BCH(m, target, 'pp', order=3)
-        self.assertTrue(np.isrealobj(logM), "approximate_matrix_log_BCH must return a real array")
-
-    def test_approximate_matrix_log_BCH_no_real_log_exists(self):
-        # A pi-rotation with anisotropic damping perpendicular to the rotation axis has two *distinct*
-        # negative real eigenvalues, so it has no real logarithm at all: real_matrix_log cannot pair them
-        # and returns a complex result. The BCH construction still produces a usable real generator.
-        target = _pi_rotation_superop()
-        m = _anisotropically_damped(target)
-
-        neg = np.sort(np.linalg.eigvals(m)[np.linalg.eigvals(m).real < 0].real)
-        self.assertEqual(len(neg), 2)
-        self.assertGreater(abs(neg[1] - neg[0]), 1e-3)  # distinct => no real log
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            self.assertGreater(np.linalg.norm(mt.real_matrix_log(m, "ignore").imag), 1e-6)
-
-        logM = mt.approximate_matrix_log_BCH(m, target, 'pp', order=3)
-        self.assertTrue(np.isrealobj(logM))
-        # exp(logM) cannot equal m exactly. The obstruction floor is set by the splitting of the two
-        # negative eigenvalues; for this purely dissipative error BCH already saturates it.
-        floor = np.sqrt(2) * abs(neg[1] - neg[0]) / 2
-        self.assertAlmostEqual(np.linalg.norm(spl.expm(logM) - m), floor, places=6)
-
-    def test_approximate_matrix_log_BCH_improves_with_order(self):
-        # The BCH series is only truncated when log(target) and log(error map) fail to commute, so this
-        # needs a coherent error component; pure damping is reproduced exactly at every order.
-        target = _pi_rotation_superop()
-        m = _coherently_perturbed(target)
-        errs = [np.linalg.norm(spl.expm(mt.approximate_matrix_log_BCH(m, target, 'pp', order=o)) - m)
-                for o in (1, 2, 3)]
-        self.assertLess(errs[1], errs[0])
-        self.assertLess(errs[2], errs[1])
-
-    def test_approximate_matrix_log_BCH_on_reported_hadamard(self):
-        # Pinned against a real failing gate (see _HADAMARD_ESTIMATE). Order 4 is deliberately not
-        # expected to improve on order 3: its contribution enters only at second order in the error
-        # generator. This is why general_decomposition hardcodes order 3.
-        errs = [np.linalg.norm(
-            spl.expm(mt.approximate_matrix_log_BCH(_HADAMARD_ESTIMATE, _HADAMARD_TARGET, 'pp', order=o))
-            - _HADAMARD_ESTIMATE) for o in (1, 2, 3, 4, 5)]
-        for expected, actual in zip([7.6994e-03, 4.4667e-03, 2.1074e-03, 2.1073e-03, 1.9894e-03], errs):
-            self.assertAlmostEqual(actual, expected, places=6)
-        self.assertLess(errs[1], errs[0])
-        self.assertLess(errs[2], errs[1])
-
-    def test_approximate_matrix_log_BCH_at_convergence_boundary(self):
-        # For a pi rotation the spectral radius of ad_{log(target)} is *exactly* 2*pi, the radius of
-        # convergence of the BCH series. Order 3 remains well behaved on that boundary, but the margin
-        # is nil -- multi-qubit targets can exceed 2*pi, where higher orders degrade.
-        log_target = mt.unitary_superoperator_matrix_log(_HADAMARD_TARGET, 'pp')
-        d = log_target.shape[0]
-        ad = np.kron(log_target, np.eye(d)) - np.kron(np.eye(d), log_target.T)
-        self.assertAlmostEqual(max(abs(np.linalg.eigvals(ad))), 2 * np.pi, places=9)
-
-    def test_approximate_matrix_log_BCH_converges_to_real_log(self):
-        # A pi-rotation target has *no unique* logarithm (branches differ by 2*pi*i), so compare against
-        # real_matrix_log on a pi/2 target, where the principal real log is unique and BCH must converge
-        # to it as the order increases.
-        target = _pi_over_2_rotation_superop()
-        m = _coherently_perturbed(target, scale=0.1)
-        exact = np.real(mt.real_matrix_log(m, "raise"))
-        errs = [np.linalg.norm(mt.approximate_matrix_log_BCH(m, target, 'pp', order=o) - exact)
-                for o in (1, 3, 5)]
-        self.assertLess(errs[1], errs[0])
-        self.assertLess(errs[2], errs[1])
-        self.assertLess(errs[2], 1e-3)
-
-    def test_approximate_matrix_log_BCH_raises_out_of_domain(self):
-        # If inv(target) @ m is not near the identity its principal log is not real, and
-        # near_identity_matrix_log raises. general_decomposition relies on this being an AssertionError.
-        target = _pi_rotation_superop()
-        with self.assertRaises(AssertionError):
-            mt.approximate_matrix_log_BCH(-target, target, 'pp', order=3)
-
-    def test_approximate_matrix_log_BCH_validates_order(self):
-        target = _pi_rotation_superop()
-        m = _anisotropically_damped(target)
-        for bad_order in (0, -1, 6):
-            with self.assertRaises(ValueError):
-                mt.approximate_matrix_log_BCH(m, target, 'pp', order=bad_order)
 
     def test_minweight_match(self):
         a = np.array([1, 2, 3, 4], 'd')
@@ -402,24 +262,157 @@ class MatrixToolsTester(BaseCase):
             np.array(sorted(actual, key=sort_key)), np.array(sorted(expected, key=sort_key)))
 
 
-def _pp_computational_superket(zvals):
+class ApproximateMatrixLogBCHTester(BaseCase):
     """
-    Independent reference for the Pauli-product super-ket of a computational
-    basis state, built by explicit Kronecker product.
-
-    |z><z| = (I + (-1)**z Z) / 2, whose Pauli-product coefficient vector
-    (normalized so the PP basis is orthonormal) is [1, 0, 0, (-1)**z]/sqrt(2).
-    Deliberately does not share any code with the routines under test.
+    Cover ``approximate_matrix_log_BCH``, which builds a *real* generator for a
+    gate that may have no real matrix logarithm at all, by BCH-combining the
+    (unique, real) logarithm of the target with the near-identity logarithm of
+    the error map.
     """
-    vec = np.array([1.0])
-    for z in zvals:
-        vec = np.kron(vec, np.array([1, 0, 0, 1 - 2 * z], 'd') / np.sqrt(2))
-    return vec
 
+    # Hamiltonian generators in the normalized Pauli-product basis, as real superoperator generators.
+    HX = np.array([[0, 0, 0, 0],
+                   [0, 0, 0, 0],
+                   [0, 0, 0, -1],
+                   [0, 0, 1, 0]], 'd')
+    HZ = np.array([[0, 0, 0, 0],
+                   [0, 0, -1, 0],
+                   [0, 1, 0, 0],
+                   [0, 0, 0, 0]], 'd')
 
-def _zvals_to_int(zvals):
-    """Encode z-values little-endian, matching EffectRepComputational."""
-    return sum(z << i for i, z in enumerate(zvals))
+    # A Hadamard gate estimate and its target, taken from a failing case reported by an end user. The
+    # estimate has two distinct real negative eigenvalues and so has no real matrix logarithm.
+    HADAMARD_ESTIMATE = np.array([
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0005827386057873005, -1.596081539413828e-06, 0.0026842386726460437, 0.9931235460359923],
+        [-0.00047897732274857033, -0.0026434875205955393, -0.9881533456738786, -0.0028483281874282394],
+        [-0.000516711221855366, 0.9890358028125664, 0.0028055709936753892, 0.00026052111853187057]])
+
+    HADAMARD_TARGET = np.array([
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, -1.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0]])
+
+    @staticmethod
+    def pi_rotation_superop():
+        """X(pi) as a superoperator in the normalized Pauli-product basis: eigenvalues (1, 1, -1, -1)."""
+        return np.diag([1.0, 1.0, -1.0, -1.0])
+
+    @classmethod
+    def pi_over_2_rotation_superop(cls):
+        """Z(pi/2) as a superoperator; eigenvalues (1, 1, +i, -i), so its real logarithm is unique."""
+        return spl.expm((np.pi / 2) * cls.HZ)
+
+    @staticmethod
+    def anisotropically_damped(target, rates=(0.01, 0.02, 0.03)):
+        """Damp the three Pauli axes at *different* rates.
+
+        Applied to a pi-rotation this splits the doubly-degenerate -1 eigenvalue into two distinct
+        negative real eigenvalues, so the result has no real matrix logarithm at all.
+        """
+        return np.diag([1.0] + [1.0 - r for r in rates]) @ target
+
+    @classmethod
+    def coherently_perturbed(cls, target, scale=1.0):
+        """Apply a real, trace-preserving error generator with a coherent part that does not commute
+        with log(target), so that the BCH truncation error is actually visible."""
+        L = scale * (0.3 * cls.HZ + 0.15 * cls.HX + np.diag([0.0, -0.01, -0.02, -0.03]))
+        return spl.expm(L) @ target
+
+    def test_exact_at_target(self):
+        # When m == target the error map is the identity, so the BCH result should be exactly log(target).
+        target = self.pi_rotation_superop()
+        log_target = mt.unitary_superoperator_matrix_log(target, 'pp')
+        for order in (1, 2, 3, 4, 5):
+            logM = mt.approximate_matrix_log_BCH(target, target, 'pp', order=order)
+            self.assertArraysAlmostEqual(logM, log_target)
+            self.assertArraysAlmostEqual(spl.expm(logM), target)
+
+    def test_returns_real(self):
+        target = self.pi_rotation_superop()
+        m = self.anisotropically_damped(target)
+        logM = mt.approximate_matrix_log_BCH(m, target, 'pp', order=3)
+        self.assertTrue(np.isrealobj(logM), "approximate_matrix_log_BCH must return a real array")
+
+    def test_no_real_log_exists(self):
+        # A pi-rotation with anisotropic damping perpendicular to the rotation axis has two *distinct*
+        # negative real eigenvalues, so it has no real logarithm at all: real_matrix_log cannot pair them
+        # and returns a complex result. The BCH construction still produces a usable real generator.
+        target = self.pi_rotation_superop()
+        m = self.anisotropically_damped(target)
+
+        neg = np.sort(np.linalg.eigvals(m)[np.linalg.eigvals(m).real < 0].real)
+        self.assertEqual(len(neg), 2)
+        self.assertGreater(abs(neg[1] - neg[0]), 1e-3)  # distinct => no real log
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            self.assertGreater(np.linalg.norm(mt.real_matrix_log(m, "ignore").imag), 1e-6)
+
+        logM = mt.approximate_matrix_log_BCH(m, target, 'pp', order=3)
+        self.assertTrue(np.isrealobj(logM))
+        # exp(logM) cannot equal m exactly. The obstruction floor is set by the splitting of the two
+        # negative eigenvalues; for this purely dissipative error BCH already saturates it.
+        floor = np.sqrt(2) * abs(neg[1] - neg[0]) / 2
+        self.assertAlmostEqual(np.linalg.norm(spl.expm(logM) - m), floor, places=6)
+
+    def test_improves_with_order(self):
+        # The BCH series is only truncated when log(target) and log(error map) fail to commute, so this
+        # needs a coherent error component; pure damping is reproduced exactly at every order.
+        target = self.pi_rotation_superop()
+        m = self.coherently_perturbed(target)
+        errs = [np.linalg.norm(spl.expm(mt.approximate_matrix_log_BCH(m, target, 'pp', order=o)) - m)
+                for o in (1, 2, 3)]
+        self.assertLess(errs[1], errs[0])
+        self.assertLess(errs[2], errs[1])
+
+    def test_on_reported_hadamard(self):
+        # Pinned against a real failing gate (see HADAMARD_ESTIMATE). Order 4 is deliberately not
+        # expected to improve on order 3: its contribution enters only at second order in the error
+        # generator. This is why general_decomposition hardcodes order 3.
+        errs = [np.linalg.norm(
+            spl.expm(mt.approximate_matrix_log_BCH(self.HADAMARD_ESTIMATE, self.HADAMARD_TARGET, 'pp', order=o))
+            - self.HADAMARD_ESTIMATE) for o in (1, 2, 3, 4, 5)]
+        for expected, actual in zip([7.6994e-03, 4.4667e-03, 2.1074e-03, 2.1073e-03, 1.9894e-03], errs):
+            self.assertAlmostEqual(actual, expected, places=6)
+        self.assertLess(errs[1], errs[0])
+        self.assertLess(errs[2], errs[1])
+
+    def test_at_convergence_boundary(self):
+        # For a pi rotation the spectral radius of ad_{log(target)} is *exactly* 2*pi, the radius of
+        # convergence of the BCH series. Order 3 remains well behaved on that boundary, but the margin
+        # is nil -- multi-qubit targets can exceed 2*pi, where higher orders degrade.
+        log_target = mt.unitary_superoperator_matrix_log(self.HADAMARD_TARGET, 'pp')
+        d = log_target.shape[0]
+        ad = np.kron(log_target, np.eye(d)) - np.kron(np.eye(d), log_target.T)
+        self.assertAlmostEqual(max(abs(np.linalg.eigvals(ad))), 2 * np.pi, places=9)
+
+    def test_converges_to_real_log(self):
+        # A pi-rotation target has *no unique* logarithm (branches differ by 2*pi*i), so compare against
+        # real_matrix_log on a pi/2 target, where the principal real log is unique and BCH must converge
+        # to it as the order increases.
+        target = self.pi_over_2_rotation_superop()
+        m = self.coherently_perturbed(target, scale=0.1)
+        exact = np.real(mt.real_matrix_log(m, "raise"))
+        errs = [np.linalg.norm(mt.approximate_matrix_log_BCH(m, target, 'pp', order=o) - exact)
+                for o in (1, 3, 5)]
+        self.assertLess(errs[1], errs[0])
+        self.assertLess(errs[2], errs[1])
+        self.assertLess(errs[2], 1e-3)
+
+    def test_raises_out_of_domain(self):
+        # If inv(target) @ m is not near the identity its principal log is not real, and
+        # near_identity_matrix_log raises. general_decomposition relies on this being an AssertionError.
+        target = self.pi_rotation_superop()
+        with self.assertRaises(AssertionError):
+            mt.approximate_matrix_log_BCH(-target, target, 'pp', order=3)
+
+    def test_validates_order(self):
+        target = self.pi_rotation_superop()
+        m = self.anisotropically_damped(target)
+        for bad_order in (0, -1, 6):
+            with self.assertRaises(ValueError):
+                mt.approximate_matrix_log_BCH(m, target, 'pp', order=bad_order)
 
 
 class ZvalsInt64Tester(BaseCase):
@@ -436,19 +429,39 @@ class ZvalsInt64Tester(BaseCase):
     ALL_ZVALS = [(), (0,), (1,), (0, 0), (0, 1), (1, 0), (1, 1),
                  (0, 1, 0), (1, 1, 0), (1, 0, 1), (1, 1, 1)]
 
+    @staticmethod
+    def pp_computational_superket(zvals):
+        """
+        Independent reference for the Pauli-product super-ket of a computational
+        basis state, built by explicit Kronecker product.
+
+        |z><z| = (I + (-1)**z Z) / 2, whose Pauli-product coefficient vector
+        (normalized so the PP basis is orthonormal) is [1, 0, 0, (-1)**z]/sqrt(2).
+        Deliberately does not share any code with the routines under test.
+        """
+        vec = np.array([1.0])
+        for z in zvals:
+            vec = np.kron(vec, np.array([1, 0, 0, 1 - 2 * z], 'd') / np.sqrt(2))
+        return vec
+
+    @staticmethod
+    def zvals_to_int(zvals):
+        """Encode z-values little-endian, matching EffectRepComputational."""
+        return sum(z << i for i, z in enumerate(zvals))
+
     def test_to_dense_matches_kron_reference(self):
         for zvals in self.ALL_ZVALS:
             with self.subTest(zvals=zvals):
-                actual = mt.zvals_int64_to_dense(_zvals_to_int(zvals), len(zvals))
-                self.assertArraysAlmostEqual(actual, _pp_computational_superket(zvals))
+                actual = mt.zvals_int64_to_dense(self.zvals_to_int(zvals), len(zvals))
+                self.assertArraysAlmostEqual(actual, self.pp_computational_superket(zvals))
 
     def test_probability_matches_kron_reference(self):
         rng = np.random.default_rng(0)
         for zvals in self.ALL_ZVALS:
             with self.subTest(zvals=zvals):
                 state = rng.standard_normal(4 ** len(zvals))
-                actual = mt.zvals_int64_probability(_zvals_to_int(zvals), len(zvals), state)
-                expected = np.dot(_pp_computational_superket(zvals), state)
+                actual = mt.zvals_int64_probability(self.zvals_to_int(zvals), len(zvals), state)
+                expected = np.dot(self.pp_computational_superket(zvals), state)
                 self.assertAlmostEqual(actual, expected)
 
     def test_probability_agrees_with_densifying_then_dotting(self):
@@ -457,7 +470,7 @@ class ZvalsInt64Tester(BaseCase):
         rng = np.random.default_rng(1)
         for zvals in self.ALL_ZVALS:
             with self.subTest(zvals=zvals):
-                zvals_int, nq = _zvals_to_int(zvals), len(zvals)
+                zvals_int, nq = self.zvals_to_int(zvals), len(zvals)
                 state = rng.standard_normal(4 ** nq)
                 dense = mt.zvals_int64_to_dense(zvals_int, nq)
                 self.assertAlmostEqual(mt.zvals_int64_probability(zvals_int, nq, state),
@@ -478,7 +491,7 @@ class ZvalsInt64Tester(BaseCase):
         # abs_elval is a caller-supplied cache of 1/sqrt(2)**nqubits; omitting it
         # must compute the same thing.
         zvals = (1, 0, 1)
-        zvals_int, nq = _zvals_to_int(zvals), len(zvals)
+        zvals_int, nq = self.zvals_to_int(zvals), len(zvals)
         state = np.random.default_rng(2).standard_normal(4 ** nq)
         abs_elval = 1 / (np.sqrt(2) ** nq)
         self.assertArraysAlmostEqual(mt.zvals_int64_to_dense(zvals_int, nq),
@@ -518,5 +531,5 @@ class ZvalsInt64Tester(BaseCase):
         mt._zvals_int64_to_dense_cache.clear()
         first = mt.zvals_int64_to_dense(0b01, 2)
         second = mt.zvals_int64_to_dense(0b10, 2)
-        self.assertArraysAlmostEqual(first, _pp_computational_superket((1, 0)))
-        self.assertArraysAlmostEqual(second, _pp_computational_superket((0, 1)))
+        self.assertArraysAlmostEqual(first, self.pp_computational_superket((1, 0)))
+        self.assertArraysAlmostEqual(second, self.pp_computational_superket((0, 1)))
