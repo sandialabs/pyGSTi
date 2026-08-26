@@ -95,6 +95,14 @@ sphinx:
       # through to the theme. The edit_button_branch extension repoints the URL at
       # `pygsti_edit_branch` and swaps .ipynb for the .md that exists there.
       use_source_button: true
+    # The example HTML reports, collected by docs/collect-reports.py. Sphinx
+    # copies the *contents* of each html_extra_path entry to the output root,
+    # so _extra/reports/ lands at /reports/ on the site. The reports are ~600 MB
+    # of generated HTML; they reach a build through docs/reports.tar.xz, which
+    # `collect-reports.py extract` unpacks (see .readthedocs.yaml). A build with
+    # no tarball simply has no _extra directory, and Sphinx skips a missing
+    # html_extra_path entry with a warning rather than failing.
+    html_extra_path: ["_extra"]
     autosummary_generate: True
     autoclass_content: "both"
     autodoc_typehints: "description"
@@ -108,6 +116,9 @@ sphinx:
     #   - pygsti.drivers.longsequence  the longsequence driver module + its functions
     #   - pygsti.evotypes.*          ~191 pages of internal evolution-type rep machinery
     exclude_patterns:
+    # html_extra_path content is copied verbatim; keep it out of source
+    # discovery so Sphinx does not also try to read it as documents.
+    - "_extra"
     # Keep the build tree out of source discovery. Jupyter Book only injects its
     # own defaults (_build, Thumbs.db, ...) when `exclude_patterns` is a TOP-LEVEL
     # key; ours lives under sphinx.config, so we must list _build ourselves.

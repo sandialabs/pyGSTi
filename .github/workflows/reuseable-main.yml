@@ -301,6 +301,30 @@ jobs:
         # so this step fails the job exactly as the nbval step did.
         python docs/execute-notebooks.py --jobs 4 --timeout 1800 --allow-errors $NB_EXCLUDE_ML
 
+    - name: Collect the example HTML reports
+      # Executing the tutorials writes ~25 pyGSTi HTML reports into the gitignored
+      # scratch directories. collect-reports.py packs them into a single 5 MB
+      # docs/reports.tar.xz (from ~600 MB of HTML), which is small enough to move
+      # as an artifact and to commit onto the generated branch. Needs pyGSTi
+      # importable, for the shared offline/ JS bundle it places on extract.
+      #
+      # always(), for the same reason the notebook upload is: a run where two
+      # notebooks failed still produced two dozen good reports.
+      if: ${{ always() && inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
+      run: python docs/collect-reports.py collect
+
+    - name: Upload the example HTML reports
+      # Consumed by stage-docs-branch.yml, which commits the tarball onto the
+      # generated branch beside the executed notebooks, so that the reports and
+      # the pages linking to them always ship together.
+      if: ${{ always() && inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: example-reports
+        path: docs/reports.tar.xz
+        if-no-files-found: error
+        retention-days: 7
+
     - name: Upload executed notebooks
       # Consumed by develop.yml's docs-notebooks job, which commits them onto the
       # develop-with-notebooks branch that ReadTheDocs builds. Artifacts are scoped

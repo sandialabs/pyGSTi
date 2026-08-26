@@ -5,8 +5,8 @@ ReadTheDocs does not execute notebooks (``docs/_config.yml`` sets
 ``execute_notebooks: 'off'``), so the branch it builds has to already carry the
 executed output. This script builds such a branch: it takes a source commit plus
 a tree of executed ``.ipynb``, replaces each notebook page's ``.md`` with the
-``.ipynb`` holding that page's output, retargets ``docs/_config.yml``, and
-commits the result as one atomic commit.
+``.ipynb`` holding that page's output, adds the collected HTML reports,
+retargets ``docs/_config.yml``, and commits the result as one atomic commit.
 
 It is the same work the CI job does, in a form a human can run. Executing the 76
 notebooks is the expensive half (~40 minutes on a 2-core GitHub runner) and any
@@ -18,6 +18,7 @@ The full local recipe, from a clean checkout of the branch you want staged::
     jupytext --sync 'docs/markdown/**/*.md'
     python -c "import sys; sys.path.insert(0,'docs'); import conftest; conftest._generate_shared_fixtures()"
     python docs/execute-notebooks.py --jobs 8 --timeout 1800 --allow-errors
+    python docs/collect-reports.py collect
     python docs/stage-rtd-branch.py --target-branch docs-preview --push
 
 Prerequisites for the execution step, beyond ``pip install -e .[docs]``: ``chp``
@@ -33,6 +34,12 @@ out of every recorded output, so nothing machine-specific survives into a
 committed notebook. The run-to-run churn that does remain (28 of 76 notebooks)
 comes from unseeded randomness inside pyGSTi and from MPI rank interleaving,
 neither of which cares which machine you are on.
+
+Executing the notebooks also writes ~25 pyGSTi HTML reports into the scratch
+directories; ``collect-reports.py`` packs those into ``docs/reports.tar.xz``,
+which this script commits alongside the notebooks so that the reports and the
+pages linking to them always ship together. Pass ``--allow-missing-reports`` to
+stage a branch without them, accepting that every report link will 404.
 
 Nothing is pushed without ``--push``, and the protected branch names are refused
 outright.
@@ -105,6 +112,29 @@ def check_staleness(notebooks: list) -> list:
     return stale
 
 
+def check_reports(repo: pathlib.Path) -> pathlib.Path | None:
+    """The report tarball, if it is present and not older than the reports.
+
+    Same failure the notebook staleness check guards against, one level up: the
+    notebooks can be re-executed without anyone re-running collect-reports.py,
+    and the site would then serve reports describing an older run. Returns None
+    when there is no tarball at all, which the caller decides what to do about.
+    """
+    tarball = repo / "docs" / "reports.tar.xz"
+    if not tarball.exists():
+        return None
+    packed = tarball.stat().st_mtime
+    newer = sorted(m.parent.name
+                   for root in ("tutorial_files", "example_files")
+                   for m in (repo / "docs" / root).glob("*/main.html")
+                   if m.stat().st_mtime > packed)
+    if newer:
+        sys.exit(f"error: {len(newer)} report(s) newer than docs/reports.tar.xz:\n  "
+                 + "\n  ".join(newer)
+                 + "\n  Re-run docs/collect-reports.py collect.")
+    return tarball
+
+
 def retarget_config(cfg: pathlib.Path, target_branch: str, edit_branch: str):
     """Point the launch buttons at `target_branch`, the source buttons at `edit_branch`.
 
@@ -151,6 +181,10 @@ def main():
                          "without ever reporting a problem, so this is off by default.")
     ap.add_argument("--allow-stale", action="store_true",
                     help="stage even if some .md is newer than its executed .ipynb")
+    ap.add_argument("--allow-missing-reports", action="store_true",
+                    help="stage even if docs/reports.tar.xz is absent. The site "
+                         "then builds without the example reports, and every link "
+                         "to one 404s, so this is off by default.")
     ap.add_argument("--push", action="store_true",
                     help="force-push the result. Without this the branch is built "
                          "locally and left for you to inspect.")
@@ -180,6 +214,16 @@ def main():
     if not notebooks:
         sys.exit(f"error: no executed notebooks under {nb_root}. "
                  f"Run docs/execute-notebooks.py first.")
+
+    tarball = check_reports(repo)
+    if tarball is None:
+        msg = ("no docs/reports.tar.xz; run docs/collect-reports.py collect "
+               "after executing the notebooks")
+        if not a.allow_missing_reports:
+            sys.exit(f"error: {msg}, or pass --allow-missing-reports.")
+        print(f"warning: {msg}. Report links will 404.", file=sys.stderr)
+    else:
+        print(f"report tarball   {tarball.stat().st_size / 2**20:.1f} MB")
 
     stale = check_staleness(notebooks)
     if stale:
@@ -244,12 +288,19 @@ def main():
             dest.with_suffix(".md").unlink(missing_ok=True)
             staged += 1
 
+        if tarball is not None:
+            shutil.copy2(tarball, wt / "docs" / tarball.name)
+
         retarget_config(wt / "docs" / "_config.yml", a.target_branch, edit_branch)
 
         run(["git", "checkout", "--quiet", "-B", a.target_branch], cwd=wt)
         # -f because .ipynb is gitignored on the source branch.
         run(["git", "add", "-A", "-f", "docs/markdown"], cwd=wt)
         run(["git", "add", "docs/_config.yml"], cwd=wt)
+        if tarball is not None:
+            # -f for the same reason as the notebooks: generated, and so
+            # gitignored on every branch a human works on.
+            run(["git", "add", "-f", f"docs/{tarball.name}"], cwd=wt)
         # [skip ci] so pushing a branch of generated notebook output does not
         # kick off a test matrix for source that was already tested.
         run(["git", "-c", "user.name=PyGSTi", "-c", "user.email=pygsti@noreply.github.com",
@@ -257,7 +308,9 @@ def main():
             cwd=wt)
         head = run(["git", "rev-parse", "HEAD"], cwd=wt)
 
-        print(f"staged           {staged} notebooks onto '{a.target_branch}' ({head[:12]})")
+        print(f"staged           {staged} notebooks"
+              + (" + reports" if tarball is not None else "")
+              + f" onto '{a.target_branch}' ({head[:12]})")
         print(f"launch buttons   -> {a.target_branch}")
         print(f"source buttons   -> {edit_branch}")
 
