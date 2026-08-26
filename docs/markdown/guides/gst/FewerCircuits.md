@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.3
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -277,5 +277,3 @@ and
 [RFPR](../../../reports/example_rfpr_report.html),
 reports may now be viewed.
 The only notable difference in the output are "gaps" in the color box plots which plot quantities such as the log-likelihood across all operation sequences, organized by germ and fiducials.
-
-

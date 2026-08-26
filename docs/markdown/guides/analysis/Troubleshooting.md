@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.3
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -130,4 +130,3 @@ What comes back is a `ModelEstimateResults` carrying a single `LinearGateSetTomo
 
 ## Can I model leakage level(s) in pyGSTi?
 For certain types of "leakage", yes: PyGSTi can create models whose operations act on n-level state spaces.  For instance, a 3-level space can be interpreted as a qubit plus a leakage level.  Model operations must be constructed and interpreted accordingly, but apart from these nuances pyGSTi treats a system with leakage levels exactly as it would a larget (e.g. multi-qubit) system.  See this [example analyzing a qubit + leakage level](../gst/Leakage).
-

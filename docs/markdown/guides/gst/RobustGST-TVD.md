@@ -252,7 +252,6 @@ print('HTML report will be written to ... ')
 import os
 print(os.getcwd() + '/' + report_dir + '/main.html\n\n')
 report.write_html(report_dir, connected=True, verbosity=0)
-
 ```
 
-The report written here is served with these docs: [robust-gst-report](../../../reports/robust-gst-report.html).
+Served with these docs: [robust-gst-report](../../../reports/robust-gst-report.html).

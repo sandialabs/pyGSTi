@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.3
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -225,4 +225,3 @@ otherView.display()
 
 ## Exporting to HTML
 Again, you can save this notebook as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file retains all of the plot *and switch* interactivity, and because we passed `connected=False` above it needs no network connection to render.
-

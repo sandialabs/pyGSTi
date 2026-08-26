@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.3
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -110,4 +110,4 @@ ws = pygsti.report.construct_standard_report(
 ).write_html('../../../example_files/sampleQutritReport', connected=True, auto_open=False, verbosity=3)
 ```
 
-The report written here is served with these docs: [sampleQutritReport](../../../reports/sampleQutritReport.html).
+Served with these docs: [sampleQutritReport](../../../reports/sampleQutritReport.html).

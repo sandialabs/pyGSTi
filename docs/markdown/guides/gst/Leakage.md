@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.3
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -100,4 +100,4 @@ report_object, updated_res = construct_leakage_report(res, title='easy leakage a
 report_object.write_html(report_dir, connected=True)
 ```
 
-The report written here is served with these docs: [leakage-report-automagic](../../../reports/leakage-report-automagic.html).
+Served with these docs: [leakage-report-automagic](../../../reports/leakage-report-automagic.html).
