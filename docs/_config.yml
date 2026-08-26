@@ -3,6 +3,12 @@
 
 title: PyGSTi Documentation
 author: PyGSTi Developers
+# Footer copyright year. Without this key the footer reads 2023, which is
+# jupyter-book's own default (its default_config.yml), not anything pyGSTi
+# ever set. Sphinx only rewrites the year on its own when SOURCE_DATE_EPOCH
+# is set, and the %Y placeholder that would keep this current arrived in
+# Sphinx 8.1 -- out of reach while `docs` pins jupyter-book<2 to Sphinx 7.x.
+copyright: "2026"
 # Logo is configured below (sphinx html_theme_options.logo) so we can serve a
 # dark-content variant in light mode and the white variant in dark mode.
 
