@@ -82,7 +82,7 @@ The `ModelEstimateResults` object returned from `run` can be used to generate a 
 
 report = pygsti.report.construct_standard_report(
     results, title="Example 2Q-GST Report", verbosity=2)
-report.write_html('../../../example_files/easy_2q_report', verbosity=2)
+report.write_html('../../../example_files/easy_2q_report', connected=True, verbosity=2)
 ```
 
 Now open [../../../example_files/easy_2q_report/main.html](../../../example_files/easy_2q_report/main.html) to see the results.  You've run 2-qubit GST!

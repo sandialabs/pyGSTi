@@ -97,5 +97,5 @@ Each estimate in `updated_res` gains a model keyed `LAGO` beside the usual `stdg
 ```{code-cell} ipython3
 report_dir = '../../../example_files/leakage-report-automagic'
 report_object, updated_res = construct_leakage_report(res, title='easy leakage analysis!')
-report_object.write_html(report_dir)
+report_object.write_html(report_dir, connected=True)
 ```

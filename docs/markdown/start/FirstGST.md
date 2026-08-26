@@ -82,7 +82,7 @@ results = gst_protocol.run(data)
 
 report = pygsti.report.construct_standard_report(
     results, title="GST Overview Tutorial Example Report", verbosity=2)
-report.write_html("../../tutorial_files/gettingStartedReport", verbosity=2)
+report.write_html("../../tutorial_files/gettingStartedReport", connected=True, verbosity=2)
 ```
 
 You can now open the file [../../tutorial_files/gettingStartedReport/main.html](../../tutorial_files/gettingStartedReport/main.html) in your browser (Firefox works best) to view the report.  **That's it!  You've just run GST!** 

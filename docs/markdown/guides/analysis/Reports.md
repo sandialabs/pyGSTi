@@ -50,8 +50,10 @@ Once constructed, a `Report` object can write itself out as an HTML document, a 
 ```{code-cell} ipython3
 report = pygsti.report.construct_standard_report(results, title="GST Example Report", verbosity=1)
 #HTML
-report.write_html("../../../tutorial_files/exampleReport", auto_open=False, verbosity=1)
+report.write_html("../../../tutorial_files/exampleReport", connected=True, auto_open=False, verbosity=1)
 ```
+
+The `connected` argument decides where a report's JavaScript and CSS come from.  At the default `connected=False`, pyGSTi copies an `offline` folder of libraries (jQuery, Plotly, KaTeX) in beside `main.html`; that adds about 9 MB to every report and lets it render on a machine with no network connection.  Passing `connected=True` loads the same libraries from a CDN instead, leaving the report as a single `main.html` file that needs a network connection to draw its figures.  Every report in this documentation is written with `connected=True`, because they are served from a web site whose readers are online by definition.  For a report you mean to email to a colleague or keep for the archive, leave the default.
 
 ```{code-cell} ipython3
 :tags: [nbval-skip, skip-execution]
@@ -109,7 +111,7 @@ Now call the *same* `construct_standard_report` function, but instead of passing
 ws = pygsti.report.Workspace()
 report = pygsti.report.construct_standard_report(
     {'full TP': results_tp, "Full": results_full}, title="Example Multi-Estimate Report", ws=ws, verbosity=2)
-report.write_html("../../../tutorial_files/exampleMultiEstimateReport", auto_open=False, verbosity=2)
+report.write_html("../../../tutorial_files/exampleMultiEstimateReport", connected=True, auto_open=False, verbosity=2)
 ```
 
 The call above constructs `ws`, a `Workspace` object.  PyGSTi's `Workspace` objects are both a factory for figures and tables and a smart cache for computed values.  A `Workspace` object can optionally be passed to `construct_standard_report`, where it is used to create all the figures in the report.  As an intended side effect, each of those figures is cached, along with some of the intermediate results used to create it.  Passing a preconstructed `Workspace` object to `construct_standard_report` lets it reuse previously cached quantities.
@@ -128,7 +130,7 @@ pygsti.report.construct_standard_report(
     results_both,
     title="Example Multi-Estimate Report (v2)", 
     ws=ws, verbosity=2
-).write_html("../../../tutorial_files/exampleMultiEstimateReport2", auto_open=False, verbosity=2)
+).write_html("../../../tutorial_files/exampleMultiEstimateReport2", connected=True, auto_open=False, verbosity=2)
 ```
 
 ## Multiple estimates and `StandardGST`
@@ -143,7 +145,7 @@ results_std = pygsti.protocols.StandardGST(modes=('full TP', 'CPTPLND', 'Target'
 # Generate a report with "TP", "CPTP", and "Target" estimates
 pygsti.report.construct_standard_report(
     results_std, title="Post StdPractice Report", verbosity=1
-).write_html("../../../tutorial_files/exampleStdReport", auto_open=False, verbosity=1)
+).write_html("../../../tutorial_files/exampleStdReport", connected=True, auto_open=False, verbosity=1)
 ```
 
 ## Reports with confidence regions
@@ -164,7 +166,7 @@ crfact.project_hessian('intrinsic error')
 pygsti.report.construct_standard_report(
     results_std, title="Post StdPractice Report (w/CIs on CPTP)",
     confidence_level=95, verbosity=1
-).write_html("../../../tutorial_files/exampleStdReport2", auto_open=False, verbosity=1)
+).write_html("../../../tutorial_files/exampleStdReport2", connected=True, auto_open=False, verbosity=1)
 ```
 
 ## Reports with multiple *different* data sets
@@ -196,7 +198,7 @@ results_std2 = pygsti.protocols.StandardGST(modes=('full TP', 'Target'),
 pygsti.report.construct_standard_report(
     {'DS1': results_std, 'DS2': results_std2},
     title="Example Multi-Dataset Report", verbosity=1
-).write_html("../../../tutorial_files/exampleMultiDataSetReport", auto_open=False, verbosity=1)
+).write_html("../../../tutorial_files/exampleMultiDataSetReport", connected=True, auto_open=False, verbosity=1)
 ```
 
 ## Reports from LGST alone
@@ -228,7 +230,7 @@ results_lgst = pygsti.protocols.LGST(smq1Q_XYI.target_model()).run(lgst_data)
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(
     results_lgst, title="LGST-only Example Report", verbosity=2
-).write_html('../../../example_files/LGSTonlyReport', auto_open=False, verbosity=2)
+).write_html('../../../example_files/LGSTonlyReport', connected=True, auto_open=False, verbosity=2)
 ```
 
 Open [../../../example_files/LGSTonlyReport/main.html](../../../example_files/LGSTonlyReport/main.html) in your browser to view that report.
@@ -246,7 +248,7 @@ Below we demonstrate both options in a very brief (`brevity=4`) report with link
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(
     results_std, title="Example Brief Report", verbosity=1
-).write_html("../../../tutorial_files/exampleBriefReport", auto_open=False, verbosity=1,
+).write_html("../../../tutorial_files/exampleBriefReport", connected=True, auto_open=False, verbosity=1,
              brevity=4, link_to=('pkl', 'tex'))
 ```
 

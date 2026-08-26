@@ -251,6 +251,6 @@ report_dir += '/robust-gst-report'
 print('HTML report will be written to ... ')
 import os
 print(os.getcwd() + '/' + report_dir + '/main.html\n\n')
-report.write_html(report_dir, verbosity=0)
+report.write_html(report_dir, connected=True, verbosity=0)
 
 ```
