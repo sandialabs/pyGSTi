@@ -940,6 +940,62 @@ def approximate_matrix_log(m: _np.ndarray, target_logm: _np.ndarray,
 
     return logM
 
+def approximate_matrix_log_BCH(m: _np.ndarray, target: _np.ndarray, mx_basis: Union[str, Basis], 
+                               order: Literal[1,2,3,4,5]= 1) -> _np.ndarray:
+    """
+    Construct an approximate logarithm of superoperator matrix `m` that is real and near a specific target
+    unitary superoperator using the BCH approximation.
+
+    Notes
+    -----
+    In this brief note we'll make the use of the BCH expansion more explicit.
+    Let T be the target unitary superoperator. Observe that m = T@T^-1@m. Let E = T^-1@m.
+    Then we have that log(m) = log(T@E). T = exp(log(T)), E = exp(log(E)), so
+    log(m) = log( exp(log(T)) @ exp(log(E) ) ~  log(T) + log(E) + (1/2)[log(T), log(E)] + ...
+
+    The gymnastics here are useful because log(T) can be computed leveraging the fact that T is a
+    unitary matrix. And because m is close to T, E is close to the identity, meaning E should
+    have a well-defined real-valued logarithm.
+
+    Parameters
+    ----------    
+    m : numpy array
+        The superoperator matrix whose logarithm is taken.
+
+    target : numpy array
+        The target superoperator matrix. Should correspond to unitary superoperator, but this is not
+        explicitly enforced and must be enforced by callers.
+
+    mx_basis : str or Basis object
+        Basis for m and target. Allowed values are strings castable to a basis, e.g.
+        Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt), see `Basis` documentation
+        for more. Or a custom `Basis` object.
+    
+    order : int, optional (default 1)
+        Order of the BCH approximation to apply
+    
+    Returns
+    -------
+    logM : numpy array
+        A matrix of the same shape as `m`.
+    """
+    from pygsti.tools.errgenproptools import pairwise_bch_numerical
+
+    log_target = unitary_superoperator_matrix_log(target, mx_basis)
+
+    E = target.conj().T@m
+    log_E = near_identity_matrix_log(E)
+
+    approx_log_m = pairwise_bch_numerical(log_target, log_E, order)
+
+    # Both log_target and log_E are real, so the BCH result should be too (pairwise_bch_numerical
+    # allocates a complex array regardless). Validate before discarding the imaginary part.
+    imag_norm = _np.linalg.norm(approx_log_m.imag)
+    if imag_norm > 1e-8:
+        raise ValueError("BCH approximation to the matrix logarithm was not real-valued "
+                         "(norm of imaginary part is %g)!" % imag_norm)
+
+    return approx_log_m.real
 
 def eigenvalues(m: _np.ndarray, *, assume_hermitian: Optional[bool] = None,
                 assume_normal: bool = False) -> _np.ndarray:

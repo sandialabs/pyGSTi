@@ -6908,11 +6908,14 @@ def bch_numerical(propagated_errorgen_layers, error_propagator, bch_order=1):
         
     return combined_err_layer  
 
-def pairwise_bch_numerical(mat1, mat2, order=1):
+def pairwise_bch_numerical(mat1: _np.ndarray, mat2: _np.ndarray, order: Literal[1,2,3,4,5]=1) -> _np.ndarray[_np.complex128]:
     """
     Helper function for doing the numerical BCH in a pairwise fashion. Note this function is primarily intended
     for numerical validations as part of testing infrastructure.
     """
+    if not 1 <= order <= 5:
+        raise ValueError('BCH order must be between 1 and 5 (inclusive), got %s' % str(order))
+
     bch_result = _np.zeros(mat1.shape, dtype=_np.complex128)
     if order >= 1:
         bch_result += mat1 + mat2
@@ -6926,7 +6929,7 @@ def pairwise_bch_numerical(mat1, mat2, order=1):
     if order >= 4:
         commutator2112 = _matrix_commutator(mat2, commutator112)
         bch_result += (-1/24)*commutator2112
-    if order >= 5:
+    if order == 5:
         commutator1112 = _matrix_commutator(mat1, commutator112)
         commutator2212 = _matrix_commutator(mat2, commutator212)
         
