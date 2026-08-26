@@ -7,7 +7,10 @@ At a high level, a QPANN:
   1) Encodes a circuit as a tensor (depth x encoding_length).
   2) Predicts per-layer error rates for a set of modelled elementary error generators.
   3) Combines predicted error rates with precomputed circuit-specific coefficients to
-     produce first-order approximations to outcome probabilities (or other metrics).
+     produce first-order (or, with `probability_computation='second-order'`, second-order)
+     approximations to outcome probabilities (or other metrics). The perturbative
+     approximation implemented here is that of "Efficient simulation of Clifford circuits
+     with small Markovian errors" (arXiv:2504.15128).
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -44,8 +47,10 @@ class QPANN(_keras.Model):
     snipper : list[list[int]]
         Feature-selection specification: for each error generator, which encoding indices
         are relevant when predicting its rate.
-    probability_computation : {'concise','expanded'}
-        Chooses between two probability-computation layers.
+    probability_computation : {'concise','expanded','second-order'}
+        Chooses between the probability-computation layers: 'concise' and 'expanded' are two
+        implementations of the first-order approximation; 'second-order' additionally includes
+        the correction quadratic in the error rates (see `ProbabilitiesLayerSecondOrder`).
     """
 
     def __init__(self, encoding_length : int, modelled_error_generators: list,  snipper: list,
@@ -80,8 +85,12 @@ class QPANN(_keras.Model):
             that learns the mapping from a circuit to matrix of rates of each error in that
             this QPANN models.
 
-        probability_computation : {'concise','expanded'}, default 'concise'
-            Selects the probability approximation implementation.
+        probability_computation : {'concise','expanded','second-order'}, default 'concise'
+            Selects the probability approximation implementation. 'concise' and 'expanded' both
+            implement the first-order (in the error rates) approximation; 'second-order' also
+            includes the term quadratic in the error rates (the second-order correction of
+            arXiv:2504.15128), and requires the additional inputs computed by
+            `pygsti.extras.ml.encoding.error_generator_tensors` with `order=2`.
 
 
         Returns
@@ -129,6 +138,8 @@ class QPANN(_keras.Model):
             self.probability_approximation_layer = ProbabilitiesLayer()
         elif self.probability_computation == 'concise':
             self.probability_approximation_layer = ProbabilitiesLayerConcise()
+        elif self.probability_computation == 'second-order':
+            self.probability_approximation_layer = ProbabilitiesLayerSecondOrder()
 
     def circuit_to_probability(self, inputs: list | tuple) -> _tf.Tensor:
         """
@@ -145,6 +156,9 @@ class QPANN(_keras.Model):
                 [circuit_encoding, signs, permutations, scaled_alpha_matrix, probabilities_ideal]
             * If 'concise':
                 [circuit_encoding, corrections_coefficients, probabilities_ideal]
+            * If 'second-order':
+                [circuit_encoding, corrections_coefficients, signs, positions,
+                 pair_coefficients, probabilities_ideal]
 
         Returns
         -------
@@ -168,6 +182,18 @@ class QPANN(_keras.Model):
             corrections_coefficients = inputs[1]  # The alpha coefficients in a (circuit depth, self.modelled_error_generators) array
             probabilities_ideal = inputs[2]  # ideal (no error) probabilities
             probabilities = self.probability_approximation_layer([error_rates, corrections_coefficients, probabilities_ideal])
+
+        elif self.probability_computation == 'second-order':
+            corrections_coefficients = inputs[1]  # first-order alpha coefficients, (2**n, circuit depth, self.modelled_error_generators)
+            signs = _tf.cast(inputs[2], _tf.float32)  # propagation sign matrix, (circuit depth, self.modelled_error_generators)
+            # positions of each slot's end-of-circuit error generator in this circuit's unique index list.
+            # Keras casts all model inputs to floats, so cast back to int for indexing (the values are small
+            # integers, exactly representable in float32).
+            positions = _tf.cast(inputs[3], _tf.int32)
+            pair_coefficients = inputs[4]  # second-order correction coefficients, (2**n, num unique, num unique)
+            probabilities_ideal = inputs[5]  # ideal (no error) probabilities
+            probabilities = self.probability_approximation_layer(
+                [error_rates, corrections_coefficients, signs, positions, pair_coefficients, probabilities_ideal])
         else:
             raise ValueError("Invalid probability_computation choice: " + str(self.probability_computation))
 
@@ -438,3 +464,101 @@ class ProbabilitiesLayerConcise(_keras.layers.Layer):
         perturbation = _tf.reduce_sum(_tf.math.multiply(corrections_coefficients, error_rates), [1, 2])
         probabilities = probabilities_ideal + perturbation
         return probabilities
+
+
+class ProbabilitiesLayerSecondOrder(_keras.layers.Layer):
+    r"""Second-order probability-approximation layer.
+
+    Implements the outcome probability approximation of "Efficient simulation of Clifford
+    circuits with small Markovian errors" (arXiv:2504.15128) to second order in the error
+    generator rates. After propagation, the noisy circuit is
+    `exp(L'_D) ... exp(L'_1) U_ideal` where `L'_l` is layer `l`'s error generator propagated to
+    the end of the circuit (larger `l` = later in the circuit = applied after). Expanding that
+    product of exponentials to exact degree 2 in the rates:
+
+        p(bs) = p_ideal(bs)
+              + sum_l <L'_l>                                    (first order, as in 'concise')
+              + sum_{l2 > l1} <L'_{l2} L'_{l1}> + (1/2) sum_l <L'_l L'_l>   (second order)
+
+    where `<.>` denotes the (scaled) first-order sensitivity (alpha) of bitstring `bs` to an
+    end-of-circuit error generator. At degree 2 this is equivalent to the paper's second-order
+    BCH recombination plus second-order Taylor correction. Each `L'_l` is the rate-weighted sum
+    of the modelled error generators' propagated (signed) images, so the second-order term is a
+    quadratic form in the predicted rates whose (rate-independent) coefficients -- the
+    sensitivities of `bs` to the pairwise *compositions* of the circuit's unique end-of-circuit
+    error generators -- are precomputed by
+    `pygsti.extras.ml.encoding.second_order_outcome_correction_tensors`.
+
+    This layer evaluates that quadratic form efficiently: it scatters the signed predicted
+    rates into "unique end-of-circuit error generator" space (via `positions`), forms the
+    ordered-pair rate products with an exclusive cumulative sum over layers (which reproduces
+    exactly the `l2 > l1` ordering and the same-layer factor of 1/2 above), and contracts them
+    with the precomputed pair coefficients.
+    """
+
+    def __init__(self, **kwargs) -> None:
+        """Initialize the layer."""
+        super(ProbabilitiesLayerSecondOrder, self).__init__(**kwargs)
+        self.bitstring_shape = None
+
+    def compute_output_shape(self, input_shape: tuple | list) -> tuple:
+        """Return output shape `(None, bitstring_shape)` once bitstring_shape is known."""
+        # Define the output shape based on the input shape and the number of tracked error generators
+        return (None, self.bitstring_shape)
+
+    def call(self, inputs: list | tuple) -> _tf.Tensor:
+        """Compute second-order corrected probabilities.
+
+        Parameters
+        ----------
+        inputs : list
+            [error_rates, corrections_coefficients, signs, positions, pair_coefficients,
+             probabilities_ideal], where (with D = circuit depth, E = number of modelled error
+            generators, U = number of unique end-of-circuit error generators, n = num qubits):
+
+            * error_rates : (D, E) predicted rates.
+            * corrections_coefficients : (2**n, D, E) first-order (sign-weighted) alpha
+              coefficients, exactly as in the 'concise' layer.
+            * signs : (D, E) propagation signs (0 for padding layers, which removes them from
+              the second-order term; the first-order coefficients are already zero there).
+            * positions : (D, E) int positions of each slot's propagated end-of-circuit error
+              generator in the circuit's unique index list.
+            * pair_coefficients : (2**n, U, U) second-order correction coefficients;
+              `[bs, u, v]` is the sensitivity of `bs` to the composition of unique generator
+              `u` applied AFTER unique generator `v`.
+            * probabilities_ideal : (2**n,) ideal probabilities.
+
+        Returns
+        -------
+        tf.Tensor
+            Approximate probability vector, shape `(2**n,)`.
+        """
+        error_rates, corrections_coefficients, signs, positions, pair_coefficients, probabilities_ideal = inputs
+        self.bitstring_shape = probabilities_ideal.shape[0]
+
+        # CircuitToErrorRatesEinSum emits its (D, E) rates with a leading broadcast dimension
+        # of 1 (an artifact of its stochastic-rate-squaring tf.where); the 'concise' layer
+        # absorbs that via broadcasting, but the einsums below need the bare (D, E) shape.
+        error_rates = _tf.reshape(error_rates, _tf.shape(signs))
+
+        # First-order term: identical to ProbabilitiesLayerConcise.
+        first_order = _tf.reduce_sum(_tf.math.multiply(corrections_coefficients, error_rates), [1, 2])
+
+        # Scatter the signed rates into unique-end-of-circuit-generator space:
+        # r[l, u] = sum_j signs[l, j] * error_rates[l, j] * [positions[l, j] == u].
+        num_unique = _tf.shape(pair_coefficients)[-1]
+        signed_rates = _tf.math.multiply(signs, error_rates)
+        slot_one_hot = _tf.one_hot(positions, depth=num_unique, dtype=signed_rates.dtype)
+        rates_by_unique = _tf.einsum('de,deu->du', signed_rates, slot_one_hot)
+
+        # Ordered-pair rate products. earlier[l, v] = sum_{l' < l} r[l', v], so
+        # T[u, v] = sum_l r[l, u] * (earlier[l, v] + 0.5 * r[l, v])
+        #         = sum_{l2 > l1} r[l2, u] r[l1, v] + 0.5 * sum_l r[l, u] r[l, v],
+        # exactly the coefficient with which the composition (u after v) enters the
+        # second-order term of the product-of-exponentials expansion.
+        earlier = _tf.cumsum(rates_by_unique, axis=0, exclusive=True)
+        pair_products = _tf.einsum('du,dv->uv', rates_by_unique, earlier + 0.5 * rates_by_unique)
+
+        second_order = _tf.einsum('buv,uv->b', pair_coefficients, pair_products)
+
+        return probabilities_ideal + first_order + second_order

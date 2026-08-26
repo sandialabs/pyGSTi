@@ -614,6 +614,219 @@ class MLSubpackageTester(unittest.TestCase):
         config = layer.get_config()
         self.assertEqual(config['layer_snipper'], [[0, 1]])
 
+    def test_second_order_tensors_vs_exact_simulation(self):
+        # End-to-end physics test of the second-order (in the error generator rates) outcome
+        # probability approximation of "Efficient simulation of Clifford circuits with small
+        # Markovian errors" (arXiv:2504.15128), as implemented by
+        # `encoding.second_order_outcome_correction_tensors` (via `error_generator_tensors`'s
+        # `order=2`) + the quadratic form evaluated by `qpanns.ProbabilitiesLayerSecondOrder`.
+        #
+        # The reference is an EXACT dense simulation, built from independently-verified
+        # conventions (`create_elementary_errorgen_nqudit(..., tensorprod_basis=False)` +
+        # `state_to_dmvec` + row-stacked unitary superoperators `kron(U, U.conj())`, exactly as
+        # in `errgenproptools.alpha_numerical`): each layer applies its ideal unitary followed
+        # by `expm` of that layer's (local, unpropagated) error generator. Correctness is
+        # asserted via the approximation-order scaling of the residuals as all rates are scaled
+        # by s -> 0: the first-order approximation's error must shrink as O(s^2) and the
+        # second-order approximation's error as O(s^3). This validates the whole pipeline
+        # (propagation indices/signs, first-order alphas, pairwise compositions, second-order
+        # coefficients, layer ordering and the same-layer factor of 1/2) against ground truth,
+        # for all four error generator types.
+        from scipy.linalg import expm
+        from pygsti.tools.optools import state_to_dmvec, create_elementary_errorgen_nqudit
+        from pygsti.baseobjs.basis import BuiltinBasis
+        import itertools
+
+        n = 2
+        pspec = _ProcessorSpec(n, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuit = Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1[Gxpi2:1Gypi2:0]@(0,1)')
+        depth = circuit.depth
+        modelled_error_generators = [('H', ('XI',)), ('H', ('IZ',)), ('S', ('IX',)), ('S', ('ZY',)),
+                                     ('C', ('XI', 'IY')), ('A', ('XI', 'IY'))]
+        num_gens = len(modelled_error_generators)
+
+        tensors = encoding.error_generator_tensors([circuit], modelled_error_generators, pspec,
+                                                     order=2, process_num=2)
+        probs_ideal = tensors['probabilities'][0]
+        alphas = tensors['alphas'][0]
+        signs = tensors['signs'][0].astype(float)
+        positions = tensors['positions'][0]
+        pair_coefficients = tensors['pair_coefficients'][0]
+        nbit_strings = [''.join(p) for p in itertools.product('01', repeat=n)]
+
+        def approximate_probs(rates, order):
+            # The polynomial the QPANN evaluates (numpy replica of the TF layers' math).
+            p = probs_ideal + np.einsum('bde,de->b', alphas, rates)
+            if order == 2:
+                num_unique = pair_coefficients.shape[-1]
+                rates_by_unique = np.zeros((depth, num_unique))
+                for l in range(depth):
+                    for j in range(num_gens):
+                        rates_by_unique[l, positions[l, j]] += signs[l, j] * rates[l, j]
+                earlier = np.cumsum(rates_by_unique, axis=0) - rates_by_unique  # exclusive cumsum
+                pair_products = np.einsum('du,dv->uv', rates_by_unique, earlier + 0.5 * rates_by_unique)
+                p = p + np.einsum('buv,uv->b', pair_coefficients, pair_products)
+            return p
+
+        layer_tableaus = circuit.convert_to_stim_tableau_layers()
+        basis_1q = BuiltinBasis('PP', 4)
+        elementary_matrices = [create_elementary_errorgen_nqudit(eg[0], eg[1], basis_1q, normalize=False,
+                                                                 sparse=False, tensorprod_basis=False)
+                               for eg in modelled_error_generators]
+
+        def exact_probs(rates):
+            rho = state_to_dmvec(np.eye(2 ** n)[:, 0].astype(complex))
+            for l in range(depth):
+                unitary = layer_tableaus[l].to_unitary_matrix(endian='big')
+                errorgen = sum(rates[l, j] * elementary_matrices[j] for j in range(num_gens))
+                rho = expm(errorgen) @ (np.kron(unitary, unitary.conj()) @ rho)
+            return np.array([np.real(state_to_dmvec(np.eye(2 ** n)[:, int(bs, 2)].astype(complex)).conj() @ rho)
+                             for bs in nbit_strings])
+
+        # Conventions sanity check: with zero rates the exact simulation must exactly reproduce
+        # the ideal probabilities computed by the tensor pipeline.
+        np.testing.assert_allclose(exact_probs(np.zeros((depth, num_gens))), probs_ideal, atol=1e-10)
+
+        rng = np.random.default_rng(0)
+        base_rates = rng.standard_normal((depth, num_gens))
+        base_rates[:, 2:4] = np.abs(base_rates[:, 2:4]) * 0.5  # 'S' rates are non-negative
+
+        scales = [0.04, 0.02, 0.01]
+        errors_order1 = []
+        errors_order2 = []
+        for s in scales:
+            exact = exact_probs(s * base_rates)
+            errors_order1.append(np.abs(exact - approximate_probs(s * base_rates, order=1)).sum())
+            errors_order2.append(np.abs(exact - approximate_probs(s * base_rates, order=2)).sum())
+
+        for i in range(len(scales) - 1):
+            # Halving s must shrink the order-1 residual ~4x (O(s^2)) and the order-2 residual
+            # ~8x (O(s^3)); use loose thresholds robust to subleading terms.
+            self.assertGreater(errors_order1[i] / errors_order1[i + 1], 3.0)
+            self.assertLess(errors_order1[i] / errors_order1[i + 1], 5.0)
+            self.assertGreater(errors_order2[i] / errors_order2[i + 1], 6.0)
+            self.assertLess(errors_order2[i] / errors_order2[i + 1], 10.0)
+            # And the second-order approximation must actually be better.
+            self.assertLess(errors_order2[i], errors_order1[i])
+
+    def test_second_order_layer_matches_naive_pair_sum(self):
+        # Validates `ProbabilitiesLayerSecondOrder`'s vectorized implementation (one-hot
+        # scatter into unique-generator space + exclusive-cumsum ordered-pair products +
+        # einsum contraction) against a naive, direct quadruple loop over slot pairs
+        # implementing the defining formula: for slots a=(l2,j2), b=(l1,j1),
+        #   l2 > l1  : + C2[bs, pos(a), pos(b)] * s_a e_a * s_b e_b
+        #   l2 == l1 : + (1/2) * (same)   [both (a,b) and (b,a) orders, including a == b]
+        # with arbitrary (random) inputs -- independent of any physics.
+        rng = np.random.default_rng(12345)
+        depth, num_gens, num_unique, num_bitstrings = 4, 3, 5, 4
+        error_rates = rng.standard_normal((depth, num_gens)).astype(np.float32)
+        first_order_coefficients = rng.standard_normal((num_bitstrings, depth, num_gens)).astype(np.float32)
+        signs = rng.choice([-1.0, 0.0, 1.0], size=(depth, num_gens)).astype(np.float32)
+        positions = rng.integers(0, num_unique, size=(depth, num_gens))
+        pair_coefficients = rng.standard_normal((num_bitstrings, num_unique, num_unique)).astype(np.float32)
+        probs_ideal = rng.random(num_bitstrings).astype(np.float32)
+
+        expected = probs_ideal + np.einsum('bde,de->b', first_order_coefficients, error_rates)
+        for l2 in range(depth):
+            for j2 in range(num_gens):
+                for l1 in range(depth):
+                    for j1 in range(num_gens):
+                        if l2 < l1:
+                            continue
+                        weight = 1.0 if l2 > l1 else 0.5
+                        expected = expected + (weight
+                                               * pair_coefficients[:, positions[l2, j2], positions[l1, j1]]
+                                               * signs[l2, j2] * error_rates[l2, j2]
+                                               * signs[l1, j1] * error_rates[l1, j1])
+
+        layer = qpanns.ProbabilitiesLayerSecondOrder()
+        output = layer([tf.constant(error_rates), tf.constant(first_order_coefficients),
+                        tf.constant(signs), tf.constant(positions, tf.int32),
+                        tf.constant(pair_coefficients), tf.constant(probs_ideal)]).numpy()
+        np.testing.assert_allclose(output, expected, rtol=1e-4, atol=1e-5)
+
+    def test_qpann_second_order_forward_and_fit(self):
+        # End-to-end test of a QPANN with probability_computation='second-order': tensors from
+        # `error_generator_tensors(order=2)`, batched forward pass (exercising the 6-input
+        # structure through tf.map_fn, including the float->int cast of `positions` that Keras'
+        # automatic input conversion necessitates), consistency of the forward pass with the
+        # 'concise' first-order QPANN's own quadratic-term-free output, and training.
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': [(0, 1)]},
+                                geometry="line", qubit_labels=[0, 1])
+        circuits = [
+            Circuit('[Gxpi2:0Gypi2:1]Gcphase:0:1[Gxpi2:1Gypi2:0]@(0,1)'),
+            Circuit('[Gypi2:0][Gcphase:0:1][Gxpi2:1]@(0,1)'),
+            Circuit('[Gxpi2:0Gxpi2:1]Gcphase:0:1@(0,1)'),
+        ]
+        modelled_error_generators = [('H', ('XI',)), ('S', ('IX',)), ('C', ('XI', 'YZ')), ('A', ('XI', 'YZ'))]
+
+        tensors = encoding.error_generator_tensors(circuits, modelled_error_generators, pspec,
+                                                     order=2, process_num=2)
+        probabilities = tensors['probabilities']
+
+        encoder = encoding.StandardCircuitEncoder(pspec)
+        circuits_tensor = encoding.circuits_to_tensor(circuits, encoder)
+        adjacency_matrix = snippers.undirected_adjacency_matrix_from_edges([(0, 1)], [0, 1])
+        snipper = snippers.layer_snipper_from_qubit_graph(modelled_error_generators, encoder,
+                                                            adjacency_matrix, hops=1)
+
+        model = qpanns.QPANN(encoder.length, modelled_error_generators, snipper,
+                             probability_computation='second-order')
+        x = [circuits_tensor, tensors['alphas'], tensors['signs'].astype(float),
+             tensors['positions'].astype(float), tensors['pair_coefficients'], probabilities]
+
+        output = model(x)
+        self.assertEqual(tuple(output.shape), (len(circuits), 2 ** pspec.num_qubits))
+        self.assertTrue(np.all(np.isfinite(output.numpy())))
+
+        # The second-order model's output must equal (first-order output) + (second-order
+        # term). Verify against a 'concise' first-order QPANN sharing the SAME trained rate
+        # predictor weights, with the second-order term recomputed in numpy from this model's
+        # own predicted rates.
+        first_order_model = qpanns.QPANN(encoder.length, modelled_error_generators, snipper,
+                                         probability_computation='concise')
+        _ = first_order_model([circuits_tensor, tensors['alphas'], probabilities])  # build weights
+        first_order_model.set_weights(model.get_weights())
+        first_order_output = first_order_model([circuits_tensor, tensors['alphas'], probabilities]).numpy()
+        for c_idx in range(len(circuits)):
+            depth = circuits_tensor.shape[1]
+            # The rate predictor emits (1, depth, num_gens) -- see the note in
+            # ProbabilitiesLayerSecondOrder.call -- so flatten the broadcast dimension.
+            rates = model.dense_layer(tf.constant(circuits_tensor[c_idx], tf.float32)).numpy().reshape(
+                depth, len(modelled_error_generators))
+            num_unique = tensors['pair_coefficients'].shape[-1]
+            rates_by_unique = np.zeros((depth, num_unique))
+            for l in range(depth):
+                for j in range(len(modelled_error_generators)):
+                    rates_by_unique[l, tensors['positions'][c_idx, l, j]] += tensors['signs'][c_idx, l, j] * rates[l, j]
+            earlier = np.cumsum(rates_by_unique, axis=0) - rates_by_unique
+            pair_products = np.einsum('du,dv->uv', rates_by_unique, earlier + 0.5 * rates_by_unique)
+            second_order_term = np.einsum('buv,uv->b', tensors['pair_coefficients'][c_idx], pair_products)
+            np.testing.assert_allclose(output.numpy()[c_idx], first_order_output[c_idx] + second_order_term,
+                                       rtol=1e-4, atol=1e-6)
+
+        # Train.
+        initial_weights = [w.numpy().copy() for w in model.trainable_variables]
+        self.assertTrue(len(initial_weights) > 0)
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-1), loss='mse')
+        model.fit(x, probabilities + 0.01, epochs=2, verbose=0)
+        changed = any(not np.allclose(w0, w1.numpy())
+                      for w0, w1 in zip(initial_weights, model.trainable_variables))
+        self.assertTrue(changed)
+
+    def test_error_generator_tensors_order_validation(self):
+        # `order` must be 1 or 2, and order=2 requires the 'concise' alpha representation
+        # (the dense 'matrix' representation has no second-order counterpart).
+        pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2'], {}, {}, geometry="line", qubit_labels=[0, 1])
+        circuits = [Circuit('[Gxpi2:0Gypi2:1]@(0,1)')]
+        modelled_error_generators = [('H', ('XI',)), ('S', ('IX',))]
+        with self.assertRaises(NotImplementedError):
+            encoding.error_generator_tensors(circuits, modelled_error_generators, pspec, order=3)
+        with self.assertRaises(NotImplementedError):
+            encoding.error_generator_tensors(circuits, modelled_error_generators, pspec,
+                                               alpha_representation='matrix', order=2)
+
     def test_regression_padded_depth_validation_fix(self):
         # Regression test for Fix D: padded_depth < circuit.depth validation check
         pspec = _ProcessorSpec(2, ['Gxpi2', 'Gypi2'], {}, {}, geometry="line", qubit_labels=[0, 1])

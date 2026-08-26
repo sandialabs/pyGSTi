@@ -5,10 +5,14 @@ This module provides:
   * Utilities for batching circuits into tensors.
   * Utilities for computing error-propagation tensors and first-order probability correction
     coefficients (alpha-like quantities) used by QPANN models.
+  * Utilities for computing second-order probability correction coefficients (sensitivities to
+    pairwise compositions of propagated error generators), used by second-order QPANN models.
 
 The core idea is to represent a circuit as a depth-by-features array, then compute additional
 tensors that describe how error generators propagate through the circuit and how they affect
-measurement outcome probabilities in a first-order approximation.
+measurement outcome probabilities in a first-order (or second-order) approximation, following
+the perturbative simulation technique of "Efficient simulation of Clifford circuits with small
+Markovian errors" (arXiv:2504.15128).
 """
 
 #***************************************************************************************************
@@ -357,13 +361,16 @@ def circuits_to_tensor(circuits: list[_Circuit], encoder: CircuitEncoder, encodi
 
 
 def error_generator_tensors(circuits: list[_Circuit], error_generators: list, pspec: "ProcessorSpec", alpha_representation: str = 'concise',
-                            process_num: int = 5) -> dict:
+                            process_num: int = 5, order: int = 1) -> dict:
     """
     Compute the tensors needed by QPANN probability-approximation layers.
 
     This is a convenience wrapper that combines:
       * error-propagation tensors (`indices`, `signs`)
       * first-order outcome tensors (`probabilities`, and either dense alphas or concise coefficients)
+      * optionally (`order=2`), second-order outcome correction tensors (`positions`,
+        `pair_coefficients`), for use with a QPANN with
+        `probability_computation='second-order'`.
 
     Parameters
     ----------
@@ -375,6 +382,12 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
         Processor specification (used mainly for num_qubits).
     alpha_representation : {'concise', 'matrix'}, default 'concise'
         Which alpha/first-order representation to compute.
+    order : {1, 2}, default 1
+        The order (in the error generator rates) of the outcome probability approximation the
+        returned tensors support. `order=2` additionally computes the tensors for the
+        second-order correction of arXiv:2504.15128 (see
+        `second_order_outcome_correction_tensors`), and requires
+        `alpha_representation='concise'`.
 
     Returns
     -------
@@ -385,9 +398,17 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
           * 'probabilities' : numpy.ndarray
           * 'alphas' : numpy.ndarray
         where the meaning/shape of 'alphas' depends on `alpha_representation`.
+        If `order=2`, also:
+          * 'positions' : numpy.ndarray
+          * 'pair_coefficients' : numpy.ndarray
+        (see `second_order_outcome_correction_tensors`).
     """
     from pygsti.processors import QubitProcessorSpec
     assert isinstance(pspec, QubitProcessorSpec)
+    if order not in (1, 2):
+        raise NotImplementedError(f"Only order 1 and order 2 outcome probability approximations are implemented, got order={order}!")
+    if order == 2 and alpha_representation != 'concise':
+        raise NotImplementedError("order=2 is only implemented for alpha_representation='concise'!")
     if alpha_representation == 'matrix' and any(eg[0] in ('C', 'A') for eg in error_generators):
         raise NotImplementedError(
             "alpha_representation='matrix' (and 'expanded' probability_computation in QPANN) only "
@@ -405,7 +426,13 @@ def error_generator_tensors(circuits: list[_Circuit], error_generators: list, ps
         probabilities, alphas = first_order_outcome_probabilities_tensors_concise(circuits, pspec, indices, signs, process_num=process_num)
     else:
         raise NotImplementedError('No other representations have been implemented yet!')
-    return {'indices':indices, 'signs':signs, 'probabilities':probabilities, 'alphas':alphas}
+    tensors = {'indices':indices, 'signs':signs, 'probabilities':probabilities, 'alphas':alphas}
+    if order == 2:
+        positions, pair_coefficients = second_order_outcome_correction_tensors(circuits, pspec, indices,
+                                                                               process_num=process_num)
+        tensors['positions'] = positions
+        tensors['pair_coefficients'] = pair_coefficients
+    return tensors
 
 
 def circuit_error_propagation_matrices(circuit: _Circuit, error_generators: list) -> tuple[_np.ndarray, _np.ndarray]:
@@ -725,6 +752,181 @@ def first_order_outcome_probabilities_tensors(circuits: list[_Circuit], pspec: "
                                              existing_alpha_matrix=prior_alpha_matrix)
 
     return probabilities, alphas
+
+
+def circuit_second_order_correction_tensors(circuit: _Circuit, indices_for_circuit: _np.ndarray, num_qubits: int,
+                                            truncation_threshold: float = 1e-14) -> tuple[_np.ndarray, _np.ndarray, _np.ndarray]:
+    """
+    Compute the second-order (in the error generator rates) outcome probability correction
+    coefficients for a single circuit, for use by second-order QPANNs.
+
+    This implements the rate-independent part of the second-order term of the perturbative
+    Clifford-circuit simulation technique of "Efficient simulation of Clifford circuits with
+    small Markovian errors" (arXiv:2504.15128). After each layer's error generators are
+    propagated to the end of the circuit (see `circuit_error_propagation_matrices`), the noisy
+    circuit is `exp(L'_D) ... exp(L'_1) U_ideal` (layer D applied last). Expanding that product
+    of exponentials to second order in the rates gives, in addition to the existing first-order
+    term, a term quadratic in the rates whose coefficients are
+
+        pair_coefficients[bs, u, v] = scale * sum_m c_m * alpha(K_m, bs)
+
+    where `L_u [L_v [.]] = sum_m c_m K_m` is the composition (`L_u` applied AFTER `L_v`) of the
+    u-th and v-th *unique* end-of-circuit error generators appearing in this circuit's
+    propagation `indices`, expanded in elementary error generators `K_m` via
+    `pygsti.tools.errgenproptools.error_generator_composition`, and `alpha`/`scale` are the same
+    first-order sensitivities used by the existing first-order machinery. Truncating the
+    expansion of the product of exponentials at exact degree 2 in the rates is equivalent, at
+    that degree, to the second-order BCH recombination plus second-order Taylor correction of
+    arXiv:2504.15128 (BCH's (1/2)[X, Y] commutators and the Taylor series' (1/2)L^2 term jointly
+    reproduce the ordered products X*Y + (1/2)X^2 + (1/2)Y^2).
+
+    The coefficients are indexed by the circuit's unique end-of-circuit error generator indices
+    (rather than by (layer, modelled-error-generator) slots) because the quadratic coefficient
+    only depends on which end-of-circuit generators a pair of slots propagates to -- this keeps
+    the tensor's size at (2**n, U, U) with U typically far smaller than depth * num_modelled.
+    How each slot's (signed) rate feeds into these coefficients -- including the ordering of the
+    two layers and the factor of 1/2 for same-layer pairs -- is handled by the network layer
+    (see `pygsti.extras.ml.qpanns.ProbabilitiesLayerSecondOrder`).
+
+    Parameters
+    ----------
+    circuit : pygsti.circuits.Circuit
+        Circuit to compute the second-order correction coefficients for.
+    indices_for_circuit : numpy.ndarray
+        Integer array of shape `(circuit.depth, num_error_generators)` of propagated
+        end-of-circuit error generator indices for this circuit, as computed by
+        `circuit_error_propagation_matrices`.
+    num_qubits : int
+        The number of qubits the circuit acts on.
+    truncation_threshold : float, default 1e-14
+        Composition-product terms with coefficient magnitudes below this value are dropped.
+
+    Returns
+    -------
+    unique_indices : numpy.ndarray
+        Sorted 1D integer array of the U unique end-of-circuit error generator indices
+        occurring in `indices_for_circuit`.
+    positions : numpy.ndarray
+        Integer array of shape `indices_for_circuit.shape` giving each slot's position in
+        `unique_indices` (i.e. `unique_indices[positions[l, j]] == indices_for_circuit[l, j]`).
+    pair_coefficients : numpy.ndarray
+        Float array of shape `(2**num_qubits, U, U)`, as defined above (includes the same
+        `1 / 2**random_support` scale factor as the first-order alpha coefficients).
+    """
+    tableau = _get_tableau(circuit)
+    nbit_strings = [''.join(p) for p in _itertools.product('01', repeat=num_qubits)]
+
+    unique_indices, positions_flat = _np.unique(indices_for_circuit, return_inverse=True)
+    positions = positions_flat.reshape(indices_for_circuit.shape)
+    num_unique = len(unique_indices)
+    labels = [_tools.index_to_error_gen(int(i), num_qubits, as_label=True) for i in unique_indices]
+
+    identity = _stim.PauliString('I' * num_qubits)
+
+    # Compute the composition L_u [L_v [.]] of every ordered pair of unique end-of-circuit
+    # error generators, expanded in elementary error generators. Note that
+    # `error_generator_composition(a, b)` is a[b[.]], i.e. `a` applied AFTER `b`.
+    composition_terms = {}
+    product_label_positions: dict = {}
+    for u, label_u in enumerate(labels):
+        for v, label_v in enumerate(labels):
+            terms = _egptools.error_generator_composition(label_u, label_v, weight=1.0, identity=identity)
+            aggregated: dict = {}
+            for lbl, coeff in terms:
+                aggregated[lbl] = aggregated.get(lbl, 0.) + coeff
+            aggregated = {lbl: coeff for lbl, coeff in aggregated.items() if abs(coeff) > truncation_threshold}
+            composition_terms[u, v] = aggregated
+            for lbl in aggregated:
+                if lbl not in product_label_positions:
+                    product_label_positions[lbl] = len(product_label_positions)
+
+    # First-order sensitivities of every bitstring to every elementary error generator that
+    # appears in any composition product, computed in bulk: (num_bitstrings, num_labels).
+    product_labels = list(product_label_positions)
+    if product_labels:
+        product_alphas = _egptools.bulk_alpha(product_labels, tableau, nbit_strings)
+    else:
+        product_alphas = _np.zeros((2 ** num_qubits, 0), float)
+
+    # See the identical computation in dense_alpha_matrix for why this can't overflow.
+    scale = 1 / 2 ** cast(Any, _egptools.random_support(tableau))
+    pair_coefficients = _np.zeros((2 ** num_qubits, num_unique, num_unique), complex)
+    for (u, v), aggregated in composition_terms.items():
+        for lbl, coeff in aggregated.items():
+            pair_coefficients[:, u, v] += coeff * product_alphas[:, product_label_positions[lbl]]
+    pair_coefficients *= scale
+    assert _np.allclose(pair_coefficients.imag, 0.), \
+        "Second-order correction coefficients should be real -- this indicates a bug!"
+
+    return unique_indices, positions, pair_coefficients.real
+
+
+def _circuit_loop_second_order(circuit: _Circuit, indices_for_circuit: _np.ndarray, num_qubits: int,
+                               truncation_threshold: float) -> tuple[_np.ndarray, _np.ndarray, _np.ndarray]:
+    # Module-level worker (multiprocessing requires a picklable function) that trims a
+    # (possibly padded) indices matrix down to the circuit's real depth before delegating to
+    # `circuit_second_order_correction_tensors`. Padded layers are excluded from the unique-
+    # index computation (their zero-filled `indices` entries are meaningless); their `positions`
+    # entries are filled with 0, which is harmless because those slots' `signs` are also 0, so
+    # the network layer zeroes out their rates.
+    unique_indices, positions_real_depth, pair_coefficients = circuit_second_order_correction_tensors(
+        circuit, indices_for_circuit[0:circuit.depth, :], num_qubits, truncation_threshold)
+    positions = _np.zeros(indices_for_circuit.shape, int)
+    positions[0:circuit.depth, :] = positions_real_depth
+    return unique_indices, positions, pair_coefficients
+
+
+def second_order_outcome_correction_tensors(circuits: list[_Circuit], pspec: "ProcessorSpec", indices: _np.ndarray,
+                                            truncation_threshold: float = 1e-14, process_num: int = 5) -> tuple[_np.ndarray, _np.ndarray]:
+    """
+    Compute batched second-order correction tensors (`positions`, `pair_coefficients`) for
+    multiple circuits, multiprocessed over circuits. See
+    `circuit_second_order_correction_tensors` for what these tensors mean; this function pads
+    them to a common size so they can be batched:  each circuit's `pair_coefficients` is
+    zero-padded up to the largest number of unique end-of-circuit error generator indices (U)
+    of any circuit in the batch (zero-padding is exact -- padded positions are simply never
+    referenced with a nonzero rate).
+
+    Parameters
+    ----------
+    circuits : list[pygsti.circuits.Circuit]
+        Circuits to process.
+    pspec : ProcessorSpec
+        Processor specification (used for `num_qubits`).
+    indices : numpy.ndarray
+        Propagated end-of-circuit error generator indices, of shape
+        `(num_circuits, depth, num_error_generators)` (see `error_propagation_tensors`).
+    truncation_threshold : float, default 1e-14
+        See `circuit_second_order_correction_tensors`.
+    process_num : int, default 5
+        Number of worker processes to use (via `multiprocessing.Pool`).
+
+    Returns
+    -------
+    positions : numpy.ndarray
+        Integer array of shape `indices.shape` giving, for each circuit, each slot's position
+        in that circuit's unique end-of-circuit error generator index list.
+    pair_coefficients : numpy.ndarray
+        Float array of shape `(num_circuits, 2**n, U_max, U_max)` of second-order correction
+        coefficients.
+    """
+    from pygsti.processors import QubitProcessorSpec
+    assert isinstance(pspec, QubitProcessorSpec)
+    num_qubits = pspec.num_qubits
+
+    circ_indices_tuples = [(circ, indices[idx], num_qubits, truncation_threshold) for idx, circ in enumerate(circuits)]
+    with Pool(process_num) as p:
+        output_list = p.starmap(_circuit_loop_second_order, tqdm.tqdm(circ_indices_tuples))
+
+    max_num_unique = max(len(tup[0]) for tup in output_list)
+    positions = _np.zeros(indices.shape, int)
+    pair_coefficients = _np.zeros((len(circuits), 2 ** num_qubits, max_num_unique, max_num_unique), float)
+    for idx, (unique_indices, positions_for_circuit, pair_coefficients_for_circuit) in enumerate(output_list):
+        num_unique = len(unique_indices)
+        positions[idx] = positions_for_circuit
+        pair_coefficients[idx, :, 0:num_unique, 0:num_unique] = pair_coefficients_for_circuit
+
+    return positions, pair_coefficients
 
 
 def first_order_outcome_probabilities_tensors_concise(circuits: list[_Circuit], pspec: "ProcessorSpec", indices: _np.ndarray, signs: _np.ndarray,

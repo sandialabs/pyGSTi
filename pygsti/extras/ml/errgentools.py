@@ -1206,7 +1206,12 @@ def index_to_error_gen(i: int, n: int, as_label: bool = False) -> tuple[str, tup
     if not as_label:
         return typ, paulis
     else:
-        return _lseg.LocalStimErrorgenLabel(typ, paulis)
+        # LocalStimErrorgenLabel's contract is that basis_element_labels are stim.PauliStrings
+        # (see its docstring); plain python strings happen to work in some downstream consumers
+        # (e.g. `alpha`) but not others (e.g. `error_generator_composition`, which calls
+        # stim.PauliString methods like `.commutes` on them).
+        return _lseg.LocalStimErrorgenLabel(typ, tuple(_stim.PauliString(p) for p in paulis),
+                                            pauli_str_reps=tuple(paulis))
 
 
 def num_error_generators(num_qubits: int) -> int:
