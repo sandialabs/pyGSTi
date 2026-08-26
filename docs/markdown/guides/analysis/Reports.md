@@ -17,6 +17,8 @@ PyGSTi constructs polished report documents that give both high-level summaries 
 
 PyGSTi's reports are stand-alone HTML documents that cannot run Python.  Everything displayed in a report is pre-computed.  If you find yourself wanting to fiddle with things and feel that these reports are too static, use a `Workspace` object (see [Workspace tables and plots](../../advanced/figures/WorkspaceFigures)) inside a Jupyter notebook, where you can intermix report tables/plots and Python.  Internally, functions like `construct_standard_report` are simple factories for `Report` objects, which are in turn little more than a wrapper around a `Workspace` object plus a set of instructions for how to generate output in different formats.
 
+Every report the example notebooks generate is served with these docs, so you can read one without running anything first. Each is linked from the cell that writes it, and they are all listed together at <a href="../../../reports/">example reports</a>.
+
 ## Get some `ModelEstimateResults`
 
 Start by performing GST to create a `ModelEstimateResults` object (you could also just load one from file).  The calls below use the protocol-object API — an experiment design paired with data and run through a protocol — described in [migrating from the function-based API](../../advanced/migration/FromFunctionAPI).
