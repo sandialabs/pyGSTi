@@ -95,6 +95,21 @@ sphinx:
       # through to the theme. The edit_button_branch extension repoints the URL at
       # `pygsti_edit_branch` and swaps .ipynb for the .md that exists there.
       use_source_button: true
+      # sphinx_book_theme renders the sidebar toctree into the HTML of every
+      # page, and api.rst's recursive autosummary puts 1725 entries in it. At
+      # the theme defaults (collapse_navbar=False, max_navbar_depth=4) that was
+      # 339 KB of <nav> on all 1848 pages -- 71% of a typical API page, 76% of a
+      # content page, and roughly 610 MB of a 1.4 GB site. Every reader was
+      # downloading 380 KB of navigation before a word of content.
+      #
+      # Capping the depth at 2 keeps the sidebar uniform across the site (the
+      # same entries on every page) while dropping the ~1500 class stubs, which
+      # are the only things in the book at level 3: _toc.yml nests just two
+      # levels of files, 33 chapters and 51 sections, so nothing outside the API
+      # branch is affected. Cold local build 20m20s -> 12m21s, docs 810 MB ->
+      # 208 MB, nav 379 KB -> 41 KB per page, warning count unchanged at 418.
+      collapse_navbar: false
+      max_navbar_depth: 2
     # The example HTML reports, collected by docs/collect-reports.py. Sphinx
     # copies the *contents* of each html_extra_path entry to the output root,
     # so _extra/reports/ lands at /reports/ on the site. The reports are ~600 MB
