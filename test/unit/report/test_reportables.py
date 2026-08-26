@@ -172,12 +172,24 @@ class HadamardRegressionTester(BaseCase):
             self.assertGreater(np.linalg.norm(mt.real_matrix_log(_HADAMARD_ESTIMATE, "ignore").imag), 1.0)
 
     def test_decomposition_values(self):
+        # The target is a pi rotation, so log(target) lands on the branch cut of the principal
+        # logarithm: log(-1) = +/- i*pi, and the two branches report the same rotation as
+        # (axis, angle) and (-axis, 2*pi - angle). unitary_superoperator_matrix_log's branch
+        # convention fixes the choice identically on every BLAS backend (OpenBLAS and Accelerate
+        # agree to ~1e-14 here), so the signed values below are pinned tightly on purpose: if the
+        # convention is ever lost (e.g. by reverting to scipy.linalg.logm, where the backend picks
+        # the branch), the angle crosses to just above 1 and the axis flips sign on Accelerate.
         decomp = self._decomp(self.estimate)
-        # Angle is in units of pi, so a Hadamard should come out just under 1.
-        self.assertAlmostEqual(decomp['Gh angle'], 0.9999652938, places=9)
-        self.assertAlmostEqual(decomp['Gh log inexactness'], 0.0021073766, places=9)
+
+        # Angle is in units of pi; a Hadamard comes out just *under* 1 on the chosen branch.
+        self.assertAlmostEqual(decomp['Gh angle'], 0.9999652938, places=8)
+
+        self.assertAlmostEqual(decomp['Gh log inexactness'], 0.0021073766, places=8)
+
+        # The middle (Y) component is ~1e-05, i.e. numerical zero for a Hadamard.
         self.assertArraysAlmostEqual(
-            decomp['Gh axis'], np.array([0.7070608183, 7.9894403e-06, 0.7071527410]), places=8)
+            np.asarray(decomp['Gh axis']),
+            np.array([0.7070608183, 7.9894403e-06, 0.7071527410]), places=8)
 
     def test_inexactness_is_near_the_obstruction_floor(self):
         # Because no real logarithm exists, a nonzero inexactness is unavoidable. Its lower bound is

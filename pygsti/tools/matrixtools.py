@@ -817,11 +817,25 @@ def unitary_superoperator_matrix_log(m: _np.ndarray, mx_basis: Union[str, Basis]
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
+    Notes
+    -----
+    The matrix logarithm is not unique: each eigenvalue of `H` is only determined
+    by `m` up to an additive multiple of 2*pi. This function chooses the branch
+    where the eigenvalues of `H` lie in [-pi, pi). The boundary case is an
+    eigenvalue of `U` at -1 (a pi rotation), where H's eigenvalue could be +pi or
+    -pi and scipy.linalg.logm picks between them based on floating-point rounding
+    -- which varies across BLAS backends (OpenBLAS rounds one way, Apple's
+    Accelerate the other). We instead map every eigenvalue of `U` within a small
+    tolerance of the negative real axis to exactly -pi in `H`, so the result is
+    the same on all backends. (-pi rather than +pi keeps the output identical to
+    what scipy.linalg.logm produced historically under OpenBLAS.)
+
     Returns
     -------
     numpy array
         A matrix `logM`, of the same shape as `m`, such that `m = exp(logM)`
-        and `logM` can be written as the action `rho -> -i[H,rho]`.
+        and `logM` can be written as the action `rho -> -i[H,rho]` where `H`
+        is Hermitian with eigenvalues in [-pi, pi).
     """
     from . import lindbladtools as _lt  # (would create circular imports if at top)
     from . import optools as _ot  # (would create circular imports if at top)
@@ -832,7 +846,14 @@ def unitary_superoperator_matrix_log(m: _np.ndarray, mx_basis: Union[str, Basis]
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
 
     U = _ot.std_process_mx_to_unitary(M_std)
-    H = _spl.logm(U) / -1j  # U = exp(-iH)
+
+    # H = logm(U) / -1j, computed eigenvalue-wise so we control the branch of the
+    # logarithm (see Notes). U is normal, so its complex Schur form is diagonal.
+    T, Z = _spl.schur(U.astype(complex), output='complex')
+    H_evals = -_np.angle(T.diagonal())  # U = exp(-iH), so H's eigenvalues are in [-pi, pi)
+    H_evals[_np.pi - _np.abs(H_evals) < 1e-10] = -_np.pi  # eigenvalues of U on the branch cut map to -pi
+    H = (Z * H_evals) @ Z.conjugate().T
+    H = (H + H.conjugate().T) / 2  # exactly Hermitian
     logM_std = _lt.create_elementary_errorgen('H', H)  # rho --> -i[H, rho]
     logM = change_basis(logM_std, "std", mx_basis)
     assert(_np.linalg.norm(_spl.expm(logM) - m) < 1e-8)  # expensive b/c of expm - could comment for performance
