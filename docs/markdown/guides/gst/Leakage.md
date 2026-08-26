@@ -99,3 +99,5 @@ report_dir = '../../../example_files/leakage-report-automagic'
 report_object, updated_res = construct_leakage_report(res, title='easy leakage analysis!')
 report_object.write_html(report_dir, connected=True)
 ```
+
+The report written here is served with these docs: [leakage-report-automagic](../../../reports/leakage-report-automagic.html).

@@ -254,3 +254,5 @@ print(os.getcwd() + '/' + report_dir + '/main.html\n\n')
 report.write_html(report_dir, connected=True, verbosity=0)
 
 ```
+
+The report written here is served with these docs: [robust-gst-report](../../../reports/robust-gst-report.html).

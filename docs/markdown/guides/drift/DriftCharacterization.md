@@ -197,4 +197,4 @@ report = pygsti.report.create_drift_report(results, title='Example Drift Report'
 report.write_html('../../../tutorial_files/DriftReport', connected=True)
 ```
 
-You can now open the file [../../../tutorial_files/DriftReport/main.html](../../../tutorial_files/DriftReport/main.html) in your browser (Firefox works best) to view the report.
+The report is served with these docs: [DriftReport](../../../reports/DriftReport.html).

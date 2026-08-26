@@ -71,6 +71,8 @@ pygsti.report.construct_standard_report(
 ).write_html("../../../tutorial_files/modeltest_report", connected=True, auto_open=False, verbosity=1)
 ```
 
+The report written here is served with these docs: [modeltest_report](../../../reports/modeltest_report.html).
+
 ```{code-cell} ipython3
 print(results)
 ```
@@ -91,6 +93,8 @@ pygsti.report.construct_standard_report(
 ).write_html("../../../tutorial_files/gstwithtest_report1", connected=True, auto_open=False, verbosity=1)
 ```
 
+The report written here is served with these docs: [gstwithtest_report1](../../../reports/gstwithtest_report1.html).
+
 ### Method 3: `modelToTest` argument
 Finally, yet another way to perform model testing alongside GST is by using the `models_to_test` argument of the `StandardGST` protocol.  This essentially combines calls to `StandardGST.run` and `ModelEstimateResults.add_model_test` (demonstrated above) with the added control of being able to specify the ordering of the estimates via the `modes` argument.  Two important remarks are in order:
 
@@ -107,6 +111,8 @@ pygsti.report.construct_standard_report(
     gst_results, title="GST with Model Test Example Report 2", verbosity=1
 ).write_html("../../../tutorial_files/gstwithtest_report2", connected=True, auto_open=False, verbosity=1)
 ```
+
+The report written here is served with these docs: [gstwithtest_report2](../../../reports/gstwithtest_report2.html).
 
 ## Checkpointing/Warmstarting
 

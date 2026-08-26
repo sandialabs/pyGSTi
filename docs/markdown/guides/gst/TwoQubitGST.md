@@ -85,7 +85,7 @@ report = pygsti.report.construct_standard_report(
 report.write_html('../../../example_files/easy_2q_report', connected=True, verbosity=2)
 ```
 
-Now open [../../../example_files/easy_2q_report/main.html](../../../example_files/easy_2q_report/main.html) to see the results.  You've run 2-qubit GST!
+The report is served with these docs: [easy 2Q report](../../../reports/easy_2q_report.html).  You've run 2-qubit GST!
 
 You can save the `ModelEstimateResults` object to the same directory as the data and experiment design:
 

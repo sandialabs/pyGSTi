@@ -89,6 +89,8 @@ report = pygsti.report.construct_standard_report(results, title="Reading Results
 report.write_html("../../tutorial_files/reading_results_report", connected=True, verbosity=0)
 ```
 
+The report written here is served with these docs: [reading_results_report](../../reports/reading_results_report.html).
+
 `write_html` writes a *directory*, not a file. Open `main.html` inside it in a browser and you have the report. The `connected=True` above keeps that directory down to the single `main.html`, at the cost of needing a network connection to view it; see [report generation](../guides/analysis/Reports) for the trade-off. Pass `auto_open=True` to have it opened for you when rendering finishes, or `single_file=True` to get one self-contained HTML document instead of a directory (convenient for emailing, slow to load for large reports). Rendering time scales with the size of your experiment design, so a real two-qubit run takes minutes rather than the couple of seconds this toy example takes; the `brevity` argument (0 through 4) drops progressively more detail if you want it faster.
 
 Error bars are the one thing the report will not compute for you. Passing `confidence_level=95` asks for them, but the underlying Hessian is expensive and is never computed as a side effect of report generation, so you must call `results.add_hessians()` first. Skip that step and `construct_standard_report` warns you and renders the tables bare. See [error bars](../guides/analysis/ErrorBars) for what the Hessian buys you and what it costs.

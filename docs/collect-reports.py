@@ -33,9 +33,13 @@ Usage::
 
     python docs/collect-reports.py collect    # scratch dirs -> _extra + tarball
     python docs/collect-reports.py extract    # tarball -> _extra
+    python docs/collect-reports.py check      # built site -> report links resolve
 
 ``extract`` is what runs on ReadTheDocs, and what you want locally before
-``jb build docs/`` if you did not just run ``collect`` yourself.
+``jb build docs/`` if you did not just run ``collect`` yourself. ``check`` runs
+against ``docs/_build/html`` after a build: the pages link to the reports by
+relative path, and nothing in the Sphinx build validates a path that resolves
+outside the document tree.
 """
 
 import argparse
@@ -260,12 +264,59 @@ def extract(docs: pathlib.Path) -> int:
     return 0
 
 
+# href="../../reports/<name>.html" as written by the pages, plus the directory
+# form for a report with sidecars.
+REPORT_HREF = re.compile(r'href="([^"]*reports/[^"#?]+\.html)"')
+
+
+def check(docs: pathlib.Path, html: pathlib.Path) -> int:
+    """Every report link on a built page resolves, and every report is linked."""
+    if not html.is_dir():
+        sys.exit(f"error: {html} is not a directory. Build the docs first.")
+    pages = html / "markdown"
+    served = html / "reports"
+    if not served.is_dir():
+        sys.exit(f"error: no {served}. Run `collect-reports.py extract`, then rebuild.")
+
+    broken, hit = [], set()
+    for page in sorted(pages.rglob("*.html")):
+        for m in REPORT_HREF.finditer(page.read_text(encoding="utf-8", errors="replace")):
+            target = (page.parent / m.group(1)).resolve()
+            if target.is_file():
+                hit.add(target)
+            else:
+                broken.append(f"{page.relative_to(html)} -> {m.group(1)}")
+
+    everything = {p.resolve() for p in served.glob("*.html")
+                  if p.name != "index.html"} | \
+                 {p.resolve() for p in served.glob("*/main.html")}
+    unlinked = sorted(p.stem if p.name != "main.html" else p.parent.name
+                      for p in everything - hit)
+
+    print(f"linked           {len(hit)} of {len(everything)} reports")
+    if unlinked:
+        # Not fatal: the index page lists them, and a report can be worth
+        # serving without a page that points at it.
+        print(f"warning: {len(unlinked)} report(s) no page links to:\n  "
+              + "\n  ".join(unlinked), file=sys.stderr)
+    if broken:
+        sys.exit(f"error: {len(broken)} report link(s) do not resolve:\n  "
+                 + "\n  ".join(broken))
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("action", choices=("collect", "extract"))
+    ap.add_argument("action", choices=("collect", "extract", "check"))
+    ap.add_argument("--html", type=pathlib.Path, default=DOCS / "_build" / "html",
+                    help="built site to check (default: docs/_build/html)")
     a = ap.parse_args()
-    return collect(DOCS) if a.action == "collect" else extract(DOCS)
+    if a.action == "collect":
+        return collect(DOCS)
+    if a.action == "extract":
+        return extract(DOCS)
+    return check(DOCS, a.html)
 
 
 if __name__ == "__main__":

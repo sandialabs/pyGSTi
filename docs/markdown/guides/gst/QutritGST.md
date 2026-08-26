@@ -109,3 +109,5 @@ ws = pygsti.report.construct_standard_report(
     result, "Example Qutrit Report", verbosity=3
 ).write_html('../../../example_files/sampleQutritReport', connected=True, auto_open=False, verbosity=3)
 ```
+
+The report written here is served with these docs: [sampleQutritReport](../../../reports/sampleQutritReport.html).

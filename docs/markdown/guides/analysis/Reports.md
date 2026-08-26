@@ -53,6 +53,8 @@ report = pygsti.report.construct_standard_report(results, title="GST Example Rep
 report.write_html("../../../tutorial_files/exampleReport", connected=True, auto_open=False, verbosity=1)
 ```
 
+The report written here is served with these docs: [exampleReport](../../../reports/exampleReport.html).
+
 The `connected` argument decides where a report's JavaScript and CSS come from.  At the default `connected=False`, pyGSTi copies an `offline` folder of libraries (jQuery, Plotly, KaTeX) in beside `main.html`; that adds about 9 MB to every report and lets it render on a machine with no network connection.  Passing `connected=True` loads the same libraries from a CDN instead, leaving the report as a single `main.html` file that needs a network connection to draw its figures.  Every report in this documentation is written with `connected=True`, because they are served from a web site whose readers are online by definition.  For a report you mean to email to a colleague or keep for the archive, leave the default.
 
 ```{code-cell} ipython3
@@ -114,6 +116,8 @@ report = pygsti.report.construct_standard_report(
 report.write_html("../../../tutorial_files/exampleMultiEstimateReport", connected=True, auto_open=False, verbosity=2)
 ```
 
+The report written here is served with these docs: [exampleMultiEstimateReport](../../../reports/exampleMultiEstimateReport.html).
+
 The call above constructs `ws`, a `Workspace` object.  PyGSTi's `Workspace` objects are both a factory for figures and tables and a smart cache for computed values.  A `Workspace` object can optionally be passed to `construct_standard_report`, where it is used to create all the figures in the report.  As an intended side effect, each of those figures is cached, along with some of the intermediate results used to create it.  Passing a preconstructed `Workspace` object to `construct_standard_report` lets it reuse previously cached quantities.
 
 **Another way**: because `results_tp` and `results_full` used the same dataset and operation sequences, they could have been combined as two estimates in a single `ModelEstimateResults` object (see [Results](Results) for the structure of those objects).  Add the estimate within `results_full` to the estimates already contained in `results_tp`:
@@ -133,6 +137,8 @@ pygsti.report.construct_standard_report(
 ).write_html("../../../tutorial_files/exampleMultiEstimateReport2", connected=True, auto_open=False, verbosity=2)
 ```
 
+The report written here is served with these docs: [exampleMultiEstimateReport2](../../../reports/exampleMultiEstimateReport2.html).
+
 ## Multiple estimates and `StandardGST`
 
 It's no coincidence that a `Results` object containing multiple estimates from the same data is precisely what the `StandardGST` protocol returns.  It runs GST several times, creating different "standard" estimates and gauge optimizations, so you can plot them all in a single HTML report.
@@ -147,6 +153,8 @@ pygsti.report.construct_standard_report(
     results_std, title="Post StdPractice Report", verbosity=1
 ).write_html("../../../tutorial_files/exampleStdReport", connected=True, auto_open=False, verbosity=1)
 ```
+
+The report written here is served with these docs: [exampleStdReport](../../../reports/exampleStdReport.html).
 
 ## Reports with confidence regions
 
@@ -168,6 +176,8 @@ pygsti.report.construct_standard_report(
     confidence_level=95, verbosity=1
 ).write_html("../../../tutorial_files/exampleStdReport2", connected=True, auto_open=False, verbosity=1)
 ```
+
+The report written here is served with these docs: [exampleStdReport2](../../../reports/exampleStdReport2.html).
 
 ## Reports with multiple *different* data sets
 
@@ -201,6 +211,8 @@ pygsti.report.construct_standard_report(
 ).write_html("../../../tutorial_files/exampleMultiDataSetReport", connected=True, auto_open=False, verbosity=1)
 ```
 
+The report written here is served with these docs: [exampleMultiDataSetReport](../../../reports/exampleMultiDataSetReport.html).
+
 ## Reports from LGST alone
 
 Reports aren't restricted to long-sequence GST.  *Linear* GST (LGST) takes substantially less data and computation time, so when a rough estimate of your gates is all you're after, it's worth knowing that its output feeds the same report machinery.  The experiment design below uses `max_max_length=1`, which is all LGST requires.
@@ -233,7 +245,7 @@ pygsti.report.construct_standard_report(
 ).write_html('../../../example_files/LGSTonlyReport', connected=True, auto_open=False, verbosity=2)
 ```
 
-Open [../../../example_files/LGSTonlyReport/main.html](../../../example_files/LGSTonlyReport/main.html) in your browser to view that report.
+That report is served with these docs: [LGSTonlyReport](../../../reports/LGSTonlyReport.html).
 
 ## Other `Report` tricks
 
@@ -251,6 +263,8 @@ pygsti.report.construct_standard_report(
 ).write_html("../../../tutorial_files/exampleBriefReport", connected=True, auto_open=False, verbosity=1,
              brevity=4, link_to=('pkl', 'tex'))
 ```
+
+The report written here is served with these docs: [exampleBriefReport](../../../reports/exampleBriefReport.html).
 
 ## Report notebooks: `Report.write_notebook`
 
