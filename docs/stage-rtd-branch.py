@@ -21,9 +21,8 @@ The full local recipe, from a clean checkout of the branch you want staged::
     python docs/collect-reports.py collect
     python docs/stage-rtd-branch.py --target-branch docs-preview --push
 
-Prerequisites for the execution step, beyond ``pip install -e .[docs]``: ``chp``
-on PATH for the Clifford-simulation page (build it from
-https://www.scottaaronson.com/chp/chp.c), an MPI launcher for the Parallelism
+Prerequisites for the execution step, beyond ``pip install -e .[docs]``:
+``.[chp]`` for the Clifford-simulation page, an MPI launcher for the Parallelism
 page, and ``.[ml]`` for the QPANN page. Anything missing costs you that page's
 output, not the run -- pass the page to ``execute-notebooks.py --exclude-also``
 to skip it deliberately instead of shipping a traceback.

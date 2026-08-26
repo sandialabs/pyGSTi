@@ -258,6 +258,11 @@ jobs:
         # executes a notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't
         # made to download TensorFlow purely to render Markdown.
         uv pip install --system -e .[docs]
+        # chp_sim backs advanced/simulation/StabilizerCHP. It is the default
+        # backend for the 'chp' evotype and is pure Python, which is why this
+        # step no longer downloads and compiles Aaronson's C implementation.
+        # That one still works if pygsti.evotypes.chp.chpexe points at it.
+        uv pip install --system -e .[chp]
         uv pip install --system -e .[ml] \
           || echo "::warning::ml extra would not install on Python ${{ inputs.python-version }}"
 
@@ -290,10 +295,6 @@ jobs:
         # generator has to be called directly.
         python -c "import sys; sys.path.insert(0, 'docs'); import conftest; conftest._generate_shared_fixtures()"
 
-        # Download and compile CHP for the Clifford-simulation notebook;
-        # put the binary on PATH so pygsti.evotypes.chp.chpexe = 'chp' resolves.
-        curl -o /tmp/chp.c https://www.scottaaronson.com/chp/chp.c
-        gcc -o /usr/local/bin/chp /tmp/chp.c
 
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         # --allow-errors keeps going past a failing cell so one broken notebook does
