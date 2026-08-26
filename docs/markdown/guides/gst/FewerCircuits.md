@@ -268,12 +268,12 @@ pygsti.report.construct_standard_report(rfpr_results, title="Random FPR Report E
                                         ).write_html("../../../tutorial_files/example_rfpr_report", connected=True)
 ```
 
-If all has gone well, the [Standard GST](../../../reports/example_stdstrs_report.html),
-[GFPR](../../../reports/example_gfpr_report.html),
-[PFPR](../../../reports/example_pfpr_report.html),
-[PFPR (Greedy)](../../../reports/example_pfpr_greedy_report.html)
-[PGGFPR](../../../reports/example_pggfpr_report.html)
+If all has gone well, the <a href="../../../reports/example_stdstrs_report.html">Standard GST</a>,
+<a href="../../../reports/example_gfpr_report.html">GFPR</a>,
+<a href="../../../reports/example_pfpr_report.html">PFPR</a>,
+<a href="../../../reports/example_pfpr_greedy_report.html">PFPR (Greedy)</a>
+<a href="../../../reports/example_pggfpr_report.html">PGGFPR</a>
 and
-[RFPR](../../../reports/example_rfpr_report.html),
+<a href="../../../reports/example_rfpr_report.html">RFPR</a>,
 reports may now be viewed.
 The only notable difference in the output are "gaps" in the color box plots which plot quantities such as the log-likelihood across all operation sequences, organized by germ and fiducials.

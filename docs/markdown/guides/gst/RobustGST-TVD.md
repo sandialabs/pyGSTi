@@ -254,4 +254,4 @@ print(os.getcwd() + '/' + report_dir + '/main.html\n\n')
 report.write_html(report_dir, connected=True, verbosity=0)
 ```
 
-Served with these docs: [robust-gst-report](../../../reports/robust-gst-report.html).
+Served with these docs: <a href="../../../reports/robust-gst-report.html">robust-gst-report</a>.

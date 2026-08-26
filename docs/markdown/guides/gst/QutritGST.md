@@ -110,4 +110,4 @@ ws = pygsti.report.construct_standard_report(
 ).write_html('../../../example_files/sampleQutritReport', connected=True, auto_open=False, verbosity=3)
 ```
 
-Served with these docs: [sampleQutritReport](../../../reports/sampleQutritReport.html).
+Served with these docs: <a href="../../../reports/sampleQutritReport.html">sampleQutritReport</a>.
