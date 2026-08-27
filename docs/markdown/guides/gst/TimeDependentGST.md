@@ -27,7 +27,7 @@ To make a time-dependent `Model`, you create a time dependent gate or operation 
 
 ```{code-cell} ipython3
 class MyTimeDependentIdle(pygsti.modelmembers.operations.DenseOperator):
-    """And idle that depolarizes over time with a parameterized rate"""
+    """An idle that depolarizes over time with a parameterized rate"""
     def __init__(self, initial_depol_rate):
         #initialize with no noise
         super(MyTimeDependentIdle,self).__init__(np.identity(4,'d'), 'pp', "densitymx") # this is *super*-operator, so "densitymx"
@@ -36,7 +36,7 @@ class MyTimeDependentIdle(pygsti.modelmembers.operations.DenseOperator):
     
     @property
     def num_params(self): 
-        return 1 # we have two parameters
+        return 1 # we have one parameter
     
     def to_vector(self):
         return np.array([self.depol_rate],'d') #our parameter vector
@@ -51,7 +51,7 @@ class MyTimeDependentIdle(pygsti.modelmembers.operations.DenseOperator):
         
         # ._ptr is a member of DenseOperator and is a reference to a
         # numpy array that is the dense Pauli transfer matrix of this operator
-        # Technical note: use [:,:] here b/c we don't want to change id of self.base
+        # Technical note: use [:,:] here b/c we don't want to change id of self._ptr
         self._ptr[:,:] = np.array([[1,   0,   0,   0],
                                    [0,   a,   0,   0],
                                    [0,   0,   a,   0],
@@ -62,7 +62,7 @@ class MyTimeDependentIdle(pygsti.modelmembers.operations.DenseOperator):
         raise NotImplementedError("MyTimeDependentIdle cannot be transformed!")
 ```
 
-The key piece to note in the above class is the `set_time` method, which will be called sometime after `from_vector` and takes over responsiblility (from `from_vector`) for setting the object's `.base` member to the process matrix based on the parameters (in `from_vector`'s `v` *and* the time given to `set_time`). 
+The key piece to note in the above class is the `set_time` method, which will be called sometime after `from_vector` and takes over responsibility (from `from_vector`) for setting the object's `._ptr` member to the process matrix based on the parameters (in `from_vector`'s `v` *and* the time given to `set_time`). 
 
 Here's an example of how to see what a `MyTimeDependentIdle(1.0)` gate looks like at the time 0.1:
 
@@ -81,7 +81,7 @@ mdl = smq1Q_XYI.target_model(simulator="map")
 mdl['Gi'] = MyTimeDependentIdle(1.0)
 ```
 
-There you have it - `mdl` is a time-dependent model, where `Gi` depolarizes with strength equal to the current time.  To compute the probability of a circuit, *GiGi* for example, we just call the usual `probs` function but specify a `time` argument:
+There you have it - `mdl` is a time-dependent model, where `Gi` depolarizes with strength equal to the current time.  (Note that `'Gi'` is a label we invented for this self-contained example; the real `smq1Q_XYI` gate set labels its idle layer with the empty tuple `()`, as the TD-GST section below uses.)  To compute the probability of a circuit, *GiGi* for example, we just call the usual `probs` function but specify a `time` argument:
 
 ```{code-cell} ipython3
 mdl.probabilities( ('Gi','Gi'), time=0.1)
@@ -122,7 +122,7 @@ mdl.probabilities( (('Gi','!0.1'),('Gi','!0.1')), time=0.1)
 ## Time dependent data
 When `DataSet` objects contain timestamped data, these timestamps indicate at what *absolute* time the relevant circuit began executing when it produced certain data.  These time values correspond to those given to the `time` argument of `probs` above.
 
-At first, we don't bother with "time-aware" circuits, and just create a list of two sample circuits.  We then use the `times` argument of `generate_fake_data` to construct a `DataSet` with 100 samples of data taken at each of three times: 0, 0.1, and 0.2 (arbitrary time units).  By setting `sample_error="none"` we can see the underlying outcome probabilities in the data (and how the depolarization caused by `Gi` increases with time):
+At first, we don't bother with "time-aware" circuits, and just create a list of two sample circuits.  We then use the `times` argument of `pygsti.data.simulate_data` to construct a `DataSet` with 100 samples of data taken at each of two times: 0 and 0.2 (arbitrary time units).  By setting `sample_error="none"` we can see the underlying outcome probabilities in the data (and how the depolarization caused by `Gi` increases with time):
 
 ```{code-cell} ipython3
 circuits = pygsti.circuits.to_circuits([ ('Gi',), ('Gi','Gi')]) # just pick some circuits
@@ -132,9 +132,9 @@ ds = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
 print(ds)
 ```
 
-A `DataSet` with timestamps displays 3 parallel arrays for each circuit: "Outcome Label Indices", "Time stamps", and "Repetitions".  Each index corresponds to a bin of some number (given by "Repetitions") of X-outcomes (X given by "Outcome Label Indices") occuring at some time (given by "Time stamps").  We see that for each of the two circuits there are bins of 0- and 1-outcomes at each of times 0, 0.1, and 0.2.  Summing the bin counts (outcome repetitions) at each time, for a given circuit, gives 100.
+A `DataSet` with timestamps displays 3 parallel arrays for each circuit: "Outcome Label Indices", "Time stamps", and "Repetitions".  Each index corresponds to a bin of some number (given by "Repetitions") of X-outcomes (X given by "Outcome Label Indices") occurring at some time (given by "Time stamps").  We see that for each of the two circuits there are bins of 0- and 1-outcomes at each of times 0 and 0.2.  Summing the bin counts (outcome repetitions) at each time, for a given circuit, gives 100.
 
-We can also add a duration of 0.05 time units to each `"Gi"` gate.  This makes the depolarization of the length-2 sequence a bit worse because the second application of `"Gi"` occurs at a time 0.05 units after the start of the circuit, at which point the noise on the gate as increased:
+We can also add a duration of 0.05 time units to each `"Gi"` gate.  This makes the depolarization of the length-2 sequence a bit worse because the second application of `"Gi"` occurs at a time 0.05 units after the start of the circuit, at which point the noise on the gate has increased:
 
 ```{code-cell} ipython3
 circuits = pygsti.circuits.to_circuits([ (('Gi','!0.05'),), (('Gi','!0.05'),('Gi','!0.05'))])
@@ -145,7 +145,7 @@ print(ds)
 ```
 
 ## Time-dependent gate set tomography (TD-GST)
-To run gate set tomography, we'll need more sequences than the two in the example above.  We'll generate some timestamped data for the standard set of GST sequences for a 1-qubit $X(\pi/2)$, $Y(\pi/2)$, $I$ gate set.  In particular, we create a data-generating model that has a `MyTimeDependentIdle` idle gate (labeled by the empty-tuple) with a depolarization "acceleration" rate of 1.0, and we generate 10 counts at each of 10 equally spaced times between 0 and 0.3.
+To run gate set tomography, we'll need more sequences than the two in the example above.  We'll generate some timestamped data for the standard set of GST sequences for a 1-qubit $X(\pi/2)$, $Y(\pi/2)$, $I$ gate set.  In particular, we create a data-generating model that has a `MyTimeDependentIdle` idle gate (labeled by the empty-tuple) with a depolarization "acceleration" rate of 1.0, and we generate 10 counts at each of 5 equally spaced times between 0 and 0.3.
 
 ```{code-cell} ipython3
 #taking just the 4/3 prep/meas fiducials below to produce a minimally informationally complete set.
@@ -170,11 +170,11 @@ ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, n
                                        sample_error="binomial", seed=1234, times=np.linspace(0,0.3,5))
 ```
 
-We can run GST on this timestamped data similar to any other data, using the `GateSetTomography` protocol.  The key difference is that a `TimeDependentPoissonPicLogLFunction` objective function is used, which evaluates the log-likelihood by accounting separately for each timestamp.  It takes the timestamps in the given `DataSet` seriously, and performs time-dependent circuit simulations rather than aggregating the counts across all times (the behavior when the default objective function is used).
+We can run GST on this timestamped data similar to any other data, using the `GateSetTomography` protocol.  The key difference is that a `TimeDependentPoissonPicLogLFunction` objective function is used, which evaluates the log-likelihood by accounting separately for each timestamp.  It takes the timestamps in the given `DataSet` seriously, and performs time-dependent circuit simulations rather than aggregating the counts across all times (the behavior when the default objective function is used).  Installing a custom objective this way — the `GSTObjFnBuilders` machinery in the cell below — is covered in [judging GST fits](JudgingTheFit).
 
-Running time-dependent GST with 10 timesteps requires 10 times the number of circuit simulations (each circuit needs to be simulated 10 times).  This, coupled with the fact that this the time-dependent simulation routines are less optimized in pyGSTi, means this running time-dependent GST is significantly slower than normal GST.  Note also that we set `gauge_opt_suite=None`.  This disables gauge optimization, and this is necessary since it won't work because our `MyTimeDependentIdle` operation doesn't implement `transform` (the action of a gauge transformation).
+Running time-dependent GST with 5 timesteps requires 5 times the number of circuit simulations (each circuit needs to be simulated 5 times).  This, coupled with the fact that the time-dependent simulation routines are less optimized in pyGSTi, means running time-dependent GST is significantly slower than normal GST.  Note also that we set `gaugeopt_suite=None`.  This disables gauge optimization, and this is necessary since it won't work because our `MyTimeDependentIdle` operation doesn't implement `transform` (the action of a gauge transformation).
 
-The cell below will take around 5 minutes to run.
+The cell below takes a few seconds to run.
 
 ```{code-cell} ipython3
 target_model = smq1Q_XYI.target_model("full TP", simulator="map") # TP-constraints on the non-Gi gates

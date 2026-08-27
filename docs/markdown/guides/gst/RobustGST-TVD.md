@@ -20,7 +20,7 @@ We compare two loss functions to be used in obtaining the final gate set model, 
 - *Negative log-likelihood* (denoted `-logl`)
 - *Total variation distance* (denoted `tvd`)
 
-The former loss is the standard, since it corresponds to GST based on maximum liklihood estimation in a Markovian error model.
+The former loss is the standard, since it corresponds to GST based on maximum likelihood estimation in a Markovian error model.
 When there is a Markovian model that accurately models all available data, minimizing ``-logl`` is a good choice.
 
 However, if a dataset contains a small fraction of "bad" circuits (e.g., from data corruption, drift events, or other outliers), likelihood-based objectives can be pulled strongly toward explaining those circuits.
@@ -39,6 +39,7 @@ F_{\text{tvd}}(M; \text{data}) = \sum_{\text{circuits } c} \lVert ~ p_{\text{obs
 $$
 
 This objective can be less sensitive to extreme outliers because it directly penalizes distribution mismatch rather than log-probability of rare events.
+The mechanics of swapping objectives — the `objfn_builders` argument and its spellings — are covered in [judging GST fits](JudgingTheFit).
 
 We will:
 1. Simulate a “clean” dataset from a slightly depolarized 1-qubit gate set.
@@ -49,7 +50,7 @@ We will:
 The next cell defines three utility functions.
 
 - ``run_dataset_and_finalobjective``: run GST on a provided dataset with a chosen final objective (`'logl'` or `'tvd'`). This function might be useful in workflows of your own.
-- ``build_all_results_for_demo``, which runs GST and produces two ModelEstimateResults objects, one for each dataset. Both of these ModelEstimateResults objects hold results from training on the original dataset and the corrupted dataset.
+- ``build_all_results_for_demo``, which runs GST and produces two ``ModelEstimateResults`` objects, one for each dataset. Both of these ``ModelEstimateResults`` objects hold results from training on the original dataset and the corrupted dataset.
 - ``print_summary_table_for_demo`` summarizes the output of ``build_all_results_for_demo`` in a way that highlights the effect of training a TVD loss even when we care about robustness *and* log-likelihood. This is an alternative to generating an HTML report.
 
 ```{code-cell} ipython3
@@ -69,7 +70,7 @@ def run_dataset_and_finalobjective(
         ds: DataSet, final_objective: Literal['tvd', 'logl'],
         # ^ We'll vary those parameters in the demo.
         edesign: GateSetTomographyDesign, target_model: ExplicitOpModel, verbosity: int, mode: str
-        # ^ Those arguments are just here in case you want to repurpose this receipe
+        # ^ Those arguments are just here in case you want to repurpose this recipe
         #   for something else.
     ) -> ModelEstimateResults:
     target_model = target_model.copy()
@@ -127,7 +128,7 @@ def print_summary_table_for_demo(
 
     def sub_table_str(dataset_name: Literal['original', 'corrupted']):
         """
-        Builds a a string representation of the following Markdown table, where "{ ... }"
+        Builds a string representation of the following Markdown table, where "{ ... }"
         are placeholders for numerical values stored in `vals_cor` and `vals_ori`.
 
             |  when M = argmin(F(*|{dataset_name}))    |
@@ -165,7 +166,8 @@ def print_summary_table_for_demo(
 
 ## Stage data for "normal" GST
 
-We use pyGSTi’s built-in **1-qubit XYI** model pack (`smq1Q_XYI`) to define the target model and a standard GST experiment design
+We use pyGSTi’s built-in **1-qubit XYI** model pack (`smq1Q_XYI`) to define the target model and a standard GST experiment design.
+The design is assembled as a `GateSetTomographyDesign` directly from circuit lists; the [experiment designs tutorial](../workflow/ExperimentDesigns) covers how that class relates to the `StandardGSTDesign` used elsewhere.
 
 We then create a *slightly noisy* “true” model by depolarizing the target gates (here `op_noise=0.01`) and simulate measurement counts from this model.
 
@@ -195,6 +197,8 @@ To test robustness, we intentionally corrupt a fraction of circuits:
 This creates a dataset that is *mostly consistent* with the true depolarized model, but contains a small number of circuits that are strongly inconsistent with any reasonable physical model.
 
 This is a stylized outlier model (not meant to represent a specific device failure mode), but it is useful for probing estimator sensitivity.
+
+The corrupted-data fits below hit the optimizer's iteration cap and warn that the result is being treated as *converged*; that is a stopping rule rather than a failed fit, and it is expected here.
 
 ```{code-cell} ipython3
 :tags: [output_scroll]
@@ -255,5 +259,11 @@ import os
 print(os.getcwd() + '/' + report_dir + '/main.html\n\n')
 report.write_html(report_dir, connected=True, verbosity=0)
 ```
+
+Trained and tested on clean data (first table), the two objectives agree closely: `-logl` scores 465.6, `tvd` scores 475.7 — a roughly 2% cost for the robust objective when there is nothing to be robust to.
+The picture reverses once the training data contains outliers (second table): scored against the clean data, the `-logl` fit lands at 5285.9 while the `tvd` fit lands at 3821.4, about 28% better.
+The `-logl` fit spent its effort explaining the 2.5% of corrupted circuits at the expense of everything else; the `tvd` fit did not take the bait.
+(Scoring both corrupted-trained models against the corrupted data itself favors `-logl`, 47862 vs 51341, but that only shows `-logl` is willing to chase the outliers it was given.)
+In short: `tvd` gives up a little accuracy when the data are clean and buys substantial robustness when they are not — reach for it when you suspect a small fraction of circuits are bad and don't know which ones.
 
 Served with these docs: <a href="../../../reports/robust-gst-report.html">robust-gst-report</a>.

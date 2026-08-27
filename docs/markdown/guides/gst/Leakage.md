@@ -67,7 +67,7 @@ dgm3, leaking_state = with_leaky_gate(tm3, ('Gxpi2', 0), strength=0.125)
 
 ## Simulating and fitting
 
-Short circuits carry less information, so `num_samples` is large: $10^5$ shots buy back some of the precision the missing depth would have supplied. That count also outruns pyGSTi's default likelihood regularization, which replaces the log-likelihood with a quadratic below `min_prob_clip` and softens the zero-frequency terms inside `radius`. Both default to $10^{-4}$, against documented advice to keep `radius` below the smallest expected frequency, which here is $10^{-5}$. Lowering both keeps the regularization out of the region where the fit is decided, at the cost of an objective that is sharper near zero probability and harder on the optimizer.
+Short circuits carry less information, so `num_samples` is large: $10^5$ shots buy back some of the precision the missing depth would have supplied. That count also outruns pyGSTi's default likelihood regularization: `min_prob_clip` and `radius` both default to $10^{-4}$, while the smallest expected frequency here is $10^{-5}$. The cell below lowers both to $10^{-12}$, which keeps the regularization out of the region where the fit is decided but leaves the objective harder on the optimizer — the fit hits its iteration cap and warns about it at every stage. [Judging fits](JudgingTheFit) explains the tradeoff.
 
 ```{code-cell} ipython3
 num_samples = 100_000

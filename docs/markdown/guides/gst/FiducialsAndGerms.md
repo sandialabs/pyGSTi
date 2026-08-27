@@ -17,9 +17,9 @@ This notebook demonstrates how to generate sets of fiducial and germ sequences w
 
 `preparation_fiducial + repeated_germ + measurement_fiducial`
 
-long-sequence GST is highly sensitive to *all possible* (within the space of allowed models).  Furthermore, by iteratively increase the number of germ repetitions in `repeated_germ`, pyGSTi's iterative algorithms are able to avoid (usually!) local optima.   
+long-sequence GST is highly sensitive to *all possible* gate errors (within the space of allowed models).  Furthermore, by iteratively increasing the number of germ repetitions in `repeated_germ`, pyGSTi's iterative algorithms are able to avoid (usually!) local optima.   
 
-Both germ and fiducial sets are determined for a given "target" model.  We currently assume that this model contains unitary gates, such that infinitely many gates may be performed without moving away from a pure state.  It is almost always the case that the desired "target" operations are unitary, so this isn't a burdensome assumption.  If this isn't the case, one should find perform fiducial and germ selection on the nearest unitary model.
+Both germ and fiducial sets are determined for a given "target" model.  We currently assume that this model contains unitary gates, such that infinitely many gates may be performed without moving away from a pure state.  It is almost always the case that the desired "target" operations are unitary, so this isn't a burdensome assumption.  If this isn't the case, one should perform fiducial and germ selection on the nearest unitary model.
 
 ## Fiducial Selection: the theory
 The purpose of the preparation and measurement fiducial sequences, $\{F_i\}$ and $\{H_i\}$, is to prepare a sufficiently diverse set of input states, and a sufficiently diverse set of measurements, to completely probe an operation of interest - defined as the map that lies *between* the fiducials.  This is achieved if (and only if) the input states $\{\rho_i\}\equiv  \{F_i|\rho\rangle\rangle\}$ and the measurement effects $\{E_j\} \equiv \{\langle\langle E|H_j\}$ are both *informationally complete* (IC).  A set of matrices is IC if and only if it spans the vector space of density matrices.  For a Hilbert space of dimension $d$ this requires at least $d^2$ linearly independent elements.
@@ -48,7 +48,6 @@ import pygsti
 import pygsti.algorithms.fiducialselection as fidsel
 import pygsti.algorithms.germselection as germsel
 from pygsti.modelpacks import smq1Q_XYI
-import numpy as np
 ```
 
 We'll begin by constructing a 1-qubit $X(\pi/2)$, $Y(\pi/2)$, $I$ model for which we will find germs and fiducials.
@@ -82,46 +81,13 @@ listOfExperiments = pygsti.circuits.create_lsgst_circuits(
 
 ### Less-automated, more control: useful optional arguments
 
-There are many ways you can assume more control over the experiment design process. We'll only demonstrate
-a few here, but all options are discussed in the documentation for the various functions we've used.
+There are many ways you can assume more control over the experiment design process. We demonstrate a few below. The rest -- the search `algorithm` and its `algorithm_kwargs`, `float_type` for memory tuning, `verbosity`, and the fiducial-set requirements `forceEmpty`, `omit_identity`, and `ops_to_omit` -- are covered in the API documentation for `find_fiducials` and `find_germs`.
 
-#### Different algorithms
-There are a number of different algorithms available for germ selection. You can choose a non-default
-algorithm by specifying the `algorithm` keyword argument.  Each of the available algorithms has a set of keyword arguments of its own with which you can more precisely specify how you want it to behave. These keyword arguments can be passed as a dictionary to `find_germs` through the keyword argument `algorithm_kwargs`.
-
-`find_germs` and `find_fiducials` support supports the algorithms: 'greedy' (default for `find_germs`), 'grasp' (default for `find_fiducials`) and 'slack'.
-
-Each of these algorithms can have different computational performance, and for systems of two-or-more qubits the 'greedy' algorithms are typically the most performant computationally (when run with certain `mode` settings, as discussed in the next section).
+#### Different modes
+For `find_germs` the `mode` kwarg indicates the caching scheme used for storing the Jacobians for the candidate germs. Default value of 'allJac' caches all of the Jacobians and requires the most memory. 'singleJac' doesn't cache anything and instead generates these Jacobians on the fly. The final option, 'compactEVD', is currently only configured to work with the greedy search algorithm (the default for `find_germs`). When selected the compact eigenvalue decomposition/compact SVD of each of the Jacobians is constructed and is cached. This uses an intermediate amount of memory between 'singleJac' and 'allJac'. When compactEVD mode is selected we also perform the greedy search iterations using an alternative method based on low-rank update techniques, which means in practice this mode can be orders-of-magnitude faster than the other modes, though typically only for two-or-more qubits. This alternative approach means that this mode also only works with the score function option set to 'all'. (Note: this mode can also be a bit more finicky than other modes, so be prepared to tinker a bit.)
 
 ```{code-cell} ipython3
-graspGerms = germsel.find_germs(target_model, algorithm='grasp', algorithm_kwargs={'iterations': 1}, seed = 1234)
-```
-
-```{code-cell} ipython3
-slackGerms = germsel.find_germs(target_model, algorithm='slack', algorithm_kwargs={'slack_frac': 0.25}, seed = 1234)
-```
-
-Fiducial selection can be controlled in much the same way, using the same algorithms.
-
-```{code-cell} ipython3
-graspPrepFids, slackMeasFids = fidsel.find_fiducials(target_model, algorithm='slack',
-                                                         algorithm_kwargs={'slack_frac': 0.25})
-```
-
-```{code-cell} ipython3
-greedyPrepFids, greedyMeasFids = fidsel.find_fiducials(target_model, algorithm='greedy')
-```
-
-#### Different Modes
-In addition to there being multiple options for the algorithm to use, there are multiple modes that the algorithms can be run in.
-For `find_germs` the `mode` kwarg acts as a flag to indicate the caching scheme used for storing the Jacobians for the candidate
-germs. Default value of 'allJac' caches all of the Jacobians and requires the most memory. 'singleJac' doesn't cache anything and instead generates these Jacobians on the fly. The final option, 'compactEVD', is currently only configured to work with the greedy search algorithm. When selected the compact eigenvalue decomposition/compact SVD of each of the Jacobians is constructed and is cached. This uses an intermediate amount of memory between 'singleJac' and 'allJac'. When compactEVD mode is selected we also perform the greedy search iterations using an alternative method based on low-rank update techniques, which means in practice this mode can be orders-of-magnitude faster than the other modes, though typically only for two-or-more qubits. This alternative approach means that this mode also only works with the score function option set to 'all'. (Note: this mode can also be a bit more finicky than other modes, so be prepared to tinker a bit, you can see hints of this finickiness below).
-
-`find_germs` also accepts the kwarg `float_type`. `float_type` is dynamically inferred based on the target model's basis (e.g., standard Pauli representations automatically use real-valued arrays). `float_type` can still be optionally specified for memory tuning (e.g. downcasting to `np.single`), which can allow for a lower memory footprint. When manually specified `float_type` is validated for compatibility against the model's basis.
-
-```{code-cell} ipython3
-greedyGerms_compactEVD = germsel.find_germs(target_model, algorithm='greedy', seed = 1234, mode='compactEVD', verbosity=1,
-                                            float_type=np.double)
+greedyGerms_compactEVD = germsel.find_germs(target_model, algorithm='greedy', seed = 1234, mode='compactEVD')
 ```
 
 #### Germ and fiducial lengths
@@ -159,49 +125,17 @@ incompletePrepFids, incompleteMeasFids = fidsel.find_fiducials(target_model, can
 print(incompleteMeasFids, incompletePrepFids)
 ```
 
+#### The 'Lite'/'Standard' germ set
+
+So far we have implicitly been constructing examples of what we call the 'Robust' germ set. This is a germ set designed to be robust against second-order effects that result in a plateauing of our sensitivity at long circuit depths. Unless your system has very low error rates, it is likely that even with this second order effect you'll be decoherence limited long before entering the regime where this effect is significant. By setting the kwarg `randomize` to `False` you can change the behavior of germ selection such that it produces a significantly smaller, but also somewhat less robust, germ set called the 'Standard' or 'Lite' germ set. While not the default behavior of `find_germs`, we've found that for most applications the lite germ set is more than sufficient, so we recommend using it unless there is specific reason to prefer the robust experiment design (e.g. if you need high precision estimates for an idle gate known to have a very high fidelity). The model packs already act on this recommendation: `create_gst_experiment_design` defaults to `lite=True`. The [GSTDesigns](GSTDesigns) page measures what the choice costs for this same model, using the model pack's stored germ sets: at maximum length 8, the 5 lite germs give a 448-circuit design and the 12 robust germs give 862. For more on these different germ sets see [this paper](https://arxiv.org/abs/2307.15767).
+
+```{code-cell} ipython3
+liteGerms = germsel.find_germs(target_model, randomize=False, algorithm='greedy')
+```
+
 #### Set requirements
-There are several natural things to require of the returned germ and fiducial sets. For germ sets, you will usually
-want the individual gates to be included as germs. If for some reason you don't want this, you can set the
-*force* keyword argument to `None`.
+Germ selection normally requires each individual gate to appear as a germ (the *force* keyword argument defaults to `'singletons'`). Setting *force* to `None` lifts the requirement. Repeating the lite selection above with `force=None`, the greedy search drops the `Gxpi2` and `Gypi2` singleton germs in favor of longer germs, reaching amplificational completeness with four germs instead of five.
 
 ```{code-cell} ipython3
-nonSingletonGerms = germsel.find_germs(target_model, force=None, candidate_germ_counts={5: 'all upto'},
-                                           algorithm='greedy', seed=1234)
+nonSingletonGerms = germsel.find_germs(target_model, force=None, randomize=False, algorithm='greedy')
 ```
-
-In fiducial selection, it is likewise natural to require the empty operation sequence to be in the
-fiducial set. This requirement may be disabled by setting *forceEmpty* to `False`. It is also
-often desireable for identity gates to be left out of fiducials, since they add no diversity
-to the set of states and measurements generated. You can allow identity gates in fiducials by
-setting *omit_identity* to `False`.
-
-A more common modification to the fiducial set requirements is to leave out additional gates from fiducials.
-This might be desireable if you have a multi-qubit system and you expect your 2-qubit gates to be of lower
-fidelity than your single-qubit gates. In this case you might want to construct fiducials from only
-single-qubit gates. A list of gates that you would like to omit from your fiducials can be provided as a
-list of operation labels to the *ops_to_omit* keyword argument.
-
-Our model doesn't have multi-qubit gates, but we can demonstrate several pieces of this
-functionality by setting *omit_identity* to `False` and omitting the identity manually using
-*ops_to_omit*.
-
-```{code-cell} ipython3
-from pygsti.baseobjs import Label
-omit_identityPrepFids, omit_identityMeasFids = fidsel.find_fiducials(target_model, omit_identity=False,
-                                                                       ops_to_omit=[Label(())])
-```
-
-#### The 'Lite'/'Standard' Germ Set
-
-So far we have implicitly been constructing examples of what we call the 'Robust' germ set. This is a germ set designed to be robust against second-order effects that result in a plateuing of our sensitivity at long circuit depths. Unless your system has very low error rates, it is likely that even with this second order effect you'll be decoherence limited long before entering the regime where this effect is significant. By setting the kwarg `randomize` to `False` you can change the behavior of germ selection such that it produces a significantly smaller, but also somewhat less robust, germ set called the 'Standard' or 'Lite' germ set. While not the default behavior of `find_germs`, we've found that for most applications the lite germ set is more than sufficient, so we recommend using it unless there is specific reason to prefer the robust experiment design (e.g. if you need high precision estimates for an idle gate known to have a very high fidelity). For more on these different germ sets see [this paper](https://arxiv.org/abs/2307.15767).
-
-```{code-cell} ipython3
-liteGerms = germsel.find_germs(target_model, randomize=False, algorithm='greedy', verbosity=1)
-```
-
-#### Verbosity
-The various algorithms can tell you something of what's going on with them while they're running. By default,
-this output is silenced, but it can be turned on using the *verbosity* keyword argument.
-- A verbosity level of 1 is the default. This prints out what algorithm is being used, the returned set, and the score of that set.
-- A verbosity level of 0 silences all output (other than warnings that things have gone wrong).
-- A verbosity level of $n+1$ where $n\geq0$ prints the output of verbosity level 1 in addition to the output that the current algorithm displays when its own verbosity is set to $n$.

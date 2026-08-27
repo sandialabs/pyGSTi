@@ -12,27 +12,49 @@ kernelspec:
 ---
 
 # Fiducial pair reduction
-The circuits used in standard Long Sequence GST are more than what are needed to amplify every possible gate error.  (Technically, this is due to the fact that the informationaly complete fiducial sub-sequences allow extraction of each germ's *entire* process matrix, when all that is needed is the part describing the amplified directions in model space.) Because of this over-completeness, fewer sequences, i.e. experiments, may be used whilst retaining the desired Heisenberg-like scaling ($\sim 1/L$, where $L$ is the maximum length sequence).  The over-completeness can still be desirable, however, as it makes the GST optimization more robust to model violation and so can serve to stabilize the GST parameter optimization in the presence of significant non-Markovian noise.  Recall that the form of a GST gate sequence is
+The circuits used in standard Long Sequence GST are more than what are needed to amplify every possible gate error.  (Technically, this is due to the fact that the informationally complete fiducial sub-sequences allow extraction of each germ's *entire* process matrix, when all that is needed is the part describing the amplified directions in model space.) Because of this over-completeness, fewer sequences, i.e. experiments, may be used whilst retaining the desired Heisenberg-like scaling ($\sim 1/L$, where $L$ is the maximum length sequence).  The over-completeness can still be desirable, however, as it makes the GST optimization more robust to model violation and so can serve to stabilize the GST parameter optimization in the presence of significant non-Markovian noise.  Recall that the form of a GST gate sequence is
 
 $$S = F_i (g_k)^n F_j $$
 
-where $F_i$ is a "preparation fiducial" sequence, $F_j$ is a "measurement fiducial" sequence, and "g_k" is a "germ" sequence.  The repeated germ sequence $(g_k)^n$ we refer to as a "germ-power".  There are currently four different ways to reduce a standard set of GST operation sequences within pyGSTi, each of which removes certain $(F_i,F_j)$ fiducial pairs for certain germ-powers.
+where $F_i$ is a "preparation fiducial" sequence, $F_j$ is a "measurement fiducial" sequence, and $g_k$ is a "germ" sequence.  The repeated germ sequence $(g_k)^n$ we refer to as a "germ-power".
 
-- **Global fiducial pair reduction (GFPR)** removes the same intelligently-selected set of fiducial pairs for all germ-powers.  This is a conceptually simple method of reducing the operation sequences, but it is the most computationally intensive since it repeatedly evaluates the number of amplified parameters for en *entire germ set*.  In practice, while it can give very large sequence reductions, its long run can make it prohibitive, and the "per-germ" reduction discussed next is used instead. 
-<span style="color:red">Note: this form of FPR is deprecated on the latest versions of pygsti's develop branch. We now recommend using per-germ FPR instead. Also note that the current implementation of per-germ FPR will in most cases return smaller experiment designs than the legacy global FPR does.</span>
+## The `fpr=True` shortcut
 
-- **Per-germ fiducial pair reduction (PFPR)** removes the same intelligently-selected set of fiducial pairs for all powers of a given germ, but different sets are removed for different germs.  Since different germs amplify different directions in model space, it makes intuitive sense to specify different fiducial pair sets for different germs.  Because this method only considers one germ at a time, it is less computationally intensive than GFPR, and thus more practical.
+For a model pack, fiducial pair reduction is a single argument: `create_gst_experiment_design` accepts `fpr=True` and applies per-germ fiducial pair sets precomputed for the pack.
 
-- **Per-germ global fiducial pair reduction (PGGFPR)** removes the same intelligently-selected set of fiducial pairs for all powers of a given germ, but different sets are removed for different germs while also taking into account the amplificational properties of a germ set as a whole. This is a two-step process in which we first identify redundancy within a germ set itself due to overlapping amplified directions in parameter space and identifies a subset of amplified parameters for each germ such that collectively we have sensitivity to every direction. In the second stage we select a subset of fiducial pairs for each germ only requiring sensitivity to the subset of amplified parameters of that germ identified in the first stage. This is currently our most effective form of fiducial pair reduction in terms of potential experimental savings, capable with the right settings of achieving experimental designs approaching information theoretic lower bounds in size, but with fewer fiducial pairs comes the potential for detecting non-Markovian effects and potentially less robustness to those effects (the extent to which this is true, or if it is true at all is an active area of research), so caveat emptor. 
+```{code-cell} ipython3
+from pygsti.modelpacks import smq1Q_XY
 
-- **Random per-germ power fiducial pair reduction (RFPR)** randomly chooses a different set of fiducial pairs to remove for each germ-power.  It is extremly fast to perform, as pairs are just randomly selected for removal, and in practice works well (i.e. does not impair Heisenberg-scaling) up until some critical fraction of the pairs are removed.  This reflects the fact that the direction detected by a fiducial pairs usually has some non-negligible overlap with each of the directions amplified by a germ, and it is the exceptional case that an amplified direction escapes undetected.  As such, the "critical fraction" which can usually be safely removed equals the ratio of amplified-parameters to germ-process-matrix-elements (typically $\approx 1/d^2$ where $d$ is the Hilbert space dimension, so $1/4 = 25\%$ for 1 qubit and $1/16 = 6.25\%$ for 2 qubits).  RFPR can be combined with GFPR or PFPR so that some number of randomly chosen pairs can be added on top of the "intelligently-chosen" pairs of GFPR or PFPR.  In this way, one can vary the amount of sequence reduction (in order to trade off speed vs. robustness to non-Markovian noise) without inadvertently selecting too few or an especially bad set of random fiducial pairs.
+full_design = smq1Q_XY.create_gst_experiment_design(max_max_length=32)
+fpr_design = smq1Q_XY.create_gst_experiment_design(max_max_length=32, fpr=True)
+print("Without FPR: %d circuits" % len(full_design.all_circuits_needing_data))
+print("With fpr=True: %d circuits" % len(fpr_design.all_circuits_needing_data))
+```
+
+For this pack, 128 circuits instead of 568.  The rest of this page covers the algorithms behind that argument: what to reach for when no model pack covers your gate set, or when you want control over how the pairs are chosen.  To check that a reduced design is still adequate, compute its Fisher information ([evaluating experiment designs](CheckYourDesign)); to estimate what a design costs to run, use `calculate_edesign_estimated_runtime` ([experiment designs](../workflow/ExperimentDesigns)).
+
+## The four reduction methods
+
+There are currently four different ways to reduce a standard set of GST operation sequences within pyGSTi, each of which removes certain $(F_i,F_j)$ fiducial pairs for certain germ-powers.
+
+- **Per-germ fiducial pair reduction (PFPR)** removes the same intelligently-selected set of fiducial pairs for all powers of a given germ, but different sets are removed for different germs.  Since different germs amplify different directions in model space, it makes intuitive sense to specify different fiducial pair sets for different germs.  Because this method only considers one germ at a time, its search stays cheap as the gate set grows.
+
+- **Per-germ global fiducial pair reduction (PGGFPR)** removes the same intelligently-selected set of fiducial pairs for all powers of a given germ, but different sets are removed for different germs while also taking into account the amplificational properties of a germ set as a whole. This is a two-step process in which we first identify redundancy within a germ set itself due to overlapping amplified directions in parameter space and identifies a subset of amplified parameters for each germ such that collectively we have sensitivity to every direction. In the second stage we select a subset of fiducial pairs for each germ only requiring sensitivity to the subset of amplified parameters of that germ identified in the first stage. With the right settings this method can achieve experiment designs approaching information-theoretic lower bounds in size — savings that materialize on multi-qubit design problems rather than in the single-qubit demo below. With fewer fiducial pairs comes the potential for detecting non-Markovian effects and potentially less robustness to those effects (the extent to which this is true, or if it is true at all, is an active area of research), so caveat emptor.
+
+- **Random per-germ power fiducial pair reduction (RFPR)** randomly chooses a different set of fiducial pairs to remove for each germ-power.  It is extremely fast to perform, as pairs are just randomly selected for removal, and in practice works well (i.e. does not impair Heisenberg-scaling) up until some critical fraction of the pairs are removed.  This reflects the fact that the direction detected by a fiducial pair usually has some non-negligible overlap with each of the directions amplified by a germ, and it is the exceptional case that an amplified direction escapes undetected.  As such, the "critical fraction" which can usually be safely removed equals the ratio of amplified-parameters to germ-process-matrix-elements (typically $\approx 1/d^2$ where $d$ is the Hilbert space dimension, so $1/4 = 25\%$ for 1 qubit and $1/16 = 6.25\%$ for 2 qubits).  RFPR can be combined with PFPR so that some number of randomly chosen pairs can be added on top of the "intelligently-chosen" pairs of PFPR.  In this way, one can vary the amount of sequence reduction (in order to trade off speed vs. robustness to non-Markovian noise) without inadvertently selecting too few or an especially bad set of random fiducial pairs.
+
+- **Global fiducial pair reduction (GFPR)** removes a single, intelligently-selected set of fiducial pairs for all germs and all germ-powers, chosen by repeatedly evaluating the number of amplified parameters for an *entire germ set*.  That global search is what rules it out in practice: the number of candidate pair lists grows combinatorially with the number of pairs kept — watch its demo below escalate from 630 candidate lists to test up to 376,992.
+
+```{warning}
+GFPR's `find_sufficient_fiducial_pairs` is deprecated in favor of `find_sufficient_fiducial_pairs_per_germ`, and Python's default warning filters usually hide the deprecation warning at runtime. Use a per-germ method in new code; the GFPR section below is kept for reference.
+```
 
 ## Preliminaries
 
 We now demonstrate how to invoke each of these methods within pyGSTi for the case of a single qubit, using our standard $X(\pi/2)$, $Y(\pi/2)$, $I$ model.  First, we retrieve a target `Model` as usual, along with corresponding sets of fiducial and germ sequences.  We set the maximum length to be 32, roughly consistent with our data-generating model having gates depolarized by 10%.
 
 ```{code-cell} ipython3
-#Import pyGSTi and the "stardard 1-qubit quantities for a model with X(pi/2), Y(pi/2)"
+#Import pyGSTi and the "standard 1-qubit quantities for a model with X(pi/2), Y(pi/2)"
 import pygsti
 import pygsti.circuits as pc
 from pygsti.modelpacks import smq1Q_XY
@@ -50,11 +72,11 @@ opLabels = list(target_model.operations.keys())
 print("Gate operation labels = ", opLabels)
 ```
 
-## Sequence Reduction
+## Sequence reduction
 
-Now let's generate a list of all the operation sequences for each maximum length - so a list of lists.  We'll generate the full lists (without any reduction) and the lists for each of the four reduction types listed above.  In the random reduction case, we'll keep 30% of the fiducial pairs, removing 70% of them.
+Now let's generate a list of all the operation sequences for each maximum length - so a list of lists.  We'll generate the full lists (without any reduction) and the lists for each of the four reduction types listed above.  In the random reduction case, we'll keep 30% of the fiducial pairs, removing 70% of them.  One constant to expect in every table that follows: the L=1 entry is always the same 56 sequences.  That first list is just the LGST circuits, which are always kept — reduction only thins the germ-power circuits stacked on top of them.
 
-### No Reduction ("standard" GST)
+### No reduction ("standard" GST)
 
 ```{code-cell} ipython3
 #Make list-of-lists of GST operation sequences
@@ -73,34 +95,7 @@ fullExperiments = pc.create_lsgst_circuits(
 print("\n%d experiments to run GST." % len(fullExperiments))
 ```
 
-### Global Fiducial Pair Reduction (GFPR)
-
-```{code-cell} ipython3
-fid_pairs = pygsti.alg.find_sufficient_fiducial_pairs(
-            target_model, prep_fiducials, meas_fiducials, germs,
-            search_mode="random", n_random=10, seed=1234,
-            verbosity=1, mem_limit=int(2*(1024)**3), minimum_pairs=2)
-
-# fid_pairs is a list of (prepIndex,measIndex) 2-tuples, where
-# prepIndex indexes prep_fiducials and measIndex indexes meas_fiducials
-print("Global FPR says we only need to keep the %d pairs:\n %s\n"
-      % (len(fid_pairs),fid_pairs))
-
-gfprStructs = pc.create_lsgst_circuit_lists(
-    opLabels, prep_fiducials, meas_fiducials, germs, maxLengths,
-    fid_pairs=fid_pairs)
-
-print("Global FPR reduction")
-for L,strct in zip(maxLengths,gfprStructs):
-    print("L=%d: %d operation sequences" % (L,len(strct)))
-    
-gfprExperiments = pc.create_lsgst_circuits(
-    opLabels, prep_fiducials, meas_fiducials, germs, maxLengths,
-    fid_pairs=fid_pairs)
-print("\n%d experiments to run GST." % len(gfprExperiments))
-```
-
-### Per-germ Fiducial Pair Reduction (PFPR)
+### Per-germ fiducial pair reduction (PFPR)
 
 ```{code-cell} ipython3
 fid_pairsDict = pygsti.alg.find_sufficient_fiducial_pairs_per_germ(
@@ -130,13 +125,13 @@ pfprExperiments = pc.create_lsgst_circuits(
 print("\n%d experiments to run GST." % len(pfprExperiments))
 ```
 
-### Per-germ Fiducial Pair Reduction (PFPR) with Greedy Search Heuristics
+### Per-germ fiducial pair reduction (PFPR) with greedy search heuristics
 
 In addition to the implementation of per-germ fiducial pair reduction above, which supports either a brute force sequential or random search heuristic, there is also an implementation using a greedy search heuristic combined with fast low-rank update-based techniques for significantly faster execution, particularly when generating experiment designs for two-or-more qubits.
 
 ```{code-cell} ipython3
 fid_pairsDict = pygsti.alg.find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials, meas_fiducials,
-                                                germs, verbosity=1)
+                                                germs, seed=1234, verbosity=1)
 print("\nPer-germ FPR to keep the pairs:")
 for germ,pairsToKeep in fid_pairsDict.items():
     print("%s: %s" % (str(germ),pairsToKeep))
@@ -155,7 +150,7 @@ pfprExperiments_greedy = pc.create_lsgst_circuits(
 print("\n%d experiments to run GST." % len(pfprExperiments_greedy))
 ```
 
-### Per-germ Global Fiducial Pair Reduction (PFPR)
+### Per-germ global fiducial pair reduction (PGGFPR)
 
 As mentioned above, the per-germ global FPR scheme is a two step process. First we identify a reduced set of amplified parameters for each germ to require sensitivity to, and then next we identify reduced sets of fiducials with sensitivity to those particular parameters.
 
@@ -171,7 +166,7 @@ germ_set_spanning_vectors, _ = pygsti.alg.germ_set_spanning_vectors(target_model
 #Next use this set of vectors to find a sufficient reduced set of fiducial pairs.
 #Alternatively this function can also take as input a list of germs
 fid_pairsDict = pygsti.alg.find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials, meas_fiducials,
-                                                germ_vector_spanning_set=germ_set_spanning_vectors, verbosity=2)
+                                                germ_vector_spanning_set=germ_set_spanning_vectors, verbosity=1)
 print("\nPer-germ Global FPR to keep the pairs:")
 for germ,pairsToKeep in fid_pairsDict.items():
     print("%s: %s" % (str(germ),pairsToKeep))
@@ -190,7 +185,7 @@ pggfprExperiments = pc.create_lsgst_circuits(
 print("\n%d experiments to run GST." % len(pggfprExperiments))
 ```
 
-### Random Fiducial Pair Reduction (RFPR)
+### Random fiducial pair reduction (RFPR)
 
 ```{code-cell} ipython3
 #keep only 30% of the pairs
@@ -208,10 +203,39 @@ rfprExperiments = pc.create_lsgst_circuits(
 print("\n%d experiments to run GST." % len(rfprExperiments))
 ```
 
-## Running GST
-In each case above, we constructed (1) a list-of-lists giving the GST operation sequences for each maximum-length stage, and (2) a list of the experiments.  In what follows, we'll use the experiment list to generate some simulated ("fake") data for each case, and then run GST on it.  Since this is done in exactly the same way in each case, we'll put all of the logic in a function.
+### Global fiducial pair reduction (GFPR)
 
-We already built each reduced circuit-structure list by hand above, so there's no need to have GST regenerate it: a `GateSetTomographyDesign` accepts a list of circuit structures directly, without insisting on a set of fiducials, germs, and a fiducial-pair-reduction scheme to derive them from (that derivation is what a `StandardGSTDesign` is for). We pair that experiment design with the simulated dataset in a `ProtocolData` object, and hand the pair to the `GateSetTomography` protocol. This sidesteps the old two-driver split between `run_long_sequence_gst`, which always builds a *complete* list of operation sequences, and `run_long_sequence_gst_base`, the "base" variant that fiducial pair reduction relied on for accepting an explicit circuit-structure list. The Protocol API takes an explicit experiment design either way, so there's only one code path to learn.
+For reference, the deprecated global method (see the warning above).
+
+```{code-cell} ipython3
+fid_pairs = pygsti.alg.find_sufficient_fiducial_pairs(
+            target_model, prep_fiducials, meas_fiducials, germs,
+            search_mode="random", n_random=10, seed=1234,
+            verbosity=1, mem_limit=int(2*(1024)**3), minimum_pairs=2)
+
+# fid_pairs is a list of (prepIndex,measIndex) 2-tuples, where
+# prepIndex indexes prep_fiducials and measIndex indexes meas_fiducials
+print("Global FPR says we only need to keep the %d pairs:\n %s\n"
+      % (len(fid_pairs),fid_pairs))
+
+gfprStructs = pc.create_lsgst_circuit_lists(
+    opLabels, prep_fiducials, meas_fiducials, germs, maxLengths,
+    fid_pairs=fid_pairs)
+
+print("Global FPR reduction")
+for L,strct in zip(maxLengths,gfprStructs):
+    print("L=%d: %d operation sequences" % (L,len(strct)))
+    
+gfprExperiments = pc.create_lsgst_circuits(
+    opLabels, prep_fiducials, meas_fiducials, germs, maxLengths,
+    fid_pairs=fid_pairs)
+print("\n%d experiments to run GST." % len(gfprExperiments))
+```
+
+## Running GST
+In each case above, we constructed (1) a list-of-lists giving the GST operation sequences for each maximum-length stage, and (2) a list of the experiments.  In what follows, we'll use the experiment list to generate some simulated ("fake") data, and then run GST on it.  Two fits are enough to make the comparison: the full design, and the greedy per-germ design.  Since both are run in exactly the same way, we'll put all of the logic in a function.
+
+We already built each reduced circuit-structure list by hand above, so there's no need to have GST regenerate it: a `GateSetTomographyDesign` accepts a list of circuit structures directly, where a `StandardGSTDesign` would derive them from fiducials, germs, and maximum lengths (the [experiment designs tutorial](../workflow/ExperimentDesigns) covers the distinction). We pair that experiment design with the simulated dataset in a `ProtocolData` object, and hand the pair to the `GateSetTomography` protocol. This sidesteps the old two-driver split between `run_long_sequence_gst`, which always builds a *complete* list of operation sequences, and `run_long_sequence_gst_base`, the "base" variant that fiducial pair reduction relied on for accepting an explicit circuit-structure list. The Protocol API takes an explicit experiment design either way, so there's only one code path to learn.
 
 ```{code-cell} ipython3
 #use a depolarized version of the target gates to generate the data
@@ -235,20 +259,8 @@ def runGST(gstStructs, exptList):
 print("\n------ GST with standard (full) sequences ------")
 full_results = runGST(fullStructs, fullExperiments)
 
-print("\n------ GST with GFPR sequences ------")
-gfpr_results = runGST(gfprStructs, gfprExperiments)
-
-print("\n------ GST with PFPR sequences ------")
-pfpr_results = runGST(pfprStructs, pfprExperiments)
-
 print("\n------ GST with PFPR sequences (greedy heuristic) ------")
 pfpr_results_greedy = runGST(pfprStructs_greedy, pfprExperiments_greedy)
-
-print("\n------ GST with PGGFPR sequences ------")
-pggfpr_results = runGST(pggfprStructs, pggfprExperiments)
-
-print("\n------ GST with RFPR sequences ------")
-rfpr_results = runGST(rfprStructs, rfprExperiments)
 ```
 
 Finally, one can generate reports using GST with reduced-sequences:
@@ -256,24 +268,11 @@ Finally, one can generate reports using GST with reduced-sequences:
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(full_results, title="Standard GST Strings Example"
                                        ).write_html("../../../tutorial_files/example_stdstrs_report", connected=True)
-pygsti.report.construct_standard_report(gfpr_results, title="Global FPR Report Example"
-                                        ).write_html("../../../tutorial_files/example_gfpr_report", connected=True)
-pygsti.report.construct_standard_report(pfpr_results, title="Per-germ FPR Report Example"
-                                        ).write_html("../../../tutorial_files/example_pfpr_report", connected=True)
 pygsti.report.construct_standard_report(pfpr_results_greedy, title="Per-germ FPR (Greedy Heuristic) Report Example"
                                         ).write_html("../../../tutorial_files/example_pfpr_greedy_report", connected=True)
-pygsti.report.construct_standard_report(pggfpr_results, title="Per-germ Global FPR Report Example"
-                                        ).write_html("../../../tutorial_files/example_pggfpr_report", connected=True)
-pygsti.report.construct_standard_report(rfpr_results, title="Random FPR Report Example"
-                                        ).write_html("../../../tutorial_files/example_rfpr_report", connected=True)
 ```
 
-If all has gone well, the <a href="../../../reports/example_stdstrs_report.html">Standard GST</a>,
-<a href="../../../reports/example_gfpr_report.html">GFPR</a>,
-<a href="../../../reports/example_pfpr_report.html">PFPR</a>,
-<a href="../../../reports/example_pfpr_greedy_report.html">PFPR (Greedy)</a>
-<a href="../../../reports/example_pggfpr_report.html">PGGFPR</a>
-and
-<a href="../../../reports/example_rfpr_report.html">RFPR</a>,
+If all has gone well, the <a href="../../../reports/example_stdstrs_report.html">Standard GST</a>
+and <a href="../../../reports/example_pfpr_greedy_report.html">PFPR (Greedy)</a>
 reports may now be viewed.
-The only notable difference in the output are "gaps" in the color box plots which plot quantities such as the log-likelihood across all operation sequences, organized by germ and fiducials.
+The only notable difference between them is the "gaps" in the color box plots, which plot quantities such as the log-likelihood across all operation sequences, organized by germ and fiducials.
