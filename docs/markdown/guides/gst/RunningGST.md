@@ -181,6 +181,8 @@ The default is `("full TP", "CPTPLND", "Target")`.  `"CPTP"` still runs but rais
 Gauge optimization is controlled by the `gaugeopt_suite` argument, just as in `GateSetTomography`.  Neither protocol takes a `gaugeopt_target` argument.  To gauge optimize toward something other than the experiment design's (typically ideal) target gates, build a `GSTGaugeOptSuite` with its own `gaugeopt_target=` and pass that in as the suite, which is what the last example on this page does.
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 results_stdprac = pygsti.protocols.StandardGST(verbosity=4).run(data, disable_checkpointing=True)
 ```
 
@@ -192,6 +194,8 @@ print("TP Estimate's gauge optimized models: ", ", ".join(results_stdprac.estima
 Next, we'll perform the same analysis but with a **non-default standard suite of gauge optimizations** - this one toggles the SPAM penalty in addition to varying the spam weight (the default suite just varies the spam weight without any SPAM penalty).  See the [gauge optimization tutorial](../analysis/GaugeFreedom) for more details on gauge optmization "suites".
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 proto = pygsti.protocols.StandardGST(gaugeopt_suite="varySpam", name="StdGST_varySpam", verbosity=4)
 results_stdprac_nondefaultgo = proto.run(data, disable_checkpointing=True)
 ```
@@ -204,6 +208,8 @@ print("TP Estimate's gauge optimized models: ", ", ".join(results_stdprac_nondef
 Finally, we'll demonstrate how to specify a fully custom set of gauge optimization parameters and how to use a **separately-specified target model for gauge optimization**.  You can get a more intuitive gauge-optimized `Model` by placing as much expected noise as possible into the gauge-optimization target, as this essentially tells the algorithm "this is what I think the estimated model should look like".  If you just use the perfect or ideal model for this (the default), then the gauge optimizer may make tradeoffs which don't reflect the expected physics (remember, all gauge-equivalent models produce the same observables!).  For example, it may spread error across all your gate operations when you expect just the 2-qubit operations are noisy.
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 my_goparams = { 'item_weights': {'gates': 1.0, 'spam': 0.001} }
 my_gaugeOptTarget = smq1Q_XYI.target_model().depolarize(
     op_noise=0.005, spam_noise=0.01) # a guess at what estimate should be
@@ -276,6 +282,8 @@ The checkpoint object itself contains information that could be useful for diagn
 Checkpointing with the `StandardGST` protocol works similarly:
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 proto_standard_gst = pygsti.protocols.StandardGST(modes=['full TP', 'CPTPLND', 'Target'], verbosity=4)
 results_stdprac = proto_standard_gst.run(data, checkpoint_path = '../../../tutorial_files/standard_gst_checkpoints/StandardGST')
 ```

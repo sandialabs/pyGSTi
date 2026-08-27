@@ -80,6 +80,8 @@ ds = simulate_data(dgm3, ed.all_circuits_needing_data, num_samples=num_samples, 
 The bad-fit machinery acts only when the misfit exceeds `threshold` standard deviations, so setting it to 0.0 makes the `wildcard1d` analysis run for essentially any fit. A wildcard budget is the slack you would have to allow the model's predicted probabilities to make them consistent with the data. The one-dimensional version fits a single scale, spread across gates in proportion to each gate's diamond distance from its target, and the report prints it beside the other error metrics.
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 gst = StandardGST(
     modes=('CPTPLND',), target_model=tm3, verbosity=4,
     badfit_options={'actions': ['wildcard1d'], 'threshold': 0.0}

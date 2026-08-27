@@ -197,6 +197,8 @@ This creates a dataset that is *mostly consistent* with the true depolarized mod
 This is a stylized outlier model (not meant to represent a specific device failure mode), but it is useful for probing estimator sensitivity.
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 prop_corrupt = 0.025
 
 ds_cor = ds_ori.copy_nonstatic()

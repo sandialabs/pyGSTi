@@ -96,6 +96,8 @@ data = ProtocolData(design, DS)
 The `optimizer` argument caps the Levenberg-Marquardt iterations at 50 to keep this page quick. Every stage then stops on the cap rather than on its own convergence test, and says so in the output below. Drop the cap when the answer matters.
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 result = StandardGST(modes=('CPTPLND',), target_model=target_model,
                      optimizer={'maxiter': 50}, verbosity=4).run(data)
 ```

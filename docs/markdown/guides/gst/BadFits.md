@@ -71,6 +71,8 @@ print(len(circuits), "circuits,", int(ds[circuits[0]].total), "counts each")
 Now fit it with a CPTP-constrained Lindblad model, which is about as expressive as a physically sensible single-qubit gate set gets.
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 mdl = target.copy()
 mdl.set_all_parameterizations("CPTPLND")
 
@@ -121,6 +123,8 @@ The mechanics are a slack variable per operation. Each circuit gets an allowance
 Request one by passing `badfit_options` to the protocol. Note that the wildcard search only runs when the fit is worse than `threshold`, which defaults to 2 standard deviations.
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 proto_wc = pygsti.protocols.GateSetTomography(
     mdl, gaugeopt_suite=None,
     badfit_options={'actions': ['wildcard'], 'wildcard_methods': ('barrier',)},
@@ -165,6 +169,8 @@ Reports pick the budget up automatically. If an estimate carries an `unmodeled_e
 The most consequential fork in this whole process is whether the violation is your model's fault or the device's. A restricted parameterization that cannot express an error the device really has will produce large $N_\sigma$ that says nothing about non-Markovianity. The test is direct: refit with a strictly larger model class.
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 truth = pygsti.models.create_crosstalk_free_model(
     pspec,
     depolarization_strengths={('Gxpi2', 0): 0.01, ('Gypi2', 0): 0.01},
