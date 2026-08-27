@@ -3747,6 +3747,19 @@ class ProtocolCheckpoint(_NicelySerializable):
         else:
             super().write(path)
 
+    def _repr_fields(self):
+        """
+        A list of (label, value string) pairs summarizing this checkpoint's state,
+        used to build `__repr__`. Subclasses should extend the list returned by
+        the base implementation. Values must be rendered deterministically, since
+        checkpoint reprs show up in documentation output.
+        """
+        return [('name', repr(self.name))]
+
+    def __repr__(self):
+        fields = ', '.join(f'{label}={value}' for label, value in self._repr_fields())
+        return f'{self.__class__.__name__}({fields})'
+
 
 #In the future, we could put this function into a base class for
 # the classes that utilize it above, so it would become a proper method.
