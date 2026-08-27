@@ -42,8 +42,7 @@ for reasons outside this driver's reach -- unseeded randomness inside pyGSTi
 reached through call sites the tutorials do not control, and one page whose MPI
 rank output interleaves nondeterministically. That was measured and accepted
 rather than chased: an independently re-executed release costs about 2.4 MB of
-packed git history against 0 for a byte-identical one. ``PLAN.md`` sections 7a-7c
-have the numbers.
+packed git history against 0 for a byte-identical one.
 """
 from __future__ import annotations
 
