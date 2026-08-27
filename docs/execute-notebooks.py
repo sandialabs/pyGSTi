@@ -168,7 +168,11 @@ def normalize(nb, paths: list) -> None:
         # the line, so only the final frame is what a reader would have seen.
         # tqdm emits one frame per update, sampled on wall-clock, so the
         # intermediate frames differ every run while the last one is stable.
+        # A \r immediately before \n is a pty line ending, not an overwrite --
+        # IPython's `!` shell escape runs through pexpect and yields \r\n --
+        # so fold those first or every such line collapses to nothing.
         if "\r" in s:
+            s = s.replace("\r\n", "\n")
             s = "\n".join(ln.rsplit("\r", 1)[-1] for ln in s.split("\n"))
         s = TQDM.sub("[00:00<00:00, 0.00it/s]", s)
         s = ANSI.sub("", s)
