@@ -181,7 +181,7 @@ The default is `("full TP", "CPTPLND", "Target")`.  `"CPTP"` still runs but rais
 Gauge optimization is controlled by the `gaugeopt_suite` argument, just as in `GateSetTomography`.  Neither protocol takes a `gaugeopt_target` argument.  To gauge optimize toward something other than the experiment design's (typically ideal) target gates, build a `GSTGaugeOptSuite` with its own `gaugeopt_target=` and pass that in as the suite, which is what the last example on this page does.
 
 ```{code-cell} ipython3
-results_stdprac = pygsti.protocols.StandardGST().run(data, disable_checkpointing=True)
+results_stdprac = pygsti.protocols.StandardGST(verbosity=4).run(data, disable_checkpointing=True)
 ```
 
 ```{code-cell} ipython3
@@ -192,7 +192,7 @@ print("TP Estimate's gauge optimized models: ", ", ".join(results_stdprac.estima
 Next, we'll perform the same analysis but with a **non-default standard suite of gauge optimizations** - this one toggles the SPAM penalty in addition to varying the spam weight (the default suite just varies the spam weight without any SPAM penalty).  See the [gauge optimization tutorial](../analysis/GaugeFreedom) for more details on gauge optmization "suites".
 
 ```{code-cell} ipython3
-proto = pygsti.protocols.StandardGST(gaugeopt_suite="varySpam", name="StdGST_varySpam")
+proto = pygsti.protocols.StandardGST(gaugeopt_suite="varySpam", name="StdGST_varySpam", verbosity=4)
 results_stdprac_nondefaultgo = proto.run(data, disable_checkpointing=True)
 ```
 
@@ -211,7 +211,7 @@ my_gaugeopt_suite = pygsti.protocols.GSTGaugeOptSuite(gaugeopt_argument_dicts={'
                                                       gaugeopt_target=my_gaugeOptTarget)
 
 proto = pygsti.protocols.StandardGST(gaugeopt_suite=my_gaugeopt_suite,
-                                     name="StdGST_myGO")
+                                     name="StdGST_myGO", verbosity=4)
 results_stdprac_nondefaultgo = proto.run(data, disable_checkpointing=True)
 ```
 
@@ -276,7 +276,7 @@ The checkpoint object itself contains information that could be useful for diagn
 Checkpointing with the `StandardGST` protocol works similarly:
 
 ```{code-cell} ipython3
-proto_standard_gst = pygsti.protocols.StandardGST(modes=['full TP', 'CPTPLND', 'Target'], verbosity=3)
+proto_standard_gst = pygsti.protocols.StandardGST(modes=['full TP', 'CPTPLND', 'Target'], verbosity=4)
 results_stdprac = proto_standard_gst.run(data, checkpoint_path = '../../../tutorial_files/standard_gst_checkpoints/StandardGST')
 ```
 

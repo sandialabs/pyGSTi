@@ -74,7 +74,7 @@ Now fit it with a CPTP-constrained Lindblad model, which is about as expressive 
 mdl = target.copy()
 mdl.set_all_parameterizations("CPTPLND")
 
-proto = pygsti.protocols.GateSetTomography(mdl, gaugeopt_suite=None, verbosity=0)
+proto = pygsti.protocols.GateSetTomography(mdl, gaugeopt_suite=None, verbosity=3)
 results = proto.run(data, disable_checkpointing=True)
 est = results.estimates['GateSetTomography']
 
@@ -124,7 +124,7 @@ Request one by passing `badfit_options` to the protocol. Note that the wildcard 
 proto_wc = pygsti.protocols.GateSetTomography(
     mdl, gaugeopt_suite=None,
     badfit_options={'actions': ['wildcard'], 'wildcard_methods': ('barrier',)},
-    verbosity=0)
+    verbosity=3)
 results_wc = proto_wc.run(data, disable_checkpointing=True)
 est_wc = results_wc.estimates['GateSetTomography']
 
@@ -175,7 +175,7 @@ data2 = pygsti.protocols.ProtocolData(edesign, ds2)
 for ptype in ("S", "H+S"):
     m = target.copy()
     m.set_all_parameterizations(ptype, prep_type="full TP", povm_type="full TP")
-    r = pygsti.protocols.GateSetTomography(m, gaugeopt_suite=None, verbosity=0).run(
+    r = pygsti.protocols.GateSetTomography(m, gaugeopt_suite=None, verbosity=3).run(
         data2, disable_checkpointing=True)
     print("%-4s N_sigma = %6.2f" % (ptype, r.estimates['GateSetTomography'].misfit_sigma()))
 ```

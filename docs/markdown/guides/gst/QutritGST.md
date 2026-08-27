@@ -97,7 +97,7 @@ The `optimizer` argument caps the Levenberg-Marquardt iterations at 50 to keep t
 
 ```{code-cell} ipython3
 result = StandardGST(modes=('CPTPLND',), target_model=target_model,
-                     optimizer={'maxiter': 50}, verbosity=3).run(data)
+                     optimizer={'maxiter': 50}, verbosity=4).run(data)
 ```
 
 ## The report

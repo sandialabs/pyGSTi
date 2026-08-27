@@ -214,7 +214,7 @@ for c in selected:
     ds_cor[c] = new_row
 
 results_ori, results_cor = build_all_results_for_demo(
-    ds_ori, ds_cor, edesign, target, verbosity=0, mode=fit_mode
+    ds_ori, ds_cor, edesign, target, verbosity=3, mode=fit_mode
 )
 ```
 

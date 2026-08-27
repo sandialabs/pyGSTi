@@ -81,7 +81,7 @@ The bad-fit machinery acts only when the misfit exceeds `threshold` standard dev
 
 ```{code-cell} ipython3
 gst = StandardGST(
-    modes=('CPTPLND',), target_model=tm3, verbosity=2,
+    modes=('CPTPLND',), target_model=tm3, verbosity=4,
     badfit_options={'actions': ['wildcard1d'], 'threshold': 0.0}
 )
 pd = ProtocolData(ed, ds)
