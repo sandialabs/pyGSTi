@@ -180,7 +180,7 @@ print("probs[('0',)] = ", probs[('0',)])  # and so does this.
 
 ## Performing tomography
 
-Now we perform tomography on a model that includes an instrument.  We build an experiment design from our standard modelpack, adding the bare instrument as a germ so that its parameters are well-constrained:
+Now we perform tomography on a model that includes an instrument.  We build an experiment design from our standard modelpack, adding the bare instrument as a germ (germs, fiducials, and the circuits GST builds from them are covered in the [GST circuits tutorial](GSTCircuits)) so that its parameters are well-constrained:
 
 ```{code-cell} ipython3
 germs = std.germs() + [pygsti.circuits.Circuit([('Iz', 0)])]
@@ -202,7 +202,7 @@ Notice the format of [intermediate_meas_dataset.txt](../../../tutorial_files/int
 
 ### Running GST under two parameterizations
 
-We fit the data with `StandardGST` under two parameterizations: `"full TP"` (a `TPInstrument`, which constrains only the *sum* of the instrument members) and `"CPTPLND"` (the effect-then-CPTP-gate representation, which makes *every* member completely positive).  Both use the ideal model as the target.
+We fit the data with `StandardGST` (the protocol and its modes are covered in [running GST](RunningGST)) under two parameterizations: `"full TP"` (a `TPInstrument`, which constrains only the *sum* of the instrument members) and `"CPTPLND"` (the effect-then-CPTP-gate representation, which makes *every* member completely positive).  Both use the ideal model as the target.
 
 ```{code-cell} ipython3
 from pygsti.protocols import StandardGST, ProtocolData
@@ -211,7 +211,7 @@ gst = StandardGST(modes=('full TP', 'CPTPLND'), target_model=mdl_ideal, verbosit
 results = gst.run(ProtocolData(edesign, ds))
 ```
 
-Both fits recover the data-generating model fairly well. We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
+Both fits recover the data-generating model fairly well; [judging GST fits](JudgingTheFit) covers assessing fit quality quantitatively. We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
 
 ```{code-cell} ipython3
 for mode in ('full TP', 'CPTPLND'):
@@ -244,4 +244,3 @@ GST results that include instruments can be rendered into an interactive HTML re
 ```
 
 **That's it!**  You have built a physically-motivated instrument, simulated mid-circuit-measurement data, and performed tomography under two parameterizations -- seeing why a completely-positive representation gives instrument estimates you can interpret.
-```

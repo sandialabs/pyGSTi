@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Evaluating experiment designs using Fisher information
-In this notebook we step through an example of using the Fisher information matrix of an experiment design to evaluate its theoretical performance. This sort of analysis was done in these two papers : [1](https://arxiv.org/abs/2307.15767) [2](https://arxiv.org/abs/2308.08781).
+In this notebook we step through an example of using the Fisher information matrix of an experiment design to evaluate its theoretical performance. The designs here are built from fiducial and germ circuits; [fiducial and germ selection](FiducialsAndGerms) covers where those come from. This sort of analysis was done in these two papers : [1](https://arxiv.org/abs/2307.15767) [2](https://arxiv.org/abs/2308.08781).
 
 ```{code-cell} ipython3
 import pygsti
@@ -31,7 +31,7 @@ edesign = smq1Q_XYI.create_gst_experiment_design(128)
 maxLs = [1,2,4,8,16,32,64,128]
 ```
 
-The fisher information is a tool for evaluating the theoretical performance of an experiment design. It corresponds to the variance of the score, which under suitable regularity conditions reducts to the hessian of the log-likelihood function with respect to the model parameters. Definitition aside, the power of the Fisher information comes from the Cramer-Rao bound, which says that the covariance matrix of estimates generated with respect to an experiment design is lower bounded by the inverse of that design's Fisher information matrix.
+The Fisher information is a tool for evaluating the theoretical performance of an experiment design. It corresponds to the variance of the score, which under suitable regularity conditions reduces to the hessian of the log-likelihood function with respect to the model parameters. Definition aside, the power of the Fisher information comes from the Cramer-Rao bound, which says that the covariance matrix of estimates generated with respect to an experiment design is lower bounded by the inverse of that design's Fisher information matrix.
 
 Below we will calculate the Fisher information matrices for each nested iteration of the GST experiment design we have constructed (we'll assume 100 shots per-circuit).
 
@@ -45,7 +45,7 @@ Next we will calculate the eigenvalues of each of these Fisher information matri
 fim_spectra_by_L = [np.linalg.eigvalsh(fim) for fim in fisher_infos_by_L.values()]
 ```
 
-The reciprocals of these eigenvalues correspond to the lengths of the axes of the uncertainty ellipsoid defined by the covariance for our estimate. So, for a well-constructed GST experiment design we expect to see a linear increase in the Fisher information eigenvalues associated with amplifiable parameters (non-SPAM, non-gauge). 
+The reciprocals of these eigenvalues correspond to the lengths of the axes of the uncertainty ellipsoid defined by the covariance for our estimate. So, for a well-constructed GST experiment design we expect to see a linear increase in the Fisher information eigenvalues associated with amplifiable parameters (non-SPAM, non-gauge). The plots below show the eigenvalues themselves rather than their reciprocals — an eigenvalue trending up means the corresponding ellipsoid axis (and hence the uncertainty in that direction) is shrinking.
 
 We can evaluate this by simply plotting these directly. (Helper function defined below)
 
@@ -85,7 +85,7 @@ plot_spectra_by_L(fim_spectra_by_L, maxLs, num_gauge=target_model.num_gauge_para
 
 A linear scaling of the Fisher information eigenvalues corresponding to amplifiable parameters is exactly what we get here. You may notice that there are 6 traces that are very clearly plateauing. These correspond to the 6 non-gauge SPAM parameters in this particular gate set model, so this too is as expected since SPAM parameters are not amplifiable (essentially because SPAM operations only ever happen once in a circuit).
 
-What about with an experiment design that we know is incomplete? One simple example would be an experiment design constructed with respect to a germ set we call the 'bare' germs, which are simply germs correspoding to the gates of the gate set themselves, and is known not to be amplificationally complete for this gate set.
+What about with an experiment design that we know is incomplete? One simple example would be an experiment design constructed with respect to a germ set we call the 'bare' germs, which are simply germs corresponding to the gates of the gate set themselves, and is known not to be amplificationally complete for this gate set.
 
 ```{code-cell} ipython3
 bare_germs= smq1Q_XYI.germs()[0:3]
@@ -107,4 +107,6 @@ fim_spectra_by_L_incomplete = [np.linalg.eigvalsh(fim) for fim in fisher_infos_b
 plot_spectra_by_L(fim_spectra_by_L_incomplete, maxLs, num_gauge=target_model.num_gauge_params, figure_size=(5,8))
 ```
 
-Here we can see that we now have at least 10 fisher information eigenvalues plateuing, more than can be accounted for due to SPAM alone. This indicates that we are no longer achieving heisenberg-limited precision scaling for our estimates of at least 4 amplifiable parameters of the gate set.
+Here we can see that we now have at least 10 Fisher information eigenvalues plateauing, more than can be accounted for due to SPAM alone. This indicates that we are no longer achieving Heisenberg-limited precision scaling for our estimates of at least 4 amplifiable parameters of the gate set.
+
+This check is exactly what to run on a design thinned by [fiducial pair reduction](FewerCircuits): if the reduction went too far, extra eigenvalues plateau, just as they do here. The module that provides `calculate_fisher_information_matrices_by_L` also provides `calculate_edesign_estimated_runtime`, for estimating what a design costs to run — see [experiment designs](../workflow/ExperimentDesigns).

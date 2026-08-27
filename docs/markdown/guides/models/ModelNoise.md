@@ -309,7 +309,7 @@ cloudmodel_stencils3 = pygsti.models.create_cloud_crosstalk_model(
 ```
 
 #### Noise parameterizations
-Along with the amount and type of noise added to a model, you can also specify how it is represented as pyGSTi operator objects. This is significant when the model will be tweaked or optimized later on, in which case the paramterization determines how the noise operations are allowed to be tweaked (changed).  Parameterization types are especially important in cloud noise models where this constitutes the entirety of how the model is parameterized.
+Along with the amount and type of noise added to a model, you can also specify how it is represented as pyGSTi operator objects. This is significant when the model will be tweaked or optimized later on, in which case the parameterization determines how the noise operations are allowed to be tweaked (changed).  Parameterization types are especially important in cloud noise models where this constitutes the entirety of how the model is parameterized.
 
 The parameterizations for the three standard noise types are given by specifying the `depolarization_parameterization`, `stochastic_parameterization`, and `lindblad_parameterization` arguments.  The options for these are as follows:
 

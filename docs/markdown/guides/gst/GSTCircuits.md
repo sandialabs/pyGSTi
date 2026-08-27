@@ -112,7 +112,7 @@ list3 = pc.create_circuits("R(a)+c", a=As, c=[('c',)], R=rep2)
 
 print("list1 = %s" % list(map(tuple, list1)))
 print("list2 = %s" % list2)
-print("list3 = %s" % list(map(str, list3)))
+print("list3 =\n%s" % "".join(map(str, list3)))
 ```
 
 The rule for what becomes a loop variable is narrow: a keyword argument whose value is a `list` or `tuple` is looped over, and anything else is passed straight through to the evaluation as a plain name. So `c=[('c',)]` above is a loop variable that happens to have one value, while `R=rep2` is a pass-through, and any callable you pass through that way can be applied to the loop variables. Watch the `tuple` half of that rule: a keyword whose value is a single circuit written as a tuple of labels gets looped over label by label rather than held fixed, and since concatenating a bare label onto a `Circuit` trips an assertion that `create_circuits` swallows, the usual symptom is an empty result list rather than an error. Wrap it in a one-element list.
