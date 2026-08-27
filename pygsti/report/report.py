@@ -78,10 +78,11 @@ class Report:
         self._build_defaults = build_defaults or {}
         self._pdf_available = pdf_available
 
-    def _build(self, build_options=None):
+    def _build(self, build_options=None, verbosity=0):
         """ Render all sections to a map of report elements for templating """
         full_params = {
             'results': self._results,
+            'verbosity': verbosity,
             **self._report_params
         }
         full_params.update(self._build_defaults)
@@ -173,7 +174,7 @@ class Report:
             toggles['BrevityLT' + str(k + 1)] = True
 
         # Render sections
-        qtys = self._build(build_options)
+        qtys = self._build(build_options, verbosity=verbosity)
 
         # TODO this really should be a parameter of this method
         embed_figures = self._report_params.get('embed_figures', True)
@@ -451,7 +452,7 @@ class Report:
         latex_flags = latex_flags or ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
 
         # Render sections
-        qtys = self._build(build_options)
+        qtys = self._build(build_options, verbosity=verbosity)
         # TODO: filter while generating plots to remove need for sanitization
         qtys = {k: v for k, v in qtys.items()
                 if not(isinstance(v, _ws.Switchboard) or isinstance(v, _ws.SwitchboardView))}
