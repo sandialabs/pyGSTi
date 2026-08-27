@@ -8,9 +8,9 @@ fixtures the cross-notebook inputs depend on::
     python -c "import sys; sys.path.insert(0,'docs'); import conftest; conftest._generate_shared_fixtures()"
     python docs/execute-notebooks.py --jobs 4 --timeout 1800 --allow-errors
 
-Two pages ship deliberately without output; see ``EXCLUDE``, overridable with
-``--exclude`` (pass it with no values to execute everything). Excluded notebooks
-are still normalized, because they are committed too.
+``EXCLUDE`` lists notebooks that ship deliberately without output (none today),
+overridable with ``--exclude``. Excluded notebooks are still normalized, because
+they are committed too.
 
 Why this rather than ``jupyter nbconvert --execute --inplace`` directly:
 
@@ -84,24 +84,18 @@ SERIAL_CHAIN = [
 ]
 
 # --------------------------------------------------------------------------
-# OUT OF SCOPE for this project: these two pages ship without output.
+# Notebooks to ship deliberately without output, as paths under docs/markdown
+# with no .ipynb suffix. Empty today: Switchboards and ComparingDataSets sat
+# here for a while -- their ColorBoxPlot hover text executes to 23 MB and
+# 9.5 MB of output respectively -- but interactive figures are those pages'
+# entire subject, so they now execute like everything else.
 #
-# Both are dominated by ColorBoxPlots whose payload is per-cell hover text
-# (~2.7 KB per circuit), at 23.0 MB and 9.5 MB of output respectively -- more
-# than belongs on a docs page. Each carries a {note} telling the reader to run
-# the notebook instead. Showing these figures at a sane size needs editorial
-# decisions about which ones to keep and over how many circuits, which is its
-# own piece of work: see notebook-execution/FOLLOWUP-ISSUE.md.
-#
-# This list is the *only* thing that excludes them. `nb_execution_excludepatterns`
-# is a myst-nb key and takes effect only when myst-nb executes; the hosted build
-# sets `execute_notebooks: 'off'` and execution happens here instead, so that key
-# would be inert.
+# This list is the *only* mechanism that can exclude a page.
+# `nb_execution_excludepatterns` is a myst-nb key and takes effect only when
+# myst-nb executes; the hosted build sets `execute_notebooks: 'off'` and
+# execution happens here instead, so that key would be inert.
 # --------------------------------------------------------------------------
-EXCLUDE = [
-    "advanced/figures/Switchboards",
-    "guides/drift/ComparingDataSets",
-]
+EXCLUDE = []
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 # Any CPython default repr ending in " at 0x...>". Deliberately broad: the
@@ -337,6 +331,13 @@ def main() -> int:
         # uuid4 cell ids on every cold sync, so without this the excluded pages
         # churn their whole cell list on every rebuild despite never running.
         nb = nbformat.read(p, as_version=4)
+        # Strip outputs, don't just decline to execute: on a workstation the
+        # .ipynb may carry outputs from an earlier run, and skipping without
+        # stripping would silently ship those stale outputs (it once did).
+        for cell in nb.cells:
+            if cell.cell_type == "code":
+                cell.outputs = []
+                cell.execution_count = None
         normalize(nb, scrubs)
         nbformat.write(nb, p)
         print(f"  [SKIP] excluded, will ship without output: {p}", flush=True)

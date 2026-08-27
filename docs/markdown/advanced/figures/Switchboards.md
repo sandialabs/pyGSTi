@@ -15,14 +15,6 @@ kernelspec:
 
 Stacking workspace figures runs out of screen fast, as the [previous tutorial](WorkspaceFigures) will have made clear. A `Switchboard` puts buttons, dropdowns and sliders in front of a set of figures so you can flip between them in place instead of scrolling past all of them. This tutorial introduces the object and demonstrates its use.
 
-```{note}
-**This page is built without its output.** The switchboards below are driven by live
-JavaScript, and executing the page produces about 25 MB of it, most of that hover text
-inside the color box plots. That is more than belongs on a docs page, so what you see
-here is the code alone. To watch the switches actually work, run the notebook: use the
-launch buttons at the top of the page, or download it and run it locally.
-```
-
 First though, let's run GST on the standard 1Q model to get some results (the same ones as the first tutorial).
 
 ```{code-cell} ipython3
