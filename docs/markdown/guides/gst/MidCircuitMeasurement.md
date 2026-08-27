@@ -151,7 +151,7 @@ Each member of this instrument really is completely positive -- its superoperato
 
 ```{code-cell} ipython3
 for outcome, member in mdl_noisy.instruments[('Iz', 0)].items():
-    neg = pygsti.tools.sum_of_negative_choi_eigenvalues_gate(member.to_dense(), 'pp')
+    neg = pygsti.tools.abs_sum_of_negative_choi_eigenvalues_gate(member.to_dense(), 'pp')
     print(f"  member {outcome!s:6s}: sum of negative Choi eigenvalues = {neg:.2e}")
 ```
 
@@ -231,7 +231,7 @@ for mode in ('full TP', 'CPTPLND'):
     inst = mdl_fit.instruments[('Iz', 0)]
     print(f"{mode}  ({type(inst).__name__}, {inst.num_params} params):")
     for outcome, member in inst.items():
-        viol = max(0.0, pygsti.tools.sum_of_negative_choi_eigenvalues_gate(member.to_dense(), 'pp'))
+        viol = pygsti.tools.abs_sum_of_negative_choi_eigenvalues_gate(member.to_dense(), 'pp')
         print(f"    member {outcome!s:6s}: CP violation = {viol:.2e}")
 ```
 

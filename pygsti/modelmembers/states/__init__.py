@@ -32,7 +32,7 @@ from pygsti.baseobjs import _compatibility as _compat
 from pygsti.tools import basistools as _bt
 from pygsti.baseobjs import Basis
 from pygsti.tools import optools as _ot
-from pygsti.tools import sum_of_negative_choi_eigenvalues_gate
+from pygsti.tools import abs_sum_of_negative_choi_eigenvalues_gate
 
 # Avoid circular import
 import pygsti.modelmembers as _mm
@@ -302,7 +302,9 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False, cp
                             L_vec += coeff * phys_direction
                         errorgen.from_vector(L_vec)
                         proc_matrix = _spl.expm(errorgen.to_dense())
-                        return _np.linalg.norm(proc_matrix @ dense_st - dense_state) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+                        temp1 = _np.linalg.norm(proc_matrix @ dense_st - dense_state)
+                        temp2 = abs_sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+                        return temp1 + cp_penalty * temp2
                     
                     soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
                                          tol=1e-13)  

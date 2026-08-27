@@ -43,7 +43,6 @@ from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis 
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
-from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
@@ -51,7 +50,6 @@ from pygsti.tools import slicetools as _slct
 from pygsti.tools import listtools as _lt
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
-from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from typing import Union, Literal
 from pygsti.tools.exceptions import UnknownGaugeSpaceDimension as _UnknownGaugeSpaceDimension
 
@@ -1528,27 +1526,6 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def _iter_ops_for_clifford_symplectic_reps(self):
         return self.operations.items()
-
-    @_deprecated_fn
-    def print_info(self):
-        """
-        Print to stdout relevant information about this model.
-
-        This information includes the Choi matrices and their eigenvalues.
-
-        Returns
-        -------
-        None
-        """
-        print(self)
-        print("\n")
-        print("Basis = ", self.basis.name)
-        print("Choi Matrices:")
-        for (label, gate) in self.operations.items():
-            jmx : _np.ndarray = _jt.jamiolkowski_iso(gate) # type: ignore
-            print(("Choi(%s) in pauli basis = \n" % label, _mt.mx_to_string_complex(jmx)))
-            print(("  --eigenvals = ", sorted(_mt.eigenvalues(jmx, assume_hermitian=True).tolist()), "\n"))
-        print(("Sum of negative Choi eigenvalues = ", _jt.sum_of_negative_choi_eigenvalues(self)))
 
     def _effect_labels_for_povm(self, povm_lbl):
         """
