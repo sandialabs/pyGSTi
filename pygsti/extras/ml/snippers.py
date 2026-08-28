@@ -16,7 +16,7 @@ per-layer feature vector that should be used as inputs when predicting that gene
 import numpy as _np
 from typing import Any, TYPE_CHECKING
 
-from pygsti.extras.ml import graphtools as _graphtools
+from pygsti.tools import graphs as _graphtools
 
 if TYPE_CHECKING:
     from pygsti.extras.ml.encoding import StandardCircuitEncoder
@@ -28,7 +28,7 @@ def undirected_adjacency_matrix_from_edges(edges: list[tuple], qubit_labels: lis
 
     See Also
     --------
-    pygsti.extras.ml.graphtools.qubit_graph_from_edges :
+    pygsti.tools.graphs.qubit_graph_from_edges :
         Builds a `networkx.Graph` (rather than a bare matrix) from an edge list; the more
         general entry point if you want to combine this with other graph-library objects.
 
@@ -90,7 +90,7 @@ def layer_snipper_from_qubit_graph(
         graph, a `QubitGraph`, or a `QubitProcessorSpec`), those labels must agree with
         `encoder.pspec.qubit_labels` (order does not matter in that case); a bare matrix's
         rows/columns are always positional and are matched to `encoder.pspec.qubit_labels` by
-        position. See `pygsti.extras.ml.graphtools.qubit_graph_to_networkx` for the full list of
+        position. See `pygsti.tools.graphs.qubit_graph_to_networkx` for the full list of
         accepted types and exactly how they're interpreted.
 
     hops : int

@@ -18,16 +18,16 @@ for that reason, and are not part of the ordinary unit suite.
 
 The correctness tests for the same algorithms -- which run in-process, assert
 nothing about time, and are safe under load -- stay in
-``test/unit/tools/test_graphcoloring.py``.
+``test/unit/tools/graphs/test_coloring.py``.
 
 Run them on an otherwise-idle machine:
 
-    pytest -s test/performance/test_graphcoloring_scaling.py
+    pytest -s test/performance/test_coloring_scaling.py
 
 ``-s`` shows the comparison tables, which are the real deliverable of the
 scaling suite. CI does not run ``test/performance/`` as a matter of course; it
-runs this module only when a branch changes the graph-coloring toolkit (see the
-graphcoloring steps in ``.github/workflows/reuseable-main.yml``).
+runs this module only when a branch changes the graphs toolkit (see the
+graphs steps in ``.github/workflows/reuseable-main.yml``).
 """
 
 import multiprocessing as _mp
@@ -37,9 +37,9 @@ import unittest
 
 import pytest
 
-from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
+from pygsti.tools.graphs.coloring import switchboard_find_edge_coloring
 
-from ..helpers.graphcoloring_graphs import (
+from ..helpers.coloring_graphs import (
     ALL_ALGORITHMS,
     DETERMINISTIC_EXACT_ALGORITHMS,
     SPARSE_SAFE,
@@ -60,14 +60,14 @@ from ..helpers.graphcoloring_graphs import (
 # test/unit/util.py). To also exclude it locally, use ``-m "not slow"``.
 #
 # However, CI (see .github/workflows/reuseable-main.yml) additionally sets
-# ``GRAPHCOLORING_CHANGED=true`` when a push/PR touches pygsti/tools/graphcoloring/,
+# ``GRAPHS_CHANGED=true`` when a push/PR touches pygsti/tools/graphs/,
 # this module, or the shared graph fixtures, so that regressions there are still
 # caught automatically instead of relying solely on local runs.
 skip_in_ci = pytest.mark.skipif(
-    'CI' in os.environ and os.environ.get('GRAPHCOLORING_CHANGED', '').lower() != 'true',
+    'CI' in os.environ and os.environ.get('GRAPHS_CHANGED', '').lower() != 'true',
     reason="benchmark-style scaling test; run locally only, or in CI when "
-           "pygsti/tools/graphcoloring/ or this module has changed "
-           "(see GRAPHCOLORING_CHANGED in reuseable-main.yml)")
+           "pygsti/tools/graphs/ or this module has changed "
+           "(see GRAPHS_CHANGED in reuseable-main.yml)")
 
 
 # Small enough that even the good algorithms finish comfortably, large enough to

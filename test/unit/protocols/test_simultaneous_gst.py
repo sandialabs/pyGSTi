@@ -29,7 +29,7 @@ from pygsti.protocols.simultaneous_gst import (
 )
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign
-from pygsti.tools.graphcoloring import check_valid_edge_coloring
+from pygsti.tools.graphs.coloring import check_valid_edge_coloring
 from ..util import BaseCase, with_temp_path
 
 
@@ -1146,7 +1146,7 @@ class DirectedAvailabilityTeeTester(BaseCase):
     symmetric, but spelling out a T or heavy-hex by hand does not -- and one
     entry per edge is natural for CNOT, where control/target is real.
 
-    ``test_graphcoloring.TeeOrientationInvarianceTester`` covers the graph-level
+    ``test_coloring.TeeOrientationInvarianceTester`` covers the graph-level
     facts on plain edge lists. What needs a pspec, and is what actually
     regressed, is that the design is constructible at all.
     """

@@ -11,19 +11,22 @@
 import numpy as np
 import pytest
 
-from pygsti.tools.graphcoloring import switchboard_find_edge_coloring
-from pygsti.tools.graphcoloring._common import (
-    canonical_edges, check_valid_edge_coloring, find_neighbors, order,
+from pygsti.tools.graphs.coloring import switchboard_find_edge_coloring
+from pygsti.tools.graphs.coloring._definitions import (
+    check_valid_edge_coloring,
 )
-from pygsti.tools.graphcoloring._topology import detect_topology
-from pygsti.tools.graphcoloring._sinnamon import (
+from pygsti.tools.graphs import (
+    canonical_edges, find_neighbors, order, max_degree,
+)
+from pygsti.tools.graphs.coloring._topology import detect_topology
+from pygsti.tools.graphs.coloring._sinnamon import (
     sinnamon_2d_minus_1_edge_coloring,
     sinnamon_euler_color_edge_coloring,
     _eulerian_partition,
 )
 
-from ..util import BaseCase
-from ...helpers.graphcoloring_graphs import (
+from ...util import BaseCase
+from ....helpers.coloring_graphs import (
     DETERMINISTIC_DP1PP_ALGORITHMS,
     DETERMINISTIC_EXACT_ALGORITHMS,
     RANDOMIZED_ALGORITHMS,
@@ -286,24 +289,6 @@ class EulerianPartitionTester(BaseCase):
 # ---------------------------------------------------------------------------
 # Class-based (example) tests.
 # ---------------------------------------------------------------------------
-class CanonicalEdgesTester(BaseCase):
-    """``canonical_edges`` dedup and orientation."""
-
-    def test_canonical_edges_behavior(self):
-        import pygsti.tools.graphcoloring as gc
-        self.assertIn('canonical_edges', gc.__all__)
-        self.assertIs(gc.canonical_edges, canonical_edges)
-        
-        self.assertEqual(canonical_edges([(0, 1), (1, 0), (1, 2), (2, 1)]), [(0, 1), (1, 2)])
-        self.assertEqual(canonical_edges([(1, 0), (2, 1)]), [(0, 1), (1, 2)])
-        
-        # Orientation matches order() coloring convention
-        edges = canonical_edges([(3, 1), (1, 0)])
-        self.assertEqual(edges, [order(3, 1), order(1, 0)])
-        
-        # First encounter order is preserved, not sorted
-        self.assertEqual(canonical_edges([(2, 1), (1, 0)]), [(1, 2), (0, 1)])
-        self.assertEqual(canonical_edges([]), [])
 
 
 class TeeOrientationInvarianceTester(BaseCase):
@@ -323,7 +308,7 @@ class TeeOrientationInvarianceTester(BaseCase):
         """Derive deg and colour, the way a caller of this package would."""
         edges = canonical_edges(edges)
         neighbors = find_neighbors(vertices, edges)
-        deg = max(len(nbrs) for nbrs in neighbors.values())
+        deg = max_degree(neighbors)
         return deg, switchboard_find_edge_coloring(
             "auto", deg, vertices, edges, neighbors, seed=0)
 
@@ -385,29 +370,6 @@ class TeeOrientationInvarianceTester(BaseCase):
         self.assertEqual((vertices, edges), tuple(self.SHAPES["tee"]))
         self.assertEqual(neighbors, find_neighbors(*self.SHAPES["tee"]))
 
-
-class FindNeighborsTester(BaseCase):
-    """``find_neighbors`` adjacency construction."""
-
-    def test_find_neighbors_behavior(self):
-        import pygsti.tools.graphcoloring as gc
-        self.assertIn('find_neighbors', gc.__all__)
-        self.assertIs(gc.find_neighbors, find_neighbors)
-
-        # Each edge is recorded from both endpoints
-        self.assertEqual(find_neighbors((0, 1, 2), [(0, 1), (1, 2)]), {0: [1], 1: [0, 2], 2: [1]})
-
-        # Writing both orientations does not duplicate neighbors
-        one_directional = find_neighbors((0, 1, 2), [(0, 1), (1, 2)])
-        two_directional = find_neighbors((0, 1, 2), [(0, 1), (1, 0), (1, 2), (2, 1)])
-        self.assertEqual(two_directional, one_directional)
-
-        # Isolated vertices get empty neighbor lists
-        self.assertEqual(find_neighbors((0, 1, 2), [(0, 1)]), {0: [1], 1: [0], 2: []})
-
-        # Multiple neighbors accumulate in edge order
-        self.assertEqual(find_neighbors((0, 1, 2, 3), [(1, 0), (1, 2), (1, 3)]),
-                         {0: [1], 1: [0, 2, 3], 2: [1], 3: [1]})
 
 
 class GraphColoringTester(BaseCase):
@@ -647,3 +609,97 @@ class AutoEdgeColoringOptimalityTester(BaseCase):
         r1 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=1)
         r2 = switchboard_find_edge_coloring("auto", deg, vertices, edges, neighbors, seed=999)
         self.assertEqual(_canonical_coloring(r1), _canonical_coloring(r2))
+
+
+class CheckValidEdgeColoringTester(BaseCase):
+    """`check_valid_edge_coloring`'s accept/reject behavior and its error message."""
+
+    def test_accepts_a_proper_coloring(self):
+        cp = {0: [(0, 1), (2, 3)], 1: [(1, 2), (3, 4)]}
+        self.assertTrue(check_valid_edge_coloring(cp))
+        self.assertTrue(check_valid_edge_coloring(cp, ret_false_on_error=True))
+
+    def test_accepts_empty_and_degenerate_colorings(self):
+        for cp in ({}, {0: []}, {0: [(0, 1)]}, {0: [], 1: [(0, 1)]}):
+            self.assertTrue(check_valid_edge_coloring(cp), msg=f"rejected {cp!r}")
+
+    def test_ret_false_on_error_returns_false_instead_of_raising(self):
+        self.assertFalse(
+            check_valid_edge_coloring({2: [(1, 5), (5, 9)]}, ret_false_on_error=True))
+
+    def test_shared_vertex_message_names_color_vertex_and_edges(self):
+        with self.assertRaises(ValueError) as ctx:
+            check_valid_edge_coloring({2: [(1, 5), (5, 9)]})
+        msg = str(ctx.exception)
+        self.assertIn("color 2", msg)
+        self.assertIn("vertex 5", msg)         # the actual point of conflict
+        self.assertIn("(1, 5)", msg)
+        self.assertIn("(5, 9)", msg)
+        self.assertIn("not a matching", msg)
+
+    def test_duplicate_edge_is_reported_as_a_duplicate_not_a_clash(self):
+        # Both endpoints "clash", but the real fault is that the edge is listed twice;
+        # saying "vertex 1 is incident to 2 edges: (1, 5), (1, 5)" would be baffling.
+        with self.assertRaises(ValueError) as ctx:
+            check_valid_edge_coloring({0: [(1, 5), (1, 5)]})
+        msg = str(ctx.exception)
+        self.assertIn("more than once", msg)
+        self.assertIn("(1, 5)", msg)
+        self.assertNotIn("not a matching", msg)
+
+    def test_duplicate_edge_is_detected_in_either_orientation(self):
+        with self.assertRaises(ValueError) as ctx:
+            check_valid_edge_coloring({0: [(1, 5), (5, 1)]})
+        self.assertIn("more than once", str(ctx.exception))
+
+    def test_self_loop_is_reported_as_a_self_loop(self):
+        # A self-loop trips the same count test but is a malformed *graph*, not a
+        # mis-assigned color, so it gets its own message.
+        with self.assertRaises(ValueError) as ctx:
+            check_valid_edge_coloring({0: [(3, 3)]})
+        msg = str(ctx.exception)
+        self.assertIn("self-loop", msg)
+        self.assertIn("(3, 3)", msg)
+
+    def test_message_reports_the_offending_color_not_the_first_one(self):
+        with self.assertRaises(ValueError) as ctx:
+            check_valid_edge_coloring({0: [(0, 1)], 1: [(2, 3), (3, 4)]})
+        self.assertIn("color 1", str(ctx.exception))
+
+    def test_message_counts_additional_clashing_vertices(self):
+        # Path 0-1-2-3 all in one color: vertices 1 and 2 both clash.
+        with self.assertRaises(ValueError) as ctx:
+            check_valid_edge_coloring({7: [(0, 1), (1, 2), (2, 3)]})
+        self.assertIn("1 other vertex also clashes", str(ctx.exception))
+
+        with self.assertRaises(ValueError) as ctx:
+            check_valid_edge_coloring({7: [(0, 1), (1, 2), (2, 3), (3, 4)]})
+        self.assertIn("2 other vertices also clash", str(ctx.exception))
+
+    def test_the_reported_vertex_is_the_first_to_clash_in_input_order(self):
+        # Several vertices can clash; the message must pick one deterministically,
+        # otherwise the same bad coloring can produce different diagnostics.
+        for patch in ([(0, 1), (1, 2), (2, 3)], [(2, 3), (1, 2), (0, 1)]):
+            with self.assertRaises(ValueError) as ctx:
+                check_valid_edge_coloring({7: patch})
+            expected = 1 if patch[0] == (0, 1) else 2
+            self.assertIn(f"vertex {expected} is incident", str(ctx.exception))
+
+    def test_message_handles_non_integer_vertex_labels(self):
+        # Vertex is Any: qubit labels are commonly strings, and are not required to
+        # be orderable, so the diagnostic must not sort or min/max them.
+        with self.assertRaises(ValueError) as ctx:
+            check_valid_edge_coloring({3: [('Q0', 'Q1'), ('Q1', 'Q2')]})
+        msg = str(ctx.exception)
+        self.assertIn("color 3", msg)
+        self.assertIn("vertex 'Q1'", msg)
+
+    def test_unorderable_vertex_labels_still_produce_a_message(self):
+        class Unorderable:
+            def __init__(self, name): self.name = name
+            def __repr__(self): return f"V({self.name})"
+            def __lt__(self, other): raise TypeError("not orderable")
+        a, b, c = Unorderable('a'), Unorderable('b'), Unorderable('c')
+        with self.assertRaises(ValueError) as ctx:
+            check_valid_edge_coloring({0: [(a, b), (b, c)]})
+        self.assertIn("V(b)", str(ctx.exception))
