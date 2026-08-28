@@ -37,7 +37,7 @@ parse:
 repository:
   url: https://github.com/sandialabs/pyGSTi  # Online location of your book
   path_to_book: docs  # Optional path to your book, relative to the repository root
-  branch: develop  # Which branch of the repository should be used when creating links (optional)
+  branch: docs-preview  # Which branch of the repository should be used when creating links (optional)
 
 # Add GitHub buttons to your book
 # See https://jupyterbook.org/customize/config.html#add-a-link-to-your-repository
@@ -84,7 +84,7 @@ sphinx:
     # the auto-generated `develop-with-notebooks` branch (so Colab launch links
     # can reach committed .ipynb companions); the edit_button_branch extension
     # uses this value to keep "Suggest edit"/"Show source" links on `develop`.
-    pygsti_edit_branch: develop
+    pygsti_edit_branch: stage-docs
     # Light/dark logo: in light mode show the dark-content logo (legible on a
     # light background); in dark mode show the white-content logo. Files live in
     # docs/_static, which JB adds to html_static_path automatically.
