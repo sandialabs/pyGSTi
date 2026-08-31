@@ -335,6 +335,6 @@ with warnings.catch_warnings():
     report.write_html("../../../tutorial_files/mcm_gst_report", connected=True, verbosity=0)
 ```
 
-The report is served with these docs: <a href="../../../reports/mcm_gst_report.html">MCM GST</a>.
+The report is served with these docs: <a href="../../../reports/mcm_gst_report/main.html">MCM GST</a>.
 
 **That's it!**  You have built a physically-motivated instrument, simulated mid-circuit-measurement data, and performed tomography under two parameterizations -- learning how to seed a CP-constrained instrument fit, and why the completely-positive representation gives instrument estimates you can interpret.

@@ -13,15 +13,18 @@ and packs the result into ``docs/reports.tar.xz`` for transport.
 
 Two shapes come out of ``write_html``:
 
-* Most reports are a single ``main.html``, because every call site passes
-  ``connected=True``. Those are flattened to ``reports/<name>.html`` and share
-  one ``reports/offline/`` directory, which is where the ``./offline/...``
-  references inside every report resolve to (the logo, the CSS duplicates that
-  back up the CDN stylesheets, and the fallback used when a CDN is unreachable).
-* A report written with ``link_to=`` also has a ``figures/`` directory of
-  pickled tables and LaTeX source, linked by relative path from inside the HTML.
-  Those keep their directory: ``reports/<name>/main.html``, with their own copy
-  of ``offline`` since the shared one is no longer a sibling.
+* A report whose directory holds only ``main.html`` is flattened to
+  ``reports/<name>.html``; the flattened reports share one ``reports/offline/``
+  directory, which is where the ``./offline/...`` references inside every report
+  resolve to (the logo, the CSS duplicates that back up the CDN stylesheets, and
+  the fallback used when a CDN is unreachable).
+* A report with sidecar files keeps its directory -- ``reports/<name>/main.html``,
+  with its own copy of ``offline`` since the shared one is no longer a sibling.
+  Because ``execute-notebooks.py`` runs the tutorials with
+  ``PYGSTI_REPORT_EMBED_FIGURE_DEFAULT=false``, this is every report: each
+  carries a ``figures/`` directory of lazily-fetched figure files (plus, with
+  ``link_to=``, pickled tables and LaTeX source), linked by relative path from
+  inside the HTML.
 
 Why a tarball rather than committing ``_extra`` itself: the reports are 575 MB
 uncompressed and 5.4 MB as ``.tar.xz``, because 25 reports of the same template

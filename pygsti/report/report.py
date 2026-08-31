@@ -158,7 +158,9 @@ class Report:
             document, with external dependencies baked-in. This mode
             is not recommended for large reports, because this file
             can grow large enough that major web browsers may struggle
-            to render it.
+            to render it.  Requires a report constructed with embedded
+            figures (the default; only a report constructed with
+            embed_figures=False lacks them).
 
         verbosity : int, optional
             Amount of detail to print to stdout.
@@ -177,11 +179,22 @@ class Report:
         qtys = self._build(build_options, verbosity=verbosity)
 
         # TODO this really should be a parameter of this method
-        embed_figures = self._report_params.get('embed_figures', True)
+        # A missing key means the report's construction did not bake in the choice
+        # (e.g. drift reports), so single-file output is fine and directory output
+        # follows the module default.
+        from pygsti.report.factory import _resolve_embed_figures
+        embed_figures = self._report_params.get('embed_figures', None)
+        if embed_figures is None and single_file:
+            embed_figures = True
+        else:
+            embed_figures = _resolve_embed_figures(embed_figures)
 
         if single_file:
-            assert(embed_figures), \
-                "Single-file mode requires `embed_figures` to be True"
+            if not embed_figures:
+                raise ValueError(
+                    "Single-file mode requires embedded figures.  Construct the report "
+                    "with advanced_options={'embed_figures': True}, or set the environment "
+                    "variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT=1 before importing pyGSTi.")
             _merge.merge_jinja_template(
                 qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,

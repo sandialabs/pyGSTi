@@ -102,4 +102,4 @@ report_object, updated_res = construct_leakage_report(res, title='easy leakage a
 report_object.write_html(report_dir, connected=True)
 ```
 
-Served with these docs: <a href="../../../reports/leakage-report-automagic.html">leakage-report-automagic</a>.
+Served with these docs: <a href="../../../reports/leakage-report-automagic/main.html">leakage-report-automagic</a>.

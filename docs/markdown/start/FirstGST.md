@@ -85,6 +85,6 @@ report = pygsti.report.construct_standard_report(
 report.write_html("../../tutorial_files/gettingStartedReport", connected=True, verbosity=2)
 ```
 
-The report is served with these docs: <a href="../../reports/gettingStartedReport.html">GST Overview Tutorial Example Report</a>.  **That's it!  You've just run GST!** 
+The report is served with these docs: <a href="../../reports/gettingStartedReport/main.html">GST Overview Tutorial Example Report</a>.  **That's it!  You've just run GST!** 
 
 In the cell above, `results` is a `ModelEstimateResults` object, which is used to generate a HTML report.  For more information see the [Results object tutorial](../guides/analysis/Results) and [report generation tutorial](../guides/analysis/Reports).

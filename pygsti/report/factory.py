@@ -44,6 +44,32 @@ from pygsti.objectivefns.wildcardbudget import PrimitiveOpsSingleScaleWildcardBu
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
 DEFAULT_NONMARK_ERRBAR_THRESHOLD = 100000.0  # essentially disable since we have better ways of quantifying this now
 
+# Default for the 'embed_figures' report option when neither advanced_options nor a
+# saved report supplies one: True, False, or the string 'auto'.  True inlines every
+# figure into main.html, giving a self-contained page that opens straight from the
+# filesystem.  False writes each figure to its own file under 'figures/', fetched on
+# demand when its section is opened; such a report loads much faster but must be
+# served over HTTP (browsers block the fetches from file:// pages).  'auto' -- the
+# value when the environment variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT is unset --
+# currently resolves to True, so pyGSTi's out-of-the-box behavior is unchanged; the
+# string form exists so an explicit choice is distinguishable from the absence of
+# one.  Set the environment variable to a falsy value ('0', 'false', ...) before
+# importing pyGSTi to make every report split its figures out, or to a truthy value
+# to force embedding.  Note that 'single_file' HTML output requires embedded figures.
+_embed_env = _os.environ.get('PYGSTI_REPORT_EMBED_FIGURE_DEFAULT', '').strip().lower()
+REPORT_EMBED_FIGURE_DEFAULT = 'auto' if _embed_env in ('', 'auto') \
+    else _embed_env not in ('0', 'false', 'no', 'off')
+
+
+def _resolve_embed_figures(embed_figures):
+    """Map an 'embed_figures' value (True/False/'auto', or None meaning
+    "consult REPORT_EMBED_FIGURE_DEFAULT") to a plain bool."""
+    if embed_figures is None:
+        embed_figures = REPORT_EMBED_FIGURE_DEFAULT
+    if embed_figures == 'auto':
+        return True
+    return bool(embed_figures)
+
 
 def _add_new_labels(running_lbls, current_lbls):
     """
@@ -806,8 +832,16 @@ def create_standard_report(results, filename, title="auto",
             i.e. just upon first rendering (`"initial"`) -- or whenever
             the browser window is resized (`"continual"`).
 
-        - embed_figures: bool, optional
-            Whether figures should be embedded in the generated report.
+        - embed_figures: bool or 'auto', optional
+            Whether figures should be embedded in the generated report's
+            main.html (making it self-contained but large and slow to load)
+            or written to a 'figures' directory and loaded on demand (fast,
+            but the report must then be served over HTTP rather than opened
+            from the filesystem).  Defaults to
+            :data:`~pygsti.report.factory.REPORT_EMBED_FIGURE_DEFAULT`,
+            which the environment variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT
+            controls; when that is unset the default is 'auto', which
+            currently embeds.
 
         - combine_robust : bool, optional
             Whether robust estimates should automatically be combined with
@@ -845,11 +879,14 @@ def create_standard_report(results, filename, title="auto",
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
 
+    advanced_options = dict(advanced_options or {})
+    if filename is not None and filename.endswith(".html"):
+        # a .html filename means single-file output, which needs embedded figures
+        advanced_options.setdefault('embed_figures', True)
+
     report = construct_standard_report(
         results, title, confidence_level, comm, ws, advanced_options, verbosity
     )
-
-    advanced_options = advanced_options or {}
     precision = advanced_options.get('precision', None)
 
     if filename is not None:
@@ -1018,11 +1055,15 @@ def create_nqnoise_report(results, filename, title="auto",
 
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
+
+    advanced_options = dict(advanced_options or {})
+    if filename is not None and filename.endswith(".html"):
+        # a .html filename means single-file output, which needs embedded figures
+        advanced_options.setdefault('embed_figures', True)
+
     report = construct_nqnoise_report(
         results, title, confidence_level, comm, ws, advanced_options, verbosity
     )
-
-    advanced_options = advanced_options or {}
     precision = advanced_options.get('precision', None)
 
     if filename is not None:
@@ -1274,8 +1315,16 @@ def construct_standard_report(results, title="auto",
             usage of non-Markovian error bars.  If None, then non-Markovian
             error bars are never computed.
 
-        - embed_figures: bool, optional
-            Whether figures should be embedded in the generated report.
+        - embed_figures: bool or 'auto', optional
+            Whether figures should be embedded in the generated report's
+            main.html (making it self-contained but large and slow to load)
+            or written to a 'figures' directory and loaded on demand (fast,
+            but the report must then be served over HTTP rather than opened
+            from the filesystem).  Defaults to
+            :data:`~pygsti.report.factory.REPORT_EMBED_FIGURE_DEFAULT`,
+            which the environment variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT
+            controls; when that is unset the default is 'auto', which
+            currently embeds.
 
         - combine_robust : bool, optional
             Whether robust estimates should automatically be combined with
@@ -1337,7 +1386,7 @@ def construct_standard_report(results, title="auto",
             DeprecationWarning)
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
-    embed_figures = advanced_options.get('embed_figures', True)
+    embed_figures = _resolve_embed_figures(advanced_options.get('embed_figures', None))
     combine_robust = advanced_options.get('combine_robust', True)
     idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
     idtIdleOp = advanced_options.get('idt_idle_oplabel', _Lbl('Gi'))
@@ -1594,8 +1643,16 @@ def construct_nqnoise_report(results, title="auto",
             tables will get confidence intervals (and reports will take longer
             to generate).
 
-        - embed_figures: bool, optional
-            Whether figures should be embedded in the generated report.
+        - embed_figures: bool or 'auto', optional
+            Whether figures should be embedded in the generated report's
+            main.html (making it self-contained but large and slow to load)
+            or written to a 'figures' directory and loaded on demand (fast,
+            but the report must then be served over HTTP rather than opened
+            from the filesystem).  Defaults to
+            :data:`~pygsti.report.factory.REPORT_EMBED_FIGURE_DEFAULT`,
+            which the environment variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT
+            controls; when that is unset the default is 'auto', which
+            currently embeds.
 
     verbosity : int, optional
         How much detail to send to stdout.
@@ -1611,7 +1668,7 @@ def construct_nqnoise_report(results, title="auto",
     advanced_options = advanced_options or {}
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
-    embed_figures = advanced_options.get('embed_figures', True)
+    embed_figures = _resolve_embed_figures(advanced_options.get('embed_figures', None))
     combine_robust = advanced_options.get('combine_robust', True)
     idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
     idtIdleOp = advanced_options.get('idt_idle_oplabel', _Lbl('Gi'))

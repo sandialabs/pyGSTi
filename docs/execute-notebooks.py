@@ -306,6 +306,15 @@ def main() -> int:
     # where elementary error-generator labels came out in a different order.
     os.environ["PYTHONHASHSEED"] = "0"
 
+    # Also inherited by the kernels: write the tutorials' HTML reports with
+    # figures split into per-figure files loaded on demand, instead of pyGSTi's
+    # default of embedding everything in main.html. Split reports load far
+    # faster but only work served over HTTP -- fine for these, which are served
+    # from the docs site (collect-reports.py keeps each report directory
+    # intact). pyGSTi's own default stays "embed", so a reader running the same
+    # notebook locally still gets a double-clickable report.
+    os.environ["PYGSTI_REPORT_EMBED_FIGURE_DEFAULT"] = "false"
+
     # A caller's environment-driven exclusions add to the deliberate ones rather
     # than replacing them; see --exclude-also.
     a.exclude = list(dict.fromkeys(list(a.exclude) + list(a.exclude_also)))

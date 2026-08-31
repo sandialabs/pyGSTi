@@ -97,4 +97,4 @@ idt.create_idletomography_report(results, "../../../tutorial_files/IDTTestReport
                                  advanced_options={'connected': True})
 ```
 
-Served with these docs: <a href="../../../reports/IDTTestReport.html">IDTTestReport</a>.
+Served with these docs: <a href="../../../reports/IDTTestReport/main.html">IDTTestReport</a>.

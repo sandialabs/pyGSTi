@@ -59,7 +59,7 @@ report = pygsti.report.construct_standard_report(
 report.write_html("../../../tutorial_files/gettingStartedReport", connected=True)
 ```
 
-Served with these docs: <a href="../../../reports/gettingStartedReport.html">gettingStartedReport</a>.
+Served with these docs: <a href="../../../reports/gettingStartedReport/main.html">gettingStartedReport</a>.
 
 ## Randomized benchmarking
 Randomized benchmarking (RB) can be used to estimate the average per-Clifford error rate by fitting a simple curve to the data from randomized circuits of different depths.  To create the experiment design, the user specifies a `QubitProcessorSpec` object that describes the quantum processor (see the [ProcessorSpec tutorial](DescribeYourDevice)), the depths (in number of Clifford gates) to use, and the number of circuits at each depth.  The results from running the protocol are then used to create a plot of the RB decay curve along with the data.  For more information, see the [RB Overview tutorial](../rb/HowRBWorks).
@@ -188,7 +188,7 @@ report = pygsti.report.create_drift_report(results, title='Demo Drift Report')
 report.write_html('../../../tutorial_files/DemoDriftReport', connected=True)
 ```
 
-Served with these docs: <a href="../../../reports/DemoDriftReport.html">DemoDriftReport</a>.
+Served with these docs: <a href="../../../reports/DemoDriftReport/main.html">DemoDriftReport</a>.
 
 ## What's next?
 This concludes the overview of how the major protocols fit together. The high-level objects involved, namely `ExperimentDesign`, `ProtocolData`, `Protocol` and `ProtocolResults`, are convenient ways of working with pyGSTi's lower-level objects. The rest of this chapter takes those objects one at a time: [describing your device](DescribeYourDevice), [circuits](Circuits), [experiment designs](ExperimentDesigns), [data sets](DataSets), [simulating data](SimulatingData) and [files and directories](FilesAndDirectories). Target models come from [model packs](../../start/TargetModels), covered in Start here.

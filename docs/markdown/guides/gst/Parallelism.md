@@ -98,7 +98,7 @@ report = construct_standard_report(
 report.write_html('../../../example_files/mpi_example_brief', connected=True, auto_open=False)
 ```
 
-Open the <a href="../../../reports/mpi_example_brief.html">report</a>.
+Open the <a href="../../../reports/mpi_example_brief/main.html">report</a>.
 
 ## Driving MPI yourself
 

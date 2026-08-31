@@ -272,7 +272,7 @@ pygsti.report.construct_standard_report(pfpr_results_greedy, title="Per-germ FPR
                                         ).write_html("../../../tutorial_files/example_pfpr_greedy_report", connected=True)
 ```
 
-If all has gone well, the <a href="../../../reports/example_stdstrs_report.html">Standard GST</a>
-and <a href="../../../reports/example_pfpr_greedy_report.html">PFPR (Greedy)</a>
+If all has gone well, the <a href="../../../reports/example_stdstrs_report/main.html">Standard GST</a>
+and <a href="../../../reports/example_pfpr_greedy_report/main.html">PFPR (Greedy)</a>
 reports may now be viewed.
 The only notable difference between them is the "gaps" in the color box plots, which plot quantities such as the log-likelihood across all operation sequences, organized by germ and fiducials.

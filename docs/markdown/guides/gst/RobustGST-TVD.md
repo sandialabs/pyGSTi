@@ -266,4 +266,4 @@ The `-logl` fit spent its effort explaining the 2.5% of corrupted circuits at th
 (Scoring both corrupted-trained models against the corrupted data itself favors `-logl`, 47862 vs 51341, but that only shows `-logl` is willing to chase the outliers it was given.)
 In short: `tvd` gives up a little accuracy when the data are clean and buys substantial robustness when they are not — reach for it when you suspect a small fraction of circuits are bad and don't know which ones.
 
-Served with these docs: <a href="../../../reports/robust-gst-report.html">robust-gst-report</a>.
+Served with these docs: <a href="../../../reports/robust-gst-report/main.html">robust-gst-report</a>.

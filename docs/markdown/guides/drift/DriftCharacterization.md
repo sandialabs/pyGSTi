@@ -197,4 +197,4 @@ report = pygsti.report.create_drift_report(results, title='Example Drift Report'
 report.write_html('../../../tutorial_files/DriftReport', connected=True)
 ```
 
-The report is served with these docs: <a href="../../../reports/DriftReport.html">DriftReport</a>.
+The report is served with these docs: <a href="../../../reports/DriftReport/main.html">DriftReport</a>.
