@@ -524,6 +524,10 @@ class _SimpleCompLayerRules(_LayerRules):
                 mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
                                                model.state_space, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
+                if layerlbl.name == povmName:
+                    if self.use_op_caching:
+                        caches['povm-layers'][layerlbl] = mpovm
+                    return mpovm
                 simplified_effects = mpovm.simplify_effects(mpovm_lbl)
                 assert(layerlbl in simplified_effects), "Failed to create marginalized effect!"
                 if self.use_op_caching:

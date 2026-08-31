@@ -37,11 +37,31 @@ class ImplicitOpModelMixin:
 
     @staticmethod
     def _test_getitem(base: BaseCase, m: ImplicitOpModel):
+        # String lookups
         base.assertIs( m['rho0'],        m.prep_blks['layers']['rho0']             )
         base.assertIs( m['Mdefault'],    m.povm_blks['layers']['Mdefault']         )
         base.assertIs( m['Gx'],          m.operation_blks['gates']['Gx']           )
-        base.assertIs( m[('Gx', 'qb0')], m.operation_blks['layers'][('Gx', 'qb0')] )
         base.assertIs( m['Gx:qb0'],      m.operation_blks['layers'][('Gx', 'qb0')] )
+
+        # Tuple lookups
+        base.assertIs( m[('Gx', 'qb0')], m.operation_blks['layers'][('Gx', 'qb0')] )
+
+        # Label lookups
+        base.assertIs( m[Label('rho0')],        m.prep_blks['layers']['rho0']             )
+        base.assertIs( m[Label('Mdefault')],    m.povm_blks['layers']['Mdefault']         )
+        base.assertIs( m[Label('Gx')],          m.operation_blks['gates']['Gx']           )
+        base.assertIs( m[Label(('Gx', 'qb0'))], m.operation_blks['layers'][('Gx', 'qb0')] )
+        base.assertIs( m[Label('Gx', 'qb0')],   m.operation_blks['layers'][('Gx', 'qb0')] )
+
+        # Missing keys raise KeyError
+        with base.assertRaises(KeyError):
+            _ = m['nonexistent']
+        with base.assertRaises(KeyError):
+            _ = m[Label('nonexistent')]
+        with base.assertRaises(KeyError):
+            _ = m[('Gnonexistent', 'qb0')]
+        with base.assertRaises(KeyError):
+            _ = m[Label(('Gnonexistent', 'qb0'))]
         return
 
 
@@ -61,6 +81,98 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
         m = self.ideal_model_from_pspec(self.pspec_2Q)
         super()._test_getitem(self, m)
         return
+
+    def test_member_dict_prefixes_valid_insertions(self):
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+
+        # Valid rho in prep_blks['layers']
+        prep = m['rho0'].copy()
+        m.prep_blks['layers']['rho1'] = prep
+        m.prep_blks['layers'][Label('rho2')] = prep
+        self.assertIs(m['rho1'], m.prep_blks['layers']['rho1'])
+        self.assertIs(m[Label('rho2')], m.prep_blks['layers']['rho2'])
+
+        # Valid M in povm_blks['layers']
+        povm = m['Mdefault'].copy()
+        m.povm_blks['layers']['M1'] = povm
+        m.povm_blks['layers'][Label('M2')] = povm
+        self.assertIs(m['M1'], m.povm_blks['layers']['M1'])
+        self.assertIs(m[Label('M2')], m.povm_blks['layers']['M2'])
+
+        # Valid G and { in operation_blks['gates']
+        op = m['Gx'].copy()
+        m.operation_blks['gates']['Gz'] = op
+        m.operation_blks['gates'][Label('Grot')] = op
+        m.operation_blks['gates']['{custom_gate}'] = op
+        m.operation_blks['gates'][Label('{custom_gate_lbl}')] = op
+        self.assertIs(m['Gz'], m.operation_blks['gates']['Gz'])
+        self.assertIs(m['{custom_gate}'], m.operation_blks['gates']['{custom_gate}'])
+
+        # Valid G and { in operation_blks['layers']
+        layer_op = m[('Gx', 'qb0')].copy()
+        m.operation_blks['layers'][('Gz', 'qb0')] = layer_op
+        m.operation_blks['layers'][Label(('Grot', 'qb0'))] = layer_op
+        m.operation_blks['layers']['{custom_layer}'] = layer_op
+        m.operation_blks['layers'][Label('{custom_layer_lbl}')] = layer_op
+        self.assertIs(m[('Gz', 'qb0')], m.operation_blks['layers'][('Gz', 'qb0')])
+        self.assertIs(m['{custom_layer}'], m.operation_blks['layers']['{custom_layer}'])
+
+        # Valid I in instrument_blks['layers']
+        inst = Instrument({'p0': np.diag([1., 0, 0, 0]), 'p1': np.diag([0, 0, 0, 1.])})
+        m.instrument_blks['layers']['Iz'] = inst
+        m.instrument_blks['layers'][Label('Iz2')] = inst
+        self.assertIs(m.instrument_blks['layers']['Iz'], m.instrument_blks['layers']['Iz'])
+        self.assertIs(m['Iz'], m.instrument_blks['layers']['Iz'])
+
+        # Valid G and { in factories['gates'] and factories['layers']
+        m.factories['gates']['Gfac'] = op
+        m.factories['gates']['{fac_idle}'] = op
+        m.factories['layers'][('Gfac', 'qb0')] = layer_op
+        m.factories['layers']['{fac_idle_layer}'] = layer_op
+        self.assertIs(m.factories['gates']['Gfac'], m.factories['gates']['Gfac'])
+        self.assertIs(m.factories['layers'][('Gfac', 'qb0')], m.factories['layers'][('Gfac', 'qb0')])
+
+    def test_member_dict_prefixes_invalid_insertions(self):
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        op = m['Gx'].copy()
+        prep = m['rho0'].copy()
+        povm = m['Mdefault'].copy()
+        inst = Instrument({'p0': np.diag([1., 0, 0, 0]), 'p1': np.diag([0, 0, 0, 1.])})
+
+        # prep_blks['layers'] only accepts 'rho'
+        for bad_key in ['Mdefault', 'Gx', '{idle}', 'Iz', 'foo', ('Gx', 'qb0')]:
+            with self.assertRaises(KeyError):
+                m.prep_blks['layers'][bad_key] = prep
+
+        # povm_blks['layers'] only accepts 'M'
+        for bad_key in ['rho0', 'Gx', '{idle}', 'Iz', 'foo', ('Gx', 'qb0')]:
+            with self.assertRaises(KeyError):
+                m.povm_blks['layers'][bad_key] = povm
+
+        # operation_blks['gates'] accepts 'G' or '{'
+        for bad_key in ['rho0', 'Mdefault', 'Iz', 'foo']:
+            with self.assertRaises(KeyError):
+                m.operation_blks['gates'][bad_key] = op
+
+        # operation_blks['layers'] accepts 'G' or '{'
+        for bad_key in ['rho0', 'Mdefault', 'Iz', 'foo', ('rho0', 'qb0')]:
+            with self.assertRaises(KeyError):
+                m.operation_blks['layers'][bad_key] = op
+
+        # instrument_blks['layers'] only accepts 'I'
+        for bad_key in ['rho0', 'Mdefault', 'Gx', '{idle}', 'foo']:
+            with self.assertRaises(KeyError):
+                m.instrument_blks['layers'][bad_key] = inst
+
+        # factories['gates'] accepts 'G' or '{'
+        for bad_key in ['rho0', 'Mdefault', 'Iz', 'foo']:
+            with self.assertRaises(KeyError):
+                m.factories['gates'][bad_key] = op
+
+        # factories['layers'] accepts 'G' or '{'
+        for bad_key in ['rho0', 'Mdefault', 'Iz', 'foo', ('rho0', 'qb0')]:
+            with self.assertRaises(KeyError):
+                m.factories['layers'][bad_key] = op
 
     def test_indep_localnoise(self):
         mdl_local = create_crosstalk_free_model(
@@ -84,6 +196,29 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
         self.assertAlmostEqual(sum(probs.values()), 1.0)
         self.assertEqual(mdl_local.num_params, 108)
 
+    def test_indep_localnoise_target_labels(self):
+        mdl_local = create_crosstalk_free_model(
+            self.pspec_2Q, ideal_gate_type='H+S',
+            ideal_spam_type='tensor product H+S', independent_gates=True,
+            ensure_composed_gates=False
+        )
+
+        # Model-level lookup with tuple, string, and Label
+        self.assertIs(mdl_local[('Gx', 'qb0')], mdl_local.operation_blks['gates'][('Gx', 'qb0')])
+        self.assertIs(mdl_local['Gx:qb0'], mdl_local.operation_blks['gates'][('Gx', 'qb0')])
+        self.assertIs(mdl_local[Label(('Gx', 'qb0'))], mdl_local.operation_blks['gates'][('Gx', 'qb0')])
+
+        # Target-bearing gate insertions into independent layout
+        op_copy = mdl_local[('Gx', 'qb0')].copy()
+        mdl_local.operation_blks['gates'][('Gz', 'qb0')] = op_copy
+        self.assertIs(mdl_local[('Gz', 'qb0')], mdl_local.operation_blks['gates'][('Gz', 'qb0')])
+
+        # Cross-family target-bearing insertions must fail prefix check
+        with self.assertRaises(KeyError):
+            mdl_local.operation_blks['gates'][('rho0', 'qb0')] = op_copy
+        with self.assertRaises(KeyError):
+            mdl_local.operation_blks['gates'][('M0', 'qb0')] = op_copy
+
     def test_dep_localnoise(self):
         mdl_local = create_crosstalk_free_model(
             self.pspec_2Q, ideal_gate_type='H+S',
@@ -97,6 +232,12 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
             ('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'),
             ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0')
         ]))
+
+        # Model-level lookup for dependent gates: gate name and target-bearing layer
+        self.assertIs(mdl_local['Gx'], mdl_local.operation_blks['gates']['Gx'])
+        self.assertIs(mdl_local[('Gx', 'qb0')], mdl_local.operation_blks['layers'][('Gx', 'qb0')])
+        self.assertIs(mdl_local['Gx:qb0'], mdl_local.operation_blks['layers'][('Gx', 'qb0')])
+
         test_circuit = ([('Gx', 'qb0'), ('Gy', 'qb1')],
                         ('Gcnot', 'qb0', 'qb1'),
                         [('Gx', 'qb1'), ('Gy', 'qb0')])
@@ -130,6 +271,13 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
             ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0'),
             ('Gidle', 'qb0'), ('Gidle', 'qb1'), '{auto_global_idle}'
         ]))
+
+        # Verify reserved brace-wrapped label lookup at model level
+        self.assertIs(mdl_local['{auto_global_idle}'],
+                      mdl_local.operation_blks['layers']['{auto_global_idle}'])
+        self.assertIs(mdl_local[Label('{auto_global_idle}')],
+                      mdl_local.operation_blks['layers']['{auto_global_idle}'])
+
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'),
                         [], [('Gx', 'qb1'), ('Gy', 'qb0')])
         probs = mdl_local.probabilities(test_circuit)

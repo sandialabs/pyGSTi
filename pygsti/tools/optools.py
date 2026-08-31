@@ -2898,10 +2898,9 @@ def effect_label_to_povm(povm_and_effect_lbl):
     if povm_and_effect_lbl is None:
         return "NONE"  # Dummy label for placeholding
     else:
-        if isinstance(povm_and_effect_lbl, _Label):
-            last_underscore = povm_and_effect_lbl.name.rindex('_')
-            povm_name = povm_and_effect_lbl.name[:last_underscore]
+        name = povm_and_effect_lbl.name if isinstance(povm_and_effect_lbl, _Label) else str(povm_and_effect_lbl)
+        if '_' in name:
+            last_underscore = name.rindex('_')
+            return name[:last_underscore]
         else:
-            last_underscore = povm_and_effect_lbl.rindex('_')
-            povm_name = povm_and_effect_lbl[:last_underscore]
-        return povm_name
+            return name
