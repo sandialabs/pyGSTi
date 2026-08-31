@@ -225,9 +225,10 @@ def _as_exclusive_blocks(dem, num_detectors=None):
     with a single branch is an ordinary independent event. Accepts a
     stim.DetectorErrorModel (all events independent), an object with
     ``.instructions`` / ``.num_detectors`` attributes (e.g. a
-    HighRankDetectorErrorModel, whose instructions are events with
-    ``.probability`` / ``.detectors`` or exclusive blocks with ``.events``),
-    or a raw iterable of blocks of (probability, detector_indices) pairs.
+    :class:`.highrank.HighRankDetectorErrorModel`, whose instructions are
+    events with ``.probability`` / ``.detectors`` or exclusive blocks with
+    ``.events``), or a raw iterable of blocks of (probability,
+    detector_indices) pairs.
 
     Returns:
         blocks: list[list[tuple[float, tuple[int, ...]]]]
@@ -287,9 +288,10 @@ def compute_outcome_distribution_from_high_rank_dem(dem, num_detectors=None) -> 
     distribution is over detector outcomes only.
 
     Parameters:
-        dem: stim.DetectorErrorModel, or HighRankDetectorErrorModel-like
-            object, or iterable of blocks of (probability, detector_indices)
-            branches (see _as_exclusive_blocks).
+        dem: stim.DetectorErrorModel, or a
+            :class:`.highrank.HighRankDetectorErrorModel` (or duck-typed
+            equivalent), or iterable of blocks of (probability,
+            detector_indices) branches (see _as_exclusive_blocks).
         num_detectors: int, optional
             Overrides / provides the number of detectors.
 

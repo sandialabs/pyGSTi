@@ -3,6 +3,8 @@ from . import core
 from . import utils
 from . import lattice
 from . import estimation
+from . import highrank
+from . import highrank_sampling
 from . import compressed_sensing
 from . import singleton
 from . import model_selection
