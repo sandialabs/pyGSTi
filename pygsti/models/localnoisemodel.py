@@ -33,6 +33,32 @@ from pygsti.tools import listtools as _lt
 from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec, QubitProcessorSpec as _QubitProcessorSpec
 
 
+# Specification of (outer_dict_name, inner_key, prefix_specification) for LocalNoiseModel.
+# Operation and factory blocks accept standard 'G' gate labels as well as reserved
+# brace-wrapped implicit operation labels (e.g., '{auto_global_idle}').
+_LOCALNOISE_MEMBER_PREFIXES = (
+    ('prep_blks', 'layers', 'rho'),
+    ('povm_blks', 'layers', 'M'),
+    ('operation_blks', 'gates', ('G', '{')),
+    ('operation_blks', 'layers', ('G', '{')),
+    ('instrument_blks', 'layers', 'I'),
+    ('factories', 'gates', ('G', '{')),
+    ('factories', 'layers', ('G', '{')),
+)
+
+
+def _init_localnoisemodel_member_dicts(mdl, modelmembers=None):
+    """
+    Initializes the seven standard OrderedMemberDict objects for a LocalNoiseModel.
+    """
+    flags = {'auto_embed': False, 'match_parent_statespace': False,
+             'match_parent_evotype': True, 'cast_to_type': None}
+    for blk_name, key, prefix in _LOCALNOISE_MEMBER_PREFIXES:
+        blk = getattr(mdl, blk_name)
+        items = modelmembers.get(f'{blk_name}|{key}', []) if modelmembers is not None else []
+        blk[key] = _OrderedMemberDict(mdl, None, prefix, flags, items)
+
+
 class LocalNoiseModel(_ImplicitOpModel):
     """
     A n-qudit implicit model that allows for only local noise.
@@ -170,21 +196,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',
                                               simulator=simulator, evotype=evotype)
 
-        flags = {'auto_embed': False, 'match_parent_statespace': False,
-                 'match_parent_evotype': True, 'cast_to_type': None}
-        self.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        # ^ Unclear why instrument_blks should only be keyed by `layers`.
-        #
-        #     I'll grant that it seems weird to key by `gates`, but the things
-        #     stored in operation_blks['gates'] have direct instrument analogs
-        #     that aren't suitable for instrument_blks['layers'].
-        #
-        self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
-        self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
+        _init_localnoisemodel_member_dicts(self)
 
         _init_spam_layers(self, prep_layers, povm_layers)  # SPAM
 
@@ -346,18 +358,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                                   simulator=simulator, evotype=state['evotype'])
 
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
-        flags = {'auto_embed': False, 'match_parent_statespace': False,
-                 'match_parent_evotype': True, 'cast_to_type': None}
-        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
-        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('povm_blks|layers', []))
-        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                         modelmembers.get('operation_blks|gates', []))
-        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                          modelmembers.get('operation_blks|layers', []))
-        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                           modelmembers.get('instrument_blks|layers', []))
-        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))
-        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|layers', []))
+        _init_localnoisemodel_member_dicts(mdl, modelmembers)
         mdl._clean_paramvec()
 
         Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
