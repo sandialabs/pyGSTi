@@ -81,3 +81,81 @@ class LabelDictTester(BaseCase):
         d[Label('IzTP')] = op_gi.copy()
         d['I_zTP'] = op_gi.copy()
         return
+
+    def test_multi_prefix_ordered_member_dict(self):
+        model = create_explicit_model_from_expressions(
+            [('Q0',)], ['Gi', 'Gx', 'Gy'],
+            ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
+        )
+        op_gi = model.operations[Label('Gi')]
+
+        # Multi-prefix dictionary accepting 'G' and '{'
+        d = OrderedMemberDict(None, "full", ('G', '{'), {'cast_to_type': None})
+        d[Label('Gx')] = op_gi.copy()
+        d['Gy'] = op_gi.copy()
+        d[Label('{auto_global_idle}')] = op_gi.copy()
+        d['{idle}'] = op_gi.copy()
+
+        self.assertIn(Label('Gx'), d)
+        self.assertIn(Label('{auto_global_idle}'), d)
+        self.assertIn('Gy', d)
+        self.assertIn('{idle}', d)
+
+        # Invalid insertions should raise KeyError with informative message
+        with self.assertRaises(KeyError) as cm:
+            d['rho0'] = op_gi.copy()
+        self.assertIn("one of the prefixes 'G', '{'", str(cm.exception))
+
+        with self.assertRaises(KeyError) as cm:
+            d[Label('Mdefault')] = op_gi.copy()
+        self.assertIn("one of the prefixes 'G', '{'", str(cm.exception))
+
+        with self.assertRaises(KeyError) as cm:
+            d['I0'] = op_gi.copy()
+        self.assertIn("one of the prefixes 'G', '{'", str(cm.exception))
+
+        # Copy preserves multi-prefix policy
+        d_copy = d.copy()
+        self.assertEqual(d_copy._prefix, ('G', '{'))
+        d_copy[Label('Gz')] = op_gi.copy()
+        d_copy['{new_idle}'] = op_gi.copy()
+        with self.assertRaises(KeyError):
+            d_copy['rho0'] = op_gi.copy()
+
+        # Pickle preserves multi-prefix policy
+        d_pickled = pickle.loads(pickle.dumps(d))
+        self.assertEqual(d_pickled._prefix, ('G', '{'))
+        self.assertIn(Label('Gx'), d_pickled)
+        self.assertIn(Label('{auto_global_idle}'), d_pickled)
+        d_pickled[Label('Gz')] = op_gi.copy()
+        d_pickled['{new_idle}'] = op_gi.copy()
+        with self.assertRaises(KeyError):
+            d_pickled['rho0'] = op_gi.copy()
+
+        # Item-based initialization
+        items = [(Label('Gx'), op_gi.copy()), (Label('{idle}'), op_gi.copy())]
+        d_init = OrderedMemberDict(None, "full", ('G', '{'), {'cast_to_type': None}, items=items)
+        self.assertIn(Label('Gx'), d_init)
+        self.assertIn(Label('{idle}'), d_init)
+
+        bad_items = [(Label('rho0'), op_gi.copy())]
+        with self.assertRaises(KeyError):
+            OrderedMemberDict(None, "full", ('G', '{'), {'cast_to_type': None}, items=bad_items)
+
+        # Unconstrained prefix=None accepts anything
+        d_none = OrderedMemberDict(None, "full", None, {'cast_to_type': None})
+        d_none['rho0'] = op_gi.copy()
+        d_none['Mdefault'] = op_gi.copy()
+        d_none['Gx'] = op_gi.copy()
+        d_none['{idle}'] = op_gi.copy()
+        self.assertIn('rho0', d_none)
+        self.assertIn('Mdefault', d_none)
+        self.assertIn('Gx', d_none)
+        self.assertIn('{idle}', d_none)
+
+        # Single prefix retains single prefix behavior and error message
+        d_single = OrderedMemberDict(None, "full", "rho", {'cast_to_type': None})
+        d_single['rho0'] = op_gi.copy()
+        with self.assertRaises(KeyError) as cm:
+            d_single['Gx'] = op_gi.copy()
+        self.assertIn("beginning with the prefix 'rho'", str(cm.exception))
