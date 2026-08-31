@@ -89,6 +89,23 @@ class GSTUtilTester(BaseCase):
         self.assertTrue('stdgaugeopt' in res.estimates['test-estimate'].models)
         self.assertTrue('stdgaugeopt' in res.estimates['test-estimate'].goparameters)
 
+    def test_add_param_preserving_gauge_opt_handles_trivial_entry(self):
+        # A 'trivial_gauge_opt' entry (goparameters value None, no gauge transformation)
+        # is inserted by ModelTest and by GST runs on instrument-bearing models.
+        # _add_param_preserving_gauge_opt iterates over goparameters entries and used to
+        # crash on the None; it must instead install the final iteration estimate itself.
+        res = self.results.copy()
+        est = res.estimates['test-estimate']
+        mdl_lnd = smq1Q_XYI.target_model('CPTPLND')  # ComposedState/ComposedPOVM members,
+        est.models['final iteration estimate'] = mdl_lnd  # as _add_param_preserving_gauge_opt requires
+        est.goparameters['trivial_gauge_opt'] = None
+        est.protocol = gst.GateSetTomography(self.target_model)
+        # ^ the estimate's protocol supplies badfit_options/optimizer; the default
+        #   options have no actions, so no badfit machinery actually runs.
+        gst._add_param_preserving_gauge_opt(res, 'test-estimate',
+                                            GSTGaugeOptSuite(gaugeopt_argument_dicts={}))
+        self.assertIs(est.models['trivial_gauge_opt'], est.models['final iteration estimate'])
+
 
 class StandardGSTDesignTester(BaseCase):
     """
