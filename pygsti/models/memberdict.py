@@ -32,7 +32,7 @@ class _PrefixOrderedDict(_collections.OrderedDict):
         Initial values.  Should only be used as part of de-serialization.
     """
 
-    def __init__(self, prefix: PrefixType, items=None):
+    def __init__(self, prefix: PrefixType = None, items=None):
         """ Creates a new _PrefixOrderedDict whose keys must begin
             with the prefix `prefix` (if a string), one of the prefixes
             in `prefix` (if a tuple), or any prefix (if None)."""
@@ -54,6 +54,12 @@ class _PrefixOrderedDict(_collections.OrderedDict):
             if not has_prefix:
                 raise KeyError("All keys must be strings, beginning with %s" % prefix_desc)
         super(_PrefixOrderedDict, self).__setitem__(key, val)
+
+    def copy(self):
+        return _PrefixOrderedDict(self._prefix, list(self.items()))
+
+    def __reduce__(self):
+        return (_PrefixOrderedDict, (self._prefix, list(self.items())), None)
 
 
 class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):

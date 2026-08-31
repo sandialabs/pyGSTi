@@ -2,7 +2,7 @@ import pickle
 
 import pygsti.baseobjs.outcomelabeldict as ld
 from pygsti.baseobjs.label import Label
-from pygsti.models.memberdict import OrderedMemberDict
+from pygsti.models.memberdict import _PrefixOrderedDict, OrderedMemberDict
 from pygsti.models.modelconstruction import create_explicit_model_from_expressions
 from pygsti.models import ExplicitOpModel
 from ..util import BaseCase
@@ -82,6 +82,67 @@ class LabelDictTester(BaseCase):
         d['I_zTP'] = op_gi.copy()
         return
 
+    def test_prefix_ordered_dict(self):
+        # Multi-prefix _PrefixOrderedDict
+        pdict = _PrefixOrderedDict(('G', '{'))
+        pdict[Label('Gx')] = 1
+        pdict[Label(('Gx', 0))] = 2
+        pdict[Label('{auto_global_idle}')] = 3
+        pdict[Label('{idle}')] = 4
+
+        self.assertEqual(pdict[Label('Gx')], 1)
+        self.assertEqual(pdict[Label(('Gx', 0))], 2)
+        self.assertEqual(pdict[Label('{auto_global_idle}')], 3)
+        self.assertEqual(pdict[Label('{idle}')], 4)
+
+        # Invalid insertions raise KeyError
+        with self.assertRaises(KeyError) as cm:
+            pdict[Label('rho0')] = 5
+        self.assertIn("one of the prefixes 'G', '{'", str(cm.exception))
+
+        with self.assertRaises(KeyError) as cm:
+            pdict[Label('Mdefault')] = 6
+        self.assertIn("one of the prefixes 'G', '{'", str(cm.exception))
+
+        with self.assertRaises(KeyError) as cm:
+            pdict[Label('I0')] = 7
+        self.assertIn("one of the prefixes 'G', '{'", str(cm.exception))
+
+        # Copy preserves multi-prefix policy
+        pdict_copy = pdict.copy()
+        self.assertEqual(pdict_copy._prefix, ('G', '{'))
+        self.assertEqual(pdict_copy[Label('Gx')], 1)
+        pdict_copy[Label('Gy')] = 10
+        with self.assertRaises(KeyError):
+            pdict_copy[Label('rho0')] = 5
+
+        # Pickle preserves multi-prefix policy
+        pdict_pickled = pickle.loads(pickle.dumps(pdict))
+        self.assertEqual(pdict_pickled._prefix, ('G', '{'))
+        self.assertEqual(pdict_pickled[Label('Gx')], 1)
+        self.assertEqual(pdict_pickled[Label('{auto_global_idle}')], 3)
+        pdict_pickled[Label('Gy')] = 10
+        with self.assertRaises(KeyError):
+            pdict_pickled[Label('rho0')] = 5
+
+        # Unconstrained prefix=None
+        pdict_none = _PrefixOrderedDict(None)
+        pdict_none[Label('rho0')] = 1
+        pdict_none[Label('Mdefault')] = 2
+        pdict_none[Label('Gx')] = 3
+        pdict_none[Label('{idle}')] = 4
+        self.assertEqual(pdict_none[Label('rho0')], 1)
+        self.assertEqual(pdict_none[Label('Mdefault')], 2)
+        self.assertEqual(pdict_none[Label('Gx')], 3)
+        self.assertEqual(pdict_none[Label('{idle}')], 4)
+
+        # Single prefix
+        pdict_single = _PrefixOrderedDict("rho")
+        pdict_single[Label('rho0')] = 1
+        with self.assertRaises(KeyError) as cm:
+            pdict_single[Label('Gx')] = 2
+        self.assertIn("beginning with the prefix 'rho'", str(cm.exception))
+
     def test_multi_prefix_ordered_member_dict(self):
         model = create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
@@ -93,10 +154,12 @@ class LabelDictTester(BaseCase):
         d = OrderedMemberDict(None, "full", ('G', '{'), {'cast_to_type': None})
         d[Label('Gx')] = op_gi.copy()
         d['Gy'] = op_gi.copy()
+        d[Label(('Gx', 'Q0'))] = op_gi.copy()
         d[Label('{auto_global_idle}')] = op_gi.copy()
         d['{idle}'] = op_gi.copy()
 
         self.assertIn(Label('Gx'), d)
+        self.assertIn(Label(('Gx', 'Q0')), d)
         self.assertIn(Label('{auto_global_idle}'), d)
         self.assertIn('Gy', d)
         self.assertIn('{idle}', d)
