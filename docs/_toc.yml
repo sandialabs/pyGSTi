@@ -144,6 +144,14 @@ parts:
     sections:
     - file: markdown/examples/DEMEstimation-LassoAndCompressedSensing
   - file: markdown/examples/DEMValidation
+  - file: markdown/rareevent/methods
+    sections:
+    - file: markdown/rareevent/method_evolution
+    - file: markdown/rareevent/malignant_set_counting
+    - file: markdown/rareevent/01_pipeline_and_monte_carlo
+    - file: markdown/rareevent/02_rare_event_splitting
+    - file: markdown/rareevent/03_malignant_set_counting
+    - file: markdown/rareevent/04_failure_spectrum
   - file: markdown/interfaces/IBMQExperiment
   - file: markdown/interfaces/CirqIntegration
 
