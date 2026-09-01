@@ -110,7 +110,7 @@ print(Gzx_comp_embed._rep._chp_ops())
 #print(Gzx_comp_embed.get_chp_str([5, 6, 7, 8]))
 ```
 
-## CHPForwardSimulator + Explicit Model
+## WeakForwardSimulator + Explicit Model
 
 ```{code-cell} ipython3
 sim = pygsti.forwardsims.WeakForwardSimulator(shots=100)
@@ -158,7 +158,7 @@ circ = pygsti.circuits.Circuit(['rho0', 'Gxx', 'Mdefault'])
 model.probabilities(circ)
 ```
 
-## CHPForwardSimulator + LocalNoiseModel
+## WeakForwardSimulator + LocalNoiseModel
 
 ```{code-cell} ipython3
 # Step 1: Define stochastic Pauli noise operators
@@ -280,59 +280,4 @@ ln_model_corr.probabilities(circ)
 ```{code-cell} ipython3
 circ = pygsti.circuits.Circuit([('Gx', 1), ('Gcnot', 1, 2)], num_lines=4)
 ln_model_corr.probabilities(circ)
-```
-
-## Crosstalk-Free Model Construction
-
-```{code-cell} ipython3
-#import pygsti.models.modelconstruction as mc
-#
-#sim = pygsti.forwardsims.WeakForwardSimulator(shots=100, base_seed=2021)
-#
-#pspec = QubitProcessorSpec(4, ['Gi', 'Gxpi', 'Gypi', 'Gcnot'], availability={'Gcnot': [(0,1),(1,2),(2,3)]})
-#
-## Use the same 2-qubit stochastic noise for CNOT as above
-#ctf_model = mc.create_crosstalk_free_model(pspec,
-#    depolarization_strengths={'Gi': 0.1, 'Gxpi': 0.1},
-#    stochastic_error_probs={'Gypi': [0.1, 0.1, 0.1], 'Gcnot': rates_2q},
-#    simulator=sim, evotype='chp')
-#
-#print_implicit_model_blocks(ctf_model, showSPAM=True)
-```
-
-```{code-cell} ipython3
-#for name, gate in ctf_model.operation_blks['gates'].items():
-#    print(f'Gate {name}')
-#    print(gate)
-#    print()
-```
-
-```{code-cell} ipython3
-#circ = pygsti.circuits.Circuit([('Gxpi', 1)], num_lines=4)
-#ctf_model.probabilities(circ)
-```
-
-```{code-cell} ipython3
-#circ = pygsti.circuits.Circuit([('Gxpi', 1), ('Gcnot', 1, 2)], num_lines=4)
-#ctf_model.probabilities(circ)
-```
-
-```{code-cell} ipython3
-# Marginalized POVMs now work!
-#circ = pygsti.circuits.Circuit([('Gxpi', 1), ('Gcnot', 1, 2)])
-#ctf_model.probabilities(circ)
-```
-
-```{code-cell} ipython3
-# Let's try a model with only readout error
-#sim = pygsti.forwardsims.CHPForwardSimulator(chpexe, shots=1000) # Bump up shots for better noise resolution
-#
-#ctf_povm_model = mc.create_crosstalk_free_model(pspec,
-#    stochastic_error_probs={'povm': [0.05, 0.0, 0.0]}, # 5% X error on prep
-#    simulator=sim, evotype='chp')
-```
-
-```{code-cell} ipython3
-#circ = pygsti.circuits.Circuit([])
-#ctf_povm_model.probabilities(circ) # Expect about 80% all 0, 5% on weight one errors, 0.25% on weight 2, etc.
 ```
