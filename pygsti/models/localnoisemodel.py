@@ -33,11 +33,8 @@ from pygsti.tools import listtools as _lt
 from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec, QubitProcessorSpec as _QubitProcessorSpec
 
 
-# Specification of (outer_dict_name, inner_key, prefix_specification) for LocalNoiseModel.
-# Operation and factory blocks accept standard 'G' gate labels as well as reserved
-# brace-wrapped implicit operation labels (e.g., '{auto_global_idle}') because local
-# models create '{auto_global_idle}' and ProcessorSpec treats brace-wrapped gate names
-# as implicit operations.
+# Operations and factories also accept the reserved brace-wrapped implicit-operation
+# labels used by ProcessorSpec and by LocalNoiseModel for '{auto_global_idle}'.
 _LOCALNOISE_MEMBER_PREFIXES = (
     ('prep_blks', 'layers', 'rho'),
     ('povm_blks', 'layers', 'M'),
@@ -50,9 +47,7 @@ _LOCALNOISE_MEMBER_PREFIXES = (
 
 
 def _init_localnoisemodel_member_dicts(mdl, modelmembers=None):
-    """
-    Initializes the seven standard OrderedMemberDict objects for a LocalNoiseModel.
-    """
+    """Initialize the seven standard member dictionaries of a `LocalNoiseModel`."""
     flags = {'auto_embed': False, 'match_parent_statespace': False,
              'match_parent_evotype': True, 'cast_to_type': None}
     for blk_name, key, prefix in _LOCALNOISE_MEMBER_PREFIXES:
@@ -90,24 +85,22 @@ class LocalNoiseModel(_ImplicitOpModel):
         with arguments.
 
     prep_layers : None or operator or dict or list
-        The state preparation operations as n-qudit layer operations.  If
+        The state preparateion operations as n-qudit layer operations.  If
         `None`, then no state preparations will be present in the created model.
-        If a dict, then the keys are labels that must begin with "rho" (e.g.
-        "rho0") and the values are layer operators.  If a list, then the elements
-        are layer operators and the labels will be assigned as "rhoX" where X is
-        an integer starting at 0.  If a single layer operation of type
-        :class:`State` is given, then this is used as the sole prep and is
-        assigned the label "rho0".
+        If a dict, then the keys are labels beginning with "rho" and the values are layer operators.
+        If a list, then the elements are layer operators and the labels will be
+        assigned as "rhoX" where X is an integer starting at 0.  If a single
+        layer operation of type :class:`State` is given, then this is used as
+        the sole prep and is assigned the label "rho0".
 
     povm_layers : None or operator or dict or list
-        The POVM operations as n-qudit layer operations.  If `None`, then no
-        POVMs will be present in the created model.  If a dict, then the keys
-        are labels that must begin with "M" (e.g. "Mdefault" or "M0") and the
-        values are layer operators.  If a list, then the elements are layer
-        operators and the labels will be assigned as "MX" where X is an integer
-        starting at 0.  If a single layer operation of type :class:`POVM` is
-        given, then this is used as the sole POVM and is assigned the label
-        "Mdefault".
+        The state preparateion operations as n-qudit layer operations.  If
+        `None`, then no POVMS will be present in the created model.  If a dict,
+        then the keys are labels beginning with "M" and the values are layer operators.  If a list,
+        then the elements are layer operators and the labels will be assigned as
+        "MX" where X is an integer starting at 0.  If a single layer operation
+        of type :class:`POVM` is given, then this is used as the sole POVM and
+        is assigned the label "Mdefault".
 
     evotype : Evotype or str, optional
         The evolution type of this model, describing how states are
@@ -524,10 +517,6 @@ class _SimpleCompLayerRules(_LayerRules):
                 mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
                                                model.state_space, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
-                if layerlbl.name == povmName:
-                    if self.use_op_caching:
-                        caches['povm-layers'][layerlbl] = mpovm
-                    return mpovm
                 simplified_effects = mpovm.simplify_effects(mpovm_lbl)
                 assert(layerlbl in simplified_effects), "Failed to create marginalized effect!"
                 if self.use_op_caching:

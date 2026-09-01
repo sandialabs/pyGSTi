@@ -184,11 +184,6 @@ def indices(s, n=None):
     -------
     list of ints
     """
-    if not isinstance(s, slice):
-        if s is None:
-            return []
-        return list(s)
-
     if s.start is None and s.stop is None:
         return []
 
@@ -231,13 +226,8 @@ def indices_as_array(s, n=None):
     -------
     numpy ndarray array of integers
     """
-    if not isinstance(s, slice):
-        if s is None:
-            return _np.array([], dtype=_np.int64)
-        return _np.array(s, dtype=_np.int64)
-
     if s.start is None and s.stop is None:
-        return _np.array([], dtype=_np.int64)
+        return []
 
     if s.start is None:
         start = 0

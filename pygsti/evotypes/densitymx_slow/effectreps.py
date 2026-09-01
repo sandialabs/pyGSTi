@@ -147,7 +147,7 @@ class EffectRepTensorProduct(EffectRep):
         return outvec
 
     def probability(self, state):  # allow scratch to be passed in?
-        scratch = _np.empty(self.state_space.dim, 'd')
+        scratch = _np.empty(self.dim, 'd')
         Edense = self.to_dense('HilbertSchmidt', scratch)
         return _np.dot(Edense, state.data)  # not vdot b/c data is *real*
 
