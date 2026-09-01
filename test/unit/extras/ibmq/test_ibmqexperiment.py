@@ -4,6 +4,7 @@ import pytest
 import pygsti
 from pygsti.extras.devices.experimentaldevice import ExperimentalDevice
 from pygsti.extras import ibmq
+from pygsti.extras.ibmq import ibmqexperiment
 from pygsti.processors import CliffordCompilationRules as CCR
 from pygsti.protocols import MirrorRBDesign as RMCDesign
 from pygsti.protocols import PeriodicMirrorCircuitDesign as PMCDesign
@@ -11,7 +12,9 @@ from pygsti.protocols import FreeformDesign
 from pygsti.protocols import ByDepthSummaryStatistics
 from pygsti.modelpacks import smq1Q_XY
 from pygsti.protocols import StandardGSTDesign
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import numpy as np
+from unittest import mock
 
 
 try:
@@ -24,6 +27,14 @@ try:
     from qiskit_ibm_runtime import QiskitRuntimeService
 except:
     QiskitRuntimeService = None
+
+
+try:
+    from qiskit_ibm_runtime import Batch as _Batch
+    from qiskit_ibm_runtime import Session as _Session
+except ImportError:
+    _Batch = None
+    _Session = None
 
 
 class IBMQExperimentTester(BaseCase):
@@ -86,6 +97,98 @@ class IBMQExperimentTester(BaseCase):
         # Submit rest of jobs
         exp1.submit(self.backend, max_attempts=1)
         assert len(exp1.qjobs) == len(exp1.qiskit_isa_circuit_batches)
+
+    def test_submit_default_uses_batch(self):
+        """Default submit() call constructs Batch (not Session) and closes it."""
+        chkpt = 'test_ibmq_submit_default_uses_batch'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+        exp.transpile(self.backend)
+
+        # Track calls to _Batch and _Session constructors and close() calls.
+        batch_instances = []
+        session_instances = []
+        original_batch = ibmqexperiment._Batch
+        original_session = ibmqexperiment._Session
+
+        def mock_batch_constructor(*args, **kwargs):
+            instance = original_batch(*args, **kwargs)
+            batch_instances.append(instance)
+            # Wrap close() to track calls
+            original_close = instance.close
+            close_calls = []
+
+            def close_wrapper():
+                close_calls.append(True)
+                original_close()
+            instance.close = close_wrapper
+            instance._close_calls = close_calls
+            return instance
+
+        def mock_session_constructor(*args, **kwargs):
+            instance = original_session(*args, **kwargs)
+            session_instances.append(instance)
+            return instance
+
+        with mock.patch.object(ibmqexperiment, '_Batch', side_effect=mock_batch_constructor), \
+             mock.patch.object(ibmqexperiment, '_Session', side_effect=mock_session_constructor):
+            exp.submit(self.backend, stop=1, max_attempts=1)
+            # Batch should be constructed exactly once
+            assert len(batch_instances) == 1
+            # Session should never be constructed
+            assert len(session_instances) == 0
+            # close() should be called exactly once on the Batch
+            assert len(batch_instances[0]._close_calls) == 1
+
+    def test_submit_caller_supplied_runtime_mode_not_closed(self):
+        """Caller-supplied ibmq_runtime_mode is used and not closed by submit()."""
+        chkpt = 'test_ibmq_submit_caller_mode_not_closed'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+        exp.transpile(self.backend)
+
+        # Create a real Batch instance that we will supply to submit()
+        caller_batch = _Batch(backend=self.backend)
+
+        with mock.patch.object(ibmqexperiment, '_Batch', wraps=ibmqexperiment._Batch) as mock_batch_cls, \
+             mock.patch.object(ibmqexperiment, '_Session', wraps=ibmqexperiment._Session) as mock_session_cls, \
+             mock.patch.object(caller_batch, 'close') as mock_instance_close:
+            exp.submit(self.backend, ibmq_runtime_mode=caller_batch, stop=1, max_attempts=1)
+            # No new Batch/Session should be constructed (caller supplied theirs)
+            mock_batch_cls.assert_not_called()
+            mock_session_cls.assert_not_called()
+            # The supplied batch instance's close() should NOT be called
+            mock_instance_close.assert_not_called()
+
+    def test_submit_deprecated_ibmq_session_still_works(self):
+        """Deprecated ibmq_session parameter still works and emits deprecation warning."""
+        chkpt = 'test_ibmq_submit_deprecated_session'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+        exp.transpile(self.backend)
+
+        # Create a real Session instance to pass as deprecated ibmq_session
+        caller_session = _Session(backend=self.backend)
+
+        # Must catch the deprecation warning and verify job submission succeeded
+        with pytest.warns(pyGSTiDeprecationWarning):
+            with mock.patch.object(caller_session, 'close') as mock_session_close:
+                exp.submit(self.backend, ibmq_session=caller_session, stop=1, max_attempts=1)
+                # Jobs should be submitted (qjobs list grows)
+                assert len(exp.qjobs) > 0
+                # Caller-supplied session should NOT be closed
+                mock_session_close.assert_not_called()
+
+    def test_submit_conflicting_session_and_runtime_mode_raises(self):
+        """Passing both ibmq_session and ibmq_runtime_mode raises ValueError."""
+        chkpt = 'test_ibmq_submit_conflicting_params'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+        exp.transpile(self.backend)
+
+        # Use non-None placeholders (ValueError is raised before these are used)
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            exp.submit(self.backend, ibmq_session=object(), ibmq_runtime_mode=object())
 
     #integration tests with end-to-end workflows.
     def test_e2e_mirror_rb(self):

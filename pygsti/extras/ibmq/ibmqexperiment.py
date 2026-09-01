@@ -35,6 +35,7 @@ except:
 try:
     from qiskit_ibm_runtime import SamplerV2 as _Sampler
     from qiskit_ibm_runtime import Session as _Session
+    from qiskit_ibm_runtime import Batch as _Batch
     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
     from qiskit_ibm_runtime import IBMBackend as _IBMBackend
 except ImportError:
@@ -62,6 +63,7 @@ from pygsti import data as _data, io as _io
 from pygsti.protocols import ProtocolData as _ProtocolData, HasProcessorSpec as _HasPSpec
 from pygsti.protocols.protocol import _TreeNode
 from pygsti.io import metadir as _metadir
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
 
 # Needs to be defined first for multiprocessing reasons
@@ -375,7 +377,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             self.write()
 
 
-    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_session=None):
+    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10,
+               ibmq_session=None, ibmq_runtime_mode=None):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -409,8 +412,16 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         wait_steps: int
             Number of steps to take before retrying job submission.
 
-        ibmq_session: IBMQuantumRuntimeSession
-            IBMQuantumRuntime Session to use 
+        ibmq_runtime_mode: qiskit_ibm_runtime.Session or qiskit_ibm_runtime.Batch, optional
+            Runtime mode instance (Session or Batch) to use for executing jobs. If not
+            provided, a new Batch is created and used. Jobs are only billed for actual
+            QPU hardware time when using Batch mode (not for IBM-side preprocessing).
+            If supplied by the caller, this object is NOT closed by submit(); the caller
+            remains responsible for closing it themselves.
+
+        ibmq_session: IBMQuantumRuntimeSession, optional
+            Deprecated. Use ibmq_runtime_mode instead. If provided, its value is forwarded
+            to ibmq_runtime_mode and a deprecation warning is emitted.
 
         Returns
         -------
@@ -423,6 +434,18 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             "Transpilation missing! Either run .transpile() first, or if loading from file, " + \
             "use the regen_qiskit_circs=True option in from_dir()."
         
+        # Handle deprecated ibmq_session parameter
+        if ibmq_session is not None and ibmq_runtime_mode is not None:
+            raise ValueError(
+                "Cannot specify both 'ibmq_session' and 'ibmq_runtime_mode'. Use 'ibmq_runtime_mode' only.")
+
+        if ibmq_session is not None:
+            _warnings.warn(
+                "The 'ibmq_session' parameter is deprecated in favor of 'ibmq_runtime_mode'; "
+                "'ibmq_session' will be removed in a future release.",
+                _pyGSTiDeprecationWarning
+            )
+            ibmq_runtime_mode = ibmq_session
 
         #Get the backend version
         backend_version = ibmq_backend.version
@@ -455,10 +478,11 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
             stop = min(start + allowed_jobs, stop)
         
-        if ibmq_session is None: 
-            ibmq_session = _Session(backend = ibmq_backend)
+        caller_supplied_mode = ibmq_runtime_mode is not None
+        if ibmq_runtime_mode is None:
+            ibmq_runtime_mode = _Batch(backend=ibmq_backend)
 
-        sampler = _Sampler(mode=ibmq_session)
+        sampler = _Sampler(mode=ibmq_runtime_mode)
         
         for batch_idx, batch in enumerate(self.qiskit_isa_circuit_batches):
             if batch_idx < start or batch_idx >= stop:
@@ -564,6 +588,10 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             
             if submit_status is False:
                 raise RuntimeError("Ran out of max attempts and job was still not submitted successfully")
+
+        # Close the runtime mode if it was created by this method (not supplied by caller)
+        if not caller_supplied_mode:
+            ibmq_runtime_mode.close()
 
     def transpile(self,
               ibmq_backend,
