@@ -8,12 +8,16 @@ import pathlib
 import random
 import unittest
 
+import tempfile
+
 import numpy as np
 import stim
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-os.environ.setdefault("MPLCONFIGDIR", str(ROOT / ".matplotlib-cache"))
-(ROOT / ".matplotlib-cache").mkdir(exist_ok=True)
+# Keep matplotlib's font cache out of the source tree (and of a possibly
+# read-only home directory in containers).
+_MPL_CACHE = pathlib.Path(tempfile.gettempdir()) / "pygsti-rareevent-mpl-cache"
+os.environ.setdefault("MPLCONFIGDIR", str(_MPL_CACHE))
+_MPL_CACHE.mkdir(exist_ok=True)
 
 from pygsti.extras.rareevent import rare_event  # noqa: E402
 
@@ -222,7 +226,8 @@ class RareEventTests(unittest.TestCase):
             direct_estimates.append(estimate)
             direct_errors.append(stderr)
 
-        pdf_path = ROOT / "tests.pdf"
+        pdf_dir = tempfile.mkdtemp(prefix="pygsti-rareevent-")
+        pdf_path = pathlib.Path(pdf_dir) / "tests.pdf"
         fig, ax = plt.subplots(figsize=(6.5, 4.5))
         ax.loglog(p_scales, result.failure_estimates, marker="o", label="Rare-event splitting")
         ax.errorbar(
