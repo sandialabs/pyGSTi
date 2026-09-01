@@ -4,9 +4,9 @@ Re-render a DEM validation report with an analyst's commentary.
 `generate_report` pickles everything the renderer needs to `*_state.pkl` and
 writes the numbers out as `*_brief.md`. Hand the brief to an analyst (the
 skill uses a Fable subagent), get back a JSON object following
-`dem_report.COMMENTARY_SCHEMA`, and run this. Nothing is recomputed: the
-battery, the Monte Carlo and the figures are all reused, so annotating a
-report that took ten minutes to produce takes under a second.
+`pygsti.extras.sparsedem.report.COMMENTARY_SCHEMA`, and run this. Nothing is
+recomputed: the battery, the Monte Carlo and the figures are all reused, so
+annotating a report that took ten minutes to produce takes under a second.
 
     python annotate_report.py \
         --state   OUT/report_state.pkl \
@@ -18,36 +18,19 @@ rewritten from the same state.
 """
 
 import argparse
-import json
 import pickle
-import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+import matplotlib
+matplotlib.use("Agg")  # the CLI is headless; force before pyplot loads
 
-from dem_report import _render_html  # noqa: E402
+from pygsti.extras.sparsedem import report as _report
+from pygsti.extras.sparsedem.report import _render_html, load_commentary
 
-
-def load_commentary(path: Path) -> dict:
-    """
-    Parse the analyst's JSON, tolerating a ```json fence around it.
-
-    A model asked for "a single JSON object" often wraps it anyway; failing
-    the run over that would be silly.
-    """
-    text = path.read_text().strip()
-    fenced = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.S)
-    if fenced:
-        text = fenced.group(1)
-    commentary = json.loads(text)
-    if not isinstance(commentary, dict):
-        raise ValueError(f"{path}: expected a JSON object, got "
-                         f"{type(commentary).__name__}")
-    unknown = set(commentary) - {"summary", "sections", "reading", "caveats"}
-    if unknown:
-        print(f"warning: ignoring unknown commentary keys {sorted(unknown)}")
-    return commentary
+# State pickles written before the report engine moved into pygsti reference
+# their classes under the module name `dem_report`; alias it so they load.
+sys.modules.setdefault("dem_report", _report)
 
 
 def main(argv=None):

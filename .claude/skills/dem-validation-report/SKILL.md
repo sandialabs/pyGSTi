@@ -82,8 +82,7 @@ Python, when you need a custom coordinate convention, extra statistics, a
 description of the pipeline that produced the model, or an artifacts table:
 
 ```python
-import sys; sys.path.insert(0, ".../scripts")
-from dem_report import ReportInputs, generate_report
+from pygsti.extras.sparsedem.report import ReportInputs, generate_report
 
 result = generate_report(ReportInputs(
     detector_samples=det,            # (shots, detectors) uint8
@@ -297,11 +296,14 @@ separately per candidate.
 
 ## Files
 
-- `scripts/dem_report.py` — the library: `ReportInputs`, `generate_report`,
-  and the individual figure functions.
+- `pygsti/extras/sparsedem/report.py` — the library: `ReportInputs`,
+  `generate_report`, `load_commentary`, and the individual figure functions
+  (import as `pygsti.extras.sparsedem.report`).
 - `scripts/run_report.py` — CLI driver.
 - `scripts/annotate_report.py` — re-renders a report from its state pickle
-  with the analyst's commentary; sub-second, nothing recomputed.
+  with the analyst's commentary; sub-second, nothing recomputed. Also loads
+  state pickles from before the move into pygsti (module alias for
+  `dem_report`).
 - `reference/pipeline.md` — learn → refit → decorate, the prerequisite
   workflow, with its failure modes.
 - `reference/example_willow.md` — a full worked example (Google Willow d=5)

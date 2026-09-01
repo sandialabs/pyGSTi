@@ -21,7 +21,7 @@ section is skipped when its inputs are absent.
 
 Typical use::
 
-    from dem_report import ReportInputs, generate_report
+    from pygsti.extras.sparsedem.report import ReportInputs, generate_report
 
     result = generate_report(ReportInputs(
         detector_samples=det,
@@ -35,8 +35,14 @@ Typical use::
     ))
     print(result.summary["learned"]["num_rejected"])
 
-See SKILL.md for the surrounding workflow and reference/pipeline.md for how
-to produce the learned and decorated DEMs in the first place.
+See the ``dem-validation-report`` skill (``.claude/skills/`` at the repository
+root) for the surrounding workflow and for how to produce the learned and
+decorated DEMs in the first place.
+
+Figures are rendered off-screen and embedded in the HTML; no backend is
+forced here, since matplotlib falls back to Agg on its own when there is no
+display. Command-line drivers that must never touch a GUI should set the
+backend themselves before importing this module.
 """
 
 from __future__ import annotations
@@ -45,22 +51,22 @@ import base64
 import collections
 import dataclasses
 import io as _io
+import json
 import pickle
+import re
 import textwrap
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
-import matplotlib
-matplotlib.use("Agg")  # must precede pyplot; reports are rendered headless
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-from matplotlib.patches import Patch  # noqa: E402
-import stim  # noqa: E402
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patches import Patch
+import stim
 
-from pygsti.extras.sparsedem import io as sdio  # noqa: E402
-from pygsti.extras.sparsedem.validation import (
+from . import io as sdio
+from .validation import (
     ValidationSuiteResult,
     build_marginal_subsets,
     complementary_gap_function,
@@ -1510,9 +1516,31 @@ _COMMENTARY_SLOTS = ("model", "validation", "polarization", "marginals",
                      "scalars", "decoder", "stationarity")
 
 
+def load_commentary(path: Path) -> dict:
+    """
+    Parse an analyst's commentary JSON, tolerating a ```json fence around it.
+
+    A model asked for "a single JSON object" often wraps it anyway; failing
+    the run over that would be silly. Unknown top-level keys are dropped with
+    a warning rather than an error, for the same reason.
+    """
+    text = Path(path).read_text().strip()
+    fenced = re.match(r"^```(?:json)?\s*(.*?)\s*```$", text, re.S)
+    if fenced:
+        text = fenced.group(1)
+    commentary = json.loads(text)
+    if not isinstance(commentary, dict):
+        raise ValueError(f"{path}: expected a JSON object, got "
+                         f"{type(commentary).__name__}")
+    unknown = set(commentary) - {"summary", "sections", "reading", "caveats"}
+    if unknown:
+        warnings.warn(f"{path}: ignoring unknown commentary keys "
+                      f"{sorted(unknown)}")
+    return commentary
+
+
 def _md_inline(text: str) -> str:
     """`code`, **bold**, *italic*, and nothing else. Deliberately small."""
-    import re
     out = []
     for i, chunk in enumerate(re.split(r"(`[^`]*`)", text)):
         if i % 2:  # inside backticks: no further markup, escape the HTML
@@ -1789,7 +1817,6 @@ def generate_report(cfg: ReportInputs, log=print) -> ReportResult:
             `.html_path`, `.summary` (per-candidate counts and headline
             numbers), `.results` (raw ValidationResults) and `.decoder_table`.
     """
-    plt.rcParams.update(_STYLE)
     det = np.asarray(cfg.detector_samples, dtype=np.uint8) % 2
     if det.ndim != 2 or det.shape[0] == 0:
         raise ValueError("detector_samples must be a non-empty 2D array.")
@@ -1872,40 +1899,45 @@ def generate_report(cfg: ReportInputs, log=print) -> ReportResult:
     # --- figures -------------------------------------------------------------
     cl = cfg.candidate_label
     figures = {}
-    figures["rejections"] = figure_rejections(fams, rejected_names,
-                                              ALL_FAMILIES, cfg.baseline_label,
-                                              cl)
-    figures["weights"] = figure_weights(learned_dict, baseline_dict,
-                                        cfg.baseline_label, cl)
-    event_masks = list(learned_dict)
-    event_probs = np.array([learned_dict[m] for m in event_masks], dtype=float)
-    event_stderr = None
-    if cfg.event_stderr:
-        event_stderr = np.array([cfg.event_stderr.get(int(m), 0.0)
-                                 for m in event_masks], dtype=float)
-    figures["probs"] = figure_probabilities(event_masks, event_probs,
-                                            event_stderr, cl)
-    figures["polz"] = figure_polarization(fams, cfg.baseline_label, cl)
-    figures["tvd"] = figure_marginal_tvd(fams, MARGINAL_FAMILIES,
-                                         cfg.baseline_label, cl)
-    figures["balls"] = figure_ball_structure(fams, coords, cfg.baseline_label,
-                                             cl)
-    figures["pvals"] = figure_pvalue_ecdf(fams, MARGINAL_FAMILIES
-                                          + ["polarization_w2"], cl)
-    statistics = {"Hamming weight (clicks per shot)": lambda s: s.sum(axis=1)}
-    if rc is not None:
-        statistics["Repeated clicks (same site, adjacent rounds)"] = rc
-    figures["scalars"] = figure_scalars(det, null_learned, null_baseline,
-                                        statistics, cfg.baseline_label, cl)
-    figures["decoder_scalars"] = figure_decoder_scalars(
-        decoder_scalar_data, cfg.baseline_label, cl)
-    figures["clickrates"] = figure_click_rates(det, null_learned, null_baseline,
-                                               cfg.baseline_label, cl)
-    figures["edges_decoder"] = figure_edges_and_decoder(
-        learned_dict, baseline_dict, coords, decoder_table,
-        cfg.baseline_label, cl)
-    if stationarity is not None:
-        figures["stationarity"] = figure_stationarity(det, stationarity.results)
+    with plt.rc_context(_STYLE):
+        figures["rejections"] = figure_rejections(fams, rejected_names,
+                                                  ALL_FAMILIES,
+                                                  cfg.baseline_label, cl)
+        figures["weights"] = figure_weights(learned_dict, baseline_dict,
+                                            cfg.baseline_label, cl)
+        event_masks = list(learned_dict)
+        event_probs = np.array([learned_dict[m] for m in event_masks],
+                               dtype=float)
+        event_stderr = None
+        if cfg.event_stderr:
+            event_stderr = np.array([cfg.event_stderr.get(int(m), 0.0)
+                                     for m in event_masks], dtype=float)
+        figures["probs"] = figure_probabilities(event_masks, event_probs,
+                                                event_stderr, cl)
+        figures["polz"] = figure_polarization(fams, cfg.baseline_label, cl)
+        figures["tvd"] = figure_marginal_tvd(fams, MARGINAL_FAMILIES,
+                                             cfg.baseline_label, cl)
+        figures["balls"] = figure_ball_structure(fams, coords,
+                                                 cfg.baseline_label, cl)
+        figures["pvals"] = figure_pvalue_ecdf(fams, MARGINAL_FAMILIES
+                                              + ["polarization_w2"], cl)
+        statistics = {"Hamming weight (clicks per shot)":
+                      lambda s: s.sum(axis=1)}
+        if rc is not None:
+            statistics["Repeated clicks (same site, adjacent rounds)"] = rc
+        figures["scalars"] = figure_scalars(det, null_learned, null_baseline,
+                                            statistics, cfg.baseline_label, cl)
+        figures["decoder_scalars"] = figure_decoder_scalars(
+            decoder_scalar_data, cfg.baseline_label, cl)
+        figures["clickrates"] = figure_click_rates(det, null_learned,
+                                                   null_baseline,
+                                                   cfg.baseline_label, cl)
+        figures["edges_decoder"] = figure_edges_and_decoder(
+            learned_dict, baseline_dict, coords, decoder_table,
+            cfg.baseline_label, cl)
+        if stationarity is not None:
+            figures["stationarity"] = figure_stationarity(
+                det, stationarity.results)
     log(f"{sum(1 for v in figures.values() if v)} figures rendered")
 
     # --- summary numbers ------------------------------------------------------

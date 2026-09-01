@@ -4,8 +4,8 @@ Command-line driver for the DEM validation report.
 
 Enough for the common case (files on disk, stim b8 shot data). For anything
 that needs custom detector coordinates, a custom scalar statistic, or a
-findings section, import `dem_report` and call `generate_report` directly --
-see SKILL.md.
+findings section, import `pygsti.extras.sparsedem.report` and call
+`generate_report` directly -- see SKILL.md.
 
 Example::
 
@@ -22,14 +22,16 @@ Example::
 """
 
 import argparse
-import sys
 from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")  # the CLI is headless; force before pyplot loads
 
 import numpy as np
 import stim
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from dem_report import ReportInputs, generate_report  # noqa: E402
+from pygsti.extras.sparsedem.report import (ReportInputs, generate_report,
+                                            load_commentary)
 
 
 def main(argv=None):
@@ -133,7 +135,6 @@ def main(argv=None):
 
     commentary = None
     if args.commentary:
-        from annotate_report import load_commentary
         commentary = load_commentary(Path(args.commentary))
 
     result = generate_report(ReportInputs(

@@ -11,3 +11,9 @@ from . import model_selection
 from . import logical_decoration
 from . import validation
 from . import circuit_noise
+
+# `report` (validation battery + HTML report generation) is deliberately not
+# imported here: it pulls in matplotlib.pyplot, which the rest of the package
+# does not need. Import it explicitly:
+#
+#     from pygsti.extras.sparsedem import report
