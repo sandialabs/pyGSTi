@@ -309,13 +309,35 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         for counter in range(len(self.qjobs), len(self.qiskit_isa_circuit_batches)):
             print(f"Batch {counter + 1}: NOT SUBMITTED")
     
-    def retrieve_results(self):
+    def retrieve_results(self, checkpointing_mode="data"):
         """
         Gets the results of the completed jobs from IBM Q, and processes
         them into a pyGSTi DataProtocol object (stored as the key 'data'),
         which can then be used in pyGSTi data analysis routines (e.g., if this
         was a GST experiment, it can input into a GST protocol object that will
         analyze the data).
+
+        Parameters
+        ----------
+        checkpointing_mode : str, optional
+            Checkpointing strategy for persisting the newly-retrieved experiment
+            state to disk. Allowed values:
+            - "data" (default): Write only the newly-retrieved outcome counts
+              (ProtocolData's data/ directory), avoiding re-serialization of
+              edesign, processor_spec, and circuit batches. This is fast for
+              large experiments.
+            - "full": Re-serialize the entire on-disk experiment state (the
+              original/legacy behavior prior to this parameter).
+            - "none": Skip checkpoint write entirely. This is safe because
+              `submit()` already persists job_ids.json and calibration data
+              incrementally, so results can always be re-retrieved on demand
+              later once the caller knows the jobs are complete.
+            Defaults to "data".
+
+        Raises
+        ------
+        ValueError
+            If checkpointing_mode is not one of the three allowed values.
         """
         
         assert len(self.qjobs) == len(self.job_ids), \
@@ -374,7 +396,17 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.data = _ProtocolData(self.edesign, ds)
 
         if not self.disable_checkpointing:
-            self.write()
+            if checkpointing_mode == "data":
+                self.data.write(self.checkpoint_path, edesign_already_written=True)
+            elif checkpointing_mode == "full":
+                self.write()
+            elif checkpointing_mode == "none":
+                pass
+            else:
+                raise ValueError(
+                    f"Invalid checkpointing_mode '{checkpointing_mode}'. "
+                    f"Allowed values are: 'data', 'full', 'none'."
+                )
 
 
     def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10,

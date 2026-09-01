@@ -190,6 +190,68 @@ class IBMQExperimentTester(BaseCase):
         with pytest.raises(ValueError, match="Cannot specify both"):
             exp.submit(self.backend, ibmq_session=object(), ibmq_runtime_mode=object())
 
+    def test_retrieve_results_checkpointing_mode_data_default(self):
+        """Default retrieve_results() calls data.write(), not full write()."""
+        chkpt = 'test_ibmq_retrieve_checkpointing_data_default'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+        exp.transpile(self.backend)
+        exp.submit(self.backend, stop=1, max_attempts=1)
+
+        # Mock the write method at the IBMQExperiment level and track data.write calls
+        with mock.patch.object(exp, 'write') as mock_write, \
+             mock.patch('pygsti.protocols.ProtocolData.write') as mock_pdata_write:
+            exp.retrieve_results()  # Use default checkpointing_mode="data"
+            # Full write() should NOT be called
+            mock_write.assert_not_called()
+            # data.write() should be called exactly once
+            mock_pdata_write.assert_called_once()
+
+    def test_retrieve_results_checkpointing_mode_full(self):
+        """retrieve_results(checkpointing_mode='full') calls full write()."""
+        chkpt = 'test_ibmq_retrieve_checkpointing_full'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+        exp.transpile(self.backend)
+        exp.submit(self.backend, stop=1, max_attempts=1)
+
+        # Mock the write method at the IBMQExperiment level and track data.write calls
+        with mock.patch.object(exp, 'write') as mock_write, \
+             mock.patch('pygsti.protocols.ProtocolData.write') as mock_pdata_write:
+            exp.retrieve_results(checkpointing_mode="full")
+            # Full write() should be called exactly once
+            mock_write.assert_called_once()
+            # data.write() should NOT be called (write() handles it internally)
+            mock_pdata_write.assert_not_called()
+
+    def test_retrieve_results_checkpointing_mode_none(self):
+        """retrieve_results(checkpointing_mode='none') calls neither write() nor data.write()."""
+        chkpt = 'test_ibmq_retrieve_checkpointing_none'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+        exp.transpile(self.backend)
+        exp.submit(self.backend, stop=1, max_attempts=1)
+
+        # Mock the write method at the IBMQExperiment level and track data.write calls
+        with mock.patch.object(exp, 'write') as mock_write, \
+             mock.patch('pygsti.protocols.ProtocolData.write') as mock_pdata_write:
+            exp.retrieve_results(checkpointing_mode="none")
+            # Neither write() nor data.write() should be called
+            mock_write.assert_not_called()
+            mock_pdata_write.assert_not_called()
+
+    def test_retrieve_results_checkpointing_mode_invalid(self):
+        """retrieve_results() with invalid checkpointing_mode raises ValueError."""
+        chkpt = 'test_ibmq_retrieve_checkpointing_invalid'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+        exp.transpile(self.backend)
+        exp.submit(self.backend, stop=1, max_attempts=1)
+
+        # Invalid checkpointing_mode should raise ValueError listing the valid options
+        with pytest.raises(ValueError, match="Invalid checkpointing_mode.*'data'.*'full'.*'none'"):
+            exp.retrieve_results(checkpointing_mode="bogus")
+
     #integration tests with end-to-end workflows.
     def test_e2e_mirror_rb(self):
         # Have to do int(i) because variable is of wrong type. Well, maybe.
