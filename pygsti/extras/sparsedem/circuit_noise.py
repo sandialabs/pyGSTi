@@ -28,6 +28,11 @@ Gidney's `midout` repository (independently implemented here):
 
 For SI1000, only Z-basis collapse operations are defined (M, R, MR and
 Z-product MPP), matching the published model; anything else raises.
+
+Note: `pygsti.extras.rareevent.noise` carries an independent, simpler SI1000
+implementation (no recorded-result measurement flips, uniform idle noise);
+its benchmark results were produced with that model, so the two are
+deliberately not unified.
 """
 
 import collections
