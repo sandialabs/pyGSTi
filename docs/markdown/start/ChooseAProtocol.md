@@ -12,8 +12,6 @@ Start from what you want to learn.
 
 **I want to know whether my device is stable.** You want drift characterization, which looks for time-dependence in data you have already taken. It needs timestamped data, and around 100 or more time-stamps per circuit. See [drift characterization](../guides/drift/DriftCharacterization).
 
-**I want to know what my qubits do while idling.** You want idle tomography, which characterizes the errors that accumulate during idle periods and scales to many more qubits than GST. See [idle tomography](../advanced/specialist/IdleTomography).
-
 **I want a very precise value for a rotation angle.** You want robust phase estimation, which spends its circuits on precision for a small number of angles rather than on breadth. See [robust phase estimation](../advanced/specialist/RobustPhaseEstimation).
 
 ## The RB family

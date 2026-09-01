@@ -12,6 +12,6 @@ What lives here is the machinery underneath that path, plus the corners of pyGST
 
 **Extending pyGSTi.** [Low-level GST](extending/LowLevelGST) drops beneath the `Protocol` layer to the optimization routines themselves, and [the gauge-optimization reference](extending/GaugeOptReference) covers adding new gauge objectives.
 
-**Specialist protocols.** [Robust phase estimation](specialist/RobustPhaseEstimation), [idle tomography](specialist/IdleTomography) and [parity benchmarking](specialist/ParityBenchmarking) are narrow-purpose measurements, each answering one question far more cheaply than a full characterization would.
+**Specialist protocols.** [Robust phase estimation](specialist/RobustPhaseEstimation) and [parity benchmarking](specialist/ParityBenchmarking) are narrow-purpose measurements, each answering one question far more cheaply than a full characterization would.
 
 **Everything else.** Machine-learned error models ([QPANN](ml/QPANN)), the [figure and report internals](figures/WorkspaceFigures), [Cirq interoperability](interop/Cirq), and the [migration table](migration/FromFunctionAPI) for the old function-based API.

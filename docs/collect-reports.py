@@ -107,6 +107,12 @@ def source_pages(docs: pathlib.Path, names: list) -> dict:
     return pages
 
 
+def toc_pages(docs: pathlib.Path) -> set:
+    """Pages the site builds, as markdown/-relative paths from _toc.yml."""
+    text = (docs / "_toc.yml").read_text(encoding="utf-8")
+    return {m.group(1) for m in re.finditer(r"(?:file|root):\s*markdown/(\S+)", text)}
+
+
 def offline_source() -> pathlib.Path:
     """The `offline` template directory inside the installed pyGSTi."""
     try:
@@ -136,12 +142,18 @@ def dir_size(p: pathlib.Path) -> int:
     return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
 
 
-def write_index(dest: pathlib.Path, entries: list) -> None:
+def write_index(dest: pathlib.Path, entries: list, built: set) -> None:
     """A plain listing at /reports/, so the collection is browsable on its own."""
     rows = []
     for name, href, size, page in entries:
-        page_cell = (f'<a href="../markdown/{html.escape(page)}.html">{html.escape(page)}</a>'
-                     if page else "<span class=none>&mdash;</span>")
+        # A page can generate a report yet be off the site (dropped from the
+        # TOC while it is being fixed); label the report without linking it.
+        if page and page in built:
+            page_cell = f'<a href="../markdown/{html.escape(page)}.html">{html.escape(page)}</a>'
+        elif page:
+            page_cell = html.escape(page)
+        else:
+            page_cell = "<span class=none>&mdash;</span>"
         rows.append(
             f'<tr><td><a href="{html.escape(href)}">{html.escape(name)}</a></td>'
             f'<td class=num>{size / 2**20:.1f} MB</td><td>{page_cell}</td></tr>'
@@ -212,7 +224,7 @@ def collect(docs: pathlib.Path) -> int:
         entries.append((r.name, href, (r / "main.html").stat().st_size,
                         pages.get(r.name)))
 
-    write_index(DEST, entries)
+    write_index(DEST, entries, toc_pages(docs))
 
     print(f"collected        {len(entries)} reports ({flat} flat, {nested} with sidecars)")
     unlabelled = [e[0] for e in entries if not e[3]]

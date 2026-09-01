@@ -109,7 +109,6 @@ parts:
   - file: markdown/advanced/specialist/Index
     sections:
     - file: markdown/advanced/specialist/RobustPhaseEstimation
-    - file: markdown/advanced/specialist/IdleTomography
     - file: markdown/advanced/specialist/ParityBenchmarking
   - file: markdown/advanced/ml/QPANN
   - file: markdown/advanced/figures/WorkspaceFigures
