@@ -14,7 +14,7 @@ kernelspec:
 # pyGSTi
 
 ```{note}
-You are reading the documentation for **pyGSTi version {{ pygsti_version }}**. Use the version selector to switch between tagged releases and the latest development build.
+You are reading the documentation for **pyGSTi version {{ pygsti_version }}**. Use the version selector in the bottom-right corner of the page to switch between tagged releases and the latest development build.
 ```
 
 pyGSTi is a Python framework for modeling and characterizing quantum information processors, from single qubits to devices with tens or hundreds of them. It was built to perform gate set tomography, which is where the name comes from, and GST is still its most detailed capability. It now also runs randomized benchmarking, volumetric and mirror-circuit benchmarks, drift detection, idle tomography and robust phase estimation, and it will build noise models, simulate circuits and generate interactive reports along the way.
