@@ -10,6 +10,7 @@ Utility functions for working with Basis objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
+import sys as _sys
 from functools import partial, lru_cache
 
 import numpy as _np
@@ -19,6 +20,26 @@ from pygsti.baseobjs import basis as _basis
 from pygsti.baseobjs import _compatibility as _compat
 
 from typing import Literal
+
+def is_cvxpy_expression(obj) -> bool:
+    """
+    Whether `obj` is a CVXPY `Expression`.
+
+    Returns False whenever cvxpy is not installed, and -- more usefully -- whenever
+    cvxpy has simply not been imported yet. This check is preferred since cvxpy 
+    imports can be expensive.
+
+    Parameters
+    ----------
+    obj : object
+        The object to test.
+
+    Returns
+    -------
+    bool
+    """
+    cvxpy = _sys.modules.get('cvxpy')
+    return cvxpy is not None and isinstance(obj, cvxpy.Expression)
 
 @lru_cache(maxsize=1)
 def basis_matrices(name_or_basis, dim, sparse=False):
