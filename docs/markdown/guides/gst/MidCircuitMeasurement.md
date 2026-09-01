@@ -251,6 +251,8 @@ def project_to_cptr_superops(instrument, basis):
 ```
 
 ```{code-cell} ipython3
+:tags: [output_scroll]
+
 def refit_instruments_cptplnd(results, base_estimate_label='full TP',
                               new_estimate_label='CPTPLND', verbosity=2):
     """Add a CP-constrained Lindblad estimate to `results`, warm-starting its
@@ -277,7 +279,7 @@ def refit_instruments_cptplnd(results, base_estimate_label='full TP',
     new_results = proto.run(results.data, disable_checkpointing=True)
     results.add_estimates(new_results, silent_steal=True)
 
-refit_instruments_cptplnd(results)
+refit_instruments_cptplnd(results, verbosity=3)
 ```
 
 Both fits recover the data-generating model fairly well; [judging GST fits](JudgingTheFit) covers assessing fit quality quantitatively. We compare each gauge-optimized estimate to the (ideal) target with the Frobenius distance:
