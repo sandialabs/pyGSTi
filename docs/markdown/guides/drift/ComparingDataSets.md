@@ -64,13 +64,9 @@ w = pygsti.report.Workspace()
 w.init_notebook_mode(connected=False, autodisplay=True) 
 ```
 
-```{code-cell} ipython3
-#As we expect, the datasets are consistent!
-#We can also visualize this in a few ways:
+As we expect, the datasets are consistent!  We can also visualize this in a few ways.  The plot below shows a histogram of the p-values associated with the different strings.  If the null hypothesis (that the underlying models are the same) is true, then we expect the distribution to roughly follow the dotted green line.
 
-#This is will show a histogram of the p-values associated with the different strings.
-#If the null hypothesis (that the underlying models are the same) is true,
-#then we expect the distribution to roughly follow the dotted green line.
+```{code-cell} ipython3
 w.DatasetComparisonHistogramPlot(comparator_0_1, log=True, display='pvalue')
 ```
 
@@ -81,9 +77,7 @@ w.ColorBoxPlot('dscmp', lists[-1], None, None, dscomparator=comparator_0_1)
 #A lack of green boxes indicates consistency between datasets!
 ```
 
-```{code-cell} ipython3
-#Now let's generate data from two similar but not identical datasets and see if our tests can detect them.
-```
+Now let's generate data from two similar but not identical models and see if our tests can detect the difference.
 
 ```{code-cell} ipython3
 mdl_exp_1 = smq1Q_XYI.target_model()
