@@ -26,7 +26,7 @@ There are three standard types of noise that can be added to operations in pyGST
 - **Hamiltonian**: $H_i : \rho \rightarrow -i[P_i,\rho]$
 - **Stochastic**: $S_i : \rho \rightarrow P_i \rho P_i - \rho$
 - **Correlated**: $C_{ij} : \rho \rightarrow P_i \rho P_j + P_j \rho P_i - \frac{1}{2}\{\{P_i,P_j\}, \rho\}$
-- **Affine/Active**: $A_{ij} : \rho \rightarrow i\left(P_i \rho P_j + P_j \rho P_i + \frac{1}{2}\{[P_i,P_j], \rho\}\right)$
+- **Active**: $A_{ij} : \rho \rightarrow i\left(P_i \rho P_j + P_j \rho P_i + \frac{1}{2}\{[P_i,P_j], \rho\}\right)$
 
 See our paper on [the taxonomy of small errors](https://arxiv.org/abs/2103.01928v1) for a more theoretical foundation of error generators.
 
@@ -38,7 +38,7 @@ Many of the model construction functions take arguments that allow users to add 
   - `'H'` for Hamiltonian errors
   - `'S'` for Pauli-stochastic errors
   - `'C'` for correlated Pauli-stochastic errors
-  - `'A'` for affine/active errors
+  - `'A'` for active errors
   
   and strings of `I`, `X`, `Y`, and `Z` can be used to label a Pauli basis element. 
 
