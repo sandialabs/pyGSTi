@@ -380,7 +380,6 @@ General-purpose numerical and quantum-information utilities.
    pygsti.tools.hypothesis
    pygsti.tools.internalgates
    pygsti.tools.jamiolkowski
-   pygsti.tools.leakage
    pygsti.tools.legacytools
    pygsti.tools.likelihoodfns
    pygsti.tools.lindbladtools

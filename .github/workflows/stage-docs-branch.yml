@@ -1,0 +1,106 @@
+# Assemble and force-push a ReadTheDocs source branch.
+#
+# ReadTheDocs does not execute notebooks (docs/_config.yml sets
+# `execute_notebooks: 'off'`), so the branch it builds from has to already carry
+# the executed output. This workflow builds such a branch: it takes a source
+# commit plus two artifacts produced by reuseable-main.yml's notebook steps --
+# `executed-notebooks` and `example-reports` -- replaces each notebook page's *.md
+# with the *.ipynb holding that page's output, adds the report tarball, retargets
+# the config, and force-pushes the result as a single atomic commit so RTD never
+# sees a half-built state.
+#
+# Two callers:
+#   * develop.yml -- the production path, staging `develop-with-notebooks` on
+#     every green push to develop.
+#   * docs-staging.yml -- a manual preview of any branch, staged under whatever
+#     name you pass, so a docs change can be seen rendered on RTD before it merges.
+#
+# Both share this file precisely so the preview exercises the production code
+# path rather than a lookalike of it.
+
+name: Stage a ReadTheDocs source branch
+
+on:
+  workflow_call:
+    inputs:
+      source-sha:
+        description: 'Commit to build the staging branch from.'
+        required: true
+        type: string
+      target-branch:
+        description: 'Branch to force-push. Overwritten without warning.'
+        required: true
+        type: string
+      edit-branch:
+        description: >-
+          Branch the "Show source" / "Suggest edit" buttons point at -- i.e. where
+          the human-editable .md lives. For the production build that is `develop`.
+          For a preview of an unmerged branch it must be that branch, since the
+          pages being previewed do not exist on develop yet.
+        required: false
+        type: string
+        default: 'develop'
+    secrets:
+      PYGSTI_TOKEN:
+        description: 'Token with push access to target-branch.'
+        required: true
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.PYGSTI_TOKEN }}
+    # Nothing is generated here. The executed .ipynb come from the notebook step in
+    # the caller's `build` job (reuseable-main.yml), which ran against this same
+    # commit; artifacts are scoped to a workflow run and a reusable workflow shares
+    # its caller's run, so this download resolves to that upload. This job therefore
+    # needs neither Python nor jupytext -- it only rearranges files and commits.
+    - name: Download executed notebooks
+      uses: actions/download-artifact@v4
+      with:
+        name: executed-notebooks
+        path: docs/markdown
+    # The ~25 example HTML reports the tutorials generate, packed by
+    # collect-reports.py in the same job that executed them. ReadTheDocs unpacks
+    # docs/reports.tar.xz before the Sphinx build; see .readthedocs.yaml.
+    - name: Download the example reports
+      uses: actions/download-artifact@v4
+      with:
+        name: example-reports
+        path: docs
+
+    - name: Assemble and push ${{ inputs.target-branch }}
+      env:
+        SOURCE_SHA: ${{ inputs.source-sha }}
+        TARGET_BRANCH: ${{ inputs.target-branch }}
+        EDIT_BRANCH: ${{ inputs.edit-branch }}
+      run: |
+        set -euo pipefail
+        # The assembly lives in docs/stage-rtd-branch.py rather than in this file so
+        # that a human can run it. Executing the notebooks is the expensive half and
+        # any decent workstation beats a 2-core runner at it, so staging a preview
+        # locally is often faster than waiting on CI -- but only if the same code is
+        # reachable from a shell. The script is stdlib-only, so the runner's
+        # preinstalled python3 is enough; this job still needs no Python environment.
+        #
+        # --allow-stale: the script compares .md and .ipynb mtimes to catch a page
+        # that was edited after it was executed. That heuristic is for working trees.
+        # Here the timestamps come from checkout and artifact extraction, while the
+        # guarantee that the output matches the source is structural -- the notebook
+        # job executed this very commit earlier in this same run.
+        python3 docs/stage-rtd-branch.py \
+          --source "${SOURCE_SHA}" \
+          --target-branch "${TARGET_BRANCH}" \
+          --edit-branch "${EDIT_BRANCH}" \
+          --allow-stale \
+          --push | tee /tmp/stage.log
+        {
+          echo "### Staged \`${TARGET_BRANCH}\`"
+          echo ""
+          echo '```'
+          cat /tmp/stage.log
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"

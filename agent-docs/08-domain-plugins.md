@@ -82,7 +82,7 @@ flowchart TD
 
 ## Canonical examples
 
-- [docs/markdown/protocols/](../docs/markdown/protocols/) — notebooks for several extras-housed protocols: drift characterization, RPE, mirror-circuit benchmarks, parity benchmarking, volumetric benchmarks, interpolated operators.
-- [docs/markdown/protocols/DriftCharacterization.md](../docs/markdown/protocols/DriftCharacterization.md), [RobustPhaseEstimation.md](../docs/markdown/protocols/RobustPhaseEstimation.md), [InterpolatedOperators.md](../docs/markdown/objects/InterpolatedOperators.md) (this one lives under `objects/`, not `protocols/`).
-- **Skip [docs/markdown/protocols/IdleTomography.md](../docs/markdown/protocols/IdleTomography.md)** — broken subsystem.
-- [docs/markdown/rb/](../docs/markdown/rb/) — RB tutorials (the RB Protocol lives in `protocols/rb.py`; supporting analysis can pull from `extras/` and `tools/rbtheory.py`).
+- Notebooks for the extras-housed protocols are spread across the guides: [drift characterization](../docs/markdown/guides/drift/DriftCharacterization.md), [volumetric benchmarks](../docs/markdown/guides/benchmarks/VolumetricBenchmarks.md), [mirror fidelity estimation](../docs/markdown/guides/benchmarks/MirrorFidelityEstimation.md), and — under `advanced/specialist/` — [RPE](../docs/markdown/advanced/specialist/RobustPhaseEstimation.md) and [parity benchmarking](../docs/markdown/advanced/specialist/ParityBenchmarking.md).
+- [docs/markdown/protocols/DriftCharacterization.md](../docs/markdown/guides/drift/DriftCharacterization.md), [RobustPhaseEstimation.md](../docs/markdown/advanced/specialist/RobustPhaseEstimation.md), [interpolated operators](../docs/markdown/advanced/models/CustomOperators.md#interpolating-a-physical-process).
+- **Skip [docs/markdown/protocols/IdleTomography.md](../docs/markdown/advanced/specialist/IdleTomography.md)** — broken subsystem.
+- [docs/markdown/guides/rb/](../docs/markdown/guides/rb/) — RB tutorials (the RB Protocol lives in `protocols/rb.py`; supporting analysis can pull from `extras/` and `tools/rbtheory.py`).

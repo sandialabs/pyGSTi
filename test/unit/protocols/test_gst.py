@@ -11,6 +11,7 @@ from pygsti.protocols import gst
 from pygsti.protocols.estimate import Estimate
 from pygsti.protocols.protocol import ProtocolData, Protocol
 from pygsti.protocols.gst import GSTGaugeOptSuite
+from pygsti.protocols.modeltest import ModelTestCheckpoint
 from pygsti.tools import two_delta_logl
 from ..util import BaseCase
 import pytest
@@ -224,6 +225,45 @@ class GSTObjFnBuildersTester(BaseCase):
 
         builders = gst.GSTObjFnBuilders.create_from('logl', freq_weighted_chi2=True)
         self.assertEqual(builders.iteration_builders[0].cls_to_build, FreqWeightedChi2Function)
+
+
+class CheckpointReprTester(BaseCase):
+    """
+    Tests that the checkpoint classes report their state rather than a default repr.
+    """
+
+    def test_gatesettomography_checkpoint_repr(self):
+        ckt_list = smq1Q_XYI.create_gst_experiment_design(max_max_length=1).circuit_lists[0]
+        checkpoint = gst.GateSetTomographyCheckpoint(mdl_list=[smq1Q_XYI.target_model()],
+                                                     last_completed_iter=3,
+                                                     last_completed_circuit_list=ckt_list,
+                                                     name='GateSetTomography')
+        self.assertEqual(repr(checkpoint),
+                         "GateSetTomographyCheckpoint(name='GateSetTomography', last_completed_iter=3, "
+                         + "num_models=1, num_circuits_last_iter=%d)" % len(ckt_list))
+
+    def test_modeltest_checkpoint_repr(self):
+        checkpoint = ModelTestCheckpoint(last_completed_iter=1, objfn_vals=[10.0, 12.0], name='ModelTest')
+        self.assertEqual(repr(checkpoint),
+                         "ModelTestCheckpoint(name='ModelTest', last_completed_iter=1, "
+                         + "num_circuits_last_iter=0, num_objfn_vals=2)")
+
+    def test_standardgst_checkpoint_repr(self):
+        modes = ['full TP', 'CPTPLND', 'Target']
+        children = {'CPTPLND': gst.GateSetTomographyCheckpoint(last_completed_iter=2, name='CPTPLND'),
+                    'Target': ModelTestCheckpoint(last_completed_iter=-1, name='Target'),
+                    'full TP': gst.GateSetTomographyCheckpoint(last_completed_iter=5, name='full TP')}
+        checkpoint = gst.StandardGSTCheckpoint(modes, children, name='StandardGST')
+        #the modes, not the insertion order of children, set the order of the reported iterations
+        self.assertEqual(repr(checkpoint),
+                         "StandardGSTCheckpoint(name='StandardGST', "
+                         + "modes=['full TP', 'CPTPLND', 'Target'], "
+                         + "last_completed_iter_by_mode={'full TP': 5, 'CPTPLND': 2, 'Target': -1})")
+
+    def test_checkpoint_reprs_carry_no_addresses(self):
+        checkpoints = [gst.GateSetTomographyCheckpoint(), gst.StandardGSTCheckpoint(), ModelTestCheckpoint()]
+        for checkpoint in checkpoints:
+            self.assertNotIn('0x', repr(checkpoint))
 
 
 class BaseProtocolData(object):

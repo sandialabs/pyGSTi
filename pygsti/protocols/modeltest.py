@@ -358,3 +358,9 @@ class ModelTestCheckpoint(_proto.ProtocolCheckpoint):
         name = state['name']
         return cls(last_completed_iter, last_completed_circuit_list, 
                    objfn_vals, chi2k_distributed_vals, name)
+
+    def _repr_fields(self):
+        return super()._repr_fields() + \
+               [('last_completed_iter', str(self.last_completed_iter)),
+                ('num_circuits_last_iter', str(len(self.last_completed_circuit_list))),
+                ('num_objfn_vals', str(len(self.objfn_vals)))]

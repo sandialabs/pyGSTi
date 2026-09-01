@@ -37,7 +37,7 @@ from .unconstrainedpovm import UnconstrainedPOVM
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
-from pygsti.tools import sum_of_negative_choi_eigenvalues_gate
+from pygsti.tools import abs_sum_of_negative_choi_eigenvalues_gate
 from pygsti.tools.exceptions import PrepareThyself
 from pygsti.baseobjs import Basis
 
@@ -603,7 +603,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                 #we only vary physical directions, not independent error generators
                 def _objfn(v):
 
-                    #For some reason adding the sum_of_negative_choi_eigenvalues_gate term
+                    #For some reason adding the abs_sum_of_negative_choi_eigenvalues_gate term
                     #resulted in minimize() sometimes choosing NaN values for v. There are
                     #two stack exchange issues showing this problem with no solution.
                     if _np.isnan(v).any():
@@ -614,8 +614,9 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False, cp_p
                         L_vec += coeff * phys_direction
                     errorgen.from_vector(L_vec)
                     proc_matrix = _spl.expm(errorgen.to_dense())
-                    
-                    return _np.linalg.norm(dense_povm - dense_ideal_povm @ proc_matrix) + cp_penalty * sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+                    temp1 = _np.linalg.norm(dense_povm - dense_ideal_povm @ proc_matrix)
+                    temp2 = abs_sum_of_negative_choi_eigenvalues_gate(proc_matrix, basis)
+                    return temp1 + cp_penalty * temp2
                 
                 soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
                                         tol=1e-13) 

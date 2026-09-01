@@ -44,6 +44,32 @@ from pygsti.objectivefns.wildcardbudget import PrimitiveOpsSingleScaleWildcardBu
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
 DEFAULT_NONMARK_ERRBAR_THRESHOLD = 100000.0  # essentially disable since we have better ways of quantifying this now
 
+# Default for the 'embed_figures' report option when neither advanced_options nor a
+# saved report supplies one: True, False, or the string 'auto'.  True inlines every
+# figure into main.html, giving a self-contained page that opens straight from the
+# filesystem.  False writes each figure to its own file under 'figures/', fetched on
+# demand when its section is opened; such a report loads much faster but must be
+# served over HTTP (browsers block the fetches from file:// pages).  'auto' -- the
+# value when the environment variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT is unset --
+# currently resolves to True, so pyGSTi's out-of-the-box behavior is unchanged; the
+# string form exists so an explicit choice is distinguishable from the absence of
+# one.  Set the environment variable to a falsy value ('0', 'false', ...) before
+# importing pyGSTi to make every report split its figures out, or to a truthy value
+# to force embedding.  Note that 'single_file' HTML output requires embedded figures.
+_embed_env = _os.environ.get('PYGSTI_REPORT_EMBED_FIGURE_DEFAULT', '').strip().lower()
+REPORT_EMBED_FIGURE_DEFAULT = 'auto' if _embed_env in ('', 'auto') \
+    else _embed_env not in ('0', 'false', 'no', 'off')
+
+
+def _resolve_embed_figures(embed_figures):
+    """Map an 'embed_figures' value (True/False/'auto', or None meaning
+    "consult REPORT_EMBED_FIGURE_DEFAULT") to a plain bool."""
+    if embed_figures is None:
+        embed_figures = REPORT_EMBED_FIGURE_DEFAULT
+    if embed_figures == 'auto':
+        return True
+    return bool(embed_figures)
+
 
 def _add_new_labels(running_lbls, current_lbls):
     """
@@ -806,8 +832,16 @@ def create_standard_report(results, filename, title="auto",
             i.e. just upon first rendering (`"initial"`) -- or whenever
             the browser window is resized (`"continual"`).
 
-        - embed_figures: bool, optional
-            Whether figures should be embedded in the generated report.
+        - embed_figures: bool or 'auto', optional
+            Whether figures should be embedded in the generated report's
+            main.html (making it self-contained but large and slow to load)
+            or written to a 'figures' directory and loaded on demand (fast,
+            but the report must then be served over HTTP rather than opened
+            from the filesystem).  Defaults to
+            :data:`~pygsti.report.factory.REPORT_EMBED_FIGURE_DEFAULT`,
+            which the environment variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT
+            controls; when that is unset the default is 'auto', which
+            currently embeds.
 
         - combine_robust : bool, optional
             Whether robust estimates should automatically be combined with
@@ -845,11 +879,14 @@ def create_standard_report(results, filename, title="auto",
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
 
+    advanced_options = dict(advanced_options or {})
+    if filename is not None and filename.endswith(".html"):
+        # a .html filename means single-file output, which needs embedded figures
+        advanced_options.setdefault('embed_figures', True)
+
     report = construct_standard_report(
         results, title, confidence_level, comm, ws, advanced_options, verbosity
     )
-
-    advanced_options = advanced_options or {}
     precision = advanced_options.get('precision', None)
 
     if filename is not None:
@@ -1018,11 +1055,15 @@ def create_nqnoise_report(results, filename, title="auto",
 
     # Wrap a call to the new factory method
     ws = ws or _ws.Workspace()
+
+    advanced_options = dict(advanced_options or {})
+    if filename is not None and filename.endswith(".html"):
+        # a .html filename means single-file output, which needs embedded figures
+        advanced_options.setdefault('embed_figures', True)
+
     report = construct_nqnoise_report(
         results, title, confidence_level, comm, ws, advanced_options, verbosity
     )
-
-    advanced_options = advanced_options or {}
     precision = advanced_options.get('precision', None)
 
     if filename is not None:
@@ -1274,8 +1315,16 @@ def construct_standard_report(results, title="auto",
             usage of non-Markovian error bars.  If None, then non-Markovian
             error bars are never computed.
 
-        - embed_figures: bool, optional
-            Whether figures should be embedded in the generated report.
+        - embed_figures: bool or 'auto', optional
+            Whether figures should be embedded in the generated report's
+            main.html (making it self-contained but large and slow to load)
+            or written to a 'figures' directory and loaded on demand (fast,
+            but the report must then be served over HTTP rather than opened
+            from the filesystem).  Defaults to
+            :data:`~pygsti.report.factory.REPORT_EMBED_FIGURE_DEFAULT`,
+            which the environment variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT
+            controls; when that is unset the default is 'auto', which
+            currently embeds.
 
         - combine_robust : bool, optional
             Whether robust estimates should automatically be combined with
@@ -1337,7 +1386,7 @@ def construct_standard_report(results, title="auto",
             DeprecationWarning)
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
-    embed_figures = advanced_options.get('embed_figures', True)
+    embed_figures = _resolve_embed_figures(advanced_options.get('embed_figures', None))
     combine_robust = advanced_options.get('combine_robust', True)
     idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
     idtIdleOp = advanced_options.get('idt_idle_oplabel', _Lbl('Gi'))
@@ -1594,8 +1643,16 @@ def construct_nqnoise_report(results, title="auto",
             tables will get confidence intervals (and reports will take longer
             to generate).
 
-        - embed_figures: bool, optional
-            Whether figures should be embedded in the generated report.
+        - embed_figures: bool or 'auto', optional
+            Whether figures should be embedded in the generated report's
+            main.html (making it self-contained but large and slow to load)
+            or written to a 'figures' directory and loaded on demand (fast,
+            but the report must then be served over HTTP rather than opened
+            from the filesystem).  Defaults to
+            :data:`~pygsti.report.factory.REPORT_EMBED_FIGURE_DEFAULT`,
+            which the environment variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT
+            controls; when that is unset the default is 'auto', which
+            currently embeds.
 
     verbosity : int, optional
         How much detail to send to stdout.
@@ -1611,7 +1668,7 @@ def construct_nqnoise_report(results, title="auto",
     advanced_options = advanced_options or {}
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
-    embed_figures = advanced_options.get('embed_figures', True)
+    embed_figures = _resolve_embed_figures(advanced_options.get('embed_figures', None))
     combine_robust = advanced_options.get('combine_robust', True)
     idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
     idtIdleOp = advanced_options.get('idt_idle_oplabel', _Lbl('Gi'))
@@ -1834,86 +1891,3 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
         pdf='drift_pdf_report.tex'
     )
     return _Report(templates, results_dict, sections, set(), global_qtys, report_params, workspace=ws)
-
-
-# # XXX this needs to be revised into a script
-# # Scratch: SAVE!!! this code generates "projected" models which can be sent to
-# # FitComparisonTable (with the same gss for each) to make a nice comparison plot.
-#        opLabels = list(model.operations.keys())  # operation labels
-#        basis = model.basis
-#
-#        if basis.name != targetModel.basis.name:
-#            raise ValueError("Basis mismatch between model (%s) and target (%s)!"\
-#                                 % (basis.name, targetModel.basis.name))
-#
-#        #Do computation first
-#        # Note: set to "full" parameterization so we can set the gates below
-#        #  regardless of what to fo parameterization the original model had.
-#        gsH = model.copy(); gsH.set_all_parameterizations("full"); Np_H = 0
-#        gsS = model.copy(); gsS.set_all_parameterizations("full"); Np_S = 0
-#        gsHS = model.copy(); gsHS.set_all_parameterizations("full"); Np_HS = 0
-#        gsLND = model.copy(); gsLND.set_all_parameterizations("full"); Np_LND = 0
-#        #gsHSCP = model.copy()
-#        gsLNDCP = model.copy(); gsLNDCP.set_all_parameterizations("full")
-#        for gl in opLabels:
-#            gate = model.operations[gl]
-#            targetOp = targetModel.operations[gl]
-#
-#            errgen = _tools.error_generator(gate, targetOp, genType)
-#            hamProj, hamGens = _tools.std_errorgen_projections(
-#                errgen, "hamiltonian", basis.name, basis, True)
-#            stoProj, stoGens = _tools.std_errorgen_projections(
-#                errgen, "stochastic", basis.name, basis, True)
-#            HProj, OProj, HGens, OGens = \
-#                _tools.lindblad_errorgen_projections(
-#                    errgen, basis, basis, basis, normalize=False,
-#                    return_generators=True)
-#                #Note: return values *can* be None if an empty/None basis is given
-#
-#            ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
-#            sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
-#            lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
-#                _np.einsum('ij,ijkl', OProj, OGens)
-#
-#            ham_error_gen = _tools.change_basis(ham_error_gen,"std",basis)
-#            sto_error_gen = _tools.change_basis(sto_error_gen,"std",basis)
-#            lnd_error_gen = _tools.change_basis(lnd_error_gen,"std",basis)
-#
-#            gsH.operations[gl]  = _tools.operation_from_error_generator(
-#                ham_error_gen, targetOp, genType)
-#            gsS.operations[gl]  = _tools.operation_from_error_generator(
-#                sto_error_gen, targetOp, genType)
-#            gsHS.operations[gl] = _tools.operation_from_error_generator(
-#                ham_error_gen+sto_error_gen, targetOp, genType)
-#            gsLND.operations[gl] = _tools.operation_from_error_generator(
-#                lnd_error_gen, targetOp, genType)
-#
-#            #CPTP projection
-#
-#            evals,U = _np.linalg.eig(OProj)
-#            pos_evals = evals.clip(0,1e100) #clip negative eigenvalues to 0
-#            OProj_cp = _np.dot(U,_np.dot(_np.diag(pos_evals),_np.linalg.inv(U))) #OProj_cp is now a pos-def matrix
-#            lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
-#                _np.einsum('ij,ijkl', OProj_cp, OGens)
-#            lnd_error_gen_cp = _tools.change_basis(lnd_error_gen_cp,"std",basis)
-#
-#            gsLNDCP.operations[gl] = _tools.operation_from_error_generator(
-#                lnd_error_gen_cp, targetOp, genType)
-#
-#            Np_H += len(hamProj)
-#            Np_S += len(stoProj)
-#            Np_HS += len(hamProj) + len(stoProj)
-#            Np_LND += HProj.size + OProj.size
-#
-#        #DEBUG!!!
-#        #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(model))
-#        #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(gsLNDCP))
-#
-#        #Check for CPTP where expected
-#        #assert(_tools.sum_of_negative_choi_eigenvalues(gsHSCP) < 1e-6)
-#        assert(_tools.sum_of_negative_choi_eigenvalues(gsLNDCP) < 1e-6)
-#
-#        # ...
-#        models = (model, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
-#        modelTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
-#        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)

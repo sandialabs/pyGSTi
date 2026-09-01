@@ -6,7 +6,23 @@ name: Build and run tests (feature branches)
 
 on:
   push:
-    branches-ignore: [ "beta", "develop", "master", "bugfix" ]
+    branches-ignore:
+    - "beta"
+    - "develop"
+    - "master"
+    - "bugfix"
+    # Docs-staging refs, which carry no source change worth testing:
+    #   stage-docs*  is the trigger ref for docs-staging.yml -- pushing here means
+    #                "render this branch", and the test matrix already ran on the
+    #                branch it was copied from.
+    #   *-with-notebooks / docs-preview are GENERATED: a source commit plus executed
+    #                notebook output, force-pushed by stage-docs-branch.yml. Those
+    #                commits carry [skip ci], so this is a second line of defence
+    #                rather than the only one.
+    - "stage-docs"
+    - "stage-docs/**"
+    - "develop-with-notebooks"
+    - "docs-preview"
   # Hacky way to only run pull requests from forked repositories (assumes : is not used in branch names unless forked)
   # https://github.community/t/how-to-trigger-an-action-on-push-or-pull-request-but-not-both/16662/10
   pull_request:

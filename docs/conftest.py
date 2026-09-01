@@ -1,21 +1,31 @@
-"""Session fixtures for the documentation notebook (nbval) tests.
+"""Shared inputs for the documentation notebooks.
 
 Several tutorial notebooks under ``docs/markdown`` analyze data that *other*
 tutorials generate and save under ``docs/tutorial_files``:
 
-* ``objects/DataSet`` writes ``Example_Dataset.txt``, ``Example_Dataset_LowCnts.txt``
-  and the ``Example_GST_Data`` protocol-data directory, which
-  ``gst/Driverfunctions``, ``gst/LowLevel``, ``gst/Protocols`` and
-  ``reporting/ReportGeneration`` read back.
-* ``gst/Protocols`` runs GST and writes the ``Example_GST_Data/results`` tree,
-  which ``objects/Results`` reads back.
+* ``guides/workflow/DataSets`` writes ``Example_Dataset.txt``,
+  ``Example_Dataset_LowCnts.txt`` and the ``Example_GST_Data`` protocol-data
+  directory.  ``advanced/extending/LowLevelGST`` reads both datasets,
+  ``guides/analysis/Reports`` reads ``Example_Dataset.txt``, and
+  ``guides/gst/RunningGST`` reads ``Example_GST_Data``.
+* ``guides/gst/RunningGST`` runs GST and writes the ``Example_GST_Data/results``
+  tree, which ``guides/analysis/Results`` reads back.
 
-When the notebooks are executed as an *unordered, parallel* nbval suite (the CI
-runs ``pytest -n auto --dist loadscope docs/markdown``) the generating notebook
-is not guaranteed to run before its consumers.  To make every notebook runnable
-on its own we materialize these shared inputs exactly once, before any notebook
-runs.  Everything is written into the gitignored ``docs/tutorial_files`` dir, so
-nothing here is ever committed.
+Nothing guarantees a generating notebook runs before its consumers, under either
+runner, so these shared inputs are materialized exactly once up front.  There are
+two entry points:
+
+* Under pytest, the autouse session fixture below does it, guarded by a lock so
+  that ``-n auto`` workers cooperate.
+* ``docs/execute-notebooks.py`` -- which is not pytest, so no fixture fires --
+  calls ``_generate_shared_fixtures()`` directly.  CI does this before executing
+  the notebooks for the hosted docs.
+
+Everything is written into the gitignored ``docs/tutorial_files`` dir, so nothing
+here is ever committed.
+
+Note that this covers only *cross-notebook* inputs.  Files a notebook writes and
+then reads a few cells later are its own business and need nothing here.
 """
 import os
 import time

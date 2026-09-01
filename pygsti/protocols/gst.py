@@ -3541,6 +3541,12 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
         name = state['name']
         return cls(mdl_list, last_completed_iter, last_completed_circuit_list, 
                    final_objfn, name)
+
+    def _repr_fields(self):
+        return super()._repr_fields() + \
+               [('last_completed_iter', str(self.last_completed_iter)),
+                ('num_models', str(len(self.mdl_list))),
+                ('num_circuits_last_iter', str(len(self.last_completed_circuit_list)))]
     
 
 class StandardGSTCheckpoint(_proto.ProtocolCheckpoint):
@@ -3626,6 +3632,15 @@ class StandardGSTCheckpoint(_proto.ProtocolCheckpoint):
         for mode in modes:
             ret.children[mode].parent = ret
         return ret
+
+    def _repr_fields(self):
+        #iterate over modes (rather than the children dict) so the ordering is deterministic
+        modes = self.modes if self.modes is not None else sorted(self.children.keys())
+        child_iters = {mode: getattr(self.children[mode], 'last_completed_iter', None)
+                       for mode in modes if mode in self.children}
+        return super()._repr_fields() + \
+               [('modes', repr(modes)),
+                ('last_completed_iter_by_mode', repr(child_iters))]
 
 
 GSTDesign = GateSetTomographyDesign

@@ -3,6 +3,12 @@
 
 title: PyGSTi Documentation
 author: PyGSTi Developers
+# Footer copyright year. Without this key the footer reads 2023, which is
+# jupyter-book's own default (its default_config.yml), not anything pyGSTi
+# ever set. Sphinx only rewrites the year on its own when SOURCE_DATE_EPOCH
+# is set, and the %Y placeholder that would keep this current arrived in
+# Sphinx 8.1 -- out of reach while `docs` pins jupyter-book<2 to Sphinx 7.x.
+copyright: "2026"
 # Logo is configured below (sphinx html_theme_options.logo) so we can serve a
 # dark-content variant in light mode and the white variant in dark mode.
 
@@ -61,6 +67,10 @@ sphinx:
     # built from the auto-generated `develop-with-notebooks` branch (whose
     # repository.branch is rewritten by CI so Colab launch links resolve).
     edit_button_branch: _ext
+    # Collapses the duplicate <script> tags that sphinx_thebe and
+    # sphinx_togglebutton emit, one of which is a `const` redeclaration that
+    # throws a SyntaxError on every page. Upstream bug; see the module docstring.
+    dedupe_js: _ext
   extra_extensions:
   - 'sphinx.ext.napoleon'
   - 'sphinx.ext.autodoc'
@@ -82,6 +92,38 @@ sphinx:
       logo:
         image_light: pyGSTi_icon_blk.png
         image_dark: pyGSTi_icon_wht.png
+      # "Show source" for each page. Set here rather than under the `repository:`
+      # block above, because jupyter-book 1.x's config_schema.json has no
+      # use_source_button key -- it exposes use_repository_button,
+      # use_issues_button and use_edit_page_button, but not this one -- so setting
+      # it there is silently dropped. It is a sphinx_book_theme option
+      # (theme.conf: use_source_button = False), so it has to be passed straight
+      # through to the theme. The edit_button_branch extension repoints the URL at
+      # `pygsti_edit_branch` and swaps .ipynb for the .md that exists there.
+      use_source_button: true
+      # sphinx_book_theme renders the sidebar toctree into the HTML of every
+      # page, and api.rst's recursive autosummary puts 1725 entries in it. At
+      # the theme defaults (collapse_navbar=False, max_navbar_depth=4) that was
+      # 339 KB of <nav> on all 1848 pages -- 71% of a typical API page, 76% of a
+      # content page, and roughly 610 MB of a 1.4 GB site. Every reader was
+      # downloading 380 KB of navigation before a word of content.
+      #
+      # Capping the depth at 2 keeps the sidebar uniform across the site (the
+      # same entries on every page) while dropping the ~1500 class stubs, which
+      # are the only things in the book at level 3: _toc.yml nests just two
+      # levels of files, 33 chapters and 51 sections, so nothing outside the API
+      # branch is affected. Cold local build 20m20s -> 12m21s, docs 810 MB ->
+      # 208 MB, nav 379 KB -> 41 KB per page, warning count unchanged at 418.
+      collapse_navbar: false
+      max_navbar_depth: 2
+    # The example HTML reports, collected by docs/collect-reports.py. Sphinx
+    # copies the *contents* of each html_extra_path entry to the output root,
+    # so _extra/reports/ lands at /reports/ on the site. The reports are ~600 MB
+    # of generated HTML; they reach a build through docs/reports.tar.xz, which
+    # `collect-reports.py extract` unpacks (see .readthedocs.yaml). A build with
+    # no tarball simply has no _extra directory, and Sphinx skips a missing
+    # html_extra_path entry with a warning rather than failing.
+    html_extra_path: ["_extra"]
     autosummary_generate: True
     autoclass_content: "both"
     autodoc_typehints: "description"
@@ -95,10 +137,20 @@ sphinx:
     #   - pygsti.drivers.longsequence  the longsequence driver module + its functions
     #   - pygsti.evotypes.*          ~191 pages of internal evolution-type rep machinery
     exclude_patterns:
-    # Treat .md as the source for each page; the paired .ipynb (committed only on
-    # the develop-with-notebooks build branch) must not be picked up as a
-    # duplicate source document. The launch-button rewrite still sees it on disk.
-    - "**/*.ipynb"
+    # html_extra_path content is copied verbatim; keep it out of source
+    # discovery so Sphinx does not also try to read it as documents.
+    - "_extra"
+    # Keep the build tree out of source discovery. Jupyter Book only injects its
+    # own defaults (_build, Thumbs.db, ...) when `exclude_patterns` is a TOP-LEVEL
+    # key; ours lives under sphinx.config, so we must list _build ourselves.
+    # Without it, myst-nb's `_build/**/jupyter_execute/*.ipynb` copies are
+    # discovered as source documents and each build nests another copy one level
+    # deeper -- unbounded growth across incremental builds.
+    - "_build"
+    # Idle tomography is off the web docs until its factor-of-two discrepancy
+    # between reported and injected intrinsic stochastic rates is resolved.
+    # The markdown source stays in the repo so it can be fixed and restored.
+    - "markdown/advanced/specialist/IdleTomography*"
     - "_autosummary/pygsti.report.*"
     - "_autosummary/pygsti.modelpacks.*"
     - "_autosummary/pygsti.drivers.longsequence*"

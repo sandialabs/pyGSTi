@@ -78,10 +78,11 @@ class Report:
         self._build_defaults = build_defaults or {}
         self._pdf_available = pdf_available
 
-    def _build(self, build_options=None):
+    def _build(self, build_options=None, verbosity=0):
         """ Render all sections to a map of report elements for templating """
         full_params = {
             'results': self._results,
+            'verbosity': verbosity,
             **self._report_params
         }
         full_params.update(self._build_defaults)
@@ -157,7 +158,9 @@ class Report:
             document, with external dependencies baked-in. This mode
             is not recommended for large reports, because this file
             can grow large enough that major web browsers may struggle
-            to render it.
+            to render it.  Requires a report constructed with embedded
+            figures (the default; only a report constructed with
+            embed_figures=False lacks them).
 
         verbosity : int, optional
             Amount of detail to print to stdout.
@@ -173,14 +176,25 @@ class Report:
             toggles['BrevityLT' + str(k + 1)] = True
 
         # Render sections
-        qtys = self._build(build_options)
+        qtys = self._build(build_options, verbosity=verbosity)
 
         # TODO this really should be a parameter of this method
-        embed_figures = self._report_params.get('embed_figures', True)
+        # A missing key means the report's construction did not bake in the choice
+        # (e.g. drift reports), so single-file output is fine and directory output
+        # follows the module default.
+        from pygsti.report.factory import _resolve_embed_figures
+        embed_figures = self._report_params.get('embed_figures', None)
+        if embed_figures is None and single_file:
+            embed_figures = True
+        else:
+            embed_figures = _resolve_embed_figures(embed_figures)
 
         if single_file:
-            assert(embed_figures), \
-                "Single-file mode requires `embed_figures` to be True"
+            if not embed_figures:
+                raise ValueError(
+                    "Single-file mode requires embedded figures.  Construct the report "
+                    "with advanced_options={'embed_figures': True}, or set the environment "
+                    "variable PYGSTI_REPORT_EMBED_FIGURE_DEFAULT=1 before importing pyGSTi.")
             _merge.merge_jinja_template(
                 qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
@@ -208,10 +222,9 @@ class Report:
         who want to tinker with the standard analysis presented in the static
         HTML or LaTeX format reports.
 
-        Note that interactive cells in report notebooks require JavaScript,
-        and therefore do not work with JupyterLab. Please continue to use
-        classic Jupyter notebooks for PyGSTi report notebooks. To track this issue,
-        see https://github.com/pyGSTio/pyGSTi/issues/205.
+        Note that interactive cells in report notebooks are driven by JavaScript,
+        so the notebook must be "Trusted" before its figures will render: JupyterLab
+        and Notebook 7 do not run scripts in an untrusted notebook.
 
         Parameters
         ----------
@@ -259,11 +272,12 @@ class Report:
         nb.add_markdown('# {title}\n(Created on {date})'.format(
             title=title, date=_time.strftime("%B %d, %Y")))
         
-        nb.add_markdown("## JupyterLab Incompatibility Warning\n" + 
-        "<font color='red'>Note that interactive cells in report notebooks require JavaScript, " +
-        "and therefore do not work with JupyterLab. Please continue to use " +
-        "classic Jupyter notebooks for PyGSTi report notebooks. To track this issue, " +
-        "see https://github.com/pyGSTio/pyGSTi/issues/205.</font>")
+        nb.add_markdown("## Before you run this\n" +
+        "The figures below are drawn by JavaScript, so this notebook has to be "
+        "**Trusted** before they will appear. JupyterLab and Notebook 7 do not run "
+        "scripts in an untrusted notebook. Run `jupyter trust` on this file, or use "
+        "the Trusted indicator in the toolbar, then reload with your browser's "
+        "reload button.")
 
         nb.add_code("""
         import pygsti
@@ -373,10 +387,8 @@ class Report:
 
         printer.log("Report Notebook created as %s" % path)
 
-        printer.warning("""Note that interactive cells in report notebooks require JavaScript,
-         and therefore do not work with JupyterLab. Please continue to use
-         classic Jupyter notebooks for PyGSTi report notebooks. To track this issue,
-         see https://github.com/pyGSTio/pyGSTi/issues/205.""")
+        printer.log("Note: the figures in a report notebook are drawn by JavaScript,"
+                    " so the notebook must be \"Trusted\" before they will render.")
 
         if auto_open:
             port = "auto" if auto_open is True else int(auto_open)
@@ -453,7 +465,7 @@ class Report:
         latex_flags = latex_flags or ["-interaction=nonstopmode", "-halt-on-error", "-shell-escape"]
 
         # Render sections
-        qtys = self._build(build_options)
+        qtys = self._build(build_options, verbosity=verbosity)
         # TODO: filter while generating plots to remove need for sanitization
         qtys = {k: v for k, v in qtys.items()
                 if not(isinstance(v, _ws.Switchboard) or isinstance(v, _ws.SwitchboardView))}

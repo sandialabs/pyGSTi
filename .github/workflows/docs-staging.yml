@@ -1,0 +1,97 @@
+# Manually stage any branch as a ReadTheDocs source branch.
+#
+# The hosted docs are only ever assembled by CI -- executing the notebooks takes
+# ~40 minutes and the result is committed to a generated branch -- so there is
+# otherwise no way to see how a docs change will actually render on RTD until it
+# has already merged to develop. This workflow closes that gap: dispatch it from
+# a branch, point RTD at the staging branch it pushes, and you get the real site.
+#
+# It runs the same notebook execution and the same staging logic as the
+# production path in develop.yml, differing only in what it does NOT do: no test
+# matrix, one Linux job instead of sixteen. Run it from the Actions tab with
+# "Run workflow", having selected the branch you want staged.
+
+name: Stage docs preview on ReadTheDocs
+
+on:
+  # A push trigger, not just workflow_dispatch, and that is not redundant.
+  # GitHub only offers the "Run workflow" button for workflows whose file is on
+  # the DEFAULT branch (master here), so a dispatch-only version of this file
+  # would be unreachable until it had shipped all the way through
+  # develop -> beta -> master -- which is backwards, since its whole purpose is
+  # previewing docs that have not merged yet. qiskit-interop.yml is the cautionary
+  # case already in this repo: it has lived on develop with schedule +
+  # workflow_dispatch triggers and has never once run, because neither trigger
+  # fires off the default branch.
+  #
+  # Push events have no such restriction -- GitHub reads .github/workflows from
+  # the pushed commit -- so pushing a branch to `stage-docs` stages it, whatever
+  # branch this file currently lives on. To preview: push whatever you are working
+  # on to `stage-docs` (force-push is fine, it is a scratch ref), then point RTD at
+  # the branch this produces.
+  push:
+    branches:
+    - 'stage-docs'
+    - 'stage-docs/**'
+  workflow_dispatch:
+    inputs:
+      target-branch:
+        description: 'Staging branch to force-push (overwritten without warning). Point RTD here.'
+        required: false
+        type: string
+        default: 'docs-preview'
+      edit-branch:
+        description: >-
+          Branch the Show source / Suggest edit buttons should point at.
+          Defaults to the branch you dispatched from, which is almost always what
+          you want: the pages being previewed may not exist on develop yet.
+        required: false
+        type: string
+        default: ''
+      python-version:
+        description: 'Python version to execute the notebooks under.'
+        required: false
+        type: string
+        default: '3.13'
+      stage-on-notebook-failure:
+        description: >-
+          Stage the branch even if some notebook cell errored. On by default: with
+          --allow-errors the traceback is captured in the notebook itself, so the
+          rendered preview is usually the fastest way to see what broke.
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  execute:
+    # One job -- Linux, Cython, no test suites. The notebook step is Linux-only
+    # (it compiles CHP into /usr/local/bin) and is the only thing being asked for.
+    uses: ./.github/workflows/reuseable-main.yml
+    name: Execute the docs notebooks
+    with:
+      os: ubuntu-latest
+      python-version: ${{ inputs.python-version || '3.13' }}
+      use-cython: 'true'
+      run-unit-tests: 'false'
+      run-integration-tests: 'false'
+      run-extra-tests: 'false'
+      run-coverage: 'false'
+      run-notebook-tests: 'true'
+
+  stage:
+    needs: execute
+    # always() so a notebook failure can still produce a preview when asked for.
+    # The artifact upload in reuseable-main.yml is itself always(), so the
+    # executed notebooks -- tracebacks and all -- are there to download either way.
+    # `github.event_name == 'push'` before the input, because on a push event the
+    # `inputs` context is empty and would read as "do not stage" -- inverting the
+    # documented default for the trigger people will actually use.
+    if: ${{ always() && (needs.execute.result == 'success' || github.event_name == 'push' || inputs.stage-on-notebook-failure) }}
+    uses: ./.github/workflows/stage-docs-branch.yml
+    name: Stage the RTD source branch
+    with:
+      source-sha: ${{ github.sha }}
+      target-branch: ${{ inputs.target-branch || 'docs-preview' }}
+      edit-branch: ${{ inputs.edit-branch || github.ref_name }}
+    secrets:
+      PYGSTI_TOKEN: ${{ secrets.PYGSTI_TOKEN }}

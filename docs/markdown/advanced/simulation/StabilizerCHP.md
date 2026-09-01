@@ -1,0 +1,283 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.3
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
+
+# CHP interface (legacy)
+
+```{warning} This notebook is under construction and will have more description in the near future.```
+
+Start by installing the pure-Python version of CHP sim.
+
+```{code-cell} ipython3
+%pip install chp_sim -q
+```
+
+```{code-cell} ipython3
+import pygsti
+import numpy as np
+from pygsti.modelmembers.operations import LinearOperator, StaticCliffordOp, StochasticNoiseOp, DepolarizeOp, ComposedOp, EmbeddedOp
+```
+
+## LinearOperator and StaticCliffordOp
+
+Now with 'chp' evotype.
+
+```{code-cell} ipython3
+Gx = StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp')
+print(Gx)
+print(Gx._rep._chp_ops())
+```
+
+```{code-cell} ipython3
+Gx.evotype.name
+```
+
+```{code-cell} ipython3
+# Can also make custom CHP operations
+# Here I'm making a (deterministic) Hadamard on qubit 0 and CNOT on qubits 1 and 2
+rep = pygsti.evotypes.chp.opreps.OpRep(['h 0', 'c 1 2'], state_space=3)
+c = LinearOperator(rep, 'chp')
+```
+
+```{code-cell} ipython3
+print(c)
+print(c._rep._chp_ops())
+```
+
+```{code-cell} ipython3
+print(StaticCliffordOp.from_standard_gate_name('Gcnot', evotype='chp'))
+```
+
+## StochasticNoiseOp and DepolarizeOp
+
+Now with 'chp' evotype
+
+```{code-cell} ipython3
+nqubits = 1
+scop = StochasticNoiseOp(nqubits, basis='pp', evotype='chp', initial_rates=[0.5, 0.1, 0.1], seed_or_state=2021)
+print(scop)
+for _ in range(4):
+    print(scop._rep._chp_ops())
+```
+
+```{code-cell} ipython3
+nqubits = 1
+dop = DepolarizeOp(nqubits, basis='pp', evotype='chp', initial_rate=0.7, seed_or_state=2021)
+print(dop)
+for _ in range(4): # With seed 2021, pulls Z, I (no output), X, Y
+    print(dop._rep._chp_ops())
+```
+
+## ComposedOp + EmbeddedOp
+
+```{code-cell} ipython3
+# ComposedOp
+Gzx_composed = ComposedOp([StaticCliffordOp.from_standard_gate_name('Gzpi', evotype='chp'), StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp')])
+print(Gzx_composed)
+print(Gzx_composed._rep._chp_ops())
+#print(Gzx_composed.get_chp_str([2]))
+```
+
+```{code-cell} ipython3
+# EmbeddedOp
+Gxi_embedded = EmbeddedOp(['Q0', 'Q1'], ['Q0'], StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp'))
+print(Gxi_embedded)
+print(Gxi_embedded._rep._chp_ops())
+#print(Gxi_embedded.get_chp_str([5,7]))
+```
+
+```{code-cell} ipython3
+Gix_embedded = EmbeddedOp(['Q0', 'Q1'], ['Q1'], StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp'))
+print(Gix_embedded)
+print(Gix_embedded._rep._chp_ops())
+#print(Gix_embedded.get_chp_str([5,7]))
+```
+
+```{code-cell} ipython3
+# EmbeddedOp made of ComposedOps
+Gzx_comp_embed = EmbeddedOp(['Q0', 'Q1', 'Q2', 'Q3'], ['Q1'], Gzx_composed)
+print(Gzx_comp_embed)
+print(Gzx_comp_embed._rep._chp_ops())
+#print(Gzx_comp_embed.get_chp_str([5, 6, 7, 8]))
+```
+
+## WeakForwardSimulator + Explicit Model
+
+```{code-cell} ipython3
+sim = pygsti.forwardsims.WeakForwardSimulator(shots=100)
+```
+
+```{code-cell} ipython3
+#Initialize an empty Model object
+model = pygsti.models.ExplicitOpModel(['Q0', 'Q1'], simulator=sim, evotype='chp')
+
+def make_2Q_op(name0, name1):
+    return ComposedOp([
+        EmbeddedOp(['Q0', 'Q1'], ['Q0'], StaticCliffordOp.from_standard_gate_name(name0, evotype='chp')),
+        EmbeddedOp(['Q0', 'Q1'], ['Q1'], StaticCliffordOp.from_standard_gate_name(name1, evotype='chp')),
+    ])
+
+#Populate the Model object with states, effects, gates
+# For CHP, prep must be all-zero ComputationalSPAMVec
+# and povm must be ComputationalBasisPOVM
+model['rho0'] = pygsti.modelmembers.states.ComputationalBasisState([0, 0], evotype='chp')
+model['Mdefault'] = pygsti.modelmembers.povms.ComputationalBasisPOVM(2, evotype='chp')
+
+model['Gii'] = make_2Q_op('Gi', 'Gi')
+model['Gxi'] = make_2Q_op('Gxpi', 'Gi')
+model['Gix'] = make_2Q_op('Gi', 'Gxpi')
+model['Gxx'] = make_2Q_op('Gxpi', 'Gxpi')
+model['Gyi'] = make_2Q_op('Gypi', 'Gi')
+model['Giy'] = make_2Q_op('Gi', 'Gypi')
+model['Gyy'] = make_2Q_op('Gypi', 'Gypi')
+
+print(model)
+```
+
+```{code-cell} ipython3
+circ = pygsti.circuits.Circuit(['Gix'])
+model.probabilities(circ)
+```
+
+```{code-cell} ipython3
+circ = pygsti.circuits.Circuit(['Gix', 'Gxi'])
+model.probabilities(circ)
+```
+
+```{code-cell} ipython3
+circ = pygsti.circuits.Circuit(['rho0', 'Gxx', 'Mdefault'])
+model.probabilities(circ)
+```
+
+## WeakForwardSimulator + LocalNoiseModel
+
+```{code-cell} ipython3
+# Step 1: Define stochastic Pauli noise operators
+# Note that the probabilities here are the "error rates" that would be model parameters (currently just static)
+noise_1q = StochasticNoiseOp(1, basis='pp', evotype='chp', initial_rates=[0.1, 0.01, 0.01], seed_or_state=2021)
+
+# Also need two-qubit version
+# Here we just make it independent stochastic Pauli noise
+noise_2q = ComposedOp([EmbeddedOp([0, 1], [0], noise_1q), EmbeddedOp([0, 1], [1], noise_1q)])
+```
+
+```{code-cell} ipython3
+# Step 2: Define gate dict of noisy gates
+# Using equivalent of XYICNOT modelpack
+gatedict = {}
+gatedict['Gi'] = noise_1q
+gatedict['Gx'] = ComposedOp([StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp'), noise_1q])
+gatedict['Gy'] = ComposedOp([StaticCliffordOp.from_standard_gate_name('Gypi', evotype='chp'), noise_1q])
+gatedict['Gcnot'] = ComposedOp([StaticCliffordOp.from_standard_gate_name('Gcnot', evotype='chp'), noise_2q])
+```
+
+```{code-cell} ipython3
+from pygsti.models.localnoisemodel import LocalNoiseModel
+from pygsti.modelmembers.states import ComputationalBasisState
+from pygsti.modelmembers.povms import ComputationalBasisPOVM
+from pygsti.processors import QubitProcessorSpec
+
+pspec = QubitProcessorSpec(4, list(gatedict.keys()), geometry='line',
+                           availability={'Gcnot': [(0,1),(1,2),(2,3)]})
+
+rho0 = ComputationalBasisState([0,]*4, evotype='chp')
+Mdefault = ComputationalBasisPOVM(4, evotype='chp')
+
+ln_model = LocalNoiseModel(pspec, gatedict=gatedict, prep_layers=[rho0], povm_layers=[Mdefault],
+                           simulator=sim, evotype='chp')
+```
+
+```{code-cell} ipython3
+# Step 4: Profit?? Worked way too quickly...
+def print_implicit_model_blocks(mdl, showSPAM=False):
+    if showSPAM:
+        print('State prep building blocks (.prep_blks):')
+        for blk_lbl,blk in mdl.prep_blks.items():
+            print(" " + blk_lbl, ": ", ', '.join(map(str,blk.keys())))
+        print()
+
+        print('POVM building blocks (.povm_blks):')
+        for blk_lbl,blk in mdl.povm_blks.items():
+            print(" "  + blk_lbl, ": ", ', '.join(map(str,blk.keys())))
+        print()
+    
+    print('Operation building blocks (.operation_blks):')
+    for blk_lbl,blk in mdl.operation_blks.items():
+        print(" " + blk_lbl, ": ", ', '.join(map(str,blk.keys())))
+    print()
+
+print_implicit_model_blocks(ln_model, showSPAM=True)
+```
+
+```{code-cell} ipython3
+print(ln_model.prep_blks['layers']['rho0'])
+```
+
+```{code-cell} ipython3
+print(ln_model.operation_blks['gates']['Gx'])
+```
+
+```{code-cell} ipython3
+Gcnot_layer_op = ln_model.operation_blks['layers']['Gcnot', 1, 2]
+print(ln_model.operation_blks['layers']['Gcnot', 1, 2])
+```
+
+```{code-cell} ipython3
+# Step 5: Actually run circuits with local noise model
+circ = pygsti.circuits.Circuit([('Gx', 1)], num_lines=4)
+ln_model.probabilities(circ)
+```
+
+```{code-cell} ipython3
+circ = pygsti.circuits.Circuit([('Gx', 1), ('Gcnot', 1, 2)], num_lines=4)
+ln_model.probabilities(circ)
+```
+
+```{code-cell} ipython3
+# Could also define correlated noise for 2-qubit error?
+pp = pygsti.baseobjs.Basis.cast('pp', 16)
+rates_2q = [0.01,]*15
+rates_2q[pp.labels.index('XX')] = 0.1 # Set XX to much higher
+
+noise_2q_correlated = StochasticNoiseOp(2, basis='pp', evotype='chp', initial_rates=rates_2q, seed_or_state=2021)
+
+gatedict = {}
+gatedict['Gi'] = noise_1q
+gatedict['Gx'] = ComposedOp([StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp'), noise_1q])
+gatedict['Gy'] = ComposedOp([StaticCliffordOp.from_standard_gate_name('Gypi', evotype='chp'), noise_1q])
+gatedict['Gcnot'] = ComposedOp([StaticCliffordOp.from_standard_gate_name('Gcnot', evotype='chp'), noise_2q_correlated])
+```
+
+```{code-cell} ipython3
+rho0 = ComputationalBasisState([0,]*4, evotype='chp')
+Mdefault = ComputationalBasisPOVM(4, evotype='chp')
+
+sim = pygsti.forwardsims.WeakForwardSimulator(shots=100)
+
+ln_model_corr = LocalNoiseModel(pspec, gatedict=gatedict, prep_layers=[rho0], povm_layers=[Mdefault],
+                                simulator=sim, evotype='chp')
+```
+
+```{code-cell} ipython3
+# Now the CNOT gates have a 2-qubit stochastic gate instead of independent 1-qubit ones
+print(ln_model_corr.operation_blks['layers']['Gcnot', 1, 2])
+```
+
+```{code-cell} ipython3
+circ = pygsti.circuits.Circuit([('Gx', 1)], num_lines=4)
+ln_model_corr.probabilities(circ)
+```
+
+```{code-cell} ipython3
+circ = pygsti.circuits.Circuit([('Gx', 1), ('Gcnot', 1, 2)], num_lines=4)
+ln_model_corr.probabilities(circ)
+```

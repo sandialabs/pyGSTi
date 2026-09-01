@@ -208,55 +208,152 @@ jobs:
       # install them only for the jobs that actually run test_packages. Without this the ml
       # tests would be silently skipped by their pytest.importorskip guard rather than run.
       #
-      # Skipped on 3.14: TensorFlow has no Python 3.14 wheels yet (tracked upstream at
-      # tensorflow/tensorflow#102890), so `uv pip install .[ml]` fails outright there instead
-      # of resolving anything. Leaving TensorFlow uninstalled on 3.14 just means the ml tests
-      # fall back to their normal pytest.importorskip skip, same as any machine lacking the
-      # `ml` extra. Drop the python-version guard once that issue ships 3.14 wheels.
-      if: ${{ inputs.run-extra-tests == 'true' && inputs.python-version != '3.14' }}
+      # TensorFlow lags new Python releases by months -- today it publishes cp310 through
+      # cp313 and no cp314 (tracked upstream at tensorflow/tensorflow#102890) -- and which
+      # release it lags moves every year. So this asks the index which case we are in
+      # rather than testing inputs.python-version against a hardcoded string.
+      #
+      # A pinned version guard is wrong in both directions, and this step used to have one.
+      # Too new: it hard-fails the job the day a Python it has not heard of enters the
+      # matrix, since `uv pip install .[ml]` then fails outright. Too old: once wheels
+      # finally ship it keeps skipping, silently dropping the ml coverage this step exists
+      # to guarantee, until someone notices and deletes the line.
+      #
+      # The probe is on bare `tensorflow`, not on `.[ml]`, so it isolates "does this
+      # interpreter have wheels" from "is our extra healthy". When it resolves, the install
+      # and the import check below must BOTH succeed -- a broken `ml` extra still fails the
+      # job rather than degrading to a skip.
+      if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
-        uv pip install --system -e .[ml]
-        python -Ic "import tensorflow, keras; print('tensorflow', tensorflow.__version__, '/ keras', keras.__version__)"
+        set -euo pipefail
+        if uv pip install --system --dry-run tensorflow >/dev/null 2>&1; then
+          uv pip install --system -e .[ml]
+          python -Ic "import tensorflow, keras; print('tensorflow', tensorflow.__version__, '/ keras', keras.__version__)"
+        else
+          echo "::warning::No TensorFlow wheel for Python ${{ inputs.python-version }}; test/test_packages/extras/ml will importorskip"
+        fi
     - name: Run test_packages
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/notebooks --durations=25 test/test_packages
-    - name: Run notebook regression
+    - name: Execute the docs notebooks
       # Linux-only: this step compiles CHP with gcc and writes it to /usr/local/bin,
       # so it cannot run on the Windows/macOS runners even if a caller requests it.
+      #
+      # This replaces a `pytest --nbval-lax` run. That run only ever asserted "no
+      # cell raised": no notebook uses NBVAL_CHECK_OUTPUT or the nbval-check-output
+      # tag, so nbval never compared an output against anything. The driver asserts
+      # the same property -- its exit status is nonzero if any cell errored, even
+      # under --allow-errors -- and additionally *keeps* the outputs, which
+      # develop.yml's docs-notebooks job commits so the hosted docs render executed
+      # results instead of bare source. See docs/execute-notebooks.py.
       if: ${{ inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
       run: |
+        set -euo pipefail
+
+        # The `ml` extra (TensorFlow + Keras) backs docs/markdown/advanced/ml/QPANN,
+        # which imports pygsti.extras.ml. It is pulled in here rather than added to
+        # `docs` itself so that ReadTheDocs -- which installs `.[docs]` but never
+        # executes a notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't
+        # made to download TensorFlow purely to render Markdown.
+        uv pip install --system -e .[docs]
+        # chp_sim backs advanced/simulation/StabilizerCHP. It is the default
+        # backend for the 'chp' evotype and is pure Python, which is why this
+        # step no longer downloads and compiles Aaronson's C implementation.
+        # That one still works if pygsti.evotypes.chp.chpexe points at it.
+        uv pip install --system -e .[chp]
+        uv pip install --system -e .[ml] \
+          || echo "::warning::ml extra would not install on Python ${{ inputs.python-version }}"
+
+        # Whether QPANN can run is decided by *probing for TensorFlow*, not by testing
+        # inputs.python-version against a hardcoded string. TensorFlow lags new Python
+        # releases by months (no 3.14 wheels yet: tensorflow/tensorflow#102890), and the
+        # version that lags moves every year, so a pinned-version guard is wrong by
+        # default between rollforwards. The predecessor of this line demonstrated the
+        # failure mode: it passed `--ignore=docs/markdown/ml` to nbval, a path that
+        # matched nothing -- the tutorial is at docs/markdown/advanced/ml -- and stayed
+        # broken indefinitely because its 3.14 branch was unreachable and so never ran.
+        #
+        # --exclude-also, not --exclude: --exclude REPLACES the driver's built-in list
+        # and would silently start executing the two pages that ship outputless by design.
+        NB_EXCLUDE_ML=""
+        if ! python -Ic "import tensorflow, keras" >/dev/null 2>&1; then
+          echo "::warning::TensorFlow/Keras unavailable; advanced/ml/QPANN will ship without output"
+          NB_EXCLUDE_ML="--exclude-also advanced/ml/QPANN"
+        fi
+
         # Tutorials live as MyST Markdown under docs/markdown/; jupytext pairs each
         # .md with an .ipynb sitting NEXT TO IT in the same directory (see
-        # docs/jupytext.toml), so the materialized notebooks land back under
-        # docs/markdown/ for nbval to consume.
-        #
-        # The `ml` extra is needed for docs/markdown/ml/* (the QPANN tutorials), which
-        # import pygsti.extras.ml. It is pulled in here rather than added to `docs`
-        # itself so that ReadTheDocs -- which installs `.[docs]` but never executes a
-        # notebook (docs/_config.yml sets execute_notebooks: 'off') -- isn't made to
-        # download TensorFlow purely to render Markdown.
-        #
-        # On 3.14, TensorFlow has no wheels yet (tensorflow/tensorflow#102890): the `ml`
-        # extra is left uninstalled, and docs/markdown/ml (the QPANN tutorials, which
-        # import pygsti.extras.ml directly with no importorskip-style guard) is excluded
-        # from the nbval run below -- jupytext itself never executes cells, so syncing
-        # that directory's .md/.ipynb pair alongside the rest is still harmless. Drop
-        # this branch once that upstream issue ships 3.14 wheels.
-        NBVAL_IGNORE_ML=""
-        if [ "${{ inputs.python-version }}" = "3.14" ]; then
-          uv pip install --system -e .[docs]
-          NBVAL_IGNORE_ML="--ignore=docs/markdown/ml"
-        else
-          uv pip install --system -e .[docs,ml]
-        fi
+        # docs/jupytext.toml). The .md side is `md:myst`, which cannot carry outputs
+        # at all, so the .ipynb is the only place execution results can live.
         (cd docs && jupytext --sync 'markdown/**/*.md')
 
-        # Download and compile CHP for the Clifford-simulation notebook;
-        # put the binary on PATH so pygsti.evotypes.chp.chpexe = 'chp' resolves.
-        curl -o /tmp/chp.c https://www.scottaaronson.com/chp/chp.c
-        gcc -o /usr/local/bin/chp /tmp/chp.c
+        # Cross-notebook inputs: Example_GST_Data, the two Example_Dataset*.txt, and
+        # the shared GST results tree. pytest used to materialize these through
+        # docs/conftest.py's autouse fixture; the driver is not pytest, so the
+        # generator has to be called directly.
+        python -c "import sys; sys.path.insert(0, 'docs'); import conftest; conftest._generate_shared_fixtures()"
+
 
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env --durations=25 $NBVAL_IGNORE_ML docs/markdown
+        # --allow-errors keeps going past a failing cell so one broken notebook does
+        # not hide the state of the other 75; the exit status still reports failure,
+        # so this step fails the job exactly as the nbval step did.
+        python docs/execute-notebooks.py --jobs 4 --timeout 1800 --allow-errors $NB_EXCLUDE_ML
+
+    - name: Collect the example HTML reports
+      # Executing the tutorials writes ~25 pyGSTi HTML reports into the gitignored
+      # scratch directories. collect-reports.py packs them into a single 5 MB
+      # docs/reports.tar.xz (from ~600 MB of HTML), which is small enough to move
+      # as an artifact and to commit onto the generated branch. Needs pyGSTi
+      # importable, for the shared offline/ JS bundle it places on extract.
+      #
+      # always(), for the same reason the notebook upload is: a run where two
+      # notebooks failed still produced two dozen good reports.
+      if: ${{ always() && inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
+      run: python docs/collect-reports.py collect
+
+    - name: Upload the example HTML reports
+      # Consumed by stage-docs-branch.yml, which commits the tarball onto the
+      # generated branch beside the executed notebooks, so that the reports and
+      # the pages linking to them always ship together.
+      if: ${{ always() && inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: example-reports
+        path: docs/reports.tar.xz
+        if-no-files-found: error
+        retention-days: 7
+
+    - name: Upload executed notebooks
+      # Consumed by develop.yml's docs-notebooks job, which commits them onto the
+      # develop-with-notebooks branch that ReadTheDocs builds. Artifacts are scoped
+      # to a workflow run, and a reusable workflow shares its caller's run, so the
+      # download in that job resolves to this upload.
+      #
+      # Uploaded even when execution failed: with --allow-errors the failing cell's
+      # traceback is recorded *in the notebook*, which is the most useful debugging
+      # artifact this job produces.
+      if: ${{ always() && inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: executed-notebooks
+        # Only the .ipynb. Executing the tutorials also litters docs/markdown/ with
+        # offline/ asset dirs and *_checkpoints/ trees (both gitignored, but
+        # docs-notebooks force-adds that directory). Filtering here is what keeps
+        # that job from having to clean up after a run it did not perform.
+        path: docs/markdown/**/*.ipynb
+        if-no-files-found: error
+        retention-days: 7
+
+    - name: Upload notebook execution logs
+      # Per-notebook stdout/stderr from the driver, for diagnosing a failure without
+      # re-running a ~40 minute job.
+      if: ${{ always() && inputs.run-notebook-tests == 'true' && inputs.os == 'ubuntu-latest' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: notebook-execution-logs
+        path: nb-exec-logs
+        if-no-files-found: warn
+        retention-days: 7

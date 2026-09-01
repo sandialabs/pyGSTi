@@ -24,6 +24,7 @@ from pprint import pprint as _pprint
 import numpy as _np
 
 from pygsti.report import merge_helpers as _merge
+from pygsti.report import notebook_setup as _nbsetup
 from pygsti.report import plotly_plot_ex as _plotly_ex
 from pygsti import baseobjs as _baseobjs
 from pygsti.baseobjs.smartcache import CustomDigestError as _CustomDigestError
@@ -454,147 +455,71 @@ class Workspace(object):
 
         script = ""
 
-        if not connected:
-            _merge.rsync_offline_dir(_os.getcwd())
+        # Define pygsti_require() *first*.  Jupyter replays the inline <script>
+        # blocks of an output cell synchronously and in document order, so
+        # putting the loader at the top of this cell guarantees that it exists
+        # before any figure cell further down the notebook is rendered.
+        script += _nbsetup.loader_script()
 
-        #If offline, add JS to head that will load local requireJS and/or
-        # jQuery if needed (jupyter-exported html files always use CDN
-        # for these).
-        if not connected:
-            script += "<script src='offline/jupyterlibload.js'></script>\n"
+        # Our plotly extensions: PlotManager, pex_init_plotdiv, etc.  These are
+        # plain function declarations that do not touch jQuery at load time, so
+        # they can be inlined before the libraries themselves arrive.
+        script += _merge.insert_resource(True, None, "pygsti_plotly_ex.js")
 
-        #Load our custom plotly extension functions
-        script += _merge.insert_resource(connected, None, "pygsti_plotly_ex.js")
-        script += "<script type='text/javascript'> window.plotman = new PlotManager(); </script>"
+        # Style sheets.  These are always *inlined*, even when connected=False:
+        # a <link href='offline/...'> in cell output would be resolved against
+        # the page URL, which is not the notebook's directory under JupyterLab
+        # or Notebook 7.  Images referenced by the jQuery-UI theme are folded in
+        # as data URIs for the same reason.
+        script += _nbsetup.inline_css("smoothness-jquery-ui.css")
+        script += _nbsetup.inline_css("pygsti_dataviz.css")
+        script += _nbsetup.inline_css("katex.css")
 
-        #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
-        jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
-        script += _merge.insert_resource(connected, jQueryUI_CSS, "smoothness-jquery-ui.css")
+        # Fix the jQuery-UI tooltip buttons (they use an old/custom jQuery-UI css).
+        script += ("<style>\n"
+                   ".tooltipbuttons .ui-button { padding: 0; border: 0; background: transparent; }\n"
+                   ".tooltipbuttons .ui-icon { background-image: url(\"%s\"); margin-top: 0; }\n"
+                   "</style>\n") % _nbsetup.image_data_uri("ui-icons_222222_256x240.png")
 
-        # Load style sheets for displaying tables
-        script += _merge.insert_resource(connected, None, "pygsti_dataviz.css")
+        # Load jQuery, jQuery-UI, plotly and KaTeX with ordinary <script> tags
+        # (sequentially from a CDN when connected, inlined when not), then
+        # release everything that queued up on pygsti_require in the meantime.
+        script += _nbsetup.library_script(connected)
 
-        #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
-        if connected:
-            imgURL = "https://code.jquery.com/ui/1.12.1/themes/smoothness/images/ui-icons_222222_256x240.png"
-        else:
-            imgURL = "offline/images/ui-icons_222222_256x240.png"
-        script += "<style>\n" + \
-                  ".tooltipbuttons .ui-button { padding: 0; border: 0; background: transparent; }\n" + \
-                  ".tooltipbuttons .ui-icon { background-image: url(\"%s\"); margin-top: 0; }\n" % imgURL + \
-                  "</style>"
-
-        # Note: within a jupyter notebook, the requireJS base path appears
-        # to be "/static", so just setting the path to "offline/myfile"
-        # would attempt to load "/static/offline/myfile.js" which points
-        # somewhere like .../site-packages/notebook/static/offline/myfile".
-        # So:
-        # - when in a notebook, the path needs to be "../files" followed
-        # by the notebook's path, which we can obtain via the notebook JS
-        # object.
-        # - when *not* in a notebook, the requireJS base defaults to the
-        # current page, so just using "offline/myfile" works fine then.
-
-        #Tell require.js where jQueryUI and Katex are
-        if connected:
-            reqscript = (
-                "<script>"
-                "console.log('ONLINE - using CDN paths');"
-                "requirejs.config({{ "
-                "   paths: {{ 'jquery-UI': ['{jqueryui}'],"
-                "             'katex': ['{katex}'],"
-                "             'autorender': ['{auto}'] }},"
-                "}});"
-                "require(['jquery', 'jquery-UI'],function($,ui) {{"
-                "  window.jQueryUI=ui; console.log('jquery-UI loaded'); }});"
-                "require(['katex', 'autorender'],function(katex,auto) {{"
-                "  window.katex=katex; console.log('Katex loaded'); }});"
-                "</script>"
-            ).format(jqueryui="https://code.jquery.com/ui/1.12.1/jquery-ui.min",
-                     katex="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.js",
-                     auto="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/contrib/auto-render.min.js")
-
-        else:
-            reqscript = (
-                "<script>"
-                "var pth;"
-                "if(typeof IPython !== 'undefined') {{"
-                "  var nb = IPython.notebook;"
-                "  var relpath = nb.notebook_path.substr(0, nb.notebook_path.lastIndexOf('/') + 1 );"
-                "  jqueryui_pth = '../files' + nb.base_url + relpath + '{jqueryui}';"
-                "  katex_pth = '../files' + nb.base_url + relpath + '{katex}';"
-                "  auto_pth = '../files' + nb.base_url + relpath + '{auto}';"
-                "  console.log('IPYTHON DETECTED - using path ' + jqueryui_pth);"
-                "}}"
-                "else {{"
-                "  jqueryui_pth = '{jqueryui}';"
-                "  katex_pth = '{katex}';"
-                "  auto_pth = '{auto}';"
-                "  console.log('NO IPYTHON DETECTED - using path ' + jqueryui_pth);"
-                "}}"
-                "requirejs.config({{ "
-                "   paths: {{ 'jquery-UI': [jqueryui_pth], 'katex': [katex_pth], 'autorender': [auto_pth] }},"
-                "}});"
-                "require(['jquery', 'jquery-UI'],function($,ui) {{"
-                "  window.jQueryUI=ui; console.log('jquery & jquery-UI loaded'); }});"
-                "require(['katex', 'autorender'],function(katex,auto) {{"
-                "  window.katex=katex; console.log('Katex loaded'); }});"
-                "</script>"
-            ).format(jqueryui="offline/jquery-ui.min",
-                     katex="offline/katex.min",
-                     auto="offline/auto-render.min")
-        script += reqscript
-
-        #Initialize Katex as a fallback if MathJax is unavailable (offline), OR,
-        # if MathJax is loaded, wait for plotly to load before rendering SVG text
-        # so math shows up properly in plots (maybe we could just use a require
-        # statement for this instead of polling?)
-        script += _merge.insert_resource(
-            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
-            "katex.css")
-
+        # Typeset math.  Modern Jupyter front-ends ship MathJax themselves, so
+        # KaTeX is only a fallback; note that MathJax 3 has no .Hub, hence the
+        # guard before poking at the v2-only configuration API.
         script += (
-            "\n<script>"
-            "require(['jquery','katex','autorender'],function($,katex,renderMathInElement) {\n"
-            "  var mathjaxTimer = setInterval( function() {\n"
-            "    if(document.readyState === 'complete' || document.readyState === 'loaded') {\n"
-            "        clearInterval(mathjaxTimer);\n"
-            "        if(typeof MathJax === 'undefined') {\n"
-            "          console.log('MATHJAX not found - attempting to typeset with Katex');\n"
-            "          renderMathInElement(document.body, { delimiters: [\n"
-            "             {left: '$$', right: '$$', display: true},\n"
-            "             {left: '$', right: '$', display: false},\n"
-            "             ] } );\n"
-            "        }\n"
-            "        else { //Mathjax is alive - wait for plotly\n"
-            "            var waitForPlotly = setInterval( function() {\n"
-            "              if( typeof(window.Plotly) !== 'undefined' ){\n"
-            "                MathJax.Hub.Config({ SVG: { font: 'STIX-Web' }, displayAlign: 'center' });\n"
-            "                MathJax.Hub.Queue(['setRenderer', MathJax.Hub, 'SVG']);\n"
-            "                clearInterval(waitForPlotly);\n"
-            "              }\n"
-            "            }, 500 );\n"
-            "        }\n"
-            "    } //end readyState check \n"
-            "  }, 500); //end setInterval \n"
+            "\n<script type='text/javascript'>\n"
+            "pygsti_require(['jquery','katex','autorender'],function($,katex,renderMathInElement) {\n"
+            "  if(typeof MathJax === 'undefined') {\n"
+            "    if(typeof renderMathInElement === 'function') {\n"
+            "      console.log('MATHJAX not found - typesetting with KaTeX');\n"
+            "      renderMathInElement(document.body, { delimiters: [\n"
+            "         {left: '$$', right: '$$', display: true},\n"
+            "         {left: '$', right: '$', display: false},\n"
+            "         ] } );\n"
+            "    }\n"
+            "  }\n"
+            "  else if(MathJax.Hub && MathJax.Hub.Config) { //MathJax 2 only\n"
+            "    MathJax.Hub.Config({ SVG: { font: 'STIX-Web' }, displayAlign: 'center' });\n"
+            "    MathJax.Hub.Queue(['setRenderer', MathJax.Hub, 'SVG']);\n"
+            "  }\n"
             "});\n"
-            '</script>\n')
-
-        # Initialize Plotly libraries
-        script += _plotly_ex.init_notebook_mode_ex(connected)
+            "</script>\n")
 
         # Perform check to see what has been loaded
         script += (
             "<div id='notebook_load_status' style='font-style:italic;color:blue'>Loading...</div>\n"
             "<script type='text/javascript'>\n"
-            "  require(['jquery','jquery-UI','plotly','katex', 'autorender'],\n"
+            "  pygsti_require(['jquery','jquery-UI','plotly','katex', 'autorender'],\n"
             "     function($,ui,Plotly,katex,auto) {\n"
             "     $(document).ready( function() {\n"
             "       var txt = '';\n"
             "       if( typeof($('#notebook_load_status').resizable) === 'undefined') {\n"
             "         txt += '<span class=\"failmsg\">JQueryUI not loaded correctly</span><br>';\n"
             "       }\n"
-            "       if( typeof(Plotly.newPlot) === 'undefined') {\n"
+            "       if( typeof(Plotly) === 'undefined' || typeof(Plotly.newPlot) === 'undefined') {\n"
             "         txt += '<span class=\"failmsg\">Plotly not loaded correctly</span><br>';\n"
             "       }\n"
             "       if(txt.length == 0) {\n"
@@ -1285,7 +1210,7 @@ class Switchboard(_collections.OrderedDict):
         #                                disabled=False)
         out = self.render("html")
         content = "<script>\n" + \
-                  "require(['jquery','jquery-UI'],function($,ui) {" + \
+                  "pygsti_require(['jquery','jquery-UI'],function($,ui) {" + \
                   out['js'] + " });</script>" + out['html']
         #self.widget.value = content
         display_ipynb(content)  # self.widget)
@@ -1425,7 +1350,7 @@ class SwitchboardView(object):
 
         out = self.render("html")
         content = "<script>\n" + \
-                  "require(['jquery','jquery-UI'],function($,ui) {" + \
+                  "pygsti_require(['jquery','jquery-UI'],function($,ui) {" + \
                   out['js'] + " });</script>" + out['html']
         display_ipynb(content)
 
@@ -1721,10 +1646,10 @@ class WorkspaceOutput(object):
             raise ValueError('Only run `display` from inside an IPython Notebook.')
 
         self.set_render_options(global_requirejs=True,
-                                output_dir=None)  # b/c jupyter uses require.js
+                                output_dir=None)  # b/c notebook output uses pygsti_require
         out = self.render("html")
         content = "<script>\n" + \
-                  "require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
+                  "pygsti_require(['jquery','jquery-UI','plotly'],function($,ui,Plotly) {" + \
                   out['js'] + " });</script>" + out['html']
 
         display_ipynb(content)
@@ -1771,7 +1696,8 @@ class WorkspaceOutput(object):
         ret = ""
 
         if global_requirejs:
-            ret += "require(['jquery','jquery-UI','plotly','autorender'],function($,ui,Plotly,renderMathInElement) {\n"
+            ret += ("pygsti_require(['jquery','jquery-UI','plotly','autorender'],"
+                    "function($,ui,Plotly,renderMathInElement) {\n")
 
         ret += '  $(document).ready(function() {\n'
         if use_loadable_items:
