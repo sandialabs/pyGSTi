@@ -182,6 +182,32 @@ def _make_cptplnd_model_with_instrument():
     return base
 
 
+def _make_cptplnd_model_with_from_effects_instrument():
+    """Like `_make_cptplnd_model_with_instrument`, but the instrument uses the
+    effect-then-gate parameterization, whose members all share a single
+    ComposedPOVM error map."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        base = smq1Q_XYI.target_model('CPTPLND')
+    E0 = np.array([1., 0., 0.,  1.]) / np.sqrt(2)   # |0><0| as a pp superket
+    E1 = np.array([1., 0., 0., -1.]) / np.sqrt(2)   # |1><1|
+    base.instruments['Iz'] = Instrument.from_effects({'p0': E0, 'p1': E1}, base.basis)
+    base.to_vector()  # force the parameter vector (and gpindices) to be built
+    return base
+
+
+def _povm_errormap_of(instrument, key):
+    """The ComposedPOVM error map behind `instrument[key]`'s measurement effect, for
+    an instrument member wrapped by `transform_composed_model` (i.e. one extra
+    ComposedOp([U, member, invU]) layer) or for a bare member."""
+    member = instrument[key]
+    if len(member.factorops) == 3:
+        member = member.factorops[1]  # unwrap the ComposedOp([U, member, invU])
+    root_conj = member.factorops[0]                      # RootConjOperator
+    composed_effect = root_conj.submembers()[0]          # ComposedPOVMEffect
+    return composed_effect.submembers()[0]               # the shared error map
+
+
 def _unitary_ggel(theta: float) -> UnitaryGaugeGroupElement:
     U = la.expm(theta * 1j * np.array([[1, -1],[-1, 1]]))
     return UnitaryGaugeGroupElement(unitary_to_pauligate(U))
@@ -346,3 +372,67 @@ class AutoEmbedTester(BaseCase):
                               pygsti.models.ExplicitOpModel.loads(self.model.dumps())):
             npt.assert_allclose(round_tripped.operations[('Gcnot', 1, 0)].to_dense('HilbertSchmidt'),
                                 self.CNOT_10, atol=1e-12)
+
+
+class Test_TransformComposedModelPreservesParameterization(BaseCase):
+    """`transform_composed_model` must be parameterization-preserving: the returned
+    model has to have the *same* free parameters as its input, and must not share
+    any parameterized object with it."""
+
+    def setUp(self):
+        self.mdl = _make_cptplnd_model_with_from_effects_instrument()
+        self.inst_keys = list(self.mdl.instruments['Iz'].keys())
+
+    def test_from_effects_instrument_shares_one_errormap(self):
+        # Baseline for the tests below: the members really do share one error map.
+        inst = self.mdl.instruments['Iz']
+        self.assertIs(_povm_errormap_of(inst, self.inst_keys[0]),
+                      _povm_errormap_of(inst, self.inst_keys[1]))
+
+    def test_identity_transform_preserves_num_params(self):
+        result = transform_composed_model(self.mdl, UnitaryGaugeGroupElement(np.eye(4)))
+        self.assertEqual(result.num_params, self.mdl.num_params)
+
+    def test_nontrivial_transform_preserves_num_params(self):
+        result = transform_composed_model(self.mdl, _unitary_ggel(0.3))
+        self.assertEqual(result.num_params, self.mdl.num_params)
+
+    def test_transformed_instrument_still_shares_one_errormap(self):
+        # The shared error map is what ties the effects together, and therefore what
+        # enforces the instrument's trace preservation.  Duplicating it per member
+        # would let the effects drift apart under re-optimization.
+        inst = transform_composed_model(self.mdl, _unitary_ggel(0.3)).instruments['Iz']
+        self.assertIs(_povm_errormap_of(inst, self.inst_keys[0]),
+                      _povm_errormap_of(inst, self.inst_keys[1]))
+
+    def test_transformed_instrument_stays_tp_under_reoptimization(self):
+        # Perturb the transformed model's parameters; the instrument's members must
+        # still sum to a trace-preserving channel.
+        result = transform_composed_model(self.mdl, _unitary_ggel(0.3))
+        v = result.to_vector()
+        result.from_vector(v + 0.02 * np.random.default_rng(0).standard_normal(len(v)))
+        total = sum(result.instruments['Iz'][ek].to_dense() for ek in self.inst_keys)
+        trace_functional = np.array([np.sqrt(2), 0., 0., 0.])  # <<I| in the pp basis
+        npt.assert_allclose(trace_functional @ total, trace_functional, atol=1e-9)
+
+    def test_result_does_not_alias_input_model(self):
+        # A rebuilt member holds a reference to the member it wraps, so the rebuild
+        # must consume the *copy's* members: otherwise from_vector on the result
+        # silently mutates the input model.
+        result = transform_composed_model(self.mdl, _unitary_ggel(0.3))
+        before = {k: np.array(self.mdl.operations[k].to_dense()) for k in self.mdl.operations}
+        before.update({('rho', k): np.array(self.mdl.preps[k].to_dense()) for k in self.mdl.preps})
+        before.update({('Iz', ek): np.array(self.mdl.instruments['Iz'][ek].to_dense())
+                       for ek in self.inst_keys})
+        v = result.to_vector()
+        result.from_vector(v + 0.05 * np.random.default_rng(1).standard_normal(len(v)))
+        for k in self.mdl.operations:
+            npt.assert_allclose(self.mdl.operations[k].to_dense(), before[k], atol=1e-12,
+                                err_msg=f'operation {k!r} was mutated via the transformed model')
+        for k in self.mdl.preps:
+            npt.assert_allclose(self.mdl.preps[k].to_dense(), before[('rho', k)], atol=1e-12,
+                                err_msg=f'prep {k!r} was mutated via the transformed model')
+        for ek in self.inst_keys:
+            npt.assert_allclose(self.mdl.instruments['Iz'][ek].to_dense(), before[('Iz', ek)],
+                                atol=1e-12,
+                                err_msg=f'instrument member {ek!r} was mutated via the transformed model')
