@@ -11,6 +11,8 @@ from . import model_selection
 from . import logical_decoration
 from . import validation
 from . import circuit_noise
+from . import cp_decomposition
+from . import tensor_contraction
 
 # `report` (validation battery + HTML report generation) is deliberately not
 # imported here: it pulls in matplotlib.pyplot, which the rest of the package

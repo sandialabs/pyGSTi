@@ -46,6 +46,8 @@ and fitting a known support).
 | `model_selection` | non-negative lasso event selection (companion notebook) |
 | `compressed_sensing` | randomized low-weight polarization sketch (companion notebook) |
 | `logical_decoration` | decorate a learned DEM with logical-flip flags from decoded shots |
+| `tensor_contraction` | exact outcome probabilities, marginals and log-likelihoods of a DEM by tensor-network contraction, beyond the $2^n$ dense limit ([notebook](../sparsedem/01_tensor_contraction_probabilities.md)) |
+| `cp_decomposition` | support discovery from a symmetric CP decomposition of the order-3 detector cumulant tensor; a hyperedge-aware generalization of the pairwise $p_{ij}$ method ([notebook](../sparsedem/02_cp_decomposition_support_discovery.md)) |
 
 +++
 

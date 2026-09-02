@@ -143,6 +143,8 @@ parts:
   - file: markdown/examples/DEMEstimation
     sections:
     - file: markdown/examples/DEMEstimation-LassoAndCompressedSensing
+    - file: markdown/sparsedem/01_tensor_contraction_probabilities
+    - file: markdown/sparsedem/02_cp_decomposition_support_discovery
   - file: markdown/examples/DEMValidation
   - file: markdown/rareevent/methods
     sections:

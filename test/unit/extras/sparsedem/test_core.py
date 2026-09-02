@@ -173,3 +173,45 @@ def test_get_threshold_mask():
     mask = estimator.get_threshold_mask()
     assert isinstance(mask, np.ndarray)
     assert mask.dtype == bool
+
+
+def test_estimate_cp_recovers_support_and_caches():
+    dem_str = """
+    error(0.02) D0 D1 D2
+    error(0.01) D0
+    error(0.015) D1 D2
+    error(0.01) D2 D3
+    """
+    dem = dem_from_str(dem_str)
+    counts = generate_syndrome_counts(dem, n_shots=200000)
+    estimator = SparseDEMEstimator(counts)
+
+    learned, info = estimator.estimate_cp(return_info=True)
+    assert isinstance(learned, stim.DetectorErrorModel)
+    assert sorted(info["masks"]) == [0b0001, 0b0110, 0b0111, 0b1100]
+    assert estimator.get_last_method() == "cp"
+    assert estimator.get_last_dem() is learned
+
+
+def test_log_likelihood_prefers_true_dem():
+    dem_str = """
+    error(0.02) D0 D1 D2
+    error(0.01) D0
+    error(0.015) D1 D2
+    error(0.01) D2 D3
+    """
+    dem = dem_from_str(dem_str)
+    counts = generate_syndrome_counts(dem, n_shots=50000)
+    estimator = SparseDEMEstimator(counts)
+
+    with pytest.raises(ValueError):
+        estimator.log_likelihood()
+
+    ll_true = estimator.log_likelihood(dem)
+    assert np.isfinite(ll_true)
+    # Dropping the hyperedge should make the data less likely.
+    ll_missing = estimator.log_likelihood(dem_from_str("error(0.01) D0\nerror(0.015) D1 D2\nerror(0.01) D2 D3"))
+    assert ll_missing < ll_true
+    # Default argument scores the last estimated DEM.
+    estimator.estimate_lattice_pruned()
+    assert np.isfinite(estimator.log_likelihood())

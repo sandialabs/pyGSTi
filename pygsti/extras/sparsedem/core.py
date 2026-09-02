@@ -3,6 +3,8 @@ import numpy as np
 from typing import Dict, Optional, Tuple
 
 from .lattice import lattice_pruning_dem_estimation
+from .cp_decomposition import cp_dem_estimation, CPConfig
+from .tensor_contraction import log_likelihood as _tn_log_likelihood
 from .estimation import (
     dense_dem_estimation,
     estimate_dem_and_covariance,
@@ -176,6 +178,71 @@ class SparseDEMEstimator:
         dem = lattice_pruning_dem_estimation(self.syndrome_counts, confidence=confidence)
         self._cache_results("lattice_pruned", dem, None, None, None)
         return dem
+
+    def estimate_cp(
+        self,
+        order: int = 3,
+        rank: Optional[int] = None,
+        config: Optional[CPConfig] = None,
+        return_info: bool = False,
+    ):
+        """
+        Estimate a DEM by symmetric CP decomposition of the joint cumulant tensor.
+
+        Support discovery from the order-`order` joint cumulant tensor of the
+        detector indicators (leading-order symmetric CP structure, see
+        `cp_decomposition`), followed by an exact refit of the recovered masks
+        with `fit_specified_dem`.
+
+        Args:
+            order (int): Cumulant order (3 recommended; 2 is the non-unique
+                covariance / "p_ij" setting).
+            rank (Optional[int]): Fixed CP rank; None selects it automatically.
+            config (Optional[CPConfig]): Solver / rank-selection configuration.
+            return_info (bool): Also return the diagnostic info dict.
+
+        Returns:
+            stim.DetectorErrorModel or tuple: Estimated DEM and optional info dict.
+        """
+        result = cp_dem_estimation(
+            self.syndrome_counts,
+            order=order,
+            rank=rank,
+            config=config,
+            return_info=return_info,
+        )
+        if return_info:
+            dem, info = result
+            self._cache_results("cp", dem, info.get("masks"), None, None)
+            return dem, info
+        self._cache_results("cp", result, None, None, None)
+        return result
+
+    def log_likelihood(
+        self,
+        dem: Optional[stim.DetectorErrorModel] = None,
+        backend: str = "auto",
+    ) -> float:
+        """
+        Log-likelihood of the syndrome counts under a DEM, by tensor-network contraction.
+
+        Uses `tensor_contraction.log_likelihood`, which evaluates exact outcome
+        probabilities without the 2^n dense distribution, so it works for DEMs
+        far beyond the reach of `compute_outcome_distribution_from_dem`.
+
+        Args:
+            dem (Optional[stim.DetectorErrorModel]): DEM to score; defaults to
+                the most recently estimated DEM.
+            backend (str): 'auto', 'numpy', or 'quimb'.
+
+        Returns:
+            float: sum over observed syndromes of count * log P(syndrome | dem).
+        """
+        if dem is None:
+            dem = self._last_dem
+        if dem is None:
+            raise ValueError("No DEM given and no DEM has been estimated yet.")
+        return float(_tn_log_likelihood(dem, self.syndrome_counts, backend=backend))
 
     def fit_custom_masks(
         self,
