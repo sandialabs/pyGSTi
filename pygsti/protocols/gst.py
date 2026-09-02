@@ -1413,7 +1413,7 @@ class GateSetTomography(_proto.Protocol):
         if optimizers is None:
             optimizers = [self.optimizer]*len(circuit_lists)
         else:
-            optimizers = _validate_and_extend_optimizers(self.optimizer, len(circuit_lists), mdl_start)
+            optimizers = _validate_and_extend_optimizers(optimizers, len(circuit_lists), mdl_start)
 
         if disable_checkpointing:
             seed_model = mdl_start.copy()
