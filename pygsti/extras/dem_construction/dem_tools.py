@@ -51,6 +51,11 @@ def compute_contribution(eeg, rate, det_pauli, tableau):
     contribution = rate*eprop.bulk_alpha_pauli([eeg], tableau, [det_pauli])/2 #TODO improve since this'll be slow
     return contribution
 
+def compute_contribution_bulk(eegs, rates, det_pauli, tableau):
+    alpha_paulis = eprop.bulk_alpha_pauli(eegs, tableau, [det_pauli])/2 #TODO improve since this'll be slow
+    contributions = [r*ap for r, ap in zip(rates, alpha_paulis)]  
+    return contributions
+
 def sort_terms_by_effect(terms, detectors, show_progress=False):
     sorted_terms = defaultdict(list)
     for j,eeg in enumerate(terms):
@@ -60,15 +65,11 @@ def sort_terms_by_effect(terms, detectors, show_progress=False):
             if j%100==0:
                 print(j)
         for i, det_pauli in enumerate(detectors):
-            #print(i, det_pauli)
-            #print(eeg[0].basis_element_labels)
-            #contribution = dems.compute_contribution(LocalStimErrorgenLabel('S',eeg[0].basis_element_labels), 1, det_pauli, tableau)
             P = eeg.basis_element_labels[0]
             if not P.commutes(det_pauli): 
                 dets_fired.append('1')
             else: dets_fired.append('0')
         det_string = ''.join(dets_fired) 
-        #print(eeg[0], det_string)
         sorted_terms[det_string].append(eeg)
 
     return dict(sorted_terms)
@@ -108,13 +109,11 @@ def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_
                     contribution = compute_contribution(new_eeg, weight, det_pauli, tableau)
                     dem[event] += -1*contribution.real
 
-                #TODO handle SCA terms
-                for eeg in sca_terms:
-                    weight = eoc_eeg[eeg]
-                    first_flipped_detector = event.find('1')
-                    det_pauli = dets_as_pauli_strings[first_flipped_detector]
-                    contribution = compute_contribution(eeg, weight, det_pauli, tableau)
-                    dem[event] += -1*contribution.real
+                weights = [eoc_eeg[eeg] for eeg in sca_terms]
+                first_flipped_detector = event.find('1')
+                det_pauli = dets_as_pauli_strings[first_flipped_detector]
+                contribution = compute_contribution(sca_terms, weights, det_pauli, tableau)
+                dem[event] += -1*contribution.real
 
     return dem
 
@@ -130,7 +129,7 @@ def compose_dems(dem1, dem2):
         else: new_dem[k] = dem2[k]
     return new_dem
 
-def generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim,  zassenhaus_order=1, add_type='add'):
+def generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim,  zassenhaus_order=1):
     #note: we're checking which detectors are affected, then combining the results to get which DEM event is affected. 
     #let's try to do this without the sensitivity vectors to make it easier to generalize
 
@@ -145,7 +144,7 @@ def generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim,  zassenhaus_o
     term_sorting = sort_terms_by_effect(eoc_eeg, dets_as_pauli_strings, sim)
     generator_split, base_events = split_generator(term_sorting, eoc_eeg)
 
-    terms_zassenhaus = eprop.zassenhaus_formula(generator_split, zassenhaus_order=zassenhaus_order) #TODO: edit this function to return a list by zassenhaus order
+    terms_zassenhaus = eprop.zassenhaus_formula(generator_split, zassenhaus_order=zassenhaus_order)
     leading_order_channels = terms_zassenhaus[:(-1)*(zassenhaus_order-1)]
     higher_order_channels = terms_zassenhaus[(-1)*(zassenhaus_order-1):]
 
@@ -154,29 +153,22 @@ def generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, sim,  zassenhaus_o
         #sort by dem event
         term_sorting = sort_terms_by_effect(channel, dets_as_pauli_strings, sim)
         generator_split, new_events = split_generator(term_sorting, channel)
-        terms_zassenhaus = eprop.zassenhaus_formula(generator_split, zassenhaus_order=1) #TODO generalize. 
-        if add_type=='add':
-            dem = add_to_dem(dem, new_events, terms_zassenhaus, channel, dets_as_pauli_strings, sim) #TODO think about if adding is correct here. 
-        elif add_type=='compose':
-            additional_dem = defaultdict(float)
-            additional_dem = add_to_dem(additional_dem, new_events, terms_zassenhaus, channel, dets_as_pauli_strings, sim)
-            #print(dem, additional_dem)
-            dem = compose_dems(dem, additional_dem)
-        else:
-            raise('add_type not recognized')
+        terms_zassenhaus = eprop.zassenhaus_formula(generator_split, zassenhaus_order=1) 
+
+        additional_dem = defaultdict(float)
+        additional_dem = add_to_dem(additional_dem, new_events, terms_zassenhaus, channel, dets_as_pauli_strings, sim)
+        dem = compose_dems(dem, additional_dem)
     
-    #TODO figure out a way to do iterative adjustment of the DEM based upon non-S errors existing in different DEM event channels
     return dem
     
-def estimate_error_rate_taylor(edict, sim, det_pauli, order=1, truncation_threshold=1e-9):
+def estimate_error_rate_taylor(edict, tableau, det_pauli, order=1, truncation_threshold=1e-9):
     '''
     function to estimate DEM event rate for a single-DEM-event channel 
     specified as a dictionary of elementary error generators and their rates.
     Computes exact rate for special cases, otherwise Taylor expands the error to a specified order (default 1)'''
     #if only S errors: compute exact
     if all(k.errorgen_type=='S' for k in edict.keys()):
-        contribution = (1-np.exp(-2*sum(edict.values())))/2 #maker sure constant factors are correct)
-        #print(sum(edict.values()))
+        contribution = (1-np.exp(-2*sum(edict.values())))/2 
     #if only one H error: compute exact
     elif len(edict.keys())==1 and all(k.errorgen_type=='H' for k in edict.keys()):
         #TODO verify
@@ -189,14 +181,8 @@ def estimate_error_rate_taylor(edict, sim, det_pauli, order=1, truncation_thresh
             alpha_errgen_prods = np.zeros(len(egen_dict))
             egens = np.array(egens.keys())
             rates = np.array(egens.values())
-            sensitivities = eprop.bulk_alpha_pauli(egens, sim, det_pauli)
+            sensitivities = eprop.bulk_alpha_pauli(egens, tableau, det_pauli)
             alpha_errgen_prods = np.real_if_close(sensitivities) @ rates
-            # for i, (lbl, rate) in enumerate(egen_dict.items()):
-            #     if abs(rate) > truncation_threshold:
-            #         ###TODO refactor to use bulk_alpha_pauli
-            #         sensitivity = bulk_alpha_pauli(lbl, sim, det_pauli)
-            #         alpha_errgen_prods[i] = np.real_if_close(sensitivity*rate)
             contribution += np.abs(np.sum(alpha_errgen_prods))
-        #print(alpha_errgen_prods)
-        contribution /= 2 #convert from change in expextation value to probability
+        contribution /= 2 
     return contribution
