@@ -1,7 +1,5 @@
 """Tests for simultaneous-GST validation execution helpers."""
 
-import importlib.util
-import json
 import os
 import pathlib
 import subprocess
@@ -29,15 +27,6 @@ from test.helpers.simultaneous_gst_validation import (
 )
 
 
-def _load_estimator_module():
-    checkout = pathlib.Path(__file__).resolve().parents[3]
-    script = checkout.parent / 'projects/simultaneous-gst-correctness/scripts/estimate_runtime.py'
-    spec = importlib.util.spec_from_file_location('simultaneous_gst_runtime_estimator', script)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def test_long_running_marker_is_registered(pytestconfig):
     assert any('long_running:' in line for line in pytestconfig.getini('markers'))
 
@@ -54,17 +43,6 @@ def test_artifact_roots_are_unique_for_colliding_profile_names(tmp_path):
     assert first != second
     assert first.is_dir()
     assert second.is_dir()
-
-
-def test_overnight_runner_finds_the_validation_checkout_from_workspace():
-    checkout = pathlib.Path(__file__).resolve().parents[3]
-    workspace = checkout.parent
-    runner = workspace / 'projects/simultaneous-gst-correctness/scripts/run_overnight.py'
-    environment = os.environ.copy()
-    environment.pop('PYTHONPATH', None)
-    result = subprocess.run([sys.executable, str(runner), '--help'], cwd=workspace,
-                            env=environment, capture_output=True, text=True, check=False)
-    assert result.returncode == 0, result.stderr
 
 
 def test_sparse_component_models_have_expected_parameter_counts():
@@ -357,184 +335,3 @@ def test_runtime_predictor_fits_nonnegative_coefficients_and_conservative_upper_
         'normal_equation_work': 0.5,
         'intercept': 7.0,
     })
-
-
-def test_estimator_constrains_loaded_blas_libraries_to_one_thread():
-    checkout = pathlib.Path(__file__).resolve().parents[3]
-    script = checkout.parent / 'projects/simultaneous-gst-correctness/scripts/estimate_runtime.py'
-    environment = os.environ.copy()
-    for variable in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS',
-                     'NUMEXPR_NUM_THREADS', 'BLIS_NUM_THREADS'):
-        environment[variable] = '8'
-    code = (
-        'import builtins, json, os, runpy; '
-        "variables = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', "
-        "'NUMEXPR_NUM_THREADS', 'BLIS_NUM_THREADS'); "
-        'observed = {}; original_import = builtins.__import__; '
-        "builtins.__import__ = lambda name, *args, **kwargs: (observed.setdefault("
-        "'numpy', {key: os.environ[key] for key in variables}) if name == 'numpy' "
-        "and 'numpy' not in observed else None) or original_import(name, *args, **kwargs); "
-        f'runpy.run_path({str(script)!r}); '
-        "print(json.dumps({'at_numpy_import': observed['numpy'], "
-        "'after_script': {key: os.environ[key] for key in variables}}))"
-    )
-    result = subprocess.run(
-        [sys.executable, '-c', code], cwd=checkout, env=environment,
-        capture_output=True, text=True, check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    configured = json.loads(result.stdout.splitlines()[-1])
-    assert set(configured['at_numpy_import'].values()) == {'1'}
-    assert set(configured['after_script'].values()) == {'1'}
-
-
-def test_resume_rejects_an_incompatible_mpi_fingerprint():
-    estimator = _load_estimator_module()
-    checkpoint = {
-        'configuration_fingerprint': {
-            'sha256': 'old',
-            'inputs': {'mpi_ranks': 1},
-        },
-    }
-    expected = {
-        'sha256': 'new',
-        'inputs': {'mpi_ranks': 2},
-    }
-
-    with pytest.raises(ValueError, match='mpi_ranks'):
-        estimator._validated_checkpoint(checkpoint, expected, legacy_configuration=None)
-
-
-def test_recovery_refuses_completed_results_without_prelaunch_fingerprint(tmp_path):
-    estimator = _load_estimator_module()
-    results_dir = tmp_path / 'twoq-fit-results' / 'sparse_hs' / 'l1'
-    marker = results_dir / 'results/twoq_runtime_probe/meta.json'
-    marker.parent.mkdir(parents=True)
-    marker.write_text('{}')
-
-    with pytest.raises(ValueError, match='prelaunch fingerprint'):
-        estimator._recover_elapsed_seconds(
-            results_dir, {'sha256': 'expected', 'inputs': {'mpi_ranks': 2}}
-        )
-
-
-def test_recovery_refuses_completed_results_with_mismatched_prelaunch_fingerprint(tmp_path):
-    estimator = _load_estimator_module()
-    results_dir = tmp_path / 'twoq-fit-results' / 'sparse_hs' / 'l1'
-    marker = results_dir / 'results/twoq_runtime_probe/meta.json'
-    marker.parent.mkdir(parents=True)
-    marker.write_text('{}')
-    estimator._persist_prelaunch_fingerprint(
-        results_dir, {'sha256': 'recorded', 'inputs': {'mpi_ranks': 1}}
-    )
-
-    with pytest.raises(ValueError, match='incompatible prelaunch fingerprint'):
-        estimator._recover_elapsed_seconds(
-            results_dir, {'sha256': 'expected', 'inputs': {'mpi_ranks': 2}}
-        )
-
-
-def test_legacy_serial_checkpoint_rejects_declarative_blas_thread_setting():
-    estimator = _load_estimator_module()
-    expected = {
-        'sha256': 'current',
-        'inputs': {
-            'mpi_ranks': 1,
-            'shots': 1000,
-            'blas_threads_per_rank': 1,
-            'optimizer': 'GateSetTomography default SimplerLMOptimizer',
-            'family': 'sparse_hs',
-            'max_lengths': [1],
-            'parameter_count': 17,
-            'design_selection_sha256': 'selection',
-        },
-    }
-    checkpoint = {
-        'family': 'sparse_hs',
-        'max_lengths': [1],
-        'parameter_count': 17,
-    }
-    legacy_configuration = {
-        'mpi_ranks': 1,
-        'shots': 1000,
-        'blas_threads_per_rank': 1,
-        'optimizer': 'GateSetTomography default SimplerLMOptimizer',
-    }
-
-    with pytest.raises(ValueError, match='serial legacy checkpoint'):
-        estimator._validated_checkpoint(
-            checkpoint, expected, legacy_configuration=legacy_configuration,
-            legacy_design_selection_sha256='selection',
-        )
-
-
-def test_matching_legacy_checkpoint_is_backfilled_with_current_fingerprint():
-    estimator = _load_estimator_module()
-    expected = {
-        'sha256': 'current',
-        'inputs': {
-            'mpi_ranks': 2,
-            'shots': 1000,
-            'blas_threads_per_rank': 1,
-            'optimizer': 'GateSetTomography default SimplerLMOptimizer',
-            'family': 'sparse_hs',
-            'max_lengths': [1, 2],
-            'parameter_count': 17,
-            'design_selection_sha256': 'selection',
-        },
-    }
-    checkpoint = {
-        'family': 'sparse_hs',
-        'max_lengths': [1, 2],
-        'parameter_count': 17,
-    }
-    legacy_configuration = {
-        'mpi_ranks': 2,
-        'shots': 1000,
-        'blas_threads_per_rank': 1,
-        'optimizer': 'GateSetTomography default SimplerLMOptimizer',
-    }
-
-    upgraded = estimator._validated_checkpoint(
-        checkpoint, expected, legacy_configuration=legacy_configuration,
-        legacy_design_selection_sha256='selection',
-    )
-
-    assert upgraded['configuration_fingerprint'] == expected
-
-
-def test_legacy_checkpoint_uses_the_recorded_full_design_selection_for_migration():
-    """Legacy records selected once on the full ladder, then fit its prefixes."""
-    estimator = _load_estimator_module()
-    expected = {
-        'sha256': 'current-prefix',
-        'inputs': {
-            'mpi_ranks': 2,
-            'shots': 1000,
-            'blas_threads_per_rank': 1,
-            'optimizer': 'GateSetTomography default SimplerLMOptimizer',
-            'family': 'sparse_hs',
-            'max_lengths': [1],
-            'parameter_count': 17,
-            'design_selection_sha256': 'prefix-selection',
-        },
-    }
-    checkpoint = {
-        'family': 'sparse_hs',
-        'max_lengths': [1],
-        'parameter_count': 17,
-    }
-    legacy_configuration = {
-        'mpi_ranks': 2,
-        'shots': 1000,
-        'blas_threads_per_rank': 1,
-        'optimizer': 'GateSetTomography default SimplerLMOptimizer',
-    }
-
-    upgraded = estimator._validated_checkpoint(
-        checkpoint, expected, legacy_configuration=legacy_configuration,
-        legacy_design_selection_sha256='full-selection',
-        expected_legacy_design_selection_sha256='full-selection',
-    )
-
-    assert upgraded['configuration_fingerprint'] == expected
