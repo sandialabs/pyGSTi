@@ -41,6 +41,7 @@ class ImplicitOpModelMixin:
         base.assertIs( m['Mdefault'],    m.povm_blks['layers']['Mdefault']         )
         base.assertIs( m['Gx'],          m.operation_blks['gates']['Gx']           )
         base.assertIs( m[('Gx', 'qb0')], m.operation_blks['layers'][('Gx', 'qb0')] )
+        base.assertIs( m['Gx:qb0'],      m.operation_blks['layers'][('Gx', 'qb0')] )
         base.assertIs( m[Label(('Gx', 'qb0'))], m.operation_blks['layers'][('Gx', 'qb0')] )
         with base.assertRaises(KeyError):
             _ = m['nonexistent']
