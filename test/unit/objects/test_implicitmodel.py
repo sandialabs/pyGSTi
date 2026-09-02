@@ -5,7 +5,7 @@ from pygsti.baseobjs.label import Label
 from pygsti.circuits.circuit import Circuit
 from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp
 from pygsti.models import LocalNoiseModel, ExplicitOpModel, ImplicitOpModel
-from pygsti.models.modelconstruction import create_crosstalk_free_model
+from pygsti.models.modelconstruction import create_cloud_crosstalk_model, create_crosstalk_free_model
 from pygsti.processors.processorspec import QubitProcessorSpec
 from pygsti.modelmembers.operations import (
     StaticArbitraryOp, ExpErrorgenOp, LindbladErrorgen
@@ -218,6 +218,33 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
         c3.done_editing()
         prob3 = mdl_local.probabilities(c3)
         self.assertEqual(len(prob3), 16)  # Full 4 qubit space
+
+
+class CloudNoiseModelTester(BaseCase):
+
+    def test_permuted_full_device_povm_supports_parameter_dependence_and_probabilities(self):
+        pspec = QubitProcessorSpec(
+            3,
+            ('Gcnot',),
+            availability={'Gcnot': [(0, 1)]},
+            qubit_labels=(0, 1, 2),
+        )
+        model = create_cloud_crosstalk_model(
+            pspec,
+            lindblad_error_coeffs={
+                ('Gcnot', 0, 1): {('H', 'Z:2'): 0.001},
+            },
+            lindblad_parameterization='H+S',
+            independent_gates=True,
+        )
+        circuit = Circuit([('Gcnot', 0, 1)], line_labels=(1, 2, 0))
+
+        parameter_dependence = model.circuit_parameter_dependence([circuit])
+        probabilities = model.probabilities(circuit)
+
+        self.assertEqual(parameter_dependence[circuit], [0])
+        self.assertEqual(len(probabilities), 8)
+        self.assertAlmostEqual(sum(probabilities.values()), 1.0)
 
 
 class ToExplicitModelTester(BaseCase):

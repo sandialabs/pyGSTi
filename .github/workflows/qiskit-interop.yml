@@ -55,7 +55,7 @@ jobs:
         python -c "import qiskit_ibm_runtime; print('runtime', qiskit_ibm_runtime.__version__)" || echo "qiskit-ibm-runtime not installed"
     - name: Run qiskit interop tests
       run: |
-        python -m pytest -v \
+        python -m pytest -v -m "not long_running" \
           test/unit/tools/test_qiskit_interop.py \
           test/unit/circuits/test_circuit.py \
           test/unit/objects/test_subcirc_selection.py \

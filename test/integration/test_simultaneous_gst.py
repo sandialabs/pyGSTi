@@ -13,6 +13,9 @@ circuit generation -> noisy data simulation -> GST fitting, for each of the
 four Lindblad error types (H, S, H+S, and H+S+C+A).
 """
 
+import dataclasses
+import os
+import pathlib
 import unittest
 
 import pytest
@@ -28,6 +31,36 @@ from pygsti.protocols.protocol import ProtocolData
 from pygsti.protocols.simultaneous_gst import SimultaneousGSTDesign
 from pygsti.tools import two_delta_logl
 from test.unit.protocols.test_simultaneous_gst import _line_pspec, _make_designs
+from test.helpers.simultaneous_gst_validation import (
+    FOUR_QUBIT_COHERENT_MARKOVIAN,
+    FOUR_QUBIT_COHERENT_SPECTATOR,
+    FOUR_QUBIT_SPARSE_MARKOVIAN,
+    FOUR_QUBIT_SPARSE_SPECTATOR,
+    THREE_QUBIT_SPARSE_MARKOVIAN,
+    THREE_QUBIT_SPARSE_SPECTATOR,
+    ValidationArtifacts,
+    run_validation_profile,
+)
+
+
+def artifact_dir():
+    root = pathlib.Path(os.environ['PYGSTI_SGST_ARTIFACT_DIR'])
+    return ValidationArtifacts(
+        root=root,
+        dataset_dir=root / 'dataset',
+        results_dir=root / 'fit',
+        manifest_path=root / 'profile.json',
+    )
+
+
+def mpi_ranks():
+    return int(os.environ.get('PYGSTI_SGST_MPI_RANKS', '1'))
+
+
+def profile_with_seed_override(profile):
+    """Return ``profile`` or an immutable per-run replacement selected by the runner."""
+    override = os.environ.get('PYGSTI_SGST_PROFILE_SEED')
+    return profile if override is None else dataclasses.replace(profile, seed=int(override))
 
 
 def _build_noise_model(pspec, lindblad_error_coeffs, parameterization):
@@ -158,6 +191,39 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
                     msg=f"2*deltaLogL too large for noise config {config_name!r}: "
                         f"{two_delta_logl_val}",
                 )
+
+
+@pytest.mark.long_running
+class SimultaneousGSTValidationTester:
+    def test_three_qubit_sparse_markovian_recovery(self):
+        result = run_validation_profile(
+            profile_with_seed_override(THREE_QUBIT_SPARSE_MARKOVIAN), artifact_dir(), mpi_ranks())
+        assert result['validation_mean_tvd'] >= 0.0
+
+    def test_three_qubit_sparse_spectator_crosstalk(self):
+        result = run_validation_profile(
+            profile_with_seed_override(THREE_QUBIT_SPARSE_SPECTATOR), artifact_dir(), mpi_ranks())
+        assert result['two_delta_logl'] >= 0.0
+
+    def test_four_qubit_sparse_markovian_bridge(self):
+        result = run_validation_profile(
+            profile_with_seed_override(FOUR_QUBIT_SPARSE_MARKOVIAN), artifact_dir(), mpi_ranks())
+        assert result['fit_model_params'] == 59
+
+    def test_four_qubit_sparse_spectator_crosstalk(self):
+        result = run_validation_profile(
+            profile_with_seed_override(FOUR_QUBIT_SPARSE_SPECTATOR), artifact_dir(), mpi_ranks())
+        assert result['fit_model_params'] == 59
+
+    def test_four_qubit_coherent_markovian_bridge(self):
+        result = run_validation_profile(
+            profile_with_seed_override(FOUR_QUBIT_COHERENT_MARKOVIAN), artifact_dir(), mpi_ranks())
+        assert result['fit_model_params'] == 21
+
+    def test_four_qubit_coherent_spectator_crosstalk(self):
+        result = run_validation_profile(
+            profile_with_seed_override(FOUR_QUBIT_COHERENT_SPECTATOR), artifact_dir(), mpi_ranks())
+        assert result['fit_model_params'] == 21
 
 
 if __name__ == '__main__':

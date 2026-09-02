@@ -508,6 +508,8 @@ class _SimpleCompLayerRules(_LayerRules):
         if layerlbl in caches['povm-layers']: return caches['povm-layers'][layerlbl]
         if layerlbl in model.povm_blks['layers']:
             return model.povm_blks['layers'][layerlbl]
+        if layerlbl.name in model.povm_blks['layers']:
+            return model.povm_blks['layers'][layerlbl.name]
         else:
             # See if this effect label could correspond to a *marginalized* POVM, and
             # if so, create the marginalized POVM and add its effects to model.effect_blks['layers']
