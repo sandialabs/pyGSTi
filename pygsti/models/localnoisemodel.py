@@ -41,6 +41,12 @@ _LOCALNOISE_MEMBER_PREFIXES = (
     ('operation_blks', 'gates', ('G', '{')),
     ('operation_blks', 'layers', ('G', '{')),
     ('instrument_blks', 'layers', 'I'),
+    # ^ Unclear why instrument_blks should only be keyed by `layers`.
+    #
+    # I'll grant that it seems weird to key by `gates`, but the things
+    # stored in operation_blks['gates'] have direct instrument analogs
+    # that aren't suitable for instrument_blks['layers'].
+    #
     ('factories', 'gates', ('G', '{')),
     ('factories', 'layers', ('G', '{')),
 )
