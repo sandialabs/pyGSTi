@@ -75,6 +75,14 @@ MAX_TWO_QUBIT_GATES_PER_CIRCUIT = 5_000_000
 MAX_RZ_GATES_PER_CIRCUIT = 30_000_000
 MAX_SX_GATES_PER_CIRCUIT = 20_000_000
 
+# Heuristic sizing for circuits_per_batch="auto": targets a job duration near IBM's
+# recommended window, biased toward the top end since the estimate below is conservative.
+# DEFAULT_REP_DELAY_SECONDS and CIRCUIT_OVERHEAD_SECONDS are fallback/overhead values
+# used when the backend doesn't expose better timing information.
+TARGET_JOB_DURATION_SECONDS = 240
+DEFAULT_REP_DELAY_SECONDS = 250e-6
+CIRCUIT_OVERHEAD_SECONDS = 2
+
 
 # Needs to be defined first for multiprocessing reasons
 def _transpile_batch(
@@ -242,6 +250,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.remove_duplicates = remove_duplicates
         self.randomized_order = randomized_order
         self.circuits_per_batch = circuits_per_batch
+        self._auto_batch_size = (circuits_per_batch == "auto")  # Records whether "auto" was originally requested
         self.num_shots = num_shots
         self.seed = seed
         self.checkpoint_path = str(checkpoint_path) if checkpoint_path is not None else 'ibmqexperiment_checkpoint'
@@ -685,7 +694,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             use cases such as non-IBM providers, mock-backend testing, or custom backends.
         """
         circuits = self.edesign.all_circuits_needing_data.copy()
-        num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
 
         if direct_to_qiskit:
             if qiskit_convert_kwargs is None:
@@ -740,6 +748,54 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         )
 
         print(f"transpiling to basis gates {qiskit_pass_kwargs['basis_gates']}")
+
+        # Build the main preset pass manager.
+        pm = _pass_manager(**qiskit_pass_kwargs)
+
+        # Build a second pass manager that converts non-terminal Measure ops
+        # into measure_2, but only if the backend advertises measure_2.
+        mcm_pm = None
+        if 'measure_2' in ibmq_backend.operation_names and use_ibm_mcm:
+            assert ConvertToMidCircuitMeasure is not None, \
+                ("Converting mid-circuit measurements requires the ConvertToMidCircuitMeasure "
+                 "transpiler pass, which was added in qiskit-ibm-runtime 0.44. Upgrade "
+                 "qiskit-ibm-runtime or set use_ibm_mcm=False.")
+            mcm_pm = _PassManager([
+                ConvertToMidCircuitMeasure(
+                    target=ibmq_backend.target,
+                    mcm_name='measure_2',
+                )
+            ])
+
+        # Resolve circuits_per_batch="auto" heuristic if requested
+        if self.circuits_per_batch == "auto":
+            longest_circuit = max(circuits, key=lambda c: c.depth)
+            isa_circuit = _transpile_batch(
+                [longest_circuit],
+                pass_manager=pm,
+                mcm_pass_manager=mcm_pm,
+                direct_to_qiskit=direct_to_qiskit,
+                qasm_convert_kwargs=qasm_convert_kwargs,
+                qiskit_convert_kwargs=qiskit_convert_kwargs,
+            )[0]
+
+            try:
+                rep_delay = ibmq_backend.configuration().default_rep_delay
+                if rep_delay is None:
+                    rep_delay = DEFAULT_REP_DELAY_SECONDS
+            except AttributeError:
+                rep_delay = DEFAULT_REP_DELAY_SECONDS
+
+            per_circuit_time = isa_circuit.estimate_duration(ibmq_backend.target) + rep_delay
+            raw_n = int(TARGET_JOB_DURATION_SECONDS // (self.num_shots * per_circuit_time + CIRCUIT_OVERHEAD_SECONDS))
+            capped_n = MAX_EXECUTIONS_PER_JOB // self.num_shots
+            self.circuits_per_batch = max(1, min(raw_n, capped_n))
+            print(
+                f"Auto-computed circuits_per_batch={self.circuits_per_batch} "
+                f"(estimated {per_circuit_time:.4g}s per circuit)"
+            )
+
+        num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
 
         if not len(self.pygsti_circuit_batches):
             rand_state = _np.random.RandomState(self.seed)  # TODO: separate seed?
@@ -799,24 +855,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             self.pygsti_circuit_batches[i]
             for i in range(len(self.qiskit_isa_circuit_batches), num_batches)
         ]
-
-        # Build the main preset pass manager.
-        pm = _pass_manager(**qiskit_pass_kwargs)
-
-        # Build a second pass manager that converts non-terminal Measure ops
-        # into measure_2, but only if the backend advertises measure_2.
-        mcm_pm = None
-        if 'measure_2' in ibmq_backend.operation_names and use_ibm_mcm:
-            assert ConvertToMidCircuitMeasure is not None, \
-                ("Converting mid-circuit measurements requires the ConvertToMidCircuitMeasure "
-                 "transpiler pass, which was added in qiskit-ibm-runtime 0.44. Upgrade "
-                 "qiskit-ibm-runtime or set use_ibm_mcm=False.")
-            mcm_pm = _PassManager([
-                ConvertToMidCircuitMeasure(
-                    target=ibmq_backend.target,
-                    mcm_name='measure_2',
-                )
-            ])
 
         # We are running _transpile_batch where the only arg that changes
         # across ranks is the circuits. Thus, create a new function with

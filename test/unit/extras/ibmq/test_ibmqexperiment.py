@@ -43,7 +43,7 @@ class IBMQExperimentTester(BaseCase):
     def setup_class(cls):
         if GenericBackendV2 is None:
             pytest.skip('Qiskit is required for this operation, and does not appear to be installed.')
-            
+
         cls.backend = GenericBackendV2(num_qubits=4, noise_info=False) # noise_info=False guarantees ideal simulation, which is needed at least for test_e2e_mirror_rb
         cls.device = ExperimentalDevice.from_qiskit_backend(cls.backend)
         cls.pspec = cls.device.create_processor_spec(['Gc{}'.format(i) for i in range(24)] + ['Gcphase'])
@@ -61,12 +61,12 @@ class IBMQExperimentTester(BaseCase):
         chkpt = 'test_ibmq_init_checkpoint'
         exp2 = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
                                    checkpoint_path=chkpt, checkpoint_override=True)
-        
+
         assert exp2.pygsti_circuit_batches == exp1.pygsti_circuit_batches
 
         exp3 = ibmq.IBMQExperiment.from_dir(chkpt)
         assert exp3.pygsti_circuit_batches == exp1.pygsti_circuit_batches
-    
+
     def test_transpile(self):
         if QiskitRuntimeService is None:
             pytest.skip('Qiskit Runtime is required for this operation, and does not appear to be installed.')
@@ -89,7 +89,7 @@ class IBMQExperimentTester(BaseCase):
         exp1 = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
                                    checkpoint_path=chkpt, checkpoint_override=True)
         exp1.transpile(self.backend)
-      
+
         # Submit first 3 jobs
         exp1.submit(self.backend, stop=3, max_attempts=1)
         assert len(exp1.qjobs) == 3
@@ -261,10 +261,10 @@ class IBMQExperimentTester(BaseCase):
         two_qubit_gate = 'Gcphase'
         gate_names = ['Gc{}'.format(i) for i in range(24)] + [two_qubit_gate,]
         availability = {two_qubit_gate: edges}
-        pspec = pygsti.processors.QubitProcessorSpec(num_qubits, gate_names, availability=availability, 
+        pspec = pygsti.processors.QubitProcessorSpec(num_qubits, gate_names, availability=availability,
                                                     qubit_labels=qubit_labels)
         clifford_compilations = {'absolute': pygsti.processors.CliffordCompilationRules.create_standard(pspec, verbosity=0)}
-        
+
         #mirror rb design parameters
         qubit_labels = [i for i in range(self.backend.num_qubits)]
         widths = [1, 2, 3, 4]
@@ -280,13 +280,13 @@ class IBMQExperimentTester(BaseCase):
             key = str(w)+ '-' 'random'
             edesigns[key] = RMCDesign(pspec, depths, circuits_per_shape, clifford_compilations=clifford_compilations,
                                     qubit_labels=qubits[w], sampler='edgegrab', samplerargs=[xi[w],])
-            
+
         for w in widths:
             key = str(w)+ '-' 'periodic'
             # xi has a different meaning in the PMC design --> twice what it is in RMC design
-            edesigns[key] = PMCDesign(pspec, depths, circuits_per_shape, clifford_compilations=clifford_compilations, 
+            edesigns[key] = PMCDesign(pspec, depths, circuits_per_shape, clifford_compilations=clifford_compilations,
                                     qubit_labels=qubits[w], sampler='edgegrab', samplerargs=[xi[w]/2,])
-            
+
         combined_edesign = pygsti.protocols.CombinedExperimentDesign(edesigns)
 
         exp = ibmq.IBMQExperiment(combined_edesign, pspec, checkpoint_override=True)
@@ -322,9 +322,9 @@ class IBMQExperimentTester(BaseCase):
         meas_fiducials = smq1Q_XY.meas_fiducials(qubit_labels=ql)
         germs = smq1Q_XY.germs(qubit_labels=ql)
 
-        Q0 = np.array([[0.5,0,0,0.5],[0,0,0,0],[0,0,0,0],[0.5,0,0,0.5]]) 
-        Q1 = np.array([[0.5,0,0,-0.5],[0,0,0,0],[0,0,0,0],[-0.5,0,0,0.5]]) 
-        target_model['Iz', ql[0]] = pygsti.modelmembers.instruments.TPInstrument({'p0':Q0,'p1':Q1}) 
+        Q0 = np.array([[0.5,0,0,0.5],[0,0,0,0],[0,0,0,0],[0.5,0,0,0.5]])
+        Q1 = np.array([[0.5,0,0,-0.5],[0,0,0,0],[0,0,0,0],[-0.5,0,0,0.5]])
+        target_model['Iz', ql[0]] = pygsti.modelmembers.instruments.TPInstrument({'p0':Q0,'p1':Q1})
         germs += [pygsti.circuits.Circuit([('Iz', ql[0])])]
 
         edesign = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, [1])
@@ -365,7 +365,7 @@ class IBMQExperimentTester(BaseCase):
         exp.retrieve_results()
 
         self.assertEqual(exp.data.dataset[circ].counts, {('10',): 1024})
-    
+
     def test_e2e_qiskit_all_w_mcms(self):
         backend = GenericBackendV2(num_qubits=9, noise_info=False)
         device = ExperimentalDevice.from_qiskit_backend(backend)
@@ -511,3 +511,143 @@ class IBMQExperimentTester(BaseCase):
             exp.transpile(self.backend, ignore_batch_limit_checks=True)
             # Verify we actually transpiled something
             self.assertGreater(len(exp.qiskit_isa_circuit_batches), 0)
+
+    def test_auto_batch_size_formula_case_1(self):
+        """Auto batch size formula correctness with num_shots=512 and fixed duration."""
+        chkpt = 'test_ibmq_auto_batch_size_case_1'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch="auto",
+                                  num_shots=512, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+
+        # Mock estimate_duration to return a known value (e.g., 0.001 seconds = 1ms per circuit)
+        # The backend doesn't have configuration(), so the fallback will be used
+        fixed_duration = 0.001
+        with mock.patch('qiskit.circuit.QuantumCircuit.estimate_duration') as mock_est_dur:
+            mock_est_dur.return_value = fixed_duration
+            exp.transpile(self.backend)
+
+            # Manually compute expected value using the formula
+            per_circuit_time = fixed_duration + ibmqexperiment.DEFAULT_REP_DELAY_SECONDS
+            raw_n = int(ibmqexperiment.TARGET_JOB_DURATION_SECONDS
+                        // (512 * per_circuit_time + ibmqexperiment.CIRCUIT_OVERHEAD_SECONDS))
+            capped_n = ibmqexperiment.MAX_EXECUTIONS_PER_JOB // 512
+            expected = max(1, min(raw_n, capped_n))
+
+            # Verify that circuits_per_batch was resolved to the expected value
+            self.assertEqual(exp.circuits_per_batch, expected)
+
+    def test_auto_batch_size_formula_case_2(self):
+        """Auto batch size formula correctness with num_shots=1024 and different duration."""
+        chkpt = 'test_ibmq_auto_batch_size_case_2'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch="auto",
+                                  num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+
+        # Mock estimate_duration to return a different value (0.002 seconds = 2ms per circuit)
+        fixed_duration = 0.002
+        with mock.patch('qiskit.circuit.QuantumCircuit.estimate_duration') as mock_est_dur:
+            mock_est_dur.return_value = fixed_duration
+            exp.transpile(self.backend)
+
+            # Manually compute expected value
+            per_circuit_time = fixed_duration + ibmqexperiment.DEFAULT_REP_DELAY_SECONDS
+            raw_n = int(ibmqexperiment.TARGET_JOB_DURATION_SECONDS
+                        // (1024 * per_circuit_time + ibmqexperiment.CIRCUIT_OVERHEAD_SECONDS))
+            capped_n = ibmqexperiment.MAX_EXECUTIONS_PER_JOB // 1024
+            expected = max(1, min(raw_n, capped_n))
+
+            self.assertEqual(exp.circuits_per_batch, expected)
+
+    def test_auto_batch_size_clipped_by_executions_cap(self):
+        """Auto batch size is clipped to MAX_EXECUTIONS_PER_JOB // num_shots when the
+        duration-based N would otherwise exceed it."""
+        chkpt = 'test_ibmq_auto_batch_size_clipped'
+        num_shots = 100_000
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch="auto",
+                                  num_shots=num_shots, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+
+        # DEFAULT_REP_DELAY_SECONDS (250us) alone is too large for the duration-based N to
+        # ever exceed the executions cap at any num_shots, so this scenario also mocks a much
+        # smaller backend-reported rep_delay to actually drive the duration-based N above the cap.
+        fixed_duration = 1e-9
+        rep_delay = 1e-8
+        mock_config = mock.MagicMock()
+        mock_config.default_rep_delay = rep_delay
+        with mock.patch('qiskit.circuit.QuantumCircuit.estimate_duration') as mock_est_dur, \
+             mock.patch.object(self.backend, 'configuration', return_value=mock_config, create=True):
+            mock_est_dur.return_value = fixed_duration
+            exp.transpile(self.backend)
+
+        per_circuit_time = fixed_duration + rep_delay
+        raw_n = int(ibmqexperiment.TARGET_JOB_DURATION_SECONDS
+                    // (num_shots * per_circuit_time + ibmqexperiment.CIRCUIT_OVERHEAD_SECONDS))
+        capped_n = ibmqexperiment.MAX_EXECUTIONS_PER_JOB // num_shots
+        # Sanity check that this scenario actually exercises the clip, not just that the
+        # result happens to satisfy <= the cap.
+        self.assertGreater(raw_n, capped_n)
+        self.assertEqual(exp.circuits_per_batch, capped_n)
+
+    def test_auto_batch_size_rep_delay_fallback(self):
+        """Auto batch size uses DEFAULT_REP_DELAY_SECONDS when backend has no configuration()."""
+        chkpt = 'test_ibmq_auto_batch_size_rep_delay_fallback'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch="auto",
+                                  num_shots=512, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+
+        fixed_duration = 0.001
+        with mock.patch('qiskit.circuit.QuantumCircuit.estimate_duration') as mock_est_dur:
+            mock_est_dur.return_value = fixed_duration
+            exp.transpile(self.backend)
+
+            # Verify that the fallback rep_delay was used
+            per_circuit_time = fixed_duration + ibmqexperiment.DEFAULT_REP_DELAY_SECONDS
+            raw_n = int(ibmqexperiment.TARGET_JOB_DURATION_SECONDS
+                        // (512 * per_circuit_time + ibmqexperiment.CIRCUIT_OVERHEAD_SECONDS))
+            capped_n = ibmqexperiment.MAX_EXECUTIONS_PER_JOB // 512
+            expected = max(1, min(raw_n, capped_n))
+
+            self.assertEqual(exp.circuits_per_batch, expected)
+
+    def test_auto_batch_size_floor_of_one(self):
+        """Auto batch size is at least 1 even with pathologically long circuit times."""
+        chkpt = 'test_ibmq_auto_batch_size_floor'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch="auto",
+                                  num_shots=1024, seed=20231201,
+                                  checkpoint_path=chkpt, checkpoint_override=True)
+
+        # Mock estimate_duration to return a huge value
+        huge_duration = 1000.0  # 1000 seconds per circuit
+        with mock.patch('qiskit.circuit.QuantumCircuit.estimate_duration') as mock_est_dur:
+            mock_est_dur.return_value = huge_duration
+            exp.transpile(self.backend)
+
+            # Even with huge duration, circuits_per_batch should be at least 1
+            self.assertGreaterEqual(exp.circuits_per_batch, 1)
+
+    def test_auto_batch_size_provenance_tracking(self):
+        """_auto_batch_size attribute correctly tracks whether 'auto' was requested."""
+        chkpt_auto = 'test_ibmq_auto_batch_size_provenance_auto'
+        chkpt_fixed = 'test_ibmq_auto_batch_size_provenance_fixed'
+
+        # Create with "auto"
+        exp_auto = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch="auto",
+                                       num_shots=512, seed=20231201,
+                                       checkpoint_path=chkpt_auto, checkpoint_override=True)
+        self.assertTrue(exp_auto._auto_batch_size)
+
+        # Transpile should update circuits_per_batch to int, but _auto_batch_size stays True
+        with mock.patch('qiskit.circuit.QuantumCircuit.estimate_duration') as mock_est_dur:
+            mock_est_dur.return_value = 0.001
+            exp_auto.transpile(self.backend)
+
+        # After transpile, circuits_per_batch should be an int
+        self.assertIsInstance(exp_auto.circuits_per_batch, int)
+        # But _auto_batch_size should still be True
+        self.assertTrue(exp_auto._auto_batch_size)
+
+        # Create with fixed batch size
+        exp_fixed = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5,
+                                        num_shots=512, seed=20231201,
+                                        checkpoint_path=chkpt_fixed, checkpoint_override=True)
+        self.assertFalse(exp_fixed._auto_batch_size)
