@@ -437,3 +437,77 @@ class IBMQExperimentTester(BaseCase):
         exp.retrieve_results()
 
         self.assertEqual(exp.data.dataset[circ].counts, {('10',): 1024})
+
+    def test_circuits_per_batch_default_is_3000(self):
+        """circuits_per_batch defaults to 3000 when unspecified."""
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, disable_checkpointing=True)
+        self.assertEqual(exp.circuits_per_batch, 3000)
+
+    def test_batch_exceeding_max_executions_raises(self):
+        """Batch whose execution count exceeds MAX_EXECUTIONS_PER_JOB raises ValueError."""
+        chkpt = 'test_ibmq_batch_max_executions'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024,
+                                  seed=20231201, checkpoint_path=chkpt, checkpoint_override=True)
+
+        # Patch MAX_EXECUTIONS_PER_JOB to a low value to trigger the check without needing
+        # to construct an actual huge batch
+        with mock.patch.object(ibmqexperiment, 'MAX_EXECUTIONS_PER_JOB', 1000):
+            with pytest.raises(ValueError, match="Batch 0 would submit.*executions.*exceeding"):
+                exp.transpile(self.backend)
+
+    def test_circuit_exceeding_max_two_qubit_gates_raises(self):
+        """Circuit whose two-qubit gate count exceeds MAX_TWO_QUBIT_GATES_PER_CIRCUIT raises ValueError."""
+        chkpt = 'test_ibmq_circuit_max_two_qubit_gates'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024,
+                                  seed=20231201, checkpoint_path=chkpt, checkpoint_override=True)
+
+        # Patch num_nonlocal_gates() to return a large count without needing a real huge circuit
+        with mock.patch('qiskit.circuit.QuantumCircuit.num_nonlocal_gates') as mock_nonlocal:
+            mock_nonlocal.return_value = ibmqexperiment.MAX_TWO_QUBIT_GATES_PER_CIRCUIT + 1
+            with pytest.raises(ValueError, match="Circuit has.*two-qubit gates.*exceeding"):
+                exp.transpile(self.backend)
+
+    def test_circuit_exceeding_max_rz_gates_raises(self):
+        """Circuit whose RZ gate count exceeds MAX_RZ_GATES_PER_CIRCUIT raises ValueError."""
+        chkpt = 'test_ibmq_circuit_max_rz_gates'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024,
+                                  seed=20231201, checkpoint_path=chkpt, checkpoint_override=True)
+
+        # Patch count_ops() to return a large RZ count without needing a real huge circuit
+        with mock.patch('qiskit.circuit.QuantumCircuit.count_ops') as mock_count:
+            mock_count.return_value = {'rz': ibmqexperiment.MAX_RZ_GATES_PER_CIRCUIT + 1}
+            with pytest.raises(ValueError, match="Circuit has.*RZ gates.*exceeding"):
+                exp.transpile(self.backend)
+
+    def test_circuit_exceeding_max_sx_gates_raises(self):
+        """Circuit whose SX gate count exceeds MAX_SX_GATES_PER_CIRCUIT raises ValueError."""
+        chkpt = 'test_ibmq_circuit_max_sx_gates'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024,
+                                  seed=20231201, checkpoint_path=chkpt, checkpoint_override=True)
+
+        # Patch count_ops() to return a large SX count without needing a real huge circuit
+        with mock.patch('qiskit.circuit.QuantumCircuit.count_ops') as mock_count:
+            mock_count.return_value = {'sx': ibmqexperiment.MAX_SX_GATES_PER_CIRCUIT + 1}
+            with pytest.raises(ValueError, match="Circuit has.*SX gates.*exceeding"):
+                exp.transpile(self.backend)
+
+    def test_ignore_batch_limit_checks_bypasses_all_validation(self):
+        """ignore_batch_limit_checks=True bypasses all four limit checks."""
+        chkpt = 'test_ibmq_ignore_batch_limit_checks'
+        exp = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024,
+                                  seed=20231201, checkpoint_path=chkpt, checkpoint_override=True)
+
+        # Patch all limits to trigger validation, but pass ignore_batch_limit_checks=True
+        with mock.patch.object(ibmqexperiment, 'MAX_EXECUTIONS_PER_JOB', 1000), \
+             mock.patch('qiskit.circuit.QuantumCircuit.num_nonlocal_gates') as mock_nonlocal, \
+             mock.patch('qiskit.circuit.QuantumCircuit.count_ops') as mock_count:
+            # Set up mocks to return huge counts that would trigger all checks
+            mock_nonlocal.return_value = ibmqexperiment.MAX_TWO_QUBIT_GATES_PER_CIRCUIT + 1
+            mock_count.return_value = {
+                'rz': ibmqexperiment.MAX_RZ_GATES_PER_CIRCUIT + 1,
+                'sx': ibmqexperiment.MAX_SX_GATES_PER_CIRCUIT + 1,
+            }
+            # Transpile should succeed when ignore_batch_limit_checks=True
+            exp.transpile(self.backend, ignore_batch_limit_checks=True)
+            # Verify we actually transpiled something
+            self.assertGreater(len(exp.qiskit_isa_circuit_batches), 0)

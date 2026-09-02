@@ -66,6 +66,16 @@ from pygsti.io import metadir as _metadir
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
 
+# IBM's currently-published per-job/per-circuit hard limits (docs.quantum.ibm.com), used to
+# validate batches before submission. A fourth documented limit (26.8M weighted
+# control-instructions per qubit per job) is not enforced here -- too complex to compute
+# precisely for a currently-theoretical concern at typical batch sizes.
+MAX_EXECUTIONS_PER_JOB = 10_000_000
+MAX_TWO_QUBIT_GATES_PER_CIRCUIT = 5_000_000
+MAX_RZ_GATES_PER_CIRCUIT = 30_000_000
+MAX_SX_GATES_PER_CIRCUIT = 20_000_000
+
+
 # Needs to be defined first for multiprocessing reasons
 def _transpile_batch(
     circs,
@@ -222,7 +232,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         
         return ret
 
-    def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
+    def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=3000,
                  num_shots=1024, seed=None, checkpoint_path=None, disable_checkpointing=False, checkpoint_override=False):
         _TreeNode.__init__(self, None, None)
 
@@ -631,7 +641,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
               qiskit_pass_kwargs=None,
               qasm_convert_kwargs=None,
               qiskit_convert_kwargs=None,
-              num_workers=1, use_ibm_mcm=True
+              num_workers=1, use_ibm_mcm=True, ignore_batch_limit_checks=False
               ):
         """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
 
@@ -668,6 +678,11 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         num_workers: int, optional
             Number of workers to use for parallel (by batch) transpilation
+
+        ignore_batch_limit_checks: bool, optional
+            If True, bypasses validation of IBM's hard limits on job executions and
+            per-circuit gate counts. Defaults to False. Set to True only for advanced
+            use cases such as non-IBM providers, mock-backend testing, or custom backends.
         """
         circuits = self.edesign.all_circuits_needing_data.copy()
         num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
@@ -759,6 +774,18 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 with open(chkpt_path / 'meta.json', 'w') as f:
                     _json.dump(metadata, f)
 
+        # Pre-transpile: validate batch execution counts against hard IBM limit
+        if not ignore_batch_limit_checks:
+            for batch_idx, batch in enumerate(self.pygsti_circuit_batches):
+                execution_count = len(batch) * self.num_shots
+                if execution_count > MAX_EXECUTIONS_PER_JOB:
+                    raise ValueError(
+                        f"Batch {batch_idx} would submit {execution_count:,} executions "
+                        f"({len(batch)} circuits × {self.num_shots} shots), exceeding the IBM "
+                        f"hard limit of {MAX_EXECUTIONS_PER_JOB:,} per job. "
+                        f"Set ignore_batch_limit_checks=True to bypass this check."
+                    )
+
         if len(self.qiskit_isa_circuit_batches):
             print(
                 f'Already completed transpilation of '
@@ -805,6 +832,33 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         for task in _tqdm.tqdm(tasks):
             self.qiskit_isa_circuit_batches.append(task_fn(task))
+
+            # Post-transpile: validate per-circuit gate counts against hard IBM limits
+            if not ignore_batch_limit_checks:
+                for circ in self.qiskit_isa_circuit_batches[-1]:
+                    num_nonlocal = circ.num_nonlocal_gates()
+                    if num_nonlocal > MAX_TWO_QUBIT_GATES_PER_CIRCUIT:
+                        raise ValueError(
+                            f"Circuit has {num_nonlocal:,} two-qubit gates, exceeding the IBM "
+                            f"hard limit of {MAX_TWO_QUBIT_GATES_PER_CIRCUIT:,} per circuit. "
+                            f"Set ignore_batch_limit_checks=True to bypass this check."
+                        )
+
+                    rz_count = circ.count_ops().get('rz', 0)
+                    if rz_count > MAX_RZ_GATES_PER_CIRCUIT:
+                        raise ValueError(
+                            f"Circuit has {rz_count:,} RZ gates, exceeding the IBM hard limit "
+                            f"of {MAX_RZ_GATES_PER_CIRCUIT:,} RZ gates per circuit. "
+                            f"Set ignore_batch_limit_checks=True to bypass this check."
+                        )
+
+                    sx_count = circ.count_ops().get('sx', 0)
+                    if sx_count > MAX_SX_GATES_PER_CIRCUIT:
+                        raise ValueError(
+                            f"Circuit has {sx_count:,} SX gates, exceeding the IBM hard limit "
+                            f"of {MAX_SX_GATES_PER_CIRCUIT:,} SX gates per circuit. "
+                            f"Set ignore_batch_limit_checks=True to bypass this check."
+                        )
 
             # Save single batch
             if not self.disable_checkpointing:
