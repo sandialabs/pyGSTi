@@ -668,8 +668,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         qiskit_pass_kwargs: dict, optional
             Only used if direct_to_qiskit is False.
             Additional kwargs to pass in to `generate_preset_pass_manager`.
-            If not defined, the default is {'seed_transpiler': self.seed, 'optimization_level': 0,
-            'basis_gates': ibmq_backend.operation_names}
+            If not defined, the default is {'seed_transpiler': self.seed, 'layout_method': 'trivial',
+            'routing_method': 'none', 'optimization_level': 1, 'basis_gates': ibmq_backend.operation_names}
             Note that "optimization_level" is a required argument to the pass manager.
 
         qasm_convert_kwargs: dict, optional
