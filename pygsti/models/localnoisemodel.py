@@ -158,12 +158,13 @@ class LocalNoiseModel(_ImplicitOpModel):
         """Initialize this model's seven standard member dictionaries."""
         flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
+        if modelmembers is None:
+            modelmembers = {}
+
         for mmdict_name, key, prefix in self._member_prefixes:
             mmdict = getattr(self, mmdict_name)
-            items = []
-            if modelmembers is not None:
-                serialization_key = f'{mmdict_name}|{key}'
-                items = modelmembers.get(serialization_key, [])
+            serialization_key = f'{mmdict_name}|{key}'
+            items = modelmembers.get(serialization_key, [])
             mmdict[key] = _OrderedMemberDict(self, None, prefix, flags, items)
 
     def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
