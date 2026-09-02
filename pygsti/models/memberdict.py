@@ -40,7 +40,7 @@ class _PrefixOrderedDict(_collections.OrderedDict):
         self._prefix = prefix
         super(_PrefixOrderedDict, self).__init__(items)
 
-    def __setitem__(self, key, val):
+    def __setitem__(self, key: _Label, val):
         """ Assumes key is a Label object """
         if self._prefix is not None:
             if isinstance(self._prefix, tuple):
