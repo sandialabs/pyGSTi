@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -117,7 +117,7 @@ In addition to there being multiple options for the algorithm to use, there are 
 For `find_germs` the `mode` kwarg acts as a flag to indicate the caching scheme used for storing the Jacobians for the candidate
 germs. Default value of 'allJac' caches all of the Jacobians and requires the most memory. 'singleJac' doesn't cache anything and instead generates these Jacobians on the fly. The final option, 'compactEVD', is currently only configured to work with the greedy search algorithm. When selected the compact eigenvalue decomposition/compact SVD of each of the Jacobians is constructed and is cached. This uses an intermediate amount of memory between 'singleJac' and 'allJac'. When compactEVD mode is selected we also perform the greedy search iterations using an alternative method based on low-rank update techniques, which means in practice this mode can be orders-of-magnitude faster than the other modes, though typically only for two-or-more qubits. This alternative approach means that this mode also only works with the score function option set to 'all'. (Note: this mode can also be a bit more finicky than other modes, so be prepared to tinker a bit, you can see hints of this finickiness below).
 
-`find_germs` also accepts the kwarg `float_type`. `float_type` is dynamically inferred based on the target model's basis (e.g., standard Pauli representations automatically use real-valued arrays). `float_type` can still be optionally specified for memory tuning (e.g. downcasting to `np.single`), which can allow for a lower memory footprint. When manually specified `float_type` is validated for compatibility against the model's basis. 
+`find_germs` also accepts the kwarg `float_type`. `float_type` is dynamically inferred based on the target model's basis (e.g., standard Pauli representations automatically use real-valued arrays). `float_type` can still be optionally specified for memory tuning (e.g. downcasting to `np.single`), which can allow for a lower memory footprint. When manually specified `float_type` is validated for compatibility against the model's basis.
 
 ```{code-cell} ipython3
 greedyGerms_compactEVD = germsel.find_germs(target_model, algorithm='greedy', seed = 1234, mode='compactEVD', verbosity=1,

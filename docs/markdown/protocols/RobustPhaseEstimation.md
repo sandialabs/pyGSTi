@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -134,5 +134,3 @@ print('alpha_true - alpha_est_final =',resultsRPE['alphaErrorList'][-1])
 print('epsilon_true - epsilon_est_final =',resultsRPE['epsilonErrorList'][-1])
 print('theta_true - theta_est_final =',resultsRPE['thetaErrorList'][-1])
 ```
-
-
