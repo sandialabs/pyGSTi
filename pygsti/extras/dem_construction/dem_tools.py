@@ -23,7 +23,6 @@ def format_dem_stim(dem_dict, n_logical):
     #need to add in logical detectors as a separate thing
     dem_string = ''
     for dbs, prob in dem_dict.items():
-        #print(len(dbs))
         if prob > 0:
             line = f'error({prob}) '+''.join([f'D{i} ' if dbs[i]=='1' else '' for i in range(n_detectors-n_logical)]+[f'L{i} ' if dbs[n_detectors-n_logical+i]=='1' else '' for i in range(n_logical)])+'\n'
             dem_string+=line
@@ -86,34 +85,35 @@ def split_generator(term_sorting, eoc_eeg):
         generator_split.append(term_dict)
     return generator_split, base_events
 
-def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_strings, sim): 
+def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_strings, tableau): 
     for event, egens in zip(base_events, leading_order_channels):
         if event != '0'*len(event):
+            first_flipped_detector = event.find('1')
+            det_pauli = dets_as_pauli_strings[first_flipped_detector]
+
             if all(k.errorgen_type=='S' for k in egens.keys()) or (len(egens.keys())==1 and all(k.errorgen_type=='H' for k in egens.keys())):
-                first_flipped_detector = event.find('1')
-                det_pauli = dets_as_pauli_strings[first_flipped_detector]
-                contribution = estimate_error_rate_taylor(egens, sim, det_pauli) #maker sure constant factors are correct)
+                contribution = estimate_error_rate_taylor(egens, tableau, det_pauli) #maker sure constant factors are correct)
                 dem[event] += contribution
             else:
                 #properly deal with H terms by separating SCA terms from H terms
                 h_terms = [t for t in egens if t.errorgen_type == 'H']
                 sca_terms = [t for t in egens if t.errorgen_type != 'H']
 
+                h_weights = []
+                h_product_eegs = []
+
                 for (eeg1, eeg2) in itertools.product(h_terms, repeat=2):
                     weight = eoc_eeg[eeg1]*eoc_eeg[eeg2]/2  
+                    h_weights.append(weight)
+                    
                     #pick out one of the detectors flipped
-                    first_flipped_detector = event.find('1')
-                    det_pauli = dets_as_pauli_strings[first_flipped_detector]
-
                     new_eeg = LocalStimErrorgenLabel('C',(eeg1.basis_element_labels[0], eeg2.basis_element_labels[0]))
-                    contribution = compute_contribution(new_eeg, weight, det_pauli, tableau)
-                    dem[event] += -1*contribution.real
+                    h_product_eegs.append(new_eeg)
 
-                weights = [eoc_eeg[eeg] for eeg in sca_terms]
-                first_flipped_detector = event.find('1')
-                det_pauli = dets_as_pauli_strings[first_flipped_detector]
-                contribution = compute_contribution(sca_terms, weights, det_pauli, tableau)
-                dem[event] += -1*contribution.real
+                weights = h_weights+[eoc_eeg[eeg] for eeg in sca_terms]
+                all_terms = h_product_eegs + sca_terms
+                contributions = compute_contributions_bulk(all_terms, weights, det_pauli, tableau)
+                dem[event] += -1*np.sum(np.real(np.array(contributions)))
 
     return dem
 
