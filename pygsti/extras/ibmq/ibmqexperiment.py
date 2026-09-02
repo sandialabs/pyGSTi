@@ -8,6 +8,15 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union
+
+if TYPE_CHECKING:
+    from pygsti.protocols.protocol import ExperimentDesign as _ExperimentDesign
+    from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
+    from qiskit_ibm_runtime import QiskitRuntimeService as _QiskitRuntimeService
+
 from datetime import datetime as _datetime
 from functools import partial as _partial
 import json as _json
@@ -35,6 +44,7 @@ except:
 try:
     from qiskit_ibm_runtime import SamplerV2 as _Sampler
     from qiskit_ibm_runtime import Session as _Session
+    from qiskit_ibm_runtime import Batch as _Batch
     from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
     from qiskit_ibm_runtime import IBMBackend as _IBMBackend
 except ImportError:
@@ -62,17 +72,36 @@ from pygsti import data as _data, io as _io
 from pygsti.protocols import ProtocolData as _ProtocolData, HasProcessorSpec as _HasPSpec
 from pygsti.protocols.protocol import _TreeNode
 from pygsti.io import metadir as _metadir
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
+
+
+# IBM's currently-published per-job/per-circuit hard limits (docs.quantum.ibm.com), used to
+# validate batches before submission. A fourth documented limit (26.8M weighted
+# control-instructions per qubit per job) is not enforced here -- too complex to compute
+# precisely for a currently-theoretical concern at typical batch sizes.
+MAX_EXECUTIONS_PER_JOB = 10_000_000
+MAX_TWO_QUBIT_GATES_PER_CIRCUIT = 5_000_000
+MAX_RZ_GATES_PER_CIRCUIT = 30_000_000
+MAX_SX_GATES_PER_CIRCUIT = 20_000_000
+
+# Heuristic sizing for circuits_per_batch="auto": targets a job duration near IBM's
+# recommended window, biased toward the top end since the estimate below is conservative.
+# DEFAULT_REP_DELAY_SECONDS and CIRCUIT_OVERHEAD_SECONDS are fallback/overhead values
+# used when the backend doesn't expose better timing information.
+TARGET_JOB_DURATION_SECONDS = 240
+DEFAULT_REP_DELAY_SECONDS = 250e-6
+CIRCUIT_OVERHEAD_SECONDS = 2
 
 
 # Needs to be defined first for multiprocessing reasons
 def _transpile_batch(
-    circs,
-    pass_manager,
-    direct_to_qiskit,
-    qasm_convert_kwargs=None,
-    qiskit_convert_kwargs=None,
-    mcm_pass_manager=None,
-):
+    circs: list,
+    pass_manager: _PassManager,
+    direct_to_qiskit: bool,
+    qasm_convert_kwargs: Optional[dict] = None,
+    qiskit_convert_kwargs: Optional[dict] = None,
+    mcm_pass_manager: Optional[_PassManager] = None,
+) -> list:
     batch = []
     for circ in circs:
         # TODO: Replace this with direct to qiskit
@@ -124,7 +153,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
     """
 
     @classmethod
-    def from_dir(cls, dirname, regen_jobs=False, service=None, new_checkpoint_path=None):
+    def from_dir(cls, dirname: Union[str, _pathlib.Path], regen_jobs: bool = False,
+                 service: Optional[_QiskitRuntimeService] = None,
+                 new_checkpoint_path: Optional[Union[str, _pathlib.Path]] = None) -> IBMQExperiment:
         """
         Initialize a new IBMQExperiment object from `dirname`.
 
@@ -220,8 +251,11 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         
         return ret
 
-    def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
-                 num_shots=1024, seed=None, checkpoint_path=None, disable_checkpointing=False, checkpoint_override=False):
+    def __init__(self, edesign: _ExperimentDesign, pspec: Optional[Union[_QuditProcessorSpec, str]],
+                 remove_duplicates: bool = True, randomized_order: bool = True,
+                 circuits_per_batch: Union[int, Literal["auto"]] = 3000, num_shots: int = 1024,
+                 seed: Optional[int] = None, checkpoint_path: Optional[Union[str, _pathlib.Path]] = None,
+                 disable_checkpointing: bool = False, checkpoint_override: bool = False) -> None:
         _TreeNode.__init__(self, None, None)
 
         self.auxfile_types = {}
@@ -230,6 +264,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.remove_duplicates = remove_duplicates
         self.randomized_order = randomized_order
         self.circuits_per_batch = circuits_per_batch
+        self._auto_batch_size = (circuits_per_batch == "auto")  # Records whether "auto" was originally requested
         self.num_shots = num_shots
         self.seed = seed
         self.checkpoint_path = str(checkpoint_path) if checkpoint_path is not None else 'ibmqexperiment_checkpoint'
@@ -272,7 +307,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                     )
             self.write(chkpath)
         
-    def monitor(self):
+    def monitor(self) -> None:
         """
         Queries IBM Q for the status of the jobs.
         """
@@ -307,13 +342,36 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         for counter in range(len(self.qjobs), len(self.qiskit_isa_circuit_batches)):
             print(f"Batch {counter + 1}: NOT SUBMITTED")
     
-    def retrieve_results(self):
+    def retrieve_results(self, checkpointing_mode: Literal["data", "full", "none"] = "data") -> None:
         """
         Gets the results of the completed jobs from IBM Q, and processes
         them into a pyGSTi DataProtocol object (stored as the key 'data'),
         which can then be used in pyGSTi data analysis routines (e.g., if this
         was a GST experiment, it can input into a GST protocol object that will
         analyze the data).
+
+        Parameters
+        ----------
+        checkpointing_mode : Literal["data", "full", "none"], optional
+            Checkpointing writes the newly-retrieved results to disk as this method runs, so a later
+            `from_dir()` load -- or a `retrieve_results()` call resumed in a separate session -- has
+            this call's outcome data available without re-querying IBM. Has no effect at all when
+            `self.disable_checkpointing` is True. Allowed values:
+            - "data" (default): Write only the newly-retrieved outcome counts
+              (ProtocolData's data/ directory), avoiding re-serialization of
+              edesign, processor_spec, and circuit batches. This is fast for
+              large experiments.
+            - "full": Re-serialize the entire on-disk experiment state (the
+              original/legacy behavior prior to this parameter).
+            - "none": Skip the checkpoint write entirely. Reasonable when even the "data" write's
+              disk cost is unwanted and this retrieval's results don't need to be available on disk
+              immediately -- `submit()` already persists job_ids.json and calibration data
+              incrementally, so the same results can still be re-retrieved from IBM on demand later.
+
+        Raises
+        ------
+        ValueError
+            If checkpointing_mode is not one of the three allowed values.
         """
         
         assert len(self.qjobs) == len(self.job_ids), \
@@ -372,10 +430,23 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.data = _ProtocolData(self.edesign, ds)
 
         if not self.disable_checkpointing:
-            self.write()
+            if checkpointing_mode == "data":
+                self.data.write(self.checkpoint_path, edesign_already_written=True)
+            elif checkpointing_mode == "full":
+                self.write()
+            elif checkpointing_mode == "none":
+                pass
+            else:
+                raise ValueError(
+                    f"Invalid checkpointing_mode '{checkpointing_mode}'. "
+                    f"Allowed values are: 'data', 'full', 'none'."
+                )
 
 
-    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10, ibmq_session=None):
+    def submit(self, ibmq_backend: Union[_IBMBackend, _AerSimulator, _GenericBackendV2], start: Optional[int] = None,
+               stop: Optional[int] = None, ignore_job_limit: bool = True, wait_time: int = 5, max_attempts: int = 10,
+               ibmq_session: Optional[_Session] = None,
+               ibmq_runtime_mode: Optional[Union[_Session, _Batch]] = None) -> None:
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -409,8 +480,16 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         wait_steps: int
             Number of steps to take before retrying job submission.
 
-        ibmq_session: IBMQuantumRuntimeSession
-            IBMQuantumRuntime Session to use 
+        ibmq_runtime_mode: qiskit_ibm_runtime.Session or qiskit_ibm_runtime.Batch, optional
+            Runtime mode instance (Session or Batch) to use for executing jobs. If not
+            provided, a new Batch is created and used. Jobs are only billed for actual
+            QPU hardware time when using Batch mode (not for IBM-side preprocessing).
+            If supplied by the caller, this object is NOT closed by submit(); the caller
+            remains responsible for closing it themselves.
+
+        ibmq_session: IBMQuantumRuntimeSession, optional
+            Deprecated. Use ibmq_runtime_mode instead. If provided, its value is forwarded
+            to ibmq_runtime_mode and a deprecation warning is emitted.
 
         Returns
         -------
@@ -423,6 +502,18 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             "Transpilation missing! Either run .transpile() first, or if loading from file, " + \
             "use the regen_qiskit_circs=True option in from_dir()."
         
+        # Handle deprecated ibmq_session parameter
+        if ibmq_session is not None and ibmq_runtime_mode is not None:
+            raise ValueError(
+                "Cannot specify both 'ibmq_session' and 'ibmq_runtime_mode'. Use 'ibmq_runtime_mode' only.")
+
+        if ibmq_session is not None:
+            _warnings.warn(
+                "The 'ibmq_session' parameter is deprecated in favor of 'ibmq_runtime_mode'; "
+                "'ibmq_session' will be removed in a future release.",
+                _pyGSTiDeprecationWarning
+            )
+            ibmq_runtime_mode = ibmq_session
 
         #Get the backend version
         backend_version = ibmq_backend.version
@@ -455,10 +546,11 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
             stop = min(start + allowed_jobs, stop)
         
-        if ibmq_session is None: 
-            ibmq_session = _Session(backend = ibmq_backend)
+        caller_supplied_mode = ibmq_runtime_mode is not None
+        if ibmq_runtime_mode is None:
+            ibmq_runtime_mode = _Batch(backend=ibmq_backend)
 
-        sampler = _Sampler(mode=ibmq_session)
+        sampler = _Sampler(mode=ibmq_runtime_mode)
         
         for batch_idx, batch in enumerate(self.qiskit_isa_circuit_batches):
             if batch_idx < start or batch_idx >= stop:
@@ -565,53 +657,21 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             if submit_status is False:
                 raise RuntimeError("Ran out of max attempts and job was still not submitted successfully")
 
-    def transpile(self,
-              ibmq_backend,
-              direct_to_qiskit=False,
-              qiskit_pass_kwargs=None,
-              qasm_convert_kwargs=None,
-              qiskit_convert_kwargs=None,
-              num_workers=1, use_ibm_mcm=True
-              ):
-        """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
+        # Close the runtime mode if it was created by this method (not supplied by caller)
+        if not caller_supplied_mode:
+            ibmq_runtime_mode.close()
 
-        Parameters
-        ----------
-        ibmq_backend:
-            IBM backend to use during Qiskit transpilation
-
-        direct_to_qiskit: bool, optional
-            Whether to use OpenQASM as an intermediary in the conversion from pyGSTi circut
-            to Qiskit circuit. If True, `qiskit_convert_kwargs` is passed to
-            `Circuit.convert_to_qiskit`. If False, the pyGSTi circuits are first converted to
-            OpenQASM and then converted into Qiskit circuits.
-
-        qiskit_pass_kwargs: dict, optional
-            Only used if direct_to_qiskit is False.
-            Additional kwargs to pass in to `generate_preset_pass_manager`.
-            If not defined, the default is {'seed_transpiler': self.seed, 'optimization_level': 0,
-            'basis_gates': ibmq_backend.operation_names}
-            Note that "optimization_level" is a required argument to the pass manager.
-
-        qasm_convert_kwargs: dict, optional
-            Only used if direct_to_qiskit is False.
-            Additional kwargs to pass in to `Circuit.convert_to_openqasm`.
-            If not defined, the default is {'num_qubits': self.processor_spec.num_qubits,
-            'standard_gates_version': 'x-sx-rz'}
-
-        qiskit_convert_kwargs: dict, optional
-            Only used if direct_to_qiskit is True.
-            Additional kwargs to pass to `Circuit.convert_to_qiskit`.
-            If not defined, the default is {'num_qubits': self.processor_spec.num_qubits,
-            'qubit_conversion': 'remove-Q', 'block_between_layers': True,
-            'qubits_to_measure': 'active'}.
-
-        num_workers: int, optional
-            Number of workers to use for parallel (by batch) transpilation
+    def _resolve_transpile_kwargs(
+        self,
+        direct_to_qiskit: bool,
+        qiskit_pass_kwargs: Optional[dict],
+        qasm_convert_kwargs: Optional[dict],
+        qiskit_convert_kwargs: Optional[dict],
+        ibmq_backend: Union[_IBMBackend, _AerSimulator, _GenericBackendV2],
+    ) -> tuple[dict, dict, dict]:
+        """Fills in transpile()'s default kwargs for whichever of qasm_convert_kwargs/qiskit_convert_kwargs
+        applies (based on direct_to_qiskit) and for qiskit_pass_kwargs (always), returning all three.
         """
-        circuits = self.edesign.all_circuits_needing_data.copy()
-        num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
-
         if direct_to_qiskit:
             if qiskit_convert_kwargs is None:
                 qiskit_convert_kwargs = {}
@@ -666,6 +726,13 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         print(f"transpiling to basis gates {qiskit_pass_kwargs['basis_gates']}")
 
+        return qiskit_pass_kwargs, qasm_convert_kwargs, qiskit_convert_kwargs
+
+    def _form_pygsti_circuit_batches(self, circuits: list, num_batches: int) -> None:
+        """Splits circuits into self.pygsti_circuit_batches (num_batches batches), randomizing/deduplicating
+        per self.randomized_order/self.remove_duplicates, and checkpoints the result. No-op if
+        self.pygsti_circuit_batches is already populated (e.g. resuming from a checkpoint).
+        """
         if not len(self.pygsti_circuit_batches):
             rand_state = _np.random.RandomState(self.seed)  # TODO: separate seed?
 
@@ -699,19 +766,119 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 with open(chkpt_path / 'meta.json', 'w') as f:
                     _json.dump(metadata, f)
 
-        if len(self.qiskit_isa_circuit_batches):
-            print(
-                f'Already completed transpilation of '
-                f'{len(self.qiskit_isa_circuit_batches)}/{num_batches} circuit batches'
-            )
-            if len(self.qiskit_isa_circuit_batches) == num_batches:
-                return
+    def _check_batch_execution_limit(
+        self,
+        batch_idx: int,
+        pygsti_batch: list,
+        ignore_batch_limit_checks: bool,
+    ) -> None:
+        """Validates a pre-transpile batch's total execution count (circuits x shots) against IBM's
+        published hard limit (MAX_EXECUTIONS_PER_JOB), unless ignore_batch_limit_checks is True.
+        """
+        if ignore_batch_limit_checks:
+            return
 
-        # Set up parallel tasks
-        tasks = [
-            self.pygsti_circuit_batches[i]
-            for i in range(len(self.qiskit_isa_circuit_batches), num_batches)
-        ]
+        execution_count = len(pygsti_batch) * self.num_shots
+        if execution_count > MAX_EXECUTIONS_PER_JOB:
+            raise ValueError(
+                f"Batch {batch_idx} would submit {execution_count:,} executions "
+                f"({len(pygsti_batch)} circuits × {self.num_shots} shots), exceeding the IBM "
+                f"hard limit of {MAX_EXECUTIONS_PER_JOB:,} per job. "
+                f"Set ignore_batch_limit_checks=True to bypass this check."
+            )
+
+    def _check_isa_circuit_gate_limits(
+        self,
+        isa_circuit: Any,
+        ignore_batch_limit_checks: bool,
+    ) -> None:
+        """Validates a post-transpile ISA circuit's two-qubit/RZ/SX gate counts against IBM's
+        published hard limits (module-level MAX_* constants), unless ignore_batch_limit_checks is True.
+        """
+        if ignore_batch_limit_checks:
+            return
+
+        num_nonlocal = isa_circuit.num_nonlocal_gates()
+        if num_nonlocal > MAX_TWO_QUBIT_GATES_PER_CIRCUIT:
+            raise ValueError(
+                f"Circuit has {num_nonlocal:,} two-qubit gates, exceeding the IBM "
+                f"hard limit of {MAX_TWO_QUBIT_GATES_PER_CIRCUIT:,} per circuit. "
+                f"Set ignore_batch_limit_checks=True to bypass this check."
+            )
+
+        rz_count = isa_circuit.count_ops().get('rz', 0)
+        if rz_count > MAX_RZ_GATES_PER_CIRCUIT:
+            raise ValueError(
+                f"Circuit has {rz_count:,} RZ gates, exceeding the IBM hard limit "
+                f"of {MAX_RZ_GATES_PER_CIRCUIT:,} RZ gates per circuit. "
+                f"Set ignore_batch_limit_checks=True to bypass this check."
+            )
+
+        sx_count = isa_circuit.count_ops().get('sx', 0)
+        if sx_count > MAX_SX_GATES_PER_CIRCUIT:
+            raise ValueError(
+                f"Circuit has {sx_count:,} SX gates, exceeding the IBM hard limit "
+                f"of {MAX_SX_GATES_PER_CIRCUIT:,} SX gates per circuit. "
+                f"Set ignore_batch_limit_checks=True to bypass this check."
+            )
+
+    def transpile(
+        self,
+        ibmq_backend: Union[_IBMBackend, _AerSimulator, _GenericBackendV2],
+        direct_to_qiskit: bool = False,
+        qiskit_pass_kwargs: Optional[dict] = None,
+        qasm_convert_kwargs: Optional[dict] = None,
+        qiskit_convert_kwargs: Optional[dict] = None,
+        num_workers: int = 1,
+        use_ibm_mcm: bool = True,
+        ignore_batch_limit_checks: bool = False,
+    ) -> None:
+        """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
+
+        Parameters
+        ----------
+        ibmq_backend:
+            IBM backend to use during Qiskit transpilation
+
+        direct_to_qiskit: bool, optional
+            Whether to use OpenQASM as an intermediary in the conversion from pyGSTi circut
+            to Qiskit circuit. If True, `qiskit_convert_kwargs` is passed to
+            `Circuit.convert_to_qiskit`. If False, the pyGSTi circuits are first converted to
+            OpenQASM and then converted into Qiskit circuits.
+
+        qiskit_pass_kwargs: dict, optional
+            Only used if direct_to_qiskit is False.
+            Additional kwargs to pass in to `generate_preset_pass_manager`.
+            If not defined, the default is {'seed_transpiler': self.seed, 'layout_method': 'trivial',
+            'routing_method': 'none', 'optimization_level': 1, 'basis_gates': ibmq_backend.operation_names}
+            Note that "optimization_level" is a required argument to the pass manager.
+
+        qasm_convert_kwargs: dict, optional
+            Only used if direct_to_qiskit is False.
+            Additional kwargs to pass in to `Circuit.convert_to_openqasm`.
+            If not defined, the default is {'num_qubits': self.processor_spec.num_qubits,
+            'standard_gates_version': 'x-sx-rz'}
+
+        qiskit_convert_kwargs: dict, optional
+            Only used if direct_to_qiskit is True.
+            Additional kwargs to pass to `Circuit.convert_to_qiskit`.
+            If not defined, the default is {'num_qubits': self.processor_spec.num_qubits,
+            'qubit_conversion': 'remove-Q', 'block_between_layers': True,
+            'qubits_to_measure': 'active'}.
+
+        num_workers: int, optional
+            Number of workers to use for parallel (by batch) transpilation
+
+        ignore_batch_limit_checks: bool, optional
+            If True, bypasses validation of IBM's hard limits on job executions and
+            per-circuit gate counts. Defaults to False. Set to True only for advanced
+            use cases such as non-IBM providers, mock-backend testing, or custom backends.
+        """
+        circuits = self.edesign.all_circuits_needing_data.copy()
+
+        qiskit_pass_kwargs, qasm_convert_kwargs, qiskit_convert_kwargs = self._resolve_transpile_kwargs(
+            direct_to_qiskit, qiskit_pass_kwargs, qasm_convert_kwargs, qiskit_convert_kwargs, ibmq_backend
+        )
 
         # Build the main preset pass manager.
         pm = _pass_manager(**qiskit_pass_kwargs)
@@ -731,6 +898,55 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 )
             ])
 
+        # Resolve circuits_per_batch="auto" heuristic if requested
+        if self.circuits_per_batch == "auto":
+            longest_circuit = max(circuits, key=lambda c: c.depth)
+            isa_circuit = _transpile_batch(
+                [longest_circuit],
+                pass_manager=pm,
+                mcm_pass_manager=mcm_pm,
+                direct_to_qiskit=direct_to_qiskit,
+                qasm_convert_kwargs=qasm_convert_kwargs,
+                qiskit_convert_kwargs=qiskit_convert_kwargs,
+            )[0]
+
+            try:
+                rep_delay = ibmq_backend.configuration().default_rep_delay
+                if rep_delay is None:
+                    rep_delay = DEFAULT_REP_DELAY_SECONDS
+            except AttributeError:
+                rep_delay = DEFAULT_REP_DELAY_SECONDS
+
+            per_circuit_time = isa_circuit.estimate_duration(ibmq_backend.target) + rep_delay
+            raw_n = int(TARGET_JOB_DURATION_SECONDS // (self.num_shots * per_circuit_time + CIRCUIT_OVERHEAD_SECONDS))
+            capped_n = MAX_EXECUTIONS_PER_JOB // self.num_shots
+            self.circuits_per_batch = max(1, min(raw_n, capped_n))
+            print(
+                f"Auto-computed circuits_per_batch={self.circuits_per_batch} "
+                f"(estimated {per_circuit_time:.4g}s per circuit)"
+            )
+
+        num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
+        self._form_pygsti_circuit_batches(circuits, num_batches)
+
+        # Pre-transpile: validate batch execution counts against hard IBM limit
+        for batch_idx, batch in enumerate(self.pygsti_circuit_batches):
+            self._check_batch_execution_limit(batch_idx, batch, ignore_batch_limit_checks)
+
+        if len(self.qiskit_isa_circuit_batches):
+            print(
+                f'Already completed transpilation of '
+                f'{len(self.qiskit_isa_circuit_batches)}/{num_batches} circuit batches'
+            )
+            if len(self.qiskit_isa_circuit_batches) == num_batches:
+                return
+
+        # Set up parallel tasks
+        tasks = [
+            self.pygsti_circuit_batches[i]
+            for i in range(len(self.qiskit_isa_circuit_batches), num_batches)
+        ]
+
         # We are running _transpile_batch where the only arg that changes
         # across ranks is the circuits. Thus, create a new function with
         # partially applied kwargs.
@@ -745,6 +961,10 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         for task in _tqdm.tqdm(tasks):
             self.qiskit_isa_circuit_batches.append(task_fn(task))
+
+            # Post-transpile: validate per-circuit gate counts against hard IBM limits
+            for circ in self.qiskit_isa_circuit_batches[-1]:
+                self._check_isa_circuit_gate_limits(circ, ignore_batch_limit_checks)
 
             # Save single batch
             if not self.disable_checkpointing:
@@ -765,7 +985,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 with open(chkpt_path / 'meta.json', 'w') as f:
                     _json.dump(metadata, f)
 
-    def write(self, dirname=None):
+    def write(self, dirname: Optional[Union[str, _pathlib.Path]] = None) -> None:
         """
         Writes to disk, storing both the pyGSTi ProtocolData object in pyGSTi's standard
         format and saving all of the IBM Q submission information stored in this object,
@@ -795,7 +1015,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         self._write_checkpoint(dirname)
     
-    def _write_checkpoint(self, dirname=None):
+    def _write_checkpoint(self, dirname: Optional[Union[str, _pathlib.Path]] = None) -> None:
         """Write only the ibmqexperiment part of .write().
         
         Parameters
@@ -812,7 +1032,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         exp_dir.mkdir(parents=True, exist_ok=True)
         _io.metadir.write_obj_to_meta_based_dir(self, exp_dir, 'auxfile_types')
 
-    def _retrieve_jobs(self, service):
+    def _retrieve_jobs(self, service: _QiskitRuntimeService) -> None:
         """Retrieves RuntimeJobs from IBMQ based on job_ids.
 
         Parameters
