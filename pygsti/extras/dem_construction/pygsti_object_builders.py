@@ -36,7 +36,7 @@ def pygsti_c_to_stim(pyg_c, include_measurement=True):
         #assume serialized
         stim_name = gatenames_to_stim[gate.name]
         stim_qs = ' '.join([str(q) for q in list(gate.qubits)])
-        stim_cstr += (gatenames_to_stim[gate.name]+' '+' '.join([str(q) for q in list(gate.qubits)])+'\n')
+        stim_cstr += (stim_name+' '+stim_qs+'\n')
     #add measurement of all qubits
     if include_measurement:
         stim_cstr += ('M '+' '.join(qs))
@@ -75,7 +75,6 @@ def local_x_errorgen(num_qubits, rate):
         truncate=False, evotype='stabilizer', state_space=state_space)
     #calling this twice is intentional. Second setting adds adjustment to get correct rate adjustment for depol probability.
     #errgen.set_error_rates(errdict)
-    
     embedded_errorgens = []
     for i in range(num_qubits):
         embedded_errorgens.append(EmbeddedErrorgen(QubitSpace(num_qubits), [i], errgen))

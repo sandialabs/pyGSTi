@@ -186,3 +186,25 @@ def estimate_error_rate_taylor(edict, tableau, det_pauli, order=1, truncation_th
             contribution += np.abs(np.sum(alpha_errgen_prods))
         contribution /= 2 
     return contribution
+
+def build_dem_end2end(circuit, model, detectors, zassenhaus_order=1 ):
+	#TODO n_logical functionality
+    dets_as_pauli_strings = [dems.get_detector_as_parity(d, measurements, n_qubits) for d in detectors]
+
+    #sets up a stim Tableau, needed for calculating DEM event contributions
+    pcircuit = pcircuit.serialize()
+    stim_c_no_extras = obj.pygsti_c_to_stim(pcircuit)
+    tableau = stim.Tableau.from_circuit(stim_c_no_extras, ignore_measurement=True) 
+    inverse_tableau = tableau.inverse()
+
+    #propagates errors and combines them into circuit error channel
+    egp = ErrorGeneratorPropagator(model)
+    eoc_eeg = egp.propagate_errorgens_bch(pcircuit, bch_order=1, include_spam=True)
+
+    #constructs the DEM
+    total_dem = dems.generate_dem_higher_order(dets_as_pauli_strings, eoc_eeg, tableau, zassenhaus_order=zassenhaus_order)
+    #the previous line represents the DEM as a dictionary. Now construct a Stim DEM
+    stim_dem_str = dems.format_dem_stim(total_dem, n_logical=1)
+    stim_dem = stim.DetectorErrorModel(stim_dem_str)
+
+    return stim_dem
