@@ -83,8 +83,8 @@ def standard_gauge_model(theta=0., alpha=0., beta=0., lam1=1., lam2=1., a=0.,
                     [-a, 0, 0, lam1]])
     E_sto = np.array([[1, 0, 0, 0],
                       [arel, 1 - r2, cxy, cxz],
-                      [arel, cxy, 1 - r2, cyz],
-                      [ay, cxz, cyz, 1 - r1]])
+                      [ay, cxy, 1 - r1, cyz],
+                      [arel, cxz, cyz, 1 - r2]])
     Lam_S = E_S @ rot(sz, np.pi / 2)
     Lam_Y = rot(sx, beta) @ E_sto @ rot(sy, np.pi / 2 + alpha) @ rot(sx, -beta)
     thx, thy, thz = idle_angles

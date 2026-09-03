@@ -22,3 +22,9 @@ from .gaugeopt import *
 from .germselection import *
 from .grammatrix import *
 from .mirroring import *
+
+# cGST (character gate set tomography) support modules; imported as submodules
+# (like `cgstfit`) rather than star-imported to keep the top-level namespace clean.
+from . import cgstdesign
+from . import cgstgauge
+from . import cgstinversion

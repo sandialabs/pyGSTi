@@ -32,6 +32,7 @@ parts:
     - file: markdown/protocols/DriftCharacterization
     - file: markdown/protocols/RobustPhaseEstimation
     - file: markdown/protocols/CharacterGST
+    - file: markdown/protocols/CharacterGST_GeneralGateSets
     - file: markdown/rb/Overview
       sections:
       - file: markdown/rb/CliffordRB

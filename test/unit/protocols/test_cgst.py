@@ -1,7 +1,11 @@
+import warnings
+
 import numpy as np
 from scipy.linalg import expm
 
 import pygsti
+from pygsti.algorithms import cgstdesign, cgstgauge
+from pygsti.baseobjs.label import Label
 from pygsti.circuits import Circuit
 from pygsti.models.modelconstruction import create_explicit_model
 from pygsti.processors import QubitProcessorSpec
@@ -41,8 +45,8 @@ def _standard_gauge_model(theta=0., alpha=0., beta=0., lam1=1., lam2=1., a=0.,
     Lam_S = E_S @ _rot(_sz, np.pi / 2)
     E_sto = np.array([[1, 0, 0, 0],
                       [arel, 1 - r2, cxy, cxz],
-                      [arel, cxy, 1 - r2, cyz],
-                      [ay, cxz, cyz, 1 - r1]])
+                      [ay, cxy, 1 - r1, cyz],
+                      [arel, cxz, cyz, 1 - r2]])
     Lam_Y = _rot(_sx, beta) @ E_sto @ _rot(_sy, np.pi / 2 + alpha) @ _rot(_sx, -beta)
     thx, thy, thz = idle_angles
     Lam_I = _rot(_sx, thx) @ _rot(_sy, thy) @ _rot(_sz, thz)
@@ -260,3 +264,179 @@ class SZYExtractionTester(BaseCase):
         self.assertEqual(set(top.decay_summaries.keys()), set(edesign.keys()))
         df = top.to_dataframe()
         self.assertGreater(len(df), len(edesign.keys()))
+
+
+class LinearGatesetInversionTester(BaseCase):
+    """
+    End-to-end tests of `CharacterGST(gateset_inversion='linear')`: the generic
+    (design-agnostic) first-order inversion of `pygsti.algorithms.cgstinversion`
+    followed by the standard-gauge fixing of `pygsti.algorithms.cgstgauge`.
+
+    The design matrix is the expensive part (~15 s); it depends only on the
+    experiment design and the target model, so it is built once here and reused
+    by every test through `CharacterGST`'s (class-level) cache.
+    """
+
+    # the trivial-irrep decays must bend measurably away from a straight line for
+    # the finite-differenced design matrix to resolve them: see the notes on
+    # `cgstinversion.first_order_design_matrix`
+    depths = [0, 1, 2, 4, 8, 16, 32, 64, 128]
+
+    truth_rates = {
+        'Gzpi2:Q0': {('H', 'Z'): 0.0015, ('H', 'X'): 0.0006, ('S', 'X'): 0.0012,
+                     ('S', 'Y'): 0.0012, ('S', 'Z'): 0.0015, ('C', 'X', 'Y'): 0.0004,
+                     ('A', 'X', 'Z'): 0.0005},
+        'Gypi2:Q0': {('H', 'Y'): 0.0012, ('H', 'X'): 0.0009, ('S', 'X'): 0.0015,
+                     ('S', 'Y'): 0.0008, ('S', 'Z'): 0.0013, ('A', 'X', 'Y'): 0.0004},
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        pspec = QubitProcessorSpec(1, ['Gzpi2', 'Gypi2'], qubit_labels=['Q0'])
+        cls.target = create_explicit_model(pspec, ideal_gate_type='full TP',
+                                           ideal_spam_type='full TP', simulator='matrix')
+        cls.truth = create_explicit_model(pspec, lindblad_error_coeffs=cls.truth_rates,
+                                          lindblad_parameterization='GLND', simulator='matrix')
+        # the amplificationally-complete germ set for {S, sqrt(Y)} has 5 germs of
+        # orders (4, 4, 3, 3, 3), each with a 2-dimensional trivial block and a
+        # multiplicity-one nontrivial irrep -> 10 children, all analyzable
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            cls.design = cgstdesign.create_cgst_design(
+                cls.target, cls.depths, 12, mode='exact', num_projection_rounds=3, seed=0)
+        cls.truth_coefficients = cgstgauge.errorgen_coefficients_in_gauge(
+            cgstgauge.fix_standard_gauge(cls.truth, cls.target, 'Gzpi2'), cls.target)
+
+    def _protocol(self, **kwargs):
+        kwargs.setdefault('bootstrap_samples', 0)
+        return CharacterGST(gateset_inversion='linear', target_model=self.target,
+                            reference_gate='Gzpi2', **kwargs)
+
+    def _run(self, num_samples=1000, sample_error='none', data_seed=None, **kwargs):
+        ds = pygsti.data.simulate_data(self.truth, self.design.all_circuits_needing_data,
+                                       num_samples, sample_error=sample_error, seed=data_seed)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')  # the degenerate irrep is skipped noisily
+            results = self._protocol(**kwargs).run(ProtocolData(self.design, ds))
+        return results
+
+    def _truth_entry(self, gate_str, errgen_str):
+        gate = next(g for g in self.truth_coefficients if str(g) == gate_str)
+        errgen = next(e for e in self.truth_coefficients[gate] if str(e) == errgen_str)
+        return self.truth_coefficients[gate][errgen], errgen
+
+    def test_design_structure(self):
+        self.assertEqual(len(self.design.keys()), 10)
+        self.assertEqual(len(set(row['germ'] for row in self.design.germ_table)), 5)
+        self.assertTrue(all(self.design[name].mode == 'exact' for name in self.design.keys()))
+
+    def test_noiseless_data_recovers_the_gate_set(self):
+        top = self._run().for_protocol['CharacterGST']
+        info = top.inversion_info
+        self.assertEqual(info['rank'], 13)
+        self.assertEqual(info['num_params'], 24)
+        self.assertEqual(info['num_observables'], 20)
+        self.assertEqual(info['num_unamplified'], 24 - 13)
+        self.assertEqual(len(info['singular_values']), 20)
+        self.assertLess(info['residual_norm'], 1e-2)
+        self.assertEqual(info['skipped_children'], [])
+
+        # (i) gauge-invariant check: every germ eigenvalue the design probes
+        for row in self.design.germ_table:
+            germ = Circuit(row['germ'])
+            true = true_germ_eigenvalues(self.truth, germ, row['group_order'])
+            got = true_germ_eigenvalues(top.estimated_model, germ, row['group_order'])
+            for irrep, value in true.items():
+                self.assertLess(abs(got[irrep] - value), 1e-4,
+                                msg='germ eigenvalue mismatch for %s irrep %d'
+                                    % (row['name'], irrep))
+
+        # (ii) gauge-dependent check: the standard-gauge Hamiltonian coefficients
+        for gate_str, per_gate in top.errorgen_estimates.items():
+            for errgen_str, entry in per_gate.items():
+                truth_value, errgen = self._truth_entry(gate_str, errgen_str)
+                if errgen.errorgen_type != 'H':
+                    continue
+                self.assertLess(abs(entry['value'] - truth_value), 1e-4,
+                                msg='%s %s: %g vs %g' % (gate_str, errgen_str,
+                                                         entry['value'], truth_value))
+        # ...and the full coefficient set is still first-order accurate
+        self.assertEqual(sorted(top.errorgen_estimates.keys()), ['Gypi2:Q0', 'Gzpi2:Q0'])
+        self.assertEqual(sum(len(v) for v in top.errorgen_estimates.values()), 24)
+
+    def test_shot_noise_uncertainties(self):
+        top = self._run(num_samples=2000, sample_error='multinomial', data_seed=2026,
+                        bootstrap_samples=20, seed=7).for_protocol['CharacterGST']
+        self.assertEqual(top.inversion_info['rank'], 13)
+        for gate_str, per_gate in top.errorgen_estimates.items():
+            for errgen_str, entry in per_gate.items():
+                truth_value, _ = self._truth_entry(gate_str, errgen_str)
+                stderr, deviation = entry['stderr'], abs(entry['value'] - truth_value)
+                self.assertTrue(np.isfinite(stderr) and stderr >= 0,
+                                msg='bad stderr for %s %s' % (gate_str, errgen_str))
+                if abs(truth_value) > 1e-6:  # amplified, physically nonzero coefficients
+                    self.assertGreater(stderr, 0.0)
+                self.assertTrue(deviation < 5e-3 or deviation < 5 * stderr,
+                                msg='%s %s off by %g (stderr %g)'
+                                    % (gate_str, errgen_str, deviation, stderr))
+        df = top.to_dataframe()
+        errgen_rows = df[df['type'] == 'error generator']
+        self.assertEqual(len(errgen_rows), 24)
+        self.assertIn('Gzpi2:Q0:H(Z:Q0)', list(errgen_rows['quantity']))
+
+    @with_temp_path
+    def test_results_roundtrip(self, pth):
+        results = self._run(num_samples=2000, sample_error='multinomial', data_seed=31,
+                            bootstrap_samples=10, seed=3)
+        results.write(pth)
+        loaded = pygsti.io.read_results_from_dir(pth)
+        top, reloaded = results.for_protocol['CharacterGST'], loaded.for_protocol['CharacterGST']
+        self.assertEqual(reloaded.inversion_info, top.inversion_info)
+        self.assertEqual(reloaded.errorgen_estimates, top.errorgen_estimates)
+        self.assertEqual(set(loaded.keys()), set(results.keys()))
+        for lbl, op in top.estimated_model.operations.items():
+            self.assertArraysAlmostEqual(reloaded.estimated_model.operations[lbl].to_dense(),
+                                         op.to_dense())
+        self.assertEqual(reloaded.protocol.gateset_inversion, 'linear')
+        self.assertEqual(reloaded.protocol.reference_gate, 'Gzpi2')
+        for lbl, op in self.target.operations.items():
+            self.assertArraysAlmostEqual(
+                reloaded.protocol.target_model.operations[lbl].to_dense(), op.to_dense())
+
+    @with_temp_path
+    def test_szy_results_still_roundtrip_without_a_model(self, pth):
+        edesign = create_1q_szy_cgst_design([0, 1, 2, 4], 12, mode='exact',
+                                            include_idle=False, seed=5)
+        ds = pygsti.data.simulate_data(_lindblad_noisy_model(),
+                                       edesign.all_circuits_needing_data, 1000,
+                                       sample_error='none')
+        results = CharacterGST(bootstrap_samples=0, gateset_inversion='szy').run(
+            ProtocolData(edesign, ds))
+        top = results.for_protocol['CharacterGST']
+        self.assertIsNotNone(top.error_parameters)
+        self.assertIsNone(top.errorgen_estimates)
+        self.assertIsNone(top.estimated_model)
+        self.assertIsNone(top.inversion_info)
+        # the new (unset) members must not break serialization
+        results.write(pth)
+        reloaded = pygsti.io.read_results_from_dir(pth).for_protocol['CharacterGST']
+        self.assertEqual(reloaded.error_parameters, top.error_parameters)
+        self.assertIsNone(reloaded.estimated_model)
+        self.assertIsNone(reloaded.protocol.target_model)
+        self.assertIsNone(reloaded.protocol.reference_gate)
+
+    def test_linear_requires_target_model_and_reference_gate(self):
+        with self.assertRaises(ValueError):
+            CharacterGST(gateset_inversion='linear')
+        with self.assertRaises(ValueError):
+            CharacterGST(gateset_inversion='linear', target_model=self.target)
+        with self.assertRaises(ValueError):
+            CharacterGST(gateset_inversion='linear', reference_gate='Gzpi2')
+        with self.assertRaises(ValueError):
+            CharacterGST(gateset_inversion='bogus')
+        # ...but the two supported inversions (and no inversion) are fine
+        CharacterGST(gateset_inversion=None)
+        CharacterGST(gateset_inversion='szy')
+        CharacterGST(gateset_inversion='linear', target_model=self.target,
+                     reference_gate=Label(('Gzpi2', 'Q0')), other_gates=['Gypi2'])

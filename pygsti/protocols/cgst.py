@@ -10,11 +10,17 @@ Character gate set tomography (cGST) protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import hashlib as _hashlib
 import itertools as _itertools
+import warnings as _warnings
 
 import numpy as _np
 
+from pygsti.algorithms import cgstdesign as _cgstdesign
 from pygsti.algorithms import cgstfit as _cgstfit
+from pygsti.algorithms import cgstgauge as _cgstgauge
+from pygsti.algorithms import cgstinversion as _cgstinversion
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.protocols import protocol as _proto
 from pygsti.protocols import vb as _vb
@@ -271,10 +277,21 @@ class CharacterGSTDesign(_proto.CombinedExperimentDesign):
 
     qubit_labels : tuple, optional
         The qubits this experiment design applies to.
+
+    germ_table : list, optional
+        A machine-readable summary of the children, with one plain (JSON-able)
+        dictionary per child holding the keys `'name'`, `'germ'` (circuit
+        string), `'group_order'`, `'irrep_index'`, `'multiplicity'` (the
+        dimension of the germ's eigenspace for that irrep), `'prep_fiducial'`
+        and `'meas_fiducial'` (circuit strings), and `'pair_index'`.  Populated
+        by :func:`pygsti.algorithms.cgstdesign.create_cgst_design`; `None` when
+        the design was built by a helper that does not track this information.
     """
 
-    def __init__(self, germ_designs, qubit_labels=None):
+    def __init__(self, germ_designs, qubit_labels=None, germ_table=None):
         super().__init__(germ_designs, qubit_labels=qubit_labels)
+        self.germ_table = None if (germ_table is None) else [dict(row) for row in germ_table]
+        self.auxfile_types['germ_table'] = 'json'
 
     @property
     def germ_design_names(self):
@@ -291,29 +308,20 @@ def _ideal_circuit_ptm(circuit):
     return ptm
 
 
-def _fiducial_overlap(germ_ptm, group_order, irrep_index, prep_ptm, meas_ptm):
-    """
-    The ideal signal amplitude of a cGST experiment with the given fiducials.
-
-    This is `|<<E| M_meas Pi' M_prep |rho>>|` with `rho = |0><0|`, `E = |0><0|`,
-    and `Pi'` the ideal character projector of the germ's targeted irrep with
-    the identity (non-decaying) direction removed -- i.e. the ideal amplitude
-    of the *decaying* part of the character-weighted signal.
-    """
-    proj = _ct.fourier_operator(germ_ptm, group_order, irrep_index).copy()
-    proj[0, :] = 0.0  # remove the identity direction: it never decays, so it
-    proj[:, 0] = 0.0  # contributes no signal to the decay-rate fit
-    rho0 = _np.array([1., 0., 0., 1.]) / _np.sqrt(2)  # |0><0| in the pp basis
-    return abs(rho0 @ meas_ptm @ proj @ prep_ptm @ rho0)
-
-
 def _select_fiducials(germ, group_order, irrep_index, gate_names, qubit_label, max_length=3):
     """
     Deterministically choose fiducial words maximizing the ideal cGST signal amplitude.
 
     Searches all words in `gate_names` up to `max_length`, preferring larger
-    ideal amplitude (see :func:`_fiducial_overlap`), then shorter total length,
-    then lexicographic order.  Returns `(prep_fiducial, meas_fiducial)` Circuits.
+    ideal amplitude (see :func:`pygsti.algorithms.cgstdesign._fiducial_overlap`),
+    then shorter total length, then lexicographic order.  Returns
+    `(prep_fiducial, meas_fiducial)` Circuits.
+
+    The search itself is
+    :func:`pygsti.algorithms.cgstdesign._select_fiducial_words`, which is also
+    what the general-gate-set helper
+    :func:`pygsti.algorithms.cgstdesign.select_cgst_fiducials` uses; this
+    wrapper just supplies the one-qubit standard-gate-name superoperators.
     """
     germ_ptm = _ideal_circuit_ptm(germ)
     words = [()]
@@ -327,14 +335,8 @@ def _select_fiducials(germ, group_order, irrep_index, gate_names, qubit_label, m
             ptm = _unitary_to_pauligate(std[name]) @ ptm
         word_ptms[word] = ptm
 
-    best, best_key = None, None
-    for prep_word, meas_word in _itertools.product(words, repeat=2):
-        overlap = _fiducial_overlap(germ_ptm, group_order, irrep_index,
-                                    word_ptms[prep_word], word_ptms[meas_word])
-        # prefer larger overlap; break near-ties toward shorter, then lexicographic
-        key = (-round(overlap, 10), len(prep_word) + len(meas_word), prep_word, meas_word)
-        if best_key is None or key < best_key:
-            best_key, best = key, (prep_word, meas_word)
+    (best,) = _cgstdesign._select_fiducial_words(germ_ptm, group_order, irrep_index,
+                                                 words, word_ptms, num_pairs=1)
 
     line_labels = (qubit_label,)
     return (_Circuit([(name, qubit_label) for name in best[0]], line_labels=line_labels),
@@ -486,6 +488,23 @@ def _to_json_safe(obj):
     if isinstance(obj, (complex, _np.complexfloating)):
         return [float(_np.real(obj)), float(_np.imag(obj))]
     return obj
+
+
+def _gate_label_to_str(gate):
+    """
+    Render a gate reference as a string, so that it survives JSON serialization.
+
+    :class:`~pygsti.baseobjs.Label` objects (and label tuples) are converted with
+    `str`, which produces e.g. `'Gzpi2:Q0'`; both that and a bare gate name are
+    resolved back to a model's operation label by
+    :func:`pygsti.algorithms.cgstgauge.standard_gauge_transform`.
+    """
+    if gate is None or isinstance(gate, str):
+        return gate
+    if isinstance(gate, (_Label, tuple)):
+        return str(_Label(gate))
+    raise TypeError("A gate reference must be a string, Label or label tuple, not %s"
+                    % type(gate).__name__)
 
 
 class CharacterDecayResults(_proto.ProtocolResults):
@@ -792,20 +811,49 @@ class CharacterGSTResults(_proto.ProtocolResults):
 
     error_parameters : dict or None
         The extracted error parameters (see
-        :func:`extract_szy_error_parameters`), if an inversion was performed.
+        :func:`extract_szy_error_parameters`), if a `'szy'` inversion was
+        performed.
+
+    errorgen_estimates : dict, optional
+        The standard-gauge elementary error generator coefficients estimated by
+        the `'linear'` gate-set inversion: maps a gate label (as a string) to a
+        dict mapping an error generator label (as a string) to a
+        `{'value': float, 'stderr': float}` dictionary.  `None` when no linear
+        inversion was performed.
+
+    estimated_model : Model, optional
+        The estimated gate set, in the cGST standard gauge (see
+        :func:`pygsti.algorithms.cgstgauge.fix_standard_gauge`).  `None` when
+        no linear inversion was performed.
+
+    inversion_info : dict, optional
+        Diagnostics of the linear inversion, with keys `'rank'` (the numerical
+        rank of the design matrix, i.e. the number of error generator
+        directions the design amplifies), `'num_params'`, `'num_observables'`,
+        `'num_unamplified'` (the dimension of the design matrix's null space),
+        `'residual_norm'` (the norm of the unexplained part of the observables),
+        `'singular_values'` (a list) and `'skipped_children'` (the names of the
+        sub-experiments the inversion could not use).
     """
 
-    def __init__(self, data, protocol_instance, decay_summaries, error_parameters):
+    def __init__(self, data, protocol_instance, decay_summaries, error_parameters,
+                 errorgen_estimates=None, estimated_model=None, inversion_info=None):
         super().__init__(data, protocol_instance)
         self.decay_summaries = _to_json_safe(decay_summaries)
         self.error_parameters = _to_json_safe(error_parameters)
+        self.errorgen_estimates = _to_json_safe(errorgen_estimates)
+        self.estimated_model = estimated_model
+        self.inversion_info = _to_json_safe(inversion_info)
+        self.auxfile_types['estimated_model'] = 'serialized-object'
 
     def to_dataframe(self):
         """
         Tabulate these results as a pandas DataFrame.
 
         One row per germ-decay sub-experiment (eigenvalue magnitude/phase and
-        uncertainties) followed by one row per extracted error parameter.
+        uncertainties), followed by one row per extracted error parameter
+        (`'szy'` inversion) and one row per standard-gauge error generator
+        coefficient (`'linear'` inversion).
 
         Returns
         -------
@@ -821,7 +869,48 @@ class CharacterGSTResults(_proto.ProtocolResults):
         if self.error_parameters:
             for key, val in self.error_parameters.items():
                 rows.append({'quantity': key, 'type': 'error parameter', 'value': val})
+        if self.errorgen_estimates:
+            for gate, per_gate in self.errorgen_estimates.items():
+                for egl, entry in per_gate.items():
+                    rows.append({'quantity': '%s:%s' % (gate, egl), 'type': 'error generator',
+                                 'value': entry['value'], 'stderr': entry['stderr']})
         return _pd.DataFrame(rows)
+
+
+def _design_fingerprint(design):
+    """
+    A hashable summary of everything about `design` that its design matrix depends on.
+
+    Besides each child's germ, irrep, fiducials, depths and sampling mode this
+    includes a digest of its *realized* random germ powers (`exponent_lists`):
+    two `'reduced'`-mode designs that differ only in their seeds produce
+    different decay curves, and hence different finite-differenced Jacobians.
+    """
+    parts = []
+    for name in design.keys():
+        child = design[name]
+        exponents = _hashlib.sha1(repr([[list(map(int, d)) for d in per_depth]
+                                        for per_depth in child.exponent_lists]).encode()).hexdigest()
+        parts.append((str(name), child.germ.str, int(child.group_order), int(child.irrep_index),
+                      str(child.mode), int(child.num_projection_rounds),
+                      tuple(int(d) for d in child.depths), int(child.circuits_per_depth),
+                      child.prep_fiducial.str, child.meas_fiducial.str, exponents))
+    return tuple(parts)
+
+
+def _model_fingerprint(model):
+    """A hashable summary of a (target) model's dense operations, preps and POVM effects."""
+    def _bytes(obj):
+        return _np.ascontiguousarray(obj.to_dense(), dtype='d').tobytes()
+    try:
+        ops = tuple((str(lbl), _bytes(op)) for lbl, op in model.operations.items())
+        preps = tuple((str(lbl), _bytes(prep)) for lbl, prep in model.preps.items())
+        povms = tuple((str(plbl), tuple((str(elbl), _bytes(effect))
+                                        for elbl, effect in povm.items()))
+                      for plbl, povm in model.povms.items())
+        return (ops, preps, povms)
+    except Exception:  # pragma: no cover - defensive: fall back to object identity
+        return id(model)
 
 
 class CharacterGST(_proto.Protocol):
@@ -832,30 +921,245 @@ class CharacterGST(_proto.Protocol):
     :class:`CharacterGSTDesign` and, optionally, inverts the collection of
     fitted decays into gate-set error parameters.
 
+    Two inversions are available.  The `'szy'` one implements the cGST
+    manuscript's closed-form parameter extraction for the one-qubit
+    {S, sqrt(Y)} gate set (see :func:`extract_szy_error_parameters`).  The
+    `'linear'` one is generic: it solves the first-order linear system relating
+    the fitted decays to the gates' elementary error generator coefficients
+    (see :mod:`pygsti.algorithms.cgstinversion`), and reports the resulting
+    gate set and its error generator coefficients in the manuscript's standard
+    gauge (see :mod:`pygsti.algorithms.cgstgauge`).
+
     Parameters
     ----------
     bootstrap_samples : int, optional
-        The number of bootstrap resamples for per-fit error bars.
+        The number of bootstrap resamples for per-fit error bars.  These are
+        also what the `'linear'` inversion propagates into error bars on the
+        reported error generator coefficients, so a nonzero value is needed
+        for meaningful uncertainties.
 
-    gateset_inversion : {None, 'szy'}, optional
-        If `'szy'`, additionally run :func:`extract_szy_error_parameters`
-        (requires the design to have been built by
-        :func:`create_1q_szy_cgst_design`).
+    gateset_inversion : {None, 'szy', 'linear'}, optional
+        Which gate-set inversion to run in addition to the per-germ decay fits.
+        `'szy'` requires the design to have been built by
+        :func:`create_1q_szy_cgst_design`; `'linear'` requires `target_model`
+        and `reference_gate`.
+
+    target_model : Model, optional
+        The ideal gate set (needed by, and only used by, the `'linear'`
+        inversion).  Must be an explicit model in the `'pp'` basis that
+        supports `set_all_parameterizations('GLND')` and a matrix forward
+        simulator, e.g. one built by
+        :func:`pygsti.models.modelconstruction.create_explicit_model`.
+
+    reference_gate : str or Label, optional
+        The gate brought to the commuting gauge when fixing the standard gauge
+        (the S gate, `'Gzpi2'`, in the manuscript).  Required for `'linear'`.
+
+    other_gates : list, optional
+        The gates whose errors are minimized by the second stage of the
+        standard-gauge construction.  `None` (the default) uses every gate of
+        the target model other than the reference gate.
+
+    design_matrix_step : float, optional
+        The finite-difference step used to build the first-order design matrix
+        (see :func:`pygsti.algorithms.cgstinversion.first_order_design_matrix`).
+
+    rcond : float, optional
+        The relative singular-value cutoff used to determine the rank of the
+        design matrix and to solve the linear system.  Because the design
+        matrix is built from finite differences of *fitted* decay rates its
+        numerically-zero singular values sit well above machine precision, so
+        the default is much larger than a typical least-squares `rcond`.
 
     seed : int, optional
         Seed for bootstrap resampling.
 
     name : str, optional
         The name of this protocol.
+
+    Notes
+    -----
+    The design matrix depends only on the experiment design and the target
+    model, so it is computed once and cached (in a class-level dictionary that
+    is not serialized with the protocol) across protocol instances.
     """
 
-    def __init__(self, bootstrap_samples=200, gateset_inversion=None, seed=None, name=None):
+    #: Cache of `(jacobian, ideal observables)` keyed by design/target/step, shared
+    #: by all instances.  This is a class attribute (not an instance one) precisely
+    #: so that it is not part of `self.__dict__` and hence never serialized.
+    _design_matrix_cache = {}
+
+    #: The most design matrices to keep cached at once.
+    _design_matrix_cache_size = 8
+
+    def __init__(self, bootstrap_samples=200, gateset_inversion=None, target_model=None,
+                 reference_gate=None, other_gates=None, design_matrix_step=1e-4,
+                 rcond=1e-4, seed=None, name=None):
         super().__init__(name)
-        if gateset_inversion not in (None, 'szy'):
-            raise ValueError("gateset_inversion must be None or 'szy'")
+        if gateset_inversion not in (None, 'szy', 'linear'):
+            raise ValueError("gateset_inversion must be None, 'szy' or 'linear', not %s"
+                             % repr(gateset_inversion))
+        if gateset_inversion == 'linear':
+            if target_model is None:
+                raise ValueError("gateset_inversion='linear' requires a `target_model` "
+                                 "(the ideal gate set the error generators are defined "
+                                 "relative to)")
+            if reference_gate is None:
+                raise ValueError("gateset_inversion='linear' requires a `reference_gate` "
+                                 "(the gate brought to the commuting gauge when fixing the "
+                                 "standard gauge, e.g. 'Gzpi2')")
         self.bootstrap_samples = bootstrap_samples
         self.gateset_inversion = gateset_inversion
+        self.target_model = target_model
+        # keep the gate references JSON-serializable (a Label round-trips through str)
+        self.reference_gate = _gate_label_to_str(reference_gate)
+        self.other_gates = None if (other_gates is None) else \
+            [_gate_label_to_str(g) for g in other_gates]
+        self.design_matrix_step = design_matrix_step
+        self.rcond = rcond
         self.seed = seed
+        self.auxfile_types['target_model'] = 'serialized-object'
+
+    def _cached_design_matrix(self, design, obs_labels):
+        """
+        The first-order design matrix and ideal observables for `design`, memoized.
+
+        Keyed by the design's germ/fiducial/depth structure, the target model's
+        operations and the finite-difference step, so that repeated runs (and
+        runs of separate protocol instances) on the same design reuse the -- by
+        far most expensive -- Jacobian computation.
+        """
+        key = (_design_fingerprint(design), _model_fingerprint(self.target_model),
+               float(self.design_matrix_step))
+        cache = CharacterGST._design_matrix_cache
+        if key not in cache:
+            if len(cache) >= CharacterGST._design_matrix_cache_size:
+                cache.pop(next(iter(cache)))
+            jacobian = _cgstinversion.first_order_design_matrix(
+                self.target_model, design, step=self.design_matrix_step, obs_labels=obs_labels)
+            y_ideal = _cgstinversion.simulate_observables(
+                self.target_model, design, self.target_model, obs_labels=obs_labels)
+            cache[key] = (jacobian, y_ideal)
+        return cache[key]
+
+    def _linear_inversion(self, design, decays):
+        """
+        Estimate standard-gauge error generator coefficients from fitted decays.
+
+        Solves the first-order linear system `J x = y - y_ideal` for the
+        minimum-norm error generator coefficient vector `x`, builds the
+        corresponding gate set, fixes the standard gauge, and reads off the
+        gauge-fixed elementary error generator coefficients.  Uncertainties are
+        obtained by propagating the observables' standard errors through this
+        entire (cheap, and nearly linear) map by central finite differences.
+
+        The least-squares solve itself is deliberately *unweighted*.  The
+        observables' standard errors span several orders of magnitude (a phase
+        fitted over 128 germ repetitions is far better determined than a
+        trivial-block asymptote), and weighting by them rescales the rows of a
+        design matrix whose smallest amplified singular value is already only
+        ~1e-1 of the largest, which makes the numerical rank -- a property of
+        the *design*, not of the data -- depend on the noise realization.
+        Leaving the solve unweighted also makes `y -> coefficients` a
+        well-defined map, which is what the finite-difference error propagation
+        below differentiates.
+
+        Returns `(errorgen_estimates, estimated_model, inversion_info)`.
+        """
+        target = self.target_model
+        _cgstinversion.check_design_modes(design)  # raises on 'full', warns on 'reduced'
+        obs_labels = _cgstinversion.observable_labels(design, target)
+        used = set(name for name, _ in obs_labels)
+        skipped = [name for name in design.keys() if name not in used]
+        if len(obs_labels) == 0:
+            raise ValueError("This design provides no usable cGST observables: the linear "
+                             "inversion has nothing to work with.")
+        param_labels = _cgstinversion.errorgen_parameter_labels(target)
+        jacobian, y_ideal = self._cached_design_matrix(design, obs_labels)
+        y, y_stderr = _cgstinversion.observables_from_results(decays, design, target)
+
+        def gauge_fixed_coefficients(observables):
+            """The standard-gauge coefficient dict (and model, and solve info) for `y`."""
+            solution = _cgstinversion.invert_first_order(observables, y_ideal, jacobian,
+                                                         rcond=self.rcond)
+            model = _cgstinversion.model_from_errorgen_coefficients(
+                target, _cgstinversion.coefficients_to_dict(solution['coefficients'],
+                                                            param_labels))
+            gauged = _cgstgauge.fix_standard_gauge(model, target, self.reference_gate,
+                                                   self.other_gates)
+            return solution, gauged, _cgstgauge.errorgen_coefficients_in_gauge(gauged, target)
+
+        solution, estimated_model, coefficients = gauge_fixed_coefficients(y)
+        coeff_keys = [(gate, egl) for gate in coefficients for egl in coefficients[gate]]
+
+        def flatten(gauge_coefficients):
+            return _np.array([gauge_coefficients[gate][egl] for gate, egl in coeff_keys], 'd')
+
+        values = flatten(coefficients)
+
+        stderrs = self._propagate_uncertainties(y, y_stderr, gauge_fixed_coefficients,
+                                                flatten, len(values))
+
+        errorgen_estimates = {}
+        for (gate, egl), value, stderr in zip(coeff_keys, values, stderrs):
+            errorgen_estimates.setdefault(str(gate), {})[str(egl)] = \
+                {'value': float(value), 'stderr': float(stderr)}
+
+        singular_values = _np.asarray(solution['singular_values'], dtype='d')
+        inversion_info = {
+            'rank': int(solution['rank']),
+            'num_params': len(param_labels),
+            'num_observables': len(obs_labels),
+            'num_unamplified': int(solution['unamplified_directions'].shape[1]),
+            'residual_norm': float(_np.linalg.norm(solution['residual'])),
+            'singular_values': [float(v) for v in singular_values],
+            'skipped_children': skipped}
+        return errorgen_estimates, estimated_model, inversion_info
+
+    @staticmethod
+    def _propagate_uncertainties(y, y_stderr, gauge_fixed_coefficients, flatten, num_coefficients):
+        """
+        Finite-difference propagation of observable uncertainties onto the coefficients.
+
+        With `F[i, c] = d(coefficient c)/d(observable i)` and uncorrelated
+        observables, `stderr_c**2 = sum_i (F[i, c] * sigma_i)**2`; each column
+        of `F` is obtained by a central difference of the whole post-Jacobian
+        pipeline (a linear solve plus a standard-gauge fit; the full
+        propagation takes a couple of seconds for a one-qubit design, against
+        tens of seconds for the Jacobian itself).  Missing or non-positive
+        uncertainties are replaced by the median of the usable ones (with a
+        warning), and if the pipeline fails for any perturbation the reported
+        uncertainties are all NaN.
+        """
+        sigma = _np.array(y_stderr, dtype='d')
+        good = _np.isfinite(sigma) & (sigma > 0)
+        if not _np.any(good):
+            _warnings.warn("cGST linear inversion: no usable observable uncertainties "
+                           "(run with bootstrap_samples > 0 on sampled data); reporting NaN "
+                           "error bars on the error generator coefficients.")
+            return _np.full(num_coefficients, _np.nan)
+        if not _np.all(good):
+            _warnings.warn("cGST linear inversion: %d of %d observables have no usable "
+                           "uncertainty; substituting the median of the others."
+                           % (int(_np.sum(~good)), len(sigma)))
+            sigma[~good] = _np.median(sigma[good])
+
+        contributions = _np.zeros((len(sigma), num_coefficients), 'd')
+        for i in range(len(sigma)):
+            # differentiate with a step that is large enough to stay above the
+            # gauge optimizer's convergence noise, then scale by sigma_i
+            step = max(float(sigma[i]), 1e-6)
+            try:
+                plus = y.copy(); plus[i] += step
+                minus = y.copy(); minus[i] -= step
+                derivative = (flatten(gauge_fixed_coefficients(plus)[2])
+                              - flatten(gauge_fixed_coefficients(minus)[2])) / (2 * step)
+            except Exception as e:
+                _warnings.warn("cGST linear inversion: uncertainty propagation failed while "
+                               "perturbing observable %d (%s); reporting NaN error bars." % (i, e))
+                return _np.full(num_coefficients, _np.nan)
+            contributions[i, :] = derivative * sigma[i]
+        return _np.sqrt(_np.sum(contributions ** 2, axis=0))
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -896,8 +1200,15 @@ class CharacterGST(_proto.Protocol):
                 'phase_stderr': fit_stderrs.get('theta')}
 
         error_parameters = None
+        errorgen_estimates = estimated_model = inversion_info = None
         if self.gateset_inversion == 'szy':
             error_parameters = extract_szy_error_parameters(decays)
+        elif self.gateset_inversion == 'linear':
+            errorgen_estimates, estimated_model, inversion_info = \
+                self._linear_inversion(design, decays)
 
-        top_results = CharacterGSTResults(data, self, summaries, error_parameters)
+        top_results = CharacterGSTResults(data, self, summaries, error_parameters,
+                                          errorgen_estimates=errorgen_estimates,
+                                          estimated_model=estimated_model,
+                                          inversion_info=inversion_info)
         return _proto.ProtocolResultsDir(data, top_results, children=children)
