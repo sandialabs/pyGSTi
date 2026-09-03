@@ -345,3 +345,28 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
         ss = ExplicitStateSpace([('Q0',), ('L',)], [(2,), (1,)])
         with self.assertRaises(ValueError):
             ggrp.TensorProductGaugeGroup.local_unitary(ss, 'pp')
+
+    def test_serialization_round_trip(self):
+        import json
+        for gg in (self.gg,
+                   ggrp.TensorProductGaugeGroup.local_unitary(ExplicitStateSpace(['Q0', 'L', 'Q1'], [2, 1, 3]), 'gm'),
+                   ggrp.TensorProductGaugeGroup([ggrp.UnitaryGaugeGroup(QuditSpace(1, 3), 'gm')] * 2,
+                                                QuditSpace(2, 3), Basis.cast('gm', 81))):
+            state = gg.to_nice_serialization()
+            json.dumps(state)  # "nice" means JSON-able
+            gg2 = ggrp.GaugeGroup.from_nice_serialization(state)
+            self.assertIsInstance(gg2, ggrp.TensorProductGaugeGroup)
+            self.assertEqual(gg2.num_params, gg.num_params)
+            self.assertEqual(gg2.state_space, gg.state_space)
+            self.assertEqual([type(f) for f in gg2.factors], [type(f) for f in gg.factors])
+            self.assertEqual(gg2._change_of_basis is None, gg._change_of_basis is None)
+            v = 0.3 * self.rng.normal(size=gg.num_params)
+            el, el2 = gg.compute_element(v), gg2.compute_element(v)
+            self.assertArraysAlmostEqual(el.transform_matrix, el2.transform_matrix)
+            # element round trip (like other Op-based elements, this keeps the matrices, not the parameterization)
+            estate = el.to_nice_serialization()
+            json.dumps(estate)
+            el3 = ggrp.GaugeGroupElement.from_nice_serialization(estate)
+            self.assertIsInstance(el3, ggrp.TensorProductGaugeGroupElement)
+            self.assertArraysAlmostEqual(el.transform_matrix, el3.transform_matrix)
+            self.assertArraysAlmostEqual(el.transform_matrix_inverse, el3.transform_matrix_inverse)

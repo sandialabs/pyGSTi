@@ -342,6 +342,90 @@ class FindPerfectGauge_DirectSumGaugeGroupTester(BaseCase):
 
 
 
+class FindPerfectGauge_TensorProductGroup_Tester(BaseCase):
+    """
+    Gauge optimization over the local unitary group (a TensorProductGaugeGroup of one
+    UnitaryGaugeGroup per qubit) on two-qubit models.
+    """
+
+    @staticmethod
+    def _max_gate_distance(a, b):
+        return max(np.linalg.norm(a.operations[lbl].to_dense('minimal') - b.operations[lbl].to_dense('minimal'))
+                   for lbl in a.operations)
+
+    def _two_qubit_target(self, cnot_qubits):
+        from pygsti.processors import QubitProcessorSpec
+        from pygsti.models import create_explicit_model
+        pspec = QubitProcessorSpec(2, ['Gxpi2', 'Gypi2', 'Gcnot'], availability={'Gcnot': [cnot_qubits]})
+        target = create_explicit_model(pspec)
+        target.set_all_parameterizations('full TP')
+        return target.depolarize(op_noise=0.01, spam_noise=0.001)
+
+    def _prep(self, target, seed, strength=0.03):
+        from pygsti.models.gaugegroup import TensorProductGaugeGroup
+        gg = TensorProductGaugeGroup.local_unitary(target.state_space, target.basis)
+        rng = np.random.default_rng(seed)
+        el = gg.compute_element(strength * rng.normal(size=gg.num_params))
+        model = target.copy()
+        model.transform_inplace(el)
+        model.default_gauge_group = gg
+        check_gate_metrics_are_nontrivial(gate_metrics_dict(model, target), tol=1e-4)
+        return model, el
+
+    def _check_recovery(self, target, cnot_qubits_desc):
+        for seed in range(2):
+            model, _ = self._prep(target, seed)
+            for method, alg_tol, test_tol in (('L-BFGS-B', 1e-7, 1e-5), ('ls', 1e-15, 1e-6)):
+                out = gop.gaugeopt_to_target(model, target, method=method, tol=alg_tol,
+                                             spam_metric='frobenius', gates_metric='frobenius', verbosity=0)
+                metrics = gate_metrics_dict(out, target)
+                check_gate_metrics_near_zero(metrics, test_tol)
+
+    def test_recovers_local_unitary_gauge(self):
+        self._check_recovery(self._two_qubit_target((0, 1)), 'Gcnot:0:1')
+
+    def test_recovers_local_unitary_gauge_with_out_of_order_cnot(self):
+        # The entangler targets (1, 0). Its superoperator lives in the full-space basis whose
+        # Kronecker order follows the state-space labels, not the gate's target order.
+        target = self._two_qubit_target((1, 0))
+        self.assertIn(pgl.Label('Gcnot', (1, 0)), target.operations)
+        self._check_recovery(target, 'Gcnot:1:0')
+
+    def test_local_element_acts_like_full_space_unitary_element(self):
+        from pygsti.models.gaugegroup import OpGaugeGroupElement
+        from pygsti.modelmembers.operations import StaticArbitraryOp
+        for cnot_qubits in ((0, 1), (1, 0)):
+            target = self._two_qubit_target(cnot_qubits)
+            model_local, el = self._prep(target, seed=5)
+            Ua, Ub = (pgo.superop_to_unitary(m, 'pp') for m in el.factor_matrices)
+            full_el = OpGaugeGroupElement(StaticArbitraryOp(pgo.unitary_to_superop(np.kron(Ua, Ub), target.basis),
+                                                            basis=target.basis))
+            model_full = target.copy()
+            model_full.transform_inplace(full_el)
+            self.assertLess(self._max_gate_distance(model_local, model_full), 1e-12)
+
+    def test_local_group_cannot_undo_entangling_gauge(self):
+        from pygsti.models.gaugegroup import UnitaryGaugeGroup, TensorProductGaugeGroup
+        target = self._two_qubit_target((0, 1))
+        full = UnitaryGaugeGroup(target.state_space, target.basis)
+        v = np.zeros(full.num_params)
+        v[-1] = 0.05  # the last Hamiltonian generator is a two-body Pauli (ZZ)
+        model = target.copy()
+        model.transform_inplace(full.compute_element(v))
+        before = self._max_gate_distance(model, target)
+        self.assertGreater(before, 1e-2)
+
+        model.default_gauge_group = TensorProductGaugeGroup.local_unitary(target.state_space, target.basis)
+        out_local = gop.gaugeopt_to_target(model, target, method='ls', tol=1e-15,
+                                           spam_metric='frobenius', gates_metric='frobenius', verbosity=0)
+        self.assertGreater(self._max_gate_distance(out_local, target), 0.1 * before)
+
+        model.default_gauge_group = full
+        out_full = gop.gaugeopt_to_target(model, target, method='ls', tol=1e-15,
+                                          spam_metric='frobenius', gates_metric='frobenius', verbosity=0)
+        self.assertLess(self._max_gate_distance(out_full, target), 1e-6)
+
+
 class LeakageDirectSumGroupTester(BaseCase):
     """
     Structural tests for pygsti.leakage.gaugeopt._leakage_direct_sum_group, which
