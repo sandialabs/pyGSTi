@@ -306,3 +306,42 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
         S_inv, dS = el.transform_matrix_inverse, el.deriv_wrt_params()
         expected = np.column_stack([(-S_inv @ dS[:, i].reshape(16, 16) @ S_inv).reshape(-1) for i in range(6)])
         self.assertArraysAlmostEqual(inv.deriv_wrt_params(), expected)
+
+    def test_local_unitary_constructor(self):
+        gg = ggrp.TensorProductGaugeGroup.local_unitary(self.state_space, 'pp')
+        self.assertEqual(gg.num_params, 6)
+        self.assertTrue(all(isinstance(f, ggrp.UnitaryGaugeGroup) for f in gg.factors))
+        self.assertEqual([f.state_space.tensor_product_blocks_labels[0] for f in gg.factors], [(0,), (1,)])
+        self.assertIsNone(gg._change_of_basis)
+        self.assertArraysAlmostEqual(gg.compute_element(self.v).transform_matrix,
+                                     self.gg.compute_element(self.v).transform_matrix)
+        # with the TensorProdBasis that pyGSTi-built models carry
+        tpb = TensorProdBasis([Basis.cast('pp', 4)] * 2)
+        gg2 = ggrp.TensorProductGaugeGroup.local_unitary(self.state_space, tpb)
+        self.assertIsNone(gg2._change_of_basis)
+        self.assertArraysAlmostEqual(gg2.compute_element(self.v).transform_matrix,
+                                     self.gg.compute_element(self.v).transform_matrix)
+
+    def test_local_tp_constructor(self):
+        gg = ggrp.TensorProductGaugeGroup.local_tp(QubitSpace(3), 'pp')
+        self.assertEqual(gg.num_params, 3 * 12)
+        self.assertTrue(all(isinstance(f, ggrp.TPGaugeGroup) for f in gg.factors))
+        el = gg.compute_element(self.rng.random(gg.num_params))
+        S = el.transform_matrix
+        self.assertArraysAlmostEqual(S[0, :], np.eye(64)[0, :])  # TP: first row is e_0
+        self.assertArraysAlmostEqual(el.transform_matrix_inverse @ S, np.eye(64))
+
+    def test_local_constructors_with_dimension_one_label(self):
+        ss = ExplicitStateSpace(['Q0', 'L', 'Q1'], [2, 1, 3])
+        gg = ggrp.TensorProductGaugeGroup.local_unitary(ss, 'gm')
+        self.assertEqual([type(f) for f in gg.factors],
+                         [ggrp.UnitaryGaugeGroup, ggrp.TrivialGaugeGroup, ggrp.UnitaryGaugeGroup])
+        self.assertEqual(gg._label_runs, ((0,), (1,), (2,)))
+        self.assertEqual(gg.num_params, 3 + 0 + 8)
+        el = gg.compute_element(0.3 * self.rng.normal(size=gg.num_params))
+        self.assertArraysAlmostEqual(el.transform_matrix_inverse @ el.transform_matrix, np.eye(36))
+
+    def test_local_constructors_reject_multi_block_space(self):
+        ss = ExplicitStateSpace([('Q0',), ('L',)], [(2,), (1,)])
+        with self.assertRaises(ValueError):
+            ggrp.TensorProductGaugeGroup.local_unitary(ss, 'pp')

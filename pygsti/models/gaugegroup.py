@@ -1470,7 +1470,7 @@ def _match_factors_to_label_runs(factor_udims, labels, label_udims):
     i = 0
     for j, fudim in enumerate(factor_udims):
         start, prod = i, 1
-        while prod < fudim and i < len(labels):
+        while (prod < fudim or i == start) and i < len(labels):  # always consume at least one label
             prod *= label_udims[i]
             i += 1
         if prod != fudim:
@@ -1595,6 +1595,80 @@ class TensorProductGaugeGroup(GaugeGroup):
         if _np.allclose(C.imag, 0):
             C = C.real
         return C
+
+    @staticmethod
+    def _per_label_factor_spaces_and_bases(state_space, basis):
+        """
+        One (state space, basis) pair per label of a single-block `state_space`, for building local factors.
+        """
+        state_space = _StateSpace.cast(state_space)
+        if state_space.num_tensor_product_blocks != 1:
+            raise ValueError("Local gauge groups require a state space with a single tensor-product block.")
+        labels = state_space.tensor_product_blocks_labels[0]
+        udims = state_space.tensor_product_blocks_udimensions[0]
+        if isinstance(basis, _TensorProdBasis) and len(basis.component_bases) == len(labels):
+            bases = list(basis.component_bases)
+        else:
+            name = basis if isinstance(basis, str) else basis.name
+            bases = [_Basis.cast(name, udim ** 2) for udim in udims]
+        spaces = [_ExplicitStateSpace([lbl], [udim]) for lbl, udim in zip(labels, udims)]
+        return spaces, bases
+
+    @classmethod
+    def local_unitary(cls, state_space: _StateSpace, basis: Union[_Basis, str],
+                      evotype: Optional[Union[_Evotype, str]] = 'default') -> TensorProductGaugeGroup:
+        """
+        The local unitary gauge group: an independent :class:`UnitaryGaugeGroup` on each label of `state_space`.
+
+        Labels of Hilbert-space dimension 1 get a :class:`TrivialGaugeGroup`.
+
+        Parameters
+        ----------
+        state_space : StateSpace
+            The model's state space (a single tensor-product block).
+
+        basis : Basis or str
+            The model's basis.
+
+        evotype : Evotype or str, optional
+            The evolution type for the factor groups.
+
+        Returns
+        -------
+        TensorProductGaugeGroup
+        """
+        spaces, bases = cls._per_label_factor_spaces_and_bases(state_space, basis)
+        factors = [UnitaryGaugeGroup(ss, b, evotype) if ss.udim > 1 else TrivialGaugeGroup(ss)
+                   for ss, b in zip(spaces, bases)]
+        return cls(factors, state_space, basis, name="Local unitary gauge group")
+
+    @classmethod
+    def local_tp(cls, state_space: _StateSpace, basis: Union[_Basis, str],
+                 evotype: Optional[Union[_Evotype, str]] = 'default') -> TensorProductGaugeGroup:
+        """
+        The local TP gauge group: an independent :class:`TPGaugeGroup` on each label of `state_space`.
+
+        Labels of Hilbert-space dimension 1 get a :class:`TrivialGaugeGroup`.
+
+        Parameters
+        ----------
+        state_space : StateSpace
+            The model's state space (a single tensor-product block).
+
+        basis : Basis or str
+            The model's basis.
+
+        evotype : Evotype or str, optional
+            The evolution type for the factor groups.
+
+        Returns
+        -------
+        TensorProductGaugeGroup
+        """
+        spaces, bases = cls._per_label_factor_spaces_and_bases(state_space, basis)
+        factors = [TPGaugeGroup(ss, b, evotype) if ss.udim > 1 else TrivialGaugeGroup(ss)
+                   for ss, b in zip(spaces, bases)]
+        return cls(factors, state_space, basis, name="Local TP gauge group")
 
     @property
     def num_params(self) -> int:
