@@ -3453,6 +3453,12 @@ def _add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str,
     # ^ That can convert to whatever parameterization it wants
     #   It'll write to est._gaugeopt_suite.
     for gop_name, gop_dictorlist in est._gaugeopt_suite.gaugeopt_argument_dicts.items():
+        if gop_dictorlist is None:
+            # e.g. 'trivial_gauge_opt' (inserted for instrument-bearing models):
+            # no gauge transformation, so the parameterization-preserving result
+            # is the final iteration estimate itself.
+            est.models[gop_name] = est.models['final iteration estimate']
+            continue
         if isinstance(gop_dictorlist, list):
             ggel_mx = _np.eye(seed_mdl.basis.dim)
             for sub_gopdict in gop_dictorlist:
