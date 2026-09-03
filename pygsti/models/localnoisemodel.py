@@ -161,11 +161,11 @@ class LocalNoiseModel(_ImplicitOpModel):
         if modelmembers is None:
             modelmembers = {}
 
-        for mmdict_name, key, prefix in self._member_prefixes:
-            mmdict = getattr(self, mmdict_name)
-            serialization_key = f'{mmdict_name}|{key}'
+        for attr_name, inner_key, prefix in self._member_prefixes:
+            outer_dict: dict[str, _OrderedMemberDict] = getattr(self, attr_name)
+            serialization_key = f'{attr_name}|{inner_key}'
             items = modelmembers.get(serialization_key, [])
-            mmdict[key] = _OrderedMemberDict(self, None, prefix, flags, items)
+            outer_dict[inner_key] = _OrderedMemberDict(self, None, prefix, flags, items)
 
     def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
                  simulator="auto", on_construction_error='raise',
