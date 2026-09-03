@@ -631,3 +631,172 @@ class ForwardSimIntegrationTester(BaseProtocolData):
     def test_matrix_fwdsim(self):
         self._run(MatrixForwardSimulator)
 
+
+
+# --------------------------------------------------------------------------------------------
+# TorchForwardSimulator's batched evaluation plan (pygsti/forwardsims/torchfwdsim_plan.py)
+# --------------------------------------------------------------------------------------------
+
+def _dprobs_in_canonical_order(model, circuits, sim):
+    """`bulk_fill_dprobs` with rows reordered to (circuits in list order, outcomes sorted by name).
+
+    Different forward simulators build different Layout subclasses, which order elements
+    differently -- MatrixCOPALayout reorders circuits to make its evaluation tree efficient. Two
+    filled arrays are only comparable once both are put in a common order.
+    """
+    m = model.copy()
+    m.sim = sim
+    layout = m.sim.create_layout(circuits, array_types=('ep',))
+    J = np.empty((layout.num_elements, m.num_params))
+    P = np.empty(layout.num_elements)
+    m.sim.bulk_fill_dprobs(J, layout, P)
+
+    all_idx = np.arange(layout.num_elements)
+    perm = []
+    for c in circuits:
+        inds, outcomes = layout.indices_and_outcomes(c)
+        inds = all_idx[inds]
+        perm.extend(inds[np.argsort([str(o) for o in outcomes], kind='stable')])
+    perm = np.asarray(perm)
+    return P[perm], J[perm]
+
+
+def _two_prep_model_and_circuits():
+    """A noisy 1-qubit model with *two* state preps, and circuits that use both."""
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.02)
+    model.preps['rho1'] = model.preps['rho0'].copy()
+    v = model.preps['rho1'].to_vector()
+    v[1:] = -0.7 * v[1:]
+    model.preps['rho1'].from_vector(v)
+    circuits = [
+        Circuit([L('rho0'), L('Gxpi2', 0)], line_labels=(0,)),
+        Circuit([L('rho1'), L('Gxpi2', 0), L('Gypi2', 0)], line_labels=(0,)),
+        Circuit([L('rho1')], line_labels=(0,)),                    # no operations at all
+        Circuit([L('rho0'), L('Gypi2', 0)], line_labels=(0,)),
+    ]
+    return model, circuits
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_multiple_state_preps():
+    """A model with more than one state prep needs more than one root in the plan's prefix DAG.
+    Those roots have to be created before any interior node, or the renumbering that puts nodes in
+    (depth, gate) order no longer leaves the roots at the front."""
+    import torch
+    model, circuits = _two_prep_model_and_circuits()
+
+    ref_P, ref_J = _dprobs_in_canonical_order(model, circuits, MatrixForwardSimulator())
+    P, J = _dprobs_in_canonical_order(model, circuits,
+                                      TorchForwardSimulator(dtype=torch.float64))
+    assert np.allclose(P, ref_P, atol=1e-12)
+    assert np.allclose(J, ref_J, atol=1e-9)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_plan_batches_gate_applications():
+    """The plan must evaluate a circuit list with far fewer matrix products than there are gate
+    applications -- that batching is the whole point of it -- while still reproducing a plain
+    per-circuit, per-layer evaluation exactly."""
+    import torch
+    from pygsti.forwardsims.torchfwdsim_plan import TorchEvalPlan
+
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.02)
+    circuits = ForwardSimConsistencyTester.standard_lsgst_circuits(model, max_lengths=(1, 2, 4, 8))
+
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    layout = model.sim.create_layout(circuits)
+    store = model.sim._circuit_store(layout)
+    plan = store.eval_plan
+    stats = plan.stats()
+
+    batched = stats['forward_matmuls'] + stats['backward_matmuls']
+    assert stats['gate_applications'] > 5 * batched, \
+        f"expected heavy batching, got {stats['gate_applications']} applications in {batched} matmuls"
+    assert stats['prefix_nodes'] < stats['gate_applications'], "no prefix sharing was found"
+
+    # ... and the batched result equals the naive one.
+    free_params = store.get_free_params(model, torch.float64, store.device)
+    torch_bases = store.get_torch_bases(free_params)
+    batched_probs = plan.probs(torch_bases, store.model_dim).cpu().numpy()
+
+    naive = []
+    for c in store.circuits:
+        superket = torch_bases[c.prep_label]
+        for op_label in c.op_labels:
+            superket = torch_bases[op_label] @ superket
+        povm_mat = torch_bases[c.povm_label]
+        if c.effect_row_indices is not None:
+            povm_mat = povm_mat[c.effect_row_indices]
+        naive.append(povm_mat @ superket)
+    naive = torch.concat(naive).cpu().numpy()
+
+    assert np.allclose(batched_probs, naive, atol=1e-13)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_circuit_store_is_reused_across_calls():
+    """Building the StatelessModelCircuitStore (and its evaluation plan) walks every circuit in
+    Python. GST calls the simulator once or twice per optimizer iteration against a fixed layout,
+    so that work must be done once, not once per call."""
+    import torch
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.02)
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    circuits = ForwardSimConsistencyTester.standard_lsgst_circuits(model, max_lengths=(1, 2))
+
+    layout = model.sim.create_layout(circuits, array_types=('ep',))
+    J = np.empty((layout.num_elements, model.num_params))
+    model.sim.bulk_fill_dprobs(J, layout, None)
+    first = model.sim._circuit_store(layout)
+    plan = first.eval_plan
+    model.sim.bulk_fill_dprobs(J, layout, None)
+    assert model.sim._circuit_store(layout) is first
+    assert first.eval_plan is plan
+
+    # A different layout must not silently reuse the old plan.
+    other_layout = model.sim.create_layout(circuits[:3], array_types=('ep',))
+    assert model.sim._circuit_store(other_layout) is not first
+
+    # The Jacobian must still track parameter changes through the reused store.
+    J2 = np.empty_like(J)
+    model.from_vector(model.to_vector() + 0.01)
+    model.sim.bulk_fill_dprobs(J2, layout, None)
+    assert not np.allclose(J, J2)
+
+
+def test_torch_circuit_store_is_invalidated_by_reparameterization():
+    """The store bakes each modelmember's *type* and stateless data, so identity of the model
+    object is not enough to key the cache on: `convert_members_inplace` swaps member objects under
+    the same labels on the same model, and reusing the store then computes against stale types."""
+    import torch
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.02)
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    circuits = ForwardSimConsistencyTester.standard_lsgst_circuits(model, max_lengths=(1,))
+
+    layout = model.sim.create_layout(circuits, array_types=('ep',))
+    first = model.sim._circuit_store(layout)
+    assert model.sim._circuit_store(layout) is first
+
+    # Same model object, same layout object, different member types underneath.
+    model.convert_members_inplace(to_type='CPTPLND')
+    assert model.sim._circuit_store(layout) is not first, \
+        "reparameterizing in place must invalidate the cached store"
+
+    # ...and the answer it now produces must match a simulator that never had a stale cache.
+    # Both sides use the same simulator class and their own layout, so element order agrees.
+    J = np.empty((layout.num_elements, model.num_params))
+    model.sim.bulk_fill_dprobs(J, layout, None)
+
+    fresh = model.copy()
+    fresh.sim = TorchForwardSimulator(dtype=torch.float64)
+    fresh_layout = fresh.sim.create_layout(circuits, array_types=('ep',))
+    Jfresh = np.empty((fresh_layout.num_elements, fresh.num_params))
+    fresh.sim.bulk_fill_dprobs(Jfresh, fresh_layout, None)
+    assert np.allclose(J, Jfresh, atol=1e-12)
