@@ -57,10 +57,25 @@ def mpi_ranks():
     return int(os.environ.get('PYGSTI_SGST_MPI_RANKS', '1'))
 
 
-def profile_with_seed_override(profile):
-    """Return ``profile`` or an immutable per-run replacement selected by the runner."""
-    override = os.environ.get('PYGSTI_SGST_PROFILE_SEED')
-    return profile if override is None else dataclasses.replace(profile, seed=int(override))
+def profile_with_overrides(profile):
+    """Return ``profile`` or an immutable per-run replacement selected by the runner.
+
+    The spectator overrides let one queue sweep crosstalk strength and character
+    without editing the canonical profiles. ``PYGSTI_SGST_SPECTATOR_TERM`` is
+    pipe-separated because a correlated coefficient key already contains commas,
+    e.g. ``H|ZZ:1,2``.
+    """
+    changes = {}
+    seed = os.environ.get('PYGSTI_SGST_PROFILE_SEED')
+    if seed is not None:
+        changes['seed'] = int(seed)
+    spectator_error = os.environ.get('PYGSTI_SGST_SPECTATOR_ERROR')
+    if spectator_error is not None:
+        changes['spectator_error'] = float(spectator_error)
+    spectator_term = os.environ.get('PYGSTI_SGST_SPECTATOR_TERM')
+    if spectator_term is not None:
+        changes['spectator_term'] = tuple(spectator_term.split('|'))
+    return dataclasses.replace(profile, **changes) if changes else profile
 
 
 def _build_noise_model(pspec, lindblad_error_coeffs, parameterization):
@@ -197,32 +212,32 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
 class SimultaneousGSTValidationTester:
     def test_three_qubit_sparse_markovian_recovery(self):
         result = run_validation_profile(
-            profile_with_seed_override(THREE_QUBIT_SPARSE_MARKOVIAN), artifact_dir(), mpi_ranks())
+            profile_with_overrides(THREE_QUBIT_SPARSE_MARKOVIAN), artifact_dir(), mpi_ranks())
         assert result['validation_mean_tvd'] >= 0.0
 
     def test_three_qubit_sparse_spectator_crosstalk(self):
         result = run_validation_profile(
-            profile_with_seed_override(THREE_QUBIT_SPARSE_SPECTATOR), artifact_dir(), mpi_ranks())
+            profile_with_overrides(THREE_QUBIT_SPARSE_SPECTATOR), artifact_dir(), mpi_ranks())
         assert result['two_delta_logl'] >= 0.0
 
     def test_four_qubit_sparse_markovian_bridge(self):
         result = run_validation_profile(
-            profile_with_seed_override(FOUR_QUBIT_SPARSE_MARKOVIAN), artifact_dir(), mpi_ranks())
+            profile_with_overrides(FOUR_QUBIT_SPARSE_MARKOVIAN), artifact_dir(), mpi_ranks())
         assert result['fit_model_params'] == 59
 
     def test_four_qubit_sparse_spectator_crosstalk(self):
         result = run_validation_profile(
-            profile_with_seed_override(FOUR_QUBIT_SPARSE_SPECTATOR), artifact_dir(), mpi_ranks())
+            profile_with_overrides(FOUR_QUBIT_SPARSE_SPECTATOR), artifact_dir(), mpi_ranks())
         assert result['fit_model_params'] == 59
 
     def test_four_qubit_coherent_markovian_bridge(self):
         result = run_validation_profile(
-            profile_with_seed_override(FOUR_QUBIT_COHERENT_MARKOVIAN), artifact_dir(), mpi_ranks())
+            profile_with_overrides(FOUR_QUBIT_COHERENT_MARKOVIAN), artifact_dir(), mpi_ranks())
         assert result['fit_model_params'] == 21
 
     def test_four_qubit_coherent_spectator_crosstalk(self):
         result = run_validation_profile(
-            profile_with_seed_override(FOUR_QUBIT_COHERENT_SPECTATOR), artifact_dir(), mpi_ranks())
+            profile_with_overrides(FOUR_QUBIT_COHERENT_SPECTATOR), artifact_dir(), mpi_ranks())
         assert result['fit_model_params'] == 21
 
 

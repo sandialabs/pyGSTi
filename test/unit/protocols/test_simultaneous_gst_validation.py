@@ -10,7 +10,7 @@ import pytest
 from pygsti.circuits import Circuit
 
 import test.helpers.simultaneous_gst_validation as validation
-from test.integration.test_simultaneous_gst import profile_with_seed_override
+from test.integration.test_simultaneous_gst import profile_with_overrides
 from test.helpers.simultaneous_gst_validation import (
     RuntimeEstimate,
     THREE_QUBIT_SPARSE_SPECTATOR,
@@ -23,6 +23,8 @@ from test.helpers.simultaneous_gst_validation import (
     eligible_to_launch,
     estimate_runtime,
     generate_finite_shot_data,
+    spectator_support,
+    spectator_term_text,
     static_work_units,
 )
 
@@ -80,17 +82,26 @@ def test_spectator_profiles_default_to_calibrated_effect():
     assert THREE_QUBIT_SPARSE_SPECTATOR.spectator_error == 0.005
 
 
-def test_profile_seed_override_is_immutable_and_optional(monkeypatch):
-    profile = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1, 2), seed=20260901)
+def test_profile_overrides_are_immutable_and_optional(monkeypatch):
+    profile = ValidationProfile.sparse_spectator_line(nqubits=3, max_lengths=(1, 2), seed=20260901)
+    for variable in ('PYGSTI_SGST_PROFILE_SEED', 'PYGSTI_SGST_SPECTATOR_ERROR',
+                     'PYGSTI_SGST_SPECTATOR_TERM'):
+        monkeypatch.delenv(variable, raising=False)
 
-    monkeypatch.delenv('PYGSTI_SGST_PROFILE_SEED', raising=False)
-    assert profile_with_seed_override(profile) is profile
+    assert profile_with_overrides(profile) is profile
 
     monkeypatch.setenv('PYGSTI_SGST_PROFILE_SEED', '606')
-    overridden = profile_with_seed_override(profile)
-    assert overridden == ValidationProfile.sparse_line(nqubits=3, max_lengths=(1, 2), seed=606)
+    monkeypatch.setenv('PYGSTI_SGST_SPECTATOR_ERROR', '0.02')
+    monkeypatch.setenv('PYGSTI_SGST_SPECTATOR_TERM', 'H|ZZ:1,2')
+    overridden = profile_with_overrides(profile)
+
+    assert overridden == ValidationProfile.sparse_spectator_line(
+        nqubits=3, max_lengths=(1, 2), seed=606, spectator_error=0.02,
+        spectator_term=('H', 'ZZ:1,2'))
     assert overridden is not profile
-    assert profile.seed == 20260901
+    # The canonical module-level profile must not be disturbed by a swept batch.
+    assert (profile.seed, profile.spectator_error, profile.spectator_term) == (
+        20260901, 0.005, ('H', 'Z:2'))
 
 
 def test_spectator_generator_differs_from_the_local_fit_hypothesis():
@@ -108,6 +119,54 @@ def test_spectator_generator_differs_from_the_local_fit_hypothesis():
     assert spectator_label.errorgen_type == 'H'
     assert spectator_label.basis_element_labels == ('Z',)
     assert spectator_value == pytest.approx(0.001)
+
+
+def test_spectator_support_parses_local_and_correlated_coefficient_keys():
+    assert spectator_support(('H', 'Z:2')) == (2,)
+    assert spectator_support(('H', 'ZZ:1,2')) == (1, 2)
+    assert spectator_support(('S', 'ZZZ:0,1,2')) == (0, 1, 2)
+    assert spectator_support(('H', 'Z')) == ()
+    assert spectator_term_text(('H', 'ZZ:1,2')) == 'H(ZZ:1,2)'
+
+
+def test_correlated_spectator_term_survives_the_deterministic_local_noise():
+    """A correlated key has support (1, 2), so the (2,)-only guard would not protect it."""
+    profile = ValidationProfile.sparse_spectator_line(
+        nqubits=3, max_lengths=(1, 2), spectator_error=0.02, spectator_term=('H', 'ZZ:1,2'))
+    _, datagen_model = build_fit_and_datagen_models(profile)
+
+    correlated = {
+        label: value
+        for label, value in datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)].items()
+        if label.support == (1, 2)
+    }
+    assert len(correlated) == 1
+    label, value = next(iter(correlated.items()))
+    assert label.errorgen_type == 'H'
+    assert value == pytest.approx(0.02)
+
+
+def test_spectator_term_must_reach_beyond_the_gate_it_is_attached_to():
+    """A term confined to the gate's own qubits is local error, not crosstalk."""
+    profile = ValidationProfile.sparse_spectator_line(
+        nqubits=3, max_lengths=(1, 2), spectator_term=('H', 'ZZ:0,1'))
+
+    with pytest.raises(ValueError, match='does not reach beyond'):
+        build_fit_and_datagen_models(profile)
+
+
+def test_deepest_held_out_circuits_come_from_the_largest_germ_power():
+    profile = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1, 2, 4), seed=1234)
+    _, held_out = build_training_design_and_validation_circuits(profile)
+
+    assert held_out.deepest
+    assert set(held_out.deepest) <= set(held_out.circuits)
+    assert len(held_out.deepest) < len(held_out.circuits)
+    # The point of the subset is that it concentrates the deep circuits.
+    assert (max(circuit.depth for circuit in held_out.deepest)
+            == max(circuit.depth for circuit in held_out.circuits))
+    assert (min(circuit.depth for circuit in held_out.deepest)
+            > min(circuit.depth for circuit in held_out.circuits))
 
 
 def test_four_qubit_fit_profiles_have_bridge_parameter_counts():
@@ -186,12 +245,13 @@ def test_component_design_selection_is_reproducible():
 
 def test_validation_circuits_are_deterministic_and_disjoint_from_training():
     profile = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1, 2), seed=1234)
-    training_design, validation_circuits = build_training_design_and_validation_circuits(profile)
-    _, repeated_validation_circuits = build_training_design_and_validation_circuits(profile)
+    training_design, held_out = build_training_design_and_validation_circuits(profile)
+    _, repeated_held_out = build_training_design_and_validation_circuits(profile)
     training_circuits = set(training_design.all_circuits_needing_data)
-    assert validation_circuits
-    assert training_circuits.isdisjoint(validation_circuits)
-    assert validation_circuits == repeated_validation_circuits
+    assert held_out.circuits
+    assert training_circuits.isdisjoint(held_out.circuits)
+    assert held_out.circuits == repeated_held_out.circuits
+    assert held_out.deepest == repeated_held_out.deepest
 
 
 def test_finite_shot_data_are_seeded_multinomial_counts():

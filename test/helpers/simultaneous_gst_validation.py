@@ -76,6 +76,11 @@ class ValidationProfile:
     scenario: Literal['markovian', 'spectator_crosstalk']
     seed: int
     spectator_error: float = 0.0
+    # The error injected into `Gcnot(0, 1)` for spectator-crosstalk scenarios, as a
+    # `create_cloud_crosstalk_model` coefficient key.  `('H', 'Z:2')` is a coherent
+    # dephasing of the spectator alone; `('H', 'ZZ:1,2')` correlates the gate's target
+    # with the spectator, which a crosstalk-free model cannot represent at all.
+    spectator_term: tuple[str, ...] = ('H', 'Z:2')
 
     @classmethod
     def sparse_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
@@ -87,9 +92,10 @@ class ValidationProfile:
     @classmethod
     def sparse_spectator_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
                               seed: int = 20260901,
-                              spectator_error: float = 0.005) -> 'ValidationProfile':
+                              spectator_error: float = 0.005,
+                              spectator_term: tuple[str, ...] = ('H', 'Z:2')) -> 'ValidationProfile':
         return cls(f'{nqubits}q_sparse_spectator_line', nqubits, tuple(max_lengths), shots,
-                   'sparse', 'spectator_crosstalk', seed, spectator_error)
+                   'sparse', 'spectator_crosstalk', seed, spectator_error, tuple(spectator_term))
 
     @classmethod
     def coherent_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
@@ -102,9 +108,10 @@ class ValidationProfile:
     @classmethod
     def coherent_spectator_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
                                 seed: int = 20260901,
-                                spectator_error: float = 0.005) -> 'ValidationProfile':
+                                spectator_error: float = 0.005,
+                                spectator_term: tuple[str, ...] = ('H', 'Z:2')) -> 'ValidationProfile':
         return cls(f'{nqubits}q_coherent_spectator_line', nqubits, tuple(max_lengths), shots,
-                   'coherent', 'spectator_crosstalk', seed, spectator_error)
+                   'coherent', 'spectator_crosstalk', seed, spectator_error, tuple(spectator_term))
 
     @classmethod
     def full_hs_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
@@ -272,8 +279,38 @@ def _build_model(processor_spec: QubitProcessorSpec,
     )
 
 
-def _set_deterministic_error_coefficients(model, seed: int, spectator_gate=None) -> None:
-    """Set every local coefficient to a small deterministic nonzero value."""
+def spectator_support(spectator_term: Sequence[str]) -> tuple:
+    """Return the qubits a `create_cloud_crosstalk_model` coefficient key acts on.
+
+    Keys carry their support in the basis-element labels, as `<paulis>:<qubits>` with
+    the qubits comma-separated -- `'Z:2'` is qubit 2 alone, `'ZZ:1,2'` is a correlated
+    term on qubits 1 and 2.
+    """
+    qubits = set()
+    for basis_element in spectator_term[1:]:
+        if ':' not in basis_element:
+            continue
+        for label in basis_element.split(':', maxsplit=1)[1].split(','):
+            try:
+                qubits.add(int(label))
+            except ValueError:
+                qubits.add(label)
+    return tuple(sorted(qubits, key=str))
+
+
+def spectator_term_text(spectator_term: Sequence[str]) -> str:
+    """Render a coefficient key for manifests and reports, e.g. `H(ZZ:1,2)`."""
+    return f"{spectator_term[0]}({','.join(spectator_term[1:])})"
+
+
+def _set_deterministic_error_coefficients(model, seed: int, spectator_gate=None,
+                                          protected_support=None) -> None:
+    """Set every local coefficient to a small deterministic nonzero value.
+
+    Coefficients on `spectator_gate` whose support matches `protected_support` are left
+    alone, so the deliberately injected crosstalk term is not overwritten by the
+    deterministic local noise.
+    """
     rng = np.random.default_rng(seed)
     for op_label, coefficients in sorted(model.errorgen_coefficients().items(), key=lambda item: str(item[0])):
         if op_label not in model.operation_blks['layers']:
@@ -285,7 +322,8 @@ def _set_deterministic_error_coefficients(model, seed: int, spectator_gate=None)
                 and (op_label.name,) + tuple(op_label.sslbls) == spectator_gate
             )
             if (is_spectator_gate
-                    and coefficient_label.support == (2,)):
+                    and protected_support is not None
+                    and coefficient_label.support == protected_support):
                 continue
             if coefficient_label.errorgen_type == 'H':
                 value = rng.uniform(-1e-3, 1e-3)
@@ -310,14 +348,21 @@ def _build_spectator_datagen_model(profile: ValidationProfile):
         for placement in processor_spec.resolved_availability(gate_name)
     }
     spectator_gate = ('Gcnot', 0, 1)
-    coefficients[spectator_gate][('H', 'Z:2')] = profile.spectator_error
+    support = spectator_support(profile.spectator_term)
+    if not support or all(qubit in spectator_gate[1:] for qubit in support):
+        raise ValueError(
+            f'Spectator term {profile.spectator_term!r} has support {support}, which does not '
+            f'reach beyond the qubits {spectator_gate[1:]} that {spectator_gate[0]} acts on; '
+            'it would be an ordinary local error on the gate rather than crosstalk')
+    coefficients[spectator_gate][tuple(profile.spectator_term)] = profile.spectator_error
     model = create_cloud_crosstalk_model(
         processor_spec,
         lindblad_error_coeffs=coefficients,
         lindblad_parameterization='H+S',
         independent_gates=True,
     )
-    _set_deterministic_error_coefficients(model, profile.seed, spectator_gate=spectator_gate)
+    _set_deterministic_error_coefficients(
+        model, profile.seed, spectator_gate=spectator_gate, protected_support=support)
     return model
 
 
@@ -401,8 +446,30 @@ def build_component_designs(profile: ValidationProfile) -> tuple[StandardGSTDesi
     return oneq_design, twoq_design
 
 
+@dataclasses.dataclass(frozen=True)
+class HeldOutCircuits:
+    """Held-out circuits, and the subset drawn from the largest germ power.
+
+    A coherent error injected during `Gcnot(0, 1)` accumulates with the number of times
+    that gate is applied, so the deepest circuits carry the most signal about it.
+    Scoring them separately measures the effect where it is largest, without changing
+    the data-generating model.
+    """
+
+    circuits: tuple
+    deepest: tuple
+
+
+def _deepest_increment(design) -> set:
+    """Return the circuits a nested design adds at its largest germ power."""
+    circuit_lists = design.circuit_lists
+    if len(circuit_lists) < 2:
+        return set(circuit_lists[-1])
+    return set(circuit_lists[-1]) - set(circuit_lists[-2])
+
+
 def build_training_design_and_validation_circuits(profile: ValidationProfile):
-    """Build one training design and a deterministic disjoint held-out circuit list."""
+    """Build one training design and a deterministic disjoint held-out circuit set."""
     processor_spec = _line_processor_spec(profile.nqubits)
     oneq_design, twoq_design = build_component_designs(profile)
     training_design = make_simultaneous_gst_design(
@@ -423,7 +490,13 @@ def build_training_design_and_validation_circuits(profile: ValidationProfile):
     )
     if not validation_circuits:
         raise RuntimeError('The second seeded design produced no held-out validation circuits')
-    return training_design, validation_circuits
+
+    deepest_increment = _deepest_increment(validation_design)
+    deepest = tuple(circuit for circuit in validation_circuits if circuit in deepest_increment)
+    if not deepest:
+        raise RuntimeError(
+            'The second seeded design produced no held-out circuits at its largest germ power')
+    return training_design, HeldOutCircuits(circuits=validation_circuits, deepest=deepest)
 
 
 def openmpi_extra_args() -> list[str]:
@@ -492,7 +565,7 @@ def run_validation_profile(
         json.dumps(dataclasses.asdict(profile), indent=2) + '\n')
 
     fit_model, datagen_model = build_fit_and_datagen_models(profile)
-    training_design, validation_circuits = build_training_design_and_validation_circuits(profile)
+    training_design, held_out = build_training_design_and_validation_circuits(profile)
     training_circuits = training_design.all_circuits_needing_data
     dataset = generate_finite_shot_data(profile, datagen_model, training_circuits)
     pdata = ProtocolData(training_design, dataset)
@@ -511,21 +584,29 @@ def run_validation_profile(
     fitted_model = estimate.models['final iteration estimate']
     two_delta_logl_value, nsigma, _ = two_delta_logl(
         fitted_model, dataset, dof_calc_method='modeltest')
-    validation_tvds = [
-        float(tvd(fitted_model.probabilities(circuit), datagen_model.probabilities(circuit)))
-        for circuit in validation_circuits
-    ]
+    tvd_by_circuit = {
+        circuit: float(tvd(fitted_model.probabilities(circuit),
+                           datagen_model.probabilities(circuit)))
+        for circuit in held_out.circuits
+    }
+    validation_tvds = list(tvd_by_circuit.values())
+    deep_tvds = [tvd_by_circuit[circuit] for circuit in held_out.deepest]
     metrics: dict[str, float | int | str] = {
         'profile': profile.name,
         'scenario': profile.scenario,
+        'spectator_term': spectator_term_text(profile.spectator_term),
+        'spectator_error': float(profile.spectator_error),
         'two_delta_logl': float(two_delta_logl_value),
         'nsigma': float(nsigma),
         'validation_mean_tvd': float(np.mean(validation_tvds)),
         'validation_max_tvd': float(np.max(validation_tvds)),
+        'validation_deep_mean_tvd': float(np.mean(deep_tvds)),
+        'validation_deep_max_tvd': float(np.max(deep_tvds)),
         'elapsed_seconds': float(elapsed_seconds),
         'fit_model_params': int(fit_model.num_params),
         'training_circuits': int(len(training_circuits)),
-        'validation_circuits': int(len(validation_circuits)),
+        'validation_circuits': int(len(held_out.circuits)),
+        'validation_deep_circuits': int(len(held_out.deepest)),
         'shots': int(profile.shots),
         'mpi_ranks': int(mpi_ranks),
     }
