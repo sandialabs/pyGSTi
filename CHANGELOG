@@ -23,6 +23,9 @@
 * Fixed two `UnboundLocalError` bugs in `pygsti.tools.errgenproptools` affecting 'A'-type (active) error generators: `slow_bulk_alpha` assigned its weight-1 anticommuting-Pauli result to the whole return array instead of the per-iteration local (masked whenever the Cython `fasterrgencalc` extension is built, since `bulk_alpha` then aliases the Cython implementation), and `error_generator_commutator`'s 'S'-'A' branch referenced an undefined `ptup` instead of `ptup1`. (#876)
 * Fixed `EmbeddedOp`/`EmbeddedErrorgen` local error-generator-label embedding (`label_type='local'`) for string or permuted-integer qubit labels, which previously raised `TypeError` or silently mis-embedded. (#878)
 
+### Changed
+* `LocalNoiseModel` member dictionaries now enforce standard key prefix namespaces (`rho` for state preparations, `M` for POVMs, `G` or `{` for operations and factories, and `I` for instruments) to prevent ambiguous lookups via `ImplicitOpModel.__getitem__`, supported by multi-prefix validation in `_PrefixOrderedDict` and `OrderedMemberDict` (#903).
+
 ## [0.10.2] - 2026-07-30
 
 Bugfix release, plus a line search safeguard for the Levenberg-Marquardt optimizer.
