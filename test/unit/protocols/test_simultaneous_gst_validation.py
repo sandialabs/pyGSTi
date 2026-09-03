@@ -146,6 +146,42 @@ def test_correlated_spectator_term_survives_the_deterministic_local_noise():
     assert value == pytest.approx(0.02)
 
 
+def test_correlation_spectator_terms_are_built_rather_than_silently_discarded():
+    """`H+S` drops `C` coefficients without warning, which would fake a crosstalk run."""
+    profile = ValidationProfile.sparse_spectator_line(
+        nqubits=3, max_lengths=(1, 2), spectator_error=0.01,
+        spectator_term=('C', 'Z:2', 'X:2'))
+    _, datagen_model = build_fit_and_datagen_models(profile)
+
+    injected = {
+        label: value
+        for label, value in datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)].items()
+        if label.errorgen_type == 'C'
+    }
+    assert len(injected) == 1
+    label, value = next(iter(injected.items()))
+    assert label.support == (2,)
+    assert tuple(label.basis_element_labels) == ('Z', 'X')
+    assert value == pytest.approx(0.01)
+
+
+def test_hamiltonian_and_stochastic_terms_keep_the_original_parameterization():
+    """Promoting every data generator to `GLNDU` would change runs that do not need it."""
+    assert validation._spectator_parameterization(('H', 'Z:2')) == 'H+S'
+    assert validation._spectator_parameterization(('S', 'Z:2')) == 'H+S'
+    assert validation._spectator_parameterization(('C', 'Z:2', 'X:2')) == 'GLNDU'
+    assert validation._spectator_parameterization(('A', 'Z:2', 'X:2')) == 'GLNDU'
+
+
+def test_held_out_circuits_are_distinct_so_the_mean_is_not_reweighted():
+    """A circuit reached by two germ powers is listed twice; averaging would double it."""
+    profile = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1, 2, 4), seed=20260902)
+    _, held_out = build_training_design_and_validation_circuits(profile)
+
+    assert len(set(held_out.circuits)) == len(held_out.circuits)
+    assert len(set(held_out.deepest)) == len(held_out.deepest)
+
+
 def test_spectator_term_must_reach_beyond_the_gate_it_is_attached_to():
     """A term confined to the gate's own qubits is local error, not crosstalk."""
     profile = ValidationProfile.sparse_spectator_line(

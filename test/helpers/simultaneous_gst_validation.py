@@ -358,12 +358,54 @@ def _build_spectator_datagen_model(profile: ValidationProfile):
     model = create_cloud_crosstalk_model(
         processor_spec,
         lindblad_error_coeffs=coefficients,
-        lindblad_parameterization='H+S',
+        lindblad_parameterization=_spectator_parameterization(profile.spectator_term),
         independent_gates=True,
     )
+    _assert_spectator_term_survived(model, spectator_gate, profile)
     _set_deterministic_error_coefficients(
         model, profile.seed, spectator_gate=spectator_gate, protected_support=support)
     return model
+
+
+def _spectator_parameterization(spectator_term: Sequence[str]) -> str:
+    """Pick the smallest Lindblad parameterization that can hold the injected term.
+
+    `H+S` builds reduced blocks containing exactly the `H` and `S` generators asked for,
+    and *discards* `C` and `A` generators without warning or error.  `GLNDU` keeps the
+    same one-parameter-per-generator sparsity while admitting all four sectors, so it is
+    used only when the injected term needs it -- terms drawn from `H` and `S` keep the
+    original parameterization and reproduce earlier runs exactly.
+    """
+    return 'GLNDU' if spectator_term[0] in ('C', 'A') else 'H+S'
+
+
+def _assert_spectator_term_survived(model, spectator_gate, profile: ValidationProfile) -> None:
+    """Fail loudly if the injected crosstalk is not in the constructed model.
+
+    Without this the `H+S` silent drop produces a spectator-crosstalk run containing no
+    crosstalk, which is indistinguishable from a matched run and looks entirely healthy.
+    """
+    wanted_type = profile.spectator_term[0]
+    wanted_paulis = tuple(basis_element.split(':', maxsplit=1)[0]
+                          for basis_element in profile.spectator_term[1:])
+    wanted_support = spectator_support(profile.spectator_term)
+    for op_label, coefficients in model.errorgen_coefficients().items():
+        if (op_label.name,) + tuple(op_label.sslbls) != spectator_gate:
+            continue
+        for label, value in coefficients.items():
+            if (label.errorgen_type != wanted_type
+                    or tuple(label.basis_element_labels) != wanted_paulis
+                    or label.support != wanted_support):
+                continue
+            if abs(np.real(value) - profile.spectator_error) <= 1e-12:
+                return
+            raise ValueError(
+                f'Spectator term {spectator_term_text(profile.spectator_term)} was built with '
+                f'coefficient {np.real(value)!r}, not the requested {profile.spectator_error!r}')
+    raise ValueError(
+        f'Spectator term {spectator_term_text(profile.spectator_term)} is absent from the '
+        f'constructed data-generating model; the chosen Lindblad parameterization '
+        f'{_spectator_parameterization(profile.spectator_term)!r} cannot represent it')
 
 
 def build_fit_and_datagen_models(profile: ValidationProfile):
@@ -484,10 +526,18 @@ def build_training_design_and_validation_circuits(profile: ValidationProfile):
         seed=validation_profile.seed,
     )
     training_circuits = set(training_design.all_circuits_needing_data)
-    validation_circuits = tuple(
-        circuit for circuit in validation_design.all_circuits_needing_data
-        if circuit not in training_circuits
-    )
+    # The stitched design can list the same circuit more than once -- a circuit reached by
+    # two different germ/power combinations appears once per combination.  Held-out scores
+    # are per distinct circuit, so a repeat would weight that circuit twice in the mean
+    # without telling anyone; deduplicate here, in the order the design produced them.
+    seen = set()
+    held_out = []
+    for circuit in validation_design.all_circuits_needing_data:
+        if circuit in training_circuits or circuit in seen:
+            continue
+        seen.add(circuit)
+        held_out.append(circuit)
+    validation_circuits = tuple(held_out)
     if not validation_circuits:
         raise RuntimeError('The second seeded design produced no held-out validation circuits')
 
