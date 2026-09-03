@@ -289,7 +289,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         -------
         None
         """
-        return self.inverse_element.from_vector()
+        self.inverse_element.from_vector(v)
 
     @property
     def num_params(self) -> int:

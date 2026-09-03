@@ -265,6 +265,15 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
         inv = el.inverse()
         self.assertArraysAlmostEqual(inv.transform_matrix @ el.transform_matrix, np.eye(16))
 
+    def test_inverse_element_from_vector_updates_wrapped_element(self):
+        el = self.gg.compute_element(self.v)
+        inv = el.inverse()
+        w = self.rng.random(self.n_params)
+        inv.from_vector(w)
+        self.assertArraysAlmostEqual(el.to_vector(), w)
+        self.assertArraysAlmostEqual(inv.to_vector(), w)
+        self.assertArraysAlmostEqual(inv.transform_matrix, np.linalg.inv(self.gg.compute_element(w).transform_matrix))
+
     def _finite_difference_deriv(self, gg, v, h=1e-6):
         el = gg.compute_element(v)
         cols = []
