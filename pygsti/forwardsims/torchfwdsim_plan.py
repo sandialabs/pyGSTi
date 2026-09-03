@@ -381,16 +381,14 @@ class TorchEvalPlan:
 
     # -- Jacobian -----------------------------------------------------------------------------
 
-    def jacobian(self, free_params, dim, num_params, out=None, probs_out=None):
+    def member_derivatives(self, free_params, num_params):
         """
-        The ``(num_elements, num_params)`` Jacobian of the outcome probabilities.
+        ``(torch_bases, derivs)``: each modelmember's dense torch_base, and its derivative with
+        respect to that member's own parameters together with the member's column block.
 
-        `free_params` is the per-modelmember tuple produced by
-        ``StatelessModelCircuitStore.get_free_params``. The dense superoperators and their
-        derivatives with respect to the modelmember's own parameters are computed here (by
-        autodiff, per modelmember); everything downstream is explicit linear algebra.
+        This is the only autodiff in the Jacobian, and its cost depends on the model, not on how
+        many circuits are being simulated.
         """
-        dtype, device = self.dtype, self.device
         torch_bases: Dict[Any, "torch.Tensor"] = {}
         derivs: Dict[Any, Tuple[Any, "torch.Tensor", slice]] = {}
         col = 0
@@ -407,6 +405,31 @@ class TorchEvalPlan:
                     torch_bases[expanded] = base[j]
                     derivs[expanded] = (base[j], jac[j], cols)
         assert col == num_params, (col, num_params)
+        return torch_bases, derivs
+
+    def jacobian(self, free_params, dim, num_params, out=None, probs_out=None):
+        """
+        The ``(num_elements, num_params)`` Jacobian of the outcome probabilities.
+
+        `free_params` is the per-modelmember tuple produced by
+        ``StatelessModelCircuitStore.get_free_params``. The dense superoperators and their
+        derivatives with respect to the modelmember's own parameters are computed here (by
+        autodiff, per modelmember); everything downstream is explicit linear algebra.
+        """
+        torch_bases, derivs = self.member_derivatives(free_params, num_params)
+        return self.jacobian_from_derivatives(torch_bases, derivs, dim, num_params,
+                                              out=out, probs_out=probs_out)
+
+    def jacobian_from_derivatives(self, torch_bases, derivs, dim, num_params,
+                                  out=None, probs_out=None):
+        """
+        The circuit-dependent half of :meth:`jacobian`, given the output of
+        :meth:`member_derivatives`.
+
+        Everything here is a fixed sequence of fixed-shape kernels determined by the plan, which is
+        what makes it capturable into a CUDA graph.
+        """
+        dtype, device = self.dtype, self.device
 
         if out is None:
             out = torch.zeros((self.outcome_probs_dim, num_params), dtype=dtype, device=device)

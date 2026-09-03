@@ -296,6 +296,24 @@ class StatelessModelCircuitStore:
         return probs
 
 
+def _copy_to_numpy(src: torch.Tensor, dest) -> None:
+    """
+    Copy a device Tensor straight into an existing numpy array.
+
+    ``dest[...] = src.cpu().numpy()`` allocates a fresh host buffer of the Tensor's full size on
+    every call and then copies it again into `dest`. For a GST Jacobian that buffer is gigabytes,
+    and the allocate-fault-copy-copy round trip costs several times more than the transfer itself.
+    Wrapping `dest` with ``torch.from_numpy`` lets the copy engine write into the caller's memory
+    directly.
+    """
+    src = src.detach().reshape(dest.shape)
+    try:
+        torch.from_numpy(dest).copy_(src)
+    except (TypeError, ValueError, RuntimeError):
+        # e.g. a non-writable, negatively-strided, or otherwise un-wrappable array
+        dest[...] = src.cpu().numpy()
+
+
 def get_device() -> str:
     if torch.cuda.is_available() and torch.cuda.device_count() > 0:
         return 'cuda:0'  # NVIDIA and AMD
@@ -410,7 +428,7 @@ class TorchForwardSimulator(ForwardSimulator):
             smcs, torch_bases = split_model
 
         probs = smcs.circuit_probs_from_torch_bases(torch_bases)
-        array_to_fill[:smcs.outcome_probs_dim] = probs.cpu().detach().numpy().ravel()
+        _copy_to_numpy(probs, array_to_fill[:smcs.outcome_probs_dim])
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
@@ -423,7 +441,7 @@ class TorchForwardSimulator(ForwardSimulator):
             probs_out = torch.empty(smcs.outcome_probs_dim, dtype=self.dtype, device=self.device)
 
         J_val = smcs.circuit_jacobian_from_free_params(free_params, probs_out=probs_out)
-        array_to_fill[:] = J_val.cpu().numpy()
+        _copy_to_numpy(J_val, array_to_fill)
         if probs_out is not None:
-            pr_array_to_fill[:smcs.outcome_probs_dim] = probs_out.cpu().numpy().ravel()
+            _copy_to_numpy(probs_out, pr_array_to_fill[:smcs.outcome_probs_dim])
         return
