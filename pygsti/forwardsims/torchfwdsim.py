@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Tuple, Optional, Dict, Any, Type, TYPE_CHECKING
 from pygsti.modelmembers.torchable import Torchable
 from pygsti.forwardsims.forwardsim import ForwardSimulator
+from pygsti.forwardsims.torchfwdsim_plan import TorchEvalPlan
 
 if TYPE_CHECKING:
     from pygsti.baseobjs.label import Label
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     import torch
 
 import warnings as warnings
+import weakref as _weakref
 
 
 try:
@@ -88,6 +90,8 @@ class StatelessModelCircuitStore:
         from pygsti.modelmembers.instruments.instrument import Instrument as _Instrument
         from pygsti.modelmembers.instruments.tpinstrument import TPInstrument as _TPInstrument
 
+        self.dtype = dtype
+        self.device = device
         circuits = []
         self.outcome_probs_dim = 0
         povm_effect_orders = {}
@@ -119,6 +123,9 @@ class StatelessModelCircuitStore:
                 circuits.append(c)
                 self.outcome_probs_dim += c.outcome_probs_dim
         self.circuits = circuits
+        self.povm_effect_counts = {lbl: len(order) for lbl, order in povm_effect_orders.items()}
+        self.model_dim = model.dim
+        self._eval_plan = None
 
         # We need to verify assumptions on what layout.iter_unique_circuits() returns.
         # Looking at the implementation of that function, the assumptions can be
@@ -227,29 +234,49 @@ class StatelessModelCircuitStore:
 
         return torch_bases
 
+    @property
+    def eval_plan(self) -> TorchEvalPlan:
+        """
+        The batched :class:`TorchEvalPlan` for this store's circuits, built on first use.
+
+        The plan depends only on the *structure* of the (model, layout) pair -- circuit contents,
+        which modelmembers are parameterized, and how many parameters each has -- so one plan
+        serves every parameter value a GST optimization visits.
+        """
+        if self._eval_plan is None:
+            self._eval_plan = TorchEvalPlan(
+                self.circuits, self.param_metadata, self.instrument_expansions,
+                self.povm_effect_counts, self.outcome_probs_dim, self.dtype, self.device
+            )
+        return self._eval_plan
+
     def circuit_probs_from_torch_bases(self, torch_bases: Dict[Label, torch.Tensor]) -> torch.Tensor:
         """
         Compute the circuit outcome probabilities that result when all of this StatelessModelCircuitStore's
         StatelessCircuits are run with data in torch_bases.
-    
+
         Return the results as a single (vectorized) torch Tensor.
         """
-        probs = []
-        for c in self.circuits:
-            superket = torch_bases[c.prep_label]
-            superops = [torch_bases[ol] for ol in c.op_labels]
-            povm_mat = torch_bases[c.povm_label]
-            if c.effect_row_indices is not None:
-                povm_mat = povm_mat[c.effect_row_indices]
-                # ^ select (and order) the POVM rows to match c.effect_labels; advanced
-                #   indexing keeps autograd flowing to the POVM's parameters.
-            for superop in superops:
-                superket = superop @ superket
-            circuit_probs = povm_mat @ superket
-            probs.append(circuit_probs)
-        probs = torch.concat(probs)
-        return probs
-    
+        return self.eval_plan.probs(torch_bases, self.model_dim)
+
+    def circuit_jacobian_from_free_params(self, free_params: Tuple[torch.Tensor],
+                                          probs_out=None) -> torch.Tensor:
+        """
+        The Jacobian of :meth:`circuit_probs_from_free_params` at `free_params`, as a dense
+        ``(outcome_probs_dim, params_dim)`` Tensor.
+
+        Unlike ``torch.func.jacfwd(circuit_probs_from_free_params)``, this does not differentiate
+        through the circuit-evaluation loop. It differentiates each modelmember's
+        ``torch_base`` map on its own (a small, per-member autodiff problem) and applies the chain
+        rule with an explicitly-derived expression for the derivative of a circuit's outcome
+        probabilities with respect to the dense superoperators. See
+        :mod:`pygsti.forwardsims.torchfwdsim_plan`.
+        """
+        num_params = sum(int(fp.numel()) for fp in free_params)
+        return self.eval_plan.jacobian(free_params, self.model_dim, num_params,
+                                       probs_out=probs_out)
+
+
     def circuit_probs_from_free_params(self, *free_params: Tuple[torch.Tensor], enable_backward=False) -> torch.Tensor:
         """
         This is the basic function we expose to pytorch for automatic differentiation. It returns the circuit
@@ -346,12 +373,37 @@ class TorchForwardSimulator(ForwardSimulator):
 
         self.dtype  = dtype
         self.device = device
+        self._store_cache = None
         super(ForwardSimulator, self).__init__(model)
+
+    def _circuit_store(self, layout) -> StatelessModelCircuitStore:
+        """
+        The StatelessModelCircuitStore for `layout`, reused across calls.
+
+        Building the store walks every circuit in Python and bakes each modelmember's stateless
+        data; building its evaluation plan walks every gate application. Neither depends on the
+        model's parameter *values*, so a GST optimization -- which calls this simulator once or
+        twice per iteration against a fixed layout -- should pay for them once, not once per
+        iteration. The cache holds weak references so it can't keep a layout or model alive, and
+        is keyed by object identity: a structurally different layout or model is a different
+        object, and `get_free_params` re-checks the modelmember labels on every call.
+        """
+        cached = self._store_cache
+        if cached is not None:
+            layout_ref, model_ref, store = cached
+            if layout_ref() is layout and model_ref() is self.model:
+                return store
+        store = StatelessModelCircuitStore(self.model, layout, self.dtype, self.device)
+        try:
+            self._store_cache = (_weakref.ref(layout), _weakref.ref(self.model), store)
+        except TypeError:  # pragma: no cover - a layout or model that can't be weak-referenced
+            self._store_cache = None
+        return store
 
     def _bulk_fill_probs(self, array_to_fill, layout, split_model = None) -> None:
         assert self.model is not None
         if split_model is None:
-            smcs = StatelessModelCircuitStore(self.model, layout, self.dtype, self.device)
+            smcs = self._circuit_store(layout)
             free_params = smcs.get_free_params(self.model, self.dtype, self.device)
             torch_bases = smcs.get_torch_bases(free_params)
         else:
@@ -363,24 +415,15 @@ class TorchForwardSimulator(ForwardSimulator):
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
         assert self.model is not None
-        smcs = StatelessModelCircuitStore(self.model, layout, self.dtype, self.device)
-        # ^ TODO: figure out how to safely recycle StatelessModelCircuitStore objects from one
-        #   call to another. The current implementation is wasteful if we need to 
-        #   compute many jacobians without structural changes to layout or self.model.
+        smcs = self._circuit_store(layout)
         free_params = smcs.get_free_params(self.model, self.dtype, self.device)
-    
+
+        probs_out = None
         if pr_array_to_fill is not None:
-            torch_bases = smcs.get_torch_bases(free_params)
-            splitm = (smcs, torch_bases)
-            self._bulk_fill_probs(pr_array_to_fill, layout, splitm)
+            probs_out = torch.empty(smcs.outcome_probs_dim, dtype=self.dtype, device=self.device)
 
-        argnums = tuple(range(len(smcs.param_metadata)))
-        if smcs.default_to_reverse_ad:
-            J_func = torch.func.jacrev(smcs.circuit_probs_from_free_params, argnums=argnums) # type: ignore
-        else:
-            J_func = torch.func.jacfwd(smcs.circuit_probs_from_free_params, argnums=argnums) # type: ignore
-
-        J_val = J_func(*free_params)
-        J_val = torch.column_stack(J_val)
-        array_to_fill[:] = J_val.cpu().detach().numpy()
+        J_val = smcs.circuit_jacobian_from_free_params(free_params, probs_out=probs_out)
+        array_to_fill[:] = J_val.cpu().numpy()
+        if probs_out is not None:
+            pr_array_to_fill[:smcs.outcome_probs_dim] = probs_out.cpu().numpy().ravel()
         return
