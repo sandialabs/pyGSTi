@@ -196,7 +196,6 @@ class U1GroupTester(GaugeGroupBase, BaseCase):
 class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
     n_params = 6
     element_type = ggrp.TensorProductGaugeGroupElement
-    HAS_DERIV_WRT_PARAMS = False  # implemented in a later phase
 
     def setUp(self):
         GaugeGroupBase.setUp(self)
@@ -265,3 +264,45 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
         el = self.gg.compute_element(self.v)
         inv = el.inverse()
         self.assertArraysAlmostEqual(inv.transform_matrix @ el.transform_matrix, np.eye(16))
+
+    def _finite_difference_deriv(self, gg, v, h=1e-6):
+        el = gg.compute_element(v)
+        cols = []
+        for i in range(gg.num_params):
+            vp, vm = v.copy(), v.copy()
+            vp[i] += h
+            vm[i] -= h
+            cols.append(((gg.compute_element(vp).transform_matrix
+                          - gg.compute_element(vm).transform_matrix) / (2 * h)).reshape(-1))
+        return el, np.column_stack(cols)
+
+    def test_deriv_wrt_params_matches_finite_differences(self):
+        el, fd = self._finite_difference_deriv(self.gg, self.v)
+        deriv = el.deriv_wrt_params()
+        self.assertEqual(deriv.shape, (16 * 16, 6))
+        self.assertArraysAlmostEqual(deriv, fd, places=6)
+
+    def test_deriv_wrt_params_honors_filter(self):
+        el = self.gg.compute_element(self.v)
+        full = el.deriv_wrt_params()
+        flt = [4, 1, 3, 1]
+        self.assertArraysAlmostEqual(el.deriv_wrt_params(flt), full[:, flt])
+        self.assertEqual(el.deriv_wrt_params([]).shape, (256, 0))
+
+    def test_deriv_wrt_params_with_change_of_basis(self):
+        qutrit = ggrp.UnitaryGaugeGroup(QuditSpace(1, 3), 'gm')
+        gg = ggrp.TensorProductGaugeGroup([qutrit, qutrit], QuditSpace(2, 3), Basis.cast('gm', 81))
+        self.assertIsNotNone(gg._change_of_basis)
+        v = 0.3 * self.rng.normal(size=gg.num_params)
+        el, fd = self._finite_difference_deriv(gg, v)
+        self.assertArraysAlmostEqual(el.deriv_wrt_params(), fd, places=6)
+        # and the element itself agrees with the direct unitary computation in the builtin gm basis
+        Ua, Ub = (superop_to_unitary(m, 'gm') for m in el.factor_matrices)
+        self.assertArraysAlmostEqual(el.transform_matrix, unitary_to_superop(np.kron(Ua, Ub), Basis.cast('gm', 81)))
+
+    def test_inverse_element_deriv(self):
+        el = self.gg.compute_element(self.v)
+        inv = el.inverse()
+        S_inv, dS = el.transform_matrix_inverse, el.deriv_wrt_params()
+        expected = np.column_stack([(-S_inv @ dS[:, i].reshape(16, 16) @ S_inv).reshape(-1) for i in range(6)])
+        self.assertArraysAlmostEqual(inv.deriv_wrt_params(), expected)

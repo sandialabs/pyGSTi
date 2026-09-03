@@ -1699,7 +1699,42 @@ class TensorProductGaugeGroupElement(GaugeGroupElement):
         return self._inv_mx
 
     def deriv_wrt_params(self, wrt_filter=None) -> _np.ndarray:
-        raise NotImplementedError()
+        """
+        Derivative of the transform matrix with respect to this element's parameters.
+
+        Product rule over the Kronecker factors: for a parameter of factor ``j``,
+        ``dS = C (S_1 ⊗ ... ⊗ dS_j ⊗ ... ⊗ S_k) C^{-1}``.
+
+        Parameters
+        ----------
+        wrt_filter : list or numpy.ndarray, optional
+            Indices of the parameters to differentiate with respect to (all if None).
+
+        Returns
+        -------
+        numpy.ndarray
+            Shape ``(dim**2, n)``; column ``i`` is the C-order flattening of ``dS/dθ_i``.
+        """
+        S = self.factor_matrices
+        d = int(_np.prod([m.shape[0] for m in S]))
+        indices = _np.arange(self.num_params) if wrt_filter is None else _np.asarray(wrt_filter, dtype=int)
+        if indices.size == 0:
+            return _np.zeros((d * d, 0), dtype='d')
+        owner = _np.searchsorted(self._param_offsets, indices, side='right') - 1
+        local = indices - self._param_offsets[owner]
+
+        columns = {}
+        for j, el in enumerate(self.factor_elements):
+            local_j = _np.unique(local[owner == j])
+            if local_j.size == 0:
+                continue
+            dSj = el.deriv_wrt_params(list(local_j))  # (d_j**2, len(local_j)), C-order columns
+            dj = S[j].shape[0]
+            for col, li in enumerate(local_j):
+                mxs = list(S)
+                mxs[j] = dSj[:, col].reshape(dj, dj)
+                columns[(j, int(li))] = self._conjugate(self._kron(mxs)).reshape(d * d)
+        return _np.column_stack([columns[(int(j), int(li))] for j, li in zip(owner, local)])
 
     def to_vector(self) -> _np.ndarray:
         return _np.concatenate([e.to_vector() for e in self.factor_elements])
