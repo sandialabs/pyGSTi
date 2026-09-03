@@ -2,7 +2,9 @@ import numpy as np
 
 from pygsti.modelmembers import operations as op
 from pygsti.models import gaugegroup as ggrp
-from pygsti.baseobjs.statespace import QubitSpace, ExplicitStateSpace
+from pygsti.baseobjs.statespace import QubitSpace, QuditSpace, ExplicitStateSpace
+from pygsti.baseobjs.basis import Basis, TensorProdBasis
+from pygsti.tools.optools import unitary_to_superop, superop_to_unitary
 from ..util import BaseCase
 
 
@@ -189,3 +191,77 @@ class U1GroupTester(GaugeGroupBase, BaseCase):
         el = self.gg.compute_element(np.array([0.7]))
         product = el.transform_matrix @ el.inverse().transform_matrix
         self.assertArraysAlmostEqual(product, np.eye(1, dtype=complex))
+
+
+class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
+    n_params = 6
+    element_type = ggrp.TensorProductGaugeGroupElement
+    HAS_DERIV_WRT_PARAMS = False  # implemented in a later phase
+
+    def setUp(self):
+        GaugeGroupBase.setUp(self)
+        self.state_space = QubitSpace(2)
+        self.factor = ggrp.UnitaryGaugeGroup(QubitSpace(1), 'pp')
+        self.gg = ggrp.TensorProductGaugeGroup([self.factor, self.factor], self.state_space, 'pp')
+        self.v = np.array([0.3, -0.2, 0.5, 0.1, 0.7, -0.4])
+
+    def test_pp_on_qubits_needs_no_change_of_basis(self):
+        self.assertIsNone(self.gg._change_of_basis)
+
+    def test_element_is_kronecker_product_of_factors(self):
+        el = self.gg.compute_element(self.v)
+        S1 = self.factor.compute_element(self.v[:3]).transform_matrix
+        S2 = self.factor.compute_element(self.v[3:]).transform_matrix
+        self.assertArraysAlmostEqual(el.transform_matrix, np.kron(S1, S2))
+        self.assertArraysAlmostEqual(el.transform_matrix_inverse, np.kron(np.linalg.inv(S1), np.linalg.inv(S2)))
+        self.assertEqual(el.transform_matrix.dtype, np.dtype('d'))
+
+    def test_element_matches_full_space_unitary(self):
+        el = self.gg.compute_element(self.v)
+        U1, U2 = (superop_to_unitary(m, 'pp') for m in el.factor_matrices)
+        self.assertArraysAlmostEqual(el.transform_matrix, unitary_to_superop(np.kron(U1, U2), 'pp'))
+
+    def test_tensor_product_model_basis(self):
+        # Models built by pyGSTi carry a TensorProdBasis ('pp*pp') rather than the builtin pp of dim 16.
+        tpb = TensorProdBasis([Basis.cast('pp', 4)] * 2)
+        gg = ggrp.TensorProductGaugeGroup([self.factor, self.factor], self.state_space, tpb)
+        self.assertIsNone(gg._change_of_basis)
+        self.assertArraysAlmostEqual(gg.compute_element(self.v).transform_matrix,
+                                     self.gg.compute_element(self.v).transform_matrix)
+
+    def test_mixed_factor_types(self):
+        tp = ggrp.TPGaugeGroup(QubitSpace(1), 'pp')
+        triv = ggrp.TrivialGaugeGroup(QubitSpace(1))
+        gg = ggrp.TensorProductGaugeGroup([tp, triv], self.state_space, 'pp')
+        self.assertEqual(gg.num_params, tp.num_params)
+        v = self.rng.random(gg.num_params)
+        el = gg.compute_element(v)
+        self.assertArraysAlmostEqual(el.transform_matrix, np.kron(tp.compute_element(v).transform_matrix, np.eye(4)))
+        self.assertArraysAlmostEqual(el.transform_matrix_inverse @ el.transform_matrix, np.eye(16))
+
+    def test_multi_label_factor(self):
+        two_q = ggrp.UnitaryGaugeGroup(QubitSpace(2), 'pp')
+        gg = ggrp.TensorProductGaugeGroup([two_q, self.factor], QubitSpace(3), 'pp')
+        self.assertEqual(gg.num_params, 15 + 3)
+        self.assertEqual(gg._label_runs, ((0, 1), (2,)))
+        el = gg.compute_element(gg.initial_params)
+        self.assertArraysAlmostEqual(el.transform_matrix, np.eye(64))
+
+    def test_constructor_rejects_bad_factor_layouts(self):
+        with self.assertRaises(ValueError):  # too few factors
+            ggrp.TensorProductGaugeGroup([self.factor], self.state_space, 'pp')
+        with self.assertRaises(ValueError):  # too many factors
+            ggrp.TensorProductGaugeGroup([self.factor] * 3, self.state_space, 'pp')
+        with self.assertRaises(ValueError):  # dimension mismatch
+            ggrp.TensorProductGaugeGroup([self.factor, ggrp.UnitaryGaugeGroup(QuditSpace(1, 3), 'gm')],
+                                         self.state_space, 'pp')
+        with self.assertRaises(ValueError):  # multi-block state space
+            ss = ExplicitStateSpace([('Q0',), ('L',)], [(2,), (1,)])
+            ggrp.TensorProductGaugeGroup([self.factor], ss, 'pp')
+        with self.assertRaises(ValueError):  # basis / state space dimension mismatch
+            ggrp.TensorProductGaugeGroup([self.factor, self.factor], self.state_space, Basis.cast('pp', 4))
+
+    def test_inverse_element(self):
+        el = self.gg.compute_element(self.v)
+        inv = el.inverse()
+        self.assertArraysAlmostEqual(inv.transform_matrix @ el.transform_matrix, np.eye(16))

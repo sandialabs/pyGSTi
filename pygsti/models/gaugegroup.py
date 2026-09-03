@@ -27,7 +27,7 @@ from pygsti.baseobjs import (
 )
 from pygsti.baseobjs import _compatibility as _compat
 from pygsti.modelmembers import operations as _op
-from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis, TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.evotypes.evotype import Evotype as _Evotype
 from pygsti.tools.optools import superop_to_unitary, unitary_to_superop
@@ -359,6 +359,17 @@ class OpGaugeGroup(GaugeGroup):
         GaugeGroup.__init__(self, name)
 
     @property
+    def state_space(self) -> _StateSpace:
+        """
+        The state space that elements of this gauge group act on.
+
+        Returns
+        -------
+        StateSpace
+        """
+        return self._operation.state_space
+
+    @property
     def num_params(self) -> int:
         """
         Return the number of parameters (degrees of freedom) of this gauge group.
@@ -415,6 +426,17 @@ class OpGaugeGroupWithBasis(OpGaugeGroup):
     def __init__(self, operation: _LinearOperator, elementcls, name: str, basis):
         self._basis = basis
         super().__init__(operation, elementcls, name)
+
+    @property
+    def basis(self) -> Union[_Basis, str]:
+        """
+        The basis in which elements of this gauge group express their transform matrices.
+
+        Returns
+        -------
+        Basis or str
+        """
+        return self._basis
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -802,11 +824,10 @@ class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
             raise ValueError()
         evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
-            _np.eye(state_space.dim), "H", basis, mx_basis=basis, evotype=evotype
+            _np.eye(state_space.dim), "H", basis, mx_basis=basis, evotype=evotype, state_space=state_space
         )
         operation = _op.ExpErrorgenOp(errgen)
         OpGaugeGroupWithBasis.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary", basis)
-        self.state_space = state_space
 
     def compute_element(self, param_vec) -> UnitaryGaugeGroupElement:
         return super().compute_element(param_vec)
@@ -1434,3 +1455,278 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
         basis = state['basis'] if isinstance(state['basis'], str) else _Basis.from_nice_serialization(state['basis'])
         level_partition = state.get('level_partition', None)
         return cls(subelements, basis, level_partition)
+
+
+def _match_factors_to_label_runs(factor_udims, labels, label_udims):
+    """
+    Assign each tensor factor of a :class:`TensorProductGaugeGroup` to a contiguous run of state-space labels.
+
+    Walks the labels of a single tensor-product block in order and gives factor ``j`` the shortest
+    run of not-yet-assigned labels whose Hilbert-space dimensions multiply to ``factor_udims[j]``.
+    Returns a tuple of index tuples, one per factor. Raises ValueError if a factor's dimension
+    cannot be matched this way or if labels are left over after the last factor.
+    """
+    runs = []
+    i = 0
+    for j, fudim in enumerate(factor_udims):
+        start, prod = i, 1
+        while prod < fudim and i < len(labels):
+            prod *= label_udims[i]
+            i += 1
+        if prod != fudim:
+            raise ValueError(
+                f"Factor {j} has Hilbert-space dimension {fudim}, but the state-space labels "
+                f"{labels[start:i]} (dimensions {label_udims[start:i]}) starting at position {start} "
+                f"cannot be grouped to match it. Factors must act on contiguous labels, in order.")
+        runs.append(tuple(range(start, i)))
+    if i != len(labels):
+        raise ValueError(
+            f"The factors account for state-space labels {labels[:i]} but the state space also "
+            f"contains {labels[i:]}. Supply a factor (e.g. a TrivialGaugeGroup) for every label.")
+    return tuple(runs)
+
+
+class TensorProductGaugeGroup(GaugeGroup):
+    """
+    A gauge group whose elements act independently on each tensor factor of a state space.
+
+    Each element is a Kronecker product ``S = S_1 ⊗ S_2 ⊗ ... ⊗ S_k`` of elements of the given
+    factor groups (expressed in the model's basis), so gauge optimization over this group can only
+    move each subsystem by itself.  The motivating case is local unitary gauge freedom, ``U(d)^{⊗k}``,
+    built by :meth:`local_unitary`, but the construction is agnostic to the factor type: TP, full,
+    trivial (to pin a subsystem) and mixed choices all work.
+
+    Parameters
+    ----------
+    factors : sequence of GaugeGroup
+        One gauge group per tensor factor, in state-space label order.  Each acts on its own
+        (single- or multi-label) state space.
+
+    state_space : StateSpace
+        The state space of the model this group will transform.  Must consist of a single
+        tensor-product block whose labels, walked in order, can be partitioned into contiguous
+        runs matching the factors' Hilbert-space dimensions.
+
+    basis : Basis or str
+        The basis in which the model expresses its operations.  Elements return transform
+        matrices in this basis.
+
+    factor_bases : sequence of (Basis or str), optional
+        The basis each factor expresses its transform matrix in.  Usually unnecessary: a factor
+        that declares a basis (the `OpGaugeGroupWithBasis` family) supplies its own, and other
+        factors get the matching component of `basis`.
+
+    name : str, optional
+        A name for this group, used in reporting.
+    """
+
+    def __init__(self, factors, state_space: _StateSpace, basis: Union[_Basis, str],
+                 factor_bases=None, name: str = "Tensor product gauge group"):
+        factors = tuple(factors)
+        if len(factors) == 0:
+            raise ValueError("TensorProductGaugeGroup needs at least one factor.")
+        state_space = _StateSpace.cast(state_space)
+        if state_space.num_tensor_product_blocks != 1:
+            raise ValueError(
+                f"TensorProductGaugeGroup requires a state space with a single tensor-product block; "
+                f"got {state_space.num_tensor_product_blocks}.")
+        labels = state_space.tensor_product_blocks_labels[0]
+        label_udims = state_space.tensor_product_blocks_udimensions[0]
+        factor_udims = [f.state_space.udim for f in factors]
+        self._label_runs = _match_factors_to_label_runs(factor_udims, labels, label_udims)
+
+        if isinstance(basis, str):
+            basis = _Basis.cast(basis, state_space)
+        if basis.dim != state_space.dim:
+            raise ValueError(f"`basis` has dimension {basis.dim} but the state space has dimension "
+                             f"{state_space.dim}.")
+
+        if factor_bases is None:
+            factor_bases = [None] * len(factors)
+        elif len(factor_bases) != len(factors):
+            raise ValueError("`factor_bases` must have one entry per factor.")
+        resolved = tuple(self._resolve_factor_basis(j, f, fb, basis, labels)
+                         for j, (f, fb) in enumerate(zip(factors, factor_bases)))
+
+        self.factors = factors
+        self.state_space = state_space
+        self.basis = basis
+        self.factor_bases = resolved
+        self._param_dims = _np.array([f.num_params for f in factors], dtype=int)
+        self._num_params = int(_np.sum(self._param_dims))
+        self._change_of_basis = self._compute_change_of_basis(resolved, basis)
+        super().__init__(name)
+
+    def _resolve_factor_basis(self, j, factor, explicit, basis, labels):
+        dim = factor.state_space.dim
+        declared = getattr(factor, 'basis', None)
+        if declared is not None:
+            declared = _Basis.cast(declared, dim)
+        if explicit is not None:
+            explicit = _Basis.cast(explicit, dim)
+            if declared is not None and not explicit.is_equivalent(declared, sparseness_must_match=False):
+                raise ValueError(f"factor_bases[{j}] disagrees with the basis factor {j} was constructed with.")
+            return explicit
+        if declared is not None:
+            return declared
+        run = self._label_runs[j]
+        if isinstance(basis, _TensorProdBasis) and len(basis.component_bases) == len(labels):
+            comps = [basis.component_bases[i] for i in run]
+            return comps[0] if len(comps) == 1 else _TensorProdBasis(comps)
+        try:
+            return _Basis.cast(basis.name, dim)
+        except Exception as e:
+            raise ValueError(
+                f"Could not determine a basis for factor {j} from the model basis '{basis.name}'. "
+                f"Pass `factor_bases` explicitly.") from e
+
+    @staticmethod
+    def _compute_change_of_basis(factor_bases, basis):
+        """
+        The matrix C with S_model = C @ kron(S_1, ..., S_k) @ inv(C), or None when C is the identity.
+        """
+        tp_basis = _TensorProdBasis(factor_bases) if len(factor_bases) > 1 else factor_bases[0]
+        C = tp_basis.create_transform_matrix(basis)
+        if hasattr(C, 'toarray'):
+            C = C.toarray()
+        C = _np.asarray(C)
+        if _np.allclose(C, _np.eye(C.shape[0])):
+            return None
+        if _np.allclose(C.imag, 0):
+            C = C.real
+        return C
+
+    @property
+    def num_params(self) -> int:
+        return self._num_params
+
+    @property
+    def initial_params(self) -> _np.ndarray:
+        return _np.concatenate([f.initial_params for f in self.factors])
+
+    def compute_element(self, param_vec: _np.ndarray) -> TensorProductGaugeGroupElement:
+        assert param_vec.size == self.num_params
+        elements, offset = [], 0
+        for pd, f in zip(self._param_dims, self.factors):
+            elements.append(f.compute_element(param_vec[offset:offset + pd]))
+            offset += pd
+        return TensorProductGaugeGroupElement(tuple(elements), self._change_of_basis)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({
+            'factors': [f.to_nice_serialization() for f in self.factors],
+            'state_space': self.state_space.to_nice_serialization(),
+            'basis': self.basis.to_nice_serialization(),
+            'factor_bases': [b.to_nice_serialization() for b in self.factor_bases],
+            'name': self.name
+        })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        factors = [GaugeGroup.from_nice_serialization(f) for f in state['factors']]
+        state_space = _StateSpace.from_nice_serialization(state['state_space'])
+        basis = _Basis.from_nice_serialization(state['basis'])
+        factor_bases = [_Basis.from_nice_serialization(b) for b in state['factor_bases']]
+        return cls(factors, state_space, basis, factor_bases, state['name'])
+
+
+class TensorProductGaugeGroupElement(GaugeGroupElement):
+    """
+    Element of a :class:`TensorProductGaugeGroup`: a Kronecker product of factor elements.
+
+    Parameters
+    ----------
+    factor_elements : tuple of GaugeGroupElement
+        The per-factor elements, in state-space order.
+
+    change_of_basis : numpy.ndarray, optional
+        Matrix ``C`` such that the transform matrix in the model's basis is
+        ``C @ kron(S_1, ..., S_k) @ inv(C)``.  ``None`` means the identity.
+    """
+
+    def __init__(self, factor_elements, change_of_basis=None):
+        self.factor_elements = tuple(factor_elements)
+        self._C = change_of_basis
+        self._Cinv = None if change_of_basis is None else _np.linalg.inv(change_of_basis)
+        self._param_dims = _np.array([e.num_params for e in self.factor_elements], dtype=int)
+        self._param_offsets = _np.concatenate([[0], _np.cumsum(self._param_dims)])
+        self._num_params = int(self._param_offsets[-1])
+        self._clear_cache()
+        super().__init__()
+
+    def _clear_cache(self):
+        self._factor_mxs = None
+        self._factor_inv_mxs = None
+        self._mx = None
+        self._inv_mx = None
+
+    def _conjugate(self, mx):
+        return mx if self._C is None else self._C @ mx @ self._Cinv
+
+    @staticmethod
+    def _kron(mxs):
+        out = mxs[0]
+        for m in mxs[1:]:
+            out = _np.kron(out, m)
+        return out
+
+    @property
+    def factor_matrices(self) -> Tuple[_np.ndarray, ...]:
+        """ The factor transform matrices, each in its own factor basis. """
+        if self._factor_mxs is None:
+            self._factor_mxs = tuple(e.transform_matrix for e in self.factor_elements)
+        return self._factor_mxs
+
+    @property
+    def factor_matrix_inverses(self) -> Tuple[_np.ndarray, ...]:
+        """ The inverses of the factor transform matrices, each in its own factor basis. """
+        if self._factor_inv_mxs is None:
+            self._factor_inv_mxs = tuple(e.transform_matrix_inverse for e in self.factor_elements)
+        return self._factor_inv_mxs
+
+    @property
+    def transform_matrix(self) -> _np.ndarray:
+        if self._mx is None:
+            self._mx = self._conjugate(self._kron(self.factor_matrices))
+        return self._mx
+
+    @property
+    def transform_matrix_inverse(self) -> _np.ndarray:
+        if self._inv_mx is None:
+            self._inv_mx = self._conjugate(self._kron(self.factor_matrix_inverses))
+        return self._inv_mx
+
+    def deriv_wrt_params(self, wrt_filter=None) -> _np.ndarray:
+        raise NotImplementedError()
+
+    def to_vector(self) -> _np.ndarray:
+        return _np.concatenate([e.to_vector() for e in self.factor_elements])
+
+    def from_vector(self, v: _np.ndarray) -> None:
+        assert v.size == self.num_params
+        for e, start, stop in zip(self.factor_elements, self._param_offsets[:-1], self._param_offsets[1:]):
+            e.from_vector(v[start:stop])
+        self._clear_cache()
+
+    @property
+    def num_params(self) -> int:
+        return self._num_params
+
+    def inverse(self) -> InverseGaugeGroupElement:
+        return InverseGaugeGroupElement(self)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({
+            'factor_elements': [e.to_nice_serialization() for e in self.factor_elements],
+            'change_of_basis': None if self._C is None else self._encodemx(self._C)
+        })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        elements = [GaugeGroupElement.from_nice_serialization(e) for e in state['factor_elements']]
+        C = None if state['change_of_basis'] is None else cls._decodemx(state['change_of_basis'])
+        return cls(tuple(elements), C)
