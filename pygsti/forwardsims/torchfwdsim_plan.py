@@ -179,23 +179,31 @@ class _SequenceDag:
         return new_of_old
 
 
-def _member_value_and_jacobian(type_handle, stateless_data, param_vec):
+def _member_value_and_jacobian(type_handle, stateless_data, param_vec, out_numel=None):
     """
     ``(torch_base(sd, v), d torch_base / d v)``. The Jacobian has shape ``out_shape + (n_v,)``;
     it is the *only* place autodiff is used, and it runs on a single modelmember's parameters, so
-    it is cheap regardless of how many circuits are being simulated.
+    its cost is independent of how many circuits are being simulated.
+
+    Reverse mode costs one pass per output element and forward mode one per parameter, so we pick
+    whichever dimension is smaller; pass `out_numel` (which the caller can remember from a previous
+    call, since it is fixed by the model's structure) to make that choice without an extra
+    evaluation. Either way the primal comes back out through ``has_aux`` rather than from a second
+    ``torch_base`` call -- for a CPTPLND modelmember that second call is a matrix exponential we
+    have already paid for.
     """
     def f(v):
-        return type_handle.torch_base(stateless_data, v)
+        out = type_handle.torch_base(stateless_data, v)
+        return out, out
 
-    out = f(param_vec)
     n_v = param_vec.numel()
     if n_v == 0:
+        out, _ = f(param_vec)
         return out, out.new_zeros(tuple(out.shape) + (0,))
-    if out.numel() <= n_v:
-        jac = torch.func.jacrev(f)(param_vec)
-    else:
-        jac = torch.func.jacfwd(f)(param_vec)
+    if out_numel is None:
+        out_numel = f(param_vec)[0].numel()
+    transform = torch.func.jacrev if out_numel <= n_v else torch.func.jacfwd
+    jac, out = transform(f, has_aux=True)(param_vec)
     return out, jac
 
 
@@ -221,6 +229,17 @@ class _PovmGroup:
         self._dense_rows: List[int] = []
         self._out_rows: List[int] = []
         self.num_circuits = 0
+
+    def register_roots(self, prep_label):
+        """
+        Create the DAG roots this group needs for `prep_label`.
+
+        Every root has to exist before any interior node does, so that roots occupy the lowest node
+        indices and stay at the front after the (depth, op-label) renumbering. Callers therefore
+        make one pass over the circuits registering roots before the pass that inserts them.
+        """
+        self.fwd.root(prep_label)
+        self.bwd.root(self.povm_label)
 
     def add_circuit(self, prep_label, op_labels, effect_rows: Sequence[int], elem_offset: int):
         ic = self.num_circuits
@@ -250,6 +269,10 @@ class _PovmGroup:
         def _t(a, dtype=torch.long):
             return torch.as_tensor(_np.asarray(a), dtype=dtype, device=device)
 
+        # Roots keep their relative order under the renumbering (they are the only depth-0 nodes,
+        # and the sort is stable), so root k of root_keys lands at new index k.
+        assert _np.array_equal(fwd_map[:self.fwd.num_roots], _np.arange(self.fwd.num_roots))
+        assert _np.array_equal(bwd_map[:self.bwd.num_roots], _np.arange(self.bwd.num_roots))
         self.circ_end_fwd = _t(fwd_map[_np.asarray(self._circ_end_fwd, dtype=_np.int64)])
         self.circ_end_bwd = _t(bwd_map[_np.asarray(self._circ_end_bwd, dtype=_np.int64)])
 
@@ -328,11 +351,14 @@ class TorchEvalPlan:
                 op_ids.setdefault(ol, len(op_ids))
 
         groups: Dict[Any, _PovmGroup] = {}
-        elem_offset = 0
-        for c in circuits:
+        for c in circuits:      # first pass: every DAG root, before any interior node
             g = groups.get(c.povm_label)
             if g is None:
                 g = groups[c.povm_label] = _PovmGroup(c.povm_label, povm_effect_counts[c.povm_label])
+            g.register_roots(c.prep_label)
+        elem_offset = 0
+        for c in circuits:
+            g = groups[c.povm_label]
             rows = (c.effect_row_indices if c.effect_row_indices is not None
                     else range(g.n_eff))
             g.add_circuit(c.prep_label, tuple(c.op_labels), rows, elem_offset)
@@ -347,6 +373,9 @@ class TorchEvalPlan:
         self.param_metadata = param_metadata
         self.instrument_expansions = instrument_expansions
         self.op_labels = list(op_ids)
+        self._member_out_numel = [None] * len(param_metadata)
+        # ^ torch_base's output size per member, learned on the first call so later calls can pick
+        #   reverse vs forward mode without evaluating torch_base an extra time.
 
     # -- diagnostics --------------------------------------------------------------------------
 
@@ -394,7 +423,9 @@ class TorchEvalPlan:
         col = 0
         for i, val in enumerate(free_params):
             label, type_handle, sld = self.param_metadata[i]
-            base, jac = _member_value_and_jacobian(type_handle, sld, val)
+            base, jac = _member_value_and_jacobian(type_handle, sld, val,
+                                                   out_numel=self._member_out_numel[i])
+            self._member_out_numel[i] = base.numel()
             torch_bases[label] = base
             cols = slice(col, col + val.numel())
             col += val.numel()
