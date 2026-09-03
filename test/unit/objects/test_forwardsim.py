@@ -767,3 +767,36 @@ def test_torch_circuit_store_is_reused_across_calls():
     model.from_vector(model.to_vector() + 0.01)
     model.sim.bulk_fill_dprobs(J2, layout, None)
     assert not np.allclose(J, J2)
+
+
+def test_torch_circuit_store_is_invalidated_by_reparameterization():
+    """The store bakes each modelmember's *type* and stateless data, so identity of the model
+    object is not enough to key the cache on: `convert_members_inplace` swaps member objects under
+    the same labels on the same model, and reusing the store then computes against stale types."""
+    import torch
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.02)
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    circuits = ForwardSimConsistencyTester.standard_lsgst_circuits(model, max_lengths=(1,))
+
+    layout = model.sim.create_layout(circuits, array_types=('ep',))
+    first = model.sim._circuit_store(layout)
+    assert model.sim._circuit_store(layout) is first
+
+    # Same model object, same layout object, different member types underneath.
+    model.convert_members_inplace(to_type='CPTPLND')
+    assert model.sim._circuit_store(layout) is not first, \
+        "reparameterizing in place must invalidate the cached store"
+
+    # ...and the answer it now produces must match a simulator that never had a stale cache.
+    # Both sides use the same simulator class and their own layout, so element order agrees.
+    J = np.empty((layout.num_elements, model.num_params))
+    model.sim.bulk_fill_dprobs(J, layout, None)
+
+    fresh = model.copy()
+    fresh.sim = TorchForwardSimulator(dtype=torch.float64)
+    fresh_layout = fresh.sim.create_layout(circuits, array_types=('ep',))
+    Jfresh = np.empty((fresh_layout.num_elements, fresh.num_params))
+    fresh.sim.bulk_fill_dprobs(Jfresh, fresh_layout, None)
+    assert np.allclose(J, Jfresh, atol=1e-12)
