@@ -136,9 +136,13 @@ class CharacterPhaseEstimationTester(BaseCase):
     def test_shot_noise_recovery_with_bootstrap(self):
         data = _simulate(self.noisy_model, self.edesign, 2000, 'multinomial', seed=2026)
         results = CharacterPhaseEstimation(bootstrap_samples=50, seed=7).run(data)
+        num_generations = len([k for k in self.edesign.depths if k > 0])
         for j, (phase, stderr) in results.phases_by_irrep().items():
             self.assertIsNotNone(stderr)
             self.assertLess(abs(phase - _TRUE_IRREP_PHASES[j]), max(4 * stderr, 3e-3))
+            gen_stderrs = results.generation_stderrs[str(j)]
+            self.assertEqual(len(gen_stderrs), num_generations)
+            self.assertTrue(all(s > 0 for s in gen_stderrs))
 
     def test_naive_unfiltered_signal_is_ambiguous(self):
         # Without character filtering, the |++> signal mixes all twelve

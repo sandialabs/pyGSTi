@@ -354,7 +354,8 @@ class CharacterPhaseEstimationResults(_proto.ProtocolResults):
     Attributes of note: `irrep_indices`, `phase_estimates` (per-irrep
     eigenphase deviations, radians, in (-pi, pi]), `phase_stderrs` (bootstrap
     standard errors, or None), `generation_estimates` (per-irrep list of the
-    RPE estimate after each generation), `raw_angles` and `signal(irrep)`.
+    RPE estimate after each generation), `generation_stderrs` (their bootstrap
+    standard errors, or None), `raw_angles` and `signal(irrep)`.
 
     Parameters
     ----------
@@ -369,7 +370,8 @@ class CharacterPhaseEstimationResults(_proto.ProtocolResults):
     """
 
     def __init__(self, data, protocol_instance, signals, raw_angles,
-                 generation_estimates, phase_estimates, phase_stderrs):
+                 generation_estimates, phase_estimates, phase_stderrs,
+                 generation_stderrs=None):
         super().__init__(data, protocol_instance)
         design = data.edesign
         self.depths = list(design.depths)
@@ -382,6 +384,8 @@ class CharacterPhaseEstimationResults(_proto.ProtocolResults):
         self.phase_estimates = _to_json_safe({str(j): p for j, p in phase_estimates.items()})
         self.phase_stderrs = _to_json_safe({str(j): s for j, s in phase_stderrs.items()}) \
             if phase_stderrs else None
+        self.generation_stderrs = _to_json_safe({str(j): s for j, s in generation_stderrs.items()}) \
+            if generation_stderrs else None
 
     def signal(self, irrep_index):
         """The complex character-filtered signal `z_j(k)` for one irrep (numpy.ndarray)."""
@@ -430,7 +434,9 @@ class CharacterPhaseEstimationResults(_proto.ProtocolResults):
         for j in self.irrep_indices:
             ests = _np.array(self.generation_estimates[str(j)])
             ests = (ests + _np.pi) % (2 * _np.pi) - _np.pi
-            line, = ax.plot(gen_depths, ests, 'o-', label='irrep %d' % j)
+            yerr = self.generation_stderrs[str(j)] if self.generation_stderrs else None
+            line, _, _ = ax.errorbar(gen_depths, ests, yerr=yerr, fmt='o-',
+                                     capsize=2, label='irrep %d' % j)
             if true_phases and j in true_phases:
                 ax.axhline(true_phases[j], color=line.get_color(), ls=':', alpha=0.7)
         envelope = _np.pi / (2 * _np.array(gen_depths, dtype=float))
@@ -508,25 +514,48 @@ class CharacterPhaseEstimation(_proto.Protocol):
             signals[j], raw_angles[j], generations[j], estimates[j] = \
                 _unwound_phase(design, weights[j], fractions)
 
-        stderrs = None
+        def _circular_std(values):
+            values = _np.asarray(values)
+            center = _np.angle(_np.mean(_np.exp(1j * values)))
+            return float(_np.std((values - center + _np.pi) % (2 * _np.pi) - _np.pi))
+
+        # Depths whose total-power windows overlap REUSE physical circuits, and
+        # that shared shot noise cancels in the raw angles arg(z(k) z(0)*).  The
+        # bootstrap must preserve this: resample each unique circuit once per
+        # iteration and broadcast it to every (depth, slot) entry that uses it,
+        # rather than resampling entries independently.
+        uniq_ids = {}
+        entry_uniq = []
+        for circuits in design.circuit_lists:
+            entry_uniq.append(_np.array([uniq_ids.setdefault(c, len(uniq_ids))
+                                         for c in circuits]))
+        uniq_f = _np.zeros(len(uniq_ids))
+        uniq_t = _np.zeros(len(uniq_ids))
+        for idx_row, f_row, t_row in zip(entry_uniq, fractions, totals):
+            uniq_f[idx_row] = f_row
+            uniq_t[idx_row] = t_row
+
+        stderrs = gen_stderrs = None
         if self.bootstrap_samples > 0:
             rand_state = _np.random.RandomState(self.seed)
             resampled = {j: [] for j in design.irrep_indices}
+            resampled_gens = {j: [] for j in design.irrep_indices}
             for _ in range(self.bootstrap_samples):
-                boot = [rand_state.binomial(t.astype(int), _np.clip(f, 0.0, 1.0)) / t
-                        for f, t in zip(fractions, totals)]
+                boot_uniq = rand_state.binomial(uniq_t.astype(int),
+                                                _np.clip(uniq_f, 0.0, 1.0)) / uniq_t
+                boot = [boot_uniq[idx_row] for idx_row in entry_uniq]
                 for j in design.irrep_indices:
-                    _, _, _, est = _unwound_phase(design, weights[j], boot)
+                    _, _, gens_b, est = _unwound_phase(design, weights[j], boot)
                     resampled[j].append(est)
-            # circular std: bootstrap phases can straddle the +-pi wrap point
-            stderrs = {}
-            for j, ests in resampled.items():
-                ests = _np.array(ests)
-                center = _np.angle(_np.mean(_np.exp(1j * ests)))
-                stderrs[j] = float(_np.std((ests - center + _np.pi) % (2 * _np.pi) - _np.pi))
+                    resampled_gens[j].append(gens_b)
+            # circular stds: bootstrap phases can straddle the +-pi wrap point
+            stderrs = {j: _circular_std(ests) for j, ests in resampled.items()}
+            gen_stderrs = {j: [_circular_std(col) for col in _np.array(g).T]
+                           for j, g in resampled_gens.items()}
 
         return CharacterPhaseEstimationResults(data, self, signals, raw_angles,
-                                               generations, estimates, stderrs)
+                                               generations, estimates, stderrs,
+                                               generation_stderrs=gen_stderrs)
 
 
 def extract_izz_phase_deviations(phases_by_irrep, ks=(1, 3, 4), order=13):

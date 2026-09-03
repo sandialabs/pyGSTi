@@ -113,7 +113,9 @@ for k in (4, 8):
 
 ## CPE on the same data
 
-Character filtering pulls three clean single-frequency signals out of the identical dataset, and the RPE unwinding converges on each:
+Character filtering pulls three clean single-frequency signals out of the identical dataset, and the RPE window selection converges on each.
+
+One feature of the exact-quadrature design is worth knowing before looking at the plots. Depth $k$ uses the circuits with total germ powers $k, \dots, k + k_0(N-1)$, so adjacent depths reuse most of the same physical circuits (depths 0 and 1 share 24 of 25), and duplicated circuits merge in the dataset, accumulating shots. The shot noise in $z_j(k)$ and the reference $z_j(0)$ is therefore mostly *common* at low depth and cancels in the raw angle $\arg[z_j(k)z_j(0)^*]$. As a result the generation estimates start out already accurate (about 1 mrad here) and improve only modestly with depth, rather than showing the wide-to-narrow funnel of textbook RPE. The per-generation bootstrap error bars below make the actual contraction visible.
 
 ```python
 proto = CharacterPhaseEstimation(bootstrap_samples=200, seed=7)
@@ -159,13 +161,12 @@ gen_depths = [k for k in results.depths if k > 0]
 for j in irreps:
     ests = np.array(results.generation_estimates[str(j)])
     ests = (ests + np.pi) % (2 * np.pi) - np.pi
-    ax_b.plot(gen_depths, 1e3 * ests, 'o-', ms=3.5, lw=1.2, color=colors[j],
-              label=f'irrep {j}')
+    yerr = 1e3 * np.array(results.generation_stderrs[str(j)])
+    ax_b.errorbar(gen_depths, 1e3 * ests, yerr=yerr, fmt='o-', ms=3.5, lw=1.2,
+                  capsize=2, color=colors[j], label=f'irrep {j}')
     ax_b.axhline(1e3 * truth[j], color=colors[j], ls=':', lw=1, alpha=0.7)
-env = np.pi / (2 * np.array(gen_depths))
-ax_b.fill_between(gen_depths, -1e3 * env, 1e3 * env, color='0.85', alpha=0.5, lw=0)
 ax_b.set_xscale('log', base=2)
-ax_b.set_ylim(-30, 30)
+ax_b.set_ylim(-12, 22)
 ax_b.set_xlabel('germ depth $k$', fontsize=8)
 ax_b.set_ylabel('estimated deviation (mrad)', fontsize=8)
 ax_b.legend(fontsize=7, loc='lower right', frameon=False)
