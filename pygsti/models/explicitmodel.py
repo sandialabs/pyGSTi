@@ -249,16 +249,25 @@ class ExplicitOpModel(_mdl.OpModel):
         return self._default_gauge_group
 
     @default_gauge_group.setter
-    def default_gauge_group(self, value: Union[Literal['tp', 'unitary'], _GaugeGroup]) -> None:
+    def default_gauge_group(self, value: Union[Literal['tp', 'unitary', 'local tp', 'local unitary'],
+                                               _GaugeGroup]) -> None:
         """
         The default gauge group.
+
+        Strings select a standard group built from this model's state space and basis:
+        ``'unitary'``, ``'tp'``, and their per-subsystem versions ``'local unitary'`` and
+        ``'local tp'`` (see :class:`TensorProductGaugeGroup`).
         """
         if isinstance(value, str):
             lower = value.lower()
             if lower == 'unitary':
                 value = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
             elif lower == 'tp':
-                value = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotypes)
+                value = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotype)
+            elif lower == 'local unitary':
+                value = _gg.TensorProductGaugeGroup.local_unitary(self.state_space, self.basis, self.evotype)
+            elif lower == 'local tp':
+                value = _gg.TensorProductGaugeGroup.local_tp(self.state_space, self.basis, self.evotype)
             else:
                 msg = f'string "{value}" cannot be used to set this model\'s gauge group.'
                 raise ValueError(msg)
