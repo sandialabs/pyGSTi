@@ -21,6 +21,7 @@
 * Fixed `EmbeddedOp`/`EmbeddedErrorgen` local error-generator-label embedding (`label_type='local'`) for string or permuted-integer qubit labels, which previously raised `TypeError` or silently mis-embedded. (#878)
 
 ### Changed
+* `LocalNoiseModel` member dictionaries now enforce standard key prefix namespaces (`rho` for state preparations, `M` for POVMs, `G` or `{` for operations and factories, and `I` for instruments) to prevent ambiguous lookups via `ImplicitOpModel.__getitem__`, supported by multi-prefix validation in `_PrefixOrderedDict` and `OrderedMemberDict` (#903).
 * **`IBMQExperiment` job submission and batching:** `submit()` now defaults to a `qiskit_ibm_runtime.Batch` runtime mode instead of `Session`, since `Batch` mode only bills for actual QPU hardware time, not IBM-side preprocessing. `circuits_per_batch`'s default is raised from `75` to `3000` (the old value came from a per-job circuit-count cap no longer enforced by IBM), and it now also accepts `circuits_per_batch="auto"` to compute a cost-aware batch size from the backend's own gate-duration data; `transpile()` validates every batch against IBM's currently-published hard job/circuit limits before submission. `retrieve_results()` gains a `checkpointing_mode` parameter (`"data"` by default) that persists only the newly-retrieved outcome counts instead of always re-serializing the entire on-disk experiment state. (#899)
 
 ### Deprecated
