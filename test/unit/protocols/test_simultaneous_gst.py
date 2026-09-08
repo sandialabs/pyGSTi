@@ -1212,10 +1212,12 @@ class TruncationTester(_SGSTFixture, BaseCase):
 
     @with_temp_path
     def test_a_truncated_design_round_trips_through_disk(self, root_path):
-        # Truncation swaps the stitcher's plain lists for CircuitLists, which serialize
-        # by a different route than the one CircuitListsDesign.__init__ recorded in
-        # auxfile_types. Nothing in the base class updates that, so without a refresh
-        # the truncated design writes its lists as text and comes back wrong.
+        # Truncation swaps the stitcher's plain lists for CircuitLists, so the objects
+        # being written are no longer the kind CircuitListsDesign.__init__ inspected when
+        # it chose auxfile_types['circuit_lists'] = 'list:text-circuit-list'. That is
+        # survivable -- CircuitList.cast on a plain list produces one with no aliases or
+        # weights, so text is a lossless encoding of it -- but it is survivable by
+        # coincidence, and truncation is now a normal thing to do to this class.
         truncated = self.design.truncate_to_circuits(self.some_circuits)
         root = pathlib.Path(root_path) / 'truncated'
         truncated.write(root)

@@ -516,7 +516,6 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         was_nested = self.nested
         super()._truncate_to_circuits_inplace(circuits_to_keep)
         self.nested = was_nested
-        self._refresh_circuit_lists_auxfile_type()
 
     def _truncate_to_design_inplace(self, other_design):
         # This one truncates list L against *other_design*'s list L, a different keep-set
@@ -528,19 +527,6 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         self.circuit_lists = [_CircuitList.cast(lst) for lst in self.circuit_lists]
         super()._truncate_to_design_inplace(other_design)
         self.nested = was_nested
-        self._refresh_circuit_lists_auxfile_type()
-
-    def _refresh_circuit_lists_auxfile_type(self) -> None:
-        """Re-derive ``auxfile_types['circuit_lists']`` from what the lists now are.
-
-        Truncation replaces plain lists with ``CircuitList``s, which serialize by a
-        different route. ``CircuitListsDesign.__init__`` picks the route once at
-        construction and nothing updates it afterwards, so without this a truncated
-        design writes its circuit lists as text and fails to round-trip.
-        """
-        self.auxfile_types['circuit_lists'] = \
-            'list:serialized-object' if any(isinstance(lst, _CircuitList) for lst in self.circuit_lists) \
-            else 'list:text-circuit-list'
 
     def truncate_to_lists(self, list_indices_to_keep):
         """
