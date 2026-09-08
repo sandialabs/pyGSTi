@@ -7,6 +7,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import copy as _copy
 import importlib as _importlib
 import pathlib as _pathlib
 import warnings as _warnings
@@ -20,6 +21,7 @@ from pygsti import io as _io
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.processors import QubitProcessorSpec
 from pygsti.circuits.circuit import Circuit
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label, LabelTup
 
@@ -472,29 +474,17 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         mapped._register_auxfile_types()  # ...which resets auxfile_types, so re-declare ours
         return mapped
 
-    # region Unsupported operations
-
-    #: Explanation shared by every refusal below.
-    _NO_SUBSETTING = (
-        "%s is not supported for a SimultaneousGSTDesign. Its circuit_lists are ordered "
-        "germ-power-major then patch-major, with every color patch contributing an equal "
-        "contiguous chunk at each germ power (see assign_the_designs_with_mapping); adding "
-        "or removing individual circuits breaks that structure and fails this design's own "
-        "assert_circuit_lists_match_color_patches check. Use .as_circuit_lists_design() to "
-        "get a plain GateSetTomographyDesign holding the same circuits, which supports this "
-        "operation, or rebuild the design from already-truncated sub-designs."
-    )
-
     def as_circuit_lists_design(self) -> GateSetTomographyDesign:
         """
         A plain :class:`GateSetTomographyDesign` holding this design's circuits.
 
         It carries the same circuit lists, processor spec, qubit labels and nesting, but
-        none of the simultaneous-GST structure -- no edge coloring, no sub-designs, no
-        patch-major ordering contract. That is what makes it useful: it supports the
-        truncation and merging this class refuses, at the cost of no longer knowing which
-        circuit belongs to which patch. The usual reason to want one is
-        ``truncate_to_available_data`` after a partial data run.
+        none of the simultaneous-GST structure -- no edge coloring, no sub-designs. Useful
+        when downstream code should not see, or accidentally rely on, the simultaneous
+        structure, and as the way to get an object that supports :meth:`merge_with`.
+
+        Truncation does not need this: it is supported on the design itself and returns a
+        ``SimultaneousGSTDesign``.
 
         Returns
         -------
@@ -505,45 +495,96 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
             qubit_labels=self.qubit_labels, nested=self.nested
         )
 
+    # region Truncation
+
+    # Dropping circuits is safe here: a circuit carries its patch in its content -- which
+    # multi-qubit gates it applies to which edges -- so the surviving circuits still
+    # validate against the coloring (see assert_circuit_lists_match_color_patches). Only
+    # the stitcher's equal-chunk patch-major *positional* layout is lost, and nothing
+    # reads it off a built design.
+    #
+    # The overrides below exist for one reason: CircuitListsDesign._truncate_to_circuits_
+    # inplace sets nested=False, because in general filtering circuit lists need not
+    # preserve containment. It does preserve it here. Every route through this class
+    # filters each germ-power list by one common keep-set, and
+    # (list_L & keep) <= (list_{L+1} & keep) whenever list_L <= list_{L+1}. Losing
+    # nested=True would be a real regression: iterative GST reads it to decide whether
+    # circuit_lists[-1] is the full circuit set.
+
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
-        # The backstop: every public truncation route reaches this method, so overriding
-        # the public methods alone would leave the in-place hooks reachable.
-        raise NotImplementedError(self._NO_SUBSETTING % "Truncating to a subset of circuits")
+        was_nested = self.nested
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+        self.nested = was_nested
+        self._refresh_circuit_lists_auxfile_type()
 
-    # Refuse on our own account to prevent parent design recursion from mutating lists first.
     def _truncate_to_design_inplace(self, other_design):
-        raise NotImplementedError(self._NO_SUBSETTING % "Truncating to another design")
+        # This one truncates list L against *other_design*'s list L, a different keep-set
+        # per list, so nesting survives only if the other design is nested too.
+        was_nested = self.nested and getattr(other_design, 'nested', False)
+        # CircuitListsDesign's version calls .truncate() on each of self.circuit_lists
+        # without casting first, unlike its sibling hooks. The default stitcher returns
+        # plain lists, so cast here or that line raises AttributeError.
+        self.circuit_lists = [_CircuitList.cast(lst) for lst in self.circuit_lists]
+        super()._truncate_to_design_inplace(other_design)
+        self.nested = was_nested
+        self._refresh_circuit_lists_auxfile_type()
 
-    def _truncate_to_available_data_inplace(self, dataset):
-        raise NotImplementedError(self._NO_SUBSETTING % "Truncating to available data")
+    def _refresh_circuit_lists_auxfile_type(self) -> None:
+        """Re-derive ``auxfile_types['circuit_lists']`` from what the lists now are.
+
+        Truncation replaces plain lists with ``CircuitList``s, which serialize by a
+        different route. ``CircuitListsDesign.__init__`` picks the route once at
+        construction and nothing updates it afterwards, so without this a truncated
+        design writes its circuit lists as text and fails to round-trip.
+        """
+        self.auxfile_types['circuit_lists'] = \
+            'list:serialized-object' if any(isinstance(lst, _CircuitList) for lst in self.circuit_lists) \
+            else 'list:text-circuit-list'
 
     def truncate_to_lists(self, list_indices_to_keep):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        # Dropping germ powers is unsupported as it silently discards simultaneous structure.
-        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_lists")
+        """
+        A new design keeping only some of the germ-power circuit lists.
 
-    def merge_with(self, other_edesign, remove_duplicates=True):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        # Concatenating other designs interleaves unrelated patch structures.
-        raise NotImplementedError(self._NO_SUBSETTING % "merge_with")
+        Overridden because ``CircuitListsDesign.truncate_to_lists`` builds a plain
+        ``CircuitListsDesign``, which would silently discard the processor spec, the edge
+        coloring and the sub-designs. A subsequence of a nested chain is still nested, so
+        ``nested`` is preserved.
 
-    # The three public entry points below all deepcopy `self` before reaching the backstop,
-    # so they are overridden purely to fail immediately rather than pay for a full copy of
-    # the design just to raise -- and to name themselves in the error message.
+        Parameters
+        ----------
+        list_indices_to_keep : iterable
+            The (integer) indices into ``circuit_lists`` to keep.
 
-    def truncate_to_circuits(self, circuits_to_keep):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_circuits")
-
-    def truncate_to_available_data(self, dataset):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_available_data")
-
-    def truncate_to_design(self, other_design):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_design")
+        Returns
+        -------
+        SimultaneousGSTDesign
+        """
+        base = _copy.deepcopy(self)
+        kept = [base.circuit_lists[i] for i in list_indices_to_keep]
+        base.circuit_lists = kept
+        # Re-truncating the kept lists to their own union is a no-op on them, but it is
+        # what recomputes all_circuits_needing_data.
+        base._truncate_to_circuits_inplace({c for lst in kept for c in lst})
+        return base
 
     # endregion
+
+    def merge_with(self, other_edesign, remove_duplicates=True):
+        """
+        Not supported for a SimultaneousGSTDesign; see :meth:`as_circuit_lists_design`.
+
+        Unlike truncation, merging has no obvious right answer: the result would have to
+        carry a single edge coloring, and there is no general rule for combining the
+        colorings of two stitched designs (they may disagree, or partition different
+        qubits). Use ``.as_circuit_lists_design()`` on both to get plain designs holding
+        the same circuits, and merge those.
+        """
+        raise NotImplementedError(
+            "merge_with is not supported for a SimultaneousGSTDesign: there is no general "
+            "rule for combining two designs' edge colorings. Use .as_circuit_lists_design() "
+            "to get a plain GateSetTomographyDesign holding the same circuits, which "
+            "supports merging."
+        )
 
 
 def patch_lines(edge_set: Sequence[Edge],
@@ -692,47 +733,109 @@ def assert_mapped_circuit_matches_patch(mapped_circuit: Circuit, info: Dict[str,
                 )
 
 
+def build_edge_to_patch_index(patch_infos: List[Dict[str, Any]]) -> Dict[Edge, int]:
+    """
+    Map each patch edge, in both orientations, to its index in ``patch_infos``.
+
+    Raises ``AssertionError`` if an edge belongs to two patches. A proper edge
+    coloring never does that (see
+    :func:`pygsti.tools.graphcoloring.check_valid_edge_coloring`), and if it did,
+    a circuit's patch could not be recovered from the gates it contains.
+    """
+    lookup: Dict[Edge, int] = {}
+    for patch_idx, info in enumerate(patch_infos):
+        for edge in info["edge_set"]:
+            for oriented in (tuple(edge), tuple(reversed(tuple(edge)))):
+                prior = lookup.setdefault(oriented, patch_idx)
+                assert prior == patch_idx, (
+                    f"Edge {oriented} appears in both patch "
+                    f"{patch_infos[prior]['patch']!r} and patch {info['patch']!r}. "
+                    "The color patches must be a proper edge coloring: with an edge in "
+                    "two patches, a circuit's patch is not determined by its content."
+                )
+    return lookup
+
+
+def identify_circuit_patch(circuit: Circuit,
+                           patch_infos: List[Dict[str, Any]],
+                           edge_to_patch: Dict[Edge, int]) -> Optional[int]:
+    """
+    Which patch a circuit belongs to, judged by the edges its multi-qubit gates act on.
+
+    Returns the index into ``patch_infos``, or None if the circuit has no
+    multi-qubit gates -- in which case it is consistent with *every* patch, since
+    each patch's tensored lines cover all the vertices.
+
+    Raises ``AssertionError`` if a multi-qubit gate acts on something that is not
+    an edge of any patch, or if the circuit's multi-qubit gates straddle two
+    patches.
+    """
+    patch_idx = None
+    for i in range(circuit.num_layers):
+        for op in circuit.layer(i):
+            if len(op.qubits) <= 1:
+                continue
+            found = edge_to_patch.get(tuple(op.qubits))
+            assert found is not None, (
+                f"Multi-qubit gate {op} acts on {tuple(op.qubits)}, which is not an "
+                f"edge of any color patch (patches: "
+                f"{[info['edge_set'] for info in patch_infos]})."
+            )
+            assert patch_idx is None or patch_idx == found, (
+                f"Circuit spans two color patches: an earlier multi-qubit gate put it "
+                f"in patch {patch_infos[patch_idx]['patch']!r}, but {op} on "
+                f"{tuple(op.qubits)} belongs to patch {patch_infos[found]['patch']!r}. "
+                "A simultaneous-GST circuit runs one patch at a time."
+            )
+            patch_idx = found
+    return patch_idx
+
+
 def assert_circuit_lists_match_color_patches(
     circuit_lists: List[List[Circuit]],
     vertices: Sequence[Vertex],
     color_patches: Dict[int, List[Edge]],
 ) -> None:
     """
-    Assert that ``circuit_lists`` is a well-formed, patch-major stitching of
-    ``color_patches`` onto ``vertices``.
+    Assert that every circuit in ``circuit_lists`` is a well-formed stitching of
+    one of ``color_patches`` onto ``vertices``.
 
     This is stitcher-agnostic: it validates the *output* of whatever
     ``circuit_stitcher`` produced ``circuit_lists``, not just the built-in
     ``assign_the_designs_with_mapping``, so it can (and is, by
-    ``SimultaneousGSTDesign.__init__``) be run regardless of which
-    stitcher was actually used.
+    ``SimultaneousGSTDesign.__init__``) be run regardless of which stitcher was
+    actually used.
 
-    For every germ-power entry ``circuit_lists[L]``, this re-derives each
-    patch's own tensored lines/edges from ``vertices``/``color_patches`` (the
-    same way ``build_patch_infos`` does) and checks that:
+    A circuit's patch is read off its **content**: the edges its multi-qubit
+    gates act on. For each distinct circuit this checks that
 
-    1. ``circuit_lists[L]`` splits evenly into ``len(color_patches)``
-       contiguous, equal-size, patch-major chunks -- i.e. the output honors
-       the germ-power-major-then-patch-major ordering contract documented on
-       ``assign_the_designs_with_mapping`` (this is required of *any*
-       ``circuit_stitcher``, not just the built-in one). Note this must hold
-       for nested output too, which is why the built-in stitcher renests
-       patch-wise rather than concatenating whole germ-power lists.
-    2. Every circuit has no implicit idle gates
-       (see :func:`assert_no_implicit_idles`).
-    3. Every circuit in a given patch's chunk is correctly stitched onto
-       that patch's own qubits/edges
-       (see :func:`assert_mapped_circuit_matches_patch`).
+    1. it has no implicit idle gates (see :func:`assert_no_implicit_idles`);
+    2. every multi-qubit gate acts on an edge of some patch, in either
+       orientation, and all of them belong to the *same* patch (see
+       :func:`identify_circuit_patch`); and
+    3. it is correctly stitched onto that patch's qubits -- in particular its
+       line labels cover all the vertices (see
+       :func:`assert_mapped_circuit_matches_patch`).
 
-    Checks 2 and 3 inspect the *denested* content: each distinct circuit is
-    checked once per patch, and repeats are skipped. Both are pure functions of
-    the circuit and its patch, so re-checking a circuit yields no new
-    information -- but ``circuit_lists`` is normally nested, meaning germ power
-    ``L``'s chunk repeats germ powers ``0..L-1``, so a naive pass would re-walk
-    every layer of germ power 0's circuits once per germ power.
+    A circuit with no multi-qubit gates is valid for any patch and is checked
+    against the first one; the only patch-dependent part of check 3 is the set
+    of allowed edges, and it has none.
 
-    Check 1 is a length check and stays per-germ-power: it is O(1) per list, and
-    it is precisely the nested chunk structure that it exists to verify.
+    Each distinct circuit is checked once. All three checks are pure functions of
+    the circuit, and ``circuit_lists`` is normally nested -- germ power ``L``
+    repeats germ powers ``0..L-1`` -- so without deduplication a naive pass would
+    re-walk every layer of germ power 0's circuits once per germ power.
+
+    Note what is *not* checked. The built-in stitcher emits each germ-power list
+    germ-power-major then patch-major, with every patch contributing an equal
+    contiguous chunk, and ``_nest_a_circuitlist`` relies on that while building
+    the lists. But that layout is a property of the stitcher's output, not a
+    requirement of the design: a ``SimultaneousGSTDesign`` may have had circuits
+    dropped from it (see :meth:`SimultaneousGSTDesign.truncate_to_circuits`, or
+    the D-optimal reduction in ``pygsti.tools.edesign.blockdopt``), which leaves
+    every circuit valid while destroying the equal-chunk positional structure.
+    Tests that care about the stitcher's ordering should assert it on
+    ``assign_the_designs_with_mapping``'s output directly.
 
     Parameters
     ----------
@@ -757,29 +860,20 @@ def assert_circuit_lists_match_color_patches(
         If any of the checks above fail.
     """
     patch_infos = build_patch_infos(vertices, color_patches)
-    num_patches = len(patch_infos)
+    assert patch_infos, "color_patches is empty; there is no patch for any circuit to belong to."
+    edge_to_patch = build_edge_to_patch_index(patch_infos)
 
-    # Circuits already checked, per patch. Nested circuit_lists repeat every
-    # earlier germ power's circuits, so without this the per-circuit checks
-    # below would redo the same work O(num_germ_powers) times.
-    checked: List[set] = [set() for _ in patch_infos]
-
+    checked: set = set()
     for circuit_list in circuit_lists:
-        assert len(circuit_list) % num_patches == 0, (
-            f"Expected {len(circuit_list)} circuits to split evenly into "
-            f"{num_patches} patch-major chunks (one per color patch)."
-        )
-        chunk_size = len(circuit_list) // num_patches
-
-        for patch_idx, info in enumerate(patch_infos):
-            start = patch_idx * chunk_size
-            already_checked = checked[patch_idx]
-            for circuit in circuit_list[start:start + chunk_size]:
-                if circuit in already_checked:
-                    continue
-                assert_no_implicit_idles(circuit)
-                assert_mapped_circuit_matches_patch(circuit, info)
-                already_checked.add(circuit)
+        for circuit in circuit_list:
+            if circuit in checked:
+                continue
+            assert_no_implicit_idles(circuit)
+            patch_idx = identify_circuit_patch(circuit, patch_infos, edge_to_patch)
+            if patch_idx is None:  # no multi-qubit gates: valid for any patch
+                patch_idx = 0
+            assert_mapped_circuit_matches_patch(circuit, patch_infos[patch_idx])
+            checked.add(circuit)
 #endregion
 
 def build_group_schedules(
