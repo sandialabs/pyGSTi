@@ -3478,6 +3478,220 @@ def _add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str,
     return
 
 
+def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=None,
+                              parameterization='CPTPLND', norm='frobenius',
+                              projection_method='auto', gaugeopt_first=True,
+                              patch='auto', gaugeopt='param-preserving',
+                              objfn_builders=None, optimizer=None,
+                              badfit_options=None, verbosity=2,
+                              disable_checkpointing=True):
+    """
+    Re-fit an existing (non-Lindblad) GST estimate in a CP-constrained Lindblad
+    parameterization, warm-starting the instruments from the CPTP projection of
+    the fitted ones, and add the result to `results` as a new estimate.
+
+    This implements the verified seeding recipe for Lindblad-mode instrument
+    fits.  Starting such a fit from the *target* instruments fails whenever the
+    target is (near-)projective: the conversion freezes a singular static base
+    gate, hard-capping every reachable member's rank (see
+    :mod:`pygsti.modelmembers.instruments.diagnostics`).  Seeding the
+    instruments at the CPTP projection of a TP fit's instruments instead gives
+    the chart the correct base structure, and the refit recovers the rest.
+
+    The steps, each with its verified rationale:
+
+    1. Take the base estimate's ``'final iteration estimate'`` (never a
+       gauge-optimized model, whose parameterization may have been coerced).
+    2. Gauge-optimize it to the target with an explicit TP gauge group
+       (`gaugeopt_first`).  Not cosmetic: CP-ness is gauge dependent, and this
+       measurably halves the projection cost.
+    3. Project each instrument's dense members onto the CPTP-instrument set
+       (`norm`, `projection_method` -- see
+       :func:`~pygsti.modelmembers.instruments.seeding.project_instrument_to_cptp`),
+       then optionally run the standard seed patchers on the projection
+       (`patch='auto'`).
+    4. Build the seed model: the *target* converted to `parameterization`
+       (gates and SPAM exactly as :class:`StandardGST` seeds them -- converting
+       fitted gates through the matrix log has known branch-cut failures), with
+       the instruments rebuilt at the projection.  The grafted seed is
+       diagnosed and any residual flags are warned about.
+    5. Run :class:`GateSetTomography` from that seed on the *same*
+       ``ProtocolData`` and merge the new estimate into `results`.
+    6. Gauge-optimize the new estimate.  By default this uses
+       *parameterization-preserving* gauge optimization
+       (``gaugeopt='param-preserving'``), which is the principled route to
+       error bars for CP-constrained estimates -- standard gauge optimization
+       can silently coerce a Lindblad-parameterized model to full TP.
+
+    Parameters
+    ----------
+    results : ModelEstimateResults
+        The results object holding the base estimate.  Modified in place: the
+        new estimate is added under `new_estimate_label`.
+
+    base_estimate_label : str
+        The estimate to warm-start from (e.g. ``'full TP'``).  Must not itself
+        be a Lindblad-parameterized instrument fit.
+
+    new_estimate_label : str, optional
+        Key for the new estimate.  Default: ``f"{base_estimate_label}.{parameterization}"``.
+
+    parameterization : str, optional
+        The Lindblad parameterization to fit (``'CPTPLND'``, ``'GLND'``, ...).
+
+    norm : {'frobenius', 'diamond', 'spectral'}, optional
+        Projection norm for step 3.
+
+    projection_method : {'auto', 'sdp', 'dykstra'}, optional
+        See :func:`~pygsti.modelmembers.instruments.seeding.project_instrument_to_cptp`.
+
+    gaugeopt_first : bool, optional
+        Whether to gauge-optimize the source model to the target before
+        projecting (step 2).
+
+    patch : {'auto', 'all', None}, optional
+        Run :func:`~pygsti.modelmembers.instruments.seeding.patch_instrument_seed`
+        on the projected members (``None`` skips patching and uses
+        :meth:`Instrument.from_cptr_superops` directly).
+
+    gaugeopt : {'param-preserving', 'suite', None} or GSTGaugeOptSuite, optional
+        Gauge optimization for the new estimate: parameterization-preserving
+        with the standard suite (default), the base estimate's own suite run
+        conventionally (``'suite'``; may coerce parameterization), or none.  A
+        :class:`GSTGaugeOptSuite` instance is used param-preservingly.
+
+    objfn_builders, optimizer, badfit_options : optional
+        Overrides for the fit configuration; by default these are scavenged
+        from the base estimate's recorded protocol.
+
+    verbosity : int, optional
+        Verbosity of the underlying protocol run.
+
+    disable_checkpointing : bool, optional
+        Forwarded to :meth:`GateSetTomography.run` (default True).
+
+    Returns
+    -------
+    str
+        The new estimate's label (already added to `results`).
+    """
+    from pygsti.modelmembers.instruments import Instrument as _Instrument
+    from pygsti.modelmembers.instruments import (
+        diagnose_model_instruments as _diagnose_model_instruments,
+        project_instrument_to_cptp as _project_to_cptp,
+        patch_instrument_seed as _patch_seed)
+    from pygsti.modelmembers.instruments.diagnostics import \
+        _static_parts_of_member
+    from pygsti.modelmembers.operations.lindbladerrorgen import \
+        LindbladParameterization as _LindbladParameterization
+    from pygsti.models.gaugegroup import TPGaugeGroup as _TPGaugeGroup
+
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
+
+    if base_estimate_label not in results.estimates:
+        raise ValueError(f"No estimate {base_estimate_label!r} in results; available: "
+                         f"{list(results.estimates.keys())}")
+    if new_estimate_label is None:
+        new_estimate_label = f"{base_estimate_label}.{parameterization}"
+    if new_estimate_label in results.estimates:
+        raise ValueError(f"results already contains an estimate named "
+                         f"{new_estimate_label!r}; pass a different new_estimate_label.")
+
+    base_est = results.estimates[base_estimate_label]
+    src_mdl = base_est.models['final iteration estimate'].copy()
+    target = base_est.models.get('target', None)
+    if target is None:
+        base_proto = base_est.parameters.get('protocol', None)
+        initial = getattr(base_proto, 'initial_model', None)
+        target = getattr(initial, 'target_model', None)
+        if target is None:
+            raise ValueError("Could not recover a target model from the base estimate; "
+                             "it has no 'target' model and its recorded protocol has no "
+                             "initial_model.target_model.")
+    if len(src_mdl.instruments) == 0:
+        raise ValueError("The base estimate's model has no instruments; this helper "
+                         "exists to seed Lindblad-mode *instrument* fits.")
+    for lbl, inst in src_mdl.instruments.items():
+        # structural check only -- the source members are typically slightly
+        # non-CP (that's why we project), so no decomposition may run here
+        if all(_static_parts_of_member(m) is not None for m in inst.values()):
+            raise ValueError(
+                f"Instrument {lbl!r} of estimate {base_estimate_label!r} already "
+                "carries a parameterized effect-then-gate chart; this helper "
+                "warm-starts a Lindblad fit from a non-Lindblad (e.g. 'full TP') "
+                "estimate.")
+
+    # 2. gauge-optimize the source to the target, with an explicit TP gauge
+    #    group: the model's default gauge group may be stale/non-TP, and a
+    #    non-TP transformation crashes on TP-parameterized members.
+    if gaugeopt_first:
+        printer.log("refit_instruments_cptplnd: gauge-optimizing the source "
+                    "estimate to the target (TP gauge group)")
+        src_mdl = _alg.gaugeopt_to_target(
+            src_mdl, target, gauge_group=_TPGaugeGroup(src_mdl.state_space, src_mdl.basis))
+
+    # 3-4. seed model: target converted to the Lindblad parameterization, with
+    #      instruments rebuilt at the CPTP projection of the fitted ones.
+    seed = target.copy()
+    seed.set_all_parameterizations(parameterization)
+    basis = seed.basis
+    povm_errormap = _LindbladParameterization.minimal_cp_paramtype(parameterization)
+    for lbl in list(seed.instruments.keys()):
+        printer.log(f"refit_instruments_cptplnd: projecting instrument {lbl!r} "
+                    f"onto the CPTP-instrument set ({norm})")
+        projected = _project_to_cptp(src_mdl.instruments[lbl], basis, norm=norm,
+                                     method=projection_method)
+        if patch is not None:
+            seed_inst = _patch_seed(projected, basis, mode=patch,
+                                    gate_parameterization=parameterization,
+                                    povm_errormap=povm_errormap)
+        else:
+            seed_inst = _Instrument.from_cptr_superops(
+                projected, basis, gate_parameterization=parameterization,
+                povm_errormap=povm_errormap)
+        seed[lbl] = seed_inst
+    _diagnose_model_instruments(seed, warn=True)   # warn on any residual flags
+
+    # 5. run the Lindblad fit from the seed, on the SAME ProtocolData object
+    #    (ModelEstimateResults.add_estimates checks dataset identity).
+    base_proto = base_est.parameters.get('protocol', None)
+    objfn_builders = objfn_builders if objfn_builders is not None \
+        else getattr(base_proto, 'objfn_builders', None)
+    optimizer = optimizer if optimizer is not None \
+        else getattr(base_proto, 'optimizer', None)
+    badfit_options = badfit_options if badfit_options is not None \
+        else getattr(base_proto, 'badfit_options', None)
+
+    scavenged_suite = None
+    if gaugeopt == 'suite':
+        scavenged_suite = getattr(base_proto, 'gaugeopt_suite', None)
+        if scavenged_suite is None:
+            _warnings.warn("refit_instruments_cptplnd: gaugeopt='suite' but the base "
+                           "estimate's protocol records no gaugeopt_suite; skipping "
+                           "gauge optimization.")
+
+    proto = GateSetTomography(
+        initial_model=GSTInitialModel(model=seed, target_model=target),
+        gaugeopt_suite=scavenged_suite, objfn_builders=objfn_builders,
+        optimizer=optimizer, badfit_options=badfit_options,
+        verbosity=verbosity, name=new_estimate_label)
+    new_results = proto.run(results.data, disable_checkpointing=disable_checkpointing)
+    results.add_estimates(new_results, silent_steal=True)
+
+    # 6. parameterization-preserving gauge optimization of the new estimate.
+    if gaugeopt == 'param-preserving' or isinstance(gaugeopt, GSTGaugeOptSuite):
+        gop_params = gaugeopt if isinstance(gaugeopt, GSTGaugeOptSuite) else \
+            GSTGaugeOptSuite(gaugeopt_suite_names='stdgaugeopt', gaugeopt_target=target)
+        printer.log("refit_instruments_cptplnd: adding parameterization-preserving "
+                    "gauge-optimized models")
+        _add_param_preserving_gauge_opt(results, new_estimate_label, gop_params,
+                                        verbosity=verbosity)
+    elif gaugeopt not in ('suite', None):
+        raise ValueError(f"Unrecognized gaugeopt option {gaugeopt!r}.")
+
+    return new_estimate_label
+
+
 class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
     """
     A class for storing intermediate results associated with running
