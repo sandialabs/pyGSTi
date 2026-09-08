@@ -20,11 +20,21 @@ class EdesignLayoutTester(BaseCase):
         for name in edesign.__all__:
             with self.subTest(name=name):
                 obj = getattr(edesign, name)
-                self.assertIs(getattr(edesigntools, name), obj)
                 self.assertIs(getattr(tools, name), obj)
+                if name in edesigntools.__all__:
+                    self.assertIs(getattr(edesigntools, name), obj)
 
-    def test_shim_and_subpackage_export_the_same_names(self):
-        self.assertEqual(sorted(edesigntools.__all__), sorted(edesign.__all__))
+    def test_shim_exports_exactly_the_names_it_used_to_hold(self):
+        # The alias is frozen at what edesigntools.py contained before the split.
+        # Names added to the subpackage afterwards (blockdopt's) do not belong to it.
+        self.assertEqual(sorted(edesigntools.__all__), [
+            'calculate_edesign_estimated_runtime',
+            'calculate_fisher_information_matrices_by_L',
+            'calculate_fisher_information_matrix',
+            'calculate_fisher_information_per_circuit',
+            'pad_edesign_with_idle_lines',
+        ])
+        self.assertLess(set(edesigntools.__all__), set(edesign.__all__))
 
     def test_documented_import_spellings_still_work(self):
         # The three spellings used in docs/markdown/.

@@ -14,18 +14,25 @@ estimates, the `calculate_fisher_information_*` family for how much a design
 tells you about a model, and `pad_edesign_with_idle_lines` for widening a design
 onto more qubits.
 
-`pygsti.tools.edesigntools` is a compatibility alias for this subpackage; it
-re-exports every name below.  New code should import from here.
+`blockdopt` cuts a design down: it ranks candidates by how much information
+each adds and keeps a budget's worth.
+
+`pygsti.tools.edesigntools` is a compatibility alias for the runtime, Fisher
+and padding names below.  New code should import from here.
 """
 from ._fisher import (calculate_fisher_information_matrices_by_L, calculate_fisher_information_matrix,
                       calculate_fisher_information_per_circuit)
 from ._padding import pad_edesign_with_idle_lines
 from ._runtime import calculate_edesign_estimated_runtime
+from .blockdopt import block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes
 
 __all__ = [
+    "block_linear_dopt",
     "calculate_edesign_estimated_runtime",
     "calculate_fisher_information_matrices_by_L",
     "calculate_fisher_information_matrix",
     "calculate_fisher_information_per_circuit",
+    "greedy_candidate_scores",
+    "greedy_path_log_volumes",
     "pad_edesign_with_idle_lines",
 ]
