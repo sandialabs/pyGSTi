@@ -93,7 +93,7 @@ class Report:
         return qtys
 
     def write_html(self, path, auto_open=False, link_to=None,
-                   connected=False, build_options=None, brevity=0,
+                   enable_offline_mode=False, build_options=None, brevity=0,
                    precision=None, resizable=True, autosize='initial',
                    single_file=False, verbosity=0):
         """
@@ -115,11 +115,14 @@ class Report:
             create and include links to Latex, PDF, and Python pickle
             files, respectively.
 
-        connected : bool, optional
-            Whether output HTML should assume an active internet connection.  If
-            True, then the resulting HTML file size will be reduced because it
-            will link to web resources (e.g. CDN libraries) instead of embedding
-            them.
+        enable_offline_mode : bool, optional (default False)
+            When True output HTML contains additional embedded resources and offline
+            data (stored on disk in a folder named `offline` written to the same directory)
+            to enable offline viewing of reports without the need for an active
+            internet connection. Default behavior of False requires an active internet connection,
+            but with significantly reduced storage footprint. The resulting HTML file size 
+            will be reduced because it will link to web resources (e.g. CDN libraries) 
+            instead of embedding them.
 
         build_options : dict
             Dict of options for building plots. Expected values are
@@ -184,7 +187,7 @@ class Report:
             _merge.merge_jinja_template(
                 qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
-                link_to=link_to, connected=connected, toggles=toggles,
+                link_to=link_to, enable_offline_mode=enable_offline_mode, toggles=toggles,
                 render_math=True, resizable=resizable,
                 autosize=autosize, verbosity=verbosity
             )
@@ -192,13 +195,13 @@ class Report:
             _merge.merge_jinja_template_dir(
                 qtys, path, template_dir=self._templates['html'],
                 auto_open=auto_open, precision=precision,
-                link_to=link_to, connected=connected, toggles=toggles,
+                link_to=link_to, enable_offline_mode=enable_offline_mode, toggles=toggles,
                 render_math=True, resizable=resizable,
                 autosize=autosize, embed_figures=embed_figures,
                 verbosity=verbosity
             )
 
-    def write_notebook(self, path, auto_open=False, connected=False, verbosity=0, use_pickle=False):
+    def write_notebook(self, path, auto_open=False, enable_offline_mode=False, verbosity=0, use_pickle=False):
         """
         Write this report to the disk as an IPython notebook
 
@@ -223,10 +226,14 @@ class Report:
             If True, automatically open the report in a web browser after it
             has been generated.
 
-        connected : bool, optional
-            Whether output notebook should assume an active internet connection.  If
-            True, then the resulting file size will be reduced because it will link
-            to web resources (e.g. CDN libraries) instead of embedding them.
+        enable_offline_mode : bool, optional (default False)
+            When True output notebook contains additional embedded resources and offline
+            data (stored on disk in a folder named `offline` written to the same directory)
+            to enable offline viewing of reports without the need for an active
+            internet connection. Default behavior of False requires an active internet connection,
+            but with significantly reduced storage footprint. The resulting file size 
+            will be reduced because it will link to web resources (e.g. CDN libraries) 
+            instead of embedding them.
 
         verbosity : int, optional
             How much detail to send to stdout.
@@ -244,7 +251,7 @@ class Report:
         notebook_templates_path = _Path(__file__).parent / 'templates' / self._templates['notebook']
 
         #Copy offline directory into position
-        if not connected:
+        if enable_offline_mode:
             _merge.rsync_offline_dir(path.parent)
 
         #Save results to file
@@ -335,8 +342,8 @@ class Report:
         nb.add_code("""\
             from pygsti.report import Workspace
             ws = Workspace()
-            ws.init_notebook_mode(connected={conn}, autodisplay=True)\
-            """.format(conn=str(connected)))
+            ws.init_notebook_mode(enable_offline_mode={conn}, autodisplay=True)\
+            """.format(conn=str(enable_offline_mode)))
 
         # The line below injects a whole BUNCH of cell definitions into 
         # the notebook. Relative to the top-level of the pyGSTi repo,
