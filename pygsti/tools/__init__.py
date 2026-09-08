@@ -13,7 +13,9 @@ pyGSTi Tools Python Package
 from .basistools import *
 from .chi2fns import *
 from . import edesign
-from .edesign import block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes
+from .edesign import (block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes,
+                      jacobian_dict_to_array, perturb_errorgen_rates, rank_circuits_by_dopt,
+                      reduce_design_by_dopt)
 from .edesigntools import *
 # ^ pygsti.tools.edesigntools is a compatibility alias for the pygsti.tools.edesign
 #   subpackage.  Star-importing it here rather than the subpackage keeps the alias on

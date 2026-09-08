@@ -25,6 +25,7 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label, LabelTup
 
+from pygsti.tools.edesign.blockdopt import reduce_design_by_dopt as _reduce_design_by_dopt
 from pygsti.tools.graphcoloring import (
     canonical_edges, find_neighbors, switchboard_find_edge_coloring,
 )
@@ -566,6 +567,36 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         # what recomputes all_circuits_needing_data.
         base._truncate_to_circuits_inplace({c for lst in kept for c in lst})
         return base
+
+    def reduce_by_dopt(self, model, num_circuits, **kwargs) -> "SimultaneousGSTDesign":
+        """
+        A copy of this design keeping only its `num_circuits` most informative circuits.
+
+        Thin delegation to :func:`pygsti.tools.edesign.blockdopt.reduce_design_by_dopt`,
+        here so the feature is findable from the class that most needs it: a stitched
+        design carries O(10,000) circuits to fit a model with O(100) parameters.
+
+        Pass a model at a plausible noisy point, not a target model --
+        :func:`pygsti.tools.edesign.blockdopt.perturb_errorgen_rates` explains why and
+        produces one.
+
+        Parameters
+        ----------
+        model : Model
+            Whose parameters the reduced design should be informative about.
+
+        num_circuits : int
+            The budget.
+
+        **kwargs
+            Forwarded to ``reduce_design_by_dopt``: `ridge`, `return_scores`, `dtype`.
+
+        Returns
+        -------
+        SimultaneousGSTDesign
+            Or, with ``return_scores=True``, a ``(design, scores)`` pair.
+        """
+        return _reduce_design_by_dopt(self, model, num_circuits, **kwargs)
 
     # endregion
 

@@ -260,3 +260,235 @@ class GreedyScorerTester(BaseCase):
             subset = rng.choice(40, size=k, replace=False)
             with self.subTest(trial=trial):
                 self.assertGreater(greedy, bd.greedy_path_log_volumes(A, 4, subset)[-1])
+
+
+class JacobianFlatteningTester(BaseCase):
+    """`jacobian_dict_to_array` turns a bulk_dprobs result into the kernel's `A`."""
+
+    @staticmethod
+    def _jac_dict(num_circuits, num_outcomes, num_params, start=0.0):
+        v = start
+        out = {}
+        for c in range(num_circuits):
+            per_circuit = {}
+            for o in range(num_outcomes):
+                per_circuit['o%d' % o] = np.full(num_params, v)
+                v += 1.0
+            out['c%d' % c] = per_circuit
+        return out
+
+    def test_shape_and_block_size(self):
+        jac, block_size = bd.jacobian_dict_to_array(self._jac_dict(5, 4, 7))
+        self.assertEqual(jac.shape, (20, 7))
+        self.assertEqual(block_size, 4)
+
+    def test_rows_are_grouped_per_circuit_in_key_order(self):
+        # The block order follows the dict's keys, not any input circuit list:
+        # bulk_dprobs may deduplicate and reorder, so this is the mapping a
+        # caller has to use to get back from a block index to a circuit.
+        jac, block_size = bd.jacobian_dict_to_array(self._jac_dict(3, 2, 1))
+        self.assertArraysEqual(jac.ravel(), np.arange(6.0))
+
+    def test_ragged_outcome_counts_raise(self):
+        ragged = self._jac_dict(2, 3, 4)
+        del ragged['c1']['o2']
+        with self.assertRaises(ValueError) as ctx:
+            bd.jacobian_dict_to_array(ragged)
+        self.assertIn('uniform outcome count', str(ctx.exception))
+
+    def test_empty_dict_raises(self):
+        with self.assertRaises(ValueError):
+            bd.jacobian_dict_to_array({})
+
+
+class _ModelFixture:
+    """A 1-qubit H+S model and a handful of circuits to differentiate on.
+
+    Class-scoped: nothing below mutates the model, and `perturb_errorgen_rates`
+    is required to copy.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from pygsti.modelpacks import smq1Q_XYI
+        cls.target = smq1Q_XYI.target_model('H+S')
+        edesign = smq1Q_XYI.create_gst_experiment_design(max_max_length=2)
+        cls.circuits = list(edesign.all_circuits_needing_data)[:40]
+        # pyGSTi names cholesky-mode stochastic parameters 'sqrt(... stochastic ...)'.
+        cls.is_stochastic = np.array(['stochastic' in str(lbl)
+                                      for lbl in cls.target.parameter_labels])
+
+    def column_norms(self, model):
+        jac, _ = bd.jacobian_dict_to_array(model.sim.bulk_dprobs(self.circuits))
+        return np.linalg.norm(jac, axis=0)
+
+
+class PerturbErrorgenRatesTester(_ModelFixture, BaseCase):
+    def test_the_target_model_has_invisible_stochastic_columns(self):
+        """The reason perturb_errorgen_rates exists, pinned as a fact about pyGSTi.
+
+        H+S stochastic rates use param_mode='cholesky': rate = theta**2, so
+        d(rate)/d(theta) = 2*theta is exactly zero at the target model. A
+        selector handed a target model optimises as if half the parameters were
+        not there, silently.
+        """
+        self.assertGreater(self.is_stochastic.sum(), 0)
+        norms = self.column_norms(self.target)
+        self.assertLess(norms[self.is_stochastic].max(), 1e-4)
+        self.assertGreater(np.median(norms[~self.is_stochastic]), 1.0)
+
+    def test_perturbing_the_parameter_vector_is_not_enough(self):
+        """The obvious fix does not work, which is why the helper sets rates.
+
+        A 1e-4 nudge of the parameter vector puts theta at 1e-4, so the
+        stochastic columns land at ~1e-4 of their rate-derivative: nonzero, but
+        orders of magnitude under the unit ridge, so still invisible to the
+        objective.
+        """
+        nudged = self.target.copy()
+        rng = np.random.default_rng(0)
+        nudged.from_vector(nudged.to_vector() + 1e-4 * rng.standard_normal(nudged.num_params))
+        norms = self.column_norms(nudged)
+        self.assertLess(norms[self.is_stochastic].max(), 1e-2)
+
+    def test_perturbing_rates_makes_the_stochastic_columns_usable(self):
+        perturbed = bd.perturb_errorgen_rates(self.target, 1e-3, seed=0)
+        norms = self.column_norms(perturbed)
+        hamiltonian = np.median(norms[~self.is_stochastic])
+        stochastic = np.median(norms[self.is_stochastic])
+        # Within an order of magnitude of the Hamiltonian columns, and well above
+        # the unit ridge, is what "visible to the objective" means here.
+        self.assertGreater(stochastic, 0.1)
+        self.assertGreater(stochastic, hamiltonian / 100)
+
+    def test_the_input_model_is_not_modified(self):
+        before = self.target.to_vector().copy()
+        bd.perturb_errorgen_rates(self.target, 1e-3, seed=0)
+        self.assertArraysEqual(self.target.to_vector(), before)
+
+    def test_the_seed_controls_the_result(self):
+        a = bd.perturb_errorgen_rates(self.target, 1e-3, seed=0)
+        b = bd.perturb_errorgen_rates(self.target, 1e-3, seed=0)
+        c = bd.perturb_errorgen_rates(self.target, 1e-3, seed=1)
+        self.assertArraysEqual(a.to_vector(), b.to_vector())
+        self.assertFalse(np.allclose(a.to_vector(), c.to_vector()))
+
+    def test_the_scale_is_a_rate_not_a_parameter_value(self):
+        # rate = theta**2 in cholesky mode, so scaling rates by 100 scales the
+        # stochastic *parameters* by 10. Pins that `scale` means what it says.
+        small = bd.perturb_errorgen_rates(self.target, 1e-4, seed=0)
+        large = bd.perturb_errorgen_rates(self.target, 1e-2, seed=0)
+        ratio = (large.to_vector()[self.is_stochastic]
+                 / small.to_vector()[self.is_stochastic])
+        self.assertArraysAlmostEqual(ratio, np.full(ratio.shape, 10.0), places=6)
+
+
+class RankCircuitsTester(_ModelFixture, BaseCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.model = bd.perturb_errorgen_rates(cls.target, 1e-3, seed=0)
+
+    def test_ranks_every_unique_circuit_by_default(self):
+        ranked = bd.rank_circuits_by_dopt(self.model, self.circuits)
+        self.assertEqual(len(ranked), len(self.circuits))
+        self.assertEqual(set(ranked), set(self.circuits))
+
+    def test_a_budget_is_a_prefix_of_the_full_ranking(self):
+        full = bd.rank_circuits_by_dopt(self.model, self.circuits)
+        self.assertEqual(bd.rank_circuits_by_dopt(self.model, self.circuits, 5), full[:5])
+
+    def test_is_deterministic(self):
+        self.assertEqual(bd.rank_circuits_by_dopt(self.model, self.circuits, 6),
+                         bd.rank_circuits_by_dopt(self.model, self.circuits, 6))
+
+    def test_duplicates_are_ranked_once(self):
+        ranked = bd.rank_circuits_by_dopt(self.model, self.circuits + self.circuits)
+        self.assertEqual(len(ranked), len(set(self.circuits)))
+        self.assertEqual(len(ranked), len(set(ranked)))
+
+    def test_scores_are_the_log_volume_curve_of_the_ranking(self):
+        """Cross-checked against the independent slogdet scorer, on the same matrix."""
+        ranked, scores = bd.rank_circuits_by_dopt(self.model, self.circuits, 8,
+                                                  return_scores=True)
+        jac_dict = self.model.sim.bulk_dprobs(list(dict.fromkeys(self.circuits)))
+        jac, block_size = bd.jacobian_dict_to_array(jac_dict)
+        keys = list(jac_dict)
+        pivots = [keys.index(c) for c in ranked]
+        expected = bd.greedy_path_log_volumes(jac.T, block_size, pivots)
+        self.assertArraysAlmostEqual(scores, expected[1:], places=8)
+
+    def test_ridge_scales_the_objective(self):
+        # A bigger ridge is a stronger prior, so each circuit adds proportionally
+        # less; the reported curve is 0.5*logdet(I + J^T J / ridge).
+        _, unit = bd.rank_circuits_by_dopt(self.model, self.circuits, 5,
+                                           return_scores=True)
+        _, heavy = bd.rank_circuits_by_dopt(self.model, self.circuits, 5,
+                                            ridge=1e4, return_scores=True)
+        self.assertTrue(np.all(heavy < unit))
+
+    def test_a_nonpositive_ridge_raises(self):
+        for ridge in (0.0, -1.0):
+            with self.subTest(ridge=ridge):
+                with self.assertRaises(ValueError):
+                    bd.rank_circuits_by_dopt(self.model, self.circuits, 2, ridge=ridge)
+
+    def test_float32_ranks_nearly_the_same_circuits(self):
+        # Not identical -- float32 reorders near-ties -- but the chosen *set* at a
+        # generous budget should not move much, or the precision is not usable.
+        f64 = set(bd.rank_circuits_by_dopt(self.model, self.circuits, 12))
+        f32 = set(bd.rank_circuits_by_dopt(self.model, self.circuits, 12,
+                                           dtype=np.float32))
+        self.assertGreaterEqual(len(f64 & f32), 10)
+
+
+class ReduceDesignTester(_ModelFixture, BaseCase):
+    """`reduce_design_by_dopt` is duck-typed; this covers it on a plain design.
+
+    The SimultaneousGSTDesign path is covered in
+    test/unit/protocols/test_simultaneous_gst.py, where the fixture already exists.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.model = bd.perturb_errorgen_rates(cls.target, 1e-3, seed=0)
+
+    def _design(self):
+        from pygsti.protocols import CircuitListsDesign
+        half = len(self.circuits) // 2
+        return CircuitListsDesign([self.circuits[:half], self.circuits], nested=True)
+
+    def test_keeps_the_budget_and_the_class(self):
+        from pygsti.protocols import CircuitListsDesign
+        design = self._design()
+        reduced = bd.reduce_design_by_dopt(design, self.model, 9)
+        self.assertIsInstance(reduced, CircuitListsDesign)
+        self.assertEqual(len(reduced.all_circuits_needing_data), 9)
+        self.assertTrue(set(reduced.all_circuits_needing_data)
+                        <= set(design.all_circuits_needing_data))
+
+    def test_the_kept_circuits_are_the_ranking_prefix(self):
+        design = self._design()
+        reduced = bd.reduce_design_by_dopt(design, self.model, 9)
+        ranked = bd.rank_circuits_by_dopt(self.model, design.all_circuits_needing_data, 9)
+        self.assertEqual(set(reduced.all_circuits_needing_data), set(ranked))
+
+    def test_the_original_design_is_not_modified(self):
+        design = self._design()
+        before = [list(cl) for cl in design.circuit_lists]
+        bd.reduce_design_by_dopt(design, self.model, 5)
+        self.assertEqual([list(cl) for cl in design.circuit_lists], before)
+
+    def test_returns_the_score_curve_on_request(self):
+        reduced, scores = bd.reduce_design_by_dopt(self._design(), self.model, 7,
+                                                   return_scores=True)
+        self.assertEqual(len(scores), 7)
+        self.assertTrue(np.all(np.diff(scores) >= -1e-9))
+
+    def test_a_budget_over_the_candidate_count_keeps_everything(self):
+        design = self._design()
+        reduced = bd.reduce_design_by_dopt(design, self.model, 10 ** 6)
+        self.assertEqual(set(reduced.all_circuits_needing_data),
+                         set(design.all_circuits_needing_data))

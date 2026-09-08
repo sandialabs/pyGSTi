@@ -24,7 +24,9 @@ from ._fisher import (calculate_fisher_information_matrices_by_L, calculate_fish
                       calculate_fisher_information_per_circuit)
 from ._padding import pad_edesign_with_idle_lines
 from ._runtime import calculate_edesign_estimated_runtime
-from .blockdopt import block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes
+from .blockdopt import (block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes,
+                        jacobian_dict_to_array, perturb_errorgen_rates, rank_circuits_by_dopt,
+                        reduce_design_by_dopt)
 
 __all__ = [
     "block_linear_dopt",
@@ -34,5 +36,9 @@ __all__ = [
     "calculate_fisher_information_per_circuit",
     "greedy_candidate_scores",
     "greedy_path_log_volumes",
+    "jacobian_dict_to_array",
     "pad_edesign_with_idle_lines",
+    "perturb_errorgen_rates",
+    "rank_circuits_by_dopt",
+    "reduce_design_by_dopt",
 ]

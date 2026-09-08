@@ -1355,3 +1355,67 @@ class AssignDesignsDefaultRandgenTester(BaseCase):
         # Confirms the default is a real generator being consumed
         explicit_other = _stitch(3, 5, seed=12345)
         self.assertNotEqual(omitted, explicit_other)
+
+
+class ReduceByDoptTester(_SGSTFixture, BaseCase):
+    """``SimultaneousGSTDesign.reduce_by_dopt``: the reason truncation was wanted.
+
+    The kernel and the ranking are tested in test/unit/tools/test_blockdopt.py. What
+    matters here is that reducing a *stitched* design gives back a well-formed
+    SimultaneousGSTDesign, since that is exactly what the class used to refuse.
+
+    The design is cut down before ranking: greedy selection costs one QR per remaining
+    candidate per pick, so ranking the full 1814-circuit design against this 330-parameter
+    model takes minutes.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.small = cls.design.truncate_to_circuits(list(cls.design.circuit_lists[0])[:30])
+        model = pygsti.models.create_crosstalk_free_model(
+            cls.pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
+        # Not the target model: at the target, every cholesky-mode stochastic column of
+        # the Jacobian is exactly zero. See perturb_errorgen_rates.
+        cls.model = pygsti.tools.perturb_errorgen_rates(model, 1e-3, seed=0)
+
+    def test_reducing_gives_back_a_well_formed_simultaneous_design(self):
+        reduced = self.small.reduce_by_dopt(self.model, 8)
+        self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        self.assertEqual(len(reduced.all_circuits_needing_data), 8)
+        self.assertTrue(reduced.nested)
+        assert_circuit_lists_match_color_patches(
+            reduced.circuit_lists, reduced.vertices, reduced.color_patches)
+        self.assertEqual(reduced.color_patches, self.small.color_patches)
+        self.assertTrue(set(reduced.all_circuits_needing_data)
+                        <= set(self.small.all_circuits_needing_data))
+
+    def test_the_method_delegates_to_the_tools_function(self):
+        self.assertEqual(
+            set(self.small.reduce_by_dopt(self.model, 6).all_circuits_needing_data),
+            set(pygsti.tools.reduce_design_by_dopt(
+                self.small, self.model, 6).all_circuits_needing_data))
+
+    def test_the_score_curve_comes_back_with_the_design(self):
+        reduced, scores = self.small.reduce_by_dopt(self.model, 6, return_scores=True)
+        self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        self.assertEqual(len(scores), 6)
+        self.assertTrue(np.all(np.diff(scores) >= -1e-9))
+
+    def test_the_reduction_beats_taking_the_first_n_circuits(self):
+        """Otherwise there is no point to any of this.
+
+        Judged by log-volume under the independent slogdet scorer, not by the
+        selector's own numbers.
+        """
+        candidates = list(self.small.all_circuits_needing_data)
+        jac, block_size = pygsti.tools.jacobian_dict_to_array(
+            self.model.sim.bulk_dprobs(candidates))
+        keys = list(self.model.sim.bulk_dprobs(candidates))
+
+        chosen = set(self.small.reduce_by_dopt(self.model, 8).all_circuits_needing_data)
+        greedy = pygsti.tools.greedy_path_log_volumes(
+            jac.T, block_size, [i for i, c in enumerate(keys) if c in chosen])[-1]
+        first_n = pygsti.tools.greedy_path_log_volumes(
+            jac.T, block_size, range(8))[-1]
+        self.assertGreater(greedy, first_n)

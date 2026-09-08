@@ -17,6 +17,10 @@ __all__ = [
     'block_linear_dopt',
     'greedy_candidate_scores',
     'greedy_path_log_volumes',
+    'jacobian_dict_to_array',
+    'perturb_errorgen_rates',
+    'rank_circuits_by_dopt',
+    'reduce_design_by_dopt',
 ]
 
 
@@ -321,3 +325,235 @@ def greedy_path_log_volumes(A, block_size, block_pivots):
     M = _np.eye(m) + _np.cumsum(grams[piv], axis=0)                 # (k, m, m)
     out[1:] = _half_logdet(M)
     return out
+
+
+# --------------------------------------------------------------------------- #
+#  Applying the kernel to a model and an experiment design
+# --------------------------------------------------------------------------- #
+
+def jacobian_dict_to_array(jac_dict):
+    """Flatten a `bulk_dprobs` result into a Jacobian array and its block size.
+
+    Parameters
+    ----------
+    jac_dict : dict
+        The output of `model.sim.bulk_dprobs(circuits)`: circuit -> (outcome ->
+        length-`num_params` derivative vector).
+
+    Returns
+    -------
+    jacobian : numpy.ndarray
+        `(num_circuits * num_outcomes, num_params)`, in Fortran order.  Rows are
+        grouped per circuit in `jac_dict` **key order**, which is not
+        necessarily the order the circuits were passed in: `bulk_dprobs` may
+        deduplicate and reorder.  Map any row-block index back through
+        `list(jac_dict)`, never through the input list.
+
+    block_size : int
+        The common number of outcomes per circuit.
+
+    Raises
+    ------
+    ValueError
+        If `jac_dict` is empty, or if the circuits do not all have the same
+        number of outcomes -- block selection needs one circuit per block, and a
+        ragged outcome count would misalign them.
+    """
+    if not jac_dict:
+        raise ValueError("jacobian_dict_to_array: got an empty Jacobian dict.")
+    outcome_counts = {len(per_circuit) for per_circuit in jac_dict.values()}
+    if len(outcome_counts) != 1:
+        raise ValueError(
+            "jacobian_dict_to_array requires a uniform outcome count per circuit, so that "
+            f"one block is one circuit; got varying counts {sorted(outcome_counts)}."
+        )
+    rowblocks = [_np.vstack(list(per_circuit.values())) for per_circuit in jac_dict.values()]
+    return _np.asfortranarray(_np.vstack(rowblocks)), outcome_counts.pop()
+
+
+def perturb_errorgen_rates(model, scale=1e-3, seed=None):
+    """A copy of `model` with every error-generator rate set to a seeded value near `scale`.
+
+    D-optimal selection needs a Jacobian that is representative of the model at a
+    plausible noisy point.  Evaluating it at a *target* model does not give one,
+    and the reason is easy to miss.
+
+    In the H+S parameterization, stochastic rates use `param_mode='cholesky'`
+    (see `pygsti/modelmembers/operations/lindbladerrorgen.py`): the free
+    parameter is `theta` with `rate = theta**2`, which pyGSTi reports under names
+    like `'sqrt(X stochastic coefficient)'`.  So `d(rate)/d(theta) = 2*theta`,
+    which is **exactly zero** at the target model.  Every stochastic column of
+    the Jacobian vanishes, and the selector optimises as if those parameters did
+    not exist.
+
+    Perturbing the raw parameter vector -- `model.from_vector(v + 1e-4 * noise)`
+    -- does not fix this.  It puts `theta` at `1e-4`, so those columns sit at
+    `2e-4` times their rate-derivative: still four orders of magnitude below the
+    Hamiltonian columns and far below the unit ridge, hence still invisible.
+    Setting the *rate* to `1e-3` puts `theta` near `0.03` and the columns within
+    a factor of ten of the Hamiltonian ones, which is what this function does.
+    (Measured on `smq1Q_XYI` H+S: median stochastic column norm 6e-7 at the
+    target, 6e-4 after a 1e-4 parameter-vector nudge, 0.24 after this.)
+
+    Parameters
+    ----------
+    model : Model
+        Not modified; a copy is returned.
+
+    scale : float, optional (default 1e-3)
+        Rates are drawn uniformly from `[0, scale)`.  This is a rate, not a
+        parameter value.
+
+    seed : int or numpy.random.Generator, optional
+        Anything `numpy.random.default_rng` accepts.  Pass one, or the selection
+        is not reproducible.
+
+    Returns
+    -------
+    Model
+        A copy of `model` with perturbed rates.
+
+    Notes
+    -----
+    Coefficients are set with `truncate=False`, so a member that cannot
+    represent a rate of this sign or size raises rather than being silently
+    clipped.  Members with no error generator are left alone.
+    """
+    perturbed = model.copy()
+    rng = _np.random.default_rng(seed)
+    for _, member in perturbed._iter_parameterized_objs():
+        getter = getattr(member, 'errorgen_coefficients', None)
+        setter = getattr(member, 'set_errorgen_coefficients', None)
+        if getter is None or setter is None:
+            continue
+        coefficients = getter()
+        if not coefficients:
+            continue
+        setter({lbl: scale * rng.random() for lbl in coefficients}, truncate=False)
+    return perturbed
+
+
+def rank_circuits_by_dopt(model, circuits, max_circuits=None, *, ridge=1.0,
+                          return_scores=False, dtype=_np.float64):
+    """Order circuits by how much information each adds about `model`'s parameters.
+
+    Greedy D-optimal selection over the per-circuit blocks of `model`'s Jacobian:
+    each step takes the circuit that most increases
+    `0.5 * logdet(ridge * I + J_S^T J_S)`, where `J_S` stacks the Jacobian rows of
+    the circuits chosen so far.
+
+    Pass a model that is *at* a plausible noisy point, not a target model -- see
+    :func:`perturb_errorgen_rates`, which explains why and is the usual way to
+    get one.  This function does not perturb anything.
+
+    Parameters
+    ----------
+    model : Model
+        Supplies `sim.bulk_dprobs`.  Its parameterization defines what is being
+        optimised for: the ranking is only as meaningful as the model's
+        parameters are the ones you care about estimating.
+
+    circuits : list of Circuit
+        Candidates.  Duplicates are dropped, keeping first occurrence.
+
+    max_circuits : int, optional
+        How many to rank.  None (the default) ranks all of them, which gives the
+        whole priority order and lets a caller pick a budget afterwards.
+
+    ridge : float, optional (default 1.0)
+        Weight of the identity prior on the information matrix.  Implemented by
+        scaling `J^T` by `ridge**-0.5`, which is exact up to an additive constant
+        and so does not change the ordering; the returned scores are for the
+        scaled matrix, i.e. `0.5 * logdet(I + J_S^T J_S / ridge)`.
+
+    return_scores : bool, optional (default False)
+        Also return the cumulative log-volume after each pick.
+
+    dtype : numpy dtype, optional (default numpy.float64)
+        Working precision.  float32 halves the memory and changes selections at
+        rounding level, which matters only among near-tied candidates.
+
+    Returns
+    -------
+    ranked : list of Circuit
+        In selection order: `ranked[0]` is the single most informative circuit,
+        and `ranked[:k]` is the greedy choice of `k`.
+
+    scores : numpy.ndarray
+        Only if `return_scores`.  Nondecreasing; where it flattens, more circuits
+        are buying little.
+
+    Notes
+    -----
+    Cost is one QR per remaining candidate per step, and the workspace holds
+    `(num_candidates, num_params + num_outcomes, num_params)` floats -- about
+    1.4 GB for 4000 circuits, 16 outcomes and 200 parameters in float64, briefly
+    doubled between steps.  Rank a subset, or use float32, if that is too much.
+    """
+    unique = list(dict.fromkeys(circuits))
+    jac_dict = model.sim.bulk_dprobs(unique)
+    jacobian, block_size = jacobian_dict_to_array(jac_dict)
+    # bulk_dprobs may reorder and deduplicate, so block i is jac_keys[i], not unique[i].
+    jac_keys = list(jac_dict)
+
+    if ridge <= 0:
+        raise ValueError(f"rank_circuits_by_dopt: ridge must be positive, got {ridge}.")
+    A = _np.asarray(jacobian, dtype=dtype).T
+    if ridge != 1.0:
+        A = _np.asarray(A * (ridge ** -0.5), dtype=dtype)
+    if max_circuits is None:
+        max_circuits = len(jac_keys)
+
+    result = block_linear_dopt(A, block_size, max_circuits, return_scores=return_scores)
+    pivots, scores = result if return_scores else (result, None)
+    ranked = [jac_keys[int(i)] for i in pivots]
+    return (ranked, scores) if return_scores else ranked
+
+
+def reduce_design_by_dopt(design, model, num_circuits, *, ridge=1.0,
+                          return_scores=False, dtype=_np.float64):
+    """A copy of `design` keeping only its `num_circuits` most informative circuits.
+
+    Ranks `design.all_circuits_needing_data` with :func:`rank_circuits_by_dopt`
+    and truncates.  Stitched simultaneous-GST designs run O(10,000) circuits to
+    fit models with O(100) parameters; this is the postprocessing step that cuts
+    that down.
+
+    Nesting is preserved for free: truncation filters every germ-power list by
+    the same keep-set, so a kept circuit stays in each list it was in and the
+    containment `circuit_lists[L] <= circuit_lists[L+1]` survives.  No explicit
+    re-binning is needed.
+
+    Parameters
+    ----------
+    design : ExperimentDesign
+        Anything with `all_circuits_needing_data` and `truncate_to_circuits`.
+        The result is whatever that method returns, so a `SimultaneousGSTDesign`
+        stays one.  Not modified.
+
+    model : Model
+        As for :func:`rank_circuits_by_dopt`, and with the same warning about
+        target models: see :func:`perturb_errorgen_rates`.
+
+    num_circuits : int
+        The budget.  Clamped to the number of unique circuits available.
+
+    ridge, return_scores, dtype
+        As for :func:`rank_circuits_by_dopt`.
+
+    Returns
+    -------
+    reduced : ExperimentDesign
+
+    scores : numpy.ndarray
+        Only if `return_scores`.  Read it before trusting the budget: this is a
+        *global* budget, so nothing stops it from spending everything on one
+        germ power and leaving another nearly empty if that germ power's
+        circuits are individually less informative.  Where the curve has
+        flattened, the budget is past the point of buying much.
+    """
+    result = rank_circuits_by_dopt(model, design.all_circuits_needing_data, num_circuits,
+                                   ridge=ridge, return_scores=return_scores, dtype=dtype)
+    ranked, scores = result if return_scores else (result, None)
+    reduced = design.truncate_to_circuits(ranked)
+    return (reduced, scores) if return_scores else reduced
