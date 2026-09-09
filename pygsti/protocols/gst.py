@@ -129,6 +129,60 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
         HasProcessorSpec.__init__(self, processorspec_filename_or_obj)
 
+        #: The :class:`~pygsti.tools.edesign.CircuitSelection` that produced this design,
+        #: if it came from :meth:`reduce_with`; None otherwise.  Records the reducer, its
+        #: score curve and the candidate count, so a reduced design carries the provenance
+        #: of its own reduction.
+        self.selection = None
+        self.auxfile_types['selection'] = 'serialized-object'
+
+    def reduce_with(self, reducer, num_circuits=None):
+        """A copy of this design keeping only the circuits `reducer` selects.
+
+        Stitched simultaneous-GST designs run O(10,000) circuits to fit models with
+        O(100) parameters, and even a standard design is often larger than the budget
+        allows; this is the postprocessing step that cuts one down.  Which circuits get
+        kept is entirely the `reducer`'s decision -- see
+        :class:`~pygsti.tools.edesign.DesignReducer` for how to write one, and
+        :class:`~pygsti.tools.edesign.BlockDoptReducer` for the D-optimal rule pyGSTi
+        ships.
+
+        Named for the parallel with `merge_with`.
+
+        Parameters
+        ----------
+        reducer : DesignReducer or callable
+            The selection rule.  A callable is invoked as `reducer(design, num_circuits)`
+            and should return the circuits to keep.
+
+        num_circuits : int, optional
+            The budget, clamped to the number of circuits available.  None asks the
+            reducer to choose for itself; a greedy reducer will typically rank everything
+            and leave the budget to be read off the returned score curve.
+
+        Returns
+        -------
+        GateSetTomographyDesign
+            Of the same class as `self`, since truncation preserves it.  Its `selection`
+            attribute holds the :class:`~pygsti.tools.edesign.CircuitSelection` that
+            produced it -- read `selection.scores` to see where the budget stopped buying
+            information.
+
+        Notes
+        -----
+        Truncation does not rebuild any structural metadata that described the *original*
+        circuit set.  On a :class:`StandardGSTDesign` in particular, `germs`,
+        `prep_fiducials`, `meas_fiducials`, `fiducial_pairs` and `maxlengths` are carried
+        over unchanged and will over-describe the reduced design.  The circuits are
+        correct; those members are a record of how the original was generated, not an
+        index of what survived.
+        """
+        from pygsti.tools.edesign import DesignReducer as _DesignReducer
+        selection = _DesignReducer.cast(reducer).select(self, num_circuits)
+        reduced = self.truncate_to_circuits(selection.circuits)
+        reduced.selection = selection
+        return reduced
+
     def map_qubit_labels(self, mapper):
         """
         Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
@@ -149,8 +203,13 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
                                 for circuit_list in self.circuit_lists]
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
-        return GateSetTomographyDesign(mapped_processorspec, mapped_circuit_lists, mapped_circuits,
-                                       mapped_qubit_labels, self.nested, remove_duplicates=False)
+        mapped = GateSetTomographyDesign(mapped_processorspec, mapped_circuit_lists, mapped_circuits,
+                                         mapped_qubit_labels, self.nested, remove_duplicates=False)
+        # Relabelling renames qubits; it does not re-select circuits. Carrying `selection`
+        # across keeps a reduced design's record of what reduced it, which is otherwise
+        # lost here without a word.
+        mapped.selection = self.selection
+        return mapped
 
 
 class StandardGSTDesign(GateSetTomographyDesign):

@@ -13,7 +13,8 @@ pyGSTi Tools Python Package
 from .basistools import *
 from .chi2fns import *
 from . import edesign
-from .edesign import (block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes,
+from .edesign import (BlockDoptReducer, CallableReducer, CircuitSelection, DesignReducer,
+                      block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes,
                       jacobian_dict_to_array, perturb_errorgen_rates, rank_circuits_by_dopt,
                       reduce_design_by_dopt)
 from .edesigntools import *

@@ -21,11 +21,14 @@ from pygsti.baseobjs.label import Label
 from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.simultaneous_gst import (
-    SimultaneousGSTDesign, _normalize_coloring, _resolve_stitcher_name, _stitcher_name,
+    SimultaneousGSTDesign, _normalize_coloring, _recordable_seed, _seed_from_record,
     assert_circuit_lists_match_color_patches,
-    assert_mapped_circuit_matches_patch,
     assign_the_designs_with_mapping,
-    build_patch_infos, make_line_mapper, make_simultaneous_gst_design,
+    make_simultaneous_gst_design,
+)
+from pygsti.protocols._stitchers import (
+    CallableStitcher, CircuitStitcher, RandomizedPatchStitcher,
+    assert_mapped_circuit_matches_patch, build_patch_infos, make_line_mapper,
 )
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign
@@ -495,11 +498,9 @@ class MakeSimultaneousGSTDesignTester(_SGSTFixture, BaseCase):
         # make_simultaneous_gst_design passes neither circuit_stitcher nor nested, so both
         # must land on their SimultaneousGSTDesign defaults. The default stitcher always
         # renests its output, so nested defaults to True.
-        self.assertIs(self.design.circuit_stitcher, assign_the_designs_with_mapping)
+        self.assertIsInstance(self.design.circuit_stitcher, RandomizedPatchStitcher)
+        self.assertTrue(self.design.circuit_stitcher.share_same_shape_schedules)
         self.assertTrue(self.design.nested)
-        self.assertEqual(list(self.design.stitcher_kwargs), ['randgen', 'verbosity'])
-        # verbosity defaults to 0, i.e. no progress bar from the stitcher.
-        self.assertEqual(self.design.stitcher_kwargs['verbosity'], 0)
 
     def test_edge_coloring_is_a_valid_proper_coloring(self):
         color_patches = self.design.color_patches
@@ -849,7 +850,7 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
             raise AssertionError("circuit_stitcher must not be re-run when relabelling")
 
         original = self.design.circuit_stitcher
-        self.design.circuit_stitcher = _explode
+        self.design.circuit_stitcher = CallableStitcher(_explode)
         try:
             mapped = self.design.map_qubit_labels(self.mapper)
         finally:
@@ -902,8 +903,7 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
         bad = Circuit([[Label('Gcnot', (0, 2)), Label('I', 1)]], line_labels=(0, 1, 2))
         malformed = SimultaneousGSTDesign(
             self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
-            circuit_stitcher=(lambda *a, **kw: [[bad.copy()]]),
-            debug_check=False)
+            circuit_stitcher=(lambda *a, **kw: [[bad.copy()]]), debug_check=False)
 
         with self.assertRaises(AssertionError) as ctx:
             malformed.map_qubit_labels(self.mapper)
@@ -918,52 +918,196 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
                                    line_labels=('Q0', 'Q1', 'Q2'))]])
 
 
-class _CallableStitcher:
-    """A stitcher supplied as a callable object rather than a function.
+def _stub_stitcher(oneq_gstdesign, twoq_gstdesign, vertices, color_patches, **kwargs):
+    """A module-level (hence importable) stitcher function, for the CallableStitcher tests."""
+    return [[c.copy() for c in cl] for cl in _STUB_CIRCUIT_LISTS]
 
-    Instances carry ``__module__`` (inherited from the class) but no
-    ``__qualname__``, which is the case :func:`_stitcher_name` has to reject.
+
+class _CountingStitcher(CircuitStitcher):
+    """A stitcher subclass with configuration, to check that options round-trip."""
+
+    def __init__(self, tag='default'):
+        super().__init__()
+        self.tag = tag
+
+    def _stitch(self, oneq_gstdesign, twoq_gstdesign, vertices, color_patches, randgen,
+                verbosity):
+        return [[c.copy() for c in cl] for cl in _STUB_CIRCUIT_LISTS]
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state['tag'] = self.tag
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['tag'])
+
+
+class _StatelessStitcher(CircuitStitcher):
+    """A stitcher subclass with no configuration, hence no serialization code."""
+
+    def _stitch(self, oneq_gstdesign, twoq_gstdesign, vertices, color_patches, randgen,
+                verbosity):
+        return [[c.copy() for c in cl] for cl in _STUB_CIRCUIT_LISTS]
+
+
+class CircuitStitcherTester(BaseCase):
+    """The stitcher interface itself: casting, validation, and serialization.
+
+    The stitching *algorithm* is covered by the many tests above that call
+    `assign_the_designs_with_mapping` directly. What matters here is the wrapper.
     """
-    def __call__(self, *args, **kwargs):
-        return _STUB_CIRCUIT_LISTS
+
+    VERTICES = ('Q0', 'Q1', 'Q2')
+    COLOR_PATCHES = {0: [('Q0', 'Q1')]}
+
+    def _stitch_with(self, stitcher, **kwargs):
+        return stitcher.stitch(None, None, self.VERTICES, self.COLOR_PATCHES,
+                               debug_check=False, **kwargs)
+
+    # -- cast ---------------------------------------------------------------- #
+
+    def test_a_stitcher_casts_to_itself(self):
+        stitcher = RandomizedPatchStitcher()
+        self.assertIs(CircuitStitcher.cast(stitcher), stitcher)
+
+    def test_a_callable_is_wrapped(self):
+        stitcher = CircuitStitcher.cast(_stub_stitcher)
+        self.assertIsInstance(stitcher, CallableStitcher)
+        self.assertEqual(len(self._stitch_with(stitcher)), len(_STUB_CIRCUIT_LISTS))
+
+    def test_options_passed_alongside_a_built_stitcher_are_rejected(self):
+        """Silently dropping them is how the old **stitcher_kwargs swallowed typos."""
+        with self.assertRaises(TypeError) as ctx:
+            CircuitStitcher.cast(RandomizedPatchStitcher(), share_same_shape_schedules=False)
+        self.assertIn('share_same_shape_schedules', str(ctx.exception))
+
+    def test_casting_a_non_callable_says_what_is_accepted(self):
+        with self.assertRaises(TypeError):
+            CircuitStitcher.cast('randomized')
+
+    # -- the injected rng ----------------------------------------------------- #
+
+    def test_the_seed_reaches_stitch_as_a_generator(self):
+        seen = {}
+
+        class _Recording(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                seen['randgen'] = randgen
+                seen['draw'] = randgen.random()
+                return []
+
+        self._stitch_with(_Recording(), seed=1234)
+        self.assertIsInstance(seen['randgen'], np.random.Generator)
+        self.assertEqual(seen['draw'], np.random.default_rng(1234).random())
+
+    def test_an_unimplemented_stitch_says_what_to_implement(self):
+        with self.assertRaises(NotImplementedError) as ctx:
+            self._stitch_with(CircuitStitcher())
+        self.assertIn('_stitch', str(ctx.exception))
+
+    # -- validation ------------------------------------------------------------ #
+
+    def test_returning_something_other_than_a_list_is_rejected(self):
+        class _Bad(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                return 'not circuit lists'
+
+        with self.assertRaises(TypeError) as ctx:
+            self._stitch_with(_Bad())
+        self.assertIn('_Bad', str(ctx.exception))
+
+    def test_returning_bare_circuits_instead_of_lists_is_rejected(self):
+        """One level of nesting missing is an easy mistake and a confusing one later."""
+        class _Flat(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                return [Circuit([Label('Gi', 'Q0')], line_labels=('Q0',))]
+
+        with self.assertRaises(TypeError) as ctx:
+            self._stitch_with(_Flat())
+        self.assertIn('germ-power index 0', str(ctx.exception))
+
+    def test_returning_a_non_circuit_is_rejected(self):
+        class _Strings(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                return [['Gx']]
+
+        with self.assertRaises(TypeError):
+            self._stitch_with(_Strings())
+
+    def test_the_coloring_check_runs_for_direct_calls_too(self):
+        """It used to live in SimultaneousGSTDesign.__init__, so it did not."""
+        off_patch = [[Circuit([[Label('Gcnot', ('Q0', 'Q2')), Label('I', 'Q1')]],
+                              line_labels=self.VERTICES)]]
+
+        class _OffPatch(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                return [[c.copy() for c in cl] for cl in off_patch]
+
+        with self.assertRaises(AssertionError) as ctx:
+            _OffPatch().stitch(None, None, self.VERTICES, self.COLOR_PATCHES,
+                               debug_check=True)
+        self.assertIn('not an edge of any color patch', str(ctx.exception))
+
+    # -- serialization ---------------------------------------------------------- #
+
+    def test_the_default_stitcher_round_trips_with_its_options(self):
+        stitcher = RandomizedPatchStitcher(share_same_shape_schedules=False)
+        restored = CircuitStitcher.from_nice_serialization(stitcher.to_nice_serialization())
+        self.assertIsInstance(restored, RandomizedPatchStitcher)
+        self.assertFalse(restored.share_same_shape_schedules)
+
+    def test_a_third_party_subclass_round_trips_without_being_registered(self):
+        restored = CircuitStitcher.from_nice_serialization(
+            _CountingStitcher('mine').to_nice_serialization())
+        self.assertIsInstance(restored, _CountingStitcher)
+        self.assertEqual(restored.tag, 'mine')
+
+    def test_a_stateless_subclass_needs_no_serialization_code(self):
+        restored = CircuitStitcher.from_nice_serialization(
+            _StatelessStitcher().to_nice_serialization())
+        self.assertIsInstance(restored, _StatelessStitcher)
+
+    def test_a_module_level_function_backed_callable_stitcher_round_trips(self):
+        stitcher = CallableStitcher(_stub_stitcher, extra=7)
+        restored = CircuitStitcher.from_nice_serialization(stitcher.to_nice_serialization())
+        self.assertIsInstance(restored, CallableStitcher)
+        self.assertIs(restored.func, _stub_stitcher)
+        self.assertEqual(restored.kwargs, {'extra': 7})
+
+    def test_a_lambda_backed_callable_stitcher_does_not_round_trip(self):
+        """Documented limitation of the escape hatch, pinned so it stays documented."""
+        state = CallableStitcher(lambda *a, **kw: []).to_nice_serialization()
+        with self.assertRaises(ValueError) as ctx:
+            CircuitStitcher.from_nice_serialization(state)
+        self.assertIn('lambda', str(ctx.exception))
 
 
-class StitcherNameTester(BaseCase):
-    """
-    Cover ``_stitcher_name`` / ``_resolve_stitcher_name``, the write/read pair that
-    stands in for the un-serializable ``circuit_stitcher``.
+class SeedRecordTester(BaseCase):
+    """`stitch_seed` is what lets a reloaded design re-stitch, so it has to be data."""
 
-    A stitcher is an arbitrary caller-supplied callable, so it is recorded by qualified
-    name and imported back. Not every callable has one: ``functools.partial`` objects and
-    callable class instances have a ``__module__`` but no ``__qualname__``. Formatting the
-    two together would yield a bogus name like ``'functools.None'`` -- harmless, since it
-    fails to import into the same "None plus a warning" state as no name at all, but
-    misleading in meta.json, so the helper reports None instead.
-    """
+    def test_an_int_is_recorded_as_itself(self):
+        self.assertEqual(_recordable_seed(7), 7)
+        self.assertEqual(_seed_from_record(7), 7)
 
-    def test_plain_function_round_trips(self):
-        name = _stitcher_name(assign_the_designs_with_mapping)
-        self.assertEqual(name, 'pygsti.protocols.simultaneous_gst.assign_the_designs_with_mapping')
-        with self.assertNoWarns():
-            self.assertIs(_resolve_stitcher_name(name), assign_the_designs_with_mapping)
+    def test_none_stays_none(self):
+        self.assertIsNone(_recordable_seed(None))
+        self.assertIsNone(_seed_from_record(None))
 
-    def test_lambda_is_named_but_not_importable(self):
-        # A lambda does have a qualname, so it is recorded -- it just cannot be
-        # imported back. The two failure modes are distinct and both end at None.
-        name = _stitcher_name(lambda *args, **kwargs: None)
-        self.assertIsNotNone(name)
-        self.assertIn('<lambda>', name)
-        with self.assertWarns(Warning):
-            self.assertIsNone(_resolve_stitcher_name(name))
+    def test_a_seed_sequence_round_trips_to_the_same_stream(self):
+        original = np.random.SeedSequence(12345).spawn(2)[1]
+        record = _recordable_seed(original)
+        self.assertIsInstance(record, dict)
+        json.dumps(record)  # must survive meta.json
+        restored = _seed_from_record(record)
+        self.assertEqual(np.random.default_rng(restored).random(),
+                         np.random.default_rng(original).random())
 
-    def test_invalid_names_resolve_to_none_with_a_warning(self):
-        # Missing, unimportable module, missing member, class method, or bare names.
-        for name in (None, 'no_such_module_xyz.some_stitcher',
-                     'pygsti.protocols.simultaneous_gst.no_such_stitcher',
-                     '_CallableStitcher.__call__', 'stitcher_with_no_module'):
-            with self.subTest(name=name):
-                with self.assertWarns(Warning):
-                    self.assertIsNone(_resolve_stitcher_name(name))
+    def test_a_live_generator_cannot_be_recorded_and_says_so(self):
+        with self.assertWarns(Warning) as ctx:
+            self.assertIsNone(_recordable_seed(np.random.default_rng(0)))
+        self.assertIn('re-stitch', str(ctx.warning))
 
 
 class SerializationTester(_SGSTFixture, BaseCase):
@@ -1000,9 +1144,8 @@ class SerializationTester(_SGSTFixture, BaseCase):
         self.assertEqual(loaded.qubit_labels, self.design.qubit_labels)
         self.assertEqual(loaded.processor_spec.qubit_labels,
                          self.design.processor_spec.qubit_labels)
-        # RNG is deliberately not preserved (stitcher_kwargs comes back empty)
-        self.assertEqual(loaded.stitcher_kwargs, {})
-        self.assertIn('randgen', self.design.stitcher_kwargs)
+        # The seed is preserved as data, so the loaded design can re-stitch.
+        self.assertEqual(loaded.stitch_seed, self.design.stitch_seed)
 
     @with_temp_path
     def test_color_patches_survive_with_int_keys_and_tuple_edges(self, root_path):
@@ -1077,37 +1220,35 @@ class SerializationTester(_SGSTFixture, BaseCase):
 
     # -- the circuit stitcher ------------------------------------------------
 
-    def test_stitcher_name_is_recorded(self):
-        self.assertEqual(self.design.circuit_stitcher_name,
-                         'pygsti.protocols.simultaneous_gst.assign_the_designs_with_mapping')
-
     @with_temp_path
-    def test_importable_stitcher_is_restored(self, root_path):
+    def test_the_stitcher_is_restored_as_an_object(self, root_path):
         _, loaded = self._roundtrip(root_path)
-        self.assertIs(loaded.circuit_stitcher, assign_the_designs_with_mapping)
+        self.assertIsInstance(loaded.circuit_stitcher, RandomizedPatchStitcher)
+        self.assertEqual(loaded.circuit_stitcher.share_same_shape_schedules,
+                         self.design.circuit_stitcher.share_same_shape_schedules)
 
     @with_temp_path
-    def test_unimportable_stitcher_loads_as_none_with_a_warning(self, root_path):
-        # A lambda has no importable name. Not fatal -- the stitcher is only called from
-        # __init__ -- but the design forgets how it was built, hence the warning.
+    def test_a_stitcher_defined_outside_pygsti_is_restored_too(self, root_path):
+        """The reason the stitcher is serialized rather than named: a subclass
+        anywhere round-trips, where an import path only works for a module-level def."""
         design = SimultaneousGSTDesign(
             self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
-            circuit_stitcher=(lambda *args, **kwargs: _STUB_CIRCUIT_LISTS),
-            debug_check=False)
-
-        root = pathlib.Path(root_path) / 'lam'
+            circuit_stitcher=_CountingStitcher('from-a-test-module'), debug_check=False)
+        root = pathlib.Path(root_path) / 'custom'
         design.write(root)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always')
-            loaded = SimultaneousGSTDesign.from_dir(root)
+        loaded = SimultaneousGSTDesign.from_dir(root)
+        self.assertIsInstance(loaded.circuit_stitcher, _CountingStitcher)
+        self.assertEqual(loaded.circuit_stitcher.tag, 'from-a-test-module')
 
-        self.assertIsNone(loaded.circuit_stitcher)
-        self.assertTrue(any('circuit_stitcher' in str(w.message) for w in caught),
-                        msg='expected a warning naming circuit_stitcher, got %s'
-                            % [str(w.message) for w in caught])
-        # The circuits themselves are unaffected by the stitcher being unrestorable.
-        self.assertEqual([list(cl) for cl in loaded.circuit_lists],
-                         [list(cl) for cl in design.circuit_lists])
+    @with_temp_path
+    def test_a_loaded_design_can_restitch_its_own_circuits(self, root_path):
+        """What the callable stitcher could not do: `stitcher_kwargs` held a live
+        Generator, so a reloaded design reproduced its circuits but could not rebuild
+        them."""
+        _, loaded = self._roundtrip(root_path)
+        restitched = loaded.restitch()
+        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+                         [list(cl) for cl in self.design.circuit_lists])
 
 
 class TruncationTester(_SGSTFixture, BaseCase):
@@ -1398,11 +1539,52 @@ class ReduceByDoptTester(_SGSTFixture, BaseCase):
             set(pygsti.tools.reduce_design_by_dopt(
                 self.small, self.model, 6).all_circuits_needing_data))
 
-    def test_the_score_curve_comes_back_with_the_design(self):
-        reduced, scores = self.small.reduce_by_dopt(self.model, 6, return_scores=True)
+    def test_the_score_curve_comes_back_on_the_design(self):
+        """`return_scores=True` used to return a tuple; the design now carries it."""
+        reduced = self.small.reduce_by_dopt(self.model, 6)
         self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        scores = reduced.selection.scores
         self.assertEqual(len(scores), 6)
         self.assertTrue(np.all(np.diff(scores) >= -1e-9))
+
+    def test_the_reduced_design_records_what_reduced_it(self):
+        from pygsti.tools.edesign import BlockDoptReducer
+        reduced = self.small.reduce_by_dopt(self.model, 6, ridge=2.0)
+        self.assertIsInstance(reduced.selection.reducer, BlockDoptReducer)
+        self.assertEqual(reduced.selection.reducer.ridge, 2.0)
+        self.assertEqual(reduced.selection.metadata['num_candidates'],
+                         len(self.small.all_circuits_needing_data))
+
+    def test_an_unreduced_design_records_no_selection(self):
+        self.assertIsNone(self.small.selection)
+
+    def test_reduce_with_takes_any_reducer(self):
+        """The point of the interface: a rule we did not write, on a stitched design."""
+        shallowest = sorted(self.small.all_circuits_needing_data, key=len)[:7]
+        reduced = self.small.reduce_with(lambda design, n: shallowest, 7)
+        self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        self.assertEqual(set(reduced.all_circuits_needing_data), set(shallowest))
+        assert_circuit_lists_match_color_patches(
+            reduced.circuit_lists, reduced.vertices, reduced.color_patches)
+
+    def test_reduce_by_dopt_is_reduce_with_a_dopt_reducer(self):
+        from pygsti.tools.edesign import BlockDoptReducer
+        self.assertEqual(
+            set(self.small.reduce_by_dopt(self.model, 6).all_circuits_needing_data),
+            set(self.small.reduce_with(BlockDoptReducer(self.model),
+                                       6).all_circuits_needing_data))
+
+    def test_a_target_model_warns_here_too(self):
+        target = pygsti.models.create_crosstalk_free_model(
+            self.pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
+        with self.assertWarns(UserWarning):
+            self.small.reduce_by_dopt(target, 4)
+
+    def test_relabelling_a_reduced_design_keeps_the_record(self):
+        """map_qubit_labels bypasses __init__, so `selection` has to be carried by hand."""
+        reduced = self.small.reduce_by_dopt(self.model, 6)
+        mapper = {q: 'Q%s' % q for q in reduced.qubit_labels}
+        self.assertIs(reduced.map_qubit_labels(mapper).selection, reduced.selection)
 
     def test_the_reduction_beats_taking_the_first_n_circuits(self):
         """Otherwise there is no point to any of this.
