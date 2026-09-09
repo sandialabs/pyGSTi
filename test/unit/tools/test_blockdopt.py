@@ -54,6 +54,54 @@ class BlockDoptKernelTester(BaseCase):
         # Adding blocks can only add information.
         self.assertTrue(np.all(np.diff(curve) >= -1e-12))
 
+    def test_scores_do_not_drift_over_a_full_ranking(self):
+        """A long run is the test of the in-place `G <- G C^-1` updates.
+
+        The kernel carries the transformed candidate matrix and overwrites it
+        once per step, so a full ranking applies as many updates as there are
+        candidates.  Each `C^-1` is a contraction, so the error should not
+        accumulate -- checked against the independent slogdet curve, which
+        recomputes from the untouched input every time.
+        """
+        A = _design(40, 120, 4, 16)
+        piv, scores = bd.block_linear_dopt(A, 4, 120, return_scores=True)
+        self.assertEqual(len(piv), 120)
+        self.assertEqual(len(set(piv.tolist())), 120)        # each candidate once
+        curve = bd.greedy_path_log_volumes(A, 4, piv)
+        self.assertArraysAlmostEqual(curve[1:], scores, places=8)
+
+    def test_selection_stays_greedy_optimal_over_a_full_ranking(self):
+        """Greedy optimality at every one of 120 steps, not just the first few.
+
+        Retiring a winner swaps it past the active boundary, so after the first
+        step the surviving candidates are no longer in ascending order.  This
+        walks the whole ranking to catch a bookkeeping error that a short run
+        would miss.
+        """
+        A = _design(41, 120, 4, 16)
+        piv = bd.block_linear_dopt(A, 4, 120)
+        self.assert_tol_greedy_path(A, 4, piv, label="full ranking")
+
+    def test_duplicate_blocks_tie_break_by_original_index_late_in_the_ranking(self):
+        """Ties must resolve to the lowest *original* index after compaction.
+
+        Companion to the short duplicate test: here the duplicated pairs are
+        weak blocks that are only reached once many swaps have permuted the
+        active set, so a tie-break that used the current position rather than
+        the original index would pick the wrong one.
+        """
+        b, ncand, p = 4, 60, 12
+        A = _design(42, ncand, b, p)
+        A[:, 40 * b:] *= 1e-3                        # make the tail get picked last
+        dups = [(41, 55), (44, 58), (47, 52)]
+        for lo, hi in dups:
+            A[:, hi * b:(hi + 1) * b] = A[:, lo * b:(lo + 1) * b]
+        piv = bd.block_linear_dopt(A, b, ncand)
+        order = {int(blk): pos for pos, blk in enumerate(piv)}
+        for lo, hi in dups:
+            self.assertGreater(order[lo], 20, (lo, order[lo]))   # genuinely late
+            self.assertLess(order[lo], order[hi], (lo, hi, piv))
+
     def test_first_pick_is_the_standalone_argmax(self):
         A = _design(31, 15, 6, 20)
         piv = bd.block_linear_dopt(A, 6, 1)
