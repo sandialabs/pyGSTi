@@ -14,8 +14,10 @@ estimates, the `calculate_fisher_information_*` family for how much a design
 tells you about a model, and `pad_edesign_with_idle_lines` for widening a design
 onto more qubits.
 
-`blockdopt` cuts a design down: it ranks candidates by how much information
-each adds and keeps a budget's worth.
+`DesignReducer` is the interface for cutting a design down to a budget; write
+one to plug your own selection rule into `design.reduce_with(...)`.
+`blockdopt` supplies the reference implementation, which ranks candidates by
+how much information each adds about a model's parameters.
 
 `pygsti.tools.edesigntools` is a compatibility alias for the runtime, Fisher
 and padding names below.  New code should import from here.
@@ -23,12 +25,16 @@ and padding names below.  New code should import from here.
 from ._fisher import (calculate_fisher_information_matrices_by_L, calculate_fisher_information_matrix,
                       calculate_fisher_information_per_circuit)
 from ._padding import pad_edesign_with_idle_lines
+from ._reduction import CallableReducer, CircuitSelection, DesignReducer
 from ._runtime import calculate_edesign_estimated_runtime
 from .blockdopt import (block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes,
                         jacobian_dict_to_array, perturb_errorgen_rates, rank_circuits_by_dopt,
                         reduce_design_by_dopt)
 
 __all__ = [
+    "CallableReducer",
+    "CircuitSelection",
+    "DesignReducer",
     "block_linear_dopt",
     "calculate_edesign_estimated_runtime",
     "calculate_fisher_information_matrices_by_L",
