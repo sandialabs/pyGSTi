@@ -10,10 +10,16 @@ Greedy block D-optimal selection of experiment-design candidates
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import warnings as _warnings
+
 import numpy as _np
 import scipy.linalg as _spl
 
+from pygsti.tools.edesign._reduction import CircuitSelection as _CircuitSelection
+from pygsti.tools.edesign._reduction import DesignReducer as _DesignReducer
+
 __all__ = [
+    'BlockDoptReducer',
     'block_linear_dopt',
     'greedy_candidate_scores',
     'greedy_path_log_volumes',
@@ -569,6 +575,12 @@ def reduce_design_by_dopt(design, model, num_circuits, *, ridge=1.0,
     fit models with O(100) parameters; this is the postprocessing step that cuts
     that down.
 
+    Equivalent to `BlockDoptReducer(model, ...).reduce(design, num_circuits)`, and
+    implemented that way.  Prefer the reducer object when you want the selection's
+    diagnostics, when the design records how it was reduced, or when D-optimality is one
+    of several rules you are comparing; see
+    :class:`~pygsti.tools.edesign.DesignReducer`.
+
     Nesting is preserved for free: truncation filters every germ-power list by
     the same keep-set, so a kept circuit stays in each list it was in and the
     containment `circuit_lists[L] <= circuit_lists[L+1]` survives.  No explicit
@@ -602,8 +614,135 @@ def reduce_design_by_dopt(design, model, num_circuits, *, ridge=1.0,
         circuits are individually less informative.  Where the curve has
         flattened, the budget is past the point of buying much.
     """
-    result = rank_circuits_by_dopt(model, design.all_circuits_needing_data, num_circuits,
-                                   ridge=ridge, return_scores=return_scores, dtype=dtype)
-    ranked, scores = result if return_scores else (result, None)
-    reduced = design.truncate_to_circuits(ranked)
-    return (reduced, scores) if return_scores else reduced
+    reducer = BlockDoptReducer(model, ridge=ridge, dtype=dtype, warn_on_target_model=False)
+    selection = reducer.select(design, num_circuits)
+    reduced = design.truncate_to_circuits(selection.circuits)
+    return (reduced, selection.scores) if return_scores else reduced
+
+
+# --------------------------------------------------------------------------- #
+#  The reducer object
+# --------------------------------------------------------------------------- #
+
+def _looks_like_a_target_model(model):
+    """Whether every error-generator coefficient of `model` is exactly zero.
+
+    True only when there is at least one coefficient to look at, so a model with no
+    error generators -- nothing to perturb, nothing to warn about -- does not trip it.
+    """
+    saw_one = False
+    for _, member in model._iter_parameterized_objs():
+        getter = getattr(member, 'errorgen_coefficients', None)
+        if getter is None:
+            continue
+        for value in getter().values():
+            saw_one = True
+            if value != 0:
+                return False
+    return saw_one
+
+
+class BlockDoptReducer(_DesignReducer):
+    """Keep the circuits that say the most about a model's parameters.
+
+    Greedy block D-optimal selection: each step takes the circuit that most increases
+    `0.5 * logdet(ridge * I + J_S^T J_S)`, where `J_S` stacks the Jacobian rows of the
+    circuits chosen so far.  This is the reducer :func:`reduce_design_by_dopt` and
+    `SimultaneousGSTDesign.reduce_by_dopt` use, and the reference against which another
+    :class:`~pygsti.tools.edesign.DesignReducer` can be judged.
+
+    Parameters
+    ----------
+    model : Model
+        Whose parameters the reduced design should be informative about.  This must be a
+        model at a *plausible noisy point*, not a target model -- see
+        :meth:`from_target_model`, which is the usual way to get one, and
+        :func:`perturb_errorgen_rates`, which explains why at length.  The model's
+        parameterization is what defines the objective: the ranking is only as
+        meaningful as its parameters are the ones you care about estimating.
+
+    ridge : float, optional (default 1.0)
+        Weight of the identity prior on the information matrix.
+
+    dtype : numpy dtype, optional (default numpy.float64)
+        Working precision.  float32 halves the memory and changes selections at rounding
+        level, which matters only among near-tied candidates.
+
+    warn_on_target_model : bool, optional (default True)
+        Whether to check `model` for all-zero error-generator rates and warn.  Turn it
+        off if you are deliberately ranking against an unperturbed model.
+
+    Notes
+    -----
+    Selecting with no budget (`num_circuits=None`) ranks every candidate rather than
+    raising: for a greedy reducer "you decide" has an honest answer, and the returned
+    score curve is the natural way to *choose* a budget.  `selection.circuits[:k]` is
+    then this reducer's own answer for a budget of `k`, with no re-ranking.
+    """
+
+    def __init__(self, model, *, ridge=1.0, dtype=_np.float64, warn_on_target_model=True):
+        super().__init__()
+        if ridge <= 0:
+            raise ValueError(f"BlockDoptReducer: ridge must be positive, got {ridge}.")
+        self.model = model
+        self.ridge = float(ridge)
+        self.dtype = _np.dtype(dtype)
+        if warn_on_target_model and _looks_like_a_target_model(model):
+            _warnings.warn(
+                "BlockDoptReducer was given a model whose error-generator rates are all "
+                "exactly zero, which usually means a target model. In the H+S and CPTPLND "
+                "parameterizations, stochastic rates use param_mode='cholesky', so "
+                "d(rate)/d(theta) = 2*theta is exactly zero there: every stochastic column "
+                "of the Jacobian vanishes and the selection silently optimizes as if those "
+                "parameters did not exist. Use BlockDoptReducer.from_target_model(model) to "
+                "perturb the rates first, or pass warn_on_target_model=False if this is "
+                "deliberate.")
+
+    @classmethod
+    def from_target_model(cls, target_model, *, scale=1e-3, seed=None, **kwargs):
+        """A reducer for a perturbed copy of `target_model`; the usual way to build one.
+
+        Parameters
+        ----------
+        target_model : Model
+            Not modified.
+
+        scale, seed
+            Passed to :func:`perturb_errorgen_rates`.  Pass a `seed`, or the selection is
+            not reproducible.
+
+        **kwargs
+            `ridge` and `dtype`, as for the constructor.
+
+        Returns
+        -------
+        BlockDoptReducer
+        """
+        return cls(perturb_errorgen_rates(target_model, scale, seed), **kwargs)
+
+    def _select(self, design, num_circuits):
+        candidates = list(design.all_circuits_needing_data)
+        ranked, scores = rank_circuits_by_dopt(
+            self.model, candidates,
+            len(candidates) if num_circuits is None else num_circuits,
+            ridge=self.ridge, return_scores=True, dtype=self.dtype)
+        return _CircuitSelection(
+            ranked, scores=scores,
+            score_name='0.5*logdet(I + J_S^T J_S / ridge)',
+            metadata={'ridge': self.ridge, 'dtype': str(self.dtype)})
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'model': self.model.to_nice_serialization(),
+                      'ridge': self.ridge,
+                      'dtype': str(self.dtype)})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        from pygsti.models.model import Model as _Model
+        # The model came from a prior instance, so it has already been vetted (or the
+        # warning already issued); re-warning on every load would be noise.
+        return cls(_Model.from_nice_serialization(state['model']),
+                   ridge=state['ridge'], dtype=_np.dtype(state['dtype']),
+                   warn_on_target_model=False)

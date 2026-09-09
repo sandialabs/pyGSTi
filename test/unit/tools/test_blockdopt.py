@@ -540,3 +540,143 @@ class ReduceDesignTester(_ModelFixture, BaseCase):
         reduced = bd.reduce_design_by_dopt(design, self.model, 10 ** 6)
         self.assertEqual(set(reduced.all_circuits_needing_data),
                          set(design.all_circuits_needing_data))
+
+
+class BlockDoptReducerTester(_ModelFixture, BaseCase):
+    """The DesignReducer wrapper around the ranking.
+
+    The selection algorithm is tested above; what matters here is that the object form
+    agrees with the function form, carries the right diagnostics, and round-trips.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.model = bd.perturb_errorgen_rates(cls.target, 1e-3, seed=0)
+
+    def _design(self):
+        from pygsti.protocols import CircuitListsDesign
+        half = len(self.circuits) // 2
+        return CircuitListsDesign([self.circuits[:half], self.circuits], nested=True)
+
+    # -- agreement with the function form ----------------------------------- #
+
+    def test_it_selects_exactly_what_rank_circuits_by_dopt_ranks(self):
+        """Pinned to the kernel, in order, so the wrapper cannot drift from it."""
+        design = self._design()
+        selection = bd.BlockDoptReducer(self.model).select(design, 9)
+        ranked = bd.rank_circuits_by_dopt(self.model, design.all_circuits_needing_data, 9)
+        self.assertEqual(list(selection.circuits), list(ranked))
+
+    def test_reduce_design_by_dopt_still_agrees_with_it(self):
+        design = self._design()
+        by_function = bd.reduce_design_by_dopt(design, self.model, 9)
+        by_object = bd.BlockDoptReducer(self.model).reduce(design, 9)
+        self.assertEqual(set(by_function.all_circuits_needing_data),
+                         set(by_object.all_circuits_needing_data))
+
+    def test_ridge_reaches_the_kernel(self):
+        design = self._design()
+        selection = bd.BlockDoptReducer(self.model, ridge=10.0).select(design, 6)
+        ranked = bd.rank_circuits_by_dopt(self.model, design.all_circuits_needing_data, 6,
+                                          ridge=10.0)
+        self.assertEqual(list(selection.circuits), list(ranked))
+
+    def test_a_nonpositive_ridge_is_rejected_at_construction(self):
+        for ridge in (0.0, -1.0):
+            with self.subTest(ridge=ridge):
+                with self.assertRaises(ValueError):
+                    bd.BlockDoptReducer(self.model, ridge=ridge)
+
+    # -- diagnostics --------------------------------------------------------- #
+
+    def test_the_selection_carries_a_nondecreasing_score_curve(self):
+        selection = bd.BlockDoptReducer(self.model).select(self._design(), 8)
+        self.assertEqual(len(selection.scores), 8)
+        self.assertTrue(np.all(np.diff(selection.scores) >= -1e-9))
+        self.assertIn('logdet', selection.score_name)
+
+    def test_the_selection_records_the_settings_and_the_candidate_count(self):
+        design = self._design()
+        selection = bd.BlockDoptReducer(self.model, ridge=2.0).select(design, 5)
+        self.assertEqual(selection.metadata['ridge'], 2.0)
+        self.assertEqual(selection.metadata['dtype'], 'float64')
+        self.assertEqual(selection.metadata['num_candidates'],
+                         len(design.all_circuits_needing_data))
+
+    def test_no_budget_ranks_everything_so_the_curve_can_pick_one(self):
+        design = self._design()
+        selection = bd.BlockDoptReducer(self.model).select(design)
+        n = len(design.all_circuits_needing_data)
+        self.assertEqual(len(selection.circuits), n)
+        # ...and the prefix is the answer for a smaller budget, with no re-ranking.
+        self.assertEqual(list(selection.circuits[:6]),
+                         list(bd.BlockDoptReducer(self.model).select(design, 6).circuits))
+
+    # -- the target-model guard ---------------------------------------------- #
+
+    def test_a_target_model_warns_and_says_how_to_fix_it(self):
+        with self.assertWarns(UserWarning) as ctx:
+            bd.BlockDoptReducer(self.target)
+        self.assertIn('from_target_model', str(ctx.warning))
+
+    def test_a_perturbed_model_does_not_warn(self):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            bd.BlockDoptReducer(self.model)
+
+    def test_the_warning_can_be_turned_off(self):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            bd.BlockDoptReducer(self.target, warn_on_target_model=False)
+
+    def test_a_model_with_no_error_generators_does_not_warn(self):
+        """Nothing to perturb means nothing to warn about; the check must not fire."""
+        from pygsti.modelpacks import smq1Q_XYI
+        full = smq1Q_XYI.target_model('full TP')
+        self.assertFalse(bd._looks_like_a_target_model(full))
+
+    def test_from_target_model_perturbs_and_does_not_warn(self):
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            reducer = bd.BlockDoptReducer.from_target_model(self.target, seed=0)
+        # Same bar as test_perturbing_rates_makes_the_stochastic_columns_usable: rates
+        # are drawn uniformly from [0, scale), so individual columns can still be small.
+        norms = self.column_norms(reducer.model)
+        self.assertGreater(np.median(norms[self.is_stochastic]), 0.1)
+
+    def test_from_target_model_leaves_the_target_alone(self):
+        before = self.target.to_vector().copy()
+        bd.BlockDoptReducer.from_target_model(self.target, seed=0)
+        self.assertArraysAlmostEqual(self.target.to_vector(), before)
+
+    def test_from_target_model_is_reproducible_given_a_seed(self):
+        design = self._design()
+        first = bd.BlockDoptReducer.from_target_model(self.target, seed=7).select(design, 6)
+        second = bd.BlockDoptReducer.from_target_model(self.target, seed=7).select(design, 6)
+        self.assertEqual(list(first.circuits), list(second.circuits))
+
+    # -- serialization -------------------------------------------------------- #
+
+    def test_it_round_trips_and_still_picks_the_same_circuits(self):
+        from pygsti.tools.edesign import DesignReducer
+        reducer = bd.BlockDoptReducer(self.model, ridge=3.0, dtype=np.float32)
+        restored = DesignReducer.from_nice_serialization(reducer.to_nice_serialization())
+        self.assertIsInstance(restored, bd.BlockDoptReducer)
+        self.assertEqual(restored.ridge, 3.0)
+        self.assertEqual(restored.dtype, np.dtype(np.float32))
+        design = self._design()
+        self.assertEqual(list(restored.select(design, 6).circuits),
+                         list(reducer.select(design, 6).circuits))
+
+    def test_reloading_does_not_re_warn_about_the_model(self):
+        """The model was vetted when the original was built; warning again is noise."""
+        import warnings
+        from pygsti.tools.edesign import DesignReducer
+        state = bd.BlockDoptReducer(self.target, warn_on_target_model=False).to_nice_serialization()
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            DesignReducer.from_nice_serialization(state)
