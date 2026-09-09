@@ -8,28 +8,24 @@
 #***************************************************************************************************
 
 import copy as _copy
-import importlib as _importlib
 import pathlib as _pathlib
 import warnings as _warnings
 
 import numpy as np
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Union, cast
 
 from pygsti import io as _io
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.processors import QubitProcessorSpec
-from pygsti.circuits.circuit import Circuit
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
-from pygsti.baseobjs.label import Label
 
 # The stitching machinery lives in _stitchers; this module is the design class that
 # drives it.  `assign_the_designs_with_mapping` and
-# `assert_circuit_lists_match_color_patches` are re-exported below because both were
-# importable from here before the split.
+# `assert_circuit_lists_match_color_patches` are used below and re-exported in __all__,
+# as both were importable from here before the split.
 from pygsti.protocols._stitchers import (
-    CircuitStitcher, RandomizedPatchStitcher, Edge, LayerMappers, Vertex,
+    CircuitStitcher, Edge, RandomizedPatchStitcher, Vertex,
     assert_circuit_lists_match_color_patches, assign_the_designs_with_mapping,
-    build_layer_mappers,
 )
 from pygsti.tools.edesign.blockdopt import BlockDoptReducer as _BlockDoptReducer
 from pygsti.tools.graphcoloring import (

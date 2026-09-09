@@ -11,7 +11,6 @@ import copy as _copy
 import hashlib
 import json
 import pathlib
-import warnings
 
 import numpy as np
 
