@@ -178,10 +178,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         index of what survived.
         """
         from pygsti.tools.edesign import DesignReducer as _DesignReducer
-        selection = _DesignReducer.cast(reducer).select(self, num_circuits)
-        reduced = self.truncate_to_circuits(selection.circuits)
-        reduced.selection = selection
-        return reduced
+        return _DesignReducer.cast(reducer).reduce(self, num_circuits)
 
     def map_qubit_labels(self, mapper):
         """

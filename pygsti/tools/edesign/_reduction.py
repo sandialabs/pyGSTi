@@ -169,8 +169,18 @@ class DesignReducer(_NicelySerializable):
         -------
         ExperimentDesign
             Whatever `design.truncate_to_circuits` returns, so the class is preserved.
+            On a design that records its provenance -- any
+            :class:`~pygsti.protocols.GateSetTomographyDesign` -- the result's `selection`
+            attribute holds the :class:`CircuitSelection` that produced it.
         """
-        return design.truncate_to_circuits(self.select(design, num_circuits).circuits)
+        selection = self.select(design, num_circuits)
+        reduced = design.truncate_to_circuits(selection.circuits)
+        # Only where the class declared the member: it is written out as a
+        # 'serialized-object' auxfile, and setting it on a design that has not registered
+        # it would leave a live object for `write` to choke on.
+        if hasattr(reduced, 'selection'):
+            reduced.selection = selection
+        return reduced
 
     # -- serialization ------------------------------------------------------ #
     #
