@@ -5,7 +5,10 @@ from pygsti.baseobjs.label import Label
 from pygsti.circuits.circuit import Circuit
 from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp
 from pygsti.models import LocalNoiseModel, ExplicitOpModel, ImplicitOpModel
-from pygsti.models.modelconstruction import create_crosstalk_free_model
+from pygsti.models.cloudnoisemodel import CloudNoiseModel
+from pygsti.models.modelconstruction import (
+    create_crosstalk_free_model, create_cloud_crosstalk_model
+)
 from pygsti.processors.processorspec import QubitProcessorSpec
 from pygsti.modelmembers.operations import (
     StaticArbitraryOp, ExpErrorgenOp, LindbladErrorgen
@@ -246,6 +249,56 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
         c3.done_editing()
         prob3 = mdl_local.probabilities(c3)
         self.assertEqual(len(prob3), 16)  # Full 4 qubit space
+
+
+class CloudNoiseModelTester(ImplicitOpModelMixin, BaseCase):
+    """
+    Build CloudNoiseModel objects from create_cloud_crosstalk_model.
+    """
+
+    def ideal_model_from_pspec(self, ps: QubitProcessorSpec) -> CloudNoiseModel:
+        return create_cloud_crosstalk_model(ps, depolarization_strengths={'Gx': 0.1})
+
+    def test_getitem(self):
+        # Not `ImplicitOpModelMixin._test_getitem`: that asserts `m[layer_lbl]` *is* the
+        # stored `operation_blks['layers']` entry, which holds for LocalNoiseModel but not
+        # here -- a CloudNoiseModel composes the target gate with its cloud noise to build
+        # the layer op on demand.
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        self.assertIs(m['rho0'], m.prep_blks['layers']['rho0'])
+        self.assertIs(m['Mdefault'], m.povm_blks['layers']['Mdefault'])
+        self.assertIs(m['Gx'], m.operation_blks['gates']['Gx'])
+        self.assertIs(m[('Gx', 'qb0')], m['Gx:qb0'])
+        with self.assertRaises(KeyError):
+            _ = m['nonexistent']
+
+    def test_member_dict_prefixes(self):
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        inst = Instrument({'p0': np.diag([1., 0, 0, 0]), 'p1': np.diag([0, 0, 0, 1.])})
+        cloudnoise_member = m.operation_blks['cloudnoise'][('Gx', 'qb0')].copy()
+        member_dicts = (
+            (m.prep_blks['layers'], 'rho1', m['rho0'].copy(), 'Mbad'),
+            (m.povm_blks['layers'], 'Mtest', m['Mdefault'].copy(), 'rhobad'),
+            (m.operation_blks['gates'], 'Ggate', m['Gx'].copy(), 'Mbad'),
+            (m.operation_blks['cloudnoise'], ('Gcloud', 'qb0'), cloudnoise_member, 'Mbad'),
+            (m.operation_blks['layers'], ('Glayer', 'qb0'), m[('Gx', 'qb0')].copy(), 'Ibad'),
+            (m.instrument_blks['layers'], 'Itest', inst, 'Gbad'),
+            (m.factories['gates'], 'Gfactory', m['Gx'].copy(), 'rhobad'),
+            (m.factories['cloudnoise'], ('Gfactorycloud', 'qb0'), m[('Gx', 'qb0')].copy(), 'rhobad'),
+            (m.factories['layers'], ('Gfactorylayer', 'qb0'), m[('Gx', 'qb0')].copy(), 'Mbad')
+        )
+        for member_dict, valid_key, member, invalid_key in member_dicts:
+            with self.subTest(valid_key=str(valid_key)):
+                member_dict[valid_key] = member
+                with self.assertRaises(KeyError):
+                    member_dict[invalid_key] = member
+
+    def test_implicit_idle_label_accepted(self):
+        # '{...}' names are the other accepted namespace; make sure enforcing 'G' did not
+        # lock out the brace-wrapped implicit labels.
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        m.operation_blks['layers']['{auto_global_idle}'] = m[('Gx', 'qb0')].copy()
+        self.assertIn('{auto_global_idle}', m.operation_blks['layers'])
 
 
 class ToExplicitModelTester(BaseCase):

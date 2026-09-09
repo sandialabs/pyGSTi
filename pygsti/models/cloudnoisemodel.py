@@ -20,7 +20,6 @@ import scipy.sparse as _sps
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel, _init_spam_layers
 from pygsti.models.layerrules import LayerRules as _LayerRules
-from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
@@ -144,6 +143,21 @@ class CloudNoiseModel(_ImplicitOpModel):
         An integer >= 0 dictating how must output to send to stdout.
     """
 
+    # Same namespaces as LocalNoiseModel._member_prefixes, plus the 'cloudnoise' blocks
+    # that are unique to this class.  Every 'cloudnoise' key is a Label built from a
+    # processor-spec gate name, so those blocks take the operation namespaces too.
+    _member_prefixes = (
+        ('prep_blks', 'layers', 'rho'),
+        ('povm_blks', 'layers', 'M'),
+        ('operation_blks', 'gates', ('G', '{')),
+        ('operation_blks', 'cloudnoise', ('G', '{')),
+        ('operation_blks', 'layers', ('G', '{')),
+        ('instrument_blks', 'layers', 'I'),
+        ('factories', 'gates', ('G', '{')),
+        ('factories', 'cloudnoise', ('G', '{')),
+        ('factories', 'layers', ('G', '{')),
+    )
+
     def __init__(self, processor_spec, gatedict,
                  prep_layers=None, povm_layers=None,
                  build_cloudnoise_fn=None, build_cloudkey_fn=None,
@@ -209,17 +223,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                                            noisy_global_idle_layer)
         super(CloudNoiseModel, self).__init__(state_space, layer_rules, "pp", simulator=simulator, evotype=evotype)
 
-        flags = {'auto_embed': False, 'match_parent_statespace': False,
-                 'match_parent_evotype': True, 'cast_to_type': None}
-        self.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['cloudnoise'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
-        self.factories['cloudnoise'] = _OrderedMemberDict(self, None, None, flags)
-        self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
+        self._init_member_dicts()
 
         printer = _VerbosityPrinter.create_printer(verbosity)
         printer.log("Creating a %d-qudit cloud-noise model" % self.processor_spec.num_qudits)
@@ -355,22 +359,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                                   simulator=simulator, evotype=state['evotype'])
 
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
-        flags = {'auto_embed': False, 'match_parent_statespace': False,
-                 'match_parent_evotype': True, 'cast_to_type': None}
-        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
-        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('povm_blks|layers', []))
-        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                         modelmembers.get('operation_blks|gates', []))
-        mdl.operation_blks['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                              modelmembers.get('operation_blks|cloudnoise', []))
-        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                          modelmembers.get('operation_blks|layers', []))
-        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                           modelmembers.get('instrument_blks|layers', []))
-        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))
-        mdl.factories['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                         modelmembers.get('factories|cloudnoise', []))
-        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|layers', []))
+        mdl._init_member_dicts(modelmembers)
 
         mdl._clouds = _collections.OrderedDict()
         mdl._clean_paramvec()
