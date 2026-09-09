@@ -120,6 +120,123 @@ class StandardGSTDesignTester(BaseCase):
                                     [1, 2])
 
 
+class ReduceWithTester(BaseCase):
+    """`GateSetTomographyDesign.reduce_with`, the general design-reduction entry point.
+
+    The DesignReducer contract is tested in test/unit/tools/test_reduction.py and the
+    D-optimal rule in test_blockdopt.py. What matters here is that the method is on the
+    right class, preserves the subclass it was called on, and records its provenance --
+    including through the paths that bypass `__init__`.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.design = smq1Q_XYI.create_gst_experiment_design(max_max_length=2)
+        cls.circuits = list(cls.design.all_circuits_needing_data)
+
+    def _shallowest(self, n):
+        return sorted(self.circuits, key=len)[:n]
+
+    def test_a_standard_design_stays_a_standard_design(self):
+        """`StandardGSTDesign` inherits the method; truncation must not downcast it."""
+        self.assertIsInstance(self.design, gst.StandardGSTDesign)
+        keep = self._shallowest(12)
+        reduced = self.design.reduce_with(lambda design, n: keep, 12)
+        self.assertIsInstance(reduced, gst.StandardGSTDesign)
+        self.assertEqual(set(reduced.all_circuits_needing_data), set(keep))
+
+    def test_the_reduced_design_records_the_selection(self):
+        reduced = self.design.reduce_with(lambda design, n: self._shallowest(9), 9)
+        self.assertEqual(len(reduced.selection.circuits), 9)
+        self.assertEqual(reduced.selection.metadata['num_candidates'], len(self.circuits))
+        self.assertIsNone(self.design.selection)
+
+    def test_the_original_design_is_untouched(self):
+        before = set(self.design.all_circuits_needing_data)
+        self.design.reduce_with(lambda design, n: self._shallowest(5), 5)
+        self.assertEqual(set(self.design.all_circuits_needing_data), before)
+
+    def test_a_bad_reducer_cannot_reach_truncation(self):
+        foreign = smq2Q_XYICNOT.create_gst_experiment_design(max_max_length=1)
+        stranger = list(foreign.all_circuits_needing_data)[:3]
+        with self.assertRaises(ValueError):
+            self.design.reduce_with(lambda design, n: stranger, 3)
+
+    def test_the_dopt_reducer_works_here_too(self):
+        """The reference reducer is not special-cased; it goes through the same door."""
+        from pygsti.tools.edesign import BlockDoptReducer
+        reducer = BlockDoptReducer.from_target_model(smq1Q_XYI.target_model('H+S'), seed=0)
+        reduced = self.design.reduce_with(reducer, 10)
+        self.assertIsInstance(reduced, gst.StandardGSTDesign)
+        self.assertEqual(len(reduced.all_circuits_needing_data), 10)
+        self.assertTrue(_np.all(_np.diff(reduced.selection.scores) >= -1e-9))
+
+    def test_relabelling_keeps_the_selection(self):
+        """`map_qubit_labels` builds its result by hand, so `selection` must be carried."""
+        reduced = self.design.reduce_with(lambda design, n: self._shallowest(6), 6)
+        mapped = reduced.map_qubit_labels({0: 'Q7'})
+        self.assertIs(mapped.selection, reduced.selection)
+
+    def test_relabelling_does_not_undo_the_reduction(self):
+        """`StandardGSTDesign.map_qubit_labels` regenerates from germs and fiducials,
+        which still describe the *unreduced* design -- so without re-truncating, a
+        relabelled 6-circuit design came back with all 168."""
+        reduced = self.design.reduce_with(lambda design, n: self._shallowest(6), 6)
+        mapped = reduced.map_qubit_labels({0: 'Q7'})
+        self.assertEqual(len(mapped.all_circuits_needing_data), 6)
+        self.assertEqual(
+            set(mapped.all_circuits_needing_data),
+            {c.map_state_space_labels({0: 'Q7'})
+             for c in reduced.all_circuits_needing_data})
+
+    def test_relabelling_an_unreduced_design_is_unchanged(self):
+        """The re-truncation must be a no-op when nothing was dropped, nesting included."""
+        mapped = self.design.map_qubit_labels({0: 'Q7'})
+        self.assertEqual(len(mapped.all_circuits_needing_data), len(self.circuits))
+        self.assertEqual(mapped.nested, self.design.nested)
+        self.assertEqual([len(cl) for cl in mapped.circuit_lists],
+                         [len(cl) for cl in self.design.circuit_lists])
+
+    def test_relabelling_a_reduced_design_keeps_its_list_structure(self):
+        """Not just the circuit set: the per-max-length binning has to survive too.
+
+        Regenerating cannot reproduce it -- `nested` is a generation option to the
+        constructor but only a description on a built design, and truncation clears it,
+        so a regenerated reduced design bins its circuits differently.
+        """
+        reduced = self.design.reduce_with(lambda design, n: self._shallowest(20), 20)
+        mapped = reduced.map_qubit_labels({0: 'Q7'})
+        self.assertEqual(mapped.nested, reduced.nested)
+        self.assertEqual([len(cl) for cl in mapped.circuit_lists],
+                         [len(cl) for cl in reduced.circuit_lists])
+        for mapped_list, original_list in zip(mapped.circuit_lists, reduced.circuit_lists):
+            self.assertEqual(set(mapped_list),
+                             {c.map_state_space_labels({0: 'Q7'}) for c in original_list})
+
+    def test_a_reduced_design_round_trips_with_its_reducer(self):
+        """The provenance claim: what reduced a design survives write/from_dir."""
+        from pygsti.tools.edesign import BlockDoptReducer
+        reducer = BlockDoptReducer.from_target_model(smq1Q_XYI.target_model('H+S'),
+                                                     seed=0, ridge=2.0)
+        reduced = self.design.reduce_with(reducer, 8)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, 'reduced')
+            reduced.write(root)
+            loaded = gst.StandardGSTDesign.from_dir(root)
+        self.assertIsInstance(loaded.selection.reducer, BlockDoptReducer)
+        self.assertEqual(loaded.selection.reducer.ridge, 2.0)
+        self.assertEqual(list(loaded.selection.circuits), list(reduced.selection.circuits))
+        self.assertArraysAlmostEqual(loaded.selection.scores, reduced.selection.scores)
+
+    def test_an_unreduced_design_round_trips_with_no_selection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = os.path.join(tmp, 'plain')
+            self.design.write(root)
+            loaded = gst.StandardGSTDesign.from_dir(root)
+        self.assertIsNone(loaded.selection)
+
+
 class GSTInitialModelTester(BaseCase):
     """
     Tests for methods in the GSTInitialModel class.

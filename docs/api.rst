@@ -369,6 +369,7 @@ General-purpose numerical and quantum-information utilities.
    pygsti.tools.chi2fns
    pygsti.tools.compilationtools
    pygsti.tools.dataframetools
+   pygsti.tools.edesign
    pygsti.tools.edesigntools
    pygsti.tools.errgenproptools
    pygsti.tools.exceptions

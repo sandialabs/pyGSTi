@@ -1915,17 +1915,21 @@ class OpModel(Model):
         #across each of the sublists.
 
         unique_layers_by_circuit = []
+        unique_layer_types = {}
         for circuits_by_prep_povm in zip(*completed_circuits_by_prep_povm):    
             #Take the complete set of circuits and get the unique layers which appear across all of them
             #then use this to pre-compute circuit_layer_operators and gpindices.
             unique_layers_by_circuit.append(set(sum([ckt.layertup for ckt in circuits_by_prep_povm], ())))
+            for ckt in circuits_by_prep_povm:
+                for i, layer in enumerate(ckt.layertup):
+                    unique_layer_types[layer] = 'prep' if i == 0 else ('povm' if i == len(ckt.layertup) - 1 else 'op')
 
         #then aggregate these:
-        unique_layers = set()
-        unique_layers = unique_layers.union(*unique_layers_by_circuit)
-
         #Now pre-compute the gpindices for all of these unique layers
-        unique_layers_gpindices_dict = {layer:_slct.indices(self.circuit_layer_operator(layer).gpindices) for layer in unique_layers}
+        unique_layers_gpindices_dict = {
+            layer: self.circuit_layer_operator(layer, typ).gpindices_as_array().tolist()
+            for layer, typ in unique_layer_types.items()
+        }
         
         #loop through the circuit layers and get the circuit layer operators.
         #from each of the circuit layer operators we'll get their gpindices. 

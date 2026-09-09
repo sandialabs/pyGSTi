@@ -7,79 +7,47 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import importlib as _importlib
+import copy as _copy
 import pathlib as _pathlib
 import warnings as _warnings
 
 import numpy as np
-from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast, Mapping
-import tqdm as _tqdm
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Union, cast
 
 from pygsti import io as _io
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.processors import QubitProcessorSpec
-from pygsti.circuits.circuit import Circuit
-from pygsti.circuits.split_circuits_into_lanes import batch_tensor
-from pygsti.baseobjs.label import Label, LabelTup
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 
+# The stitching machinery lives in _stitchers; this module is the design class that
+# drives it.  `assign_the_designs_with_mapping` and
+# `assert_circuit_lists_match_color_patches` are used below and re-exported in __all__,
+# as both were importable from here before the split.
+from pygsti.protocols._stitchers import (
+    CircuitStitcher, Edge, RandomizedPatchStitcher, Vertex,
+    assert_circuit_lists_match_color_patches, assign_the_designs_with_mapping,
+)
+from pygsti.tools.edesign.blockdopt import BlockDoptReducer as _BlockDoptReducer
 from pygsti.tools.graphcoloring import (
     canonical_edges, find_neighbors, switchboard_find_edge_coloring,
 )
 
-# Type aliases for the graph / stitching data structures used throughout.
-Vertex = Union[int, str]
-Edge = Tuple[Vertex, Vertex]
-LayerMappers = Dict[int, Dict[Label, Label]]
-CircuitStitcher = Callable[..., List[List[Circuit]]]
 SeedLike = Union[int, np.random.SeedSequence, np.random.Generator]
 
 # This module is star-imported into ``pygsti.protocols``, so ``__all__`` is kept
 # to the documented public surface: the design class, its convenience
-# constructor, the default circuit stitcher (documented as pluggable, so callers
-# need to be able to name it), and the stitcher-agnostic output validator (which
-# anyone writing their own stitcher is expected to run). The remaining helpers
-# are deliberately left out.
+# constructor, the default circuit stitcher and the stitcher base class
+# (documented as pluggable, so callers need to be able to name them), and the
+# stitcher-agnostic output validator (which anyone writing their own stitcher is
+# expected to run). The remaining helpers are deliberately left out.
 __all__ = [
     'SimultaneousGSTDesign',
     'make_simultaneous_gst_design',
+    'CircuitStitcher',
+    'RandomizedPatchStitcher',
     'assign_the_designs_with_mapping',
     'assert_circuit_lists_match_color_patches',
 ]
-
-
-def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign: GateSetTomographyDesign) -> LayerMappers:
-    """Build the layer_mappers used by batch_tensor when stitching, mapping empty layers to explicit idles."""
-    twoq_idle_label = Label(('Gii',) + twoq_gstdesign.qubit_labels)
-    oneq_idle_label = Label(('Gi',)  + oneq_gstdesign.qubit_labels)
-    mapper_2q: dict[Label, Label] = {twoq_idle_label: twoq_idle_label}
-    mapper_1q: dict[Label, Label] = {oneq_idle_label: oneq_idle_label}
-    for cl in twoq_gstdesign.circuit_lists:
-        for c in cl:
-            mapper_2q.update({k: k for k in c._labels})
-    for cl in oneq_gstdesign.circuit_lists:
-        for c in cl:
-            mapper_1q.update({k: k for k in c._labels})
-    empty_label = Label(())
-    mapper_2q[empty_label] = twoq_idle_label
-    mapper_1q[empty_label] = oneq_idle_label
-    assert empty_label not in mapper_2q.values()
-    assert empty_label not in mapper_1q.values()
-
-    # Check for any labels in `mapper_2q` that imply a single-qubit target.
-    # For any such label, add an explicit single-qubit idle on the non-target
-    # qubit, and wrap the whole thing as a LabelTupTup.
-    for k2 in list(mapper_2q.keys()):
-        if k2.num_qubits == 1:
-            assert isinstance(k2, LabelTup)
-            tgt = k2[1]
-            assert tgt in [0,1]
-            tmp = [None, None]
-            tmp[tgt] = k2
-            tmp[1-tgt] = Label("Gi", 1-tgt)
-            mapper_2q[k2] = Label(tuple(tmp))
-
-    return {1: mapper_1q, 2: mapper_2q}
 
 
 def make_simultaneous_gst_design(
@@ -132,34 +100,31 @@ def _normalize_coloring(coloring: Mapping[int, Sequence[Edge]]) -> Dict[int, Lis
     return {patch: [tuple(edge) for edge in edge_set] for patch, edge_set in coloring.items()}
 
 
-def _stitcher_name(circuit_stitcher: CircuitStitcher) -> Optional[str]:
-    """Return the fully-qualified "module.qualname" of a circuit stitcher, or None."""
-    qualname = getattr(circuit_stitcher, '__qualname__', None)
-    if qualname is None:
-        return None
-    module_name = getattr(circuit_stitcher, '__module__', None)
-    if module_name is None:
-        return None
-    return module_name + '.' + qualname
+def _recordable_seed(seed: Optional[SeedLike]) -> Optional[Union[int, Dict[str, Any]]]:
+    """`seed` reduced to something JSON can hold, so a design can re-stitch after a reload.
+
+    An int is itself; a ``SeedSequence`` becomes its entropy and spawn key, which is
+    enough to rebuild it. A live ``Generator`` has consumed state that cannot be
+    recorded, so it becomes None and the design loses the ability to re-stitch -- pass an
+    int if that matters.
+    """
+    if seed is None or isinstance(seed, (int, np.integer)):
+        return None if seed is None else int(seed)
+    if isinstance(seed, np.random.SeedSequence):
+        return {'entropy': seed.entropy, 'spawn_key': list(seed.spawn_key)}
+    _warnings.warn("A SimultaneousGSTDesign was seeded with a live Generator, whose state "
+                   "cannot be recorded. The design's circuits are unaffected, but it will "
+                   "not be able to re-stitch them after a reload. Pass an int or a "
+                   "SeedSequence for a design that can.")
+    return None
 
 
-def _resolve_stitcher_name(name: Optional[str]) -> Optional[CircuitStitcher]:
-    """Import the circuit stitcher recorded by :func:`_stitcher_name`."""
-    if name is None:
-        _warnings.warn("Loaded a SimultaneousGSTDesign with no recorded circuit_stitcher; "
-                       "setting it to None. The design's circuits are unaffected.")
-        return None
-
-    try:
-        from pygsti.io.metadir import _class_for_name as _resolve_name
-        resolved = _resolve_name(name)
-    except (ImportError, AttributeError, ValueError) as e:
-        _warnings.warn("Could not restore the circuit_stitcher %r of a loaded "
-                       "SimultaneousGSTDesign (%s); setting it to None. This is expected for a "
-                       "lambda or a locally-defined function. The design's circuits are "
-                       "unaffected." % (name, e))
-        return None
-    return cast(CircuitStitcher, resolved)
+def _seed_from_record(record: Optional[Union[int, Mapping[str, Any]]]) -> Optional[SeedLike]:
+    """Invert :func:`_recordable_seed`."""
+    if record is None or isinstance(record, (int, np.integer)):
+        return record
+    return np.random.SeedSequence(entropy=record['entropy'],
+                                  spawn_key=tuple(record['spawn_key']))
 
 
 class SimultaneousGSTDesign(GateSetTomographyDesign):
@@ -177,9 +142,13 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         Each edge is stored as a tuple regardless of how it was supplied, so that
         ``color_patches`` compares equal across designs however they were built (see
         :func:`_normalize_coloring`). Edge *orientation* is preserved as given.
-    circuit_stitcher (callable): A function to stitch circuits together (default: assign_the_designs_with_mapping).
+    circuit_stitcher (CircuitStitcher): The rule that combines the two designs
+        (default: a :class:`RandomizedPatchStitcher`). A plain callable is accepted and
+        wrapped in a :class:`CallableStitcher`; see :meth:`CircuitStitcher.cast`.
     seed (optional): Anything ``np.random.default_rng`` accepts -- an int, a SeedSequence,
         or an already-built Generator -- used to seed the randgen handed to the stitcher.
+        Recorded as ``stitch_seed``, so an int or a SeedSequence lets a reloaded design
+        re-stitch its circuits; a live Generator cannot be recorded.
     nested (bool): Whether ``circuit_stitcher``'s output is nested, i.e. whether
         ``circuit_lists[L+1]`` contains every circuit in ``circuit_lists[L]``. The
         default stitcher always produces nested lists, hence the default of True;
@@ -187,7 +156,6 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
     verbosity (int): Forwarded to ``circuit_stitcher``. With the default stitcher,
         anything greater than 0 displays a progress bar over germ powers.
         Defaults to 0 (silent).
-    **stitcher_kwargs: Extra keyword arguments forwarded verbatim to ``circuit_stitcher``.
 
     circuit_lists (list): The generated list of stitched circuits.
     """
@@ -199,30 +167,21 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
                  seed: Optional[SeedLike] = None,
                  nested: bool = True,
                  debug_check: bool = True,
-                 verbosity: int = 0,
-                 **stitcher_kwargs: Any):
+                 verbosity: int = 0):
         """
         Assume that the GST designs have the same Ls.
 
-        The default ``circuit_stitcher`` is ``assign_the_designs_with_mapping``,
-        which expects the (oneq_circuitlists, twoq_circuitlists, vertices,
-        color_patches, ...) calling convention used below.
+        The default ``circuit_stitcher`` is a :class:`RandomizedPatchStitcher`, which
+        wraps :func:`assign_the_designs_with_mapping`.
 
-        Any ``circuit_stitcher`` is invoked as::
+        A stitcher's *options* are its own constructor arguments, not keyword arguments
+        here::
 
-            circuit_stitcher(oneq_gstdesign, twoq_gstdesign, vertices,
-                             color_patches, randgen=..., verbosity=...,
-                             **stitcher_kwargs)
+            SimultaneousGSTDesign(..., circuit_stitcher=RandomizedPatchStitcher(
+                share_same_shape_schedules=False))
 
-        A stitcher that does not want ``verbosity`` should absorb it in its own
-        ``**kwargs``, as the default stitcher does for the options it ignores.
-
-        Extra keyword arguments to ``__init__`` are collected into ``**stitcher_kwargs``
-        and forwarded verbatim, so alternative stitchers can accept their own options
-        without a signature change here. Callers may also override ``randgen``
-        this way, or pass the default stitcher's
-        ``share_same_shape_schedules=False`` to stop same-shape patches from
-        sharing one randomized schedule.
+        which is why this signature has no ``**stitcher_kwargs``: a catch-all silently
+        accepts a misspelled option, whereas a stitcher constructor rejects one.
 
         ``nested`` is a *declaration* about ``circuit_stitcher``'s output, not a
         request: the default stitcher always denests its inputs and renests its
@@ -236,15 +195,12 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         empty (implicit-idle) layer label ``Label(())`` onto an explicit idle gate
         (asserting ``Label(())`` never survives into a mapper's values), and
         ``batch_tensor`` re-checks that invariant. When ``debug_check`` is True
-        (the default), this constructor itself verifies the resulting
-        ``circuit_lists`` via :func:`assert_circuit_lists_match_color_patches`
-        -- checking that every generated circuit has no implicit idle gates and
-        is correctly stitched onto its own patch's qubits/edges. This runs
-        regardless of which ``circuit_stitcher`` is used.
+        (the default), the resulting ``circuit_lists`` are verified via
+        :func:`assert_circuit_lists_match_color_patches` -- checking that every
+        generated circuit has no implicit idle gates and is correctly stitched onto its
+        own patch's qubits/edges. That check lives in :meth:`CircuitStitcher.stitch`, so
+        it runs for any stitcher and for direct stitcher calls too.
         """
-        if circuit_stitcher is None:
-            circuit_stitcher = assign_the_designs_with_mapping
-        randgen = np.random.default_rng(seed)
         self.processor_spec = processor_spec
         self.oneq_gstdesign = oneq_gstdesign
         self.twoq_gstdesign = twoq_gstdesign
@@ -253,28 +209,42 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         self.neighbors = find_neighbors(self.vertices, self.edges)
         self.deg = max([len(self.neighbors[v]) for v in self.vertices])
         self.color_patches = _normalize_coloring(edge_coloring)
-        self.circuit_stitcher = circuit_stitcher
-        self.circuit_stitcher_name = _stitcher_name(circuit_stitcher)
+        self.circuit_stitcher = CircuitStitcher.cast(
+            RandomizedPatchStitcher() if circuit_stitcher is None else circuit_stitcher)
+        self.stitch_seed = _recordable_seed(seed)
 
-        # Base kwargs common to the built-in calling convention; caller-supplied
-        # stitcher_kwargs take precedence so any option can be overridden.
-        kwargs = dict(randgen=randgen, verbosity=verbosity)
-        kwargs.update(stitcher_kwargs)
-        self.stitcher_kwargs = kwargs
-
-        self.circuit_lists = circuit_stitcher(
-            self.oneq_gstdesign, self.twoq_gstdesign, self.vertices, self.color_patches, **kwargs,
+        self.circuit_lists = self.circuit_stitcher.stitch(
+            self.oneq_gstdesign, self.twoq_gstdesign, self.vertices, self.color_patches,
+            seed=seed, verbosity=verbosity, debug_check=debug_check,
         )
-
-        if debug_check:
-            # Stitcher-agnostic verification of circuit_lists: runs no matter
-            # which circuit_stitcher produced it.
-            assert_circuit_lists_match_color_patches(
-                self.circuit_lists, self.vertices, self.color_patches
-            )
 
         super().__init__(processor_spec, self.circuit_lists,qubit_labels=self.vertices, nested=nested)
         self._register_auxfile_types()
+
+    def restitch(self, verbosity: int = 0, debug_check: bool = True) -> "SimultaneousGSTDesign":
+        """Rebuild this design's circuits from its recorded stitcher and seed.
+
+        Equal to `self` in circuit content whenever `stitch_seed` was recordable -- an int
+        or a SeedSequence, but not a live Generator. Useful as a round-trip check after a
+        write/load, and as the way to regenerate a design whose circuits were not kept.
+
+        Returns
+        -------
+        SimultaneousGSTDesign
+
+        Raises
+        ------
+        ValueError
+            If this design has no stitcher to run, which happens only when it was loaded
+            from a directory written before the stitcher became a serializable object.
+        """
+        if self.circuit_stitcher is None:
+            raise ValueError("This SimultaneousGSTDesign has no circuit_stitcher to run.")
+        return SimultaneousGSTDesign(
+            self.processor_spec, self.oneq_gstdesign, self.twoq_gstdesign,
+            self.color_patches, circuit_stitcher=self.circuit_stitcher,
+            seed=_seed_from_record(self.stitch_seed), nested=self.nested,
+            debug_check=debug_check, verbosity=verbosity)
 
     # region Serialization
 
@@ -306,9 +276,11 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         for member in self._SUBDESIGN_DIRS:  # written/read by hand; see _SUBDESIGN_DIRS
             self.auxfile_types[member] = 'none'
 
-        # The stitcher is recorded by name instead; its kwargs hold a live Generator.
-        self.auxfile_types['circuit_stitcher'] = 'none'
-        self.auxfile_types['stitcher_kwargs'] = 'none'
+        # A CircuitStitcher is NicelySerializable, so it round-trips as data -- including
+        # a subclass defined outside pyGSTi, whose module and class name it records.
+        # `stitch_seed` is a plain int or dict and needs no declaration; together they are
+        # what lets a reloaded design re-stitch (see :meth:`restitch`).
+        self.auxfile_types['circuit_stitcher'] = 'serialized-object'
 
     def write(self, dirname=None, parent=None) -> None:
         """
@@ -349,12 +321,12 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
 
         Reconstructs the members that :meth:`_register_auxfile_types` marks ``'none'``:
         the graph members are recomputed from the processor spec as ``__init__`` does,
-        the sub-designs are read back from their sub-directories, and the stitcher is
-        re-imported from its recorded name.
+        and the sub-designs are read back from their sub-directories. The stitcher comes
+        back as an object, not as an import path, so a stitcher subclass defined outside
+        pyGSTi is restored too.
 
-        The design is restored as a *record of an already-generated experiment* -- the
-        stitcher's random state is not preserved (``stitcher_kwargs`` comes back empty),
-        so a loaded design reproduces its circuits but cannot re-stitch them.
+        With the stitcher and ``stitch_seed`` both restored, a loaded design can
+        regenerate its own circuits -- see :meth:`restitch`.
 
         Parameters
         ----------
@@ -393,8 +365,6 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
             else:
                 setattr(ret, member, None)
 
-        ret.circuit_stitcher = _resolve_stitcher_name(getattr(ret, 'circuit_stitcher_name', None))
-        ret.stitcher_kwargs = {}
         return ret
 
     # endregion
@@ -460,8 +430,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         mapped.deg = max(len(mapped.neighbors[v]) for v in mapped.vertices)
         mapped.color_patches = mapped_color_patches
         mapped.circuit_stitcher = self.circuit_stitcher
-        mapped.circuit_stitcher_name = self.circuit_stitcher_name
-        mapped.stitcher_kwargs = self.stitcher_kwargs
+        mapped.stitch_seed = self.stitch_seed
         mapped.circuit_lists = mapped_circuit_lists
 
         # Sets processor_spec, qubit_labels, all_circuits_needing_data, auxfile_types, etc.
@@ -469,32 +438,23 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
             mapped, mapped_processor_spec, mapped_circuit_lists,
             qubit_labels=mapped.vertices, nested=self.nested
         )
-        mapped._register_auxfile_types()  # ...which resets auxfile_types, so re-declare ours
+        # ...and resets `selection` to None along with auxfile_types, so restore it:
+        # relabelling renames qubits, it does not re-select circuits.
+        mapped.selection = self.selection
+        mapped._register_auxfile_types()  # re-declare ours, which __init__ also reset
         return mapped
-
-    # region Unsupported operations
-
-    #: Explanation shared by every refusal below.
-    _NO_SUBSETTING = (
-        "%s is not supported for a SimultaneousGSTDesign. Its circuit_lists are ordered "
-        "germ-power-major then patch-major, with every color patch contributing an equal "
-        "contiguous chunk at each germ power (see assign_the_designs_with_mapping); adding "
-        "or removing individual circuits breaks that structure and fails this design's own "
-        "assert_circuit_lists_match_color_patches check. Use .as_circuit_lists_design() to "
-        "get a plain GateSetTomographyDesign holding the same circuits, which supports this "
-        "operation, or rebuild the design from already-truncated sub-designs."
-    )
 
     def as_circuit_lists_design(self) -> GateSetTomographyDesign:
         """
         A plain :class:`GateSetTomographyDesign` holding this design's circuits.
 
         It carries the same circuit lists, processor spec, qubit labels and nesting, but
-        none of the simultaneous-GST structure -- no edge coloring, no sub-designs, no
-        patch-major ordering contract. That is what makes it useful: it supports the
-        truncation and merging this class refuses, at the cost of no longer knowing which
-        circuit belongs to which patch. The usual reason to want one is
-        ``truncate_to_available_data`` after a partial data run.
+        none of the simultaneous-GST structure -- no edge coloring, no sub-designs. Useful
+        when downstream code should not see, or accidentally rely on, the simultaneous
+        structure, and as the way to get an object that supports :meth:`merge_with`.
+
+        Truncation does not need this: it is supported on the design itself and returns a
+        ``SimultaneousGSTDesign``.
 
         Returns
         -------
@@ -505,628 +465,113 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
             qubit_labels=self.qubit_labels, nested=self.nested
         )
 
+    # region Truncation
+
+    # Dropping circuits is safe here: a circuit carries its patch in its content -- which
+    # multi-qubit gates it applies to which edges -- so the surviving circuits still
+    # validate against the coloring (see assert_circuit_lists_match_color_patches). Only
+    # the stitcher's equal-chunk patch-major *positional* layout is lost, and nothing
+    # reads it off a built design.
+    #
+    # The overrides below exist for one reason: CircuitListsDesign._truncate_to_circuits_
+    # inplace sets nested=False, because in general filtering circuit lists need not
+    # preserve containment. It does preserve it here. Every route through this class
+    # filters each germ-power list by one common keep-set, and
+    # (list_L & keep) <= (list_{L+1} & keep) whenever list_L <= list_{L+1}. Losing
+    # nested=True would be a real regression: iterative GST reads it to decide whether
+    # circuit_lists[-1] is the full circuit set.
+
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
-        # The backstop: every public truncation route reaches this method, so overriding
-        # the public methods alone would leave the in-place hooks reachable.
-        raise NotImplementedError(self._NO_SUBSETTING % "Truncating to a subset of circuits")
+        was_nested = self.nested
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+        self.nested = was_nested
 
-    # Refuse on our own account to prevent parent design recursion from mutating lists first.
     def _truncate_to_design_inplace(self, other_design):
-        raise NotImplementedError(self._NO_SUBSETTING % "Truncating to another design")
-
-    def _truncate_to_available_data_inplace(self, dataset):
-        raise NotImplementedError(self._NO_SUBSETTING % "Truncating to available data")
+        # This one truncates list L against *other_design*'s list L, a different keep-set
+        # per list, so nesting survives only if the other design is nested too.
+        was_nested = self.nested and getattr(other_design, 'nested', False)
+        # CircuitListsDesign's version calls .truncate() on each of self.circuit_lists
+        # without casting first, unlike its sibling hooks. The default stitcher returns
+        # plain lists, so cast here or that line raises AttributeError.
+        self.circuit_lists = [_CircuitList.cast(lst) for lst in self.circuit_lists]
+        super()._truncate_to_design_inplace(other_design)
+        self.nested = was_nested
 
     def truncate_to_lists(self, list_indices_to_keep):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        # Dropping germ powers is unsupported as it silently discards simultaneous structure.
-        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_lists")
+        """
+        A new design keeping only some of the germ-power circuit lists.
 
-    def merge_with(self, other_edesign, remove_duplicates=True):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        # Concatenating other designs interleaves unrelated patch structures.
-        raise NotImplementedError(self._NO_SUBSETTING % "merge_with")
+        Overridden because ``CircuitListsDesign.truncate_to_lists`` builds a plain
+        ``CircuitListsDesign``, which would silently discard the processor spec, the edge
+        coloring and the sub-designs. A subsequence of a nested chain is still nested, so
+        ``nested`` is preserved.
 
-    # The three public entry points below all deepcopy `self` before reaching the backstop,
-    # so they are overridden purely to fail immediately rather than pay for a full copy of
-    # the design just to raise -- and to name themselves in the error message.
+        Parameters
+        ----------
+        list_indices_to_keep : iterable
+            The (integer) indices into ``circuit_lists`` to keep.
 
-    def truncate_to_circuits(self, circuits_to_keep):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_circuits")
+        Returns
+        -------
+        SimultaneousGSTDesign
+        """
+        base = _copy.deepcopy(self)
+        kept = [base.circuit_lists[i] for i in list_indices_to_keep]
+        base.circuit_lists = kept
+        # Re-truncating the kept lists to their own union is a no-op on them, but it is
+        # what recomputes all_circuits_needing_data.
+        base._truncate_to_circuits_inplace({c for lst in kept for c in lst})
+        return base
 
-    def truncate_to_available_data(self, dataset):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_available_data")
+    def reduce_by_dopt(self, model, num_circuits, **kwargs) -> "SimultaneousGSTDesign":
+        """
+        A copy of this design keeping only its `num_circuits` most informative circuits.
 
-    def truncate_to_design(self, other_design):
-        """Not supported; see :meth:`as_circuit_lists_design`."""
-        raise NotImplementedError(self._NO_SUBSETTING % "truncate_to_design")
+        Shorthand for ``self.reduce_with(BlockDoptReducer(model, **kwargs), num_circuits)``,
+        here so the feature is findable from the class that most needs it: a stitched
+        design carries O(10,000) circuits to fit a model with O(100) parameters. Use
+        :meth:`reduce_with` directly for any other selection rule.
+
+        Pass a model at a plausible noisy point, not a target model --
+        :meth:`pygsti.tools.edesign.BlockDoptReducer.from_target_model` produces one, and
+        :func:`pygsti.tools.edesign.perturb_errorgen_rates` explains why it is needed.
+        Passing a target model here warns.
+
+        Parameters
+        ----------
+        model : Model
+            Whose parameters the reduced design should be informative about.
+
+        num_circuits : int
+            The budget.
+
+        **kwargs
+            Forwarded to :class:`~pygsti.tools.edesign.BlockDoptReducer`: `ridge`,
+            `dtype`, `warn_on_target_model`.
+
+        Returns
+        -------
+        SimultaneousGSTDesign
+            Its `selection` attribute holds the score curve that ``return_scores=True``
+            used to return.
+        """
+        return self.reduce_with(_BlockDoptReducer(model, **kwargs), num_circuits)
 
     # endregion
 
-
-def patch_lines(edge_set: Sequence[Edge],
-                vertices: Sequence[Vertex]) -> Tuple[List[Edge], List[Vertex], List[Union[Edge, Tuple[Vertex]]]]:
-    """Return the ordered tensor lines for a patch: first 2Q edge lines, then 1Q unused-qubit lines."""
-    edge_set = sorted([tuple(edge) for edge in edge_set])
-    used_qubits    = {q for edge in edge_set for q in edge}
-    unused_qubits  = [q for q in vertices if q not in used_qubits]
-    tensored_lines = list(edge_set) + [(q,) for q in unused_qubits]
-    return edge_set, unused_qubits, tensored_lines
-
-
-def make_line_mapper(source_lines: Sequence[Edge],
-                     target_lines: Sequence[Edge]) -> Dict[Vertex, Vertex]:
-    """
-    Construct a state-space-label mapper from source tensor lines to target tensor lines.
-    Example: [(0, 1), (4,)] to [(2, 3), (0,)] returns {0: 2, 1: 3, 4: 0}.
-    """
-    if len(source_lines) != len(target_lines):
-        raise ValueError("Source and target line lists have different lengths.")
-
-    mapper = {}
-
-    for src_line, dst_line in zip(source_lines, target_lines):
-        if len(src_line) != len(dst_line):
-            raise ValueError(
-                f"Line arity mismatch: source {src_line}, target {dst_line}"
-            )
-
-        for src_label, dst_label in zip(src_line, dst_line):
-            if src_label in mapper and mapper[src_label] != dst_label:
-                raise ValueError(
-                    f"Inconsistent mapping for {src_label}: "
-                    f"{mapper[src_label]} versus {dst_label}"
-                )
-
-            mapper[src_label] = dst_label
-
-    if len(set(mapper.values())) != len(mapper):
-        raise ValueError("Mapper is not one-to-one.")
-
-    return mapper
-
-
-def build_patch_infos(vertices: Sequence[Vertex],
-                      color_patches: Dict[int, List[Edge]]
-                      ) -> List[Dict[str, Any]]:
-    """Describe each color patch's geometry in color_patches order, fixing patch-major output order."""
-    vertices = list(vertices)
-
-    patch_infos = []
-
-    for patch, edge_set in color_patches.items():
-        edge_set, unused_qubits, tensored_lines = patch_lines(edge_set, vertices)
-
-        info = {
-            "patch": patch, "edge_set": edge_set, "unused_qubits": unused_qubits,
-            "tensored_lines": tensored_lines, "num_edges": len(edge_set),
-            "num_unused_qubits": len(unused_qubits),
-        }
-
-        patch_infos.append(info)
-
-    return patch_infos
-
-
-def group_patches_for_scheduling(patch_infos: List[Dict[str, Any]],
-                                 share_same_shape_schedules: bool = True
-                                 ) -> List[List[Dict[str, Any]]]:
-    """
-    Partition patches into scheduling groups based on their shape (2Q edge slots and 1Q unused qubit slots).
-    A singleton group is exactly the degenerate case of a shared one (with no other members to relabel onto).
-    """
-    if not share_same_shape_schedules:
-        return [[info] for info in patch_infos]
-
-    groups: Dict[Tuple[int, int], List[Dict[str, Any]]] = defaultdict(list)
-    for info in patch_infos:
-        groups[(info["num_edges"], info["num_unused_qubits"])].append(info)
-
-    # dict preserves insertion order, i.e. first appearance of each shape.
-    return list(groups.values())
-
-
-def random_index_schedule(n: int, num_circs_at_germ_power: int, randgen: np.random.Generator) -> np.ndarray:
-    """
-    Build a length-num_circs_at_germ_power index schedule into a CircuitList of size n.
-    Draws bootstrap indices uniformly with replacement from 0..n-1 if n < num_circs_at_germ_power,
-    then shuffles the result.
-    """
-    if n == num_circs_at_germ_power:
-        base = np.arange(num_circs_at_germ_power)
-    else:
-        base = np.concatenate((
-            np.arange(n),
-            randgen.integers(0, n, size=num_circs_at_germ_power - n),
-        ))
-    return randgen.permutation(base)
-
-#region Invariant Helpers
-
-def assert_no_implicit_idles(circuit: Circuit) -> None:
-    """Assert that every idle gate in `circuit` is explicit (no implicit idle gates)."""
-    for i in range(circuit.num_layers):
-        l0 = set(circuit.layer(i))
-        l1 = set(circuit.layer_with_idles(i))
-        assert l0 == l1, (
-            f"Implicit idle gate(s) detected in layer {i}: "
-            f"layer()={l0} != layer_with_idles()={l1}"
-        )
-
-
-def assert_mapped_circuit_matches_patch(mapped_circuit: Circuit, info: Dict[str, Any]) -> None:
-    """Assert that `mapped_circuit`'s line labels match the patch, and its multi-qubit gates land on the patch's own edges."""
-    expected_labels = {
-        q
-        for line in info["tensored_lines"]
-        for q in line
-    }
-
-    actual_labels = set(mapped_circuit.line_labels)
-
-    assert actual_labels == expected_labels, (
-        actual_labels,
-        expected_labels
-    )
-
-    # Also verify *where* the multi-qubit gates actually landed,
-    allowed_edges = {tuple(e) for e in info["edge_set"]}
-    allowed_edges |= {tuple(reversed(e)) for e in allowed_edges}
-    for i in range(mapped_circuit.num_layers):
-        for op in mapped_circuit.layer(i):
-            if len(op.qubits) > 1:
-                assert tuple(op.qubits) in allowed_edges, (
-                    f"Patch {info['patch']!r}: found multi-qubit "
-                    f"gate {op} on {op.qubits}, which is not one "
-                    f"of this patch's own edges {info['edge_set']} "
-                    "(mapper likely applied incorrectly, or the "
-                    "circuit was never remapped from the "
-                    "representative patch)."
-                )
-
-
-def assert_circuit_lists_match_color_patches(
-    circuit_lists: List[List[Circuit]],
-    vertices: Sequence[Vertex],
-    color_patches: Dict[int, List[Edge]],
-) -> None:
-    """
-    Assert that ``circuit_lists`` is a well-formed, patch-major stitching of
-    ``color_patches`` onto ``vertices``.
-
-    This is stitcher-agnostic: it validates the *output* of whatever
-    ``circuit_stitcher`` produced ``circuit_lists``, not just the built-in
-    ``assign_the_designs_with_mapping``, so it can (and is, by
-    ``SimultaneousGSTDesign.__init__``) be run regardless of which
-    stitcher was actually used.
-
-    For every germ-power entry ``circuit_lists[L]``, this re-derives each
-    patch's own tensored lines/edges from ``vertices``/``color_patches`` (the
-    same way ``build_patch_infos`` does) and checks that:
-
-    1. ``circuit_lists[L]`` splits evenly into ``len(color_patches)``
-       contiguous, equal-size, patch-major chunks -- i.e. the output honors
-       the germ-power-major-then-patch-major ordering contract documented on
-       ``assign_the_designs_with_mapping`` (this is required of *any*
-       ``circuit_stitcher``, not just the built-in one). Note this must hold
-       for nested output too, which is why the built-in stitcher renests
-       patch-wise rather than concatenating whole germ-power lists.
-    2. Every circuit has no implicit idle gates
-       (see :func:`assert_no_implicit_idles`).
-    3. Every circuit in a given patch's chunk is correctly stitched onto
-       that patch's own qubits/edges
-       (see :func:`assert_mapped_circuit_matches_patch`).
-
-    Checks 2 and 3 inspect the *denested* content: each distinct circuit is
-    checked once per patch, and repeats are skipped. Both are pure functions of
-    the circuit and its patch, so re-checking a circuit yields no new
-    information -- but ``circuit_lists`` is normally nested, meaning germ power
-    ``L``'s chunk repeats germ powers ``0..L-1``, so a naive pass would re-walk
-    every layer of germ power 0's circuits once per germ power.
-
-    Check 1 is a length check and stays per-germ-power: it is O(1) per list, and
-    it is precisely the nested chunk structure that it exists to verify.
-
-    Parameters
-    ----------
-    circuit_lists : list[list[Circuit]]
-        The stitched circuit lists to check, e.g. ``self.circuit_lists`` on a
-        ``SimultaneousGSTDesign``.
-
-    vertices : list[Vertex]
-        Vertices/qubits in the connectivity graph.
-
-    color_patches : dict[int, list[tuple]]
-        Mapping from patch/color identifier to the list of disjoint 2Q edges
-        in that patch, as passed to ``SimultaneousGSTDesign``.
-
-    Returns
-    -------
-    None
-
-    Raises
-    ------
-    AssertionError
-        If any of the checks above fail.
-    """
-    patch_infos = build_patch_infos(vertices, color_patches)
-    num_patches = len(patch_infos)
-
-    # Circuits already checked, per patch. Nested circuit_lists repeat every
-    # earlier germ power's circuits, so without this the per-circuit checks
-    # below would redo the same work O(num_germ_powers) times.
-    checked: List[set] = [set() for _ in patch_infos]
-
-    for circuit_list in circuit_lists:
-        assert len(circuit_list) % num_patches == 0, (
-            f"Expected {len(circuit_list)} circuits to split evenly into "
-            f"{num_patches} patch-major chunks (one per color patch)."
-        )
-        chunk_size = len(circuit_list) // num_patches
-
-        for patch_idx, info in enumerate(patch_infos):
-            start = patch_idx * chunk_size
-            already_checked = checked[patch_idx]
-            for circuit in circuit_list[start:start + chunk_size]:
-                if circuit in already_checked:
-                    continue
-                assert_no_implicit_idles(circuit)
-                assert_mapped_circuit_matches_patch(circuit, info)
-                already_checked.add(circuit)
-#endregion
-
-def build_group_schedules(
-    num_edges: int,
-    num_unused_qubits: int,
-    num_circs_at_germ_power: int,
-    twoq_len: int,
-    oneq_len: int,
-    randgen: np.random.Generator,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Build the random circuit-index schedules for one patch-shape group at one germ power.
-    Independent draws per slot allow different edges to run different 2Q circuits simultaneously.
-    """
-    twoq_slot_schedules = np.empty((num_edges, num_circs_at_germ_power), dtype=np.int64)
-    for edge_slot in range(num_edges):
-        twoq_slot_schedules[edge_slot, :] = random_index_schedule(twoq_len, num_circs_at_germ_power, randgen)
-
-    oneq_slot_schedules = np.empty((num_unused_qubits, num_circs_at_germ_power), dtype=np.int64)
-    for qubit_slot in range(num_unused_qubits):
-        oneq_slot_schedules[qubit_slot, :] = random_index_schedule(oneq_len, num_circs_at_germ_power, randgen)
-
-    return twoq_slot_schedules, oneq_slot_schedules
-
-
-def build_patch_mappers(infos: List[Dict[str, Any]]) -> Dict[int, Optional[Dict[Vertex, Vertex]]]:
-    """
-    Build the line mappers for one scheduling group.
-    Mappers are geometry-dependent and built once to be reused across all germ powers.
-    """
-    representative = infos[0]
-    representative_lines = representative["tensored_lines"]
-
-    mappers: Dict[int, Optional[Dict[Vertex, Vertex]]] = {}
-    for info in infos:
-        if info is representative:
-            mappers[info["patch"]] = None
-        else:
-            mappers[info["patch"]] = make_line_mapper(
-                representative_lines,
-                info["tensored_lines"]
-            )
-
-    return mappers
-
-
-def flatten_patch_major(
-    patch_buffers: Dict[int, List[Circuit]],
-    patch_order: List[int],
-) -> List[Circuit]:
-    """Flatten one germ power's per-patch circuit buffers into a single list, patch-major."""
-    output_circuits: List[Circuit] = []
-    for patch in patch_order:
-        output_circuits.extend(patch_buffers[patch])
-    return output_circuits
-
-
-def _denest_a_circuitlist(circuitlist: list[list[Circuit]]) -> list[list[Circuit]]:
-    """Remove any circuits which were duplicated in a previous inner list."""
-    cop = [[] for _ in range(len(circuitlist))]
-    if not circuitlist:
-        return cop
-
-    cop[0] = list(circuitlist[0])
-    seen = set(cop[0])
-
-    for i in range(1, len(circuitlist)):
-        for circ in circuitlist[i]:
-            if circ not in seen:
-                cop[i].append(circ)
-                seen.add(circ)
-    return cop
-
-
-def _nest_a_circuitlist(circuitlist: list[list[Circuit]], num_patches: int = 1) -> list[list[Circuit]]:
-    """Undo _denest_a_circuitlist patch-wise to preserve germ-power-major-then-patch-major ordering."""
-    cop = [[] for _ in range(len(circuitlist))]
-    if not circuitlist:
-        return cop
-
-    chunk_sizes = []
-    for i, lst in enumerate(circuitlist):
-        if len(lst) % num_patches != 0:
-            raise ValueError(
-                f"Germ power {i} has {len(lst)} circuits, which does not split evenly "
-                f"into {num_patches} patch-major chunks. Every patch must contribute "
-                "the same number of circuits at each germ power."
-            )
-        chunk_sizes.append(len(lst) // num_patches)
-
-    for i in range(len(circuitlist)):
-        accumulated: List[Circuit] = []
-        for patch_idx in range(num_patches):
-            for j in range(i + 1):  # Since i < len(circuitlist) this is fine.
-                start = patch_idx * chunk_sizes[j]
-                accumulated.extend(circuitlist[j][start:start + chunk_sizes[j]])
-        cop[i] = accumulated
-    return cop
-
-
-def assign_the_designs_with_mapping(
-    oneq_gstdesign: GateSetTomographyDesign,
-    twoq_gstdesign: GateSetTomographyDesign,
-    vertices: Sequence[Vertex],
-    color_patches: Dict[int, List[Edge]],
-    randgen: Optional[np.random.Generator] = None,
-    share_same_shape_schedules: bool = True,
-    verbosity: int = 0,
-    **kwargs: Any,
-) -> List[List[Circuit]]:
-    """
-    Given a 1Q GST design, a 2Q GST design, and an edge-colored graph of the topology of the
-    processor, construct a simultaneous GST design which runs the 2Q design on every edge
-    of the processor's topology. This helper function produces a list of lists of simultaneous circuits
-    which have a gate prescribed for every qubit at every layer.
-
-    -------- Intro --------
-    The input color patches indicate which sets of edges can run a 2Q design simultaneously since
-    they do not share a vertex and thus do not share a qubit. Therefore, for a given color patch,
-    we can run a 2Q design on the qubits specified by the vertices of our processor's topology graph.
-    On the other vertices we will run a 1Q design so as to not have the other qubits be exclusively idle.
-    GST designs contain CircuitLists which are sorted by germ power see `gst.py` for more details
-    Importantly for this context, the order in which the circuits are executed for a particular GST design is arbitrary.
-
-    ----- Simultaneous GST circuit ordering -----
-    Duplicate the 2Q design for each edge in the color patch
-    For each germ power in the CircuitList choose a random permutation of the circuits at that germ power to be executed
-    on that particular pair of qubits.
-
-    Duplicate the 1Q design for each qubit not specified by an edge in the color patch
-    For each germ power in the CircuitList choose a random permutation of the circuits at that germ power to be executed
-    on that particular qubit.    
-
-    ---- Example ----
-
-    Imagine A and B are your only circuits for 1Q GST at germ power 1 and C, D are the two qubit options for 2Q GST at germ power 1.
-    Then, for a 5 qubit line processor  0-1-2-3-4, and a coloring of [(0,1), (2,3)] we could have as one possible CircuitList for the full 5Q line topology:
-
-    0 -- D --   | 0 -- C --
-    1 -- D --   | 1 -- C --
-    2 -- C --   | 2 -- D --
-    3 -- C --   | 3 -- D --
-    4 -- A --   | 4 -- B --
-
-    or
-
-    0 -- C --   | 0 -- D --
-    1 -- C --   | 1 -- D --
-    2 -- C --   | 2 -- D --
-    3 -- C --   | 3 -- D --
-    4 -- B --   | 4 -- A --
-
-    A different way to view this would be each simultaneous circuit has a slot for each subcircuit to use. In the first case,
-    the first simultaneous circuit we chose (D,C,A) for slot 0 and (C,D,B) for slot 1.
-
-    ----- Output ordering -----
-    The returned lists are indexed by germ power, and within a germ power the
-    circuits are grouped by patch: all of the first patch's circuits, then all of
-    the second patch's, and so on, following the input order of ``color_patches``.
-    We call this germ-power-major, then patch-major. Every patch contributes the
-    same number of circuits at a given germ power, so each germ power's list splits
-    into equal contiguous per-patch chunks.
-
-    ----- Nesting -----
-    The input designs' CircuitLists are assumed to be nested (GST's usual
-    convention: germ power L+1's list contains germ power L's). They are denested
-    on the way in, so each germ power is stitched from only its own new circuits,
-    and the result is renested on the way out. Renesting is done patch-wise, so the
-    germ-power-major-then-patch-major ordering above is preserved: patch p's chunk
-    at germ power L is patch p's circuits from germ powers 0..L, in order. Nesting
-    is therefore about set containment, not about the order of the flat list.
-
-    ----- Randomization across patches -----
-    By default (``share_same_shape_schedules=True``) patches with the same shape --
-    the same number of 2Q edge slots and unused 1Q qubit slots -- share a single
-    random schedule: one is stitched and the rest are relabellings of it onto their
-    own qubits. So on a 5Q line with patches ``[(0,1),(2,3)]`` and ``[(1,2),(3,4)]``,
-    patch 1's circuits are patch 0's circuits shifted over by one qubit, slot for
-    slot. Randomness is drawn once per shape, not once per patch, which makes the
-    spectator context each subcircuit sees correlated across same-shape patches; the
-    payoff is that tensoring cost scales with the number of distinct shapes rather
-    than the number of patches.
-
-    Set ``share_same_shape_schedules=False`` for independent draws per patch, at a
-    tensoring cost of roughly ``num_patches / num_shapes`` times the default. Note
-    the two settings consume the random stream at different rates, so their outputs
-    are unrelated at a fixed seed and should not be diffed against each other.
-
-    ---------- Notes -------------
-    - If either the 2Q GST or the 1Q GST has a germ power which contains more circuits than that of the other GST design then for
-    either the edges (in the case 1Q has more circuits) or (the unused qubits in the case 2Q has more circuits) will be bootstrapped to the number of circuits
-    specified by the other design for that particular germ power. That is, the shorter design's circuits are resampled with replacement
-    (after each is used once) to fill the extra slots. This could be different for different germ powers.
-
-    - A full simultaneous circuit will always will pad swallower subcircuits with noisy idle gates to the length of the longest subcircuit.
-    
-    - This function does not deduplicate color patches. For example, if both
-    ``[(0, 1), (2, 3)]`` and ``[(1, 0), (3, 2)]`` are supplied, both designs are
-    generated, even though they differ only by edge orientation.
-
-    - This function does not verify its own output (e.g. that no implicit idle
-    gates remain, or that circuits landed on the correct patch). That
-    verification is stitcher-agnostic and lives in
-    :func:`assert_circuit_lists_match_color_patches`, which
-    ``SimultaneousGSTDesign.__init__`` runs (by default) against
-    whatever this or any other ``circuit_stitcher`` returns.
-
-    Parameters
-    ----------
-    oneq_gstdesign : GateSetTomographyDesign
-        The 1Q GST experiment design.
-
-    twoq_gstdesign : GateSetTomographyDesign
-        The 2Q GST experiment design. Must have the same number of germ-power
-        groups as ``oneq_gstdesign``.
-
-    vertices : list[int]
-        Vertices/qubits in the connectivity graph.
-
-    color_patches : dict[int, list[tuple[int, int]]]
-        Mapping from patch/color identifier to the list of disjoint 2Q edges in that patch.
-        Each edge is represented as a pair of qubit labels.
-
-    randgen : numpy.random.Generator, optional
-        Random number generator used to randomize circuit assignments across edge
-        and qubit slots. If None, uses ``np.random.default_rng(0)``.
-
-    share_same_shape_schedules : bool, optional
-        Whether patches with the same shape share one random schedule (and hence
-        receive identical circuit content up to qubit relabelling). Defaults to
-        True. See "Randomization across patches" above for the tradeoff.
-
-    verbosity : int, optional
-        If greater than 0, display a progress bar over germ powers while
-        stitching. Defaults to 0 (silent), so that library calls and test
-        suites produce no output.
-
-    **kwargs
-        Ignored. Accepted so this stitcher matches the generic
-        ``circuit_stitcher(oneq, twoq, vertices, color_patches, **kwargs)``
-        calling convention used by ``SimultaneousGSTDesign``, allowing
-        it to be swapped with other stitchers that take extra options.
-
-    Returns
-    -------
-    list[list]
-        ``circuit_lists[L]`` contains the generated simultaneous GST circuits for
-        germ-power index ``L``. Within each germ-power group, circuits are ordered
-        patch-major according to the input order of ``color_patches``. The lists are
-        nested: ``circuit_lists[L+1]`` contains every circuit in ``circuit_lists[L]``.
-
-    Raises
-    ------
-    NotImplementedError
-        If ``oneq_gstdesign`` and ``twoq_gstdesign`` do not have the same number
-        of germ-power groups. The two designs are stitched germ power by germ
-        power, so pairing designs with differing numbers of germ powers is not
-        supported; truncate the longer design (or rebuild both with the same
-        ``max_lengths``) before calling.
-    """
-    if randgen is None:
-        randgen = np.random.default_rng(0)
-
-    oneq_gstdesign_circuitlists = oneq_gstdesign.circuit_lists
-    twoq_gstdesign_circuitlists = twoq_gstdesign.circuit_lists
-    layer_mappers = build_layer_mappers(oneq_gstdesign, twoq_gstdesign)
-    # Denest the Circuit lists. We will renest them at the end.
-    oneq_gstdesign_circuitlists = _denest_a_circuitlist(oneq_gstdesign_circuitlists)
-    twoq_gstdesign_circuitlists = _denest_a_circuitlist(twoq_gstdesign_circuitlists)
-
-    if len(oneq_gstdesign_circuitlists) != len(twoq_gstdesign_circuitlists):
+    def merge_with(self, other_edesign, remove_duplicates=True):
+        """
+        Not supported for a SimultaneousGSTDesign; see :meth:`as_circuit_lists_design`.
+
+        Unlike truncation, merging has no obvious right answer: the result would have to
+        carry a single edge coloring, and there is no general rule for combining the
+        colorings of two stitched designs (they may disagree, or partition different
+        qubits). Use ``.as_circuit_lists_design()`` on both to get plain designs holding
+        the same circuits, and merge those.
+        """
         raise NotImplementedError(
-            "The 1Q and 2Q designs must have the same number of germ powers, but got "
-            f"{len(oneq_gstdesign_circuitlists)} (1Q) versus "
-            f"{len(twoq_gstdesign_circuitlists)} (2Q). The designs are stitched germ "
-            "power by germ power, so pairing designs of differing lengths is not "
-            "supported; truncate the longer design (or rebuild both with the same "
-            "max_lengths) before calling."
+            "merge_with is not supported for a SimultaneousGSTDesign: there is no general "
+            "rule for combining two designs' edge colorings. Use .as_circuit_lists_design() "
+            "to get a plain GateSetTomographyDesign holding the same circuits, which "
+            "supports merging."
         )
-
-    vertices = list(vertices)
-
-    patch_infos = build_patch_infos(vertices, color_patches)
-
-    # Preserve user/color_patches ordering in the final output.
-    patch_order = [info["patch"] for info in patch_infos]
-
-    # Which patches share a schedule (and hence a tensored template circuit).
-    schedule_groups = group_patches_for_scheduling(
-        patch_infos, share_same_shape_schedules
-    )
-
-    # Line mappers depend only on patch geometry, not on the germ power or on any
-    # random draw, so build them once here rather than inside the germ-power loop.
-    # Parallel to schedule_groups; empty-but-for-the-representative when patches
-    # do not share schedules.
-    group_mappers = [build_patch_mappers(infos) for infos in schedule_groups]
-
-    circuit_lists: List[List[Circuit]] = [[] for _ in twoq_gstdesign_circuitlists]
-
-    for L, (oneq_circuits, twoq_circuits) in _tqdm.tqdm(
-        enumerate(zip(oneq_gstdesign_circuitlists, twoq_gstdesign_circuitlists)),
-        total=len(twoq_gstdesign_circuitlists),
-        disable=(verbosity <= 0), desc="Building Simultaneous Circuits"
-    ):
-        oneq_len = len(oneq_circuits)
-        twoq_len = len(twoq_circuits)
-
-        num_circs_at_germ_power = max(oneq_len, twoq_len)
-
-        # We produce max(oneq, twoq) simultaneous circuits to use every circuit of the longer design.
-        # The shorter design is bootstrapped, and batch_tensor pads shorter sub-circuits with explicit idles.
-
-        # Temporary per-patch storage so output ordering remains patch-major.
-        patch_buffers = {
-            info["patch"]: []
-            for info in patch_infos
-        }
-
-        for infos, mappers in zip(schedule_groups, group_mappers):
-            representative = infos[0]
-            representative_lines = representative["tensored_lines"]
-
-            twoq_slot_schedules, oneq_slot_schedules = build_group_schedules(
-                representative["num_edges"], representative["num_unused_qubits"],
-                num_circs_at_germ_power, twoq_len, oneq_len, randgen
-            )
-
-            for j in range(num_circs_at_germ_power):
-                circs_to_tensor = [twoq_circuits[idx] for idx in twoq_slot_schedules[:, j]]
-                circs_to_tensor += [oneq_circuits[idx] for idx in oneq_slot_schedules[:, j]]
-
-                template_circuit = batch_tensor(
-                    circs_to_tensor,
-                    layer_mappers,
-                    None,
-                    representative_lines
-                )
-
-                patch_buffers[representative["patch"]].append(
-                    template_circuit.copy()
-                )
-
-                for info in infos[1:]:
-                    mapper = mappers[info["patch"]]
-
-                    mapped_circuit = template_circuit.map_state_space_labels(mapper)
-                    patch_buffers[info["patch"]].append(mapped_circuit)
-
-        # Preserve patch-major output ordering.
-        circuit_lists[L] = flatten_patch_major(patch_buffers, patch_order)
-
-    # Renest patch-wise, so germ-power-major-then-patch-major ordering survives.
-    return _nest_a_circuitlist(circuit_lists, num_patches=len(patch_order))
-
