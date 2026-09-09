@@ -42,6 +42,9 @@ class ImplicitOpModelMixin:
         base.assertIs( m['Gx'],          m.operation_blks['gates']['Gx']           )
         base.assertIs( m[('Gx', 'qb0')], m.operation_blks['layers'][('Gx', 'qb0')] )
         base.assertIs( m['Gx:qb0'],      m.operation_blks['layers'][('Gx', 'qb0')] )
+        base.assertIs( m[Label(('Gx', 'qb0'))], m.operation_blks['layers'][('Gx', 'qb0')] )
+        with base.assertRaises(KeyError):
+            _ = m['nonexistent']
         return
 
 
@@ -62,6 +65,24 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
         super()._test_getitem(self, m)
         return
 
+    def test_member_dict_prefixes(self):
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        inst = Instrument({'p0': np.diag([1., 0, 0, 0]), 'p1': np.diag([0, 0, 0, 1.])})
+        member_dicts = (
+            (m.prep_blks['layers'], 'rho1', m['rho0'].copy(), 'Mbad'),
+            (m.povm_blks['layers'], 'Mtest', m['Mdefault'].copy(), 'rhobad'),
+            (m.operation_blks['gates'], 'Ggate', m['Gx'].copy(), 'Mbad'),
+            (m.operation_blks['layers'], ('Glayer', 'qb0'), m[('Gx', 'qb0')].copy(), 'Ibad'),
+            (m.instrument_blks['layers'], 'Itest', inst, 'Gbad'),
+            (m.factories['gates'], 'Gfactory', m['Gx'].copy(), 'rhobad'),
+            (m.factories['layers'], ('Gfactorylayer', 'qb0'), m[('Gx', 'qb0')].copy(), 'Mbad')
+        )
+        for member_dict, valid_key, member, invalid_key in member_dicts:
+            member_dict[valid_key] = member
+            self.assertIs(m[valid_key], member_dict[valid_key])
+            with self.assertRaises(KeyError):
+                member_dict[invalid_key] = member
+
     def test_indep_localnoise(self):
         mdl_local = create_crosstalk_free_model(
             self.pspec_2Q, ideal_gate_type='H+S',
@@ -77,6 +98,7 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
             ('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'),
             ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0')
         ]))
+        self.assertIs(mdl_local[('Gx', 'qb0')], mdl_local.operation_blks['gates'][('Gx', 'qb0')])
         test_circuit = ([('Gx', 'qb0'), ('Gy', 'qb1')],
                         ('Gcnot', 'qb0', 'qb1'),
                         [('Gx', 'qb1'), ('Gy', 'qb0')])
@@ -97,6 +119,8 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
             ('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'),
             ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0')
         ]))
+
+        self.assertIs(mdl_local[('Gx', 'qb0')], mdl_local.operation_blks['layers'][('Gx', 'qb0')])
         test_circuit = ([('Gx', 'qb0'), ('Gy', 'qb1')],
                         ('Gcnot', 'qb0', 'qb1'),
                         [('Gx', 'qb1'), ('Gy', 'qb0')])
@@ -130,6 +154,10 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
             ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0'),
             ('Gidle', 'qb0'), ('Gidle', 'qb1'), '{auto_global_idle}'
         ]))
+
+        self.assertIs(mdl_local['{auto_global_idle}'],
+                      mdl_local.operation_blks['layers']['{auto_global_idle}'])
+
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'),
                         [], [('Gx', 'qb1'), ('Gy', 'qb0')])
         probs = mdl_local.probabilities(test_circuit)
