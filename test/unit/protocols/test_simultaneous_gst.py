@@ -439,6 +439,17 @@ class NestingTester(BaseCase):
         )
         self._assert_no_duplicates(circuit_lists)
 
+    def test_a_component_with_no_circuits_at_all_is_rejected(self):
+        # The cumulative-pool fallback cannot help at the first maximum length:
+        # there is nothing earlier to fall back on.  Fail with a message about
+        # component designs rather than out of numpy.
+        with self.assertRaises(ValueError) as ctx:
+            self._run(
+                oneq_lens=[0, 3], twoq_lens=[4, 6],
+                color_patches={0: [(0, 1)]}, vertices=[0, 1, 2],
+            )
+        self.assertIn('empty component-design pool', str(ctx.exception))
+
     def test_either_component_may_add_no_circuits_at_a_germ_power(self):
         circuit_lists = self._run(
             oneq_lens=[3, 3], twoq_lens=[4, 6],

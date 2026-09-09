@@ -502,13 +502,19 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
     # the stitcher's equal-chunk patch-major *positional* layout is lost, and nothing
     # reads it off a built design.
     #
-    # The overrides below exist for one reason: CircuitListsDesign._truncate_to_circuits_
-    # inplace sets nested=False, because in general filtering circuit lists need not
-    # preserve containment. It does preserve it here. Every route through this class
-    # filters each germ-power list by one common keep-set, and
-    # (list_L & keep) <= (list_{L+1} & keep) whenever list_L <= list_{L+1}. Losing
-    # nested=True would be a real regression: iterative GST reads it to decide whether
-    # circuit_lists[-1] is the full circuit set.
+    # The two in-place overrides below exist for one reason: CircuitListsDesign._truncate_
+    # to_circuits_inplace sets nested=False, because in general filtering circuit lists
+    # need not preserve containment. It does preserve it here. truncate_to_circuits,
+    # truncate_to_available_data and truncate_to_lists all filter every germ-power list by
+    # one common keep-set, and (list_L & keep) <= (list_{L+1} & keep) whenever
+    # list_L <= list_{L+1}. (truncate_to_design is the exception -- see that override.)
+    #
+    # Losing nested=True matters at the next *rebuild*, not immediately: these hooks mutate
+    # in place, but CircuitListsDesign.__init__ reads nested to decide whether to take
+    # circuit_lists[-1] as all_circuits_needing_data or to union every list instead. So a
+    # design that forgot the flag would come back from map_qubit_labels, merge_with or
+    # from_dir having recomputed its circuit set the slow way. StandardGSTDesign.truncate_
+    # to_design restores the flag by hand for the same reason (see gst.py).
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
         was_nested = self.nested
