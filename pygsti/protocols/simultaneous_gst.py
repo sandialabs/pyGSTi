@@ -631,11 +631,16 @@ def group_patches_for_scheduling(patch_infos: List[Dict[str, Any]],
 def random_index_schedule(n: int, num_circs_at_germ_power: int, randgen: np.random.Generator) -> np.ndarray:
     """
     Build a length-num_circs_at_germ_power index schedule into a CircuitList of size n.
-    Draws bootstrap indices uniformly with replacement from 0..n-1 if n < num_circs_at_germ_power,
-    then shuffles the result.
+    Samples without replacement if n is larger than the requested schedule; draws
+    bootstrap indices uniformly with replacement from 0..n-1 if n is smaller; then
+    shuffles the result.
     """
+    if n == 0 and num_circs_at_germ_power:
+        raise ValueError("Cannot schedule circuits from an empty component-design pool")
     if n == num_circs_at_germ_power:
         base = np.arange(num_circs_at_germ_power)
+    elif n > num_circs_at_germ_power:
+        base = randgen.permutation(n)[:num_circs_at_germ_power]
     else:
         base = np.concatenate((
             np.arange(n),
@@ -1038,12 +1043,12 @@ def assign_the_designs_with_mapping(
     if randgen is None:
         randgen = np.random.default_rng(0)
 
-    oneq_gstdesign_circuitlists = oneq_gstdesign.circuit_lists
-    twoq_gstdesign_circuitlists = twoq_gstdesign.circuit_lists
+    nested_oneq_circuitlists = oneq_gstdesign.circuit_lists
+    nested_twoq_circuitlists = twoq_gstdesign.circuit_lists
     layer_mappers = build_layer_mappers(oneq_gstdesign, twoq_gstdesign)
     # Denest the Circuit lists. We will renest them at the end.
-    oneq_gstdesign_circuitlists = _denest_a_circuitlist(oneq_gstdesign_circuitlists)
-    twoq_gstdesign_circuitlists = _denest_a_circuitlist(twoq_gstdesign_circuitlists)
+    oneq_gstdesign_circuitlists = _denest_a_circuitlist(nested_oneq_circuitlists)
+    twoq_gstdesign_circuitlists = _denest_a_circuitlist(nested_twoq_circuitlists)
 
     if len(oneq_gstdesign_circuitlists) != len(twoq_gstdesign_circuitlists):
         raise NotImplementedError(
@@ -1080,10 +1085,25 @@ def assign_the_designs_with_mapping(
         total=len(twoq_gstdesign_circuitlists),
         disable=(verbosity <= 0), desc="Building Simultaneous Circuits"
     ):
+        new_oneq_len = len(oneq_circuits)
+        new_twoq_len = len(twoq_circuits)
+
+        num_circs_at_germ_power = max(new_oneq_len, new_twoq_len)
+
+        # StandardGSTDesign may repeat a nested list when no selected germ adds a
+        # circuit at an adjacent maximum length.  If the other component does add
+        # circuits, pair those additions with a sample from the unchanged
+        # component's cumulative pool.  The number of new simultaneous circuits
+        # remains governed by the denested additions, so older component circuits
+        # are not spuriously counted as new work.
+        if num_circs_at_germ_power:
+            if new_oneq_len == 0:
+                oneq_circuits = nested_oneq_circuitlists[L]
+            if new_twoq_len == 0:
+                twoq_circuits = nested_twoq_circuitlists[L]
+
         oneq_len = len(oneq_circuits)
         twoq_len = len(twoq_circuits)
-
-        num_circs_at_germ_power = max(oneq_len, twoq_len)
 
         # We produce max(oneq, twoq) simultaneous circuits to use every circuit of the longer design.
         # The shorter design is bootstrapped, and batch_tensor pads shorter sub-circuits with explicit idles.
@@ -1129,4 +1149,3 @@ def assign_the_designs_with_mapping(
 
     # Renest patch-wise, so germ-power-major-then-patch-major ordering survives.
     return _nest_a_circuitlist(circuit_lists, num_patches=len(patch_order))
-

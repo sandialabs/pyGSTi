@@ -422,6 +422,32 @@ class NestingTester(BaseCase):
             for c in germ_power_list[half:]:
                 self.assertEqual(_cnot_edges(c), {(1, 2)})
 
+    def test_one_component_may_add_no_circuits_at_a_germ_power(self):
+        # A valid nested StandardGSTDesign can repeat a circuit list when no
+        # selected germ changes between adjacent maximum lengths.  The other
+        # component's new circuits must still be stitchable against a sample
+        # from the repeated component's cumulative pool.
+        circuit_lists = self._run(
+            oneq_lens=[3, 5], twoq_lens=[4, 4],
+            color_patches={0: [(0, 1)]}, vertices=[0, 1, 2],
+        )
+        self.assertEqual([len(circuit_list) for circuit_list in circuit_lists], [4, 6])
+        self._assert_patchwise_containment(
+            circuit_lists, [0, 1, 2], {0: [(0, 1)]}
+        )
+        self._assert_no_duplicates(circuit_lists)
+
+    def test_either_component_may_add_no_circuits_at_a_germ_power(self):
+        circuit_lists = self._run(
+            oneq_lens=[3, 3], twoq_lens=[4, 6],
+            color_patches={0: [(0, 1)]}, vertices=[0, 1, 2],
+        )
+        self.assertEqual([len(circuit_list) for circuit_list in circuit_lists], [4, 6])
+        self._assert_patchwise_containment(
+            circuit_lists, [0, 1, 2], {0: [(0, 1)]}
+        )
+        self._assert_no_duplicates(circuit_lists)
+
 
 class _SGSTFixture:
     """A 3-qubit line device and the simultaneous-GST design built on it.
