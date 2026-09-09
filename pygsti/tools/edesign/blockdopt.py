@@ -629,13 +629,27 @@ def _looks_like_a_target_model(model):
 
     True only when there is at least one coefficient to look at, so a model with no
     error generators -- nothing to perturb, nothing to warn about -- does not trip it.
+
+    This only ever drives a warning, so it must not be able to fail: a model that cannot
+    be walked (`Model._iter_parameterized_objs` is abstract, and a member's coefficients
+    need not be readable) is reported as not-a-target rather than raising.  A false
+    negative costs a missed warning; an exception here would cost a construction.
     """
+    try:
+        members = list(model._iter_parameterized_objs())
+    except Exception:
+        return False
+
     saw_one = False
-    for _, member in model._iter_parameterized_objs():
+    for _, member in members:
         getter = getattr(member, 'errorgen_coefficients', None)
         if getter is None:
             continue
-        for value in getter().values():
+        try:
+            coefficients = getter()
+        except Exception:
+            continue
+        for value in coefficients.values():
             saw_one = True
             if value != 0:
                 return False

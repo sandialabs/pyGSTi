@@ -680,3 +680,29 @@ class BlockDoptReducerTester(_ModelFixture, BaseCase):
         with warnings.catch_warnings():
             warnings.simplefilter('error')
             DesignReducer.from_nice_serialization(state)
+
+    def test_a_model_that_cannot_be_walked_does_not_break_construction(self):
+        """The check only drives a warning, so it must never be the thing that raises.
+
+        `Model._iter_parameterized_objs` is abstract, and a member's coefficients need
+        not be readable, so an exception here is reachable from a custom Model.
+        """
+        class _Opaque:
+            def _iter_parameterized_objs(self):
+                raise NotImplementedError
+
+        class _BadMember:
+            def errorgen_coefficients(self):
+                raise RuntimeError("no coefficients for you")
+
+        class _HasBadMember:
+            def _iter_parameterized_objs(self):
+                yield ('Gx', _BadMember())
+
+        for model in (_Opaque(), _HasBadMember()):
+            with self.subTest(model=type(model).__name__):
+                self.assertFalse(bd._looks_like_a_target_model(model))
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter('error')
+                    bd.BlockDoptReducer(model)
