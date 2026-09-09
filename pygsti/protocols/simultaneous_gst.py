@@ -21,7 +21,6 @@ from pygsti import io as _io
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.processors import QubitProcessorSpec
 from pygsti.circuits.circuit import Circuit
-from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label, LabelTup
 
@@ -520,10 +519,6 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         # This one truncates list L against *other_design*'s list L, a different keep-set
         # per list, so nesting survives only if the other design is nested too.
         was_nested = self.nested and getattr(other_design, 'nested', False)
-        # CircuitListsDesign's version calls .truncate() on each of self.circuit_lists
-        # without casting first, unlike its sibling hooks. The default stitcher returns
-        # plain lists, so cast here or that line raises AttributeError.
-        self.circuit_lists = [_CircuitList.cast(lst) for lst in self.circuit_lists]
         super()._truncate_to_design_inplace(other_design)
         self.nested = was_nested
 

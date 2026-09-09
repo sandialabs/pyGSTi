@@ -20,6 +20,7 @@
 * Fixed germ selection ignoring the user-specified number of non-gauge parameters.
 * Fixed two `UnboundLocalError` bugs in `pygsti.tools.errgenproptools` affecting 'A'-type (active) error generators: `slow_bulk_alpha` assigned its weight-1 anticommuting-Pauli result to the whole return array instead of the per-iteration local (masked whenever the Cython `fasterrgencalc` extension is built, since `bulk_alpha` then aliases the Cython implementation), and `error_generator_commutator`'s 'S'-'A' branch referenced an undefined `ptup` instead of `ptup1`. (#876)
 * Fixed `EmbeddedOp`/`EmbeddedErrorgen` local error-generator-label embedding (`label_type='local'`) for string or permuted-integer qubit labels, which previously raised `TypeError` or silently mis-embedded. (#878)
+* `CircuitListsDesign.truncate_to_design` no longer raises `AttributeError: 'list' object has no attribute 'truncate'` when the design holds plain lists of circuits rather than `CircuitList`s. Plain lists are a supported state — `__init__` chooses `auxfile_types['circuit_lists']` based on whether any list is a `CircuitList` — and the other two in-place truncation hooks already cast; this one did not.
 
 ### Changed
 * `LocalNoiseModel` member dictionaries now enforce standard key prefix namespaces (`rho` for state preparations, `M` for POVMs, `G` or `{` for operations and factories, and `I` for instruments) to prevent ambiguous lookups via `ImplicitOpModel.__getitem__`, supported by multi-prefix validation in `_PrefixOrderedDict` and `OrderedMemberDict` (#903).
