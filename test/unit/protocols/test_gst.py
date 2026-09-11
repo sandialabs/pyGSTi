@@ -120,6 +120,65 @@ class StandardGSTDesignTester(BaseCase):
                                     [1, 2])
 
 
+class MapQubitLabelsTester(BaseCase):
+    """`StandardGSTDesign.map_qubit_labels` on a design that has been cut down.
+
+    The method builds its result through the `StandardGSTDesign` constructor, which
+    regenerates the circuit lists from germs, fiducials and max lengths. Those describe
+    the design as it was originally generated, not as it stands once circuits have been
+    dropped, so relabelling has to install what the design actually holds.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.design = smq1Q_XYI.create_gst_experiment_design(max_max_length=2)
+        cls.circuits = list(cls.design.all_circuits_needing_data)
+
+    def _shallowest(self, n):
+        return sorted(self.circuits, key=len)[:n]
+
+    def test_relabelling_does_not_restore_dropped_circuits(self):
+        """A relabelled 6-circuit truncated design used to come back with all 168."""
+        keep = self._shallowest(6)
+        truncated = self.design.truncate_to_circuits(keep)
+        self.assertEqual(len(truncated.all_circuits_needing_data), 6)
+
+        mapped = truncated.map_qubit_labels({0: 'Q7'})
+        self.assertIsInstance(mapped, gst.StandardGSTDesign)
+        self.assertEqual(len(mapped.all_circuits_needing_data), 6)
+        self.assertEqual(
+            set(mapped.all_circuits_needing_data),
+            {c.map_state_space_labels({0: 'Q7'}) for c in keep})
+
+    def test_relabelling_a_truncated_design_keeps_its_list_structure(self):
+        """Not just the circuit set: the per-max-length binning has to survive too.
+
+        Regenerating cannot reproduce it -- `nested` is a generation option to the
+        constructor but only a description on a built design, and truncation clears it,
+        so a regenerated truncated design bins its circuits differently.
+        """
+        truncated = self.design.truncate_to_circuits(self._shallowest(20))
+        mapped = truncated.map_qubit_labels({0: 'Q7'})
+        self.assertEqual(mapped.nested, truncated.nested)
+        self.assertEqual([len(cl) for cl in mapped.circuit_lists],
+                         [len(cl) for cl in truncated.circuit_lists])
+        for mapped_list, original_list in zip(mapped.circuit_lists, truncated.circuit_lists):
+            self.assertEqual(set(mapped_list),
+                             {c.map_state_space_labels({0: 'Q7'}) for c in original_list})
+
+    def test_relabelling_an_untruncated_design_is_unchanged(self):
+        """Installing the real lists must be a no-op when nothing was dropped."""
+        mapped = self.design.map_qubit_labels({0: 'Q7'})
+        self.assertEqual(len(mapped.all_circuits_needing_data), len(self.circuits))
+        self.assertEqual(mapped.nested, self.design.nested)
+        self.assertEqual([len(cl) for cl in mapped.circuit_lists],
+                         [len(cl) for cl in self.design.circuit_lists])
+        self.assertEqual(
+            set(mapped.all_circuits_needing_data),
+            {c.map_state_space_labels({0: 'Q7'}) for c in self.circuits})
+
+
 class GSTInitialModelTester(BaseCase):
     """
     Tests for methods in the GSTInitialModel class.
