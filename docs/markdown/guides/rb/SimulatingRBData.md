@@ -27,7 +27,7 @@ from pygsti.processors import CliffordCompilationRules as CCR
 
 ## Get some CRB circuits
 
-Follow the [Clifford RB](../../guides/rb/CliffordRB) tutorial to generate a set of sequences. For Direct RB instead, replace this cell with the contents of the [Direct RB](../../guides/rb/DirectRB) tutorial up to the point where it creates `circuitlist`.
+Follow the [Clifford RB](CliffordRB) tutorial to generate a set of sequences. For Direct RB instead, replace this cell with the contents of the [Direct RB](DirectRB) tutorial up to the point where it creates `circuitlist`.
 
 ```{code-cell} ipython3
 #Specify the device to be benchmarked - in this case 2 qubits
@@ -66,7 +66,7 @@ Both model types below produce the right gate names. They differ on parallel lay
 
 ## Explicit model: arbitrary $n$-qubit process matrices
 
-Build the model from the standard 2-qubit X, Y, CPHASE model pack, which already has the right gates. A model pack packages a `Model` object with the meta information other protocols (like GST) need. If you can't start from a standard model, create an `ExplicitOpModel` of the appropriate dimension (see the [explicit models tutorial](../../guides/models/Models)) and assign gates keyed by, for instance, `('Gxpi2',0)` rather than plain `'Gxpi2'`.
+Build the model from the standard 2-qubit X, Y, CPHASE model pack, which already has the right gates. A model pack packages a `Model` object with the meta information other protocols (like GST) need. If you can't start from a standard model, create an `ExplicitOpModel` of the appropriate dimension (see the [explicit models tutorial](../../internals/models/ExplicitModels)) and assign gates keyed by, for instance, `('Gxpi2',0)` rather than plain `'Gxpi2'`.
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq2Q_XYCPHASE
@@ -109,7 +109,7 @@ ds_explicit = ds_explicit.process_circuits(lambda c: unserialize_map[c])
 
 ## Implicit model: local noise on each gate
 
-Implicit models (see the [implicit model tutorial](../../guides/models/MultiQubitModels)) describe multi-qubit processors efficiently, and they handle parallel-gate layers natively, so no serialization step is needed. There are several ways to construct one. The simplest is a "local noise model" (class `LocalNoiseModel`), in which the noise on a gate acts only on that gate's target qubits: 1-qubit gates stay 1-qubit operators rather than becoming $n$-qubit ones.
+Implicit models (see the [implicit model tutorial](../models/MultiQubitModels)) describe multi-qubit processors efficiently, and they handle parallel-gate layers natively, so no serialization step is needed. There are several ways to construct one. The simplest is a "local noise model" (class `LocalNoiseModel`), in which the noise on a gate acts only on that gate's target qubits: 1-qubit gates stay 1-qubit operators rather than becoming $n$-qubit ones.
 
 `create_crosstalk_free_model` builds a `LocalNoiseModel` from a `QubitProcessorSpec`.
 

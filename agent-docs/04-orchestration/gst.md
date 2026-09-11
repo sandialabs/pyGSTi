@@ -163,8 +163,7 @@ Configuration helpers, mixins, the LGST protocol, and checkpoints. Most are cons
 
 ## Canonical examples
 
-- [docs/markdown/gst/Overview.md](../../docs/markdown/start/FirstGST.md) — **the canonical class-API GST tutorial.** Read this first.
-- [docs/markdown/gst/Protocols.md](../../docs/markdown/guides/gst/RunningGST.md) — Protocol class details for GST.
-- [docs/markdown/gst/Overview-functionbased.md](../../docs/markdown/advanced/migration/FromFunctionAPI.md) — the legacy function-based path, useful when porting old code. See [drivers.md](drivers.md).
-- [docs/markdown/gst/Driverfunctions.md](../../docs/markdown/advanced/migration/FromFunctionAPI.md) — driver functions in detail.
+- [docs/markdown/start/FirstGST.md](../../docs/markdown/start/FirstGST.md) — **the canonical class-API GST tutorial.** Read this first.
+- [docs/markdown/guides/gst/RunningGST.md](../../docs/markdown/guides/gst/RunningGST.md) — Protocol class details for GST.
+- [docs/markdown/reference/FromFunctionAPI.md](../../docs/markdown/reference/FromFunctionAPI.md) — the function → protocol migration table, useful when porting old code. See [drivers.md](drivers.md).
 - [docs/markdown/guides/gst/Parallelism.md](../../docs/markdown/guides/gst/Parallelism.md) — class-API usage under MPI.

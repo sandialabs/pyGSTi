@@ -33,7 +33,7 @@ from pygsti.circuits import Circuit as C
 2. create a `Circuit`
 3. call `model.probabilities(circuit)`
 
-Steps 1 and 2 are covered elsewhere (see the [circuits guide](Circuits) and the [explicit-op model](../models/Models) and [implicit-op model](../models/MultiQubitModels) guides).  This section is about step 3, and about the `Model` options that change how probabilities get computed.  This is the right approach when you have a large number of circuits that are known and fixed beforehand.
+Steps 1 and 2 are covered elsewhere (see the [circuits guide](Circuits) and the [explicit-op model](../../internals/models/ExplicitModels) and [implicit-op model](../models/MultiQubitModels) guides).  This section is about step 3, and about the `Model` options that change how probabilities get computed.  This is the right approach when you have a large number of circuits that are known and fixed beforehand.
 
 Here is a simple example:
 
@@ -101,7 +101,7 @@ Simulation by state propagation is a work in progress in pyGSTi, and users shoul
 
 ## Forward-simulation types
 
-Several forward-simulation methods are available, and a `Model` holds its active one in the `.sim` attribute (an instance of a `ForwardSimulator` subclass).  The default, selected when a construction function is passed `simulator="auto"`, is `"map"`: repeated matrix-vector products against the state representation, with operations treated as abstract *maps*.  The `"matrix"` method multiplies together dense process matrices for the whole circuit; it can win on small (1-2 qubit) Hilbert spaces where caching dense matrices pays off across very large circuit batches, but it is not the automatic choice.  See the [forward simulation types guide](../../advanced/simulation/ForwardSimulators) for the full list, including the term-based and CHP simulators.
+Several forward-simulation methods are available, and a `Model` holds its active one in the `.sim` attribute (an instance of a `ForwardSimulator` subclass).  The default, selected when a construction function is passed `simulator="auto"`, is `"map"`: repeated matrix-vector products against the state representation, with operations treated as abstract *maps*.  The `"matrix"` method multiplies together dense process matrices for the whole circuit; it can win on small (1-2 qubit) Hilbert spaces where caching dense matrices pays off across very large circuit batches, but it is not the automatic choice.  See the [forward simulation types guide](../../internals/simulation/ForwardSimulators) for the full list, including the term-based and CHP simulators.
 
 Usually you don't need to think about this.  When you do, `.sim` is both readable and assignable:
 
@@ -117,7 +117,7 @@ print("3Q implicit_3q will simulate probabilities using the '%s' forward-simulat
 implicit_3q.probabilities(c)
 ```
 
-Switching is a one-line assignment.  We do it on the two-qubit model rather than the three-qubit one deliberately: `"matrix"` composes a dense process matrix for the entire circuit, so it can pay off at one or two qubits and [should not be pointed at a many-qubit model](../../advanced/simulation/ForwardSimulators).
+Switching is a one-line assignment.  We do it on the two-qubit model rather than the three-qubit one deliberately: `"matrix"` composes a dense process matrix for the entire circuit, so it can pay off at one or two qubits and [should not be pointed at a many-qubit model](../../internals/simulation/ForwardSimulators).
 
 ```{code-cell} ipython3
 mdl_2q.sim = 'matrix'

@@ -13,7 +13,7 @@ kernelspec:
 
 # Explicit models
 
-An `ExplicitOpModel` is the simplest kind of `Model` in pyGSTi: a dictionary-like container holding $d^2 \times d^2$ operation matrices, length-$d^2$ state preparation vectors, and sets of length-$d^2$ effect vectors that encode positive operator-valued measures (POVMs). State preparation and POVM effect vectors are collectively called "SPAM" (state preparation and measurement) vectors.
+An `ExplicitOpModel` is the simplest kind of `Model` in pyGSTi: a dictionary-like container holding $d^2 \times d^2$ operation matrices, length-$d^2$ state preparation vectors, and sets of length-$d^2$ effect vectors that encode positive operator-valued measures (POVMs). State preparation and POVM effect vectors are collectively called "SPAM" (state preparation and measurement) vectors. If you're deciding which kind of model to use, or putting noise on one, start from [modeling a noisy device](../../guides/models/DeviceModels) instead; what follows builds one by hand.
 
 A word on conventions before the mechanics. A "state space" is a Hilbert space of *pure* quantum states, often thought of as length-$d$ vectors with $d = 2^N$ for $N$ qubits. A "density matrix space" is a Hilbert space of density matrices, which you can think of as $d \times d$ matrices or, equivalently, as length-$d^2$ vectors. Those vectors live in Hilbert-Schmidt space, the space of linear operators on the $d \times d$ density matrix space. pyGSTi uses this "Liouville" vector representation for density matrices and POVM effects, which lets quantum gates be represented by $d^2 \times d^2$ matrices acting on Hilbert-Schmidt vectors.
 
@@ -37,9 +37,9 @@ from pygsti.modelpacks import smq2Q_XYICNOT
 
 Two quantities belong to *every* `Model`, not just explicit ones.
 
-A model's `.state_space` member (a `StateSpace` object) describes the state space as a direct sum and tensor product of labelled *factors*. Usually this is a tensor product of one or more 2-dimensional qubit spaces labelled by the integers 0 through $N_{qubits}-1$, or by `"Q0"`, `"Q1"`, and so on. Below we specify a 1-qubit state space with `["Q0"]`; the leading "Q" tells pyGSTi the factor is a 2-dimensional *qubit* space. For two qubits use `["Q0","Q1"]` or `[0,1]`, since integer labels also stand for qubit spaces. See the [state space tutorial](../../advanced/conventions/StateSpaces) for more.
+A model's `.state_space` member (a `StateSpace` object) describes the state space as a direct sum and tensor product of labelled *factors*. Usually this is a tensor product of one or more 2-dimensional qubit spaces labelled by the integers 0 through $N_{qubits}-1$, or by `"Q0"`, `"Q1"`, and so on. Below we specify a 1-qubit state space with `["Q0"]`; the leading "Q" tells pyGSTi the factor is a 2-dimensional *qubit* space. For two qubits use `["Q0","Q1"]` or `[0,1]`, since integer labels also stand for qubit spaces. See the [state space tutorial](../conventions/StateSpaces) for more.
 
-A model's `.basis` member (a `Basis` object) says how dense representations (matrices and vectors) of the model's operations should be interpreted. We use the "Pauli product" basis throughout, named `"pp"` in pyGSTi, whose elements are tensor products of Pauli matrices. For a 1-qubit state space that is just $\{\sigma_0,\sigma_X,\sigma_Y,\sigma_Z\}$. See the [Basis object tutorial](../../advanced/conventions/Bases) for more.
+A model's `.basis` member (a `Basis` object) says how dense representations (matrices and vectors) of the model's operations should be interpreted. We use the "Pauli product" basis throughout, named `"pp"` in pyGSTi, whose elements are tensor products of Pauli matrices. For a 1-qubit state space that is just $\{\sigma_0,\sigma_X,\sigma_Y,\sigma_Z\}$. See the [Basis object tutorial](../conventions/Bases) for more.
 
 ## Four ways to build one
 
@@ -47,7 +47,7 @@ There are roughly four routes to an `ExplicitOpModel`:
 
 * Create an empty one and set its elements directly.
 * Call a `pygsti.models.modelconstruction` function, which automates the above.
-* Load from a text-format model file with `pygsti.io.read_model` (see the [File IO tutorial](../workflow/FilesAndDirectories)).
+* Load from a text-format model file with `pygsti.io.read_model` (see the [File IO tutorial](../../guides/workflow/FilesAndDirectories)).
 * Load one from `pygsti.modelpacks` (see the [ModelPacks tutorial](../../start/TargetModels)).
 
 The first three are shown below, building the same 1-qubit model each time.
@@ -60,7 +60,7 @@ Keys carry type information. The model looks at the start of each key: keys begi
 
 The `preps`, `povms`, and `operations` members give you separate dictionary-like access to each category. `myModel.operations['Gx']` reaches the same underlying `LinearOperator` as `myModel['Gx']`, and likewise for `myModel.preps['rho0']` and `myModel['rho0']`. Values can be read and written either way.
 
-A `POVM` behaves like a dictionary of effect vectors, but it typically requires all of them to be initialized at once: you cannot assign individual effect vectors into an existing `POVM`. Its string keys label the outcome associated with each effect vector, and are therefore called *effect labels* or *outcome labels*. Those same labels designate data inside a `DataSet` (see the [DataSet tutorial](../workflow/DataSets)), which is what ties a modeled POVM to an experimental measurement.
+A `POVM` behaves like a dictionary of effect vectors, but it typically requires all of them to be initialized at once: you cannot assign individual effect vectors into an existing `POVM`. Its string keys label the outcome associated with each effect vector, and are therefore called *effect labels* or *outcome labels*. Those same labels designate data inside a `DataSet` (see the [DataSet tutorial](../../guides/workflow/DataSets)), which is what ties a modeled POVM to an experimental measurement.
 
 ```{code-cell} ipython3
 #Initialize an empty Model object
@@ -155,7 +155,7 @@ model4 = mc.create_explicit_model_from_expressions( ['Q0'],
 
 `create_explicit_model_from_expressions` makes you spell out gates as X, Y, and Z rotations. Often you want standard gates by name instead. pyGSTi defines a set of these (X/Y/Z, $\sqrt{X/Y/Z}$, and others) that can be used without writing out an expression, via `create_explicit_model`, which takes its information from a `QubitProcessorSpec`.
 
-A `QubitProcessorSpec` describes an experimental device: number of qubits, names of the standard gates it implements, qubit labels, and the topology or availability of gates. See the [processor specification tutorial](../workflow/DescribeYourDevice) for the full story. Here it's enough to treat it as a container for qubit and gate information, and it's a common input to most model construction routines.
+A `QubitProcessorSpec` describes an experimental device: number of qubits, names of the standard gates it implements, qubit labels, and the topology or availability of gates. See the [processor specification tutorial](../../guides/workflow/DescribeYourDevice) for the full story. Here it's enough to treat it as a container for qubit and gate information, and it's a common input to most model construction routines.
 
 ```{code-cell} ipython3
 pspec = QubitProcessorSpec(1, ['Gi', 'Gxpi2', 'Gypi2'], qubit_labels=['Q0']) # single qubit with idle, X(pi/2), and Y(pi/2) gates
@@ -238,7 +238,7 @@ print("Probabilities of outcomes of the \"complete\" gate\n sequence rho0+GxGx+M
       depol_model3.probabilities( ("rho0", "Gx", "Gx", "Mdefault")))
 ```
 
-You can also reach the underlying operations through the model's forward simulator. With the `matrix` simulator type, for instance, you can compute the product of two gate operations. See the [forward simulators tutorial](../../advanced/simulation/ForwardSimulators) for details.
+You can also reach the underlying operations through the model's forward simulator. With the `matrix` simulator type, for instance, you can compute the product of two gate operations. See the [forward simulators tutorial](../simulation/ForwardSimulators) for details.
 
 ```{code-cell} ipython3
 # Computing the product of operation matrices (only allowed with the matrix simulator type)
@@ -247,7 +247,7 @@ print("Product of Gx * Gx = \n",depol_model3.sim.product(("Gx", "Gx")), end='\n\
 
 ## Two-qubit models
 
-Explicit models scale badly. Memory cost grows as $d^4 = 16^N$ per operation, so they become impractical past two or three qubits; for larger devices use [implicit models](MultiQubitModels) instead. Two qubits, though, is a regime where explicit models are still the right tool, and it's the regime where you're most likely to need a gate pyGSTi doesn't know how to name.
+Explicit models scale badly. Memory cost grows as $d^4 = 16^N$ per operation, so they become impractical past two or three qubits; for larger devices use [implicit models](../../guides/models/MultiQubitModels) instead. Two qubits, though, is a regime where explicit models are still the right tool, and it's the regime where you're most likely to need a gate pyGSTi doesn't know how to name.
 
 The construction generalizes straightforwardly. Here is a 2-qubit model built the same way as `model4` above, with integer qubit labels and a CNOT:
 
@@ -351,4 +351,4 @@ To run 2-qubit GST against a custom model you would ideally generate fiducials a
 
 ## Next steps
 
-Look at [implicit models](MultiQubitModels), which trade the dictionary-of-matrices interface for something that scales to more qubits. The [operators tutorial](../../advanced/models/Operators#choosing-types-when-you-build-a-model) and the [model noise tutorial](ModelNoise.md) both apply to explicit and implicit models alike.
+The [operators](Operators) page covers the objects you've been assigning into these models, their parameterizations, and how to compose and embed them. For models that scale past two or three qubits, and for the noise arguments the construction functions accept, see the characterization guides: [modeling a noisy device](../../guides/models/DeviceModels), then [implicit models](../../guides/models/MultiQubitModels) and [model noise](../../guides/models/ModelNoise).

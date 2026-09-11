@@ -14,9 +14,9 @@ Any further arguments are passed through to ``jb build``.
 
 The config and table of contents are derived from ``_config.yml`` and
 ``_toc.yml`` at run time, so there is nothing here to keep in sync when those
-change. The derivation drops the "API reference" part from the table of
-contents, excludes ``api.rst`` and the generated ``_autosummary`` tree, and
-turns off ``autosummary_generate``.
+change. The derivation drops the ``api.rst`` entry from the table of contents
+(the rest of the Reference part stays), excludes ``api.rst`` and the generated
+``_autosummary`` tree, and turns off ``autosummary_generate``.
 
 The cost is that this build has no API reference: no API section in its sidebar,
 and any cross-reference from a tutorial into the ``pygsti`` API pages will not
@@ -34,7 +34,9 @@ OUT = DOCS / "_build" / "prose"
 EXTRA_EXCLUDES = ["api.rst", "_autosummary/**"]
 
 toc = yaml.safe_load((DOCS / "_toc.yml").read_text())
-toc["parts"] = [part for part in toc["parts"] if part.get("caption") != "API reference"]
+for part in toc["parts"]:
+    part["chapters"] = [ch for ch in part.get("chapters", []) if ch.get("file") != "api.rst"]
+toc["parts"] = [part for part in toc["parts"] if part["chapters"]]
 
 config = yaml.safe_load((DOCS / "_config.yml").read_text())
 sphinx = config.setdefault("sphinx", {})

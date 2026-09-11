@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 # Idle tomography
-This tutorial demonstrates how to run idle tomography on a multi-qubits system.  Idle tomography is a protocol which characterizes the errors present in an idle operation using data from a small number of intuitive circuits.  If $\tilde{I}$ is the noisy idle operation being characterized and we write $\tilde{I} = e^{\Lambda}$, where we call $\Lambda$ the *error generator* of $\tilde{I}$, and we express $\Lambda$ as a sum of terms, $\Lambda = \sum_i \alpha_i F_i$, then idle tomography estimates the $\alpha_i$ for some set of $F_i$.  The $F_i$ are specific generators for well-known errors (e.g. rotations or stochastic errors), the $\alpha_i$ can roughly be interpreted as the error *rates* corresponding to the well-known error types.  The three classes of $F_i$ that pyGSTi's implementation of idle tomography estimates are (see the Lindblad operator section of the [tutorial on operators](../models/Operators) for more details):
+This tutorial demonstrates how to run idle tomography on a multi-qubits system.  Idle tomography is a protocol which characterizes the errors present in an idle operation using data from a small number of intuitive circuits.  If $\tilde{I}$ is the noisy idle operation being characterized and we write $\tilde{I} = e^{\Lambda}$, where we call $\Lambda$ the *error generator* of $\tilde{I}$, and we express $\Lambda$ as a sum of terms, $\Lambda = \sum_i \alpha_i F_i$, then idle tomography estimates the $\alpha_i$ for some set of $F_i$.  The $F_i$ are specific generators for well-known errors (e.g. rotations or stochastic errors), the $\alpha_i$ can roughly be interpreted as the error *rates* corresponding to the well-known error types.  The three classes of $F_i$ that pyGSTi's implementation of idle tomography estimates are (see the Lindblad operator section of the [tutorial on operators](../../internals/models/Operators) for more details):
 
 - **Hamiltonian**: $F_i = H_i$ where $H_i : \rho \rightarrow -i[P_i,\rho]$
 - **Stochastic**: $F_i = S_i$ where $S_i : \rho \rightarrow P_i \rho P_i - \rho$
@@ -62,7 +62,7 @@ results = idt.do_idle_tomography(n_qubits, ds, max_lengths, paulidicts)
 That's basically it - now all we need to do is visualize the results.  Lets begin by creating a pyGSTi `Workspace` object to display plots inline.
 
 If the figures below don't appear, the notebook is probably not "Trusted"; see the
-[workspace figures tutorial](../figures/WorkspaceFigures) for that and the other causes.
+[workspace figures tutorial](../../internals/figures/WorkspaceFigures) for that and the other causes.
 The same plots are in the HTML report generated in the final
 cell of this example.
 

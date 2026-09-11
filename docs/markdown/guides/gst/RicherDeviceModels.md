@@ -25,4 +25,4 @@ The four pages here are not variations on a theme. Each one names a different pl
 
 **Your device does not hold still.** Standard GST fits one set of gate parameters to all your data at once, which is exactly wrong if the device drifts over the course of the experiment. [Time-dependent GST](TimeDependentGST) covers time-aware circuits, timestamped data, and objective functions that re-simulate at each time.
 
-If your device is straightforward and you are looking for how to describe it to pyGSTi in the first place, that is [describing your device](../workflow/DescribeYourDevice) rather than anything here. If the model you need is unusual in ways these pages do not cover, [custom operators](../../advanced/models/CustomOperators) is where the extension machinery lives.
+If your device is straightforward and you are looking for how to describe it to pyGSTi in the first place, that is [describing your device](../workflow/DescribeYourDevice) rather than anything here. If the model you need is unusual in ways these pages do not cover, [custom operators](../../internals/models/CustomOperators) is where the extension machinery lives.

@@ -83,6 +83,6 @@ flowchart TD
 ## Canonical examples
 
 - Notebooks for the extras-housed protocols are spread across the guides: [drift characterization](../docs/markdown/guides/drift/DriftCharacterization.md), [volumetric benchmarks](../docs/markdown/guides/benchmarks/VolumetricBenchmarks.md), [mirror fidelity estimation](../docs/markdown/guides/benchmarks/MirrorFidelityEstimation.md), and — under `advanced/specialist/` — [RPE](../docs/markdown/advanced/specialist/RobustPhaseEstimation.md) and [parity benchmarking](../docs/markdown/advanced/specialist/ParityBenchmarking.md).
-- [docs/markdown/protocols/DriftCharacterization.md](../docs/markdown/guides/drift/DriftCharacterization.md), [RobustPhaseEstimation.md](../docs/markdown/advanced/specialist/RobustPhaseEstimation.md), [interpolated operators](../docs/markdown/advanced/models/CustomOperators.md#interpolating-a-physical-process).
-- **Skip [docs/markdown/protocols/IdleTomography.md](../docs/markdown/advanced/specialist/IdleTomography.md)** — broken subsystem.
+- [docs/markdown/guides/drift/DriftCharacterization.md](../docs/markdown/guides/drift/DriftCharacterization.md), [docs/markdown/advanced/specialist/RobustPhaseEstimation.md](../docs/markdown/advanced/specialist/RobustPhaseEstimation.md), [interpolated operators](../docs/markdown/internals/models/CustomOperators.md#interpolating-a-physical-process).
+- **Skip [docs/markdown/advanced/specialist/IdleTomography.md](../docs/markdown/advanced/specialist/IdleTomography.md)** — broken subsystem, and deliberately left out of the web docs' table of contents.
 - [docs/markdown/guides/rb/](../docs/markdown/guides/rb/) — RB tutorials (the RB Protocol lives in `protocols/rb.py`; supporting analysis can pull from `extras/` and `tools/rbtheory.py`).

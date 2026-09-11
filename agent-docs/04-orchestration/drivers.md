@@ -36,9 +36,8 @@ The bootstrap helpers (`create_bootstrap_dataset`, `create_bootstrap_models`) ar
 ## Pitfalls and gotchas
 
 - **Driver functions are legacy.** Don't add new ones. If a tutorial calls `run_long_sequence_gst`, that's a reasonable migration target — port to `StandardGST(...).run(data)` (or `GateSetTomography(...).run(data)`) when you next touch the call site.
-- **The function-centric tutorial labels itself "older-style."** [docs/markdown/gst/Overview-functionbased.md](../../docs/markdown/advanced/migration/FromFunctionAPI.md) explicitly recommends switching to the class-based path.
+- **The docs discourage the driver functions.** [docs/markdown/reference/FromFunctionAPI.md](../../docs/markdown/reference/FromFunctionAPI.md) maps each driver function to its protocol-object replacement and says the drivers are expected to be deprecated.
 
 ## Canonical examples
 
-- [docs/markdown/gst/Overview-functionbased.md](../../docs/markdown/advanced/migration/FromFunctionAPI.md) — the legacy function-based tutorial. Useful when porting old code.
-- [docs/markdown/gst/Driverfunctions.md](../../docs/markdown/advanced/migration/FromFunctionAPI.md) — driver functions in detail.
+- [docs/markdown/reference/FromFunctionAPI.md](../../docs/markdown/reference/FromFunctionAPI.md) — the function → protocol migration table, including the keyword-argument moves. Useful when porting old code.

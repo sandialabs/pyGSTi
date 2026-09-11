@@ -44,14 +44,16 @@ model.probabilities(circuit)                        # ~ {('0',): 0.5, ('1',): 0.
 
 ## Where to go next
 
-This documentation is arranged in three tiers, and which one you want depends on what you are doing rather than on how much you already know.
+This documentation is arranged in five parts, and which one you want depends on what you are doing rather than on how much you already know.
 
 - **[Start here](Index)** is a short guided path from a fresh install to a characterization result you can read. It is the whole of what most people need.
 - **[Characterization guides](../guides/Index)** is the practitioner layer: one chapter per protocol, plus the workflow, modeling and analysis chapters that all of them draw on.
-- **[Advanced topics and internals](../advanced/Index)** is for extending pyGSTi, working with unusual devices, or research use. If you are characterizing a device with one of the protocols above, you do not need any of it.
+- **[Advanced capabilities](../advanced/Index)** is what only some readers need: specialist protocols, machine-learned error models, and circuits and data exchanged with Cirq or IBM Q.
+- **[Internals](../internals/Index)** is the machinery underneath: operators, conventions, simulators, extension points and the figures that reports are assembled from. If you are characterizing a device with one of the protocols above, you need neither this part nor the one before it.
+- **Reference** holds the [FAQ](../reference/Troubleshooting), [citing pyGSTi](../reference/Citing), [migrating from the function-based API](../reference/FromFunctionAPI) and the API reference.
 
-If you have a specific problem and want to know which few lines of Python solve it, try [troubleshooting](../guides/analysis/Troubleshooting). If that does not cover it, email us at pygsti@sandia.gov or open an issue on [GitHub](https://github.com/sandialabs/pyGSTi).
+If you have a specific problem and want to know which few lines of Python solve it, try the [FAQ](../reference/Troubleshooting). If that does not cover it, email us at pygsti@sandia.gov or open an issue on [GitHub](https://github.com/sandialabs/pyGSTi).
 
 ## Citing pyGSTi
 
-If pyGSTi contributed to work you are publishing, please see [citing pyGSTi](../advanced/Citing) for the references to use.
+If pyGSTi contributed to work you are publishing, please see [citing pyGSTi](../reference/Citing) for the references to use.

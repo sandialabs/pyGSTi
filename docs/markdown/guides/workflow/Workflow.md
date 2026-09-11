@@ -104,7 +104,7 @@ rbresults.plot()
 ```
 
 ## Model testing (see whether data agrees with a model)
-GST fits a parameterized model to a data set (see above), which can require many circuits to be run, and take a long time to analyze.  It is also possible to create a model in pyGSTi and test how well that model fits a set of data.  The circuits used to make this comparison don't need to have any special structure, and the time required to perform the analysis it greatly reduce.  In the example below we create a simple 2-qubit model and test it against the output of five hand-selected sequences.  For more information on model testing, see the [model testing tutorial](../analysis/ModelTesting).  For more information about creating explicit models, see the [explicit model tutorial](../models/Models).
+GST fits a parameterized model to a data set (see above), which can require many circuits to be run, and take a long time to analyze.  It is also possible to create a model in pyGSTi and test how well that model fits a set of data.  The circuits used to make this comparison don't need to have any special structure, and the time required to perform the analysis it greatly reduce.  In the example below we create a simple 2-qubit model and test it against the output of five hand-selected sequences.  For more information on model testing, see the [model testing tutorial](../analysis/ModelTesting).  For more information about creating explicit models, see the [explicit model tutorial](../../internals/models/ExplicitModels).
 
 ```{code-cell} ipython3
 # create a dataset file that is just a list of circuits run and their outcomes

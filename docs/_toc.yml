@@ -1,11 +1,16 @@
 # Table of contents
 # Learn more at https://jupyterbook.org/customize/toc.html
 #
-# Structure: three reader tiers, visible in the URL path.
-#   start/     the golden path -- a newcomer should need nothing else
-#   guides/    practitioner material, one chapter per characterization protocol
-#              plus the shared workflow/modeling/analysis chapters
-#   advanced/  extending pyGSTi, unusual devices, research use
+# Structure: five parts, with the reader tier visible in the URL path.
+#   start/      the golden path -- a newcomer should need nothing else
+#   guides/     practitioner material, one chapter per characterization protocol
+#               plus the shared workflow/modeling/analysis chapters
+#   advanced/   capabilities only some readers need: specialist protocols,
+#               machine-learned error models, other platforms' hardware and tooling
+#   internals/  the machinery underneath: operators, conventions, simulators,
+#               extension points, figure internals
+#   reference/  FAQ, citing, the function-API migration table, and the API
+#               reference last so that it never buries the rest
 # Depth is capped at 2. Order within a chapter is by expected demand, not alphabetical.
 
 format: jb-book
@@ -34,7 +39,7 @@ parts:
     - file: markdown/guides/workflow/DataSets
     - file: markdown/guides/workflow/SimulatingData
     - file: markdown/guides/workflow/FilesAndDirectories
-  - file: markdown/guides/models/Models
+  - file: markdown/guides/models/DeviceModels
     sections:
     - file: markdown/guides/models/MultiQubitModels
     - file: markdown/guides/models/ModelNoise
@@ -68,6 +73,7 @@ parts:
     - file: markdown/guides/rb/BinaryRB
     - file: markdown/guides/rb/Samplers
     - file: markdown/guides/rb/SimultaneousRB
+    - file: markdown/guides/rb/SimulatingRBData
     - file: markdown/guides/rb/SU2QuditRB
   - file: markdown/guides/benchmarks/VolumetricBenchmarks
     sections:
@@ -83,41 +89,45 @@ parts:
     - file: markdown/guides/analysis/GaugeFreedom
     - file: markdown/guides/analysis/ErrorBars
     - file: markdown/guides/analysis/ModelTesting
-    - file: markdown/guides/analysis/Troubleshooting
-  - file: markdown/guides/hardware/IBMQ
 
-- caption: Advanced topics and internals
+- caption: Advanced capabilities
   chapters:
   - file: markdown/advanced/Index
-  - file: markdown/advanced/models/Operators
-    sections:
-    - file: markdown/advanced/models/CustomOperators
-    - file: markdown/advanced/models/CustomPOVMs
-    - file: markdown/advanced/models/TyingParameters
-  - file: markdown/advanced/conventions/Bases
-    sections:
-    - file: markdown/advanced/conventions/StateSpaces
-  - file: markdown/advanced/simulation/ForwardSimulators
-    sections:
-    - file: markdown/advanced/simulation/StabilizerCHP
-    - file: markdown/advanced/simulation/SimulatingRBData
-    - file: markdown/advanced/simulation/ErrorGeneratorPropagation
-    - file: markdown/advanced/simulation/ErrorGeneratorPolynomials
-  - file: markdown/advanced/extending/LowLevelGST
-    sections:
-    - file: markdown/advanced/extending/GaugeOptReference
   - file: markdown/advanced/specialist/Index
     sections:
     - file: markdown/advanced/specialist/RobustPhaseEstimation
     - file: markdown/advanced/specialist/ParityBenchmarking
   - file: markdown/advanced/ml/QPANN
-  - file: markdown/advanced/figures/WorkspaceFigures
-    sections:
-    - file: markdown/advanced/figures/Switchboards
   - file: markdown/advanced/interop/Cirq
-  - file: markdown/advanced/migration/FromFunctionAPI
-  - file: markdown/advanced/Citing
+  - file: markdown/advanced/interop/IBMQ
 
-- caption: API reference
+- caption: Internals
   chapters:
+  - file: markdown/internals/Index
+  - file: markdown/internals/models/Operators
+    sections:
+    - file: markdown/internals/models/CustomOperators
+    - file: markdown/internals/models/CustomPOVMs
+    - file: markdown/internals/models/TyingParameters
+  - file: markdown/internals/models/ExplicitModels
+  - file: markdown/internals/conventions/Bases
+    sections:
+    - file: markdown/internals/conventions/StateSpaces
+  - file: markdown/internals/simulation/ForwardSimulators
+    sections:
+    - file: markdown/internals/simulation/StabilizerCHP
+    - file: markdown/internals/simulation/ErrorGeneratorPropagation
+    - file: markdown/internals/simulation/ErrorGeneratorPolynomials
+  - file: markdown/internals/extending/LowLevelGST
+    sections:
+    - file: markdown/internals/extending/GaugeOptReference
+  - file: markdown/internals/figures/WorkspaceFigures
+    sections:
+    - file: markdown/internals/figures/Switchboards
+
+- caption: Reference
+  chapters:
+  - file: markdown/reference/Troubleshooting
+  - file: markdown/reference/Citing
+  - file: markdown/reference/FromFunctionAPI
   - file: api.rst

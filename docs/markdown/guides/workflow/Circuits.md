@@ -383,7 +383,7 @@ print(quil)
 ```
 
 ### Simulating circuits
-`Model` objects in pyGSTi are able to *simulate*, or "generate the outcome probabilities for", circuits.  To demonstrate, let's create a circuit and a model (see the tutorials on ["explicit" models](../models/Models) and ["implicit" models](../models/MultiQubitModels) for more information on model creation):
+`Model` objects in pyGSTi are able to *simulate*, or "generate the outcome probabilities for", circuits.  To demonstrate, let's create a circuit and a model (see the tutorials on ["explicit" models](../../internals/models/ExplicitModels) and ["implicit" models](../models/MultiQubitModels) for more information on model creation):
 
 ```{code-cell} ipython3
 clifford_circuit = Circuit([ [L('Gh','Q0'),L('Gh','Q1')],
@@ -409,7 +409,7 @@ out1
 
 The keys of the outcome dictionary `out` are things like `('00',)` instead of just `'00'` because of possible *intermediate* outcomes.  See the [Instruments tutorial](../gst/MidCircuitMeasurement) if you're interested in learning more about intermediate outcomes.
 
-Computation of outcome probabilities may be done in a variety of ways, and `Model` objects are associated with a *forward simulator* that supplies the core computational routines for generating outcome probabilities.  In the example above the simulation was performed by multiplying together process matrices.  For more information on the types of forward simulators in pyGSTi and how to use them, see the [forward simulators tutorial](../../advanced/simulation/ForwardSimulators).
+Computation of outcome probabilities may be done in a variety of ways, and `Model` objects are associated with a *forward simulator* that supplies the core computational routines for generating outcome probabilities.  In the example above the simulation was performed by multiplying together process matrices.  For more information on the types of forward simulators in pyGSTi and how to use them, see the [forward simulators tutorial](../../internals/simulation/ForwardSimulators).
 
 ## Conclusion
 This concludes our detailed look into the `Circuit` object.  If you're intersted in using circuits for specific applications, you might want to check out the [tutorial on constructing GST circuits](../gst/GSTCircuits), which covers building GST circuit lists and pyGSTi's general-purpose circuit-list construction functions

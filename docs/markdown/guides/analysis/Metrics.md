@@ -21,7 +21,7 @@ This page is under construction. It covers the metrics people reach for most oft
 
 ## Setup
 
-Build three models: the ideal 1-qubit $X(\pi/2)$, $Y(\pi/2)$, idle model from a model pack, a depolarized version of it, and a version with a coherent over-rotation on every gate. Two noise types are worth carrying through the page because several metrics tell them apart. For more on building models see [Models](../models/Models); for the model packs themselves see [target models](../../start/TargetModels).
+Build three models: the ideal 1-qubit $X(\pi/2)$, $Y(\pi/2)$, idle model from a model pack, a depolarized version of it, and a version with a coherent over-rotation on every gate. Two noise types are worth carrying through the page because several metrics tell them apart. For more on building models see [modeling a noisy device](../models/DeviceModels); for the model packs themselves see [target models](../../start/TargetModels).
 
 ```{code-cell} ipython3
 import numpy as np
@@ -48,7 +48,7 @@ Gx_overrot = overrot_model[('Gxpi2', 0)].to_dense()
 tls.print_mx(Gx_overrot)
 ```
 
-Nearly every metric function needs to know which basis its matrix and vector arguments are written in. You can pass the string `'pp'`, or an explicit `Basis` object; see [Bases](../../advanced/conventions/Bases) for what the choice means.
+Nearly every metric function needs to know which basis its matrix and vector arguments are written in. You can pass the string `'pp'`, or an explicit `Basis` object; see [Bases](../../internals/conventions/Bases) for what the choice means.
 
 ```{code-cell} ipython3
 basis = pygsti.baseobjs.Basis.cast("pp", 4)  # 1-qubit Pauli basis (2x2 matrices)

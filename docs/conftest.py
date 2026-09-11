@@ -5,7 +5,7 @@ tutorials generate and save under ``docs/tutorial_files``:
 
 * ``guides/workflow/DataSets`` writes ``Example_Dataset.txt``,
   ``Example_Dataset_LowCnts.txt`` and the ``Example_GST_Data`` protocol-data
-  directory.  ``advanced/extending/LowLevelGST`` reads both datasets,
+  directory.  ``internals/extending/LowLevelGST`` reads both datasets,
   ``guides/analysis/Reports`` reads ``Example_Dataset.txt``, and
   ``guides/gst/RunningGST`` reads ``Example_GST_Data``.
 * ``guides/gst/RunningGST`` runs GST and writes the ``Example_GST_Data/results``

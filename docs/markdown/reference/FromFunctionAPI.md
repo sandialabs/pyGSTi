@@ -36,7 +36,7 @@ The practical wins: an experiment design can be written to disk before you take 
 |---|---|---|
 | `pygsti.run_long_sequence_gst` | `pygsti.protocols.GateSetTomography` | One GST estimate from one starting model. The starting model's parameterization *is* the constraint: pass `target_model("full TP")` to constrain the fit to TP gate sets. |
 | `pygsti.run_stdpractice_gst` | `pygsti.protocols.StandardGST` | Runs several parameterizations in one pass. The old `modes="full TP,CPTP,Target"` comma-string still parses but warns; pass a tuple, e.g. `modes=('full TP','CPTPLND','Target')`. |
-| `pygsti.run_model_test` | `pygsti.protocols.ModelTest` | See [model testing](../../guides/analysis/ModelTesting). |
+| `pygsti.run_model_test` | `pygsti.protocols.ModelTest` | See [model testing](../guides/analysis/ModelTesting). |
 | `pygsti.run_long_sequence_gst_base` | `pygsti.protocols.GateSetTomography` with an explicit design | The `_base` variant existed to accept a pre-built circuit structure; build a `GSTDesign` instead. |
 
 Keyword arguments move too. `advanced_options={'estimate_label': ...}` becomes the protocol's `name`, and bad-fit handling, which the drivers exposed piecemeal through `advanced_options`, is now a `GSTBadFitOptions` object passed as `badfit_options`.
@@ -86,6 +86,6 @@ print(estimate.models['final iteration estimate'].num_params, "parameters")
 
 ## Where to go next
 
-- [Running GST](../../guides/gst/RunningGST) — the protocol API in full, including parameterization choices, gauge optimization and bad-fit handling.
-- [GST overview](../../start/FirstGST) — start here if you are new to GST rather than porting existing code.
-- [Model testing](../../guides/analysis/ModelTesting) — the `ModelTest` protocol, which replaces `run_model_test`.
+- [Running GST](../guides/gst/RunningGST) — the protocol API in full, including parameterization choices, gauge optimization and bad-fit handling.
+- [GST overview](../start/FirstGST) — start here if you are new to GST rather than porting existing code.
+- [Model testing](../guides/analysis/ModelTesting) — the `ModelTest` protocol, which replaces `run_model_test`.

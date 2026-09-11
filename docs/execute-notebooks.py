@@ -75,7 +75,7 @@ SERIAL_CHAIN = [
     "guides/workflow/DataSets",        # W Example_Dataset{,_LowCnts}.txt, Example_GST_Data
     "guides/gst/RunningGST",           # W Example_GST_Data (+ results)
     "guides/analysis/Results",         # R Example_GST_Data/results
-    "advanced/extending/LowLevelGST",  # R Example_Dataset{,_LowCnts}.txt
+    "internals/extending/LowLevelGST", # R Example_Dataset{,_LowCnts}.txt
     "guides/analysis/Reports",         # R Example_Dataset.txt
     "start/FirstGST",                  # W gettingStartedReport, test_gst_dir
     "guides/workflow/Workflow",        # W gettingStartedReport, test_gst_dir, test_rb_dir
@@ -302,7 +302,7 @@ def main() -> int:
     # Kernels are subprocesses and inherit this. Without a fixed hash seed,
     # iteration order over sets and dicts keyed by strings (or tuples of them)
     # varies per process, so any cell that prints such a collection produces a
-    # different ordering every run -- observed in advanced/models/Operators,
+    # different ordering every run -- observed in internals/models/Operators,
     # where elementary error-generator labels came out in a different order.
     os.environ["PYTHONHASHSEED"] = "0"
 

@@ -20,7 +20,7 @@ import pygsti
 ```
 
 ## Step 1: construct the desired 2-qubit model
-Since the purpose of this example is to show how to *run* 2Q-GST, we'll just use a built-in "standard" 2-qubit model.  (The [explicit models tutorial](../models/Models) covers creating a custom 2-qubit model.)
+Since the purpose of this example is to show how to *run* 2Q-GST, we'll just use a built-in "standard" 2-qubit model.  (The [explicit models tutorial](../../internals/models/ExplicitModels) covers creating a custom 2-qubit model.)
 
 ```{code-cell} ipython3
 from pygsti.modelpacks import smq2Q_XY

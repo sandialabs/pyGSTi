@@ -6,7 +6,7 @@ pyGSTi's documentation assumes a handful of ideas that are easy to half-know: ga
 
 A noisy quantum operation is a map from density matrices to density matrices, not from states to states. pyGSTi represents such a map by flattening the $d \times d$ density matrix into a length-$d^2$ vector and writing the operation as a $d^2 \times d^2$ matrix acting on it. That matrix is the *superoperator*, and this is the Liouville (or "process matrix") representation.
 
-Two consequences follow, and both surface constantly in the API. First, a one-qubit gate is a $4 \times 4$ object, not $2 \times 2$. Second, the choice of basis for that flattened space is a real choice with real consequences for how numbers look: pyGSTi defaults to the normalized Pauli-product basis, in which a perfect gate's matrix has a recognizable sparse structure and error terms read off cleanly. See [bases](../advanced/conventions/Bases) if you need the conventions spelled out.
+Two consequences follow, and both surface constantly in the API. First, a one-qubit gate is a $4 \times 4$ object, not $2 \times 2$. Second, the choice of basis for that flattened space is a real choice with real consequences for how numbers look: pyGSTi defaults to the normalized Pauli-product basis, in which a perfect gate's matrix has a recognizable sparse structure and error terms read off cleanly. See [bases](../internals/conventions/Bases) if you need the conventions spelled out.
 
 State preparations and measurements live in the same space. A prepared state is a vector in it, and a POVM effect is a covector, so probabilities come out of ordinary matrix products.
 
@@ -47,7 +47,7 @@ A pyGSTi `Model` is not just a collection of matrices; it is a collection of mat
 
 The cost is substantial, which is the point. For the one-qubit XYI model pack, `full` has 60 parameters and `full TP` has 43; counting only the non-gauge parameters that actually affect the fit, the drop is 44 to 31. `CPTPLND` keeps 60 raw parameters but only 10 non-gauge ones.
 
-The practical point is that **choosing a parameterization is choosing a physical assumption**, and GST is only as constrained as you make it. A `full` fit that produces a non-physical map is not necessarily a bug; it may be telling you your data does not pin the gate down. See [running GST](../guides/gst/RunningGST) for how to set this, and [operators](../advanced/models/Operators#choosing-types-when-you-build-a-model) for the full inventory of parameterization names.
+The practical point is that **choosing a parameterization is choosing a physical assumption**, and GST is only as constrained as you make it. A `full` fit that produces a non-physical map is not necessarily a bug; it may be telling you your data does not pin the gate down. See [running GST](../guides/gst/RunningGST) for how to set this, and the [operators](../internals/models/Operators) page (its section on choosing types when you build a model) for the full inventory of parameterization names.
 
 ## Judging a fit
 

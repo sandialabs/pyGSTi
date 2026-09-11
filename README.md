@@ -149,7 +149,7 @@ for version control convenience, but can be converted to Jupyter notebooks as ne
 
 ### Viewing the documentation *online*
 The recommended way to view the documentation is on [ReadTheDocs](https://pygsti.readthedocs.io/en/latest/),
-although the raw Markdown files can also be looked at on [GitHub](https://github.com/sandialabs/pyGSTi/blob/master/docs/markdown/intro.md).
+although the raw Markdown files can also be looked at on [GitHub](https://github.com/sandialabs/pyGSTi/tree/master/docs/markdown) (the root page is `docs/markdown/start/intro.md`).
 
 The site renders the source MyST Markdown without executing notebook cells, so you won't see outputs (plots, tables) inline.
 You can download the notebooks or run them on the cloud with buttons in the upper-right of the given page.
