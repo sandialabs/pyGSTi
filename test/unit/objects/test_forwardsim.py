@@ -800,3 +800,45 @@ def test_torch_circuit_store_is_invalidated_by_reparameterization():
     Jfresh = np.empty((fresh_layout.num_elements, fresh.num_params))
     fresh.sim.bulk_fill_dprobs(Jfresh, fresh_layout, None)
     assert np.allclose(J, Jfresh, atol=1e-12)
+
+
+@pytest.mark.parametrize("ptype1,ptype2", [
+    ('CPTPLND', 'GLND'),
+    ('H', 'S'),
+    ('H+S', 'H+s'),
+])
+def test_torch_circuit_store_invalidated_by_type_preserving_reparameterization(ptype1, ptype2):
+    """A same-family Lindblad reparameterization performed while the model still sits at its
+    unperturbed target point rebuilds every member as an identically-shaped `ComposedOp` on both
+    sides, preserving type and parameter count even though the internal structure (which
+    Lindblad coefficient blocks are active) has changed. The cached circuit store must be
+    invalidated by this regardless, and a store rebuilt after conversion must still agree with
+    one built completely fresh."""
+    import torch
+    model = smq1Q_XYI.target_model(ptype1)
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    circuits = ForwardSimConsistencyTester.standard_lsgst_circuits(model, max_lengths=(1,))
+
+    layout = model.sim.create_layout(circuits, array_types=('ep',))
+    first = model.sim._circuit_store(layout)
+    assert model.sim._circuit_store(layout) is first
+
+    # Reparameterize while still at the unperturbed target point: this is exactly the collision
+    # `_model_signature` can't see, since type(obj) and obj.num_params match on both sides.
+    model.convert_members_inplace(to_type=ptype2, categories_to_convert='ops', flatten_structure=True)
+    assert model.sim._circuit_store(layout) is not first, \
+        "reparameterizing to a type/num_params-preserving parameterization must still invalidate the cached store"
+
+    # Once correctly invalidated, the (now-fresh) store must still agree with a fully independent
+    # computation built from scratch at the same perturbed parameter vector.
+    np.random.seed(1234)
+    model.from_vector(model.to_vector() + 0.01 * np.random.randn(model.num_params))
+    J = np.empty((layout.num_elements, model.num_params))
+    model.sim.bulk_fill_dprobs(J, layout, None)
+
+    model2 = model.copy()
+    model2.sim = TorchForwardSimulator(dtype=torch.float64)
+    layout2 = model2.sim.create_layout(circuits, array_types=('ep',))
+    J2 = np.empty((layout2.num_elements, model2.num_params))
+    model2.sim.bulk_fill_dprobs(J2, layout2, None)
+    assert np.allclose(J, J2, atol=1e-12)
