@@ -18,7 +18,6 @@ import numpy as _np
 
 from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel, _init_spam_layers
 from pygsti.models.layerrules import LayerRules as _LayerRules
-from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
@@ -153,19 +152,6 @@ class LocalNoiseModel(_ImplicitOpModel):
         ('factories', 'gates', ('G', '{')),
         ('factories', 'layers', ('G', '{')),
     )
-
-    def _init_member_dicts(self, modelmembers=None):
-        """Initialize this model's seven standard member dictionaries."""
-        flags = {'auto_embed': False, 'match_parent_statespace': False,
-                 'match_parent_evotype': True, 'cast_to_type': None}
-        if modelmembers is None:
-            modelmembers = {}
-
-        for attr_name, inner_key, prefix in self._member_prefixes:
-            outer_dict: dict[str, _OrderedMemberDict] = getattr(self, attr_name)
-            serialization_key = f'{attr_name}|{inner_key}'
-            items = modelmembers.get(serialization_key, [])
-            outer_dict[inner_key] = _OrderedMemberDict(self, None, prefix, flags, items)
 
     def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
                  simulator="auto", on_construction_error='raise',
