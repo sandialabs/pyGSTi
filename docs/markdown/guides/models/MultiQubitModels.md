@@ -312,4 +312,4 @@ print(known_gate_names)
 ```
 
 ## Next steps
-To learn more about using implicit models, you may want to check out the [operators tutorial](../../internals/models/Operators) (its section on implicit models), which covers parameterization material especially relevant when optimizing implicit models, and the [model noise tutorial](ModelNoise), which describes how to add noise to implicit (and explicit) models.
+To learn more about using implicit models, you may want to check out the [operators tutorial](../../internals/models/Operators) (its section on implicit models), which covers parameterization material especially relevant when optimizing implicit models, and the [model noise tutorial](ModelNoise.md), which describes how to add noise to implicit (and explicit) models.
