@@ -24,7 +24,7 @@ from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than as _bel_less_than
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
@@ -6455,50 +6455,61 @@ def _ordered_new_bels_C(pauli1, pauli2, first_pauli_ident, second_pauli_ident, p
     return new_eg_type, new_bels, addl_factor
 
 def com(P1, P2):
-    # P1 and P2 either commute or anticommute.
+    """
+    Commutator of two Paulis, [P1, P2] = P1 P2 - P2 P1.
+
+    Returns None if `P1` and `P2` commute (the commutator is zero), otherwise a tuple
+    `(phase, P3)` such that [P1, P2] = phase * P3, where `P3` is the sign-free product
+    P1 P2 and `phase` (one of +-2, +-2i) is twice the sign of that product.
+    """
     if P1.commutes(P2):
         return None
-    else:
-        P3 = P1*P2
-        return (P3.sign*2, P3 / P3.sign)
-    # return (sign(P3) * 2 if P1 and P2 anticommute, 0 o.w.,
-    #         unsigned P3)
-             
+    P3 = P1*P2
+    phase = 2*P3.sign
+    P3.sign = 1
+    return (phase, P3)
+
+
 def acom(P1, P2):
-    # P1 and P2 either commute or anticommute.
-    if P1.commutes(P2):
-        P3 = P1*P2
-        return (P3.sign*2, P3 / P3.sign)
-    else:
-        return  None
-    
-    # return (sign(P3) * 2 if P1 and P2 commute, 0 o.w.,
-    #         unsigned P3)
+    """
+    Anticommutator of two Paulis, {P1, P2} = P1 P2 + P2 P1.
+
+    Returns None if `P1` and `P2` anticommute (the anticommutator is zero), otherwise a
+    tuple `(phase, P3)` such that {P1, P2} = phase * P3, where `P3` is the sign-free product
+    P1 P2 and `phase` (one of +-2, +-2i) is twice the sign of that product.
+    """
+    if not P1.commutes(P2):
+        return None
+    P3 = P1*P2
+    phase = 2*P3.sign
+    P3.sign = 1
+    return (phase, P3)
+
 
 def pauli_product(P1, P2):
+    """
+    Product of two Paulis, returned as a tuple `(phase, P3)` such that P1 P2 = phase * P3,
+    where `P3` is the sign-free product and `phase` is one of +-1, +-i.
+    """
     P3 = P1*P2
-    return (P3.sign, P3 / P3.sign)
-    # return (sign(P3),
-    #         unsigned P3)
+    phase = P3.sign
+    P3.sign = 1
+    return (phase, P3)
+
 
 def stim_pauli_string_less_than(pauli1, pauli2):
     """
-    Returns true if pauli1 is less than pauli lexicographically.
+    Returns True if `pauli1` sorts strictly before `pauli2` in the canonical basis element
+    label ordering: lexicographically on the 'I'-padded Pauli strings ('I' < 'X' < 'Y' < 'Z'),
+    ignoring signs. This is the order in which the two basis element labels of 'C' and 'A'
+    type error generator labels are stored.
 
     Parameters
     ----------
     pauli1, pauli2 : stim.PauliString
-        Paulis to compare.
+        Hermitian Paulis (sign +1 or -1) of the same length to compare.
     """
-
-    # remove the signs.
-    unsigned_pauli1 = pauli1/pauli1.sign
-    unsigned_pauli2 = pauli2/pauli2.sign
-
-    unsigned_pauli1_str = str(unsigned_pauli1)[1:].replace('_', 'I')
-    unsigned_pauli2_str = str(unsigned_pauli2)[1:].replace('_', 'I')
-    
-    return unsigned_pauli1_str < unsigned_pauli2_str
+    return _bel_less_than(pauli1, pauli2)
 
 def errorgen_pauli_action(errorgen: _LSE, pauli: stim.PauliString) -> tuple[float, stim.PauliString]:
     """

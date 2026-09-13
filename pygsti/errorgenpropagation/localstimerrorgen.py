@@ -18,21 +18,35 @@ from pygsti.tools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen
 
 
-def _bel_less_than(pauli1, pauli2):
+def bel_str(pauli):
+    """
+    The plain-string form of a basis element label (BEL) given as a `stim.PauliString`, e.g.
+    `stim.PauliString('+_XY')` -> `'IXY'`.
+
+    This is the representation `LocalElementaryErrorgenLabel` uses for its basis element
+    labels, and the one `LocalStimErrorgenLabel` hashes on and the canonical C/A ordering
+    (`bel_less_than`) sorts on. stim renders identities as '_' (ASCII 95, which would sort
+    *after* 'X', 'Y' and 'Z'), so identities are rewritten to 'I' ('I' < 'X' < 'Y' < 'Z').
+
+    The leading sign character is dropped, so signs of +1 and -1 are ignored. Imaginary
+    phases (+i/-i) are not supported: they never occur for basis element labels, which are
+    Hermitian Paulis.
+    """
+    return str(pauli)[1:].replace('_', 'I')
+
+
+def bel_less_than(pauli1, pauli2):
     """
     Returns True if `pauli1` sorts strictly before `pauli2` in the canonical basis element
-    label (BEL) ordering used for the two BELs of 'C' and 'A' type error generator labels.
+    label ordering, i.e. lexicographically on the strings `bel_str` produces. This is the
+    order in which the two basis element labels of 'C' and 'A' type error generator labels
+    are stored everywhere in pyGSTi.
 
-    The ordering is lexicographic on the 'I'-padded Pauli strings, i.e. the strings
-    `LocalElementaryErrorgenLabel` uses ('I' < 'X' < 'Y' < 'Z'). stim renders identities
-    as '_' (ASCII 95, which sorts *after* 'X', 'Y' and 'Z'), so the substitution is
-    required to agree with that convention.
-
-    Both inputs are assumed to be sign-free (sign == +1) and of equal length; callers are
-    responsible for stripping signs first. `pygsti.tools.errgenproptools.stim_pauli_string_less_than`
-    is the public form of this comparison.
+    Both inputs are assumed to be Hermitian (sign +1 or -1; the sign is ignored) and of the
+    same length. When the strings are already available, compare them directly with `<`
+    instead: it is two orders of magnitude cheaper than rendering them again.
     """
-    return str(pauli1)[1:].replace('_', 'I') < str(pauli2)[1:].replace('_', 'I')
+    return bel_str(pauli1) < bel_str(pauli2)
 
 
 #TODO: Split this into a parent class and subclass for markovian and non-markovian
@@ -196,7 +210,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         Convert the elements of `basis_element_labels` to python strings
         (from stim.PauliString(s)) and return as a tuple. 
         """       
-        return tuple([str(ps)[1:].replace('_',"I") for ps in self.basis_element_labels])
+        return tuple([bel_str(ps) for ps in self.basis_element_labels])
 
 
     def __eq__(self, other):
@@ -248,25 +262,25 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         """
         new_basis_labels = []
         weightmod = 1.0
+        # `slayer(pauli)` returns a new PauliString, so its sign can be cleared in place
+        # (cheaper than multiplying by the sign, which allocates another full-width string).
         if self.errorgen_type == 'S':
             for pauli in self.basis_element_labels:
                 temp = slayer(pauli)
-                temp = temp*temp.sign
+                temp.sign = 1
                 new_basis_labels.append(temp)
         else:
             for pauli in self.basis_element_labels:
                 temp = slayer(pauli)
-                temp_sign = temp.sign
-                weightmod = temp_sign.real*weightmod
-                temp = temp*temp_sign
+                weightmod = temp.sign.real*weightmod
+                temp.sign = 1
                 new_basis_labels.append(temp)
 
             # Conjugation by a Clifford need not preserve the relative order of the two
             # basis element labels of a C or A generator (e.g. SWAP maps (IX, XI) to (XI, IX)),
             # so re-canonicalize. C is symmetric, C_{P,Q} = C_{Q,P}, so a swap is free; A is
             # antisymmetric, A_{P,Q} = -A_{Q,P}, so a swap must also flip the sign of the weight.
-            # The labels were sign-stripped above, as `_bel_less_than` requires.
-            if self.errorgen_type in ('C', 'A') and not _bel_less_than(new_basis_labels[0], new_basis_labels[1]):
+            if self.errorgen_type in ('C', 'A') and not bel_less_than(new_basis_labels[0], new_basis_labels[1]):
                 new_basis_labels.reverse()
                 if self.errorgen_type == 'A':
                     weightmod = -weightmod
