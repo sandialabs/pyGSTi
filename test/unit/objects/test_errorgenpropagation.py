@@ -16,6 +16,8 @@ from pygsti.modelpacks import smq2Q_XYCPHASE
 import numpy as np
 import stim
 import unittest
+import copy
+import pickle
 
 
 class ErrorgenPropTester(BaseCase):
@@ -177,6 +179,64 @@ class LocalStimErrorgenLabelTester(BaseCase):
         lse = _LSE('S', [stim.PauliString('ZI')])
         propagated_lse = lse.propagate_error_gen_tableau(self.tableau, 1)
         self.assertEqual(propagated_lse, (_LSE('S', [stim.PauliString('ZI')]), 1))
+
+    def test_type_idx(self):
+        from pygsti.errorgenpropagation.localstimerrorgen import ERRORGEN_TYPE_INDICES
+        self.assertEqual(ERRORGEN_TYPE_INDICES, {'H': 0, 'S': 1, 'C': 2, 'A': 3})
+        for typ, bels in [('H', ['XI']), ('S', ['XI']), ('C', ['XI', 'YI']), ('A', ['XI', 'YI'])]:
+            lse = _LSE.cast((typ, bels))
+            self.assertEqual(lse.type_idx, ERRORGEN_TYPE_INDICES[typ])
+            self.assertEqual(copy.copy(lse).type_idx, lse.type_idx)
+            self.assertEqual(copy.deepcopy(lse).type_idx, lse.type_idx)
+            self.assertEqual(pickle.loads(pickle.dumps(lse)).type_idx, lse.type_idx)
+        with self.assertRaises(ValueError):
+            _LSE('Q', [stim.PauliString('XI')])
+
+    def test_unpickle_legacy_states(self):
+        # Pickles written by older versions of LocalStimErrorgenLabel lack attributes added
+        # since. Emulate them by editing the instance __dict__ before pickling (the default
+        # reduce protocol pickles __dict__ verbatim) and check that __setstate__ migrates them.
+        # Use a propagated label so that the stored pre-propagation initial_label differs from
+        # the label itself and its preservation can be checked.
+        original = _LSE('A', [stim.PauliString('XI'), stim.PauliString('YI')])
+        propagated, sign = original.propagate_error_gen_tableau(stim.Tableau.from_named_gate('H') + stim.Tableau(1), 1.0)
+        self.assertNotEqual(propagated, original)
+        self.assertEqual(propagated.initial_label, original.to_local_eel())
+        fresh_state = dict(propagated.__dict__)
+
+        def roundtrip(state):
+            legacy = copy.copy(propagated)
+            legacy.__dict__.clear()
+            legacy.__dict__.update(state)
+            return pickle.loads(pickle.dumps(legacy))
+
+        # (1) state written before `type_idx` existed.
+        state = dict(fresh_state)
+        del state['type_idx']
+        restored = roundtrip(state)
+        self.assertEqual(restored.type_idx, propagated.type_idx)
+
+        # (2) state written before `initial_label` became a lazy property (plain attribute,
+        #     always materialized) and before `type_idx` existed.
+        state = dict(fresh_state)
+        del state['type_idx']
+        state['initial_label'] = state.pop('_initial_label')
+        restored = roundtrip(state)
+        self.assertEqual(restored.type_idx, propagated.type_idx)
+        self.assertEqual(restored.initial_label, original.to_local_eel())
+
+        # (3) as (2), and additionally without the cached hashable string representations.
+        del state['_hashable_basis_element_labels']
+        del state['_hashable_string_rep']
+        restored = roundtrip(state)
+        self.assertEqual(restored._hashable_basis_element_labels, propagated._hashable_basis_element_labels)
+        self.assertEqual(restored.initial_label, original.to_local_eel())
+
+        for restored in [roundtrip(fresh_state), restored]:
+            self.assertEqual(restored, propagated)
+            self.assertEqual(hash(restored), hash(propagated))
+            self.assertEqual(restored.basis_element_labels, propagated.basis_element_labels)
+            self.assertEqual(restored.type_idx, propagated.type_idx)
 
 class FixedLayerErrorgenPropTester(BaseCase):
     """Coverage for ``ErrorGeneratorPropagator(fixed_errorgen_layer=...)`` construction,

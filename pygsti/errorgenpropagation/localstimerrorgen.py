@@ -49,6 +49,13 @@ def bel_less_than(pauli1, pauli2):
     return bel_str(pauli1) < bel_str(pauli2)
 
 
+# Fixed numbering of the error generator sectors. `LocalStimErrorgenLabel.type_idx` is the
+# index of a label's `errorgen_type` in this table; `pygsti.tools.errgenproptools` uses
+# `4*type_idx_1 + type_idx_2` to index its per-type-pair dispatch tables for the error
+# generator commutator and composition, so the order here and there must agree.
+ERRORGEN_TYPE_INDICES = {'H': 0, 'S': 1, 'C': 2, 'A': 3}
+
+
 #TODO: Split this into a parent class and subclass for markovian and non-markovian
 #propagation. There is some overhead in instantiating the NM version of these labels
 #which we can avoid and make markovian applications much more efficient (label instantiation
@@ -60,6 +67,11 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
     designed to manage the propagation of error generator using Stim primitives for fast Pauli and
     Clifford operations, storing propagation related metadata, and storing metadata relevant to the
     evaluation of non-Markovian error propagators using cumulant expansion based techniques.
+
+    Besides the `errorgen_type` string, each label carries the integer `type_idx`
+    (`ERRORGEN_TYPE_INDICES[errorgen_type]`, i.e. H=0, S=1, C=2, A=3) that the error generator
+    commutator and composition routines in `pygsti.tools.errgenproptools` use to index their
+    per-type-pair dispatch tables.
     """
 
     @classmethod
@@ -173,6 +185,10 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             When specified can speed up construction of hashable label representations.
         """
         self.errorgen_type = errorgen_type
+        try:
+            self.type_idx = ERRORGEN_TYPE_INDICES[errorgen_type]
+        except KeyError:
+            raise ValueError(f"Unknown error generator type {errorgen_type!r}; expected one of 'H', 'S', 'C', 'A'.")
         self.basis_element_labels = tuple(basis_element_labels) 
         self.label = label
         self.circuit_time = circuit_time
@@ -204,6 +220,25 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
     def __hash__(self):
         #return hash((self.errorgen_type, self._hashable_basis_element_labels))
         return hash(self._hashable_string_rep)
+
+    def __setstate__(self, state):
+        """
+        Restore from a pickled/copied state, migrating states written by older versions
+        of this class:
+
+        - `type_idx` did not exist: derive it from `errorgen_type`.
+        - `initial_label` was a plain attribute (it is now the read-only property backed
+          by `_initial_label`): move it, so the stored pre-propagation label is kept.
+        - the cached `_hashable_*` string representations did not exist: rebuild them.
+        """
+        if 'initial_label' in state:
+            state['_initial_label'] = state.pop('initial_label')
+        if 'type_idx' not in state:
+            state['type_idx'] = ERRORGEN_TYPE_INDICES[state['errorgen_type']]
+        if '_hashable_basis_element_labels' not in state or '_hashable_string_rep' not in state:
+            state['_hashable_basis_element_labels'] = tuple([bel_str(ps) for ps in state['basis_element_labels']])
+            state['_hashable_string_rep'] = state['errorgen_type'].join(state['_hashable_basis_element_labels'])
+        self.__dict__.update(state)
 
     def bel_to_strings(self):
         """
@@ -243,6 +278,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
     
       
     #TODO: Rework this to not directly modify the weights, and only return the sign modifier.
+    #      (Revisit after the error generator commutator/composition refactor, which touches all callers.)
     def propagate_error_gen_tableau(self, slayer, weight):
         """
         Parameters
