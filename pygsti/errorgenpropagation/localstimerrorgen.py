@@ -17,6 +17,24 @@ import numpy as _np
 from pygsti.tools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen
 
+
+def _bel_less_than(pauli1, pauli2):
+    """
+    Returns True if `pauli1` sorts strictly before `pauli2` in the canonical basis element
+    label (BEL) ordering used for the two BELs of 'C' and 'A' type error generator labels.
+
+    The ordering is lexicographic on the 'I'-padded Pauli strings, i.e. the strings
+    `LocalElementaryErrorgenLabel` uses ('I' < 'X' < 'Y' < 'Z'). stim renders identities
+    as '_' (ASCII 95, which sorts *after* 'X', 'Y' and 'Z'), so the substitution is
+    required to agree with that convention.
+
+    Both inputs are assumed to be sign-free (sign == +1) and of equal length; callers are
+    responsible for stripping signs first. `pygsti.tools.errgenproptools.stim_pauli_string_less_than`
+    is the public form of this comparison.
+    """
+    return str(pauli1)[1:].replace('_', 'I') < str(pauli2)[1:].replace('_', 'I')
+
+
 #TODO: Split this into a parent class and subclass for markovian and non-markovian
 #propagation. There is some overhead in instantiating the NM version of these labels
 #which we can avoid and make markovian applications much more efficient (label instantiation
@@ -213,7 +231,8 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         Returns
         -------
         tuple of consisting of an `LocalStimErrorgenLabel` and an updated error generator
-        weight, which may have changed by a sign.
+        weight, which may have changed by a sign. For 'C' and 'A' type labels the returned
+        label's basis element labels are in canonical (sorted) order.
         """
         new_basis_labels = []
         weightmod = 1.0
@@ -229,7 +248,17 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
                 weightmod = temp_sign.real*weightmod
                 temp = temp*temp_sign
                 new_basis_labels.append(temp)
-        
+
+            # Conjugation by a Clifford need not preserve the relative order of the two
+            # basis element labels of a C or A generator (e.g. SWAP maps (IX, XI) to (XI, IX)),
+            # so re-canonicalize. C is symmetric, C_{P,Q} = C_{Q,P}, so a swap is free; A is
+            # antisymmetric, A_{P,Q} = -A_{Q,P}, so a swap must also flip the sign of the weight.
+            # The labels were sign-stripped above, as `_bel_less_than` requires.
+            if self.errorgen_type in ('C', 'A') and not _bel_less_than(new_basis_labels[0], new_basis_labels[1]):
+                new_basis_labels.reverse()
+                if self.errorgen_type == 'A':
+                    weightmod = -weightmod
+
         return (LocalStimErrorgenLabel(self.errorgen_type, new_basis_labels, initial_label=self.initial_label, circuit_time=self.circuit_time), 
                 weightmod*weight)
     
