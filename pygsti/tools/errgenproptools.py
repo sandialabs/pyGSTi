@@ -1,5 +1,53 @@
 """
 Tools for the propagation of error generators through circuits.
+
+Extended elementary error generator conventions
+-----------------------------------------------
+The analytic formulas for the commutator and the composition of two elementary error
+generators (implemented by `error_generator_commutator` and `error_generator_composition`)
+are written in terms of an *extended* family of elementary error generators (EEGs) whose
+indices are products, commutators or anticommutators of the input Paulis. Such an index
+carries a phase, may be the identity and may coincide with the other index of the same
+term. The code transcribes the formulas term by term through the four emitters `_H`,
+`_S`, `_C` and `_A`, which reduce each extended term to a canonical
+`LocalStimErrorgenLabel` (or drop it if it is zero) using the identities below. Keep
+these in mind when comparing the code with the formulas, e.g. those in the Supplemental
+Note "Formulae for efficiently manipulating elementary error generators" of *Approximate
+simulation of Clifford circuits with small Markovian errors* (whose notation is used
+throughout).
+
+Signed Paulis
+    A product of Paulis is represented by the pair `(phase, P)` returned by
+    `pauli_product`, `com` and `acom`: `P` is an unsigned `stim.PauliString` and `phase`
+    is +1, -1, +i or -i. For `com` and `acom` the pair represents `P1 P2 -/+ P2 P1`, so
+    `phase` is +-2 or +-2i (and they return `None` when the (anti)commutator vanishes;
+    every emitter treats a `None` index as a zero term). An unsigned input Pauli is
+    written `(1, P)`. Phases are folded into the rate of the emitted term as
+
+        H_{wP}       = w   H_P
+        S_{wP}       = S_P             (w^2 S_P in the paper, whose w is +-1; a unit phase
+                                        drops out of P rho P^dagger, so +-i is ignored too)
+        C_{wP,vQ}    = w v C_{P,Q}
+        A_{wP,vQ}    = w v A_{P,Q}
+
+Identity indices
+    H_I = S_I = 0,   C_{I,Q} = C_{P,I} = 0,   A_{I,Q} = H_Q,   A_{P,I} = -H_P.
+
+Repeated indices
+    C_{P,P} = 2 S_P,   A_{P,P} = 0.
+
+Canonical ordering
+    The two basis element labels of a 'C' or 'A' label are stored sorted, lexicographically
+    on their 'I'-padded strings with 'I' < 'X' < 'Y' < 'Z' (`bel_str`, `bel_less_than`).
+    C is symmetric, so swapping is free; A is antisymmetric, so a swap negates the rate:
+    C_{Q,P} = C_{P,Q},  A_{Q,P} = -A_{P,Q}.
+
+Operand order and weights
+    `error_generator_commutator(e1, e2)` computes [e1, e2] and
+    `error_generator_composition(e1, e2)` computes e1[e2[.]] (e1 applied after e2). Both
+    return a list of `(LocalStimErrorgenLabel, rate)` pairs, each rate already multiplied
+    by the `weight` argument; the same label may appear more than once and the caller is
+    expected to accumulate.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -24,7 +72,7 @@ from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than as _bel_less_than
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_str as _bel_str, bel_less_than as _bel_less_than
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.modelmembers.operations import LindbladErrorgen as _LinbladErrorgen
 from pygsti.circuits import Circuit as _Circuit
@@ -798,42 +846,181 @@ def _error_generator_layer_pairwise_commutator(errorgen_layer_1, errorgen_layer_
     return commuted_errgen_list
 
 
+# ---------------------------------------------------------------------------------------
+# Term emitters. See "Extended elementary error generator conventions" in the module
+# docstring for the identities they apply. Each appends c * <generator> to `terms` as a
+# (LocalStimErrorgenLabel, rate) pair, or appends nothing when the term is zero. Indices
+# are signed Paulis `(phase, P)` (as returned by `pauli_product`, `com` and `acom`, `(1, P)`
+# for an unsigned input Pauli) or `None` for a zero Pauli (as returned by `com`/`acom`).
+# The 'I'-padded strings are rendered once here, used for the degeneracy checks and the
+# canonical ordering, and handed to the label constructor via `pauli_str_reps`.
+# ---------------------------------------------------------------------------------------
+
+def _H(terms, X, c):
+    """
+    Append c * H_X to `terms`. H_{wP} = w H_P, H_I = 0.
+    """
+    if X is None:
+        return
+    phase, P = X
+    sP = _bel_str(P)
+    if sP == 'I' * len(sP):
+        return
+    terms.append((_LSE('H', (P,), pauli_str_reps=(sP,)), phase * c))
+
+
+def _S(terms, X, c):
+    """
+    Append c * S_X to `terms`. S_{wP} = S_P (the unit phase drops out), S_I = 0.
+    """
+    if X is None:
+        return
+    P = X[1]
+    sP = _bel_str(P)
+    if sP == 'I' * len(sP):
+        return
+    terms.append((_LSE('S', (P,), pauli_str_reps=(sP,)), c))
+
+
+def _C(terms, X, Y, c):
+    """
+    Append c * C_{X,Y} to `terms`. C_{wP,vQ} = w v C_{P,Q}, C_{P,P} = 2 S_P,
+    C_{I,Q} = C_{P,I} = 0, and the two labels are stored in canonical order (C is symmetric).
+    """
+    if X is None or Y is None:
+        return
+    phase_P, P = X
+    phase_Q, Q = Y
+    sP = _bel_str(P)
+    sQ = _bel_str(Q)
+    # The identity string sorts first, so of an ordered pair only the smaller can be identity.
+    if sP == sQ:
+        if sP == 'I' * len(sP):
+            return
+        terms.append((_LSE('S', (P,), pauli_str_reps=(sP,)), 2 * phase_P * phase_Q * c))
+    elif sP < sQ:
+        if sP == 'I' * len(sP):
+            return
+        terms.append((_LSE('C', (P, Q), pauli_str_reps=(sP, sQ)), phase_P * phase_Q * c))
+    else:
+        if sQ == 'I' * len(sQ):
+            return
+        terms.append((_LSE('C', (Q, P), pauli_str_reps=(sQ, sP)), phase_P * phase_Q * c))
+
+
+def _A(terms, X, Y, c):
+    """
+    Append c * A_{X,Y} to `terms`. A_{wP,vQ} = w v A_{P,Q}, A_{P,P} = 0, A_{I,Q} = H_Q,
+    A_{P,I} = -H_P, and the two labels are stored in canonical order, which negates the rate
+    when they have to be swapped (A is antisymmetric).
+    """
+    if X is None or Y is None:
+        return
+    phase_P, P = X
+    phase_Q, Q = Y
+    sP = _bel_str(P)
+    sQ = _bel_str(Q)
+    # The identity string sorts first, so of an ordered pair only the smaller can be identity.
+    if sP == sQ:
+        return
+    elif sP < sQ:
+        if sP == 'I' * len(sP):
+            terms.append((_LSE('H', (Q,), pauli_str_reps=(sQ,)), phase_P * phase_Q * c))
+        else:
+            terms.append((_LSE('A', (P, Q), pauli_str_reps=(sP, sQ)), phase_P * phase_Q * c))
+    else:
+        if sQ == 'I' * len(sQ):
+            terms.append((_LSE('H', (P,), pauli_str_reps=(sP,)), -phase_P * phase_Q * c))
+        else:
+            terms.append((_LSE('A', (Q, P), pauli_str_reps=(sQ, sP)), -phase_P * phase_Q * c))
+
+
 def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0, identity=None):
     """
     Returns the commutator of two error generators. I.e. [errorgen_1, errorgen_2].
-    
+
+    The result is assembled from the analytic commutation relations of the elementary
+    error generators; see "Extended elementary error generator conventions" in the module
+    docstring for how the terms of those formulas map onto the returned labels.
+
     Parameters
     ----------
-    errorgen1 : `LocalStimErrorgenLabel`
+    errorgen_1 : `LocalStimErrorgenLabel`
         First error generator.
 
-    errorgen2 : `LocalStimErrorgenLabel`
+    errorgen_2 : `LocalStimErrorgenLabel`
         Second error generator
 
     flip_weight : bool, optional (default False)
         If True flip the sign of the input value of weight kwarg.
-    
+
     weight : float, optional (default 1.0)
         An optional weighting value to apply to the value of the commutator.
-    
+
     identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
+        Retained for backward compatibility and no longer used: identity indices are now
+        detected on the string representations that are computed for the returned labels
+        anyway, so no identity `stim.PauliString` is needed.
 
     Returns
     -------
-    list of `LocalStimErrorgenLabel`s corresponding to the commutator of the two input error generators,
-    weighted by the specified value of `weight`.
+    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`
+    corresponding to a component of the commutator of the two input error generators.
+    The second element is the rate of that term, additionally weighted by the specified
+    value of `weight`. The same label may appear in more than one tuple.
     """
-    
+    w = -weight if flip_weight else weight
+    handler = _COMMUTATOR_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx]
+    if handler is None:  # transitional, see _COMMUTATOR_HANDLERS
+        return _error_generator_commutator_develop(errorgen_1, errorgen_2, w, identity)
+    return handler(errorgen_1, errorgen_2, w)
+
+
+def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=None):
+    r"""
+    Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
+
+    The result is assembled from the analytic composition rules of the elementary error
+    generators; see "Extended elementary error generator conventions" in the module
+    docstring for how the terms of those formulas map onto the returned labels.
+
+    Parameters
+    ----------
+    errorgen_1 : `LocalStimErrorgenLabel`
+        First error generator (applied second).
+
+    errorgen_2 : `LocalStimErrorgenLabel`
+        Second error generator (applied first).
+
+    weight : float, optional (default 1.0)
+        An optional weighting value to apply to the value of the composition.
+
+    identity : stim.PauliString, optional (default None)
+        Retained for backward compatibility and no longer used: identity indices are now
+        detected on the string representations that are computed for the returned labels
+        anyway, so no identity `stim.PauliString` is needed.
+
+    Returns
+    -------
+    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`
+    corresponding to a component of the composition of the two input error generators.
+    The second element is the rate of that term, additionally weighted by the specified
+    value of `weight`. The same label may appear in more than one tuple.
+    """
+    handler = _COMPOSITION_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx]
+    if handler is None:  # transitional, see _COMPOSITION_HANDLERS
+        return _error_generator_composition_develop(errorgen_1, errorgen_2, weight, identity)
+    return handler(errorgen_1, errorgen_2, weight)
+
+
+def _error_generator_commutator_develop(errorgen_1, errorgen_2, weight, identity):
+    """
+    Transitional: the original (pre-refactor) commutator body, used for the type pairs whose
+    handler in `_COMMUTATOR_HANDLERS` has not been rewritten yet. Removed when the table is
+    complete.
+    """
     errorgens=[]
-    
-    if flip_weight:
-        w= -weight
-    else:
-        w = weight
+    w = weight
 
     errorgen_1_type = errorgen_1.errorgen_type
     errorgen_2_type = errorgen_2.errorgen_type
@@ -1337,37 +1524,13 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
            
     return errorgens
 
-def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=None):
-    r"""
-    Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
-    
-    Parameters
-    ----------
-    errorgen1 : `LocalStimErrorgenLabel`
-        First error generator.
-
-    errorgen2 : `LocalStimErrorgenLabel`
-        Second error generator
-    
-    weight : float, optional (default 1.0)
-        An optional weighting value to apply to the value of the composition.
-    
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
-
-    Returns
-    -------
-    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`s 
-    corresponding to a component of the composition of the two input error generators.
-    The second element is the weight of that term, additionally weighted by the specified
-    value of `weight`.
+def _error_generator_composition_develop(errorgen_1, errorgen_2, weight, identity):
     """
-
+    Transitional: the original (pre-refactor) composition body, used for the type pairs whose
+    handler in `_COMPOSITION_HANDLERS` has not been rewritten yet. Removed when the table is
+    complete.
+    """
     composed_errorgens = []
-
     w = weight
 
     errorgen_1_type = errorgen_1.errorgen_type
@@ -6409,6 +6572,34 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
                         composed_errorgens.append((_LSE(new_eg_type_6, new_bels_6), -1j*QAB[0]*addl_factor_6*w))
 
     return composed_errorgens
+
+# Dispatch tables for the error generator commutator and composition, indexed by
+# 4*errorgen_1.type_idx + errorgen_2.type_idx with the type order H=0, S=1, C=2, A=3 of
+# `pygsti.errorgenpropagation.localstimerrorgen.ERRORGEN_TYPE_INDICES`. Each entry is the
+# handler for one ordered type pair, called as handler(errorgen_1, errorgen_2, weight) and
+# returning the list of (LocalStimErrorgenLabel, rate) terms. Transitional: `None` entries
+# fall back to the original bodies above until the corresponding handlers are written.
+_COMMUTATOR_HANDLERS = (
+    # [H, H]  [H, S]  [H, C]  [H, A]
+    None,   None,   None,   None,
+    # [S, H]  [S, S]  [S, C]  [S, A]
+    None,   None,   None,   None,
+    # [C, H]  [C, S]  [C, C]  [C, A]
+    None,   None,   None,   None,
+    # [A, H]  [A, S]  [A, C]  [A, A]
+    None,   None,   None,   None,
+)
+
+_COMPOSITION_HANDLERS = (
+    # H[H]  H[S]  H[C]  H[A]
+    None,   None,   None,   None,
+    # S[H]  S[S]  S[C]  S[A]
+    None,   None,   None,   None,
+    # C[H]  C[S]  C[C]  C[A]
+    None,   None,   None,   None,
+    # A[H]  A[S]  A[C]  A[A]
+    None,   None,   None,   None,
+)
 
 # helper function for getting the new (properly ordered) basis element labels, error generator type (A can turn into H with certain index combinations), and additional signs.
 # reduces code repetition in composition code.

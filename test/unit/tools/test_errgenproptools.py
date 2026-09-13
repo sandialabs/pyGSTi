@@ -283,6 +283,92 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 pauli_action_numerical = _eprop.errorgen_pauli_action_numerical(eglbl, pauli)
                 assert np.linalg.norm(pauli_action_dense-pauli_action_numerical) < 1e-14, f'Numerical and analytical results differ, {eglbl=}, {pauli=}'
 
+    def test_term_emitters(self):
+        """
+        Check the four term emitters `_H`, `_S`, `_C`, `_A` against the "Extended elementary
+        error generator conventions" of the module docstring: for every signed (possibly
+        identity or repeated) index combination the emitted canonical terms must sum to the
+        superoperator obtained by substituting the signed Paulis literally into the defining
+        sandwich expressions, and every emitted label must be canonical.
+        """
+        from pygsti.errorgenpropagation.localstimerrorgen import bel_less_than
+
+        def sandwich(M, N):  # rho -> M rho N on row-stacked vec(rho), pyGSTi's convention
+            return np.kron(M, N.T)
+
+        def ext_H(M, I):
+            return -1j * (sandwich(M, I) - sandwich(I, M))
+
+        def ext_S(M, I):
+            return sandwich(M, M.conj().T) - sandwich(I, I)
+
+        def ext_C(M, N, I):
+            anti = M @ N + N @ M
+            return sandwich(M, N) + sandwich(N, M) - 0.5 * (sandwich(anti, I) + sandwich(I, anti))
+
+        def ext_A(M, N, I):
+            comm = M @ N - N @ M
+            return 1j * (sandwich(M, N) - sandwich(N, M) + 0.5 * (sandwich(comm, I) + sandwich(I, comm)))
+
+        def label_matrix(lbl, I):
+            mats = [p.to_unitary_matrix(endian='big') for p in lbl.basis_element_labels]
+            fn = {'H': ext_H, 'S': ext_S, 'C': ext_C, 'A': ext_A}[lbl.errorgen_type]
+            return fn(*mats, I)
+
+        phases = [1, -1, 1j, -1j]
+        for num_qubits in (1, 2):
+            dim = 2**num_qubits
+            I = np.eye(dim)
+            paulis = [stim.PauliString(''.join(p)) for p in product('IXYZ', repeat=num_qubits)]
+            identity = stim.PauliString(num_qubits)
+            # tie the sandwich definitions to pyGSTi's standard elementary error generators
+            # for the ordinary (Hermitian, non-identity) case.
+            P0, Q0 = paulis[1], paulis[-1]
+            m0, m1 = P0.to_unitary_matrix(endian='big'), Q0.to_unitary_matrix(endian='big')
+            for typ, mats in [('H', (m0,)), ('S', (m0,)), ('C', (m0, m1)), ('A', (m0, m1))]:
+                self.assertArraysAlmostEqual(label_matrix(_LSE(typ, (P0, Q0)[:len(mats)]), I),
+                                             create_elementary_errorgen(typ, *mats))
+
+            for P in paulis:
+                MP = P.to_unitary_matrix(endian='big')
+                for w in phases:
+                    for c in (0.7, -0.3j):
+                        for emitter, expected in [(_eprop._H, c * ext_H(w * MP, I)), (_eprop._S, c * ext_S(w * MP, I))]:
+                            terms = []
+                            emitter(terms, (w, P), c)
+                            total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))
+                            self.assertArraysAlmostEqual(total, expected)
+                            for lbl, rate in terms:
+                                self.assertNotEqual(lbl.basis_element_labels[0], identity)
+                                self.assertEqual(lbl._hashable_basis_element_labels, lbl.bel_to_strings())
+                            self.assertLessEqual(len(terms), 1)
+                        # a None index (vanishing commutator / anticommutator) is a zero term.
+                        terms = []
+                        _eprop._H(terms, None, c)
+                        _eprop._S(terms, None, c)
+                        _eprop._C(terms, None, (w, P), c)
+                        _eprop._A(terms, (w, P), None, c)
+                        self.assertEqual(terms, [])
+
+            for P, Q in product(paulis, repeat=2):
+                MP, MQ = P.to_unitary_matrix(endian='big'), Q.to_unitary_matrix(endian='big')
+                for w, v in product(phases, repeat=2):
+                    c = 0.7 - 0.3j
+                    for emitter, expected in [(_eprop._C, c * ext_C(w * MP, v * MQ, I)),
+                                              (_eprop._A, c * ext_A(w * MP, v * MQ, I))]:
+                        terms = []
+                        emitter(terms, (w, P), (v, Q), c)
+                        total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))
+                        self.assertArraysAlmostEqual(total, expected)
+                        self.assertLessEqual(len(terms), 1)
+                        for lbl, rate in terms:
+                            self.assertEqual(lbl._hashable_basis_element_labels, lbl.bel_to_strings())
+                            self.assertNotIn(identity, lbl.basis_element_labels)
+                            if lbl.errorgen_type in ('C', 'A'):
+                                self.assertTrue(bel_less_than(*lbl.basis_element_labels))
+                            else:  # degenerate outcomes of the two-index emitters
+                                self.assertEqual(len(lbl.basis_element_labels), 1)
+
     def test_CA_label_ordering_preserved_by_tableau_propagation(self):
         """
         Regression test: `propagate_error_gen_tableau` must return C/A labels whose basis
