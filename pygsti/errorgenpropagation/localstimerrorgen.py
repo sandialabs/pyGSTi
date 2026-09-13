@@ -144,8 +144,11 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         initial_label : `ElementaryErrorgenLabel`, optional (default None)
             If not None, then this `ElementaryErrorgenLabel` is stored within this label and is interpreted
             as being the 'initial' value of this error generator, prior to any propagation or transformation
-            during the course of its use. If None, then this is initialized to a `LocalElementaryErrorgenLabel`
-            matching the `errorgen_type` and `basis_element_labels` of this label.
+            during the course of its use. If None, then a `LocalElementaryErrorgenLabel` matching the
+            `errorgen_type` and `basis_element_labels` of this label is used; it is constructed lazily,
+            on the first access of the `initial_label` property, since the vast majority of labels
+            (e.g. the intermediate terms produced by the commutator and composition routines in
+            `pygsti.tools.errgenproptools`) never have it read.
 
         label : str, optional (default None)
             An optional label string which is included when printing the string representation of this
@@ -168,12 +171,21 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             self._hashable_string_rep = self.errorgen_type.join(self._hashable_basis_element_labels)
 
         #additionally store a copy of the value of the original error generator label which will remain unchanged
-        #during the course of propagation for later bookkeeping purposes.
-        if initial_label is not None:
-            self.initial_label = initial_label
-        else:
-            self.initial_label = self.to_local_eel()
+        #during the course of propagation for later bookkeeping purposes. (None means "this label itself",
+        #materialized on first access; see the `initial_label` property.)
+        self._initial_label = initial_label
     #TODO: Update various methods to account for additional metadata that has been added.
+
+    @property
+    def initial_label(self):
+        """
+        The `ElementaryErrorgenLabel` this label originated from, prior to any propagation or
+        transformation. Defaults to a `LocalElementaryErrorgenLabel` equivalent to this label,
+        constructed on first access.
+        """
+        if self._initial_label is None:
+            self._initial_label = self.to_local_eel()
+        return self._initial_label
 
     def __hash__(self):
         #return hash((self.errorgen_type, self._hashable_basis_element_labels))
@@ -259,6 +271,10 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
                 if self.errorgen_type == 'A':
                     weightmod = -weightmod
 
+        # Note: `self.initial_label` (the property, not `_initial_label`) is deliberately used
+        # here. It materializes the pre-propagation label if it has not been already, which is
+        # required: a `None` passed on would make the new label lazily build its initial label
+        # from the *post*-propagation basis element labels.
         return (LocalStimErrorgenLabel(self.errorgen_type, new_basis_labels, initial_label=self.initial_label, circuit_time=self.circuit_time), 
                 weightmod*weight)
     
