@@ -48,6 +48,7 @@ The experiments built by `create_1q_szy_cgst_design` (following the cGST manuscr
 | `idle_s/y/tri` | germ · $G_i$ | n/a | complex | idle coherent components $\theta_{I,z}$, $\theta_{I,y}$, $\theta_{I,x}$ |
 
 ```python
+import os
 import numpy as np
 from scipy.linalg import expm
 import matplotlib.pyplot as plt
@@ -155,11 +156,21 @@ Each sub-experiment's character-weighted signal and fit:
 
 ```python
 names = list(edesign.keys())
+titles = {'s_t1': r'$S$: $T_1$ (trivial irrep)', 's_ramsey': r'$S$: Ramsey ($i^n$ irrep)',
+          'y_t1': r'$\sqrt{Y}$: $T_1$', 'y_ramsey': r'$\sqrt{Y}$: Ramsey',
+          'tri_t1': r'$\triangle = \sqrt{Y}S$: $T_1$', 'tri_ramsey': r'$\triangle$: Ramsey ($e^{2\pi i n/3}$ irrep)',
+          'idle_s': r'$S\,\mathbb{I}$: Ramsey', 'idle_y': r'$\sqrt{Y}\,\mathbb{I}$: Ramsey',
+          'idle_tri': r'$\triangle\,\mathbb{I}$: Ramsey'}
 fig, axes = plt.subplots(3, 3, figsize=(13, 9))
 for name, ax in zip(names, axes.ravel()):
     decay = results[name].for_protocol['CharacterDecay']
-    decay.plot(ax=ax, title=name)
+    decay.plot(ax=ax, title=titles.get(name, name))
 fig.tight_layout()
+
+figdir = '../../../../overleaf-9-10-26/figs'  # the manuscript's figure directory, if present
+if os.path.isdir(figdir):
+    fig.savefig(os.path.join(figdir, 'cGST_Demo.pdf'), bbox_inches='tight')
+    print('saved', os.path.join(figdir, 'cGST_Demo.pdf'))
 ```
 
 ## Fitted vs. true error parameters
@@ -246,9 +257,72 @@ print(f"reduced-mode estimate = {params['lambda2']:.5f} @ {params['theta']:+.5f}
 print(f"truth                 = {abs(truth['s_ramsey']):.5f} @ {np.angle(truth['s_ramsey']):+.5f}")
 ```
 
+## Standard-gauge error generators with the generic pipeline
+
+Everything above used the hand-derived first-order inversion for $\{S, \sqrt{Y}\}$ (`gateset_inversion='szy'`). pyGSTi also provides a gate-set-agnostic path (see the *Character GST for arbitrary finite-order gate sets* tutorial): `create_cgst_design` builds an amplificationally complete design from the target model alone, and `CharacterGST(gateset_inversion='linear', ...)` inverts the fitted decays into elementary error-generator coefficients, reported in the manuscript's standard gauge (the reference gate's error channel commutes with its ideal gate exactly; the residual freedom is fixed on the other gates). We run it on the same $S$ and $\sqrt{Y}$ channels, in the `'exact'` quadrature mode the linear inversion prefers. The idle is left out here: its only finite-order germs are interleaved ones, which the generic tutorial discusses.
+
+```python
+from pygsti.algorithms import cgstdesign, cgstgauge
+from pygsti.tools import chartools
+
+pspec_sy = QubitProcessorSpec(1, ['Gzpi2', 'Gypi2'], qubit_labels=['Q0'])
+target = create_explicit_model(pspec_sy, ideal_gate_type='full TP', ideal_spam_type='full TP',
+                               simulator='matrix')
+truth_sy = create_explicit_model(pspec_sy, ideal_gate_type='full', simulator='matrix')
+for lbl in [('Gzpi2', 'Q0'), ('Gypi2', 'Q0')]:
+    truth_sy.operations[lbl] = true_model.operations[lbl].to_dense()
+
+edesign_gen = cgstdesign.create_cgst_design(target, depths=[0, 1, 2, 4, 8, 16, 32, 64, 128],
+                                            circuits_per_depth=12, num_projection_rounds=3, seed=0)
+germs = sorted({row['germ'] for row in edesign_gen.germ_table}, key=len)
+for g in germs:
+    order = chartools.germ_group_order(target.sim.product(pygsti.circuits.Circuit(g)))
+    print(f"germ {g:45s} order {order}")
+print(f"{len(edesign_gen.keys())} sub-experiments, {len(edesign_gen.all_circuits_needing_data)} circuits")
+```
+
+```python
+ds_gen = pygsti.data.simulate_data(truth_sy, edesign_gen.all_circuits_needing_data,
+                                   num_samples=1000, sample_error='multinomial', seed=2026)
+protocol_gen = CharacterGST(bootstrap_samples=100, gateset_inversion='linear',
+                            target_model=target, reference_gate='Gzpi2', seed=7)
+top_gen = protocol_gen.run(ProtocolData(edesign_gen, ds_gen)).for_protocol['CharacterGST']
+info = top_gen.inversion_info
+print(f"design-matrix rank {info['rank']} of {info['num_params']} error-generator parameters "
+      f"({info['num_unamplified']} gauge/unamplified directions), {info['num_observables']} observables")
+```
+
+The comparison must be made in the same gauge: the truth is brought to the standard gauge with the same routine before its error generators are read off. The Hamiltonian coefficients are half the rotation angles of the manuscript's parameterization, $\theta = 2h_Z(S)$, $\alpha = 2h_Y(\sqrt{Y})$, and $\beta = 2h_X(\sqrt{Y}) = 2h_Z(\sqrt{Y})$; the stochastic coefficients of $S$ satisfy $s_X = s_Y$ (the equatorial decay $\lambda_2$) as the commuting form requires.
+
+```python
+truth_sg = cgstgauge.errorgen_coefficients_in_gauge(
+    cgstgauge.fix_standard_gauge(truth_sy, target, 'Gzpi2'), target)
+rows = []
+for gate, coeffs in truth_sg.items():
+    for lbl, tval in coeffs.items():
+        e = top_gen.errorgen_estimates[str(gate)][str(lbl)]
+        rows.append({'gate': str(gate).split(':')[0], 'generator': str(lbl).replace(':Q0', ''),
+                     'true': tval, 'estimate': e['value'], 'stderr': e['stderr'],
+                     'z': (e['value'] - tval) / e['stderr'] if e['stderr'] > 1e-12 else 0.0})
+gen_table = pd.DataFrame(rows)
+gen_table[gen_table['generator'].str.startswith(('H', 'S'))].style.format(
+    {'true': '{:+.5f}', 'estimate': '{:+.5f}', 'stderr': '{:.5f}', 'z': '{:+.1f}'})
+```
+
+```python
+ca = gen_table[gen_table['generator'].str.startswith(('C', 'A')) & (gen_table['true'].abs() > 1e-6)]
+print(f"C/A-type coefficients (nonzero in truth): max |estimate - true| = {(ca['estimate'] - ca['true']).abs().max():.1e},"
+      f" max |z| = {ca['z'].abs().max():.1f}")
+print(f"2 h_Z(S) = {2 * gen_table.query('gate == \"Gzpi2\" and generator == \"H(Z)\"')['estimate'].item():+.5f}  (theta = {injected['theta']:+.5f})")
+print(f"2 h_Y(Y) = {2 * gen_table.query('gate == \"Gypi2\" and generator == \"H(Y)\"')['estimate'].item():+.5f}  (alpha = {injected['alpha']:+.5f})")
+print(f"2 h_X(Y) = {2 * gen_table.query('gate == \"Gypi2\" and generator == \"H(X)\"')['estimate'].item():+.5f}  (beta  = {injected['beta']:+.5f})")
+```
+
+The coherent ($H$) and stochastic ($S$) sectors are recovered within their uncertainties. The correlated ($C$) and active ($A$) coefficients of $\sqrt{Y}$ are at the few-$10^{-3}$ level and are only resolved at the $2$--$3\sigma$ level with $10^3$ shots per circuit; they also carry the largest first-order truncation, since the active errors enter the observables only through the product of a decay rate and an asymptote shift.
+
 ## Notes and caveats
 
 * **First-order validity.** The extraction formulas for $\beta$, `c_sum` and `active_combo` are first order in the error rates; with errors at the $10^{-2}$ scale, expect $O(10^{-4})$ truncation on top of statistical error. The germ eigenvalues themselves ($\lambda$'s, $\theta$, $\alpha$, $\omega$) are not truncated: they are exact spectral properties, fit directly.
 * **Sampling variance.** Character weighting is a signed/complex average, so its statistical error at fixed shots exceeds a plain probability estimate's. The `'exact'` quadrature mode removes the character-sampling component entirely for cyclic germs, at the cost of a fixed circuits-per-depth; the stratification and common-random-number refinements do most of that work for the Monte-Carlo modes.
 * **Reduced-mode bias.** The $k_0$-round synthetic projector leaks into unwanted irreps at $O(r^{k_0})$ for per-germ infidelity $r$; with $k_0 = 4$ and $r \sim 10^{-2}$ this is negligible against shot noise.
-* **Scaling.** Everything here generalizes to any germ whose ideal implementation generates a *cyclic* group, and the character utilities (`pygsti.tools.chartools`) support arbitrary finite abelian groups (products of cyclics) toward the multi-qubit constructions of the manuscript; non-abelian groups and multiplicity handling are future work.
+* **Other gate sets.** The generic design builder and linear inversion used in the last section work for any gate set whose germs have finite ideal order; see the *Character GST for arbitrary finite-order gate sets* tutorial. The character utilities (`pygsti.tools.chartools`) support arbitrary finite abelian groups (products of cyclics) toward the multi-qubit constructions of the manuscript; non-abelian groups and degenerate (multiplicity $>1$) irrep blocks are future work.
