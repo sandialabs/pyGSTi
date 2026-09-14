@@ -32,7 +32,7 @@ The decay magnitudes are the noisy germ's eigenvalue magnitudes (stochastic erro
 `CharacterGSTGermDesign` implements three sampling modes.
 
 * In `'reduced'` mode, used below, a fixed number $k_0$ of random germ powers act as synthetic SPAM (an approximate projector onto the target irrep), followed by $k$ deterministic germ repetitions. The fitted per-$k$ decay is the noisy germ's own eigenvalue.
-* In `'full'` mode, depth $k$ means $k$ i.i.d. random powers. The fitted decay is then an eigenvalue of the group Fourier operator $\Pi_j = \frac{1}{N}\sum_m \chi_j^*(m)\Lambda^m$, which relates to the germ eigenvalue deviation $y$ through $f(y) = \frac{1-y^N}{N(1-y)}$. Since $\arg f(e^{i\theta}) \approx \frac{N-1}{2}\theta$, full mode amplifies phase errors by $(N{-}1)/2$; `pygsti.algorithms.cgstfit.invert_projector_eigenvalue` inverts $f$ numerically to recover the bare eigenvalue.
+* In `'full'` mode, depth $k$ means $k$ i.i.d. random powers. The fitted decay is then an eigenvalue of the group Fourier operator $\Pi_j = \frac{1}{N}\sum_m \chi_j^*(m)\Lambda^m$, which relates to the germ eigenvalue deviation $y$ through $f(y) = \frac{1-y^N}{N(1-y)}$. Since $\arg f(e^{i\theta}) \approx \frac{N-1}{2}\theta$, full mode amplifies phase errors by $(N{-}1)/2$. `pygsti.algorithms.cgstfit.invert_projector_eigenvalue` inverts $f$ numerically to recover the bare eigenvalue.
 * In `'exact'` mode, the $k_0$ Monte-Carlo rounds are replaced by deterministic quadrature over all possible total powers, weighted by their exact probabilities. This works because a cyclic germ's circuit depends only on the total power, and it evaluates the synthetic projector with zero sampling error.
 
 The experiments built by `create_1q_szy_cgst_design` are the single-gate $T_1$ and Ramsey germ decays for $S$ and $\sqrt{Y}$, the same pair for the "triangle" germ $\sqrt{Y}S$ that exposes the two gates' relational errors, and idle-interleaved Ramsey germs that isolate the idle's coherent error:
@@ -170,7 +170,7 @@ fig.tight_layout()
 
 ## Fitted vs. true error parameters
 
-The germ-level decays should match the numeric eigenvalue truth tightly; the derived standard-gauge parameters are first-order formulas, so they carry $O(\epsilon^2)$ truncation on top of the statistical error.
+The germ-level decays should match the eigenvalues of data generating model. The inferred standard-gauge parameters are first-order formulas, so they are subject to an $O(\epsilon^2)$ truncation in addition to the statistical error.
 
 ```python
 import pandas as pd
@@ -208,7 +208,7 @@ The triangle germ $\triangle = \sqrt{Y}S$ rotates by $2\pi/3$ about the axis $(\
 
 * $\omega - \frac{2\pi}{3} = \frac{\theta + \alpha + 2\beta}{\sqrt{3}}$: the two over-rotations and the axis mismatch project onto the triangle axis;
 * $\lambda_1^\triangle - \lambda_2^\triangle = c_{xy} + c_{xz} + c_{yz}$, with coefficient exactly $1$, because the triangle axis weights the three correlated rates equally: the splitting is $+\tfrac{2}{3}c_{\rm sum}$ on the trivial branch and $-\tfrac{1}{3}c_{\rm sum}$ on the complex branch;
-* $3\,(1-\lambda_1^\triangle)(2C^\triangle - 1) = -a + a_y + 2a_{\rm rel}$; the minus sign on $a$ comes from $\sqrt{Y}$ rotating $S$'s active shift ($\hat z \to \hat x$) before it projects onto the triangle axis;
+* $3\,(1-\lambda_1^\triangle)(2C^\triangle - 1) = -a + a_y + 2a_{\rm rel}$. The minus sign on $a$ comes from $\sqrt{Y}$ rotating $S$'s active shift ($\hat z \to \hat x$) before it projects onto the triangle axis;
 * for the $S$ germ itself, $a = (1-\lambda_1)(1 - 2\tilde C)$, following from the channel convention $E_S[3,0] = -a$.
 
 A quick demonstration of the splitting coefficient (sweeping only the correlated errors, with a little depolarization to keep the model completely positive):
@@ -254,7 +254,7 @@ print(f"truth                 = {abs(truth['s_ramsey']):.5f} @ {np.angle(truth['
 
 ## Standard-gauge error generators with generic gate sets
 
-Everything above used the hand-derived first-order inversion for $\{S, \sqrt{Y}\}$ (`gateset_inversion='szy'`). pyGSTi also provides a gate-set-independent path (see the *Character GST for arbitrary finite-order gate sets* tutorial): `create_cgst_design` builds an amplificationally complete design from the target model alone, and `CharacterGST(gateset_inversion='linear', ...)` inverts the fitted decays into elementary error-generator coefficients, reported in the cGST standard gauge (the reference gate's error channel commutes with its ideal gate exactly; the residual freedom is fixed on the other gates). We run it on the same $S$ and $\sqrt{Y}$ channels, in the `'exact'` quadrature mode the linear inversion prefers. The idle is left out here: its only finite-order germs are interleaved ones, which the generic tutorial discusses.
+Everything above used the hand-derived first-order inversion for $\{S, \sqrt{Y}\}$ (`gateset_inversion='szy'`). pyGSTi also provides a gate-set-independent path (see the *Character GST for arbitrary finite-order gate sets* tutorial): `create_cgst_design` builds an amplificationally complete design from the target model alone, and `CharacterGST(gateset_inversion='linear', ...)` inverts the fitted decays into elementary error-generator coefficients, reported in the cGST standard gauge (the reference gate's error channel commutes with its ideal gate and the remaining freedom is fixed on the other gates). We run it on the same $S$ and $\sqrt{Y}$ channels, in the `'exact'` quadrature mode the linear inversion prefers. The idle is left out here: its only finite-order germs are interleaved ones, which the generic tutorial discusses.
 
 ```python
 from pygsti.algorithms import cgstdesign, cgstgauge
@@ -287,7 +287,7 @@ print(f"design-matrix rank {info['rank']} of {info['num_params']} error-generato
       f"({info['num_unamplified']} gauge/unamplified directions), {info['num_observables']} observables")
 ```
 
-The comparison must be made in the same gauge: the data generating model is brought to the standard gauge with the same routine before its error generators are read off. The Hamiltonian coefficients are half the rotation angles of the channel parameterization used above, $\theta = 2h_Z(S)$, $\alpha = 2h_Y(\sqrt{Y})$, and $\beta = 2h_X(\sqrt{Y}) = 2h_Z(\sqrt{Y})$; the stochastic coefficients of $S$ satisfy $s_X = s_Y$ (the equatorial decay $\lambda_2$) as the commuting form requires.
+The comparison must be made in the same gauge: the data generating model is brought to the standard gauge with the same routine before its error generators are read off. The Hamiltonian coefficients are half the rotation angles of the channel parameterization used above, $\theta = 2h_Z(S)$, $\alpha = 2h_Y(\sqrt{Y})$, and $\beta = 2h_X(\sqrt{Y}) = 2h_Z(\sqrt{Y})$.  The stochastic coefficients of $S$ satisfy $s_X = s_Y$ (the equatorial decay $\lambda_2$) as the commuting form requires.
 
 ```python
 truth_sg = cgstgauge.errorgen_coefficients_in_gauge(
@@ -313,7 +313,7 @@ print(f"2 h_Y(Y) = {2 * gen_table.query('gate == \"Gypi2\" and generator == \"H(
 print(f"2 h_X(Y) = {2 * gen_table.query('gate == \"Gypi2\" and generator == \"H(X)\"')['estimate'].item():+.5f}  (beta  = {injected['beta']:+.5f})")
 ```
 
-The coherent ($H$) and stochastic ($S$) sectors are recovered within their uncertainties. The correlated ($C$) and active ($A$) coefficients of $\sqrt{Y}$ are at the few-$10^{-3}$ level and are only resolved at the $2$--$3\sigma$ level with $10^3$ shots per circuit; they also carry the largest first-order truncation, since the active errors enter the observables only through the product of a decay rate and an asymptote shift.
+The coherent ($H$) and stochastic ($S$) sectors are recovered within their uncertainties. The correlated ($C$) and active ($A$) coefficients of $\sqrt{Y}$ are at the few-$10^{-3}$ level and are only resolved at the $2$--$3\sigma$ level with $10^3$ shots per circuit. They are also subject to the largest first-order truncation, since the active errors enter the observables only through the product of a decay rate and an asymptote shift.
 
 ## Caveats
 
