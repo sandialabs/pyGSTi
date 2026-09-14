@@ -468,7 +468,7 @@ def magnus_symbolic_polynomial(errorgen_transform_maps: list[dict[tuple[_LSE, in
 
 def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps: list[dict[tuple[_LSE, int], tuple[_LSE, complex]]], 
                                                   errorgen_to_var_map: dict[tuple[_LSE, int], int], 
-                                                  identity: Optional[stim.PauliString]=None) -> dict[_LSE, _Polynomial]:
+                                                  identity: Optional[str]=None) -> dict[_LSE, _Polynomial]:
     r"""
     Helper function for computing the second-order correction term in the
     magnus expansion.
@@ -486,11 +486,9 @@ def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps: list[
         and whose value is an integer corresponding to the corresponding variable index to use in constructed
         Polynomials.
 
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n, used to detect
+        identity indices in the commutator calculations. Built if not given.
 
     Returns
     -------
@@ -508,7 +506,7 @@ def _second_order_magnus_term_symbolic_polynomial(errorgen_transform_maps: list[
     if identity is None and errorgen_transform_maps:
         for layer in errorgen_transform_maps:
             if layer:
-                identity = stim.PauliString('I'*len(next(iter(layer))[0].basis_element_labels[0]))
+                identity = 'I'*len(next(iter(layer))[0].basis_element_labels[0])
                 break
     
     # compute second-order BCH correction for each pair of error generators in the
@@ -534,7 +532,7 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
                                                                    errorgen_layer_2: dict[tuple[_LSE, int], tuple[_LSE, complex]], 
                                                                    errorgen_to_var_map: dict[tuple[_LSE, int], int], 
                                                                    addl_weight: float=1.0, 
-                                                                   identity: Optional[stim.PauliString]=None) -> dict[_LSE, _Polynomial]:
+                                                                   identity: Optional[str]=None) -> dict[_LSE, _Polynomial]:
     """
     Helper function for computing the pairwise commutator of two error generator layers symbolically, i.e. returning a data 
     structure which expresses the rates as polynomials in the original generators. 
@@ -557,11 +555,9 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
     addl_weight : float
         An additional weight to add to the coefficients of the returned commutator polynomials.
         
-    identity : stim.PauliString
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n, used to detect
+        identity indices in the commutator calculations. Built if not given.
         
     Returns
     -------

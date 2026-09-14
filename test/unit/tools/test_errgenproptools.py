@@ -321,6 +321,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
             I = np.eye(dim)
             paulis = [stim.PauliString(''.join(p)) for p in product('IXYZ', repeat=num_qubits)]
             identity = stim.PauliString(num_qubits)
+            identity_str = 'I' * num_qubits
             # tie the sandwich definitions to pyGSTi's standard elementary error generators
             # for the ordinary (Hermitian, non-identity) case.
             P0, Q0 = paulis[1], paulis[-1]
@@ -335,10 +336,10 @@ class ErrgenCompositionCommutationTester(BaseCase):
                     for c in (0.7, -0.3j):
                         for emitter, expected in [(_eprop._H, c * ext_H(w * MP, I)), (_eprop._S, c * ext_S(w * MP, I))]:
                             terms = []
-                            emitter(terms, (w, P), c)
+                            emitter(terms, (w, P), c, identity_str)
                             # the pre-rendered-string form must give the identical result.
                             terms_pre = []
-                            emitter(terms_pre, (w, P, bel_str(P)), c)
+                            emitter(terms_pre, (w, P, bel_str(P)), c, identity_str)
                             self.assertEqual(terms_pre, terms)
                             total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))
                             self.assertArraysAlmostEqual(total, expected)
@@ -348,10 +349,10 @@ class ErrgenCompositionCommutationTester(BaseCase):
                             self.assertLessEqual(len(terms), 1)
                         # a None index (vanishing commutator / anticommutator) is a zero term.
                         terms = []
-                        _eprop._H(terms, None, c)
-                        _eprop._S(terms, None, c)
-                        _eprop._C(terms, None, (w, P), c)
-                        _eprop._A(terms, (w, P), None, c)
+                        _eprop._H(terms, None, c, identity_str)
+                        _eprop._S(terms, None, c, identity_str)
+                        _eprop._C(terms, None, (w, P), c, identity_str)
+                        _eprop._A(terms, (w, P), None, c, identity_str)
                         self.assertEqual(terms, [])
 
             for P, Q in product(paulis, repeat=2):
@@ -361,9 +362,9 @@ class ErrgenCompositionCommutationTester(BaseCase):
                     for emitter, expected in [(_eprop._C, c * ext_C(w * MP, v * MQ, I)),
                                               (_eprop._A, c * ext_A(w * MP, v * MQ, I))]:
                         terms = []
-                        emitter(terms, (w, P), (v, Q), c)
+                        emitter(terms, (w, P), (v, Q), c, identity_str)
                         terms_pre = []
-                        emitter(terms_pre, (w, P, bel_str(P)), (v, Q, bel_str(Q)), c)
+                        emitter(terms_pre, (w, P, bel_str(P)), (v, Q, bel_str(Q)), c, identity_str)
                         self.assertEqual(terms_pre, terms)
                         self.assertEqual([r for _, r in terms_pre], [r for _, r in terms])
                         total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))

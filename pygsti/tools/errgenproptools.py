@@ -205,9 +205,9 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
         elif curr_order == 1:
             # calculate the pairwise commutators between each of the error generators in current_errgen_dict_1 and
             # current_errgen_dict_2.
-            # precompute an identity string for comparisons in commutator calculations.
+            # precompute the all-identity Pauli string for comparisons in commutator calculations.
             if errgen_layer_1:
-                identity = stim.PauliString('I'*len(next(iter(errgen_layer_1)).basis_element_labels[0]))
+                identity = 'I'*len(next(iter(errgen_layer_1)).basis_element_labels[0])
             commuted_errgen_list = []
             for error1, error1_val in errgen_layer_1.items():
                 for error2, error2_val in errgen_layer_2.items():
@@ -575,7 +575,7 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
             if errorgen_layers:
                 for layer in errorgen_layers:
                     if layer:
-                        identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+                        identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                         break
             second_order_comm_dict = _second_order_magnus_term(errorgen_layers, identity, truncation_threshold)
             new_errorgen_layer.append(second_order_comm_dict)
@@ -712,7 +712,7 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
     # Future: Possibly do one last truncation pass in case any of the different orders cancel out when aggregated?
     return new_errorgen_layer_dict
 
-def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity: Optional[stim.PauliString],
+def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity: Optional[str],
                               truncation_threshold: float = 1e-14) -> dict[_LSE, float]:
     r"""
     Helper function for computing the second-order correction term in the
@@ -726,11 +726,9 @@ def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity
         List of dictionaries of the error generator coefficients and rates for a circuit layer. 
         The error generator coefficients are represented using LocalStimErrorgenLabel.
 
-    identity : stim.PauliString, optional (default None)
-        An optional stim.PauliString to use for comparisons to the identity.
-        Passing in this kwarg isn't necessary, but can allow for reduced 
-        stim.PauliString creation when calling this function many times for
-        improved efficiency.
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n, used to detect
+        identity indices in the commutator calculations. Built if not given.
         
     truncation_threshold : float, optional (default 1e-14)
         Threshold for which any error generators with magnitudes below this value
@@ -751,7 +749,7 @@ def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity
     if identity is None and errorgen_layers:
         for layer in errorgen_layers:
             if layer:
-                identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+                identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                 break
     
     # compute second-order BCH correction for each pair of error generators in the
@@ -823,7 +821,7 @@ def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_orde
         if errorgen_groups:
             for layer in errorgen_groups:
                 if layer:
-                    identity = stim.PauliString('I'*len(next(iter(layer)).basis_element_labels[0]))
+                    identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                     break
         second_order_comm_dict = _second_order_magnus_term(errorgen_groups, identity, truncation_threshold)
         zassenhaus_formula_dicts.append(second_order_comm_dict)
@@ -852,94 +850,160 @@ def _error_generator_layer_pairwise_commutator(errorgen_layer_1, errorgen_layer_
 
 # ---------------------------------------------------------------------------------------
 # Term emitters. See "Extended elementary error generator conventions" in the module
-# docstring for the identities they apply. Each appends c * <generator> to `terms` as a
-# (LocalStimErrorgenLabel, rate) pair, or appends nothing when the term is zero. Indices
-# are signed Paulis `(phase, P)` as returned by `pauli_product`, `com` and `acom`, or
-# `None` for a zero Pauli (as returned by `com`/`acom`), or `(phase, P, s)` when the
-# 'I'-padded string `s = bel_str(P)` is already known (input Paulis: `(1, P, s)` with `s`
-# taken from the input label's `_hashable_basis_element_labels`). Strings not supplied are
-# rendered once here; they serve the degeneracy checks and the canonical ordering and are
-# handed to the label constructor via `pauli_str_reps`.
+# docstring for the identities they apply.
+#
+# Each emitter appends one term of a formula, coeff * G_{index(es)}, to `terms` as a
+# (LocalStimErrorgenLabel, rate) pair - or appends nothing when the term is zero. An index
+# is a *signed Pauli* w P, passed as
+#     (w, P)        as returned by `pauli_product`, `com` and `acom`,
+#     (w, P, s)     the same with the 'I'-padded string s = bel_str(P) already rendered
+#                   (used for the input Paulis, whose strings the input labels cache in
+#                   `_hashable_basis_element_labels`, so they are not rendered again), or
+#     None          a vanishing (anti)commutator, as returned by `com`/`acom`.
+# Strings not supplied are rendered once here; they serve the identity check (a compare
+# against the all-'I' string `identity`) and the canonical ordering, and are handed to the
+# label constructor via `pauli_str_reps`.
 # ---------------------------------------------------------------------------------------
 
-def _H(terms, X, c):
+def _H(terms, pauli, coeff, identity):
     """
-    Append c * H_X to `terms`. H_{wP} = w H_P, H_I = 0.
+    Append coeff * H_{wP} = (coeff w) H_P to `terms`; nothing if P = I (H_I = 0).
+
+    Parameters
+    ----------
+    terms : list
+        Accumulator of (LocalStimErrorgenLabel, rate) pairs, appended to in place.
+
+    pauli : tuple or None
+        The signed Pauli index wP as `(w, P)` or `(w, P, s)`; None is a zero index.
+
+    coeff : complex
+        Prefactor of the term in the formula, including the overall weight.
+
+    identity : str
+        The all-identity Pauli string `'I'*n` for the number of qubits n.
     """
-    if X is None:
+    if pauli is None:
         return
-    phase, P = X[0], X[1]
-    sP = X[2] if len(X) == 3 else _bel_str(P)
-    if sP == 'I' * len(sP):
+    w, P = pauli[0], pauli[1]
+    sP = pauli[2] if len(pauli) == 3 else _bel_str(P)
+    if sP == identity:
         return
-    terms.append((_LSE('H', (P,), pauli_str_reps=(sP,)), phase * c))
+    terms.append((_LSE('H', (P,), pauli_str_reps=(sP,)), w * coeff))
 
 
-def _S(terms, X, c):
+def _S(terms, pauli, coeff, identity):
     """
-    Append c * S_X to `terms`. S_{wP} = w w* S_P = S_P for a unit phase (the phase enters
-    once plainly and once conjugated), S_I = 0.
+    Append coeff * S_{wP} = coeff S_P to `terms`; nothing if P = I (S_I = 0). The unit
+    phase w contributes w w* = 1 (it enters S_L = L . L^dag - ½{L^dag L, .} twice, once
+    conjugated).
+
+    Parameters
+    ----------
+    terms : list
+        Accumulator of (LocalStimErrorgenLabel, rate) pairs, appended to in place.
+
+    pauli : tuple or None
+        The signed Pauli index wP as `(w, P)` or `(w, P, s)`; None is a zero index.
+
+    coeff : complex
+        Prefactor of the term in the formula, including the overall weight.
+
+    identity : str
+        The all-identity Pauli string `'I'*n` for the number of qubits n.
     """
-    if X is None:
+    if pauli is None:
         return
-    P = X[1]
-    sP = X[2] if len(X) == 3 else _bel_str(P)
-    if sP == 'I' * len(sP):
+    P = pauli[1]
+    sP = pauli[2] if len(pauli) == 3 else _bel_str(P)
+    if sP == identity:
         return
-    terms.append((_LSE('S', (P,), pauli_str_reps=(sP,)), c))
+    terms.append((_LSE('S', (P,), pauli_str_reps=(sP,)), coeff))
 
 
-def _C(terms, X, Y, c):
+def _C(terms, pauli_1, pauli_2, coeff, identity):
     """
-    Append c * C_{X,Y} to `terms`. C_{wP,vQ} = w v C_{P,Q}, C_{P,P} = 2 S_P,
-    C_{I,Q} = C_{P,I} = 0, and the two labels are stored in canonical order (C is symmetric).
+    Append coeff * C_{wP,vQ} = (coeff w v) C_{P,Q} to `terms`, reduced as follows:
+    C_{P,P} = 2 S_P; nothing if P = I or Q = I (C_{I,Q} = C_{P,I} = 0); the two basis
+    element labels are stored in canonical order (C is symmetric, so this is free).
+
+    Parameters
+    ----------
+    terms : list
+        Accumulator of (LocalStimErrorgenLabel, rate) pairs, appended to in place.
+
+    pauli_1, pauli_2 : tuple or None
+        The signed Pauli indices wP and vQ, each as `(w, P)` or `(w, P, s)`; None is a
+        zero index.
+
+    coeff : complex
+        Prefactor of the term in the formula, including the overall weight.
+
+    identity : str
+        The all-identity Pauli string `'I'*n` for the number of qubits n.
     """
-    if X is None or Y is None:
+    if pauli_1 is None or pauli_2 is None:
         return
-    phase_P, P = X[0], X[1]
-    phase_Q, Q = Y[0], Y[1]
-    sP = X[2] if len(X) == 3 else _bel_str(P)
-    sQ = Y[2] if len(Y) == 3 else _bel_str(Q)
+    w, P = pauli_1[0], pauli_1[1]
+    v, Q = pauli_2[0], pauli_2[1]
+    sP = pauli_1[2] if len(pauli_1) == 3 else _bel_str(P)
+    sQ = pauli_2[2] if len(pauli_2) == 3 else _bel_str(Q)
     # The identity string sorts first, so of an ordered pair only the smaller can be identity.
     if sP == sQ:
-        if sP == 'I' * len(sP):
+        if sP == identity:
             return
-        terms.append((_LSE('S', (P,), pauli_str_reps=(sP,)), 2 * phase_P * phase_Q * c))
+        terms.append((_LSE('S', (P,), pauli_str_reps=(sP,)), 2 * w * v * coeff))
     elif sP < sQ:
-        if sP == 'I' * len(sP):
+        if sP == identity:
             return
-        terms.append((_LSE('C', (P, Q), pauli_str_reps=(sP, sQ)), phase_P * phase_Q * c))
+        terms.append((_LSE('C', (P, Q), pauli_str_reps=(sP, sQ)), w * v * coeff))
     else:
-        if sQ == 'I' * len(sQ):
+        if sQ == identity:
             return
-        terms.append((_LSE('C', (Q, P), pauli_str_reps=(sQ, sP)), phase_P * phase_Q * c))
+        terms.append((_LSE('C', (Q, P), pauli_str_reps=(sQ, sP)), w * v * coeff))
 
 
-def _A(terms, X, Y, c):
+def _A(terms, pauli_1, pauli_2, coeff, identity):
     """
-    Append c * A_{X,Y} to `terms`. A_{wP,vQ} = w v A_{P,Q}, A_{P,P} = 0, A_{I,Q} = H_Q,
-    A_{P,I} = -H_P, and the two labels are stored in canonical order, which negates the rate
-    when they have to be swapped (A is antisymmetric).
+    Append coeff * A_{wP,vQ} = (coeff w v) A_{P,Q} to `terms`, reduced as follows:
+    nothing if P = Q (A_{P,P} = 0); A_{I,Q} = H_Q and A_{P,I} = -H_P; the two basis
+    element labels are stored in canonical order, which negates the rate when they have
+    to be swapped (A is antisymmetric).
+
+    Parameters
+    ----------
+    terms : list
+        Accumulator of (LocalStimErrorgenLabel, rate) pairs, appended to in place.
+
+    pauli_1, pauli_2 : tuple or None
+        The signed Pauli indices wP and vQ, each as `(w, P)` or `(w, P, s)`; None is a
+        zero index.
+
+    coeff : complex
+        Prefactor of the term in the formula, including the overall weight.
+
+    identity : str
+        The all-identity Pauli string `'I'*n` for the number of qubits n.
     """
-    if X is None or Y is None:
+    if pauli_1 is None or pauli_2 is None:
         return
-    phase_P, P = X[0], X[1]
-    phase_Q, Q = Y[0], Y[1]
-    sP = X[2] if len(X) == 3 else _bel_str(P)
-    sQ = Y[2] if len(Y) == 3 else _bel_str(Q)
+    w, P = pauli_1[0], pauli_1[1]
+    v, Q = pauli_2[0], pauli_2[1]
+    sP = pauli_1[2] if len(pauli_1) == 3 else _bel_str(P)
+    sQ = pauli_2[2] if len(pauli_2) == 3 else _bel_str(Q)
     # The identity string sorts first, so of an ordered pair only the smaller can be identity.
     if sP == sQ:
         return
     elif sP < sQ:
-        if sP == 'I' * len(sP):
-            terms.append((_LSE('H', (Q,), pauli_str_reps=(sQ,)), phase_P * phase_Q * c))
+        if sP == identity:
+            terms.append((_LSE('H', (Q,), pauli_str_reps=(sQ,)), w * v * coeff))
         else:
-            terms.append((_LSE('A', (P, Q), pauli_str_reps=(sP, sQ)), phase_P * phase_Q * c))
+            terms.append((_LSE('A', (P, Q), pauli_str_reps=(sP, sQ)), w * v * coeff))
     else:
-        if sQ == 'I' * len(sQ):
-            terms.append((_LSE('H', (P,), pauli_str_reps=(sP,)), -phase_P * phase_Q * c))
+        if sQ == identity:
+            terms.append((_LSE('H', (P,), pauli_str_reps=(sP,)), -w * v * coeff))
         else:
-            terms.append((_LSE('A', (Q, P), pauli_str_reps=(sQ, sP)), -phase_P * phase_Q * c))
+            terms.append((_LSE('A', (Q, P), pauli_str_reps=(sQ, sP)), -w * v * coeff))
 
 
 def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0, identity=None):
@@ -964,10 +1028,10 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     weight : float, optional (default 1.0)
         An optional weighting value to apply to the value of the commutator.
 
-    identity : stim.PauliString, optional (default None)
-        Retained for backward compatibility and no longer used: identity indices are now
-        detected on the string representations that are computed for the returned labels
-        anyway, so no identity `stim.PauliString` is needed.
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n, used to detect
+        identity indices. Built from `errorgen_1` if not given; passing it avoids
+        rebuilding it when calling this function many times.
 
     Returns
     -------
@@ -977,10 +1041,12 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     value of `weight`. The same label may appear in more than one tuple.
     """
     w = -weight if flip_weight else weight
+    if identity is None:
+        identity = 'I' * len(errorgen_1._hashable_basis_element_labels[0])
     handler = _COMMUTATOR_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx]
     if handler is None:  # transitional, see _COMMUTATOR_HANDLERS
-        return _error_generator_commutator_develop(errorgen_1, errorgen_2, w, identity)
-    return handler(errorgen_1, errorgen_2, w)
+        return _error_generator_commutator_develop(errorgen_1, errorgen_2, w, stim.PauliString(identity))
+    return handler(errorgen_1, errorgen_2, w, identity)
 
 
 def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=None):
@@ -1002,10 +1068,10 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
     weight : float, optional (default 1.0)
         An optional weighting value to apply to the value of the composition.
 
-    identity : stim.PauliString, optional (default None)
-        Retained for backward compatibility and no longer used: identity indices are now
-        detected on the string representations that are computed for the returned labels
-        anyway, so no identity `stim.PauliString` is needed.
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n, used to detect
+        identity indices. Built from `errorgen_1` if not given; passing it avoids
+        rebuilding it when calling this function many times.
 
     Returns
     -------
@@ -1014,10 +1080,12 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
     The second element is the rate of that term, additionally weighted by the specified
     value of `weight`. The same label may appear in more than one tuple.
     """
+    if identity is None:
+        identity = 'I' * len(errorgen_1._hashable_basis_element_labels[0])
     handler = _COMPOSITION_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx]
     if handler is None:  # transitional, see _COMPOSITION_HANDLERS
-        return _error_generator_composition_develop(errorgen_1, errorgen_2, weight, identity)
-    return handler(errorgen_1, errorgen_2, weight)
+        return _error_generator_composition_develop(errorgen_1, errorgen_2, weight, stim.PauliString(identity))
+    return handler(errorgen_1, errorgen_2, weight, identity)
 
 
 def _error_generator_commutator_develop(errorgen_1, errorgen_2, weight, identity):
@@ -1042,9 +1110,6 @@ def _error_generator_commutator_develop(errorgen_1, errorgen_2, weight, identity
     if errorgen_2_type == 'C' or errorgen_2_type == 'A':
         errorgen_2_bel_1 = errorgen_2.basis_element_labels[1]
 
-    # create the identity stim.PauliString for later comparisons.
-    if identity is None:
-        identity = stim.PauliString('I'*len(errorgen_1_bel_0))
         
     if errorgen_1_type=='H' and errorgen_2_type=='H':
         ptup = com(errorgen_1_bel_0 , errorgen_2_bel_0)
@@ -1553,9 +1618,6 @@ def _error_generator_composition_develop(errorgen_1, errorgen_2, weight, identit
     if errorgen_2_type == 'C' or errorgen_2_type == 'A':
         errorgen_2_bel_1 = errorgen_2.basis_element_labels[1]
 
-    # create the identity stim.PauliString for later comparisons.
-    if identity is None:
-        identity = stim.PauliString('I'*len(errorgen_1_bel_0))
 
     if errorgen_1_type == 'H' and errorgen_2_type == 'H':
         # H_P[H_Q] P->errorgen_1_bel_0, Q -> errorgen_2_bel_0
@@ -6583,8 +6645,8 @@ def _error_generator_composition_develop(errorgen_1, errorgen_2, weight, identit
 # Dispatch tables for the error generator commutator and composition, indexed by
 # 4*errorgen_1.type_idx + errorgen_2.type_idx with the type order H=0, S=1, C=2, A=3 of
 # `pygsti.errorgenpropagation.localstimerrorgen.ERRORGEN_TYPE_INDICES`. Each entry is the
-# handler for one ordered type pair, called as handler(errorgen_1, errorgen_2, weight) and
-# returning the list of (LocalStimErrorgenLabel, rate) terms. Transitional: `None` entries
+# handler for one ordered type pair, called as handler(errorgen_1, errorgen_2, weight, identity)
+# (identity = the 'I'*n string) and returning the list of (LocalStimErrorgenLabel, rate) terms. Transitional: `None` entries
 # fall back to the original bodies above until the corresponding handlers are written.
 _COMMUTATOR_HANDLERS = (
     # [H, H]  [H, S]  [H, C]  [H, A]
