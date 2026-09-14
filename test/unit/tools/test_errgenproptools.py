@@ -200,9 +200,19 @@ class ErrgenCompositionCommutationTester(BaseCase):
                                            (_LSE('C', (stim.PauliString("+_X"), stim.PauliString("+X_"))), -1)]                                          
                                         ]
         
+        def aggregate(label_rate_pairs):
+            # the returned order is not part of the contract, and a label may appear more than once.
+            totals = {}
+            for lbl, rate in label_rate_pairs:
+                totals[lbl] = totals.get(lbl, 0) + rate
+            return {lbl: rate for lbl, rate in totals.items() if abs(rate) > 1e-12}
+
         for lbls, rates, correct_lbls in zip(test_labels, rates, correct_iterative_compositions):
-            iterated_composition = _eprop.iterative_error_generator_composition(lbls, rates)
-            self.assertEqual(iterated_composition, correct_lbls)
+            iterated_composition = aggregate(_eprop.iterative_error_generator_composition(lbls, rates))
+            correct = aggregate(correct_lbls)
+            self.assertEqual(set(iterated_composition), set(correct))
+            for lbl, rate in correct.items():
+                self.assertAlmostEqual(iterated_composition[lbl], rate)
 
         _compare_analytic_numeric_iterative_composition(2)
         
