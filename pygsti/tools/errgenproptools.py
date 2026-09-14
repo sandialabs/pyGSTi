@@ -324,18 +324,12 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
         else:
             raise NotImplementedError("Higher orders beyond fifth order are not implemented yet.")
 
-    # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
-    errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in new_errorgen_layer]
-    complete_errorgen_labels = errorgen_labels_by_order[0]
-    for order_dict in errorgen_labels_by_order[1:]:
-        complete_errorgen_labels.update(order_dict)
-
-    # initialize a dictionary with requisite keys
-    new_errorgen_layer_dict = {lbl: 0 for lbl in complete_errorgen_labels}
-
+    # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.
+    new_errorgen_layer_dict = {}
+    get = new_errorgen_layer_dict.get
     for order_dict in new_errorgen_layer:
         for lbl, rate in order_dict.items():
-            new_errorgen_layer_dict[lbl] += rate.real
+            new_errorgen_layer_dict[lbl] = get(lbl, 0) + rate.real
 
     # Future: Possibly do one last truncation pass in case any of the different order cancel out when aggregated?
 
@@ -481,18 +475,12 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
         else: 
             raise NotImplementedError("Magnus expansions beyond third order are not implemented yet.")
 
-    # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.   
-    errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in new_errorgen_layer]
-    complete_errorgen_labels = errorgen_labels_by_order[0]
-    for order_dict in errorgen_labels_by_order[1:]:
-        complete_errorgen_labels.update(order_dict)
-
-    # initialize a dictionary with requisite keys
-    new_errorgen_layer_dict = {lbl: 0 for lbl in complete_errorgen_labels}
-
+    # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.
+    new_errorgen_layer_dict = {}
+    get = new_errorgen_layer_dict.get
     for order_dict in new_errorgen_layer:
         for lbl, rate in order_dict.items():
-            new_errorgen_layer_dict[lbl] += rate.real
+            new_errorgen_layer_dict[lbl] = get(lbl, 0) + rate.real
 
     # Future: Possibly do one last truncation pass in case any of the different orders cancel out when aggregated?
     return new_errorgen_layer_dict
@@ -3679,18 +3667,12 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
     else:
         #compute the taylor series approximation to the desired order.
         taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
-        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.   
-        errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in taylor_expansion]
-        complete_errorgen_labels = errorgen_labels_by_order[0]
-        for order_dict in errorgen_labels_by_order[1:]:
-            complete_errorgen_labels.update(order_dict)
-
-        # initialize a dictionary with requisite keys
-        combined_taylor_dict = {lbl: 0 for lbl in complete_errorgen_labels}
-
+        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
+        combined_taylor_dict = {}
+        get = combined_taylor_dict.get
         for order_dict in taylor_expansion:
             for lbl, rate in order_dict.items():
-                combined_taylor_dict[lbl] += rate.real
+                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
 
     #can now do the correction computation in a single-shot.
     alphas = bulk_alpha(combined_taylor_dict, tableau, [desired_bitstring])
@@ -3740,18 +3722,12 @@ def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order
     else:
         #compute the taylor series approximation to the desired order.
         taylor_expansion = error_generator_taylor_expansion(errorgen_dict, order, truncation_threshold)
-        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.   
-        errorgen_labels_by_order = [{key: None for key in order_dict} for order_dict in taylor_expansion]
-        complete_errorgen_labels = errorgen_labels_by_order[0]
-        for order_dict in errorgen_labels_by_order[1:]:
-            complete_errorgen_labels.update(order_dict)
-
-        # initialize a dictionary with requisite keys
-        combined_taylor_dict = {lbl: 0 for lbl in complete_errorgen_labels}
-
+        # Accumulate all of the dictionaries in taylor expansion into a single one, summing overlapping terms.
+        combined_taylor_dict = {}
+        get = combined_taylor_dict.get
         for order_dict in taylor_expansion:
             for lbl, rate in order_dict.items():
-                combined_taylor_dict[lbl] += rate.real
+                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
 
     #can now do the correction computation in a single-shot.
     alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, [pauli])
