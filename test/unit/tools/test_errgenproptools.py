@@ -119,24 +119,22 @@ class ErrgenCompositionCommutationTester(BaseCase):
         errorgen_lbls_2Q = complete_errorgen_basis_2Q.labels
         errorgen_lbl_matrix_dict_2Q = {lbl: mat for lbl, mat in zip(errorgen_lbls_2Q, complete_errorgen_basis_2Q.elemgen_matrices)}
         
-        #TEMPORARY (error_generator_composition refactor validation, reverted in the next commit):
-        #test ALL 3Q label pairs instead of a random selection of 50 labels, collecting every
-        #mismatch before failing. 4032 labels -> 16,257,024 ordered pairs (~45 min single-process).
-        errorgen_lbls_3Q, errorgen_mats_3Q = complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_matrices
+        #augment testing with random selection of 3Q labels (some commutation relations for C and A terms require a minimum of 3 qubits).
+        errorgen_lbls_3Q, errorgen_mats_3Q = select_random_items_from_multiple_lists([complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_matrices], 50)
         errorgen_lbl_matrix_dict_3Q = {lbl: mat for lbl, mat in zip(errorgen_lbls_3Q, errorgen_mats_3Q)}
             
         complete_errorgen_lbl_matrix_dict_3Q = {lbl: mat for lbl, mat in zip(complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_matrices)}
 
         #loop through all of the pairs of indices.
         errorgen_label_pairs_2Q = list(product(errorgen_lbls_2Q, repeat=2))
-        errorgen_label_pairs_3Q = product(errorgen_lbls_3Q, repeat=2)  # TEMPORARY: lazy, 16.26M pairs
+        errorgen_label_pairs_3Q = list(product(errorgen_lbls_3Q, repeat=2))
         
         #also get a version of this list where the labels are local stim ones
         local_stim_errorgen_lbls_2Q = [_LSE.cast(lbl) for lbl in errorgen_lbls_2Q]
         local_stim_errorgen_lbls_3Q = [_LSE.cast(lbl) for lbl in errorgen_lbls_3Q]
         
         stim_errorgen_label_pairs_2Q = list(product(local_stim_errorgen_lbls_2Q, repeat=2))
-        stim_errorgen_label_pairs_3Q = product(local_stim_errorgen_lbls_3Q, repeat=2)  # TEMPORARY: lazy
+        stim_errorgen_label_pairs_3Q = list(product(local_stim_errorgen_lbls_3Q, repeat=2))
                 
         #for each pair compute the composition directly and compute it analytically (then converting it to
         #a numeric array) and see how they compare.
@@ -165,33 +163,30 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 print_mx(analytic_composition_mat)
                 raise ValueError('Numeric and analytic error generator compositions were not found to be identical!')
 
-        #TEMPORARY: exhaustive 3Q sweep collecting all mismatches (numeric or non-canonical output label).
-        mismatches_3Q = []
-        num_pairs_3Q = 0
         for pair1, pair2 in zip(errorgen_label_pairs_3Q, stim_errorgen_label_pairs_3Q):
-            num_pairs_3Q += 1
             numeric_composition = _eprop.error_generator_composition_numerical(pair1[0], pair1[1], errorgen_lbl_matrix_dict_3Q)
             analytic_composition = _eprop.error_generator_composition(pair2[0], pair2[1])
             try:
                 analytic_composition_mat = _eprop.errorgen_layer_to_matrix(analytic_composition, 3, errorgen_matrix_dict = complete_errorgen_lbl_matrix_dict_3Q)        
-            except KeyError as e:
-                mismatches_3Q.append((pair1, f'KeyError (label not in canonical basis): {e}', analytic_composition))
-                continue
+            except KeyError:
+                print(f'{analytic_composition=}')
             norm_diff = np.linalg.norm(numeric_composition-analytic_composition_mat)
             if norm_diff > 1e-10:
-                #Decompose the numerical composition into rates for the report.
-                numeric_rates = {lbl: np.trace(dual.conj().T@numeric_composition)
-                                 for lbl, dual in zip(complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_dual_matrices)}
-                numeric_rates = {lbl: rate for lbl, rate in numeric_rates.items() if abs(rate) > 1e-3}
-                mismatches_3Q.append((pair1, f'norm_diff={norm_diff}, numeric rates {numeric_rates}', analytic_composition))
-        print(f'Exhaustive 3Q composition check: {num_pairs_3Q} ordered pairs, {len(mismatches_3Q)} mismatches.')
-        if mismatches_3Q:
-            for pair, reason, analytic in mismatches_3Q[:100]:
-                print(f'pair {pair}: {reason}; analytic_composition={analytic}')
-            if len(mismatches_3Q) > 100:
-                print(f'... and {len(mismatches_3Q) - 100} more')
-            raise ValueError(f'Numeric and analytic error generator compositions differ for {len(mismatches_3Q)} '
-                             f'of {num_pairs_3Q} 3Q label pairs!')
+                print(f'Difference in compositions for pair {pair1} is greater than 1e-10.')
+                print(f'{np.linalg.norm(numeric_composition-analytic_composition_mat)=}')
+                print('numeric_composition=')
+                print_mx(numeric_composition)
+                
+                #Decompose the numerical composition into rates.
+                for lbl, dual in zip(complete_errorgen_basis_3Q.labels, complete_errorgen_basis_3Q.elemgen_dual_matrices):
+                    rate = np.trace(dual.conj().T@numeric_composition)
+                    if abs(rate) >1e-3:
+                        print(f'{lbl}: {rate}')
+                
+                print(f'{analytic_composition=}')
+                print('analytic_composition_mat=')
+                print_mx(analytic_composition_mat)
+                raise ValueError('Numeric and analytic error generator compositions were not found to be identical!')    
     
     def test_iterative_error_generator_composition(self):
         test_labels = [(_LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')])), 
