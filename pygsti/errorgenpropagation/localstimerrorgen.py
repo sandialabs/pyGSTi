@@ -193,12 +193,14 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         self.label = label
         self.circuit_time = circuit_time
 
+        # Cached string forms: the tuple of 'I'-padded basis element label strings, and the single
+        # string this label hashes and compares on (type letter followed by the concatenated
+        # label strings, e.g. 'HXI', 'CXIYI'; the type letter is needed to keep H_P and S_P apart).
         if pauli_str_reps is not None:
             self._hashable_basis_element_labels = pauli_str_reps
-            self._hashable_string_rep = self.errorgen_type.join(pauli_str_reps)
         else:
             self._hashable_basis_element_labels = self.bel_to_strings()
-            self._hashable_string_rep = self.errorgen_type.join(self._hashable_basis_element_labels)
+        self._hashable_string_rep = errorgen_type + ''.join(self._hashable_basis_element_labels)
 
         #additionally store a copy of the value of the original error generator label which will remain unchanged
         #during the course of propagation for later bookkeeping purposes. (None means "this label itself",
@@ -229,15 +231,17 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         - `type_idx` did not exist: derive it from `errorgen_type`.
         - `initial_label` was a plain attribute (it is now the read-only property backed
           by `_initial_label`): move it, so the stored pre-propagation label is kept.
-        - the cached `_hashable_*` string representations did not exist: rebuild them.
+        - the cached `_hashable_basis_element_labels` did not exist: rebuild it; the hash/equality
+          string `_hashable_string_rep` is always rebuilt since its format has changed.
         """
         if 'initial_label' in state:
             state['_initial_label'] = state.pop('initial_label')
         if 'type_idx' not in state:
             state['type_idx'] = ERRORGEN_TYPE_INDICES[state['errorgen_type']]
-        if '_hashable_basis_element_labels' not in state or '_hashable_string_rep' not in state:
+        if '_hashable_basis_element_labels' not in state:
             state['_hashable_basis_element_labels'] = tuple([bel_str(ps) for ps in state['basis_element_labels']])
-            state['_hashable_string_rep'] = state['errorgen_type'].join(state['_hashable_basis_element_labels'])
+        # always rebuilt: the format of this string has changed between versions.
+        state['_hashable_string_rep'] = state['errorgen_type'] + ''.join(state['_hashable_basis_element_labels'])
         self.__dict__.update(state)
 
     def bel_to_strings(self):
@@ -250,11 +254,11 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
 
     def __eq__(self, other):
         """
-        Performs equality check by seeing if the two error gen labels have the same `errorgen_type` 
-        and `basis_element_labels`.
+        Performs equality check by seeing if the two error gen labels have the same `errorgen_type`
+        and `basis_element_labels` (compared through their cached string representations, which
+        is an order of magnitude cheaper than comparing the `stim.PauliString`s).
         """
-        return self.errorgen_type == other.errorgen_type and self.basis_element_labels == other.basis_element_labels \
-            and isinstance(other, LocalStimErrorgenLabel)
+        return isinstance(other, LocalStimErrorgenLabel) and self._hashable_string_rep == other._hashable_string_rep
     
  
     def __str__(self):

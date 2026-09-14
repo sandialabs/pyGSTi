@@ -192,6 +192,24 @@ class LocalStimErrorgenLabelTester(BaseCase):
         with self.assertRaises(ValueError):
             _LSE('Q', [stim.PauliString('XI')])
 
+    def test_hash_and_equality(self):
+        # equal labels built independently compare equal and hash equal; H_P and S_P (same Pauli)
+        # must differ in both (the hash string carries the type letter); other objects are unequal.
+        a = _LSE('C', [stim.PauliString('XX'), stim.PauliString('YY')])
+        b = _LSE.cast(('C', ['XX', 'YY']))
+        self.assertEqual(a, b)
+        self.assertEqual(hash(a), hash(b))
+        self.assertEqual(len({a, b}), 1)
+        h = _LSE('H', [stim.PauliString('XX')])
+        s = _LSE('S', [stim.PauliString('XX')])
+        self.assertNotEqual(h, s)
+        self.assertNotEqual(hash(h), hash(s))
+        self.assertNotEqual(a, _LSE('A', [stim.PauliString('XX'), stim.PauliString('YY')]))
+        self.assertNotEqual(a, LocalElementaryErrorgenLabel('C', ['XX', 'YY']))
+        self.assertFalse(a == ('C', ('XX', 'YY')))
+        # labels carrying propagation metadata are still equal to their plain counterpart.
+        self.assertEqual(_LSE('H', [stim.PauliString('XX')], circuit_time=3, label='foo'), h)
+
     def test_unpickle_legacy_states(self):
         # Pickles written by older versions of LocalStimErrorgenLabel lack attributes added
         # since. Emulate them by editing the instance __dict__ before pickling (the default
@@ -231,6 +249,13 @@ class LocalStimErrorgenLabelTester(BaseCase):
         restored = roundtrip(state)
         self.assertEqual(restored._hashable_basis_element_labels, propagated._hashable_basis_element_labels)
         self.assertEqual(restored.initial_label, original.to_local_eel())
+
+        # (4) state with the older format of the hash/equality string (type letter used as the
+        #     joiner, so absent for single-index labels): it must be rebuilt, not trusted.
+        state = dict(fresh_state)
+        state['_hashable_string_rep'] = state['errorgen_type'].join(state['_hashable_basis_element_labels'])
+        restored = roundtrip(state)
+        self.assertEqual(restored._hashable_string_rep, propagated._hashable_string_rep)
 
         for restored in [roundtrip(fresh_state), restored]:
             self.assertEqual(restored, propagated)
