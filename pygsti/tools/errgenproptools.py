@@ -76,7 +76,7 @@ except ImportError:
 import numpy as _np
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL, LocalElementaryErrorgenLabel as _LEEL, ElementaryErrorgenLabel as _EEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace
-from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_str as _bel_str, bel_less_than as _bel_less_than
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
@@ -88,7 +88,8 @@ from itertools import chain, product
 from math import factorial
 from typing import Literal, Optional, Union, Callable, Iterable, Iterator, TypeVar, cast as _cast
 
-def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
+def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label: Union[_GEEL, _LEEL],
+                                          num_qubits: int) -> tuple[stim.PauliString, ...]:
     """
     Converts an input `GlobalElementaryErrorgenLabel` to a tuple of stim.PauliString
     objects, padded with an appropriate number of identities.
@@ -1856,7 +1857,9 @@ def errorgen_pauli_action(errorgen: _LSE, pauli: stim.PauliString) -> tuple[floa
     
     return ret
 
-def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=None, sslbls=None):
+def errorgen_layer_to_matrix(errorgen_layer: Union[list[tuple[_EEL, float]], tuple[tuple[_EEL, float], ...], dict[_EEL, float]],
+                             num_qubits: int, errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                             sslbls: Optional[Union[list, tuple]] = None) -> _np.ndarray:
     """
     Converts an iterable over error generator coefficients and rates into the corresponding
     dense numpy array representation.
@@ -2026,7 +2029,9 @@ def iterative_error_generator_composition(errorgen_labels: tuple[_LSE, ...], rat
 
 # Helper functions for doing numeric commutators, compositions and BCH.
 
-def error_generator_commutator_numerical(errorgen1, errorgen2, errorgen_matrix_dict=None, num_qubits=None):
+def error_generator_commutator_numerical(errorgen1: _EEL, errorgen2: _EEL,
+                                         errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                                         num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Numerically compute the commutator of the two specified elementary error generators.
 
@@ -2080,7 +2085,9 @@ def error_generator_commutator_numerical(errorgen1, errorgen2, errorgen_matrix_d
                   - errorgen_matrix_dict[_LSE.cast(errorgen2)]@errorgen_matrix_dict[_LSE.cast(errorgen1)]
     return comm
 
-def error_generator_composition_numerical(errorgen1, errorgen2, errorgen_matrix_dict=None, num_qubits=None):
+def error_generator_composition_numerical(errorgen1: _EEL, errorgen2: _EEL,
+                                          errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                                          num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Numerically compute the composition of the two specified elementary error generators.
 
@@ -2132,7 +2139,9 @@ def error_generator_composition_numerical(errorgen1, errorgen2, errorgen_matrix_
             comp = errorgen_matrix_dict[_LSE.cast(errorgen1)]@errorgen_matrix_dict[_LSE.cast(errorgen2)]
     return comp
 
-def bch_numerical(propagated_errorgen_layers, error_propagator, bch_order=1):
+def bch_numerical(propagated_errorgen_layers: list[_np.ndarray],
+                  error_propagator: _epropagator.ErrorGeneratorPropagator,
+                  bch_order: int = 1) -> _np.ndarray:
     """
     Iteratively compute effective error generator layer produced by applying the BCH approximation
     to the list of input error generator matrices. Note this is primarily intended
@@ -2422,10 +2431,12 @@ def zassenhaus_formula_numerical(errorgen_groups: list[dict[_EEL, float]], error
 
     return zassenhaus_formula_arrays
     
-def _matrix_commutator(mat1, mat2):
+def _matrix_commutator(mat1: _np.ndarray, mat2: _np.ndarray) -> _np.ndarray:
     return mat1@mat2 - mat2@mat1
 
-def iterative_error_generator_composition_numerical(errorgen_labels, rates, errorgen_matrix_dict=None, num_qubits=None):
+def iterative_error_generator_composition_numerical(errorgen_labels: tuple[_LSE, ...], rates: tuple[float, ...],
+                                                    errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                                                    num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Iteratively compute error generator compositions. The function computes a dense representation of this composition
     numerically and is primarily intended as part of testing infrastructure.
@@ -2524,7 +2535,7 @@ def random_support(tableau: Union[stim.Tableau, stim.TableauSimulator], return_s
 
 # Courtesy of Gidney 
 # https://quantumcomputing.stackexchange.com/questions/38826/how-do-i-efficiently-compute-the-fidelity-between-two-stabilizer-tableau-states
-def tableau_fidelity(tableau1, tableau2):
+def tableau_fidelity(tableau1: stim.Tableau, tableau2: stim.Tableau) -> float:
     """
     Calculate the fidelity between the stabilizer states corresponding to the given stim
     tableaus. This returns a result in units of probability (so this may be squared
@@ -2553,7 +2564,7 @@ def tableau_fidelity(tableau1, tableau2):
             sim.postselect_z(q, desired_value=False)
     return p
 
-def bitstring_to_tableau(bitstring):
+def bitstring_to_tableau(bitstring: str) -> stim.Tableau:
     """
     Map a computational basis bit string into a corresponding Tableau which maps the all zero
     state into that state.
@@ -2772,7 +2783,7 @@ def in_stabilizer_support(tableau: Union[stim.Tableau, stim.TableauSimulator], d
         sim.set_inverse_tableau(orig_tableau_inverse)
     return success
 
-def compute_phase_reference(tableau):
+def compute_phase_reference(tableau: Union[stim.Tableau, stim.TableauSimulator]) -> list[bool]:
     """ 
     Compute a canonical state, corresponding to the smallest state with non-zero amplitude, to use
     as a phase reference in computing the phases of components of this stabilizer state. 
@@ -3109,7 +3120,8 @@ def slow_bulk_phi(tableau: Union[stim.Tableau, stim.TableauSimulator],
     return result_phis
 
 # helper function for numerically computing phi, primarily used for testing.
-def phi_numerical(tableau, desired_bitstring, P, Q):
+def phi_numerical(tableau: stim.Tableau, desired_bitstring: str, P: Union[str, stim.PauliString],
+                  Q: Union[str, stim.PauliString]) -> _np.ndarray:
     """
     This function computes a quantity whose value is used in expression for the sensitivity of probabilities to error generators.
     (This version does this calculation numerically and is primarily intended for testing infrastructure.)
@@ -3314,7 +3326,7 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
 
     return sensitivities_by_bitstring
 
-def alpha_numerical(errorgen, tableau, desired_bitstring):
+def alpha_numerical(errorgen: Union[_LSE, _EEL], tableau: stim.Tableau, desired_bitstring: str) -> float:
     """
     First-order error generator sensitivity function for probability. This implementation calculates
     this quantity numerically, and as such is primarily intended for used as parting of testing
@@ -3768,7 +3780,10 @@ def stabilizer_pauli_expectation_correction(errorgen_dict: _ErrorgenDict, tablea
 
     return correction
 
-def stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order = 1):
+def stabilizer_pauli_expectation_correction_numerical(errorgen_dict: dict[_EEL, float],
+                                                      errorgen_propagator: _epropagator.ErrorGeneratorPropagator,
+                                                      circuit: _Circuit, pauli: stim.PauliString,
+                                                      order: int = 1) -> float:
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
     
@@ -3816,7 +3831,7 @@ def stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_pr
     expectation_correction = _np.linalg.multi_dot([pauli_vec.conj().T, taylor_expanded_errorgen,stabilizer_state_dmvec]).item()
     return expectation_correction
 
-def stabilizer_probability(tableau, desired_bitstring):
+def stabilizer_probability(tableau: stim.Tableau, desired_bitstring: str) -> float:
     """
     Calculate the output probability for the specified output bitstring.
     
@@ -3839,7 +3854,7 @@ def stabilizer_probability(tableau, desired_bitstring):
     # compute what Gidney calls the tableau fidelity (which in this case gives the probability).
     return tableau_fidelity(tableau, bitstring_to_tableau(desired_bitstring))
 
-def stabilizer_pauli_expectation(tableau, pauli):
+def stabilizer_pauli_expectation(tableau: stim.Tableau, pauli: stim.PauliString) -> float:
     """
     Calculate the output probability for the specified output bitstring.
       
@@ -3868,7 +3883,9 @@ def stabilizer_pauli_expectation(tableau, pauli):
     expectation  = pauli_sign*sim.peek_observable_expectation(unsigned_pauli)
     return expectation
 
-def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring, order=1, truncation_threshold=1e-14):
+def approximate_stabilizer_probability(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
+                                       desired_bitstring: str, order: int = 1,
+                                       truncation_threshold: float = 1e-14) -> float:
     """
     Calculate the approximate probability of a desired bit string using an nth-order taylor series approximation.
     
@@ -3915,7 +3932,9 @@ def approximate_stabilizer_probability(errorgen_dict, circuit, desired_bitstring
     correction = stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order, truncation_threshold)
     return ideal_prob + correction
 
-def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, order=1, truncation_threshold=1e-14):
+def approximate_stabilizer_pauli_expectation(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
+                                             pauli: Union[str, stim.PauliString], order: int = 1,
+                                             truncation_threshold: float = 1e-14) -> float:
     """
     Calculate the approximate probability of a desired bit string using a first-order approximation.
     
@@ -3965,7 +3984,10 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict, circuit, pauli, orde
     correction = stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order, truncation_threshold)
     return ideal_expectation + correction
 
-def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order=1):
+def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict: dict[_EEL, float],
+                                                       errorgen_propagator: _epropagator.ErrorGeneratorPropagator,
+                                                       circuit: _Circuit, pauli: stim.PauliString,
+                                                       order: int = 1) -> float:
     """
     Calculate the approximate probability of a desired bit string using a first-order approximation.
     This function performs the corrections numerically and so it primarily intended for testing
@@ -4011,7 +4033,8 @@ def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict, errorgen_p
     correction = stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order)
     return ideal_expectation + correction
 
-def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, truncation_threshold=1e-14):
+def approximate_stabilizer_probabilities(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
+                                         order: int = 1, truncation_threshold: float = 1e-14) -> _np.ndarray:
     """
     Calculate the approximate probability distribution over all bitstrings using a first-order approximation.
     Note the size of this distribution scales exponentially in the qubit count, so this is very inefficient for
@@ -4116,7 +4139,10 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
 
     return taylor_order_terms
 
-def error_generator_taylor_expansion_numerical(errorgen_dict, errorgen_propagator, order = 1, mx_basis = 'pp'):
+def error_generator_taylor_expansion_numerical(errorgen_dict: dict[_EEL, float],
+                                               errorgen_propagator: _epropagator.ErrorGeneratorPropagator,
+                                               order: int = 1,
+                                               mx_basis: Union[str, _Basis] = 'pp') -> _np.ndarray:
     """
     Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
     error generator dictionary. (Excluding the zeroth-order identity). This function computes a dense representation

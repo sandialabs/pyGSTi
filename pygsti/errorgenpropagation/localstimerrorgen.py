@@ -77,7 +77,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
     """
 
     @classmethod
-    def cast(cls, obj: Union[LocalStimErrorgenLabel, _LEEL, _GEEL, tuple, list],
+    def cast(cls, obj: Union[_ElementaryErrorgenLabel, tuple, list],
              sslbls: Optional[Sequence[Any]] = None) -> LocalStimErrorgenLabel:
         """
         Method for casting objects to instances of LocalStimErrorgenLabel.
