@@ -15,27 +15,27 @@ jupyter:
 
 # Character Gate Set Tomography (cGST)
 
-Character gate set tomography combines the *amplifying germs* of gate set tomography (GST) with the *representation-theoretic filtering* of character randomized benchmarking. This tutorial builds a cGST experiment design for the one-qubit $\{S, \sqrt{Y}\}$ gate set, simulates data from a noise model whose error parameters are known exactly, runs the cGST analysis, and compares the fitted parameters to the truth.
+Character gate set tomography combines the amplifying germs of gate set tomography (GST) with the representation-theoretic filtering of character randomized benchmarking. This tutorial builds a cGST experiment design for the one-qubit $\{S, \sqrt{Y}\}$ gate set, simulates data from a noise model whose error parameters are known exactly, runs the cGST analysis, and compares the fitted parameters to the data generating model.
 
 ## The idea
 
-A cGST **germ** is a short circuit whose ideal implementation generates a small finite cyclic group: the phase gate $S$ generates $\mathbb{Z}_4$, $\sqrt{Y}$ generates $\mathbb{Z}_4$, and the compound "triangle" germ $\triangle = \sqrt{Y}\cdot S$ generates $\mathbb{Z}_3$ (it is a third root of the identity). Instead of only repeating a germ deterministically (as GST does), cGST inserts uniformly random powers of the germ and, in post-processing, weights each circuit's outcome by the conjugated character $\chi^*_j(n)$ of one irrep $j$ of that group, evaluated at the circuit's total germ power $n$. Averaging then cancels every other irrep's contribution, so each character-weighted signal
+A cGST germ is a short circuit whose ideal implementation generates a small finite cyclic group: the phase gate $S$ generates $\mathbb{Z}_4$, $\sqrt{Y}$ generates $\mathbb{Z}_4$, and the compound "triangle" germ $\triangle = \sqrt{Y}\cdot S$ generates $\mathbb{Z}_3$ (it is a third root of the identity). Instead of only repeating a germ deterministically (as GST does), cGST inserts uniformly random powers of the germ and, in post-processing, weights each circuit's outcome by the conjugated character $\chi^*_j(n)$ of one irrep $j$ of that group, evaluated at the circuit's total germ power $n$. Averaging then cancels every other irrep's contribution, so each character-weighted signal
 
 $$ z_j(k) \;=\; \big\langle\, \chi^*_j(n)\, \hat{p}(n) \,\big\rangle_{\text{circuits at depth } k} $$
 
-decays as a single exponential: the multi-exponential fitting problem of ordinary GST decomposes into a collection of effective $T_1$ experiments (trivial irrep, $j=0$) and Ramsey experiments (complex irreps):
+decays as a single exponential. The multi-exponential fitting problem of ordinary GST becomes a collection of $T_1$ experiments (trivial irrep, $j=0$) and Ramsey experiments (complex irreps):
 
 $$ z_0(k) = (B - C)\,\lambda_1^k + C, \qquad z_1(k) = A\,\lambda_2^k\, e^{i(\theta k + \varphi)} . $$
 
 The decay magnitudes are the noisy germ's eigenvalue magnitudes (stochastic error rates) and the phase-winding rate $\theta$ is its coherent (over-rotation) angle error, read off directly from a linear fit to the unwrapped phase.
 
-Three sampling modes are implemented by `CharacterGSTGermDesign`:
+`CharacterGSTGermDesign` implements three sampling modes.
 
-* **`'reduced'`** *(used below)*: a fixed number $k_0$ of random germ powers act as "synthetic SPAM" (an approximate projector onto the target irrep), followed by $k$ deterministic germ repetitions. The fitted per-$k$ decay is the noisy germ's own eigenvalue.
-* **`'full'`**: depth $k$ means $k$ i.i.d. random powers. The fitted decay is then an eigenvalue of the group *Fourier operator* $\Pi_j = \frac{1}{N}\sum_m \chi_j^*(m)\Lambda^m$, which relates to the germ eigenvalue deviation $y$ through $f(y) = \frac{1-y^N}{N(1-y)}$. Note $\arg f(e^{i\theta}) \approx \frac{N-1}{2}\theta$: full mode *amplifies* phase errors by $(N{-}1)/2$, and `pygsti.algorithms.cgstfit.invert_projector_eigenvalue` numerically inverts $f$ to recover the bare eigenvalue.
-* **`'exact'`**: for a cyclic germ the circuit depends only on the total power, so the $k_0$ Monte-Carlo rounds can be replaced by deterministic quadrature over all possible totals, weighted by their exact probabilities: the synthetic projector is evaluated with zero sampling error.
+* In `'reduced'` mode, used below, a fixed number $k_0$ of random germ powers act as synthetic SPAM (an approximate projector onto the target irrep), followed by $k$ deterministic germ repetitions. The fitted per-$k$ decay is the noisy germ's own eigenvalue.
+* In `'full'` mode, depth $k$ means $k$ i.i.d. random powers. The fitted decay is then an eigenvalue of the group Fourier operator $\Pi_j = \frac{1}{N}\sum_m \chi_j^*(m)\Lambda^m$, which relates to the germ eigenvalue deviation $y$ through $f(y) = \frac{1-y^N}{N(1-y)}$. Since $\arg f(e^{i\theta}) \approx \frac{N-1}{2}\theta$, full mode amplifies phase errors by $(N{-}1)/2$; `pygsti.algorithms.cgstfit.invert_projector_eigenvalue` inverts $f$ numerically to recover the bare eigenvalue.
+* In `'exact'` mode, the $k_0$ Monte-Carlo rounds are replaced by deterministic quadrature over all possible total powers, weighted by their exact probabilities. This works because a cyclic germ's circuit depends only on the total power, and it evaluates the synthetic projector with zero sampling error.
 
-The experiments built by `create_1q_szy_cgst_design` are the single-gate $T_1$ and Ramsey germ decays for $S$ and $\sqrt{Y}$, the same pair for the "triangle" germ $\sqrt{Y}S$ that exposes the two gates' *relational* errors, and idle-interleaved Ramsey germs that isolate the idle's coherent error:
+The experiments built by `create_1q_szy_cgst_design` are the single-gate $T_1$ and Ramsey germ decays for $S$ and $\sqrt{Y}$, the same pair for the "triangle" germ $\sqrt{Y}S$ that exposes the two gates' relational errors, and idle-interleaved Ramsey germs that isolate the idle's coherent error:
 
 | name | germ | group | irrep | estimates |
 |---|---|---|---|---|
@@ -63,7 +63,7 @@ from pygsti.tools.optools import unitary_to_pauligate
 
 ## A noise model with exactly known error parameters
 
-We construct the noisy $S$ and $\sqrt{Y}$ gates *directly in their standard-gauge channel forms*, so that every parameter cGST is supposed to estimate has a known injected value: over-rotations $\theta, \alpha$, the relational angle-between-axes $\beta$, stochastic decays $\lambda_1, \lambda_2$ (for $S$) and the $E_{\rm sto}$ block (for $\sqrt{Y}$) with correlated rates $c_{xy}, c_{xz}, c_{yz}$, and active (amplitude-damping-type) errors $a, a_y, a_{\rm rel}$. The idle gets known coherent rotation errors about all three axes.
+We construct the noisy $S$ and $\sqrt{Y}$ gates in the *standard gauge*.  This allows us to specify every parameter cGST can estimate, including over-rotations $\theta, \alpha$, the relational angle-between-axes $\beta$, stochastic decays $\lambda_1, \lambda_2$ (for $S$) and the $E_{\rm sto}$ block (for $\sqrt{Y}$) with correlated rates $c_{xy}, c_{xz}, c_{yz}$, and active (amplitude-damping-type) errors $a, a_y, a_{\rm rel}$. The idle suffers a known coherent rotation errors about all three axes.
 
 ```python
 sx = np.array([[0, 1], [1, 0]], complex)
@@ -106,11 +106,11 @@ injected = dict(theta=0.010, alpha=0.008, beta=0.006,
 true_model = standard_gauge_model(**injected)
 ```
 
-(Any pyGSTi model works here, e.g. one built with `create_explicit_model(pspec, lindblad_error_coeffs={'Gzpi2:Q0': {('H','Z'): 0.005, ('S','X'): 0.004, ...}})`. We use the standard-gauge construction because it makes the truth table below exact; for a generic model the gauge-invariant germ eigenvalues computed next play the role of the truth.)
+(Any pyGSTi model works here, e.g. one built with `create_explicit_model(pspec, lindblad_error_coeffs={'Gzpi2:Q0': {('H','Z'): 0.005, ('S','X'): 0.004, ...}})`. We use the standard-gauge construction because it allows for direct comparison between known parameters and those learned from the data. For a generic model, one can compare the gauge-invariant germ eigenvalues computed below.)
 
-## Numeric ground truth
+## Parameters from the data generating model
 
-cGST's decay fits estimate the noisy germs' eigenvalue deviations, which are gauge-invariant quantities we can extract from the true model by eigendecomposition, with no first-order approximations:
+cGST's decay fits estimate the noisy germs' eigenvalue deviations, which are gauge-invariant quantities we can extract from the true model by eigendecomposition:
 
 ```python
 depths = [0, 1, 2, 4, 8, 16, 24, 32, 48, 64, 96]
@@ -125,9 +125,9 @@ for name in edesign.keys():
     print(f"{name:10s}  |y| = {abs(truth[name]):.5f}   arg y = {np.angle(truth[name]):+.5f}")
 ```
 
-## The experiment design
+## Experiment design
 
-Each sub-experiment holds, per depth, `circuits_per_depth` circuits of the form *prep fiducial · germ$^n$ · measurement fiducial*, where $n$ contains the random contribution. The realized random exponents are stored in the design (serialized alongside the circuits), and the character weights are recomputed from them:
+Each sub-experiment includes, for each depth, `circuits_per_depth` circuits of the form prep fiducial · germ$^n$ · measurement fiducial. The sampled random exponents are stored in the design (serialized alongside the circuits) and are used to compute the character weights:
 
 ```python
 sub = edesign['s_ramsey']
@@ -138,9 +138,9 @@ print(sub.circuit_lists[3][0])
 print("\ncharacter weights at depth 4:", np.round(sub.character_weights()[3][:6], 3), "...")
 ```
 
-Two variance-reduction refinements are built into the sampling (both leave expectations unchanged): the random powers are *stratified* over the residue classes of the total power, so character weights of constant backgrounds cancel exactly at each depth, and in `'reduced'` mode the projection-round draws are *reused across depths* (common random numbers), so their contribution is a depth-independent constant absorbed by the fit amplitude rather than per-depth noise.
+Two variance-reduction steps are included the sampling. The random powers are chosen so that each residue class appears an equal number of times at each depth (which is only possible if `circuits_per_depth` is a multiple of the group order). In `'reduced'` mode the random draws are also reused across depths, so their contribution is a depth-independent constant rather than per-depth noise.
 
-## Simulate and run
+## Run simulation
 
 ```python
 ds = pygsti.data.simulate_data(true_model, edesign.all_circuits_needing_data,
@@ -252,9 +252,9 @@ print(f"reduced-mode estimate = {params['lambda2']:.5f} @ {params['theta']:+.5f}
 print(f"truth                 = {abs(truth['s_ramsey']):.5f} @ {np.angle(truth['s_ramsey']):+.5f}")
 ```
 
-## Standard-gauge error generators with the generic pipeline
+## Standard-gauge error generators with generic gate sets
 
-Everything above used the hand-derived first-order inversion for $\{S, \sqrt{Y}\}$ (`gateset_inversion='szy'`). pyGSTi also provides a gate-set-agnostic path (see the *Character GST for arbitrary finite-order gate sets* tutorial): `create_cgst_design` builds an amplificationally complete design from the target model alone, and `CharacterGST(gateset_inversion='linear', ...)` inverts the fitted decays into elementary error-generator coefficients, reported in the cGST standard gauge (the reference gate's error channel commutes with its ideal gate exactly; the residual freedom is fixed on the other gates). We run it on the same $S$ and $\sqrt{Y}$ channels, in the `'exact'` quadrature mode the linear inversion prefers. The idle is left out here: its only finite-order germs are interleaved ones, which the generic tutorial discusses.
+Everything above used the hand-derived first-order inversion for $\{S, \sqrt{Y}\}$ (`gateset_inversion='szy'`). pyGSTi also provides a gate-set-independent path (see the *Character GST for arbitrary finite-order gate sets* tutorial): `create_cgst_design` builds an amplificationally complete design from the target model alone, and `CharacterGST(gateset_inversion='linear', ...)` inverts the fitted decays into elementary error-generator coefficients, reported in the cGST standard gauge (the reference gate's error channel commutes with its ideal gate exactly; the residual freedom is fixed on the other gates). We run it on the same $S$ and $\sqrt{Y}$ channels, in the `'exact'` quadrature mode the linear inversion prefers. The idle is left out here: its only finite-order germs are interleaved ones, which the generic tutorial discusses.
 
 ```python
 from pygsti.algorithms import cgstdesign, cgstgauge
@@ -287,7 +287,7 @@ print(f"design-matrix rank {info['rank']} of {info['num_params']} error-generato
       f"({info['num_unamplified']} gauge/unamplified directions), {info['num_observables']} observables")
 ```
 
-The comparison must be made in the same gauge: the truth is brought to the standard gauge with the same routine before its error generators are read off. The Hamiltonian coefficients are half the rotation angles of the channel parameterization used above, $\theta = 2h_Z(S)$, $\alpha = 2h_Y(\sqrt{Y})$, and $\beta = 2h_X(\sqrt{Y}) = 2h_Z(\sqrt{Y})$; the stochastic coefficients of $S$ satisfy $s_X = s_Y$ (the equatorial decay $\lambda_2$) as the commuting form requires.
+The comparison must be made in the same gauge: the data generating model is brought to the standard gauge with the same routine before its error generators are read off. The Hamiltonian coefficients are half the rotation angles of the channel parameterization used above, $\theta = 2h_Z(S)$, $\alpha = 2h_Y(\sqrt{Y})$, and $\beta = 2h_X(\sqrt{Y}) = 2h_Z(\sqrt{Y})$; the stochastic coefficients of $S$ satisfy $s_X = s_Y$ (the equatorial decay $\lambda_2$) as the commuting form requires.
 
 ```python
 truth_sg = cgstgauge.errorgen_coefficients_in_gauge(
@@ -315,9 +315,9 @@ print(f"2 h_X(Y) = {2 * gen_table.query('gate == \"Gypi2\" and generator == \"H(
 
 The coherent ($H$) and stochastic ($S$) sectors are recovered within their uncertainties. The correlated ($C$) and active ($A$) coefficients of $\sqrt{Y}$ are at the few-$10^{-3}$ level and are only resolved at the $2$--$3\sigma$ level with $10^3$ shots per circuit; they also carry the largest first-order truncation, since the active errors enter the observables only through the product of a decay rate and an asymptote shift.
 
-## Notes and caveats
+## Caveats
 
-* **First-order validity.** The extraction formulas for $\beta$, `c_sum` and `active_combo` are first order in the error rates; with errors at the $10^{-2}$ scale, expect $O(10^{-4})$ truncation on top of statistical error. The germ eigenvalues themselves ($\lambda$'s, $\theta$, $\alpha$, $\omega$) are not truncated: they are exact spectral properties, fit directly.
-* **Sampling variance.** Character weighting is a signed/complex average, so its statistical error at fixed shots exceeds a plain probability estimate's. The `'exact'` quadrature mode removes the character-sampling component entirely for cyclic germs, at the cost of a fixed circuits-per-depth; the stratification and common-random-number refinements do most of that work for the Monte-Carlo modes.
-* **Reduced-mode bias.** The $k_0$-round synthetic projector leaks into unwanted irreps at $O(r^{k_0})$ for per-germ infidelity $r$; with $k_0 = 4$ and $r \sim 10^{-2}$ this is negligible against shot noise.
-* **Other gate sets.** The generic design builder and linear inversion used in the last section work for any gate set whose germs have finite ideal order; see the *Character GST for arbitrary finite-order gate sets* tutorial. The character utilities (`pygsti.tools.chartools`) support arbitrary finite abelian groups (products of cyclics), which is what the multi-qubit constructions need; non-abelian groups and degenerate (multiplicity $>1$) irrep blocks are future work.
+* The extraction formulas for $\beta$, `c_sum` and `active_combo` are first order in the error rates. With errors at the $10^{-2}$ scale, expect $O(10^{-4})$ truncation on top of statistical error. The germ eigenvalues themselves ($\lambda$'s, $\theta$, $\alpha$, $\omega$) are exact spectral properties, fit directly, with no truncation.
+* Character weighting is a signed, complex average, so its statistical error at fixed shots exceeds that of a plain probability estimate. The `'exact'` quadrature mode removes the character-sampling component entirely for cyclic germs, at the cost of a fixed number of circuits per depth. For the Monte-Carlo modes, the stratification and common-random-number refinements do most of that work.
+* The $k_0$-round synthetic projector of `'reduced'` mode leaks into unwanted irreps at $O(r^{k_0})$ for per-germ infidelity $r$. With $k_0 = 4$ and $r \sim 10^{-2}$ this is negligible against shot noise.
+* The generic design builder and linear inversion used in the last section work for any gate set whose germs have finite ideal order; see the *Character GST for arbitrary finite-order gate sets* tutorial. The character utilities in `pygsti.tools.chartools` support arbitrary finite abelian groups (products of cyclics), which is what multi-qubit constructions need. Non-abelian groups and degenerate (multiplicity $>1$) irrep blocks are future work.
