@@ -349,7 +349,8 @@ def create_1q_szy_cgst_design(depths, circuits_per_depth, mode='reduced',
     """
     The cGST experiment design for the one-qubit {S, sqrt(Y)} gate set.
 
-    Builds the experiments of the cGST manuscript for `S = Gzpi2` and
+    Builds the germ-decay sub-experiments that jointly amplify every error
+    parameter of the {S, sqrt(Y)} gate set, with `S = Gzpi2` and
     `sqrt(Y) = Gypi2` (plus, optionally, idle-interleaved variants using `Gi`):
 
     * `'s_t1'`, `'s_ramsey'` : trivial- and complex-irrep decays of the S germ
@@ -701,12 +702,39 @@ def extract_szy_error_parameters(decay_results):
     """
     Invert 1Q {S, sqrt(Y)} cGST decay fits into standard-gauge error parameters.
 
-    Implements (to first order in the error rates) the parameter extraction of
-    the cGST manuscript for the gate set built by
-    :func:`create_1q_szy_cgst_design`.  Intrinsic parameters come directly from
-    the single-germ decays; relational parameters come from the triangle-germ
-    ("triangle equations") and idle-interleaved decays combined with the
-    single-germ results.
+    Implements (to first order in the error rates) the closed-form parameter
+    extraction for the gate set built by :func:`create_1q_szy_cgst_design`.
+    Intrinsic parameters come directly from the single-germ decays; relational
+    parameters come from the triangle-germ ("triangle equations") and
+    idle-interleaved decays combined with the single-germ results.
+
+    The parameters are those of the standard-gauge error channels.  In the
+    Pauli basis (I, X, Y, Z), S's error channel is
+
+        E_S = [[     1,                  0,                   0,  0      ],
+               [     0,  lambda2*cos(theta), -lambda2*sin(theta),  0      ],
+               [     0,  lambda2*sin(theta),  lambda2*cos(theta),  0      ],
+               [    -a,                  0,                   0,  lambda1]]
+
+    -- an over-rotation `theta` about Z, a decay `lambda1` along the rotation
+    axis and `lambda2` in the equatorial plane, and an active
+    (amplitude-damping-type) shift `a` along Z.  The noisy gate is
+    `E_S @ R_z(pi/2)`.
+
+    The noisy sqrt(Y) is `R_x(beta) @ E_sto @ R_y(pi/2 + alpha) @ R_x(-beta)`,
+    where `alpha` is its over-rotation, `beta` is the angle between the two
+    gates' rotation axes (the relational coherent error, placed along X by the
+    standard gauge), and
+
+        E_sto = [[    1,     0,     0,     0 ],
+                 [a_rel, 1 - r2,  c_xy,  c_xz],
+                 [ a_y,   c_xy, 1 - r1,  c_yz],
+                 [a_rel,  c_xz,  c_yz, 1 - r2]]
+
+    so `r1` is the stochastic decay along sqrt(Y)'s own (Y) axis and `r2` the
+    decay of the two orthogonal components, `a_y` and `a_rel` are its axial and
+    relational active errors, and `c_xy`, `c_xz`, `c_yz` are the correlated
+    stochastic rates.
 
     Parameters
     ----------
@@ -739,16 +767,15 @@ def extract_szy_error_parameters(decay_results):
     params['lambda2'] = mag('s_ramsey')
     # r1/r2 are defined OPERATIONALLY as sqrt(Y)'s eigenvalue deficits: r1 on
     # the branch parallel to its rotation axis, r2 on the orthogonal (Ramsey)
-    # branches.  (At first order these are combinations of the manuscript's
-    # E_sto matrix entries, whose r1/r2 placement its own review flags as
-    # inconsistent with the experiment-mapping table.)
+    # branches.  (At first order these are combinations of the entries of
+    # sqrt(Y)'s stochastic block E_sto, with r1 built from the rate along the
+    # rotation axis and r2 from the two orthogonal ones.)
     params['r1'] = 1.0 - mag('y_t1')
     params['r2'] = 1.0 - mag('y_ramsey')
-    # S's active (amplitude-damping-type) error from the T1 asymptote.  With
-    # the manuscript's channel convention (E_S[3,0] = -a, eq:S_Channel) the
-    # asymptote satisfies C = 1/2 - a/(2(1-lambda1)), so a = (1-lambda1)(1-2C):
-    # the manuscript's a = (1-lambda1)(2C-1) has the sign flipped relative to
-    # its own channel convention (adjudicated numerically in test_cgst.py).
+    # S's active (amplitude-damping-type) error from the T1 asymptote.  In the
+    # standard-gauge form of the S error channel the active shift sits in the Z
+    # row of the affine column, E_S[3, 0] = -a, so the trivial-irrep signal
+    # decays to C = 1/2 - a/(2(1-lambda1)) and hence a = (1-lambda1)(1-2C).
     params['a'] = (1.0 - params['lambda1']) * (1.0 - 2.0 * asymptote('s_t1'))
 
     # -- relational parameters from the triangle germ (Z3), first order.
@@ -758,9 +785,11 @@ def extract_szy_error_parameters(decay_results):
     params['omega_deviation'] = delta_omega
     params['beta'] = (_np.sqrt(3.0) * delta_omega - params['theta'] - params['alpha']) / 2.0
     # Correlated-stochastic sum from the splitting of the triangle's decay
-    # eigenvalues.  Numerical adjudication (test_cgst.py) of the manuscript's
-    # eq:Triangle_Equations gives  lam1_tri - lam2_tri = c_xy + c_xz + c_yz
-    # exactly at first order (coefficient 1, not the manuscript's 2/3).
+    # eigenvalues.  The triangle germ rotates about (X+Y+Z)/sqrt(3), which
+    # weights the three correlated rates equally: at first order the trivial
+    # branch is shifted by +(2/3)*c_sum and the complex branches by
+    # -(1/3)*c_sum, so the splitting is exactly
+    #   lam1_tri - lam2_tri = c_xy + c_xz + c_yz.
     lam1_tri, lam2_tri = mag('tri_t1'), mag('tri_ramsey')
     params['lambda1_triangle'] = lam1_tri
     params['lambda2_triangle'] = lam2_tri
@@ -768,9 +797,10 @@ def extract_szy_error_parameters(decay_results):
     # Relational active-error combination from the triangle T1 asymptote.  The
     # fixed-point shift of the triangle germ (with the inter-gate rotation of
     # S's shift vector accounted for) gives, at first order,
-    #   -a + a_y + 2*a_rel = 3 * (1 - lam1_tri) * (2*C_tri - 1),
-    # a different weighting than the manuscript's flagged equation (verified
-    # numerically in test_cgst.py).
+    #   -a + a_y + 2*a_rel = 3 * (1 - lam1_tri) * (2*C_tri - 1).
+    # The minus sign on `a` is because sqrt(Y) rotates S's active shift from
+    # the z axis onto the x axis before it is projected onto the triangle axis
+    # (x + y + z)/sqrt(3).
     params['active_combo'] = 3.0 * (1.0 - lam1_tri) * (2.0 * asymptote('tri_t1') - 1.0)
 
     # -- idle characterization: interleaved-vs-bare phase differences give the
@@ -921,14 +951,14 @@ class CharacterGST(_proto.Protocol):
     :class:`CharacterGSTDesign` and, optionally, inverts the collection of
     fitted decays into gate-set error parameters.
 
-    Two inversions are available.  The `'szy'` one implements the cGST
-    manuscript's closed-form parameter extraction for the one-qubit
-    {S, sqrt(Y)} gate set (see :func:`extract_szy_error_parameters`).  The
+    Two inversions are available.  The `'szy'` one is the closed-form
+    parameter extraction for the one-qubit {S, sqrt(Y)} gate set (see
+    :func:`extract_szy_error_parameters`).  The
     `'linear'` one is generic: it solves the first-order linear system relating
     the fitted decays to the gates' elementary error generator coefficients
     (see :mod:`pygsti.algorithms.cgstinversion`), and reports the resulting
-    gate set and its error generator coefficients in the manuscript's standard
-    gauge (see :mod:`pygsti.algorithms.cgstgauge`).
+    gate set and its error generator coefficients in the cGST standard gauge
+    (see :mod:`pygsti.algorithms.cgstgauge`).
 
     Parameters
     ----------
@@ -953,7 +983,8 @@ class CharacterGST(_proto.Protocol):
 
     reference_gate : str or Label, optional
         The gate brought to the commuting gauge when fixing the standard gauge
-        (the S gate, `'Gzpi2'`, in the manuscript).  Required for `'linear'`.
+        (the S gate, `'Gzpi2'`, for the {S, sqrt(Y)} gate set).  Required for
+        `'linear'`.
 
     other_gates : list, optional
         The gates whose errors are minimized by the second stage of the

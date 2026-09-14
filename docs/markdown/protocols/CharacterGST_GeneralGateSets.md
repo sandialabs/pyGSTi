@@ -15,7 +15,7 @@ jupyter:
 
 # Character GST for arbitrary finite-order gate sets
 
-The `CharacterGST` tutorial builds the cGST manuscript's hand-designed one-qubit $\{S, \sqrt{Y}\}$ experiment and inverts it with closed-form formulas. This tutorial does the same job for *any* gate set, automatically.
+The `CharacterGST` tutorial builds a hand-designed one-qubit $\{S, \sqrt{Y}\}$ experiment and inverts it with closed-form formulas. This tutorial does the same job for *any* gate set, automatically.
 
 ## The idea
 
@@ -25,7 +25,7 @@ Every cGST observable is an eigenvalue of a *noisy germ* on one irrep of the fin
 2. **irrep enumeration** from the ideal germ's eigenvalues (`chartools.germ_irrep_multiplicities`, `cgstdesign.germ_irreps`);
 3. **fiducial choice** maximizing the ideal decaying signal on each (germ, irrep) block (`cgstdesign.select_cgst_fiducials`);
 4. **first-order inversion** of the fitted decays into error generator coefficients (`cgstinversion`), followed by
-5. **gauge fixing** into the manuscript's standard gauge (`cgstgauge`).
+5. **gauge fixing** into the cGST standard gauge (`cgstgauge`).
 
 Steps 1–3 are `cgstdesign.create_cgst_design`; steps 4–5 are `CharacterGST(gateset_inversion='linear')`.
 
@@ -55,7 +55,7 @@ def short(circuit_str, qubit='Q0'):
 
 ## Germs, groups and irreps of the XY gate set
 
-The gate set is the standard $\{X_{\pi/2}, Y_{\pi/2}\}$ one — not the manuscript's. `find_cgst_germs` runs pyGSTi's ordinary greedy germ search over the finite-order candidates only, so the result is amplificationally complete *and* usable by cGST:
+The gate set here is the standard $\{X_{\pi/2}, Y_{\pi/2}\}$ one, rather than the $\{S, \sqrt{Y}\}$ set of the `CharacterGST` tutorial. `find_cgst_germs` runs pyGSTi's ordinary greedy germ search over the finite-order candidates only, so the result is amplificationally complete *and* usable by cGST:
 
 ```python
 pspec = QubitProcessorSpec(1, ['Gxpi2', 'Gypi2'], qubit_labels=['Q0'])
@@ -136,9 +136,9 @@ for gate in ('Gxpi2', 'Gt'):
               superop, chartools.germ_group_order(superop)))
 ```
 
-## The manuscript's gate set, idle included
+## A gate set with an idle
 
-The manuscript's $\{S, \sqrt{Y}\}$ set comes with an idle, $G_I$. A bare idle can never be a cGST germ — its ideal product is the identity, of group order 1, with nothing to filter on — so `finite_order_candidate_germs` excludes it (and `create_cgst_design` skips it with a warning if it is passed explicitly). The idle's twelve error-generator coefficients are amplified instead by finite-order germs that *contain* it, which is exactly what the search returns once the candidate list is deduplicated correctly:
+The $\{S, \sqrt{Y}\}$ set of the `CharacterGST` tutorial comes with an idle, $G_I$. A bare idle can never be a cGST germ — its ideal product is the identity, of group order 1, with nothing to filter on — so `finite_order_candidate_germs` excludes it (and `create_cgst_design` skips it with a warning if it is passed explicitly). The idle's twelve error-generator coefficients are amplified instead by finite-order germs that *contain* it, which is exactly what the search returns once the candidate list is deduplicated correctly:
 
 ```python
 i_pspec = QubitProcessorSpec(1, ['Gzpi2', 'Gypi2', 'Gi'], qubit_labels=['Q0'])
@@ -276,18 +276,18 @@ top.to_dataframe().query("type == 'error generator'").head()
 
 ## What the standard gauge is
 
-Reporting error generators requires a gauge convention, and cGST uses the manuscript's (Apps. "Construction of the commuting gauge" and "Construction of the standard gauge"), implemented in `cgstgauge`:
+Reporting error generators requires a gauge convention. cGST uses the *standard gauge*, built in two stages by `cgstgauge`:
 
-* **Stage 1 (exact).** The *reference gate* is brought to the gauge in which its error channel commutes with its ideal implementation, by matching eigenspaces of the noisy and ideal superoperators (`commuting_gauge_transform`). Here that is `reference_gate='Gxpi2'`; in the manuscript it is $S$.
-* **Stage 2 (least squares).** What remains is the group of TP gauge transformations commuting with the ideal reference gate (`tp_commutant_basis`; four-dimensional for a one-qubit $\pi/2$ rotation). It is spent minimizing the summed squared Frobenius error of the *other* gates. For $\{S, \sqrt{Y}\}$ this reproduces the manuscript's $\xi, \zeta, \eta$ and puts the relational coherent error along $X$.
+* **Stage 1 (exact).** The *reference gate* is brought to the gauge in which its error channel commutes with its ideal implementation, by matching eigenspaces of the noisy and ideal superoperators (`commuting_gauge_transform`). Here that is `reference_gate='Gxpi2'`; for the $\{S, \sqrt{Y}\}$ set it is $S$.
+* **Stage 2 (least squares).** What remains is the group of TP gauge transformations commuting with the ideal reference gate (`tp_commutant_basis`; four-dimensional for a one-qubit $\pi/2$ rotation). It is spent minimizing the summed squared Frobenius error of the *other* gates. For $\{S, \sqrt{Y}\}$ this fixes the equatorial scale $\xi$, the axis scale $\zeta$ and the axis shift $\eta$, and puts the relational coherent error along $X$.
 
-One direction is not fixed by either stage, a subtlety the manuscript does not spell out: gauge transformations commuting with *every* ideal gate — for an irreducible one-qubit gate set, the uniform Bloch-ball scaling $\mathrm{diag}(0,1,1,1)$ — do not move the gate errors at first order, and the Frobenius objective actually decreases monotonically as that scale shrinks. `standard_gauge_transform` splits those directions off and pins them by minimizing the distance of the model's SPAM from the target's (`fix_spam_gauge=True`, the default), which leaves them essentially untouched for cGST's reconstructions (whose SPAM is ideal) while making the gauge fixing well posed.
+One direction is fixed by neither stage: gauge transformations commuting with *every* ideal gate — for an irreducible one-qubit gate set, the uniform Bloch-ball scaling $\mathrm{diag}(0,1,1,1)$ — do not move the gate errors at first order, and the Frobenius objective actually decreases monotonically as that scale shrinks. `standard_gauge_transform` splits those directions off and pins them by minimizing the distance of the model's SPAM from the target's (`fix_spam_gauge=True`, the default), which leaves them essentially untouched for cGST's reconstructions (whose SPAM is ideal) while making the gauge fixing well posed.
 
 ## Notes and caveats
 
 * **First order only.** The inversion linearizes the observables about the ideal gate set, so the estimates carry an $O(\text{rate}^2)$ bias — but the relevant rate is the error *per germ repetition*, which for a length-7 germ is several times the per-gate rate. That bias is what the nonzero residual norm above reports. Re-running this notebook with `sample_error='none'` isolates it: the Hamiltonian, stochastic and correlation coefficients then come back to $1$–$2 \times 10^{-5}$, and the active sector to $\sim 3 \times 10^{-4}$ (see the next bullet) — i.e. at these rates, below the statistical error of a few thousand shots per circuit for everything but the active terms.
 * **Unconstrained coefficients.** The least-squares solve knows nothing about complete positivity, so `S` coefficients can and do come out slightly negative when their true value is at or below the noise level. That is expected, not a failure.
-* **Active (A-type) coefficients are the least accurate.** Their only first-order signature is the trivial-block observable $(1-\lambda)(B - C)$, a *product* of two first-order quantities, so its inversion carries an $O(\text{rate}^2)$ bias with a much larger prefactor than the eigenvalue observables: about $14\,\text{rate}^2$ on the manuscript's $\{S, \sqrt{Y}\}$ model (verified to scale as $\text{rate}^2$ by halving every rate, and unchanged when `design_matrix_step` is raised to $10^{-3}$, so it is truncation, not finite-difference error). At $10^{-3}$ rates that is $\sim 10^{-5}$ — small, but the Hamiltonian sector does two orders of magnitude better.
+* **Active (A-type) coefficients are the least accurate.** Their only first-order signature is the trivial-block observable $(1-\lambda)(B - C)$, a *product* of two first-order quantities, so its inversion carries an $O(\text{rate}^2)$ bias with a much larger prefactor than the eigenvalue observables: about $14\,\text{rate}^2$ on the $\{S, \sqrt{Y}\}$ model (verified to scale as $\text{rate}^2$ by halving every rate, and unchanged when `design_matrix_step` is raised to $10^{-3}$, so it is truncation, not finite-difference error). At $10^{-3}$ rates that is $\sim 10^{-5}$ — small, but the Hamiltonian sector does two orders of magnitude better.
 * **Degenerate blocks.** Nontrivial irreps of multiplicity $> 1$ (and trivial blocks of multiplicity $\ne 2$, which includes most multi-qubit germs) are designed — the fiducial grid is emitted — but not analyzed; `include_degenerate_blocks=False` drops them. Matrix-valued decays are future work, and until then a germ set certified amplificationally complete by pyGSTi can still leave a direction unmeasured (see the idle example above).
 * **The Jacobian is the expensive step.** Building the design matrix means re-fitting every decay curve $2 \times 24$ times: about 15 s for this 10-child one-qubit design (most of the 'linear inversion' time above); propagating the uncertainties through the linear solve and the gauge fit costs a couple of seconds more. It depends only on the design and the target model, so `CharacterGST` caches it in a class-level dictionary shared by all instances (and never serialized), keyed by the design's germs, fiducials, depths, sampling mode *and realized random germ powers* and by the target model's gates and SPAM; re-running the protocol on the same design, e.g. to change `bootstrap_samples`, is cheap.
 * **Design the design for the Jacobian.** A trivial-block decay curve bends away from a straight line only by $\sim((1-\lambda) k_{\max})^2$, so the finite differences need `design_matrix_step * max(depths)` to be at least $\sim 10^{-2}$: use depths out to $\sim 128$. Keep the default `mode='exact'`: its quadrature over germ powers removes character-sampling noise entirely, which both sharpens the Jacobian and makes the whole pipeline deterministic. A `'reduced'`-mode design still works (the same realized germ powers enter the data and the Jacobian, so the inversion is self-consistent) but its Monte-Carlo projector leaves an $O(\text{error})$ ripple in every decay curve: the protocol warns, the estimates come out roughly 20–40$\times$ less accurate than in exact mode, and a spurious extra singular value of order 1 makes the reported rank unreliable. `'full'`-mode designs are rejected: the Fourier-operator eigenvalue inversion they require is not first-order linearizable.

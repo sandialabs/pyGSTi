@@ -141,13 +141,11 @@ for name, true_val in zip(('d_iz', 'd_zi', 'd_zz'), deviations):
           f"   (injected {true_val:+.5f})")
 ```
 
-## The manuscript figure
+## Phase-estimation summary figure
 
 Panel (a): the twelve-peak DFT of the unfiltered signal (why naive RPE is ambiguous). Panel (b): per-irrep RPE convergence of the character-filtered estimates toward the injected deviations, inside the $\pm\pi/2k$ RPE envelope.
 
 ```python
-import os
-
 colors = {irreps[0]: '#0072B2', irreps[1]: '#D55E00', irreps[2]: '#009E73'}
 fig, (ax_a, ax_b) = plt.subplots(2, 1, figsize=(3.4, 4.4))
 
@@ -177,11 +175,6 @@ for ax in (ax_a, ax_b):
     for spine in ('top', 'right'):
         ax.spines[spine].set_visible(False)
 fig.tight_layout()
-
-figdir = '../../../../new/figs'
-if os.path.isdir(figdir):
-    fig.savefig(os.path.join(figdir, 'CPE_Demo.pdf'), bbox_inches='tight')
-    print('saved', os.path.join(figdir, 'CPE_Demo.pdf'))
 ```
 
 ## Notes and caveats

@@ -126,7 +126,7 @@ class FindGermsTester(BaseCase):
         self.assertIn(_circ('Gzpi2'), deduped)
 
     def test_idle_gate_set_yields_an_ac_germ_set(self):
-        # the manuscript's gate set *with* its idle.  pyGSTi's own find_germs fails
+        # the {S, sqrt(Y)} gate set *with* its idle.  pyGSTi's own find_germs fails
         # here because its superoperator-only deduplication discards every germ
         # that amplifies the idle's errors; the cGST search must not.
         mdl = _model(('Gzpi2', 'Gypi2', 'Gi'))

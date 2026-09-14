@@ -34,8 +34,8 @@ def _standard_gauge_model(theta=0., alpha=0., beta=0., lam1=1., lam2=1., a=0.,
                           r1=0., r2=0., cxy=0., cxz=0., cyz=0., ay=0., arel=0.,
                           idle_angles=(0., 0., 0.)):
     """
-    An ExplicitOpModel whose S and sqrt(Y) gates are EXACTLY the manuscript's
-    standard-gauge channel forms (eq:S_Channel / eq:Y_Channel), so every
+    An ExplicitOpModel whose S and sqrt(Y) gates are EXACTLY the standard-gauge
+    channel forms (see :func:`extract_szy_error_parameters`), so every
     standard-gauge error parameter has a known injected value.
     """
     E_S = np.array([[1, 0, 0, 0],
@@ -193,10 +193,11 @@ class CharacterDecayTester(BaseCase):
 
 class SZYExtractionTester(BaseCase):
     """
-    These tests adjudicate, numerically, the manuscript's flagged sign/coefficient
-    ambiguities (eq:Triangle_Equations and the idle phase differences): the
-    formulas implemented in extract_szy_error_parameters must reproduce
-    parameters injected via the manuscript's own standard-gauge channel forms.
+    These tests pin down, numerically, the signs and coefficients of the
+    closed-form {S, sqrt(Y)} extraction (the triangle equations and the idle
+    phase differences): the formulas implemented in
+    extract_szy_error_parameters must reproduce parameters injected via the
+    standard-gauge channel forms.
     """
 
     injected = dict(theta=0.010, alpha=0.008, beta=0.006, lam1=1 - 0.020,
@@ -231,8 +232,10 @@ class SZYExtractionTester(BaseCase):
 
     def test_triangle_equation_signs(self):
         # c-dominated model: the triangle eigenvalue SPLITTING equals c_sum
-        # with coefficient +1 (adjudicating the manuscript's flagged 2/3 and
-        # sign).  A little uniform depolarization keeps the model CP -- with
+        # with coefficient +1, because the triangle axis (x+y+z)/sqrt(3)
+        # weights the three correlated rates equally (+2/3 c_sum on the trivial
+        # branch, -1/3 c_sum on the complex ones).  A little uniform
+        # depolarization keeps the model CP -- with
         # correlated errors alone the trivial branch GROWS (eigenvalue > 1)
         # and probabilities leave [0, 1].
         depol = dict(lam1=0.99, lam2=0.99, r1=0.01, r2=0.01)

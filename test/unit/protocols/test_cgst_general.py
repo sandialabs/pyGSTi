@@ -1,7 +1,7 @@
 """
 End-to-end cGST tests across *several* gate sets.
 
-`test_cgst.py` exercises the manuscript's one-qubit {S, sqrt(Y)} gate set.  This
+`test_cgst.py` exercises the one-qubit {S, sqrt(Y)} gate set.  This
 module checks that the generic pipeline -- finite-order germ search
 (`pygsti.algorithms.cgstdesign`), first-order linear inversion
 (`pygsti.algorithms.cgstinversion`) and standard-gauge fixing
@@ -15,7 +15,7 @@ tuned on:
 * {Gxpi2, Gypi2, Grot} with `Grot` an infinite-order (1 radian) rotation, which
   must never be used as a germ;
 
-and that on the manuscript's own gate set the generic pipeline agrees, to first
+and that on the {S, sqrt(Y)} gate set the generic pipeline agrees, to first
 order, with the closed-form extraction of `extract_szy_error_parameters`.
 
 The first-order design matrix is the expensive part of a linear run, so each
@@ -371,7 +371,7 @@ class FullModeRejectionTester(BaseCase):
 
 class IdleGateSetDesignTester(BaseCase):
     """
-    The manuscript's gate set *with* its idle, {S, sqrt(Y), I}, must be designable.
+    The {S, sqrt(Y)} gate set *with* an idle, {S, sqrt(Y), I}, must be designable.
 
     The bare idle has group order 1 and is never a germ; the idle's twelve error
     generator coefficients are amplified by finite-order germs that contain it,
@@ -481,15 +481,15 @@ class InfiniteOrderGermExclusionTester(BaseCase):
             self.assertTrue(len(circuit) >= 0)  # design is well formed
 
 
-def _manuscript_model(theta=0., alpha=0., beta=0., lam1=1., lam2=1., a=0., r1=0., r2=0.,
+def _standard_gauge_model(theta=0., alpha=0., beta=0., lam1=1., lam2=1., a=0., r1=0., r2=0.,
                       cxy=0., cxz=0., cyz=0., ay=0., arel=0.):
     """
-    The manuscript's standard-gauge {S, sqrt(Y)} channel forms, without an idle.
+    The standard-gauge {S, sqrt(Y)} channel forms, without an idle.
 
-    Identical to `test_cgst._standard_gauge_model` (including the corrected
-    eq:Y_Channel row placement: `r1` and `a_y` sit on the Y row, the rotation
-    axis of sqrt(Y)) but built on a two-gate processor spec, so that it can also
-    serve as the truth model of a *generic* linear-inversion run.
+    Identical to `test_cgst._standard_gauge_model` (including the sqrt(Y) row
+    placement: `r1` and `a_y` sit on the Y row, the rotation axis of sqrt(Y))
+    but built on a two-gate processor spec, so that it can also serve as the
+    truth model of a *generic* linear-inversion run.
     """
     E_S = np.array([[1, 0, 0, 0],
                     [0, lam2 * np.cos(theta), -lam2 * np.sin(theta), 0],
@@ -511,11 +511,11 @@ class SzyVersusLinearInversionTester(BaseCase):
     """
     The generic linear pipeline agrees with `extract_szy_error_parameters`.
 
-    Both analyses are run on noiseless data from the *same* manuscript
-    standard-gauge truth model: the closed-form one on the hand-built
+    Both analyses are run on noiseless data from the *same* standard-gauge
+    truth model: the closed-form one on the hand-built
     `create_1q_szy_cgst_design` experiment set, the generic one on a
     `create_cgst_design` experiment set for the same gate set.  Every parameter
-    of the manuscript's channel forms is then read back off the linear
+    of the standard-gauge channel forms is then read back off the linear
     estimate's standard-gauge gate matrices and compared.  Both routes are
     first order in the error rates, so they may differ by `O(rate**2)`.
     """
@@ -541,10 +541,10 @@ class SzyVersusLinearInversionTester(BaseCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.truth = _manuscript_model(**cls.injected)
+        cls.truth = _standard_gauge_model(**cls.injected)
         cls.target = _target(('Gzpi2', 'Gypi2'))
 
-        # -- closed-form ('szy') analysis on the manuscript's own design
+        # -- closed-form ('szy') analysis on the hand-built {S, sqrt(Y)} design
         szy_design = create_1q_szy_cgst_design(DEPTHS, 12, mode='exact',
                                                include_idle=False, seed=19)
         ds = pygsti.data.simulate_data(cls.truth, szy_design.all_circuits_needing_data,
@@ -559,15 +559,15 @@ class SzyVersusLinearInversionTester(BaseCase):
             cls.design = cgstdesign.create_cgst_design(
                 cls.target, DEPTHS, 12, mode='exact', num_projection_rounds=3, seed=0)
         cls.top = _run_linear(cls.truth, cls.target, cls.design, 'Gzpi2')
-        cls.linear = cls._read_manuscript_parameters(cls.top, cls.target)
+        cls.linear = cls._read_channel_parameters(cls.top, cls.target)
 
     @staticmethod
-    def _read_manuscript_parameters(top, target):
+    def _read_channel_parameters(top, target):
         """
-        Read the manuscript's channel parameters off a standard-gauge estimate.
+        Read the standard-gauge channel parameters off a standard-gauge estimate.
 
         `theta`, `lambda1`, `lambda2` and `a` come straight from the S gate's
-        error channel `E_S = Lam_S S_ideal^{-1}` (eq:S_Channel), whose Bloch
+        error channel `E_S = Lam_S S_ideal^{-1}`, whose Bloch
         block is `lam2 R_z(theta)` on the equator and `lam1` along the axis,
         with `E_S[3, 0] = -a`.
 
@@ -577,7 +577,8 @@ class SzyVersusLinearInversionTester(BaseCase):
         sqrt(Y) germ.
 
         `beta` -- the angle between the two gates' rotation axes -- is *not*
-        directly a matrix entry, because eq:Y_Channel conjugates by `R_x(beta)`.
+        directly a matrix entry, because the sqrt(Y) channel form conjugates by
+        `R_x(beta)`.
         Expanding `Lam_Y = R_x(beta) E_sto R_y(pi/2 + alpha) R_x(-beta)` to first
         order and using `R_y(pi/2) X R_y(-pi/2) = -Z` gives an error generator
         `beta*G_x + alpha*G_y + beta*G_z + (E_sto - 1)`, where `G_P` generates

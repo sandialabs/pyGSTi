@@ -53,7 +53,7 @@ from pygsti.tools import chartools as _ct
 # limit at the ideal point and its finite-difference derivative diverges like
 # 1/step.  What IS linear is the product
 #
-#     active := (1 - lam) * (B - C)   [ = (1 - lam)/2 + a/2 for the manuscript's
+#     active := (1 - lam) * (B - C)   [ = (1 - lam)/2 + a/2 for the standard-gauge
 #                                       S-gate channel, where B = 1 ]
 #
 # so that is the quantity this module uses (quantity name `'active'`).  It
@@ -797,7 +797,7 @@ def invert_first_order(y, y_ideal, jacobian, y_stderr=None, rcond=1e-8):
     the germ set fails to amplify.  The minimum-norm solution returned here is
     therefore *a* representative of the estimated gauge orbit -- specifically
     the one of smallest total error generator (Euclidean) norm.  Converting it
-    to a physically meaningful gauge (e.g. the manuscript's standard gauge) is
+    to a physically meaningful gauge (e.g. the cGST standard gauge) is
     a separate, downstream step.
 
     Parameters

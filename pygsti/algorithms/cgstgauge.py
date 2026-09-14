@@ -21,9 +21,7 @@ from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as 
 from pygsti.models.gaugegroup import FullGaugeGroupElement as _FullGaugeGroupElement
 from pygsti.tools import optools as _ot
 
-# The cGST manuscript reports gate error parameters in a "standard gauge" that is
-# built in two stages (manuscript Apps. "Construction of the commuting gauge" and
-# "Construction of the standard gauge"):
+# cGST reports gate error parameters in a "standard gauge", built in two stages:
 #
 #  1. A *reference gate* (the S gate for the {S, sqrt(Y)} gate set) is brought to the
 #     "commuting gauge", in which its error channel commutes with the ideal gate.  This
@@ -34,13 +32,13 @@ from pygsti.tools import optools as _ot
 #
 #  2. The residual freedom is spent on the *other* gates: the summed Frobenius norm of
 #     their errors (transformed channel minus ideal gate) is minimized over that group.
-#     For {S, sqrt(Y)} these are the manuscript's transformations A_1 (equatorial scale
-#     xi), A_2 (axis scale zeta and axis shift eta) and A_3 (equatorial rotation psi).
-#     Including psi in the same least-squares problem places the sqrt(Y) axis tilt in
-#     the Y-Z plane, i.e. the relational coherent error along X, which is exactly the
-#     manuscript's convention (`standard_gauge_transform`).
+#     For {S, sqrt(Y)} the residual transformations are an equatorial scale (xi), an
+#     axis scale together with an axis shift (zeta and eta), and an equatorial rotation
+#     (psi).  Including psi in the same least-squares problem places the sqrt(Y) axis
+#     tilt in the Y-Z plane, i.e. the relational coherent error along X
+#     (`standard_gauge_transform`).
 #
-# One subtlety is not spelled out in the manuscript.  Gauge directions that commute with
+# One subtlety is worth spelling out.  Gauge directions that commute with
 # *every* ideal gate (for an irreducible single-qubit gate set this is the uniform
 # scaling of the Bloch ball, diag(0, 1, 1, 1)) do not move any gate at first order in
 # the noise, so they are not fixed by the gate errors: they only rescale the affine
@@ -173,8 +171,7 @@ def commuting_gauge_transform(noisy_superop, ideal_superop, tol=1e-6):
     """
     Gauge transformation bringing a noisy gate to the *commuting gauge* of its ideal counterpart.
 
-    This is the exact construction of the cGST manuscript's appendix "Construction of
-    the commuting gauge".  Writing the noisy gate `Lam` and the ideal gate `G` in
+    This is an exact construction.  Writing the noisy gate `Lam` and the ideal gate `G` in
     eigen-decomposed form, each noisy eigenvalue is paired with the ideal eigenvalue
     cluster it is closest to, and the transformation `A = W V^{-1}` maps the noisy
     eigenvectors `V` onto (ideal-eigenspace) vectors `W`, so that `A Lam A^{-1}` is
@@ -194,7 +191,7 @@ def commuting_gauge_transform(noisy_superop, ideal_superop, tol=1e-6):
     the near-degenerate cluster {1, lambda_1} of, e.g., the S gate this automatically
     pairs the exact unit eigenvalue with the identity direction; the noisy fixed point
     is mapped to its projection onto the ideal eigenvalue-1 eigenspace, which is what
-    produces the active-error entry of the manuscript's commuting form.
+    produces the active-error entry of the commuting form.
 
     Parameters
     ----------
@@ -294,9 +291,8 @@ def tp_commutant_basis(ideal_superop, tol=1e-8):
     gate has been brought to its commuting gauge.
 
     For a single-qubit pi/2 rotation such as the S gate this space is four
-    dimensional and corresponds to the manuscript's residual transformations: an
-    equatorial scale (A_1, xi), an axis scale and an axis shift (A_2, zeta and eta),
-    and an equatorial rotation (A_3, psi).  For a reference gate with a degenerate
+    dimensional and consists of an equatorial scale (xi), an axis scale and an axis
+    shift (zeta and eta), and an equatorial rotation (psi).  For a reference gate with a degenerate
     nontrivial eigenvalue (e.g. a pi rotation) the commutant, and hence this basis,
     is larger.
 
@@ -329,14 +325,14 @@ def tp_commutant_basis(ideal_superop, tol=1e-8):
 def standard_gauge_transform(model, target_model, reference_gate, other_gates=None,
                              return_info=False, fix_spam_gauge=True):
     """
-    Gauge transformation bringing `model` to the cGST manuscript's *standard gauge*.
+    Gauge transformation bringing `model` to the cGST *standard gauge*.
 
     The transformation is built in two stages and returned as `A = A2 @ A1`
     (apply `A1` first):
 
     * **Stage 1.** `A1 = commuting_gauge_transform(Lam_ref, G_ref)` brings the
       reference gate to the gauge in which its error channel commutes with the ideal
-      gate exactly (manuscript App. "Construction of the commuting gauge").
+      gate exactly.
 
     * **Stage 2.** The residual freedom is the group of TP gauge transformations that
       commute with the ideal reference gate, generated by `tp_commutant_basis(G_ref)`.
@@ -345,19 +341,15 @@ def standard_gauge_transform(model, target_model, reference_gate, other_gates=No
 
           sum_g || A2 A1 Lam_g A1^{-1} A2^{-1} - G_g ||_F^2,
 
-      is minimized (manuscript App. "Construction of the standard gauge", which
-      phrases this as minimizing the L2 norm of the sqrt(Y) channel; as the commuting
-      gauge appendix explains, this is a least-squares removal of the gauge-movable
-      part of the error, and the objective used here is the corresponding one with the
-      ideal gate subtracted).  For the {S, sqrt(Y)} gate set with reference gate S this
-      reproduces the manuscript's construction: the equatorial scale xi, the axis scale
-      zeta and the axis shift eta minimize the sqrt(Y) error, and the equatorial
-      rotation psi (the manuscript's A_3) is fixed by the same minimization, which
-      places the relational coherent error along X, i.e. the sqrt(Y) axis tilt in the
-      Y-Z plane.  The optimization starts at the identity, where the objective is
+      is minimized.  This is a least-squares removal of the gauge-movable part of the
+      remaining gates' errors.  For the {S, sqrt(Y)} gate set with reference gate S the
+      equatorial scale xi, the axis scale zeta and the axis shift eta minimize the
+      sqrt(Y) error, and the equatorial rotation psi is fixed by the same minimization,
+      which places the relational coherent error along X, i.e. the sqrt(Y) axis tilt in
+      the Y-Z plane.  The optimization starts at the identity, where the objective is
       already close to its minimum because stage 1 tends to the identity as the noise
       vanishes.  The stationary conditions of this objective are, to first order,
-      exactly the symmetries of the manuscript's sqrt(Y) channel form: the X and Z
+      exactly the symmetries of the standard-gauge sqrt(Y) channel form: the X and Z
       rows carry equal Ramsey decays (r_2) and equal relational active errors (a_rel),
       with the second-order residuals delta and delta' determined by the minimization.
 
@@ -392,8 +384,8 @@ def standard_gauge_transform(model, target_model, reference_gate, other_gates=No
         The ideal model, with the same operation labels and basis.
 
     reference_gate : Label or str
-        The gate brought to the commuting gauge in stage 1 (the S gate, `'Gzpi2'`, in
-        the manuscript).  A bare gate name is resolved against the target model's
+        The gate brought to the commuting gauge in stage 1 (the S gate, `'Gzpi2'`, for
+        the {S, sqrt(Y)} gate set).  A bare gate name is resolved against the target model's
         operation labels.
 
     other_gates : list of (Label or str), optional

@@ -30,13 +30,15 @@ def _target():
     return create_explicit_model(_pspec(), simulator='matrix')
 
 
-def _manuscript_model(theta=0., alpha=0., beta=0., lam1=1., lam2=1., a=0.,
+def _standard_gauge_model(theta=0., alpha=0., beta=0., lam1=1., lam2=1., a=0.,
                       r1=0., r2=0., cxy=0., cxz=0., cyz=0., ay=0., arel=0.,
                       idle_angles=(0., 0., 0.)):
     """
-    The manuscript's {S, sqrt(Y)} model *in* the standard gauge: eq:S_Channel for S and
-    the corrected eq:Y_Channel for sqrt(Y) (a_rel and r_2 on the X and Z rows, a_y and
-    r_1 on the Y row; the second-order residuals delta, delta' set to zero).
+    The {S, sqrt(Y)} model *in* the standard gauge: the commuting channel form for S
+    (equatorial decay lam2 and over-rotation theta, axial decay lam1, active shift a)
+    and the stochastic-block form for sqrt(Y) (a_rel and r_2 on the X and Z rows, a_y
+    and r_1 on the Y row, the correlated rates off diagonal, and the axis tilt beta
+    about X; the second-order residuals delta, delta' set to zero).
     """
     E_S = np.array([[1, 0, 0, 0],
                     [0, lam2 * np.cos(theta), -lam2 * np.sin(theta), 0],
@@ -131,7 +133,7 @@ class CommutingGaugeTester(BaseCase):
         self.assertArraysAlmostEqual(A, np.identity(4))
 
     def test_already_commuting_model_is_fixed_point(self):
-        Lam = _manuscript_model(**_INJECTED).operations[('Gzpi2', 'Q0')].to_dense()
+        Lam = _standard_gauge_model(**_INJECTED).operations[('Gzpi2', 'Q0')].to_dense()
         A = cgstgauge.commuting_gauge_transform(Lam, self.S)
         self.assertArraysAlmostEqual(A, np.identity(4))
 
@@ -179,7 +181,7 @@ class TPCommutantBasisTester(BaseCase):
             E = expm(0.3 * K)
             self.assertArraysAlmostEqual(E[0, :], [1, 0, 0, 0])
             self.assertLess(np.abs(E @ S - S @ E).max(), 1e-12)
-        # the manuscript's A_1, A_2, A_3 generators all lie in the span
+        # the equatorial scale, axis scale/shift and equatorial rotation all lie in the span
         span = np.column_stack([K.ravel() for K in Ks])
         proj = span @ span.T
         gens = [np.diag([0, 1, 1, 0]),                         # xi : equatorial scale
@@ -198,11 +200,11 @@ class StandardGaugeTester(BaseCase):
 
     def setUp(self):
         self.target = _target()
-        self.model = _manuscript_model(**_INJECTED)
+        self.model = _standard_gauge_model(**_INJECTED)
         self.rng = np.random.default_rng(2026)
 
-    def test_manuscript_model_is_nearly_fixed(self):
-        # the corrected manuscript form is a first-order stationary point of the stage-2
+    def test_standard_gauge_model_is_nearly_fixed(self):
+        # the standard-gauge channel form is a first-order stationary point of the stage-2
         # objective: the transformation is within O(eps^2) of the identity and only the
         # second-order residuals delta, delta' of the sqrt(Y) channel change
         A, info = cgstgauge.standard_gauge_transform(self.model, self.target, 'Gzpi2', ['Gypi2'],
@@ -220,7 +222,7 @@ class StandardGaugeTester(BaseCase):
         fixed = cgstgauge.fix_standard_gauge(self.model, self.target, 'Gzpi2', ['Gypi2'])
         self.assertLess(_max_gate_diff(fixed, self.model), 1e-4)
         Y = fixed.operations[('Gypi2', 'Q0')].to_dense()
-        # symmetric structure of the corrected eq:Y_Channel: equal X/Z affine entries and decays
+        # symmetric structure of the sqrt(Y) channel: equal X/Z affine entries and decays
         self.assertLess(abs(Y[1, 0] - Y[3, 0]), 1e-4)
         self.assertLess(abs(Y[1, 3] + Y[3, 1]), 1e-4)  # E_XX == E_ZZ  (Lam = E_sto Y)
 
@@ -237,7 +239,7 @@ class StandardGaugeTester(BaseCase):
             for elbl in fixed.povms['Mdefault'].keys():
                 self.assertArraysAlmostEqual(fixed.povms['Mdefault'][elbl].to_dense(),
                                              fixed0.povms['Mdefault'][elbl].to_dense())
-            # recovery of the manuscript matrices up to their second-order residuals
+            # recovery of the standard-gauge matrices up to their second-order residuals
             self.assertLess(_max_gate_diff(fixed, self.model), 1e-4)
             # the S gate is exactly in the commuting form again and the model is TP
             S = self.target.operations[('Gzpi2', 'Q0')].to_dense()
@@ -260,7 +262,7 @@ class StandardGaugeTester(BaseCase):
         hx_ref = None
         for phi in (0.0, 0.7, 2.0, -1.3, np.pi / 2):
             axis = np.cos(phi) * _sx + np.sin(phi) * _sz   # tilt about an equatorial axis
-            model = _manuscript_model(theta=0.01, lam1=0.995, lam2=0.99, r1=0.006, r2=0.004)
+            model = _standard_gauge_model(theta=0.01, lam1=0.995, lam2=0.99, r1=0.006, r2=0.004)
             model.operations[('Gypi2', 'Q0')] = _rot(axis, beta) @ model.operations[('Gypi2', 'Q0')].to_dense() @ _rot(axis, -beta)
             fixed = cgstgauge.fix_standard_gauge(model, self.target, 'Gzpi2', ['Gypi2'])
             co = cgstgauge.errorgen_coefficients_in_gauge(fixed, self.target)[Label('Gypi2', 'Q0')]
@@ -320,7 +322,7 @@ class StandardGaugeTester(BaseCase):
         # {Z(pi), Y(pi/2)} leaves the Y axis invariant, so the Y-axis scaling commutes
         # with every ideal gate and -- unlike the uniform Bloch scaling -- is invisible
         # to the ideal SPAM: two SPAM-only directions, and the standard gauge is not
-        # gauge invariant.  That must be flagged.
+        # gauge invariant.  That must raise a warning.
         pspec = QubitProcessorSpec(1, ['Gzpi', 'Gypi2'], qubit_labels=['Q0'])
         target = create_explicit_model(pspec, simulator='matrix')
         noise = {'Gzpi:Q0': {('H', 'Z'): 0.01, ('H', 'X'): 0.008, ('S', 'X'): 0.012, ('A', 'X', 'Z'): 0.003},
