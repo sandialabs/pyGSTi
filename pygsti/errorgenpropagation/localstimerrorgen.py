@@ -7,6 +7,8 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Any, Iterable, Optional, Sequence, Union
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel, GlobalElementaryErrorgenLabel as _GEEL,\
 LocalElementaryErrorgenLabel as _LEEL
 try:
@@ -18,7 +20,7 @@ from pygsti.tools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen
 
 
-def bel_str(pauli):
+def bel_str(pauli: stim.PauliString) -> str:
     """
     The plain-string form of a basis element label (BEL) given as a `stim.PauliString`, e.g.
     `stim.PauliString('+_XY')` -> `'IXY'`.
@@ -35,7 +37,7 @@ def bel_str(pauli):
     return str(pauli)[1:].replace('_', 'I')
 
 
-def bel_less_than(pauli1, pauli2):
+def bel_less_than(pauli1: stim.PauliString, pauli2: stim.PauliString) -> bool:
     """
     Returns True if `pauli1` sorts strictly before `pauli2` in the canonical basis element
     label ordering, i.e. lexicographically on the strings `bel_str` produces. This is the
@@ -53,7 +55,7 @@ def bel_less_than(pauli1, pauli2):
 # index of a label's `errorgen_type` in this table; `pygsti.tools.errgenproptools` uses
 # `4*type_idx_1 + type_idx_2` to index its per-type-pair dispatch tables for the error
 # generator commutator and composition, so the order here and there must agree.
-ERRORGEN_TYPE_INDICES = {'H': 0, 'S': 1, 'C': 2, 'A': 3}
+ERRORGEN_TYPE_INDICES: dict[str, int] = {'H': 0, 'S': 1, 'C': 2, 'A': 3}
 
 
 #TODO: Split this into a parent class and subclass for markovian and non-markovian
@@ -75,7 +77,8 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
     """
 
     @classmethod
-    def cast(cls, obj, sslbls=None):
+    def cast(cls, obj: Union[LocalStimErrorgenLabel, _LEEL, _GEEL, tuple, list],
+             sslbls: Optional[Sequence[Any]] = None) -> LocalStimErrorgenLabel:
         """
         Method for casting objects to instances of LocalStimErrorgenLabel.
 
@@ -146,8 +149,9 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         return cls(errorgen_type, stim_bels, initial_label=initial_label)
 
 
-    def __init__(self, errorgen_type, basis_element_labels, circuit_time=None, initial_label=None,
-                 label=None, pauli_str_reps=None):
+    def __init__(self, errorgen_type: str, basis_element_labels: Iterable[stim.PauliString],
+                 circuit_time: Optional[float] = None, initial_label: Optional[_ElementaryErrorgenLabel] = None,
+                 label: Optional[str] = None, pauli_str_reps: Optional[tuple[str, ...]] = None) -> None:
         """
         Create a new instance of  `LocalStimErrorgenLabel`
 
@@ -209,7 +213,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
     #TODO: Update various methods to account for additional metadata that has been added.
 
     @property
-    def initial_label(self):
+    def initial_label(self) -> _ElementaryErrorgenLabel:
         """
         The `ElementaryErrorgenLabel` this label originated from, prior to any propagation or
         transformation. Defaults to a `LocalElementaryErrorgenLabel` equivalent to this label,
@@ -219,11 +223,11 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             self._initial_label = self.to_local_eel()
         return self._initial_label
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         #return hash((self.errorgen_type, self._hashable_basis_element_labels))
         return hash(self._hashable_string_rep)
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
         """
         Restore from a pickled/copied state, migrating states written by older versions
         of this class:
@@ -244,7 +248,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         state['_hashable_string_rep'] = state['errorgen_type'] + ''.join(state['_hashable_basis_element_labels'])
         self.__dict__.update(state)
 
-    def bel_to_strings(self):
+    def bel_to_strings(self) -> tuple[str, ...]:
         """
         Convert the elements of `basis_element_labels` to python strings
         (from stim.PauliString(s)) and return as a tuple. 
@@ -252,7 +256,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         return tuple([bel_str(ps) for ps in self.basis_element_labels])
 
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         """
         Performs equality check by seeing if the two error gen labels have the same `errorgen_type`
         and `basis_element_labels` (compared through their cached string representations, which
@@ -283,7 +287,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
       
     #TODO: Rework this to not directly modify the weights, and only return the sign modifier.
     #      (Revisit after the error generator commutator/composition refactor, which touches all callers.)
-    def propagate_error_gen_tableau(self, slayer, weight):
+    def propagate_error_gen_tableau(self, slayer: stim.Tableau, weight: float) -> tuple[LocalStimErrorgenLabel, float]:
         """
         Parameters
         ----------

@@ -86,7 +86,7 @@ from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmv
 from functools import reduce, wraps as _wraps
 from itertools import chain, product
 from math import factorial
-from typing import Literal, Optional, Union, Callable, Iterable
+from typing import Literal, Optional, Union, Callable, Iterable, Iterator, TypeVar, cast as _cast
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
     """
@@ -151,8 +151,29 @@ def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label, num_qubits):
 
 # ------- Error Generator Math -------------# 
 
+# A list of (error generator label, rate) pairs, as produced by the commutator and
+# composition routines below. Rates may be complex prior to aggregation.
+_ErrorgenTerms = list[tuple[_LSE, complex]]
+
+# A dictionary of error generator rates keyed by label, as taken and returned by the drivers
+# (BCH, Magnus, Zassenhaus, Taylor) for one layer or one order. Their intermediate per-order
+# accumulators hold complex rates (`_Rate`) until the final merge takes the real part.
+_ErrorgenDict = dict[_LSE, float]
+_Rate = TypeVar('_Rate', float, complex)
+
+# A signed Pauli w P as accepted by the term emitters and returned by `pauli_product`, `com`
+# and `acom`: `(w, P)` with P an unsigned stim.PauliString and w the phase, or `(w, P, s)`
+# with s = bel_str(P) already rendered. See "Signed Paulis" in the module docstring.
+_SignedPauli = Union[tuple[complex, stim.PauliString], tuple[complex, stim.PauliString, str]]
+
+# The signature shared by the sixteen `_commutator_XY` and sixteen `_composition_XY`
+# handlers: (errorgen_1, errorgen_2, weight, identity string) -> terms.
+_PairHandler = Callable[[_LSE, _LSE, complex, str], _ErrorgenTerms]
+
+_F = TypeVar('_F', bound=Callable)
+
 @_contextmanager
-def _cyclic_gc_paused():
+def _cyclic_gc_paused() -> Iterator[None]:
     """
     Suspend Python's cyclic garbage collector for the duration of a block, restoring its
     previous state afterwards. The drivers below allocate millions of small, acyclic
@@ -169,17 +190,18 @@ def _cyclic_gc_paused():
             _gc.enable()
 
 
-def _with_cyclic_gc_paused(fn):
+def _with_cyclic_gc_paused(fn: _F) -> _F:
     """Decorator form of `_cyclic_gc_paused` for the driver functions."""
     @_wraps(fn)
     def wrapper(*args, **kwargs):
         with _cyclic_gc_paused():
             return fn(*args, **kwargs)
-    return wrapper
+    return _cast(_F, wrapper)
 
 
 @_with_cyclic_gc_paused
-def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_threshold=1e-14):
+def bch_approximation(errgen_layer_1: _ErrorgenDict, errgen_layer_2: _ErrorgenDict, bch_order: Literal[1,2,3,4,5] = 1,
+                      truncation_threshold: float = 1e-14) -> _ErrorgenDict:
     """
     Apply the BCH approximation at the given order to combine the input dictionaries
     of  error generator rates.
@@ -336,8 +358,8 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1, truncation_th
     return new_errorgen_layer_dict
 
 @_with_cyclic_gc_paused
-def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Literal[1,2,3] = 1, 
-                     truncation_threshold: float = 1e-14) -> dict[_LSE, float]:
+def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal[1,2,3] = 1,
+                     truncation_threshold: float = 1e-14) -> _ErrorgenDict:
     """
     Function for computing the nth-order magnus expansion for a set of error generator layers.
     Please see https://arxiv.org/abs/0810.5488 or https://en.wikipedia.org/wiki/Magnus_expansion
@@ -485,8 +507,8 @@ def magnus_expansion(errorgen_layers: list[dict[_LSE, float]], magnus_order: Lit
     # Future: Possibly do one last truncation pass in case any of the different orders cancel out when aggregated?
     return new_errorgen_layer_dict
 
-def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity: Optional[str],
-                              truncation_threshold: float = 1e-14) -> dict[_LSE, float]:
+def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
+                              truncation_threshold: float = 1e-14) -> _ErrorgenDict:
     r"""
     Helper function for computing the second-order correction term in the
     magnus expansion.
@@ -535,8 +557,8 @@ def _second_order_magnus_term(errorgen_layers: list[dict[_LSE, float]], identity
     return second_order_comm_dict
 
 @_with_cyclic_gc_paused
-def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_order: Literal[1,2] = 1, 
-                      truncation_threshold: float = 1e-14) -> list[dict[_LSE, float]]:
+def zassenhaus_formula(errorgen_groups: list[_ErrorgenDict], zassenhaus_order: Literal[1,2] = 1,
+                      truncation_threshold: float = 1e-14) -> list[_ErrorgenDict]:
     r"""
     Function for computing the nth-order Zassenhaus formula for a set of error generators.
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
@@ -596,15 +618,17 @@ def zassenhaus_formula(errorgen_groups: list[dict[_LSE, float]], zassenhaus_orde
 
 # TODO: Refactor a bunch of the code in this module to use this helper function.
 # define a helper function to do a layerwise commutator accumulating all of the pairwise terms into a single list.
-def _accumulate_layer_pairwise_commutators(target, errorgen_layer_1, errorgen_layer_2, identity, addl_weight=1.0,
-                                           truncation_threshold=1e-14):
+def _accumulate_layer_pairwise_commutators(target: dict[_LSE, complex], errorgen_layer_1: dict[_LSE, _Rate],
+                                           errorgen_layer_2: dict[_LSE, _Rate], identity: Optional[str],
+                                           addl_weight: float = 1.0, truncation_threshold: float = 1e-14) -> None:
     """
     Add addl_weight * rate_1 * rate_2 * [e1, e2] to `target`, a dict of label -> rate, for every
     e1 in `errorgen_layer_1` and e2 in `errorgen_layer_2` (dicts of label -> rate). Terms are
     accumulated as they are produced: the same label typically arises from many pairs, and
     aggregating on the fly keeps one label object per distinct key instead of a list of every
     term (which at 100 qubits held ~1e6 labels at once). `target` is not truncated; callers
-    apply their threshold after all contributions are in.
+    apply their threshold after all contributions are in. `identity` is the 'I'*n string
+    (callers pass None only when `errorgen_layer_1` is empty, in which case nothing is computed).
     """
     get = target.get
     for error1, error1_val in errorgen_layer_1.items():
@@ -617,7 +641,7 @@ def _accumulate_layer_pairwise_commutators(target, errorgen_layer_1, errorgen_la
                 target[lbl] = get(lbl, 0) + rate
 
 
-def _truncated(errorgen_dict, truncation_threshold):
+def _truncated(errorgen_dict: dict[_LSE, _Rate], truncation_threshold: float) -> dict[_LSE, _Rate]:
     """The entries of `errorgen_dict` (label -> rate) whose rate exceeds `truncation_threshold` in magnitude."""
     return {lbl: rate for lbl, rate in errorgen_dict.items() if abs(rate) > truncation_threshold}
 
@@ -639,7 +663,7 @@ def _truncated(errorgen_dict, truncation_threshold):
 # label constructor via `pauli_str_reps`.
 # ---------------------------------------------------------------------------------------
 
-def _H(terms, pauli, coeff, identity):
+def _H(terms: _ErrorgenTerms, pauli: Optional[_SignedPauli], coeff: complex, identity: str) -> None:
     """
     Append coeff * H_{wP} = (coeff w) H_P to `terms`; nothing if P = I (H_I = 0).
 
@@ -666,7 +690,7 @@ def _H(terms, pauli, coeff, identity):
     terms.append((_LSE('H', (P,), pauli_str_reps=(sP,)), w * coeff))
 
 
-def _S(terms, pauli, coeff, identity):
+def _S(terms: _ErrorgenTerms, pauli: Optional[_SignedPauli], coeff: complex, identity: str) -> None:
     """
     Append coeff * S_{wP} = coeff S_P to `terms`; nothing if P = I (S_I = 0). The unit
     phase w contributes w w* = 1 (it enters S_L = L . L^dag - ½{L^dag L, .} twice, once
@@ -695,7 +719,8 @@ def _S(terms, pauli, coeff, identity):
     terms.append((_LSE('S', (P,), pauli_str_reps=(sP,)), coeff))
 
 
-def _C(terms, pauli_1, pauli_2, coeff, identity):
+def _C(terms: _ErrorgenTerms, pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli], coeff: complex,
+       identity: str) -> None:
     """
     Append coeff * C_{wP,vQ} = (coeff w v) C_{P,Q} to `terms`, reduced as follows:
     C_{P,P} = 2 S_P; nothing if P = I or Q = I (C_{I,Q} = C_{P,I} = 0); the two basis
@@ -737,7 +762,8 @@ def _C(terms, pauli_1, pauli_2, coeff, identity):
         terms.append((_LSE('C', (Q, P), pauli_str_reps=(sQ, sP)), w * v * coeff))
 
 
-def _A(terms, pauli_1, pauli_2, coeff, identity):
+def _A(terms: _ErrorgenTerms, pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli], coeff: complex,
+       identity: str) -> None:
     """
     Append coeff * A_{wP,vQ} = (coeff w v) A_{P,Q} to `terms`, reduced as follows:
     nothing if P = Q (A_{P,P} = 0); A_{I,Q} = H_Q and A_{P,I} = -H_P; the two basis
@@ -785,7 +811,7 @@ def _A(terms, pauli_1, pauli_2, coeff, identity):
 # or None, which propagates: a vanishing (anti)commutator anywhere inside a nested index
 # makes the whole index, and hence the term, vanish.
 
-def _prod(pauli_1, pauli_2):
+def _prod(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[tuple[complex, stim.PauliString]]:
     """
     Product of two signed Paulis, `(w v phase, PQ)` with `PQ` unsigned; None if either is None.
     """
@@ -797,7 +823,8 @@ def _prod(pauli_1, pauli_2):
     return (pauli_1[0] * pauli_2[0] * phase, PQ)
 
 
-def _reversed(pauli_1, pauli_2, product):
+def _reversed(pauli_1: _SignedPauli, pauli_2: _SignedPauli,
+              product: Optional[tuple[complex, stim.PauliString]]) -> Optional[tuple[complex, stim.PauliString]]:
     """
     The product pauli_2 * pauli_1, given `product` = `_prod(pauli_1, pauli_2)`: identical when
     the two commute, sign-flipped when they anticommute. Cheaper than a second product.
@@ -809,7 +836,7 @@ def _reversed(pauli_1, pauli_2, product):
     return (-product[0], product[1])
 
 
-def _com(pauli_1, pauli_2):
+def _com(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[tuple[complex, stim.PauliString]]:
     """
     Commutator [pauli_1, pauli_2] of two signed Paulis as a signed Pauli (phase +-2, +-2i);
     None if either is None or they commute.
@@ -822,7 +849,7 @@ def _com(pauli_1, pauli_2):
     return (pauli_1[0] * pauli_2[0] * phase, PQ)
 
 
-def _acom(pauli_1, pauli_2):
+def _acom(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[tuple[complex, stim.PauliString]]:
     """
     Anticommutator {pauli_1, pauli_2} of two signed Paulis as a signed Pauli (phase +-2, +-2i);
     None if either is None or they anticommute.
@@ -835,7 +862,7 @@ def _acom(pauli_1, pauli_2):
     return (pauli_1[0] * pauli_2[0] * phase, PQ)
 
 
-def _index(errorgen, k):
+def _index(errorgen: _LSE, k: int) -> tuple[int, stim.PauliString, str]:
     """
     The k-th basis element label of `errorgen` as the signed Pauli `(1, P, s)` with its
     cached string, ready for the emitters and the signed-Pauli helpers.
@@ -843,7 +870,8 @@ def _index(errorgen, k):
     return (1, errorgen.basis_element_labels[k], errorgen._hashable_basis_element_labels[k])
 
 
-def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0, identity=None):
+def error_generator_commutator(errorgen_1: _LSE, errorgen_2: _LSE, flip_weight: bool = False, weight: complex = 1.0,
+                               identity: Optional[str] = None) -> _ErrorgenTerms:
     """
     Returns the commutator of two error generators. I.e. [errorgen_1, errorgen_2].
 
@@ -862,7 +890,7 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     flip_weight : bool, optional (default False)
         If True flip the sign of the input value of weight kwarg.
 
-    weight : float, optional (default 1.0)
+    weight : float or complex, optional (default 1.0)
         An optional weighting value to apply to the value of the commutator.
 
     identity : str, optional (default None)
@@ -883,7 +911,8 @@ def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight
     return _COMMUTATOR_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx](errorgen_1, errorgen_2, w, identity)
 
 
-def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=None):
+def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: complex = 1.0,
+                                identity: Optional[str] = None) -> _ErrorgenTerms:
     r"""
     Returns the composition of two error generators. I.e. errorgen_1[errorgen_2[\cdot]].
 
@@ -899,7 +928,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
     errorgen_2 : `LocalStimErrorgenLabel`
         Second error generator (applied first).
 
-    weight : float, optional (default 1.0)
+    weight : float or complex, optional (default 1.0)
         An optional weighting value to apply to the value of the composition.
 
     identity : str, optional (default None)
@@ -927,7 +956,7 @@ def error_generator_composition(errorgen_1, errorgen_2, weight=1.0, identity=Non
 # reversed pairs use [X, Y] = -[Y, X].
 # ---------------------------------------------------------------------------------------
 
-def _commutator_HH(errorgen_1, errorgen_2, w, identity):
+def _commutator_HH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [H_P, H_Q] = -i H_{[P,Q]}
     P = _index(errorgen_1, 0)
     Q = _index(errorgen_2, 0)
@@ -936,7 +965,7 @@ def _commutator_HH(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _commutator_HS(errorgen_1, errorgen_2, w, identity):
+def _commutator_HS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [H_P, S_Q] = i C_{Q,[Q,P]}
     P = _index(errorgen_1, 0)
     Q = _index(errorgen_2, 0)
@@ -945,12 +974,12 @@ def _commutator_HS(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _commutator_SH(errorgen_1, errorgen_2, w, identity):
+def _commutator_SH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [S_P, H_Q] = -[H_Q, S_P]
     return _commutator_HS(errorgen_2, errorgen_1, -w, identity)
 
 
-def _commutator_HC(errorgen_1, errorgen_2, w, identity):
+def _commutator_HC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [H_P, C_{A,B}] = i (C_{[A,P],B} + C_{[B,P],A})
     P = _index(errorgen_1, 0)
     A = _index(errorgen_2, 0)
@@ -961,12 +990,12 @@ def _commutator_HC(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _commutator_CH(errorgen_1, errorgen_2, w, identity):
+def _commutator_CH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [C_{A,B}, H_P] = -[H_P, C_{A,B}]
     return _commutator_HC(errorgen_2, errorgen_1, -w, identity)
 
 
-def _commutator_HA(errorgen_1, errorgen_2, w, identity):
+def _commutator_HA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [H_P, A_{A,B}] = -i (A_{[P,A],B} + A_{A,[P,B]})
     P = _index(errorgen_1, 0)
     A = _index(errorgen_2, 0)
@@ -977,17 +1006,17 @@ def _commutator_HA(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _commutator_AH(errorgen_1, errorgen_2, w, identity):
+def _commutator_AH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [A_{A,B}, H_P] = -[H_P, A_{A,B}]
     return _commutator_HA(errorgen_2, errorgen_1, -w, identity)
 
 
-def _commutator_SS(errorgen_1, errorgen_2, w, identity):
+def _commutator_SS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [S_P, S_Q] = 0
     return []
 
 
-def _commutator_SC(errorgen_1, errorgen_2, w, identity):
+def _commutator_SC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [S_P, C_{A,B}] = -i (A_{PA,BP} + A_{PB,AP}) - i/2 (A_{{A,B}P,P} + A_{P,P{A,B}})
     P = _index(errorgen_1, 0)
     A = _index(errorgen_2, 0)
@@ -1007,12 +1036,12 @@ def _commutator_SC(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _commutator_CS(errorgen_1, errorgen_2, w, identity):
+def _commutator_CS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [C_{A,B}, S_P] = -[S_P, C_{A,B}]
     return _commutator_SC(errorgen_2, errorgen_1, -w, identity)
 
 
-def _commutator_SA(errorgen_1, errorgen_2, w, identity):
+def _commutator_SA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [S_P, A_{A,B}] = i (C_{PA,BP} - C_{PB,AP}) - 1/2 A_{P,[P,[A,B]]}
     P = _index(errorgen_1, 0)
     A = _index(errorgen_2, 0)
@@ -1028,12 +1057,12 @@ def _commutator_SA(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _commutator_AS(errorgen_1, errorgen_2, w, identity):
+def _commutator_AS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [A_{A,B}, S_P] = -[S_P, A_{A,B}]
     return _commutator_SA(errorgen_2, errorgen_1, -w, identity)
 
 
-def _commutator_CC(errorgen_1, errorgen_2, w, identity):
+def _commutator_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [C_{A,B}, C_{P,Q}] = -i (A_{AP,QB} + A_{AQ,PB} + A_{BP,QA} + A_{BQ,PA})
     #                      - i/2 (A_{[P,{A,B}],Q} + A_{[Q,{A,B}],P} + A_{[{P,Q},A],B} + A_{[{P,Q},B],A})
     #                      + i/4 H_{[{A,B},{P,Q}]}
@@ -1064,7 +1093,7 @@ def _commutator_CC(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _commutator_CA(errorgen_1, errorgen_2, w, identity):
+def _commutator_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [C_{A,B}, A_{P,Q}] = i (C_{AP,QB} - C_{AQ,PB} + C_{BP,QA} - C_{PA,BQ})
     #                      + 1/2 (A_{[A,[P,Q]],B} + A_{[B,[P,Q]],A} + i C_{[P,{A,B}],Q} - i C_{[Q,{A,B}],P})
     #                      - 1/4 H_{[[P,Q],{A,B}]}
@@ -1095,12 +1124,12 @@ def _commutator_CA(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _commutator_AC(errorgen_1, errorgen_2, w, identity):
+def _commutator_AC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [A_{A,B}, C_{P,Q}] = -[C_{P,Q}, A_{A,B}]
     return _commutator_CA(errorgen_2, errorgen_1, -w, identity)
 
 
-def _commutator_AA(errorgen_1, errorgen_2, w, identity):
+def _commutator_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # [A_{A,B}, A_{P,Q}] = -i (A_{QB,AP} + A_{PA,BQ} + A_{BP,QA} + A_{AQ,PB})
     #                      + 1/2 (C_{[B,[P,Q]],A} - C_{[A,[P,Q]],B} + C_{[P,[A,B]],Q} - C_{[Q,[A,B]],P})
     #                      + i/4 H_{[[P,Q],[A,B]]}
@@ -1149,7 +1178,7 @@ def _commutator_AA(errorgen_1, errorgen_2, w, identity):
 # additionally requires an odd number of the four cross pairs to anticommute.
 # ---------------------------------------------------------------------------------------
 
-def _composition_HH(errorgen_1, errorgen_2, w, identity):
+def _composition_HH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # H_P[H_Q] = C_{P,Q} - i/2 H_{[P,Q]}
     P = _index(errorgen_1, 0)
     Q = _index(errorgen_2, 0)
@@ -1159,7 +1188,7 @@ def _composition_HH(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_HS(errorgen_1, errorgen_2, w, identity):
+def _composition_HS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # H_P[S_Q] = -H_P - A_{PQ,Q}    if [P,Q] = 0
     #          = -H_P - i C_{PQ,Q}  if {P,Q} = 0
     P = _index(errorgen_1, 0)
@@ -1174,7 +1203,7 @@ def _composition_HS(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_SH(errorgen_1, errorgen_2, w, identity):
+def _composition_SH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # S_P[H_Q] = -H_Q - A_{PQ,P}    if [P,Q] = 0
     #          = -H_Q - i C_{PQ,P}  if {P,Q} = 0
     P = _index(errorgen_1, 0)
@@ -1189,7 +1218,7 @@ def _composition_SH(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_SS(errorgen_1, errorgen_2, w, identity):
+def _composition_SS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # S_P[S_Q] = S_{PQ} - S_P - S_Q
     P = _index(errorgen_1, 0)
     Q = _index(errorgen_2, 0)
@@ -1200,7 +1229,7 @@ def _composition_SS(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_HC(errorgen_1, errorgen_2, w, identity):
+def _composition_HC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # H_A[C_{P,Q}]:
     #   (PA,Q) by (A,P):  c: -A   a: +iC
     #   (QA,P) by (A,Q):  c: -A   a: +iC
@@ -1229,7 +1258,7 @@ def _composition_HC(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_HA(errorgen_1, errorgen_2, w, identity):
+def _composition_HA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # H_A[A_{P,Q}]:
     #   (PA,Q) by (A,P):  c: +C   a: +iA
     #   (QA,P) by (A,Q):  c: -C   a: -iA
@@ -1258,7 +1287,7 @@ def _composition_HA(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_SC(errorgen_1, errorgen_2, w, identity):
+def _composition_SC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # S_A[C_{P,Q}] = -C_{P,Q} + ...
     #   (PA,QA) by (A,P),(A,Q):  cc: +C   ca: -iA   ac: +iA   aa: -C
     #   if {P,Q} != 0:  (APQ,A) by (A,PQ):  c: -C   a: +iA
@@ -1284,7 +1313,7 @@ def _composition_SC(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_SA(errorgen_1, errorgen_2, w, identity):
+def _composition_SA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # S_A[A_{P,Q}] = -A_{P,Q} + ...
     #   (PA,QA) by (A,P),(A,Q):  cc: +A   ca: +iC   ac: -iC   aa: -A
     #   if [P,Q] != 0:  (APQ,A) by (A,PQ):  c: +iC   a: +A
@@ -1310,7 +1339,7 @@ def _composition_SA(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_CH(errorgen_1, errorgen_2, w, identity):
+def _composition_CH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # C_{P,Q}[H_A]:
     #   (PA,Q) by (A,P):  c: -A   a: -iC
     #   (QA,P) by (A,Q):  c: -A   a: -iC
@@ -1339,7 +1368,7 @@ def _composition_CH(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_CS(errorgen_1, errorgen_2, w, identity):
+def _composition_CS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # C_{P,Q}[S_A] = -C_{P,Q} + ...
     #   (PA,QA) by (A,P),(A,Q):  cc: +C   ca: +iA   ac: -iA   aa: -C
     #   if {P,Q} != 0:  (APQ,A) by (A,PQ):  c: -C   a: -iA
@@ -1365,7 +1394,7 @@ def _composition_CS(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_AH(errorgen_1, errorgen_2, w, identity):
+def _composition_AH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # A_{P,Q}[H_A]:
     #   (PA,Q) by (A,P):  c: +C   a: -iA
     #   (QA,P) by (A,Q):  c: -C   a: +iA
@@ -1394,7 +1423,7 @@ def _composition_AH(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_AS(errorgen_1, errorgen_2, w, identity):
+def _composition_AS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # A_{P,Q}[S_A] = -A_{P,Q} + ...
     #   (PA,QA) by (A,P),(A,Q):  cc: +A   ca: -iC   ac: +iC   aa: -A
     #   if [P,Q] != 0:  (APQ,A) by (A,PQ):  c: +iC   a: -A
@@ -1420,7 +1449,7 @@ def _composition_AS(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_CC(errorgen_1, errorgen_2, w, identity):
+def _composition_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # C_{A,B}[C_{P,Q}]; the {A,B} and {P,Q} slots exist only when those brackets are nonzero.
     A = _index(errorgen_1, 0)
     B = _index(errorgen_1, 1)
@@ -1484,7 +1513,7 @@ def _composition_CC(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_CA(errorgen_1, errorgen_2, w, identity):
+def _composition_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # C_{A,B}[A_{P,Q}]; the {A,B} and [P,Q] slots exist only when those brackets are nonzero.
     A = _index(errorgen_1, 0)
     B = _index(errorgen_1, 1)
@@ -1548,7 +1577,7 @@ def _composition_CA(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_AC(errorgen_1, errorgen_2, w, identity):
+def _composition_AC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # A_{A,B}[C_{P,Q}]; the [A,B] and {P,Q} slots exist only when those brackets are nonzero.
     A = _index(errorgen_1, 0)
     B = _index(errorgen_1, 1)
@@ -1612,7 +1641,7 @@ def _composition_AC(errorgen_1, errorgen_2, w, identity):
     return terms
 
 
-def _composition_AA(errorgen_1, errorgen_2, w, identity):
+def _composition_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # A_{A,B}[A_{P,Q}]; the [A,B] and [P,Q] slots exist only when those brackets are nonzero.
     A = _index(errorgen_1, 0)
     B = _index(errorgen_1, 1)
@@ -1681,21 +1710,21 @@ def _composition_AA(errorgen_1, errorgen_2, w, identity):
 # `pygsti.errorgenpropagation.localstimerrorgen.ERRORGEN_TYPE_INDICES`. Each entry is the
 # handler for one ordered type pair, called as handler(errorgen_1, errorgen_2, weight, identity)
 # (identity = the 'I'*n string) and returning the list of (LocalStimErrorgenLabel, rate) terms.
-_COMMUTATOR_HANDLERS = (
+_COMMUTATOR_HANDLERS: tuple[_PairHandler, ...] = (
     _commutator_HH, _commutator_HS, _commutator_HC, _commutator_HA,
     _commutator_SH, _commutator_SS, _commutator_SC, _commutator_SA,
     _commutator_CH, _commutator_CS, _commutator_CC, _commutator_CA,
     _commutator_AH, _commutator_AS, _commutator_AC, _commutator_AA,
 )
 
-_COMPOSITION_HANDLERS = (
+_COMPOSITION_HANDLERS: tuple[_PairHandler, ...] = (
     _composition_HH, _composition_HS, _composition_HC, _composition_HA,
     _composition_SH, _composition_SS, _composition_SC, _composition_SA,
     _composition_CH, _composition_CS, _composition_CC, _composition_CA,
     _composition_AH, _composition_AS, _composition_AC, _composition_AA,
 )
 
-def com(P1, P2):
+def com(P1: stim.PauliString, P2: stim.PauliString) -> Optional[tuple[complex, stim.PauliString]]:
     """
     Commutator of two Paulis, [P1, P2] = P1 P2 - P2 P1.
 
@@ -1711,7 +1740,7 @@ def com(P1, P2):
     return (phase, P3)
 
 
-def acom(P1, P2):
+def acom(P1: stim.PauliString, P2: stim.PauliString) -> Optional[tuple[complex, stim.PauliString]]:
     """
     Anticommutator of two Paulis, {P1, P2} = P1 P2 + P2 P1.
 
@@ -1727,7 +1756,7 @@ def acom(P1, P2):
     return (phase, P3)
 
 
-def pauli_product(P1, P2):
+def pauli_product(P1: stim.PauliString, P2: stim.PauliString) -> tuple[complex, stim.PauliString]:
     """
     Product of two Paulis, returned as a tuple `(phase, P3)` such that P1 P2 = phase * P3,
     where `P3` is the sign-free product and `phase` is one of +-1, +-i.
@@ -1738,7 +1767,7 @@ def pauli_product(P1, P2):
     return (phase, P3)
 
 
-def stim_pauli_string_less_than(pauli1, pauli2):
+def stim_pauli_string_less_than(pauli1: stim.PauliString, pauli2: stim.PauliString) -> bool:
     """
     Returns True if `pauli1` sorts strictly before `pauli2` in the canonical basis element
     label ordering: lexicographically on the 'I'-padded Pauli strings ('I' < 'X' < 'Y' < 'Z'),
@@ -1932,7 +1961,7 @@ def errorgen_layer_to_matrix(errorgen_layer, num_qubits, errorgen_matrix_dict=No
     
     return mat
 
-def iterative_error_generator_composition(errorgen_labels, rates):
+def iterative_error_generator_composition(errorgen_labels: tuple[_LSE, ...], rates: tuple[complex, ...]) -> _ErrorgenTerms:
     """
     Iteratively compute error generator compositions. Each error generator
     composition in general returns a list of multiple new error generators,
@@ -3626,7 +3655,8 @@ def _bitstring_to_int(bitstring: Union[str, tuple]) -> int:
     else:
         raise ValueError("Input must be either a string or a tuple of '0's and '1's")
 
-def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order = 1, truncation_threshold = 1e-14):
+def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: stim.Tableau, desired_bitstring: str,
+                                      order: int = 1, truncation_threshold: float = 1e-14) -> float:
     """
     Compute the kth-order correction to the probability of the specified bit string.
     
@@ -3686,7 +3716,8 @@ def stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring,
 # TODO: The implementations for the pauli expectation value correction and probability correction
 # are basically identical modulo some additional scale factors and the alpha function used. Should be able to combine
 # the implementations into one function.
-def stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order = 1, truncation_threshold = 1e-14):
+def stabilizer_pauli_expectation_correction(errorgen_dict: _ErrorgenDict, tableau: stim.Tableau, pauli: stim.PauliString,
+                                            order: int = 1, truncation_threshold: float = 1e-14) -> float:
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
     
@@ -4029,7 +4060,8 @@ def approximate_stabilizer_probabilities(errorgen_dict, circuit, order=1, trunca
     return probs
 
 @_with_cyclic_gc_paused
-def error_generator_taylor_expansion(errorgen_dict, order = 1, truncation_threshold = 1e-14):
+def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 1,
+                                     truncation_threshold: float = 1e-14) -> list[_ErrorgenDict]:
     """
     Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
     error generator dictionary. (Excluding the zeroth-order identity).
