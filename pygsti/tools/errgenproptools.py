@@ -21,12 +21,16 @@ Signed Paulis
     `pauli_product`, `com` and `acom`: `P` is an unsigned `stim.PauliString` and `phase`
     is +1, -1, +i or -i. For `com` and `acom` the pair represents `P1 P2 -/+ P2 P1`, so
     `phase` is +-2 or +-2i (and they return `None` when the (anti)commutator vanishes;
-    every emitter treats a `None` index as a zero term). An unsigned input Pauli is
-    written `(1, P)`. Phases are folded into the rate of the emitted term as
+    every emitter treats a `None` index as a zero term). An index may also be given as
+    the triple `(phase, P, s)` with `s = bel_str(P)` already rendered; this is used for
+    the input Paulis, whose strings the input labels already hold, so that they are not
+    rendered again. An unsigned input Pauli is thus written `(1, P, s)`. Phases are folded
+    into the rate of the emitted term as
 
         H_{wP}       = w   H_P
-        S_{wP}       = S_P             (w^2 S_P in the paper, whose w is +-1; a unit phase
-                                        drops out of P rho P^dagger, so +-i is ignored too)
+        S_{wP}       = w w* S_P = S_P  (S_L = L . L^dag - ½{L^dag L, .} contains L twice,
+                                        once conjugated, so a unit phase contributes
+                                        |w|^2 = 1; the paper writes w^2, its w being +-1)
         C_{wP,vQ}    = w v C_{P,Q}
         A_{wP,vQ}    = w v A_{P,Q}
 
@@ -850,10 +854,12 @@ def _error_generator_layer_pairwise_commutator(errorgen_layer_1, errorgen_layer_
 # Term emitters. See "Extended elementary error generator conventions" in the module
 # docstring for the identities they apply. Each appends c * <generator> to `terms` as a
 # (LocalStimErrorgenLabel, rate) pair, or appends nothing when the term is zero. Indices
-# are signed Paulis `(phase, P)` (as returned by `pauli_product`, `com` and `acom`, `(1, P)`
-# for an unsigned input Pauli) or `None` for a zero Pauli (as returned by `com`/`acom`).
-# The 'I'-padded strings are rendered once here, used for the degeneracy checks and the
-# canonical ordering, and handed to the label constructor via `pauli_str_reps`.
+# are signed Paulis `(phase, P)` as returned by `pauli_product`, `com` and `acom`, or
+# `None` for a zero Pauli (as returned by `com`/`acom`), or `(phase, P, s)` when the
+# 'I'-padded string `s = bel_str(P)` is already known (input Paulis: `(1, P, s)` with `s`
+# taken from the input label's `_hashable_basis_element_labels`). Strings not supplied are
+# rendered once here; they serve the degeneracy checks and the canonical ordering and are
+# handed to the label constructor via `pauli_str_reps`.
 # ---------------------------------------------------------------------------------------
 
 def _H(terms, X, c):
@@ -862,8 +868,8 @@ def _H(terms, X, c):
     """
     if X is None:
         return
-    phase, P = X
-    sP = _bel_str(P)
+    phase, P = X[0], X[1]
+    sP = X[2] if len(X) == 3 else _bel_str(P)
     if sP == 'I' * len(sP):
         return
     terms.append((_LSE('H', (P,), pauli_str_reps=(sP,)), phase * c))
@@ -871,12 +877,13 @@ def _H(terms, X, c):
 
 def _S(terms, X, c):
     """
-    Append c * S_X to `terms`. S_{wP} = S_P (the unit phase drops out), S_I = 0.
+    Append c * S_X to `terms`. S_{wP} = w w* S_P = S_P for a unit phase (the phase enters
+    once plainly and once conjugated), S_I = 0.
     """
     if X is None:
         return
     P = X[1]
-    sP = _bel_str(P)
+    sP = X[2] if len(X) == 3 else _bel_str(P)
     if sP == 'I' * len(sP):
         return
     terms.append((_LSE('S', (P,), pauli_str_reps=(sP,)), c))
@@ -889,10 +896,10 @@ def _C(terms, X, Y, c):
     """
     if X is None or Y is None:
         return
-    phase_P, P = X
-    phase_Q, Q = Y
-    sP = _bel_str(P)
-    sQ = _bel_str(Q)
+    phase_P, P = X[0], X[1]
+    phase_Q, Q = Y[0], Y[1]
+    sP = X[2] if len(X) == 3 else _bel_str(P)
+    sQ = Y[2] if len(Y) == 3 else _bel_str(Q)
     # The identity string sorts first, so of an ordered pair only the smaller can be identity.
     if sP == sQ:
         if sP == 'I' * len(sP):
@@ -916,10 +923,10 @@ def _A(terms, X, Y, c):
     """
     if X is None or Y is None:
         return
-    phase_P, P = X
-    phase_Q, Q = Y
-    sP = _bel_str(P)
-    sQ = _bel_str(Q)
+    phase_P, P = X[0], X[1]
+    phase_Q, Q = Y[0], Y[1]
+    sP = X[2] if len(X) == 3 else _bel_str(P)
+    sQ = Y[2] if len(Y) == 3 else _bel_str(Q)
     # The identity string sorts first, so of an ordered pair only the smaller can be identity.
     if sP == sQ:
         return

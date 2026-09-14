@@ -291,7 +291,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
         superoperator obtained by substituting the signed Paulis literally into the defining
         sandwich expressions, and every emitted label must be canonical.
         """
-        from pygsti.errorgenpropagation.localstimerrorgen import bel_less_than
+        from pygsti.errorgenpropagation.localstimerrorgen import bel_less_than, bel_str
 
         def sandwich(M, N):  # rho -> M rho N on row-stacked vec(rho), pyGSTi's convention
             return np.kron(M, N.T)
@@ -336,6 +336,10 @@ class ErrgenCompositionCommutationTester(BaseCase):
                         for emitter, expected in [(_eprop._H, c * ext_H(w * MP, I)), (_eprop._S, c * ext_S(w * MP, I))]:
                             terms = []
                             emitter(terms, (w, P), c)
+                            # the pre-rendered-string form must give the identical result.
+                            terms_pre = []
+                            emitter(terms_pre, (w, P, bel_str(P)), c)
+                            self.assertEqual(terms_pre, terms)
                             total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))
                             self.assertArraysAlmostEqual(total, expected)
                             for lbl, rate in terms:
@@ -358,6 +362,10 @@ class ErrgenCompositionCommutationTester(BaseCase):
                                               (_eprop._A, c * ext_A(w * MP, v * MQ, I))]:
                         terms = []
                         emitter(terms, (w, P), (v, Q), c)
+                        terms_pre = []
+                        emitter(terms_pre, (w, P, bel_str(P)), (v, Q, bel_str(Q)), c)
+                        self.assertEqual(terms_pre, terms)
+                        self.assertEqual([r for _, r in terms_pre], [r for _, r in terms])
                         total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))
                         self.assertArraysAlmostEqual(total, expected)
                         self.assertLessEqual(len(terms), 1)
