@@ -4300,27 +4300,24 @@ def error_generator_taylor_expansion(errorgen_dict, order = 1, truncation_thresh
         if abs(rate) > truncation_threshold:
             taylor_order_terms[0][lbl] = rate
 
-    if order > 1:
-        # The order of the approximation determines the combinations of error generators
-        # which need to be composed. (given by cartesian products of labels in errorgen_dict).
-        labels_by_order = [list(product(errorgen_dict.keys(), repeat = i+1)) for i in range(1,order)]
-        # Get a similar structure for the corresponding rates
-        rates_by_order = [list(product(errorgen_dict.values(), repeat = i+1)) for i in range(1,order)]
-        for current_order, (current_order_labels, current_order_rates) in enumerate(zip(labels_by_order, rates_by_order), start=2):
-            order_scale = 1/factorial(current_order)
-            composition_results = []
-            for label_tup, rate_tup in zip(current_order_labels, current_order_rates):
-                composition_results.extend(iterative_error_generator_composition(label_tup, rate_tup))
-            # aggregate together any overlapping terms in composition_results
-            composition_results_dict = dict()
-            for lbl, rate in composition_results:
-                if composition_results_dict.get(lbl,None) is None:
-                    composition_results_dict[lbl] = rate
-                else:
-                    composition_results_dict[lbl] += rate
-            for lbl, rate in composition_results_dict.items():
-                if order_scale*abs(rate) > truncation_threshold:
-                    taylor_order_terms[current_order-1][lbl] = order_scale*rate
+    if order > 1 and errorgen_dict:
+        # The k-th order term is (1/k!) L^k with L = sum_i rate_i * L_i. Composition is bilinear, so
+        # the k-th power is built from the aggregated (k-1)-th power, L^k = L o L^(k-1): every
+        # generator of `errorgen_dict` is composed with every term of the previous power once,
+        # instead of re-composing the tail of each k-tuple of generators (which repeats the same
+        # compositions for every leading generator).
+        identity = 'I' * len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
+        previous_power = dict(errorgen_dict)
+        for current_order in range(2, order + 1):
+            order_scale = 1 / factorial(current_order)
+            current_power = dict()
+            for lbl_1, rate_1 in errorgen_dict.items():
+                for lbl_2, rate_2 in previous_power.items():
+                    for lbl, rate in error_generator_composition(lbl_1, lbl_2, weight=rate_1 * rate_2, identity=identity):
+                        current_power[lbl] = current_power.get(lbl, 0) + rate
+            taylor_order_terms[current_order - 1] = {lbl: order_scale * rate for lbl, rate in current_power.items()
+                                                     if order_scale * abs(rate) > truncation_threshold}
+            previous_power = current_power
 
     return taylor_order_terms
 
