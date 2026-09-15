@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -90,5 +90,3 @@ rhoB = np.array( [ [0.9,   0],
                    [ 0,  0.1]], complex)
 tls.fidelity(rhoA, rhoB)
 ```
-
-

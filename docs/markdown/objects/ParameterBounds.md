@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -63,5 +63,3 @@ print("\nModel bounds after getting the number of parameters:\n",mdl.parameter_b
 ```
 
 Now, when model `mdl` is optimized, the optimizer will limit range of this parameter as desired.
-
-
