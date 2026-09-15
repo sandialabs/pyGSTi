@@ -3,7 +3,8 @@
 The kernel picks candidates by comparing R-factor diagonals from a Householder
 QR.  Everything here judges its choices with `greedy_candidate_scores` and
 `greedy_path_log_volumes` instead, which get the same quantity from a float64
-`slogdet` of the information matrix and share no arithmetic with the kernel.
+Cholesky factorization of the information matrix and share no arithmetic with
+the kernel.
 A test that scored the kernel with the kernel's own numbers would pass on a
 consistently wrong implementation.
 
@@ -37,6 +38,7 @@ def _design(seed, ncand, b, p, dtype=np.float64, order="C"):
 
 
 class BlockDoptKernelTester(BaseCase):
+
     def assert_tol_greedy_path(self, A, b, piv, rel_tol=1e-8, label="selection"):
         """Every pick must be within tolerance of the best score given its own prefix.
 
@@ -57,7 +59,7 @@ class BlockDoptKernelTester(BaseCase):
     def test_scores_are_the_cumulative_log_volume_curve(self):
         """The per-step winning scores equal 0.5*logdet(I + J_S^T J_S)."""
         A = _design(30, 24, 4, 12)
-        piv, scores = bd.block_linear_dopt(A, 4, 8, return_scores=True)
+        piv, scores = bd.block_linear_dopt(A, 4, 8)
         curve = bd.greedy_path_log_volumes(A, 4, piv)
         self.assertArraysAlmostEqual(curve[1:], scores, places=8)
         self.assertEqual(curve[0], 0.0)
@@ -70,11 +72,11 @@ class BlockDoptKernelTester(BaseCase):
         The kernel carries the transformed candidate matrix and overwrites it
         once per step, so a full ranking applies as many updates as there are
         candidates.  Each `C^-1` is a contraction, so the error should not
-        accumulate -- checked against the independent slogdet curve, which
+        accumulate -- checked against the independent log-volume curve, which
         recomputes from the untouched input every time.
         """
         A = _design(40, 120, 4, 16)
-        piv, scores = bd.block_linear_dopt(A, 4, 120, return_scores=True)
+        piv, scores = bd.block_linear_dopt(A, 4, 120)
         self.assertEqual(len(piv), 120)
         self.assertEqual(len(set(piv.tolist())), 120)        # each candidate once
         curve = bd.greedy_path_log_volumes(A, 4, piv)
@@ -89,7 +91,7 @@ class BlockDoptKernelTester(BaseCase):
         would miss.
         """
         A = _design(41, 120, 4, 16)
-        piv = bd.block_linear_dopt(A, 4, 120)
+        piv, _ = bd.block_linear_dopt(A, 4, 120)
         self.assert_tol_greedy_path(A, 4, piv, label="full ranking")
 
     def test_duplicate_blocks_tie_break_by_original_index_late_in_the_ranking(self):
@@ -106,7 +108,7 @@ class BlockDoptKernelTester(BaseCase):
         dups = [(41, 55), (44, 58), (47, 52)]
         for lo, hi in dups:
             A[:, hi * b:(hi + 1) * b] = A[:, lo * b:(lo + 1) * b]
-        piv = bd.block_linear_dopt(A, b, ncand)
+        piv, _ = bd.block_linear_dopt(A, b, ncand)
         order = {int(blk): pos for pos, blk in enumerate(piv)}
         for lo, hi in dups:
             self.assertGreater(order[lo], 20, (lo, order[lo]))   # genuinely late
@@ -114,7 +116,7 @@ class BlockDoptKernelTester(BaseCase):
 
     def test_first_pick_is_the_standalone_argmax(self):
         A = _design(31, 15, 6, 20)
-        piv = bd.block_linear_dopt(A, 6, 1)
+        piv, _ = bd.block_linear_dopt(A, 6, 1)
         self.assertEqual(piv.tolist(), [int(np.argmax(bd.greedy_candidate_scores(A, 6)))])
 
     def test_selection_is_greedy_optimal_at_every_step(self):
@@ -124,7 +126,7 @@ class BlockDoptKernelTester(BaseCase):
                                      (3, 12, 8, 3, 6)]:       # block_size > num params
             with self.subTest(seed=seed):
                 A = _design(seed, ncand, b, p)
-                piv = bd.block_linear_dopt(A, b, k)
+                piv, _ = bd.block_linear_dopt(A, b, k)
                 self.assertEqual(len(piv), min(ncand, k))
                 self.assert_tol_greedy_path(A, b, piv)
 
@@ -135,12 +137,12 @@ class BlockDoptKernelTester(BaseCase):
         U, _, Vt = np.linalg.svd(rng.standard_normal((ncand * b, p)), full_matrices=False)
         J = (U * (1 + np.arange(p)) ** -1.5) @ Vt
         A = np.ascontiguousarray(J.T)
-        piv = bd.block_linear_dopt(A, b, ncand)
+        piv, _ = bd.block_linear_dopt(A, b, ncand)
         self.assert_tol_greedy_path(A, b, piv, rel_tol=1e-6)
 
     def test_float32_selection_is_greedy_optimal_to_float32_tolerance(self):
         A = _design(1, 30, 6, 16, dtype=np.float32)
-        piv = bd.block_linear_dopt(A, 6, 10)
+        piv, _ = bd.block_linear_dopt(A, 6, 10)
         self.assert_tol_greedy_path(A, 6, piv, rel_tol=1e-3)
 
     # -- determinism and purity -------------------------------------------- #
@@ -148,8 +150,8 @@ class BlockDoptKernelTester(BaseCase):
     def test_is_deterministic_and_does_not_modify_input(self):
         A = _design(32, 12, 3, 9)
         A0 = A.copy()
-        p1 = bd.block_linear_dopt(A, 3, 5)
-        p2 = bd.block_linear_dopt(A, 3, 5)
+        p1, _ = bd.block_linear_dopt(A, 3, 5)
+        p2, _ = bd.block_linear_dopt(A, 3, 5)
         self.assertArraysEqual(p1, p2)
         self.assertArraysEqual(A, A0)
 
@@ -157,13 +159,13 @@ class BlockDoptKernelTester(BaseCase):
         base = _design(11, 40, 4, 12)
         A = base[:, ::2]                            # 20 candidates, non-contiguous
         self.assertFalse(A.flags.c_contiguous or A.flags.f_contiguous)
-        self.assertArraysEqual(bd.block_linear_dopt(A, 4, 8),
-                               bd.block_linear_dopt(np.ascontiguousarray(A), 4, 8))
+        self.assertArraysEqual(bd.block_linear_dopt(A, 4, 8)[0],
+                               bd.block_linear_dopt(np.ascontiguousarray(A), 4, 8)[0])
 
     def test_fortran_order_input_gives_the_same_answer(self):
         c = _design(0, 20, 4, 12, order="C")
         f = np.asfortranarray(c)
-        self.assertArraysEqual(bd.block_linear_dopt(c, 4, 8), bd.block_linear_dopt(f, 4, 8))
+        self.assertArraysEqual(bd.block_linear_dopt(c, 4, 8)[0], bd.block_linear_dopt(f, 4, 8)[0])
 
     def test_exact_duplicate_blocks_tie_break_to_the_lowest_index(self):
         """Bitwise-identical blocks tie exactly; argmax takes the first maximum."""
@@ -172,7 +174,7 @@ class BlockDoptKernelTester(BaseCase):
         dups = [(2, 9), (5, 13)]
         for lo, hi in dups:
             A[:, hi * b:(hi + 1) * b] = A[:, lo * b:(lo + 1) * b]
-        piv = bd.block_linear_dopt(A, b, ncand)
+        piv, _ = bd.block_linear_dopt(A, b, ncand)
         order = {int(blk): pos for pos, blk in enumerate(piv)}
         for lo, hi in dups:
             self.assertLess(order[lo], order[hi], (lo, hi, piv))
@@ -189,9 +191,9 @@ class BlockDoptKernelTester(BaseCase):
         if not bd._SCIPY_QR_IS_BATCHED:
             self.skipTest("already running the fallback; nothing to compare against")
         A = _design(7, 22, 5, 14)
-        batched = bd.block_linear_dopt(A, 5, 11, return_scores=True)
+        batched = bd.block_linear_dopt(A, 5, 11)
         with unittest.mock.patch.object(bd, '_SCIPY_QR_IS_BATCHED', False):
-            looped = bd.block_linear_dopt(A, 5, 11, return_scores=True)
+            looped = bd.block_linear_dopt(A, 5, 11)
         self.assertArraysEqual(batched[0], looped[0])
         self.assertArraysEqual(batched[1], looped[1])
 
@@ -206,16 +208,14 @@ class BlockDoptKernelTester(BaseCase):
 
     def test_max_blocks_zero_returns_empty(self):
         A = _design(40, 8, 2, 5)
-        piv = bd.block_linear_dopt(A, 2, 0)
+        piv, scores = bd.block_linear_dopt(A, 2, 0)
         self.assertEqual(piv.shape, (0,))
         self.assertEqual(piv.dtype, np.int64)
-        piv, scores = bd.block_linear_dopt(A, 2, 0, return_scores=True)
-        self.assertEqual(piv.shape, (0,))
         self.assertEqual(scores.shape, (0,))
 
     def test_max_blocks_is_clamped_to_the_candidate_count(self):
         A = _design(41, 5, 3, 7)
-        self.assertEqual(len(bd.block_linear_dopt(A, 3, 100)), 5)
+        self.assertEqual(len(bd.block_linear_dopt(A, 3, 100)[0]), 5)
 
     def test_invalid_arguments_raise(self):
         A = _design(42, 8, 3, 6)             # n = 24
@@ -264,7 +264,7 @@ class BlockDoptKernelTester(BaseCase):
         self.assertGreater(standalone[4], 0.0)
         self.assertTrue(np.all(np.isfinite(standalone)))
 
-        piv, scores = bd.block_linear_dopt(A, b, 6, return_scores=True)
+        piv, scores = bd.block_linear_dopt(A, b, 6)
         self.assertEqual(sorted(piv.tolist()), list(range(6)))
         self.assertEqual(piv.tolist()[-1], 3)                # the zero block last
         self.assertEqual(piv.tolist()[-2], 4)                # the rank-1 block next
@@ -275,6 +275,7 @@ class BlockDoptKernelTester(BaseCase):
 
 
 class GreedyScorerTester(BaseCase):
+
     def test_candidate_scores_mark_selected_blocks_as_minus_inf(self):
         A = _design(50, 10, 2, 6)
         s = bd.greedy_candidate_scores(A, 2, selected=(3, 7))
@@ -310,10 +311,10 @@ class GreedyScorerTester(BaseCase):
     def test_greedy_selection_beats_a_random_subset_on_log_volume(self):
         """Not guaranteed in general, but overwhelmingly true and worth pinning:
         if greedy stops beating random draws, the objective is not being
-        maximised."""
+        maximized."""
         A = _design(55, 40, 4, 10)
         k = 8
-        piv = bd.block_linear_dopt(A, 4, k)
+        piv, _ = bd.block_linear_dopt(A, 4, k)
         greedy = bd.greedy_path_log_volumes(A, 4, piv)[-1]
         rng = np.random.default_rng(0)
         for trial in range(10):
@@ -350,7 +351,7 @@ class ColumnPivotedQRTester(BaseCase):
 
     where `Aug = vstack([A, eye(n)])` and `Aug_S` is its columns `S`.  So the
     ridged objective is the log-volume of a set of columns of `Aug`, and
-    greedy log-volume maximisation over columns is by definition the
+    greedy log-volume maximization over columns is by definition the
     Businger-Golub column-pivoted QR of `Aug`.  `scipy.linalg.qr(Aug,
     pivoting=True)` is therefore an exact reference for both the selection
     order and the score curve, with no scaling trick and no tolerance beyond
@@ -381,7 +382,7 @@ class ColumnPivotedQRTester(BaseCase):
     def _check_every_budget(self, A, places=9):
         pivots, curve = self._reference(A)
         for k in range(1, A.shape[1] + 1):
-            piv, scores = bd.block_linear_dopt(A, 1, k, return_scores=True)
+            piv, scores = bd.block_linear_dopt(A, 1, k)
             self.assertArraysEqual(piv, pivots[:k])
             self.assertArraysAlmostEqual(scores, curve[:k], places=places)
 
@@ -467,7 +468,7 @@ class BruteForceEnumerationTester(BaseCase):
         max_blocks = n_cand if max_blocks is None else max_blocks
         table = self._subset_log_volumes(A, block_size, test_case=self)
         want_piv, want_curve = self._brute_force_greedy(table, n_cand, max_blocks)
-        piv, scores = bd.block_linear_dopt(A, block_size, max_blocks, return_scores=True)
+        piv, scores = bd.block_linear_dopt(A, block_size, max_blocks)
         self.assertEqual(piv.tolist(), want_piv)
         self.assertArraysAlmostEqual(scores, want_curve, places=10)
 
@@ -489,12 +490,12 @@ class BruteForceEnumerationTester(BaseCase):
     def _assert_greedy_up_to_ties(self, A, block_size, tol=1e-9):
         """The kernel's ordering is *a* greedy ordering: at every step its pick is
         within `tol` of the best available gain, and its score is that prefix's
-        log-volume.  Which of several tied maximisers it takes is not checked here,
+        log-volume.  Which of several tied maximizers it takes is not checked here,
         because the enumerated table itself is subject to rounding and cannot
         adjudicate an exact tie; `BlockDoptKernelTester` pins the tie-break rule."""
         n_cand = A.shape[1] // block_size
         table = self._subset_log_volumes(A, block_size, test_case=self)
-        piv, scores = bd.block_linear_dopt(A, block_size, n_cand, return_scores=True)
+        piv, scores = bd.block_linear_dopt(A, block_size, n_cand)
         self.assertEqual(sorted(piv.tolist()), list(range(n_cand)))
         selected = []
         for step, i in enumerate(piv.tolist()):
@@ -515,7 +516,7 @@ class BruteForceEnumerationTester(BaseCase):
         A = _scaled_design(308, 4, 5 * b, "flat")
         A[:, 3 * b:4 * b] = A[:, 1 * b:2 * b]           # candidate 3 duplicates 1
         self._assert_greedy_up_to_ties(A, b)
-        piv = bd.block_linear_dopt(A, b, 5).tolist()
+        piv = bd.block_linear_dopt(A, b, 5)[0].tolist()
         self.assertLess(piv.index(1), piv.index(3))     # the kernel's own rule, exact ties
 
     def test_it_matches_brute_force_with_degenerate_blocks(self):

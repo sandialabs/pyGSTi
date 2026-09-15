@@ -92,7 +92,7 @@ def _batched_qr_r(W):
     return out
 
 
-def block_linear_dopt(A, block_size, max_blocks, *, return_scores=False):
+def block_linear_dopt(A, block_size, max_blocks):
     """Deterministic greedy block D-optimal selection.
 
     Selects column blocks of `A` one at a time, each time taking the block that
@@ -115,9 +115,6 @@ def block_linear_dopt(A, block_size, max_blocks, *, return_scores=False):
     max_blocks : int
         Maximum number of blocks to select; clamped to `n_candidates`.
 
-    return_scores : bool, optional (default False)
-        If true, also return the winning score of each greedy step.
-
     Returns
     -------
     block_pivots : numpy.ndarray
@@ -125,72 +122,57 @@ def block_linear_dopt(A, block_size, max_blocks, *, return_scores=False):
         indices in selection order.
 
     scores : numpy.ndarray
-        Only returned if `return_scores` is true.  float64, same length.
-        `scores[k]` is the objective value of the block chosen at step `k`,
-        i.e. `sum_j log|R_jj|` of the workspace of that block, which equals
+        float64, same length.  `scores[k]` is the objective value after the
+        block chosen at step `k` is added, i.e.
         `0.5 * logdet(I_m + sum_{i in S_k} A_i A_i^T)` with `S_k` the first
         `k+1` selected blocks.  The curve is nondecreasing.
 
     Notes
     -----
-    Scoring goes through the matrix determinant lemma, so a candidate costs a QR
-    with `block_size` columns rather than `num_params` columns.
-
     Write `M_S = I_m + sum_{i in S} A_i A_i^T` for the ridged information matrix
     of the design chosen so far, and `R_S` for its upper-triangular factor,
-    `R_S^T R_S = M_S`.  Then
+    `R_S^T R_S = M_S`.  By the matrix determinant lemma,
 
         0.5*logdet(M_{S+i}) = 0.5*logdet(M_S) + 0.5*logdet(I_b + G_i G_i^T),
 
     where `G_i = A_i^T R_S^-1` is candidate `i`'s row block expressed in the
-    current factor's coordinates.  The second term is candidate `i`'s *gain*, and
-    `sum_j log|rho_jj|` of the R factor of the `(m + b_sz) x b_sz` panel
+    current factor's coordinates.  The second term is candidate `i`'s *gain*,
+    and it equals `sum_j log|rho_jj|` for the R factor `rho_i` of the
+    `(m + b_sz) x b_sz` panel
 
         P_i = [ G_i^T ]
               [  I_b  ]
 
-    is exactly that gain.  So one QR per remaining candidate per step still
-    scores every candidate exactly, with no rank-one update bookkeeping -- but
-    the panels have `b_sz` columns instead of `m`, and the running total of the
-    gains is the same log-volume curve.
+    Each greedy step therefore QRs one such panel per remaining candidate and
+    takes the largest gain.  The running total of the winning gains is the
+    returned score curve.
 
-    `R_S` is never built by a Cholesky factorization, and in fact never built at
-    all.  The algorithm carries `G` instead of `A` and updates it in place: when
+    The algorithm carries `G` rather than `A` and updates it in place.  When
     candidate `i*` is selected, `R_new = C R_S` with `C^T C = I_m + G_{i*}^T
     G_{i*}`, so `C` is the R factor of the `(b_sz + m) x m` matrix
-    `[G_{i*} ; I_m]` -- one QR per *step*, not per candidate -- and every
-    surviving `G_i` becomes `G_i C^-1`.  Since `C^T C >= I_m`, `||C^-1|| <= 1`
-    and the updates are contractions, so the in-place arithmetic does not
-    amplify earlier rounding.
+    `[G_{i*} ; I_m]` (one QR per step), and every surviving `G_i` becomes
+    `G_i C^-1`.  Since `C^T C >= I_m`, `||C^-1|| <= 1`, so these updates are
+    contractions and do not amplify earlier rounding.
 
     Storage is a single row-major buffer holding the augmented candidate matrix:
     row block `i` is `[ G_i | I_b ]`, of shape `b_sz x (m + b_sz)`, so
     transposing it yields the panels `P_i` in the column-major order LAPACK's
-    `geqrf` wants, with no copy.  The trailing identity columns are constant,
-    which makes the update `G <- G C^-1` one in-place triangular solve of the
-    survivors' rows against `diag(C, I_b)`; a selection retires the winner by
-    swapping its row block past the active boundary.  Nothing is reallocated
-    inside the loop.
+    `geqrf` wants.  The trailing identity columns are constant, which makes the
+    update `G <- G C^-1` one in-place triangular solve of the survivors' rows
+    against `diag(C, I_b)`; a selection retires the winner by swapping its row
+    block past the active boundary.  All buffers are allocated once, before the
+    loop.
 
     Those swaps permute the survivors, so ties are resolved by the lowest
-    *original* candidate index explicitly rather than by argmax position.
+    *original* candidate index.
 
-    The identity block in `P_i` is a fixed unit ridge on the information matrix.
+    The identity block in `P_i` is a unit ridge on the information matrix.
     Callers who want a different ridge `lambda` should scale `A` by
     `lambda**-0.5` before calling, which turns the objective into
     `0.5 * logdet(lambda * I + J_S^T J_S)` up to an additive constant.  Because
     `P_i^T P_i = I_b + G_i G_i^T` is at least `I_b`, every candidate has a finite
     nonnegative gain: a rank-deficient block gains less than a full-rank one and
-    an all-zero block gains exactly zero, so blocks that carry no information are
-    simply ranked after every block that carries some.  There is no singular
-    case to handle, and non-finite input is rejected up front.
-
-    The `bled` reference implementation
-    (`bled.reference_impls.block_linear_dopt`) instead QRs an `(m + b_sz) x m`
-    workspace per candidate.  The two are algebraically the same greedy
-    selection, and agree on selections and log-volumes to rounding; this
-    formulation is about 5x faster and uses a third of the memory at 1926
-    candidates with 42 parameters and 8 outcomes.
+    an all-zero block gains exactly zero.
     """
     A = _validate_inputs(A, block_size, max_blocks)
     T = A.dtype
@@ -202,7 +184,7 @@ def block_linear_dopt(A, block_size, max_blocks, *, return_scores=False):
     block_pivs = _np.zeros(num_blocks, dtype=_np.int64)
     best_scores = _np.zeros(num_blocks, dtype=_np.float64)
     if num_blocks == 0:
-        return (block_pivs, best_scores) if return_scores else block_pivs
+        return block_pivs, best_scores
 
     # The one persistent workspace: the augmented candidate matrix, row-major.
     # Row block i is [ G_i | I_b ], so buf[:k].transpose(0, 2, 1) is a stack of
@@ -233,7 +215,7 @@ def block_linear_dopt(A, block_size, max_blocks, *, return_scores=False):
         # factor; the leading b_sz x b_sz upper triangle is rho_i.
         R = _batched_qr_r(buf[:n_rem].transpose(0, 2, 1))[:, :b_sz, :]
 
-        # ---- Step 2: gain = sum_j log|rho_jj|; lowest-index maximiser. -----
+        # ---- Step 2: gain = sum_j log|rho_jj|; lowest-index maximizer. -----
         # Every panel has full column rank because of its identity block, so
         # every |rho_jj| is at least 1 and every gain is finite and >= 0.
         d = _np.abs(_np.diagonal(R, axis1=-2, axis2=-1))            # (n_rem, b_sz)
@@ -269,7 +251,7 @@ def block_linear_dopt(A, block_size, max_blocks, *, return_scores=False):
         _spl.solve_triangular(dwork, rows[:n_rem * b_sz].T, trans='T', lower=False,
                               overwrite_b=True, check_finite=False)
 
-    return (block_pivs, best_scores) if return_scores else block_pivs
+    return block_pivs, best_scores
 
 
 # --------------------------------------------------------------------------- #
@@ -286,18 +268,19 @@ def _gram_blocks(A, block_size):
 def _half_logdet(M):
     """Batched `0.5 * logdet(M)` over a stack of ridged information matrices.
 
-    Every `M` handed here is `I_m` plus a sum of Gram matrices, so its
-    eigenvalues are at least 1 and `logdet` is nonnegative; there is no
-    sign to test.
+    Every `M` handed here is `I_m` plus a sum of Gram matrices, so it is
+    symmetric positive definite with eigenvalues at least 1.  With `L` its
+    Cholesky factor, `0.5 * logdet(M) = sum_j log(L_jj)`.
     """
-    return 0.5 * _np.linalg.slogdet(M)[1]
+    L = _np.linalg.cholesky(M)
+    return _np.log(_np.diagonal(L, axis1=-2, axis2=-1)).sum(axis=-1)
 
 
 def greedy_candidate_scores(A, block_size, selected=()):
     """Score of every candidate block given an already-selected prefix.
 
-    This is the objective :func:`block_linear_dopt` maximises at each step,
-    evaluated in float64 via `slogdet` rather than via QR.  It shares no
+    This is the objective :func:`block_linear_dopt` maximizes at each step,
+    evaluated in float64 via a Cholesky factorization rather than via QR.  It shares no
     arithmetic with the kernel, so it is an independent yardstick for judging
     the kernel's choices, and it is the natural way to ask "what would this
     circuit add?" without re-running a selection.
@@ -356,8 +339,8 @@ def greedy_path_log_volumes(A, block_size, block_pivots):
 
             `out[k] = 0.5 * logdet(I_m + sum_{i in block_pivots[:k]} A_i A_i^T)`
 
-        so `out[0] == 0` and `out[1:]` is what `block_linear_dopt`'s
-        `return_scores` reports for the same order.  Use it to see where a
+        so `out[0] == 0` and `out[1:]` is the score curve `block_linear_dopt`
+        returns for the same order.  Use it to see where a
         budget stops buying information, or to score a selection the kernel did
         not produce (a random subset, say) on the same footing.
     """
