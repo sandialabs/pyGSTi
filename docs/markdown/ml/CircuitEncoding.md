@@ -67,7 +67,7 @@ For a system of $n$ qubits, the total number of possible error generators grows 
 * All weight-1 error generators (single-qubit coherent and stochastic errors).
 * Weight-2 error generators that lie on connected edges of our device's qubit connectivity graph.
 
-To do this, we describe our device's connectivity as a graph and call the convenience entry point `up_to_weight_k_error_gens_from_qubit_graph`. This (and `layer_snipper_from_qubit_graph`, used in Part 2) accepts a `networkx` graph, an `igraph`/`graph-tool` graph, pyGSTi's own `QubitGraph` or `QubitProcessorSpec`, or a raw adjacency matrix -- see `pygsti.extras.ml.graphtools` for the full list. Let's demonstrate this on a {{num_qubits}}-qubit line graph (0-1-2) with a hop distance of {{num_hops}}.
+To do this, we describe our device's connectivity as a graph and call the convenience entry point `up_to_weight_k_error_gens_from_qubit_graph`. This (and `layer_snipper_from_qubit_graph`, used in Part 2) accepts a `networkx` graph, an `igraph`/`graph-tool` graph, pyGSTi's own `QubitGraph` or `QubitProcessorSpec`, or a raw adjacency matrix -- see `pygsti.tools.graphs` for the full list. Let's demonstrate this on a {{num_qubits}}-qubit line graph (0-1-2) with a hop distance of {{num_hops}}.
 
 ```{code-cell} ipython3
 from pygsti.processors.processorspec import QubitProcessorSpec as QPS

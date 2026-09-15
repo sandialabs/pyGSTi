@@ -18,7 +18,8 @@ import numpy as np
 import networkx as _nx
 from typing import List, Optional, Union
 
-from ._common import Vertex, Edge, NeighborMap, Coloring, order
+from .._common import Vertex, Edge, NeighborMap, order
+from ._definitions import Coloring
 from ._vizing import vizing_edge_coloring, _BipartiteEdgeColoring
 
 

@@ -29,7 +29,8 @@ import pygsti
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.baseobjs.qubitgraph import QubitGraph
 from pygsti.circuits import Circuit
-from pygsti.extras.ml import errgentools, encoding, snippers, customlayers, qpanns, graphtools
+from pygsti.extras.ml import errgentools, encoding, snippers, customlayers, qpanns
+from pygsti.tools import graphs as graphtools
 
 
 class MLSubpackageTester(unittest.TestCase):
@@ -142,6 +143,150 @@ class MLSubpackageTester(unittest.TestCase):
             (set(i for i, c in enumerate(p1) if c != 'I') | set(i for i, c in enumerate(p2) if c != 'I')) == {0, 2}
             for p1, p2 in pairs_hop2
         ))
+
+    def test_errgentools_enumeration_order_is_stable(self):
+        # The *order* of these lists is load-bearing, not incidental: it fixes the order of the
+        # error-generator list, which in turn indexes QPANN parameters (`stochastic_mask` in
+        # qpanns.py), the last axis of encoding.py's index tensors, and the `prior_indices`
+        # incremental contract -- so reordering it silently invalidates any trained or saved
+        # network. The other tests in this file compare sets or lengths, which would not catch
+        # a reordering; these assertions pin the order itself.
+        import itertools
+
+        n = 3
+        line_adjacency = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]])  # 0-1-2 line graph
+
+        # Exact expected list, weight-major then support-lexicographic then XYZ-product order.
+        # {0,2} is absent at hops=1 (0 and 2 are not adjacent), which is why there are 9 + 18
+        # entries rather than 9 + 27.
+        self.assertEqual(
+            errgentools.up_to_weight_k_paulis_from_qubit_graph(2, n, line_adjacency, 1),
+            ['XII', 'YII', 'ZII', 'IXI', 'IYI', 'IZI', 'IIX', 'IIY', 'IIZ',
+             'XXI', 'XYI', 'XZI', 'YXI', 'YYI', 'YZI', 'ZXI', 'ZYI', 'ZZI',
+             'IXX', 'IXY', 'IXZ', 'IYX', 'IYY', 'IYZ', 'IZX', 'IZY', 'IZZ'])
+
+        pairs = errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(2, n, line_adjacency, 1)
+        self.assertEqual(len(pairs), 207)
+        self.assertEqual(pairs[:9],
+                         [('XII', 'YII'), ('XII', 'ZII'), ('YII', 'ZII'),
+                          ('IXI', 'IYI'), ('IXI', 'IZI'), ('IYI', 'IZI'),
+                          ('IIX', 'IIY'), ('IIX', 'IIZ'), ('IIY', 'IIZ')])
+        self.assertEqual(pairs[-3:],
+                         [('IZX', 'IZY'), ('IZX', 'IZZ'), ('IZY', 'IZZ')])
+
+        self.assertEqual(
+            errgentools.up_to_weight_k_error_gens_from_qubit_graph(
+                1, n, line_adjacency, 1, egtypes=['H', 'S']),
+            [('H', (p,)) for p in ['XII', 'YII', 'ZII', 'IXI', 'IYI', 'IZI', 'IIX', 'IIY', 'IIZ']]
+            + [('S', (p,)) for p in ['XII', 'YII', 'ZII', 'IXI', 'IYI', 'IZI', 'IIX', 'IIY', 'IIZ']])
+
+        # The graph-restricted enumeration must agree *as an ordered list* with a brute-force
+        # "enumerate every support, keep the connected ones" scan. This is the contract that
+        # lets the supports be enumerated by growth (`graphtools.connected_supports`) rather
+        # than by filtering, and it is the thing most at risk from a future optimization.
+        def brute_force_supports(adjacency, k, hops):
+            close = graphtools.within_hops_matrix(adjacency, hops)
+            size = close.shape[0]
+
+            def connected(support):
+                seen, stack = {support[0]}, [support[0]]
+                while stack:
+                    u = stack.pop()
+                    for v in support:
+                        if v not in seen and close[u, v]:
+                            seen.add(v)
+                            stack.append(v)
+                return len(seen) == len(support)
+
+            return [s for w in range(1, k + 1)
+                    for s in itertools.combinations(range(size), w) if connected(s)]
+
+        for adjacency, size in ((line_adjacency, 3),
+                                (np.array([[0, 1, 1, 1], [1, 0, 0, 0],
+                                           [1, 0, 0, 0], [1, 0, 0, 0]]), 4)):  # star, center 0
+            for hops in (1, 2):
+                for k in (1, 2, 3):
+                    supports = brute_force_supports(adjacency, k, hops)
+                    expected_paulis = []
+                    expected_pairs = []
+                    for support in supports:
+                        base = ['I'] * size
+                        for letters in itertools.product('XYZ', repeat=len(support)):
+                            s = base[:]
+                            for q, letter in zip(support, letters):
+                                s[q] = letter
+                            expected_paulis.append(''.join(s))
+                        expected_pairs.extend(
+                            errgentools._pauli_pairs_for_support(support, size, False))
+                    self.assertEqual(
+                        errgentools.up_to_weight_k_paulis_from_qubit_graph(k, size, adjacency, hops),
+                        expected_paulis, f"paulis differ for hops={hops}, k={k}")
+                    self.assertEqual(
+                        errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(
+                            k, size, adjacency, hops),
+                        expected_pairs, f"pairs differ for hops={hops}, k={k}")
+
+        # On a complete graph every support is connected, so the graph-restricted enumeration
+        # must reduce exactly (order included) to the unrestricted one.
+        for size in (2, 3):
+            complete = np.ones((size, size), int) - np.eye(size, dtype=int)
+            for k in range(1, size + 1):
+                self.assertEqual(
+                    errgentools.up_to_weight_k_paulis_from_qubit_graph(k, size, complete, 1),
+                    errgentools.up_to_weight_k_paulis(k, size))
+                self.assertEqual(
+                    errgentools.up_to_weight_k_pauli_pairs_from_qubit_graph(k, size, complete, 1),
+                    errgentools.up_to_weight_k_pauli_pairs(k, size))
+
+    def test_errgentools_pauli_pairs_for_support(self):
+        # `_pauli_pairs_for_support` hoists its combo filtering into a per-weight cache
+        # (`_valid_pauli_pair_combos`) and assembles strings from precomputed runs of 'I'
+        # instead of per-character lists. These assertions pin the properties that rewrite
+        # must preserve, independently of the callers above.
+        for w in range(1, 5):
+            size = max(w, 5)
+            support = tuple(range(w))
+            pairs = errgentools._pauli_pairs_for_support(support, size, False)
+            # Count follows the inclusion-exclusion in the function's own docstring.
+            self.assertEqual(len(pairs), (15**w - 3**(w + 1)) // 2, f"w={w}")
+            self.assertEqual(len(set(pairs)), len(pairs), f"duplicates at w={w}")
+            for P, Q in pairs:
+                self.assertEqual(len(P), size)
+                self.assertEqual(len(Q), size)
+                self.assertLess(P, Q)  # canonically ordered, and hence distinct
+                # The union support must be the requested support EXACTLY, not a subset.
+                union = {i for i, c in enumerate(P) if c != 'I'} | {i for i, c in enumerate(Q) if c != 'I'}
+                self.assertEqual(union, set(support))
+
+        # reverse_index flips qubit q to string position n-1-q, and nothing else.
+        for w in (1, 2, 3):
+            size = 5
+            support = tuple(range(w))
+            forward = errgentools._pauli_pairs_for_support(support, size, False)
+            reversed_ = errgentools._pauli_pairs_for_support(support, size, True)
+            self.assertEqual(len(forward), len(reversed_))
+            self.assertEqual({tuple(sorted((P[::-1], Q[::-1]))) for P, Q in reversed_},
+                             {(P, Q) for P, Q in forward})
+
+        # The per-weight cache must not leak state between the two index conventions, nor
+        # between weights: recomputing after a cache clear must give identical results.
+        before = {(w, rev): errgentools._pauli_pairs_for_support(tuple(range(w)), 6, rev)
+                  for w in (1, 2, 3) for rev in (False, True)}
+        errgentools._PAULI_PAIR_COMBO_CACHE.clear()
+        after = {(w, rev): errgentools._pauli_pairs_for_support(tuple(range(w)), 6, rev)
+                 for w in (1, 2, 3) for rev in (False, True)}
+        self.assertEqual(before, after)
+
+        # Non-contiguous and offset supports place letters at the right string positions.
+        self.assertEqual(errgentools._pauli_pairs_for_support((1,), 3, False),
+                         [('IXI', 'IYI'), ('IXI', 'IZI'), ('IYI', 'IZI')])
+        self.assertEqual(errgentools._pauli_pairs_for_support((1,), 3, True),
+                         [('IXI', 'IYI'), ('IXI', 'IZI'), ('IYI', 'IZI')])
+        self.assertEqual(errgentools._pauli_pairs_for_support((0,), 3, True),
+                         [('IIX', 'IIY'), ('IIX', 'IIZ'), ('IIY', 'IIZ')])
+        self.assertEqual(len(errgentools._pauli_pairs_for_support((0, 3), 5, False)), 99)
+        self.assertTrue(all(P[1:3] == 'II' and Q[1:3] == 'II'
+                            for P, Q in errgentools._pauli_pairs_for_support((0, 3), 5, False)))
 
     def test_errgentools_error_generator_index_ca(self):
         # 'H'/'S' backward compatibility: exact same index values as before 'C'/'A' were added.
@@ -623,130 +768,10 @@ class MLSubpackageTester(unittest.TestCase):
             encoder(circuit, padded_depth=1)
 
 
-class GraphToolsTester(unittest.TestCase):
+class GraphMLIntegrationTester(unittest.TestCase):
     # Reference data for a 4-qubit line graph 0-1-2-3, used by several tests below.
     LINE4_EDGES = [(0, 1), (1, 2), (2, 3)]
     LINE4_ADJACENCY = np.array([[0, 1, 0, 0], [1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0]])
-
-    def test_bare_matrix_must_be_adjacency(self):
-        # A bare qubit_graph matrix must be a plain adjacency matrix (entries >= 0); the
-        # all-zero (edgeless) matrix is trivially valid.
-        Z = np.zeros((3, 3))
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(Z), np.zeros((3, 3), int))
-
-        A_star = np.array([[0, 1, 1, 1], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]])  # star, center 0
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(A_star), A_star)
-
-        # A graph Laplacian (L = D - A) has negative off-diagonal entries and must be rejected
-        # with a clear error, rather than silently guessed at or misinterpreted as an adjacency
-        # matrix.
-        L = np.array([[1, -1, 0], [-1, 2, -1], [0, -1, 1]])  # 0-1-2 line graph Laplacian
-        with self.assertRaises(ValueError):
-            graphtools.qubit_graph_to_networkx(L)
-        L_star = np.array([[3, -1, -1, -1], [-1, 1, 0, 0], [-1, 0, 1, 0], [-1, 0, 0, 1]])
-        with self.assertRaises(ValueError):
-            graphtools.qubit_graph_adjacency_matrix(L_star)
-
-    def test_networkx_inputs(self):
-        A_expected = self.LINE4_ADJACENCY[:3, :3]  # 3-qubit line sub-case (0-1-2)
-
-        G_int = nx.Graph()
-        G_int.add_nodes_from([0, 1, 2])
-        G_int.add_edges_from([(0, 1), (1, 2)])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(G_int), A_expected)
-
-        # A DiGraph with only "forward" edges must still be symmetrized.
-        G_di = nx.DiGraph()
-        G_di.add_nodes_from([0, 1, 2])
-        G_di.add_edges_from([(0, 1), (1, 2)])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(G_di), A_expected)
-
-        # Non-integer (string) qubit labels: native node order defines position.
-        G_str = nx.Graph()
-        G_str.add_nodes_from(['q0', 'q1', 'q2'])
-        G_str.add_edges_from([('q0', 'q1'), ('q1', 'q2')])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(G_str), A_expected)
-
-    def test_node_ordering_regression(self):
-        # An nx graph whose insertion order differs from the desired qubit_labels order must
-        # still be reordered correctly (the old bare-matrix API had no such ordering check at
-        # all -- a mismatched matrix would silently produce wrong results).
-        G = nx.Graph()
-        G.add_nodes_from(['Q2', 'Q0', 'Q1'])  # scrambled insertion order
-        G.add_edge('Q0', 'Q1')
-        out = graphtools.qubit_graph_to_networkx(G, qubit_labels=['Q0', 'Q1', 'Q2'])
-        self.assertEqual(list(out.nodes()), ['Q0', 'Q1', 'Q2'])
-        A = graphtools.qubit_graph_adjacency_matrix(G, qubit_labels=['Q0', 'Q1', 'Q2'])
-        np.testing.assert_array_equal(A, np.array([[0, 1, 0], [1, 0, 0], [0, 0, 0]]))
-
-        # Positional fallback: a plain-int-labeled graph mapped onto non-integer qubit_labels.
-        G_pos = nx.Graph()
-        G_pos.add_nodes_from([0, 1, 2])
-        G_pos.add_edge(0, 1)
-        out_pos = graphtools.qubit_graph_to_networkx(G_pos, qubit_labels=['Qa', 'Qb', 'Qc'])
-        self.assertEqual(list(out_pos.nodes()), ['Qa', 'Qb', 'Qc'])
-        self.assertEqual(sorted(out_pos.edges()), [('Qa', 'Qb')])
-
-        # An unreconcilable mismatch raises a clear ValueError naming the offending node.
-        with self.assertRaises(ValueError):
-            graphtools.qubit_graph_to_networkx(G, qubit_labels=['Q0', 'Q1'])  # 'Q2' unexplained
-
-    @unittest.skipUnless(IGRAPH_IMPORTED, "igraph not installed")
-    def test_igraph_input(self):
-        g = igraph.Graph(n=4, edges=self.LINE4_EDGES)
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g), self.LINE4_ADJACENCY)
-
-        g_named = igraph.Graph(n=3)
-        g_named.vs['name'] = ['q0', 'q1', 'q2']
-        g_named.add_edges([(0, 1)])
-        out = graphtools.qubit_graph_to_networkx(g_named)
-        self.assertEqual(list(out.nodes()), ['q0', 'q1', 'q2'])
-        self.assertEqual(sorted(out.edges()), [('q0', 'q1')])
-
-        # Directed igraph graph with only one direction present must still be symmetrized.
-        g_dir = igraph.Graph(n=4, edges=self.LINE4_EDGES, directed=True)
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g_dir), self.LINE4_ADJACENCY)
-
-    @unittest.skipUnless(GRAPH_TOOL_IMPORTED, "graph_tool not installed")
-    def test_graph_tool_input(self):
-        g = graph_tool.Graph(directed=False)
-        g.add_vertex(4)
-        g.add_edge_list(self.LINE4_EDGES)
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g), self.LINE4_ADJACENCY)
-
-        g_named = graph_tool.Graph(directed=False)
-        g_named.add_vertex(3)
-        vprop = g_named.new_vertex_property("string")
-        for i, name in enumerate(['q0', 'q1', 'q2']):
-            vprop[g_named.vertex(i)] = name
-        g_named.vertex_properties['name'] = vprop
-        g_named.add_edge(g_named.vertex(0), g_named.vertex(1))
-        out = graphtools.qubit_graph_to_networkx(g_named)
-        self.assertEqual(list(out.nodes()), ['q0', 'q1', 'q2'])
-        self.assertEqual(sorted(out.edges()), [('q0', 'q1')])
-
-        # Directed graph_tool graph with only one direction present must still be symmetrized.
-        g_dir = graph_tool.Graph(directed=True)
-        g_dir.add_vertex(4)
-        g_dir.add_edge_list(self.LINE4_EDGES)
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(g_dir), self.LINE4_ADJACENCY)
-
-    def test_qubitgraph_and_processorspec_inputs(self):
-        qg = QubitGraph.common_graph(4, "line", directed=True, qubit_labels=[0, 1, 2, 3])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(qg), self.LINE4_ADJACENCY)
-
-        pspec = _ProcessorSpec(4, ['Gxpi2', 'Gypi2', 'Gcphase'], {}, {'Gcphase': self.LINE4_EDGES},
-                                qubit_labels=[0, 1, 2, 3])
-        np.testing.assert_array_equal(graphtools.qubit_graph_adjacency_matrix(pspec), self.LINE4_ADJACENCY)
-        # pspec.qubit_graph itself is edgeless (no explicit `geometry` given to the constructor);
-        # this checks we used compute_2Q_connectivity() and not the (wrong) edgeless qubit_graph.
-        self.assertEqual(pspec.qubit_graph.edges(), [])
-
-    def test_scipy_sparse_input(self):
-        import scipy.sparse as sp
-        A_sparse = sp.csr_matrix(self.LINE4_ADJACENCY)
-        np.testing.assert_array_equal(
-            graphtools.qubit_graph_adjacency_matrix(A_sparse), self.LINE4_ADJACENCY)
 
     def test_missing_required_graph_args_raise(self):
         # qubit_graph/num_hops (errgentools) and qubit_graph/hops (snippers) are required
@@ -816,13 +841,6 @@ class GraphToolsTester(unittest.TestCase):
         snip_reference = snip_results['adjacency']
         for name, result in snip_results.items():
             self.assertEqual(result, snip_reference, f"snipper mismatch for backend {name!r}")
-
-    def test_qubit_graph_from_edges(self):
-        G = graphtools.qubit_graph_from_edges([(0, 1), (1, 2)], [0, 1, 2, 3])
-        self.assertEqual(list(G.nodes()), [0, 1, 2, 3])  # qubit 3 has no edges but is present
-        self.assertEqual(sorted(G.edges()), [(0, 1), (1, 2)])
-        with self.assertRaises(ValueError):
-            graphtools.qubit_graph_from_edges([(0, 5)], [0, 1, 2, 3])  # 5 isn't a qubit label
 
 
 if __name__ == '__main__':
