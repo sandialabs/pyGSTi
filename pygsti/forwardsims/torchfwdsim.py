@@ -397,20 +397,25 @@ class TorchForwardSimulator(ForwardSimulator):
     @staticmethod
     def _model_signature(model):
         """
-        A cheap structural fingerprint of `model`'s parameterized members.
+        A structural fingerprint of `model`'s parameterized members, keyed on live object identity.
 
         The store bakes each member's *type* and its `stateless_data`, so reusing a store is only
-        sound while the members themselves are structurally unchanged. Object identity of the
-        model is not sufficient: `set_all_parameterizations` and `convert_members_inplace` replace
-        member objects under the same labels on the same model object, which would otherwise leave
-        the cached types and stateless data stale.
+        sound while the *same* member objects back the model. `set_all_parameterizations` and
+        `convert_members_inplace` replace member objects under the same labels on the same model
+        object, so weak references to the live objects (compared via `is`) catch every such
+        replacement generically -- including a conversion that preserves both `type` and
+        `num_params` while changing internal structure (e.g. `CPTPLND`<->`GLND`, `H`<->`S`,
+        `H+S`<->`H+s`). Including each member's label also detects labels being added or
+        removed.
 
         This does not, and cannot cheaply, detect in-place mutation of a *static* member's dense
-        matrix, whose value is baked into `stateless_data`. Mutating a member pyGSTi considers
-        static is out of contract; call `model.sim = TorchForwardSimulator(...)` again if you do it.
+        matrix, whose value is baked into `stateless_data`; call `model.sim =
+        TorchForwardSimulator(...)` again if you do that. It also does not catch
+        `ComposedOp`/`ComposedErrorgen`'s own `append`/`insert`/`remove`, which mutate a
+        container's factor list in place without replacing the outer object's identity -- a real
+        but unconfirmed residual gap.
         """
-        return tuple((lbl, type(obj), obj.num_params)
-                     for lbl, obj in model._iter_parameterized_objs())
+        return tuple((lbl, _weakref.ref(obj)) for lbl, obj in model._iter_parameterized_objs())
 
     def _circuit_store(self, layout) -> StatelessModelCircuitStore:
         """
@@ -422,21 +427,25 @@ class TorchForwardSimulator(ForwardSimulator):
         twice per iteration against a fixed layout -- should pay for them once, not once per
         iteration.
 
-        The cache holds weak references so it can't keep a layout or model alive. It is keyed by
-        the identity of the layout and model *and* by :meth:`_model_signature`, so that replacing
-        modelmembers in place (a different parameterization under the same label) invalidates it.
+        The cache holds weak references so it can't keep a layout, model, or member alive. It is
+        keyed by the identity of the layout, the model, and each of the model's parameterized
+        members (see :meth:`_model_signature`), so that replacing modelmembers in place (a
+        different parameterization under the same label) invalidates it.
         """
-        signature = self._model_signature(self.model)
         cached = self._store_cache
         if cached is not None:
             layout_ref, model_ref, cached_signature, store = cached
+            current_objs = tuple(self.model._iter_parameterized_objs())
             if (layout_ref() is layout and model_ref() is self.model
-                    and cached_signature == signature):
+                    and len(cached_signature) == len(current_objs)
+                    and all(lbl == cur_lbl and ref() is cur_obj
+                            for (lbl, ref), (cur_lbl, cur_obj) in zip(cached_signature, current_objs))):
                 return store
         store = StatelessModelCircuitStore(self.model, layout, self.dtype, self.device)
         try:
+            signature = self._model_signature(self.model)
             self._store_cache = (_weakref.ref(layout), _weakref.ref(self.model), signature, store)
-        except TypeError:  # pragma: no cover - a layout or model that can't be weak-referenced
+        except TypeError:  # pragma: no cover - a layout, model, or member that can't be weak-referenced
             self._store_cache = None
         return store
 
