@@ -372,7 +372,7 @@ class FindPerfectGauge_TensorProductGroup_Tester(BaseCase):
         check_gate_metrics_are_nontrivial(gate_metrics_dict(model, target), tol=1e-4)
         return model, el
 
-    def _check_recovery(self, target, cnot_qubits_desc):
+    def _check_recovery(self, target):
         for seed in range(2):
             model, _ = self._prep(target, seed)
             for method, alg_tol, test_tol in (('L-BFGS-B', 1e-7, 1e-5), ('ls', 1e-15, 1e-6)):
@@ -382,14 +382,14 @@ class FindPerfectGauge_TensorProductGroup_Tester(BaseCase):
                 check_gate_metrics_near_zero(metrics, test_tol)
 
     def test_recovers_local_unitary_gauge(self):
-        self._check_recovery(self._two_qubit_target((0, 1)), 'Gcnot:0:1')
+        self._check_recovery(self._two_qubit_target((0, 1)))
 
     def test_recovers_local_unitary_gauge_with_out_of_order_cnot(self):
         # The entangler targets (1, 0). Its superoperator lives in the full-space basis whose
         # Kronecker order follows the state-space labels, not the gate's target order.
         target = self._two_qubit_target((1, 0))
         self.assertIn(pgl.Label('Gcnot', (1, 0)), target.operations)
-        self._check_recovery(target, 'Gcnot:1:0')
+        self._check_recovery(target)
 
     def test_local_element_acts_like_full_space_unitary_element(self):
         from pygsti.models.gaugegroup import OpGaugeGroupElement

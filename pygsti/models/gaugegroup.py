@@ -10,6 +10,8 @@ GaugeGroup and derived objects, used primarily in gauge optimization
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 from __future__ import annotations
+import warnings as _warnings
+
 import numpy as _np
 from typing import (
     Optional,
@@ -19,6 +21,8 @@ from typing import (
 )
 
 import scipy.linalg as _la
+import scipy.sparse as _sps
+import scipy.sparse.linalg as _spsl
 
 from pygsti.baseobjs import (
     StateSpace as _StateSpace,
@@ -30,7 +34,9 @@ from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis, TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.evotypes.evotype import Evotype as _Evotype
+from pygsti.tools import matrixtools as _mt
 from pygsti.tools.optools import superop_to_unitary, unitary_to_superop
+from pygsti.tools.exceptions import DubiousTargetWarning
 
 if TYPE_CHECKING:
     from pygsti.modelmembers.operations import LinearOperator as _LinearOperator
@@ -1457,27 +1463,83 @@ class DirectSumUnitaryGroupElement(GaugeGroupElement):
         return cls(subelements, basis, level_partition)
 
 
-def _match_factors_to_label_runs(factor_udims, labels, label_udims):
+#: Builtin bases ``B`` for which ``B(d1 * d2) == B(d1) (x) B(d2)``, so that a tensor product of
+#: them needs no change of basis.  ``'std'`` is deliberately absent: its elements are ordered by
+#: (row, column) of the *composite* space, which is the perfect shuffle of the tensor-product
+#: ordering, so the transform from ``std (x) std`` is a permutation rather than the identity.
+_TENSOR_PRODUCT_BUILTIN_BASES = frozenset(['pp'])
+
+
+def _basis_components(basis):
+    """ The component bases of a tensor-product basis, or ``[basis]`` for a simple one. """
+    return list(basis.component_bases) if isinstance(basis, _TensorProdBasis) else [basis]
+
+
+def _factor_bases_tensor_to(factor_bases, basis):
+    """
+    Whether the tensor product of `factor_bases` is `basis` itself, so no change of basis is needed.
+
+    Decided from the bases' structure, without building any transform matrix: building one costs
+    O(dim^2) memory and dominates the cost of constructing a :class:`TensorProductGaugeGroup`.
+    Returns False whenever it can't tell, leaving the caller to build the transform and test it.
+    """
+    components = [c for fb in factor_bases for c in _basis_components(fb)]
+    if isinstance(basis, _TensorProdBasis):
+        model_components = basis.component_bases
+        return (len(components) == len(model_components)
+                and all(c.is_equivalent(m, sparseness_must_match=False)
+                        for c, m in zip(components, model_components)))
+    if len(components) == 1:
+        return components[0].is_equivalent(basis, sparseness_must_match=False)
+    if isinstance(basis, _BuiltinBasis) and basis.name in _TENSOR_PRODUCT_BUILTIN_BASES:
+        return all(isinstance(c, _BuiltinBasis) and c.name == basis.name for c in components)
+    return False
+
+
+def _is_identity(mx, atol=1e-8):
+    """ Whether `mx`, dense or sparse, is the identity matrix to within `atol`. """
+    n = mx.shape[0]
+    if _sps.issparse(mx):
+        return _mt.safe_norm((mx - _sps.identity(n, format='csr')).tocsr()) < atol
+    return _np.allclose(mx, _np.eye(n), atol=atol)
+
+
+def _match_factors_to_label_runs(factor_dims, labels, label_dims):
     """
     Assign each tensor factor of a :class:`TensorProductGaugeGroup` to a contiguous run of state-space labels.
 
     Walks the labels of a single tensor-product block in order and gives factor ``j`` the shortest
-    run of not-yet-assigned labels whose Hilbert-space dimensions multiply to ``factor_udims[j]``.
+    run of not-yet-assigned labels whose dimensions multiply to ``factor_dims[j]``.
     Returns a tuple of index tuples, one per factor. Raises ValueError if a factor's dimension
-    cannot be matched this way or if labels are left over after the last factor.
+    cannot be matched this way or if labels are left over after the last factor, and warns with
+    :class:`DubiousTargetWarning` when a factor's run picks up a dimension-1 label.
+
+    Matching on Hilbert-Schmidt dimension selects the same runs that matching on Hilbert-space
+    dimension would -- each label's ``dim`` is its ``udim`` squared, and squaring is monotonic --
+    but stays meaningful for state spaces where ``udim`` isn't defined.
     """
     runs = []
     i = 0
-    for j, fudim in enumerate(factor_udims):
+    for j, fdim in enumerate(factor_dims):
         start, prod = i, 1
-        while (prod < fudim or i == start) and i < len(labels):  # always consume at least one label
-            prod *= label_udims[i]
+        while (prod < fdim or i == start) and i < len(labels):  # always consume at least one label
+            prod *= label_dims[i]
             i += 1
-        if prod != fudim:
+        if prod != fdim:
             raise ValueError(
-                f"Factor {j} has Hilbert-space dimension {fudim}, but the state-space labels "
-                f"{labels[start:i]} (dimensions {label_udims[start:i]}) starting at position {start} "
+                f"Factor {j} has dimension {fdim}, but the state-space labels "
+                f"{labels[start:i]} (dimensions {label_dims[start:i]}) starting at position {start} "
                 f"cannot be grouped to match it. Factors must act on contiguous labels, in order.")
+        if i - start > 1 and any(label_dims[k] == 1 for k in range(start, i)):
+            # A factor absorbing a dimension-1 label is dimensionally consistent, so we allow it,
+            # but it usually means the caller miscounted their factors.
+            triv = [labels[k] for k in range(start, i) if label_dims[k] == 1]
+            rest = [labels[k] for k in range(start, i) if label_dims[k] != 1]
+            _warnings.warn(
+                f"Factor {j} (dimension {fdim}) was matched to state-space labels {labels[start:i]}, "
+                f"which include the dimension-1 label(s) {triv}. If the factor was meant to act on "
+                f"{rest} alone, supply a separate factor (e.g. a TrivialGaugeGroup) for each "
+                f"dimension-1 label.", DubiousTargetWarning, stacklevel=2)
         runs.append(tuple(range(start, i)))
     if i != len(labels):
         raise ValueError(
@@ -1500,7 +1562,9 @@ class TensorProductGaugeGroup(GaugeGroup):
     ----------
     factors : sequence of GaugeGroup
         One gauge group per tensor factor, in state-space label order.  Each acts on its own
-        (single- or multi-label) state space.
+        (single- or multi-label) state space.  A factor whose matched run of labels includes a
+        dimension-1 label raises a :class:`DubiousTargetWarning`: the layout is dimensionally
+        consistent, but it usually means a factor is missing.
 
     state_space : StateSpace
         The state space of the model this group will transform.  Must consist of a single
@@ -1530,10 +1594,10 @@ class TensorProductGaugeGroup(GaugeGroup):
             raise ValueError(
                 f"TensorProductGaugeGroup requires a state space with a single tensor-product block; "
                 f"got {state_space.num_tensor_product_blocks}.")
-        labels = state_space.tensor_product_blocks_labels[0]
-        label_udims = state_space.tensor_product_blocks_udimensions[0]
-        factor_udims = [f.state_space.udim for f in factors]
-        self._label_runs = _match_factors_to_label_runs(factor_udims, labels, label_udims)
+        labels     = state_space.tensor_product_blocks_labels[0]
+        label_dims = state_space.tensor_product_blocks_dimensions[0]
+        factor_dims = [f.state_space.dim for f in factors]
+        self._label_runs = _match_factors_to_label_runs(factor_dims, labels, label_dims)
 
         if isinstance(basis, str):
             basis = _Basis.cast(basis, state_space)
@@ -1554,10 +1618,15 @@ class TensorProductGaugeGroup(GaugeGroup):
         self.factor_bases = resolved
         self._param_dims = _np.array([f.num_params for f in factors], dtype=int)
         self._num_params = int(_np.sum(self._param_dims))
-        self._change_of_basis = self._compute_change_of_basis(resolved, basis)
+        self._change_of_basis, self._change_of_basis_inverse = self._compute_change_of_basis(resolved, basis)
         super().__init__(name)
 
     def _resolve_factor_basis(self, j, factor, explicit, basis, labels):
+        # Decide which basis factor `j` expresses its transform matrix in, in order of precedence:
+        # an explicit `factor_bases` entry (cross-checked against the factor's own basis, if it has
+        # one), then the factor's own basis, then the components of `basis` covering this factor's
+        # labels when `basis` is a TensorProdBasis laid out one component per label, and finally a
+        # same-named builtin basis at the factor's dimension.
         dim = factor.state_space.dim
         declared = getattr(factor, 'basis', None)
         if declared is not None:
@@ -1583,18 +1652,26 @@ class TensorProductGaugeGroup(GaugeGroup):
     @staticmethod
     def _compute_change_of_basis(factor_bases, basis):
         """
-        The matrix C with S_model = C @ kron(S_1, ..., S_k) @ inv(C), or None when C is the identity.
+        The operators C and C^-1 with S_model = C @ kron(S_1, ..., S_k) @ C^-1.
+
+        Both are :class:`IdentityOperator` when the factor bases already tensor to `basis`, so
+        callers can conjugate unconditionally and pay nothing for the common case.  That case is
+        settled structurally first, so the Pauli-product bases our model constructors produce
+        never build a transform matrix at all.  C and C^-1 keep whatever density their bases
+        give them; everything downstream handles both.
         """
+        identity = _mt.IdentityOperator()
+        if _factor_bases_tensor_to(factor_bases, basis):
+            return identity, identity
         tp_basis = _TensorProdBasis(factor_bases) if len(factor_bases) > 1 else factor_bases[0]
         C = tp_basis.create_transform_matrix(basis)
-        if hasattr(C, 'toarray'):
-            C = C.toarray()
-        C = _np.asarray(C)
-        if _np.allclose(C, _np.eye(C.shape[0])):
-            return None
-        if _np.allclose(C.imag, 0):
-            C = C.real
-        return C
+        if _is_identity(C):
+            return identity, identity
+        # `reverse_transform_matrix` inverts `create_transform_matrix`, and `Basis` caches both.
+        Cinv = tp_basis.reverse_transform_matrix(basis)
+        if _mt.safe_norm(C, 'imag') < 1e-10:  # C real implies C^-1 real, up to numerical noise
+            C, Cinv = C.real, Cinv.real
+        return C, Cinv
 
     @staticmethod
     def _per_label_factor_spaces_and_bases(state_space, basis):
@@ -1605,12 +1682,14 @@ class TensorProductGaugeGroup(GaugeGroup):
         if state_space.num_tensor_product_blocks != 1:
             raise ValueError("Local gauge groups require a state space with a single tensor-product block.")
         labels = state_space.tensor_product_blocks_labels[0]
-        udims = state_space.tensor_product_blocks_udimensions[0]
+        dims = state_space.tensor_product_blocks_dimensions[0]
         if isinstance(basis, _TensorProdBasis) and len(basis.component_bases) == len(labels):
             bases = list(basis.component_bases)
         else:
             name = basis if isinstance(basis, str) else basis.name
-            bases = [_Basis.cast(name, udim ** 2) for udim in udims]
+            bases = [_Basis.cast(name, dim) for dim in dims]
+        # ExplicitStateSpace is built from Hilbert-space dimensions, so the udims are still needed here.
+        udims = state_space.tensor_product_blocks_udimensions[0]
         spaces = [_ExplicitStateSpace([lbl], [udim]) for lbl, udim in zip(labels, udims)]
         return spaces, bases
 
@@ -1684,7 +1763,8 @@ class TensorProductGaugeGroup(GaugeGroup):
         for pd, f in zip(self._param_dims, self.factors):
             elements.append(f.compute_element(param_vec[offset:offset + pd]))
             offset += pd
-        return TensorProductGaugeGroupElement(tuple(elements), self._change_of_basis)
+        return TensorProductGaugeGroupElement(tuple(elements), self._change_of_basis,
+                                              self._change_of_basis_inverse)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -1715,15 +1795,26 @@ class TensorProductGaugeGroupElement(GaugeGroupElement):
     factor_elements : tuple of GaugeGroupElement
         The per-factor elements, in state-space order.
 
-    change_of_basis : numpy.ndarray, optional
-        Matrix ``C`` such that the transform matrix in the model's basis is
-        ``C @ kron(S_1, ..., S_k) @ inv(C)``.  ``None`` means the identity.
+    change_of_basis : numpy.ndarray or IdentityOperator, optional
+        Operator ``C`` such that the transform matrix in the model's basis is
+        ``C @ kron(S_1, ..., S_k) @ C^-1``.  ``None`` is taken as the identity.
+
+    change_of_basis_inverse : numpy.ndarray or IdentityOperator, optional
+        The inverse of `change_of_basis`, which the owning group already has.  Computed here
+        when omitted.
     """
 
-    def __init__(self, factor_elements, change_of_basis=None):
+    def __init__(self, factor_elements, change_of_basis=None, change_of_basis_inverse=None):
         self.factor_elements = tuple(factor_elements)
-        self._C = change_of_basis
-        self._Cinv = None if change_of_basis is None else _np.linalg.inv(change_of_basis)
+        self._C = _mt.to_operatorlike(change_of_basis)
+        if change_of_basis_inverse is not None:
+            self._Cinv = _mt.to_operatorlike(change_of_basis_inverse)
+        elif change_of_basis is None:
+            self._Cinv = _mt.IdentityOperator()
+        elif _sps.issparse(change_of_basis):
+            self._Cinv = _spsl.inv(change_of_basis.tocsc()).tocsr()
+        else:
+            self._Cinv = _np.linalg.inv(change_of_basis)
         self._param_dims = _np.array([e.num_params for e in self.factor_elements], dtype=int)
         self._param_offsets = _np.concatenate([[0], _np.cumsum(self._param_dims)])
         self._num_params = int(self._param_offsets[-1])
@@ -1737,7 +1828,7 @@ class TensorProductGaugeGroupElement(GaugeGroupElement):
         self._inv_mx = None
 
     def _conjugate(self, mx):
-        return mx if self._C is None else self._C @ mx @ self._Cinv
+        return self._C @ mx @ self._Cinv
 
     @staticmethod
     def _kron(mxs):
@@ -1830,7 +1921,8 @@ class TensorProductGaugeGroupElement(GaugeGroupElement):
         state = super()._to_nice_serialization()
         state.update({
             'factor_elements': [e.to_nice_serialization() for e in self.factor_elements],
-            'change_of_basis': None if self._C is None else self._encodemx(self._C)
+            'change_of_basis': (None if isinstance(self._C, _mt.IdentityOperator)
+                                else self._encodemx(self._C))
         })
         return state
 
