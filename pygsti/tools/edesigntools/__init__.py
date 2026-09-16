@@ -11,17 +11,30 @@
 Utilities that take an ExperimentDesign and tell you something about it, or hand
 you a modified one: `calculate_edesign_estimated_runtime` for wall-clock
 estimates, the `calculate_fisher_information_*` family for how much a design
-tells you about a model.  The `blockdopt` submodule holds the greedy block
-D-optimal selection kernel, whose three public functions are re-exported here.
+tells you about a model.
+
+`DesignReducer` is the interface for cutting a design down to a budget; write
+one to plug your own selection rule into `design.reduce_with(...)`.
+`BlockDoptReducer` is the reference implementation, which ranks candidates by
+how much information each adds about a model's parameters; it and the greedy
+block D-optimal selection kernel it is built on live in the `blockdopt`
+submodule, and everything public there is re-exported here.
 
 New code should import from here.
 """
 from ._fisher import (calculate_fisher_information_matrices_by_L, calculate_fisher_information_matrix,
                       calculate_fisher_information_per_circuit)
+from ._reduction import CallableReducer, CircuitSelection, DesignReducer
 from ._runtime import calculate_edesign_estimated_runtime
-from .blockdopt import block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes
+from .blockdopt import (BlockDoptReducer, block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes,
+                        jacobian_dict_to_array, perturb_errorgen_rates, rank_circuits_by_dopt,
+                        reduce_design_by_dopt)
 
 __all__ = [
+    "BlockDoptReducer",
+    "CallableReducer",
+    "CircuitSelection",
+    "DesignReducer",
     "block_linear_dopt",
     "calculate_edesign_estimated_runtime",
     "calculate_fisher_information_matrices_by_L",
@@ -29,4 +42,8 @@ __all__ = [
     "calculate_fisher_information_per_circuit",
     "greedy_candidate_scores",
     "greedy_path_log_volumes",
+    "jacobian_dict_to_array",
+    "perturb_errorgen_rates",
+    "rank_circuits_by_dopt",
+    "reduce_design_by_dopt",
 ]

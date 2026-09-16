@@ -21,7 +21,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
-from typing import Optional, Union, Any
+from typing import Any, Callable, Optional, Union
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -51,6 +51,7 @@ from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAl
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
+from pygsti.tools.edesigntools import DesignReducer as _DesignReducer
 from pygsti.circuits import Circuit
 from pygsti.forwardsims import ForwardSimulator
 from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
@@ -124,10 +125,87 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         when `all_circuits_needing_data` is given).
     """
 
+    #: The :class:`~pygsti.tools.edesigntools.CircuitSelection` that produced this design,
+    #: if it came from :meth:`reduce_with`; None otherwise.  Records the reducer, its score
+    #: curve and the candidate count, so a reduced design carries the provenance of its
+    #: own reduction.  Declared on the class as well as set in `__init__` so that a design
+    #: rebuilt without `__init__` -- as `from_dir` does -- reads as unreduced even if it was
+    #: written before this member existed.
+    selection = None
+
     def __init__(self, processorspec_filename_or_obj, circuit_lists, all_circuits_needing_data=None,
                  qubit_labels=None, nested=False, remove_duplicates=True):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
         HasProcessorSpec.__init__(self, processorspec_filename_or_obj)
+        self.selection = None
+        self.auxfile_types['selection'] = 'serialized-object'
+
+    @classmethod
+    def from_dir(cls, dirname: str, parent: Optional[_proto.ExperimentDesign] = None,
+                 name: Optional[str] = None, quick_load: bool = False) -> "GateSetTomographyDesign":
+        """
+        Initialize a new GateSetTomographyDesign from `dirname`.
+
+        As :meth:`ExperimentDesign.from_dir`, and additionally registers the `selection`
+        member on a design written before it existed, so that reducing such a design and
+        writing the result does not try to store a live object as JSON.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is a 'edesign' subdirectory).
+
+        parent : ExperimentDesign, optional
+            The parent design object, if there is one.
+
+        name : str, optional
+            The sub-name of the design object being loaded.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of the potentially long circuit lists.
+
+        Returns
+        -------
+        GateSetTomographyDesign
+        """
+        ret = super().from_dir(dirname, parent=parent, name=name, quick_load=quick_load)
+        ret.auxfile_types.setdefault('selection', 'serialized-object')
+        return ret
+
+    def reduce_with(self, reducer: Union[_DesignReducer, Callable[..., Any]],
+                    num_circuits: Optional[int] = None) -> "GateSetTomographyDesign":
+        """A copy of this design keeping only the circuits `reducer` selects.
+
+        Named for the parallel with `merge_with`.
+
+        Parameters
+        ----------
+        reducer : DesignReducer or callable
+            The selection rule.  A callable is invoked as `reducer(design, num_circuits)`
+            and should return the circuits to keep.
+
+        num_circuits : int, optional
+            The budget, clamped to the number of circuits available.  None asks the
+            reducer to choose for itself; a greedy reducer will typically rank everything
+            and leave the budget to be read off the returned score curve.
+
+        Returns
+        -------
+        GateSetTomographyDesign
+            Of the same class as `self`.  Its `selection` attribute holds the
+            :class:`~pygsti.tools.edesigntools.CircuitSelection` that produced it -- read
+            `selection.scores` to see where the budget stopped buying information.
+
+        Notes
+        -----
+        Truncation does not rebuild any structural metadata that described the *original*
+        circuit set.  On a :class:`StandardGSTDesign` in particular, `germs`,
+        `prep_fiducials`, `meas_fiducials`, `fiducial_pairs` and `maxlengths` are carried
+        over unchanged and will over-describe the reduced design.  The circuits are
+        correct; those members are a record of how the original was generated, not an
+        index of what survived.
+        """
+        return _DesignReducer.cast(reducer).reduce(self, num_circuits)
 
     def map_qubit_labels(self, mapper):
         """
@@ -149,8 +227,13 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
                                 for circuit_list in self.circuit_lists]
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
-        return GateSetTomographyDesign(mapped_processorspec, mapped_circuit_lists, mapped_circuits,
-                                       mapped_qubit_labels, self.nested, remove_duplicates=False)
+        mapped = GateSetTomographyDesign(mapped_processorspec, mapped_circuit_lists, mapped_circuits,
+                                         mapped_qubit_labels, self.nested, remove_duplicates=False)
+        # Relabelling renames qubits; it does not re-select circuits. Carrying `selection`
+        # across keeps a reduced design's record of what reduced it, which is otherwise
+        # lost here without a word.
+        mapped.selection = self.selection
+        return mapped
 
 
 class StandardGSTDesign(GateSetTomographyDesign):
@@ -400,9 +483,9 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
         # The constructor above *regenerates* the circuit lists from germs, fiducials and
         # max lengths, which describe the design as originally generated -- not as it
-        # stands if circuits have since been dropped by `truncate_to_circuits` or another
-        # truncation route. Left alone, relabelling a truncated design silently restores
-        # every circuit that was removed.
+        # stands if circuits have since been dropped by `reduce_with`, `truncate_to_circuits`
+        # or another truncation route. Left alone, relabelling a reduced design silently
+        # restores every circuit that was removed.
         #
         # So when the reconstruction disagrees with what this design actually holds,
         # install the real lists instead, relabelled: renaming qubits is not a reason to
@@ -416,6 +499,8 @@ class StandardGSTDesign(GateSetTomographyDesign):
                                     for circuit_list in self.circuit_lists]
             mapped.all_circuits_needing_data = _CircuitList.cast(mapped_all)
             mapped.nested = self.nested
+
+        mapped.selection = self.selection
         return mapped
 
 

@@ -18,9 +18,17 @@ greedy ordering off the resulting table.
 
 Ported from `python-block-edesigns/tests/test_reference_impls.py`, minus the
 cases that compare against that package's compiled C++ kernel.
+
+From `JacobianFlatteningTester` down, the tests cover what sits between a pyGSTi
+model and the kernel: flattening a `bulk_dprobs` result into the kernel's
+matrix, perturbing a target model so that its Jacobian is representative, the
+function-shaped entry points `rank_circuits_by_dopt` and
+`reduce_design_by_dopt`, and `BlockDoptReducer`, the `DesignReducer` that wraps
+them.  The `DesignReducer` contract itself is tested in test_reduction.py.
 """
 import itertools
 import unittest.mock
+import warnings
 
 import numpy as np
 import scipy.linalg
@@ -526,3 +534,397 @@ class BruteForceEnumerationTester(BaseCase):
         A[:, 2 * b:3 * b] = 0.0                          # candidate 2: zero
         A[:, 4 * b:5 * b] = np.outer(A[:, 0], [1.0, -2.0, 0.5])   # candidate 4: rank 1
         self._compare(A, b)
+
+
+class JacobianFlatteningTester(BaseCase):
+    """`jacobian_dict_to_array` turns a bulk_dprobs result into the kernel's `A`."""
+
+    @staticmethod
+    def _jac_dict(num_circuits, num_outcomes, num_params, start=0.0):
+        v = start
+        out = {}
+        for c in range(num_circuits):
+            per_circuit = {}
+            for o in range(num_outcomes):
+                per_circuit['o%d' % o] = np.full(num_params, v)
+                v += 1.0
+            out['c%d' % c] = per_circuit
+        return out
+
+    def test_shape_and_block_size(self):
+        jac, block_size = bd.jacobian_dict_to_array(self._jac_dict(5, 4, 7))
+        self.assertEqual(jac.shape, (20, 7))
+        self.assertEqual(block_size, 4)
+
+    def test_rows_are_grouped_per_circuit_in_key_order(self):
+        # The block order follows the dict's keys, not any input circuit list:
+        # bulk_dprobs may deduplicate and reorder, so this is the mapping a
+        # caller has to use to get back from a block index to a circuit.
+        jac, block_size = bd.jacobian_dict_to_array(self._jac_dict(3, 2, 1))
+        self.assertArraysEqual(jac.ravel(), np.arange(6.0))
+
+    def test_ragged_outcome_counts_raise(self):
+        ragged = self._jac_dict(2, 3, 4)
+        del ragged['c1']['o2']
+        with self.assertRaises(ValueError) as ctx:
+            bd.jacobian_dict_to_array(ragged)
+        self.assertIn('uniform outcome count', str(ctx.exception))
+
+    def test_empty_dict_raises(self):
+        with self.assertRaises(ValueError):
+            bd.jacobian_dict_to_array({})
+
+
+class _ModelFixture:
+    """A 1-qubit H+S model and a handful of circuits to differentiate on.
+
+    Class-scoped: nothing below mutates the model, and `perturb_errorgen_rates`
+    is required to copy.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from pygsti.modelpacks import smq1Q_XYI
+        cls.target = smq1Q_XYI.target_model('H+S')
+        edesign = smq1Q_XYI.create_gst_experiment_design(max_max_length=2)
+        cls.circuits = list(edesign.all_circuits_needing_data)[:40]
+        # pyGSTi names cholesky-mode stochastic parameters 'sqrt(... stochastic ...)'.
+        cls.is_stochastic = np.array(['stochastic' in str(lbl)
+                                      for lbl in cls.target.parameter_labels])
+
+    def column_norms(self, model):
+        jac, _ = bd.jacobian_dict_to_array(model.sim.bulk_dprobs(self.circuits))
+        return np.linalg.norm(jac, axis=0)
+
+
+class PerturbErrorgenRatesTester(_ModelFixture, BaseCase):
+    def test_the_target_model_has_invisible_stochastic_columns(self):
+        """The reason perturb_errorgen_rates exists, pinned as a fact about pyGSTi.
+
+        H+S stochastic rates use param_mode='cholesky': rate = theta**2, so
+        d(rate)/d(theta) = 2*theta is exactly zero at the target model. A
+        selector handed a target model optimises as if half the parameters were
+        not there, silently.
+        """
+        self.assertGreater(self.is_stochastic.sum(), 0)
+        norms = self.column_norms(self.target)
+        self.assertLess(norms[self.is_stochastic].max(), 1e-4)
+        self.assertGreater(np.median(norms[~self.is_stochastic]), 1.0)
+
+    def test_perturbing_the_parameter_vector_is_not_enough(self):
+        """The obvious fix does not work, which is why the helper sets rates.
+
+        A 1e-4 nudge of the parameter vector puts theta at 1e-4, so the
+        stochastic columns land at ~1e-4 of their rate-derivative: nonzero, but
+        orders of magnitude under the unit ridge, so still invisible to the
+        objective.
+        """
+        nudged = self.target.copy()
+        rng = np.random.default_rng(0)
+        nudged.from_vector(nudged.to_vector() + 1e-4 * rng.standard_normal(nudged.num_params))
+        norms = self.column_norms(nudged)
+        self.assertLess(norms[self.is_stochastic].max(), 1e-2)
+
+    def test_perturbing_rates_makes_the_stochastic_columns_usable(self):
+        perturbed = bd.perturb_errorgen_rates(self.target, 1e-3, seed=0)
+        norms = self.column_norms(perturbed)
+        hamiltonian = np.median(norms[~self.is_stochastic])
+        stochastic = np.median(norms[self.is_stochastic])
+        # Within an order of magnitude of the Hamiltonian columns, and well above
+        # the unit ridge, is what "visible to the objective" means here.
+        self.assertGreater(stochastic, 0.1)
+        self.assertGreater(stochastic, hamiltonian / 100)
+
+    def test_the_input_model_is_not_modified(self):
+        before = self.target.to_vector().copy()
+        bd.perturb_errorgen_rates(self.target, 1e-3, seed=0)
+        self.assertArraysEqual(self.target.to_vector(), before)
+
+    def test_the_seed_controls_the_result(self):
+        a = bd.perturb_errorgen_rates(self.target, 1e-3, seed=0)
+        b = bd.perturb_errorgen_rates(self.target, 1e-3, seed=0)
+        c = bd.perturb_errorgen_rates(self.target, 1e-3, seed=1)
+        self.assertArraysEqual(a.to_vector(), b.to_vector())
+        self.assertFalse(np.allclose(a.to_vector(), c.to_vector()))
+
+    def test_the_scale_is_a_rate_not_a_parameter_value(self):
+        # rate = theta**2 in cholesky mode, so scaling rates by 100 scales the
+        # stochastic *parameters* by 10. Pins that `scale` means what it says.
+        small = bd.perturb_errorgen_rates(self.target, 1e-4, seed=0)
+        large = bd.perturb_errorgen_rates(self.target, 1e-2, seed=0)
+        ratio = (large.to_vector()[self.is_stochastic]
+                 / small.to_vector()[self.is_stochastic])
+        self.assertArraysAlmostEqual(ratio, np.full(ratio.shape, 10.0), places=6)
+
+
+class RankCircuitsTester(_ModelFixture, BaseCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.model = bd.perturb_errorgen_rates(cls.target, 1e-3, seed=0)
+
+    def _ranked(self, circuits, max_circuits=None, **kwargs):
+        ranked, scores = bd.rank_circuits_by_dopt(self.model, circuits, max_circuits, **kwargs)
+        self.assertEqual(len(scores), len(ranked))
+        return ranked
+
+    def test_ranks_every_unique_circuit_by_default(self):
+        ranked = self._ranked(self.circuits)
+        self.assertEqual(len(ranked), len(self.circuits))
+        self.assertEqual(set(ranked), set(self.circuits))
+
+    def test_a_budget_is_a_prefix_of_the_full_ranking(self):
+        full = self._ranked(self.circuits)
+        self.assertEqual(self._ranked(self.circuits, 5), full[:5])
+
+    def test_is_deterministic(self):
+        self.assertEqual(self._ranked(self.circuits, 6), self._ranked(self.circuits, 6))
+
+    def test_duplicates_are_ranked_once(self):
+        ranked = self._ranked(self.circuits + self.circuits)
+        self.assertEqual(len(ranked), len(set(self.circuits)))
+        self.assertEqual(len(ranked), len(set(ranked)))
+
+    def test_scores_are_the_log_volume_curve_of_the_ranking(self):
+        """Cross-checked against the independent Cholesky scorer, on the same matrix."""
+        ranked, scores = bd.rank_circuits_by_dopt(self.model, self.circuits, 8)
+        jac_dict = self.model.sim.bulk_dprobs(list(dict.fromkeys(self.circuits)))
+        jac, block_size = bd.jacobian_dict_to_array(jac_dict)
+        keys = list(jac_dict)
+        pivots = [keys.index(c) for c in ranked]
+        expected = bd.greedy_path_log_volumes(jac.T, block_size, pivots)
+        self.assertArraysAlmostEqual(scores, expected[1:], places=8)
+
+    def test_ridge_scales_the_objective(self):
+        # A bigger ridge is a stronger prior, so each circuit adds proportionally
+        # less; the reported curve is 0.5*logdet(I + J^T J / ridge).
+        _, unit = bd.rank_circuits_by_dopt(self.model, self.circuits, 5)
+        _, heavy = bd.rank_circuits_by_dopt(self.model, self.circuits, 5, ridge=1e4)
+        self.assertTrue(np.all(heavy < unit))
+
+    def test_a_nonpositive_ridge_raises(self):
+        for ridge in (0.0, -1.0):
+            with self.subTest(ridge=ridge):
+                with self.assertRaises(ValueError):
+                    bd.rank_circuits_by_dopt(self.model, self.circuits, 2, ridge=ridge)
+
+    def test_float32_ranks_nearly_the_same_circuits(self):
+        # Not identical -- float32 reorders near-ties -- but the chosen *set* at a
+        # generous budget should not move much, or the precision is not usable.
+        f64 = set(self._ranked(self.circuits, 12))
+        f32 = set(self._ranked(self.circuits, 12, dtype=np.float32))
+        self.assertGreaterEqual(len(f64 & f32), 10)
+
+
+class ReduceDesignTester(_ModelFixture, BaseCase):
+    """`reduce_design_by_dopt` is duck-typed; this covers it on a plain design.
+
+    The SimultaneousGSTDesign path is covered in
+    test/unit/protocols/test_simultaneous_gst.py, where the fixture already exists.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.model = bd.perturb_errorgen_rates(cls.target, 1e-3, seed=0)
+
+    def _design(self):
+        from pygsti.protocols import CircuitListsDesign
+        half = len(self.circuits) // 2
+        return CircuitListsDesign([self.circuits[:half], self.circuits], nested=True)
+
+    def test_keeps_the_budget_and_the_class(self):
+        from pygsti.protocols import CircuitListsDesign
+        design = self._design()
+        reduced, _ = bd.reduce_design_by_dopt(design, self.model, 9)
+        self.assertIsInstance(reduced, CircuitListsDesign)
+        self.assertEqual(len(reduced.all_circuits_needing_data), 9)
+        self.assertTrue(set(reduced.all_circuits_needing_data)
+                        <= set(design.all_circuits_needing_data))
+
+    def test_the_kept_circuits_are_the_ranking_prefix(self):
+        design = self._design()
+        reduced, _ = bd.reduce_design_by_dopt(design, self.model, 9)
+        ranked, _ = bd.rank_circuits_by_dopt(self.model, design.all_circuits_needing_data, 9)
+        self.assertEqual(set(reduced.all_circuits_needing_data), set(ranked))
+
+    def test_the_original_design_is_not_modified(self):
+        design = self._design()
+        before = [list(cl) for cl in design.circuit_lists]
+        bd.reduce_design_by_dopt(design, self.model, 5)
+        self.assertEqual([list(cl) for cl in design.circuit_lists], before)
+
+    def test_returns_the_score_curve_alongside_the_design(self):
+        reduced, scores = bd.reduce_design_by_dopt(self._design(), self.model, 7)
+        self.assertEqual(len(scores), 7)
+        self.assertTrue(np.all(np.diff(scores) >= -1e-9))
+
+    def test_a_budget_over_the_candidate_count_keeps_everything(self):
+        design = self._design()
+        reduced, _ = bd.reduce_design_by_dopt(design, self.model, 10 ** 6)
+        self.assertEqual(set(reduced.all_circuits_needing_data),
+                         set(design.all_circuits_needing_data))
+
+
+class BlockDoptReducerTester(_ModelFixture, BaseCase):
+    """The DesignReducer wrapper around the ranking.
+
+    The selection algorithm is tested above; what matters here is that the object form
+    agrees with the function form, carries the right diagnostics, and round-trips.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.model = bd.perturb_errorgen_rates(cls.target, 1e-3, seed=0)
+
+    def _design(self):
+        from pygsti.protocols import CircuitListsDesign
+        half = len(self.circuits) // 2
+        return CircuitListsDesign([self.circuits[:half], self.circuits], nested=True)
+
+    # -- agreement with the function form ----------------------------------- #
+
+    def test_it_selects_exactly_what_rank_circuits_by_dopt_ranks(self):
+        """Pinned to the kernel, in order, so the wrapper cannot drift from it."""
+        design = self._design()
+        selection = bd.BlockDoptReducer(self.model).select(design, 9)
+        ranked, scores = bd.rank_circuits_by_dopt(self.model, design.all_circuits_needing_data, 9)
+        self.assertEqual(list(selection.circuits), list(ranked))
+        self.assertArraysEqual(selection.scores, scores)
+
+    def test_reduce_design_by_dopt_still_agrees_with_it(self):
+        design = self._design()
+        by_function, scores = bd.reduce_design_by_dopt(design, self.model, 9)
+        by_object = bd.BlockDoptReducer(self.model).reduce(design, 9)
+        self.assertEqual(set(by_function.all_circuits_needing_data),
+                         set(by_object.all_circuits_needing_data))
+        self.assertEqual(len(scores), 9)
+
+    def test_ridge_reaches_the_kernel(self):
+        design = self._design()
+        selection = bd.BlockDoptReducer(self.model, ridge=10.0).select(design, 6)
+        ranked, _ = bd.rank_circuits_by_dopt(self.model, design.all_circuits_needing_data, 6,
+                                               ridge=10.0)
+        self.assertEqual(list(selection.circuits), list(ranked))
+
+    def test_a_nonpositive_ridge_is_rejected_at_construction(self):
+        for ridge in (0.0, -1.0):
+            with self.subTest(ridge=ridge):
+                with self.assertRaises(ValueError):
+                    bd.BlockDoptReducer(self.model, ridge=ridge)
+
+    # -- diagnostics --------------------------------------------------------- #
+
+    def test_the_selection_carries_a_nondecreasing_score_curve(self):
+        selection = bd.BlockDoptReducer(self.model).select(self._design(), 8)
+        self.assertEqual(len(selection.scores), 8)
+        self.assertTrue(np.all(np.diff(selection.scores) >= -1e-9))
+        self.assertIn('logdet', selection.score_name)
+
+    def test_the_selection_records_the_settings_and_the_candidate_count(self):
+        design = self._design()
+        selection = bd.BlockDoptReducer(self.model, ridge=2.0).select(design, 5)
+        self.assertEqual(selection.metadata['ridge'], 2.0)
+        self.assertEqual(selection.metadata['dtype'], 'float64')
+        self.assertEqual(selection.metadata['num_candidates'],
+                         len(design.all_circuits_needing_data))
+
+    def test_no_budget_ranks_everything_so_the_curve_can_pick_one(self):
+        design = self._design()
+        selection = bd.BlockDoptReducer(self.model).select(design)
+        n = len(design.all_circuits_needing_data)
+        self.assertEqual(len(selection.circuits), n)
+        # ...and the prefix is the answer for a smaller budget, with no re-ranking.
+        self.assertEqual(list(selection.circuits[:6]),
+                         list(bd.BlockDoptReducer(self.model).select(design, 6).circuits))
+
+    # -- the target-model guard ---------------------------------------------- #
+
+    def test_a_target_model_warns_and_says_how_to_fix_it(self):
+        with self.assertWarns(UserWarning) as ctx:
+            bd.BlockDoptReducer(self.target)
+        self.assertIn('from_target_model', str(ctx.warning))
+
+    def test_a_perturbed_model_does_not_warn(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            bd.BlockDoptReducer(self.model)
+
+    def test_the_warning_can_be_turned_off(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            bd.BlockDoptReducer(self.target, warn_on_target_model=False)
+
+    def test_a_model_with_no_error_generators_does_not_warn(self):
+        """Nothing to perturb means nothing to warn about; the check must not fire."""
+        from pygsti.modelpacks import smq1Q_XYI
+        full = smq1Q_XYI.target_model('full TP')
+        self.assertFalse(bd._looks_like_a_target_model(full))
+
+    def test_from_target_model_perturbs_and_does_not_warn(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            reducer = bd.BlockDoptReducer.from_target_model(self.target, seed=0)
+        # Same bar as test_perturbing_rates_makes_the_stochastic_columns_usable: rates
+        # are drawn uniformly from [0, scale), so individual columns can still be small.
+        norms = self.column_norms(reducer.model)
+        self.assertGreater(np.median(norms[self.is_stochastic]), 0.1)
+
+    def test_from_target_model_leaves_the_target_alone(self):
+        before = self.target.to_vector().copy()
+        bd.BlockDoptReducer.from_target_model(self.target, seed=0)
+        self.assertArraysAlmostEqual(self.target.to_vector(), before)
+
+    def test_from_target_model_is_reproducible_given_a_seed(self):
+        design = self._design()
+        first = bd.BlockDoptReducer.from_target_model(self.target, seed=7).select(design, 6)
+        second = bd.BlockDoptReducer.from_target_model(self.target, seed=7).select(design, 6)
+        self.assertEqual(list(first.circuits), list(second.circuits))
+
+    # -- serialization -------------------------------------------------------- #
+
+    def test_it_round_trips_and_still_picks_the_same_circuits(self):
+        from pygsti.tools.edesigntools import DesignReducer
+        reducer = bd.BlockDoptReducer(self.model, ridge=3.0, dtype=np.float32)
+        restored = DesignReducer.from_nice_serialization(reducer.to_nice_serialization())
+        self.assertIsInstance(restored, bd.BlockDoptReducer)
+        self.assertEqual(restored.ridge, 3.0)
+        self.assertEqual(restored.dtype, np.dtype(np.float32))
+        design = self._design()
+        self.assertEqual(list(restored.select(design, 6).circuits),
+                         list(reducer.select(design, 6).circuits))
+
+    def test_reloading_does_not_re_warn_about_the_model(self):
+        """The model was vetted when the original was built; warning again is noise."""
+        from pygsti.tools.edesigntools import DesignReducer
+        state = bd.BlockDoptReducer(self.target, warn_on_target_model=False).to_nice_serialization()
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            DesignReducer.from_nice_serialization(state)
+
+    def test_a_model_that_cannot_be_walked_does_not_break_construction(self):
+        """The check only drives a warning, so it must never be the thing that raises.
+
+        `Model._iter_parameterized_objs` is abstract, and a member's coefficients need
+        not be readable, so an exception here is reachable from a custom Model.
+        """
+        class _Opaque:
+            def _iter_parameterized_objs(self):
+                raise NotImplementedError
+
+        class _BadMember:
+            def errorgen_coefficients(self):
+                raise RuntimeError("no coefficients for you")
+
+        class _HasBadMember:
+            def _iter_parameterized_objs(self):
+                yield ('Gx', _BadMember())
+
+        for model in (_Opaque(), _HasBadMember()):
+            with self.subTest(model=type(model).__name__):
+                self.assertFalse(bd._looks_like_a_target_model(model))
+                with warnings.catch_warnings():
+                    warnings.simplefilter('error')
+                    bd.BlockDoptReducer(model)
