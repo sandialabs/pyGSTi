@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Union
 
 import numpy as _np
 import scipy.linalg as _spl
-from numpy.typing import DTypeLike as _DTypeLike
+from numpy.typing import ArrayLike as _ArrayLike, DTypeLike as _DTypeLike
 
 from ._reduction import CircuitSelection as _CircuitSelection
 from ._reduction import DesignReducer as _DesignReducer
@@ -45,7 +45,7 @@ __all__ = [
 ]
 
 
-def _validate_inputs(A, block_size, max_blocks):
+def _validate_inputs(A: _ArrayLike, block_size: int, max_blocks: int) -> _np.ndarray:
     """Check the arguments of :func:`block_linear_dopt` and return `A` as an ndarray."""
     A = _np.asarray(A)
     if A.ndim != 2:
@@ -66,7 +66,7 @@ def _validate_inputs(A, block_size, max_blocks):
     return A
 
 
-def _candidate_blocks(A, block_size):
+def _candidate_blocks(A: _np.ndarray, block_size: int) -> _np.ndarray:
     """`(m, n_candidates * b)` -> `(n_candidates, m, b)` stack with `out[i] = A_i`.
 
     A view when `A` is C-contiguous; otherwise `reshape` copies.  `A` is never
@@ -76,7 +76,7 @@ def _candidate_blocks(A, block_size):
     return A.reshape(m, n // block_size, block_size).transpose(1, 0, 2)
 
 
-def _scipy_qr_is_batched():
+def _scipy_qr_is_batched() -> bool:
     """Whether this SciPy's `linalg.qr` accepts a stack of matrices.
 
     Batched (gufunc-style) input landed in SciPy 1.18; pyGSTi does not pin a
@@ -97,7 +97,7 @@ def _scipy_qr_is_batched():
 _SCIPY_QR_IS_BATCHED = _scipy_qr_is_batched()
 
 
-def _batched_qr_r(W):
+def _batched_qr_r(W: _np.ndarray) -> _np.ndarray:
     """R factors of a `(k, r, c)` stack of matrices, as a `(k, r, c)` stack.
 
     One `scipy.linalg.qr` call over the whole stack where SciPy supports it,
@@ -117,7 +117,7 @@ def _batched_qr_r(W):
     return out
 
 
-def block_linear_dopt(A, block_size, max_blocks):
+def block_linear_dopt(A: _ArrayLike, block_size: int, max_blocks: int) -> tuple[_np.ndarray, _np.ndarray]:
     """Deterministic greedy block D-optimal selection.
 
     Selects column blocks of `A` one at a time, each time taking the block that
@@ -283,14 +283,14 @@ def block_linear_dopt(A, block_size, max_blocks):
 #  Independent (QR-free) scorers
 # --------------------------------------------------------------------------- #
 
-def _gram_blocks(A, block_size):
+def _gram_blocks(A: _ArrayLike, block_size: int) -> _np.ndarray:
     """float64 `(n_candidates, m, m)` stack of `A_i A_i^T` (one stacked matmul)."""
     A = _np.asarray(A, dtype=_np.float64)
     blocks = _candidate_blocks(A, block_size)                       # (n_cand, m, b)
     return blocks @ blocks.transpose(0, 2, 1)
 
 
-def _half_logdet(M):
+def _half_logdet(M: _np.ndarray) -> _np.ndarray:
     """Batched `0.5 * logdet(M)` over a stack of ridged information matrices.
 
     Every `M` handed here is `I_m` plus a sum of Gram matrices, so it is
@@ -301,7 +301,7 @@ def _half_logdet(M):
     return _np.log(_np.diagonal(L, axis1=-2, axis2=-1)).sum(axis=-1)
 
 
-def greedy_candidate_scores(A, block_size, selected=()):
+def greedy_candidate_scores(A: _ArrayLike, block_size: int, selected: Sequence[int] = ()) -> _np.ndarray:
     """Score of every candidate block given an already-selected prefix.
 
     This is the objective :func:`block_linear_dopt` maximizes at each step,
@@ -342,7 +342,7 @@ def greedy_candidate_scores(A, block_size, selected=()):
     return scores
 
 
-def greedy_path_log_volumes(A, block_size, block_pivots):
+def greedy_path_log_volumes(A: _ArrayLike, block_size: int, block_pivots: Sequence[int]) -> _np.ndarray:
     """Cumulative log-volume curve of a selection order, evaluated independently.
 
     Parameters
