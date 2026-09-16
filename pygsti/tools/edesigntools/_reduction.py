@@ -10,11 +10,24 @@ Pluggable rules for cutting an experiment design down to a budget
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Optional, Sequence, Union
+
 import numpy as _np
 
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
+if TYPE_CHECKING:
+    from pygsti.circuits.circuit import Circuit
+    from pygsti.protocols.protocol import ExperimentDesign
+
 __all__ = ['CircuitSelection', 'DesignReducer', 'CallableReducer']
+
+#: What :meth:`DesignReducer.cast` accepts in place of a reducer: called as
+#: ``f(design, num_circuits)``, returning a :class:`CircuitSelection` or the circuits to keep.
+ReducerFunction = Callable[['ExperimentDesign', Optional[int]],
+                           Union['CircuitSelection', Sequence['Circuit']]]
 
 
 class CircuitSelection(_NicelySerializable):
@@ -52,18 +65,19 @@ class CircuitSelection(_NicelySerializable):
         produced it.  None if the selection was built by hand.
     """
 
-    def __init__(self, circuits, scores=None, score_name=None, metadata=None):
+    def __init__(self, circuits: Iterable[Circuit], scores: Optional[Sequence[float]] = None,
+                 score_name: Optional[str] = None, metadata: Optional[Mapping[str, Any]] = None) -> None:
         super().__init__()
-        self.circuits = tuple(circuits)
-        self.scores = None if scores is None else _np.asarray(scores, dtype=_np.float64)
-        self.score_name = score_name
-        self.metadata = dict(metadata) if metadata else {}
-        self.reducer = None
+        self.circuits: tuple[Circuit, ...] = tuple(circuits)
+        self.scores: Optional[_np.ndarray] = None if scores is None else _np.asarray(scores, dtype=_np.float64)
+        self.score_name: Optional[str] = score_name
+        self.metadata: dict[str, Any] = dict(metadata) if metadata else {}
+        self.reducer: Optional[DesignReducer] = None
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.circuits)
 
-    def _to_nice_serialization(self):
+    def _to_nice_serialization(self) -> dict[str, Any]:
         state = super()._to_nice_serialization()
         state.update({
             'circuits': [c.str for c in self.circuits],
@@ -75,7 +89,7 @@ class CircuitSelection(_NicelySerializable):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):
+    def _from_nice_serialization(cls, state: dict[str, Any]) -> CircuitSelection:
         from pygsti.io.readers import convert_strings_to_circuits as _to_circuits
         ret = cls(_to_circuits(state['circuits']), state['scores'],
                   state['score_name'], state['metadata'])
@@ -103,7 +117,7 @@ class DesignReducer(_NicelySerializable):
 
     # -- the one method a subclass writes ----------------------------------- #
 
-    def _select(self, design, num_circuits):
+    def _select(self, design: ExperimentDesign, num_circuits: Optional[int]) -> CircuitSelection:
         """Choose circuits from `design`; return a :class:`CircuitSelection`.
 
         `num_circuits` arrives already validated and clamped to the number of candidates,
@@ -118,7 +132,7 @@ class DesignReducer(_NicelySerializable):
 
     # -- what callers use --------------------------------------------------- #
 
-    def select(self, design, num_circuits=None):
+    def select(self, design: ExperimentDesign, num_circuits: Optional[int] = None) -> CircuitSelection:
         """The circuits this reducer would keep, with its diagnostics.
 
         Parameters
@@ -150,7 +164,7 @@ class DesignReducer(_NicelySerializable):
         selection.metadata.setdefault('num_candidates', len(candidates))
         return selection
 
-    def reduce(self, design, num_circuits=None):
+    def reduce(self, design: ExperimentDesign, num_circuits: Optional[int] = None) -> ExperimentDesign:
         """A copy of `design` keeping only the circuits this reducer selects.
 
         Works on any design with `all_circuits_needing_data` and `truncate_to_circuits`,
@@ -191,11 +205,11 @@ class DesignReducer(_NicelySerializable):
     # `BlockDoptReducer` for the pattern.
 
     @classmethod
-    def _from_nice_serialization(cls, state):
+    def _from_nice_serialization(cls, state: dict[str, Any]) -> DesignReducer:
         return cls()
 
     @classmethod
-    def from_nice_serialization(cls, state):
+    def from_nice_serialization(cls, state: dict[str, Any]) -> DesignReducer:
         """Rebuild the reducer described by `state`, whatever subclass it is.
 
         Parameters
@@ -219,7 +233,7 @@ class DesignReducer(_NicelySerializable):
         return super().from_nice_serialization(state)
 
     @classmethod
-    def cast(cls, obj):
+    def cast(cls, obj: Union[DesignReducer, ReducerFunction]) -> DesignReducer:
         """`obj` as a :class:`DesignReducer`: itself, or a callable wrapped in one.
 
         Parameters
@@ -242,7 +256,8 @@ class DesignReducer(_NicelySerializable):
 
     # -- validation --------------------------------------------------------- #
 
-    def _validate(self, selection, candidates, num_circuits):
+    def _validate(self, selection: CircuitSelection, candidates: Sequence[Circuit],
+                  num_circuits: Optional[int]) -> None:
         """Check `_select`'s output, or raise explaining what the subclass got wrong."""
         me = type(self).__name__
         if not isinstance(selection, CircuitSelection):
@@ -287,7 +302,7 @@ class DesignReducer(_NicelySerializable):
                 "rejected here instead.")
 
 
-def _examples(circuits, limit=3):
+def _examples(circuits: Iterable[Circuit], limit: int = 3) -> str:
     """A short, stable sample of `circuits` for an error message."""
     shown = sorted(str(c) for c in circuits)[:limit]
     more = len(circuits) - len(shown)
@@ -311,17 +326,17 @@ class CallableReducer(DesignReducer):
         Invoked as `func(design, num_circuits)`.
     """
 
-    def __init__(self, func):
+    def __init__(self, func: ReducerFunction) -> None:
         super().__init__()
         self.func = func
 
-    def _select(self, design, num_circuits):
+    def _select(self, design: ExperimentDesign, num_circuits: Optional[int]) -> CircuitSelection:
         result = self.func(design, num_circuits)
         if isinstance(result, CircuitSelection):
             return result
         return CircuitSelection(result)
 
-    def _to_nice_serialization(self):
+    def _to_nice_serialization(self) -> dict[str, Any]:
         state = super()._to_nice_serialization()
         module = getattr(self.func, '__module__', None)
         qualname = getattr(self.func, '__qualname__', None)
@@ -329,7 +344,7 @@ class CallableReducer(DesignReducer):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):
+    def _from_nice_serialization(cls, state: dict[str, Any]) -> CallableReducer:
         name = state.get('func')
         if name is None:
             raise ValueError("Cannot restore a CallableReducer: its function had no "

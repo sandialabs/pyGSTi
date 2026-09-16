@@ -21,7 +21,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
-from typing import Optional, Union, Any
+from typing import Any, Callable, Optional, Union
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -51,6 +51,7 @@ from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAl
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
+from pygsti.tools.edesigntools import DesignReducer as _DesignReducer
 from pygsti.circuits import Circuit
 from pygsti.forwardsims import ForwardSimulator
 from pygsti.optimize.simplerlm import SimplerLMOptimizer as _SimplerLMOptimizer
@@ -140,7 +141,8 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         self.auxfile_types['selection'] = 'serialized-object'
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+    def from_dir(cls, dirname: str, parent: Optional[_proto.ExperimentDesign] = None,
+                 name: Optional[str] = None, quick_load: bool = False) -> "GateSetTomographyDesign":
         """
         Initialize a new GateSetTomographyDesign from `dirname`.
 
@@ -170,16 +172,9 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         ret.auxfile_types.setdefault('selection', 'serialized-object')
         return ret
 
-    def reduce_with(self, reducer, num_circuits=None):
+    def reduce_with(self, reducer: Union[_DesignReducer, Callable[..., Any]],
+                    num_circuits: Optional[int] = None) -> "GateSetTomographyDesign":
         """A copy of this design keeping only the circuits `reducer` selects.
-
-        Stitched simultaneous-GST designs run O(10,000) circuits to fit models with
-        O(100) parameters, and even a standard design is often larger than the budget
-        allows; this is the postprocessing step that cuts one down.  Which circuits get
-        kept is entirely the `reducer`'s decision -- see
-        :class:`~pygsti.tools.edesigntools.DesignReducer` for how to write one, and
-        :class:`~pygsti.tools.edesigntools.BlockDoptReducer` for the D-optimal rule
-        pyGSTi ships.
 
         Named for the parallel with `merge_with`.
 
@@ -197,10 +192,9 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         Returns
         -------
         GateSetTomographyDesign
-            Of the same class as `self`, since truncation preserves it.  Its `selection`
-            attribute holds the :class:`~pygsti.tools.edesigntools.CircuitSelection`
-            that produced it -- read `selection.scores` to see where the budget stopped
-            buying information.
+            Of the same class as `self`.  Its `selection` attribute holds the
+            :class:`~pygsti.tools.edesigntools.CircuitSelection` that produced it -- read
+            `selection.scores` to see where the budget stopped buying information.
 
         Notes
         -----
@@ -211,7 +205,6 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         correct; those members are a record of how the original was generated, not an
         index of what survived.
         """
-        from pygsti.tools.edesigntools import DesignReducer as _DesignReducer
         return _DesignReducer.cast(reducer).reduce(self, num_circuits)
 
     def map_qubit_labels(self, mapper):

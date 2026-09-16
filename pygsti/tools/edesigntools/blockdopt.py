@@ -16,13 +16,22 @@ pyGSTi model and design: `rank_circuits_by_dopt`, `reduce_design_by_dopt`, and
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 import warnings as _warnings
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Union
 
 import numpy as _np
 import scipy.linalg as _spl
+from numpy.typing import DTypeLike as _DTypeLike
 
 from ._reduction import CircuitSelection as _CircuitSelection
 from ._reduction import DesignReducer as _DesignReducer
+
+if TYPE_CHECKING:
+    from pygsti.circuits.circuit import Circuit
+    from pygsti.models.model import Model
+    from pygsti.protocols.protocol import ExperimentDesign
 
 __all__ = [
     'BlockDoptReducer',
@@ -375,7 +384,7 @@ def greedy_path_log_volumes(A, block_size, block_pivots):
 #  Applying the kernel to a model and an experiment design
 # --------------------------------------------------------------------------- #
 
-def jacobian_dict_to_array(jac_dict):
+def jacobian_dict_to_array(jac_dict: Mapping[Circuit, Mapping[Any, _np.ndarray]]) -> tuple[_np.ndarray, int]:
     """Flatten a `bulk_dprobs` result into a Jacobian array and its block size.
 
     Parameters
@@ -415,7 +424,8 @@ def jacobian_dict_to_array(jac_dict):
     return _np.asfortranarray(_np.vstack(rowblocks)), outcome_counts.pop()
 
 
-def perturb_errorgen_rates(model, scale=1e-3, seed=None):
+def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
+                           seed: Union[int, _np.random.Generator, None] = None) -> Model:
     """A copy of `model` with every error-generator rate set to a seeded value near `scale`.
 
     D-optimal selection needs a Jacobian that is representative of the model at a
@@ -477,7 +487,8 @@ def perturb_errorgen_rates(model, scale=1e-3, seed=None):
     return perturbed
 
 
-def rank_circuits_by_dopt(model, circuits, max_circuits=None, *, ridge=1.0, dtype=_np.float64):
+def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuits: Optional[int] = None, *,
+                          ridge: float = 1.0, dtype: _DTypeLike = _np.float64) -> tuple[list[Circuit], _np.ndarray]:
     """Order circuits by how much information each adds about `model`'s parameters.
 
     Greedy D-optimal selection over the per-circuit blocks of `model`'s Jacobian:
@@ -555,7 +566,8 @@ def rank_circuits_by_dopt(model, circuits, max_circuits=None, *, ridge=1.0, dtyp
     return ranked, scores
 
 
-def reduce_design_by_dopt(design, model, num_circuits, *, ridge=1.0, dtype=_np.float64):
+def reduce_design_by_dopt(design: ExperimentDesign, model: Model, num_circuits: int, *,
+                          ridge: float = 1.0, dtype: _DTypeLike = _np.float64) -> tuple[ExperimentDesign, _np.ndarray]:
     """A copy of `design` keeping only its `num_circuits` most informative circuits.
 
     Ranks `design.all_circuits_needing_data` with :func:`rank_circuits_by_dopt`
@@ -612,7 +624,7 @@ def reduce_design_by_dopt(design, model, num_circuits, *, ridge=1.0, dtype=_np.f
 #  The reducer object
 # --------------------------------------------------------------------------- #
 
-def _looks_like_a_target_model(model):
+def _looks_like_a_target_model(model: Model) -> bool:
     """Whether every error-generator coefficient of `model` is exactly zero.
 
     True only when there is at least one coefficient to look at, so a model with no
@@ -682,7 +694,8 @@ class BlockDoptReducer(_DesignReducer):
     then this reducer's own answer for a budget of `k`, with no re-ranking.
     """
 
-    def __init__(self, model, *, ridge=1.0, dtype=_np.float64, warn_on_target_model=True):
+    def __init__(self, model: Model, *, ridge: float = 1.0, dtype: _DTypeLike = _np.float64,
+                 warn_on_target_model: bool = True) -> None:
         super().__init__()
         if ridge <= 0:
             raise ValueError(f"BlockDoptReducer: ridge must be positive, got {ridge}.")
@@ -701,7 +714,9 @@ class BlockDoptReducer(_DesignReducer):
                 "deliberate.")
 
     @classmethod
-    def from_target_model(cls, target_model, *, scale=1e-3, seed=None, **kwargs):
+    def from_target_model(cls, target_model: Model, *, scale: float = 1e-3,
+                          seed: Union[int, _np.random.Generator, None] = None,
+                          **kwargs: Any) -> BlockDoptReducer:
         """A reducer for a perturbed copy of `target_model`; the usual way to build one.
 
         Parameters
@@ -722,7 +737,7 @@ class BlockDoptReducer(_DesignReducer):
         """
         return cls(perturb_errorgen_rates(target_model, scale, seed), **kwargs)
 
-    def _select(self, design, num_circuits):
+    def _select(self, design: ExperimentDesign, num_circuits: Optional[int]) -> _CircuitSelection:
         candidates = list(design.all_circuits_needing_data)
         ranked, scores = rank_circuits_by_dopt(
             self.model, candidates,
@@ -733,7 +748,7 @@ class BlockDoptReducer(_DesignReducer):
             score_name='0.5*logdet(I + J_S^T J_S / ridge)',
             metadata={'ridge': self.ridge, 'dtype': str(self.dtype)})
 
-    def _to_nice_serialization(self):
+    def _to_nice_serialization(self) -> dict[str, Any]:
         state = super()._to_nice_serialization()
         state.update({'model': self.model.to_nice_serialization(),
                       'ridge': self.ridge,
@@ -741,7 +756,7 @@ class BlockDoptReducer(_DesignReducer):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):
+    def _from_nice_serialization(cls, state: dict[str, Any]) -> BlockDoptReducer:
         from pygsti.models.model import Model as _Model
         # The model came from a prior instance, so it has already been vetted (or the
         # warning already issued); re-warning on every load would be noise.

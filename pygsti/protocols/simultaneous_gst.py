@@ -13,12 +13,14 @@ import pathlib as _pathlib
 import warnings as _warnings
 
 import numpy as np
+from numpy.typing import DTypeLike
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, cast, Mapping
 import tqdm as _tqdm
 
 from pygsti import io as _io
 from pygsti.protocols.gst import GateSetTomographyDesign
+from pygsti.models.model import Model
 from pygsti.processors import QubitProcessorSpec
 from pygsti.circuits.circuit import Circuit
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
@@ -466,15 +468,16 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         mapped.stitcher_kwargs = self.stitcher_kwargs
         mapped.circuit_lists = mapped_circuit_lists
 
-        # Sets processor_spec, qubit_labels, all_circuits_needing_data, auxfile_types, etc.
+        # Sets processor_spec, qubit_labels, all_circuits_needing_data, etc. It also
+        # rebuilds auxfile_types from scratch and sets `selection` to None.
         GateSetTomographyDesign.__init__(
             mapped, mapped_processor_spec, mapped_circuit_lists,
             qubit_labels=mapped.vertices, nested=self.nested
         )
-        # ...and resets `selection` to None along with auxfile_types, so restore it:
+        # Re-declare this class's auxfile types, and restore the reduction record:
         # relabelling renames qubits, it does not re-select circuits.
+        mapped._register_auxfile_types()
         mapped.selection = self.selection
-        mapped._register_auxfile_types()  # re-declare ours, which __init__ also reset
         return mapped
 
     def as_circuit_lists_design(self) -> GateSetTomographyDesign:
@@ -558,15 +561,11 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         base._truncate_to_circuits_inplace({c for lst in kept for c in lst})
         return base
 
-    def reduce_by_dopt(self, model, num_circuits, *, ridge=1.0, dtype=np.float64,
-                       warn_on_target_model=True) -> "SimultaneousGSTDesign":
+    def reduce_by_dopt(self, model: Model, num_circuits: int, *, ridge: float = 1.0,
+                       dtype: DTypeLike = np.float64,
+                       warn_on_target_model: bool = True) -> "SimultaneousGSTDesign":
         """
         A copy of this design keeping only its `num_circuits` most informative circuits.
-
-        Shorthand for ``self.reduce_with(BlockDoptReducer(model, ...), num_circuits)``,
-        here so the feature is findable from the class that most needs it: a stitched
-        design carries O(10,000) circuits to fit a model with O(100) parameters. Use
-        :meth:`reduce_with` directly for any other selection rule.
 
         Pass a model at a plausible noisy point, not a target model --
         :meth:`pygsti.tools.edesigntools.BlockDoptReducer.from_target_model` produces one,
