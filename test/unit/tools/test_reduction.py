@@ -200,6 +200,16 @@ class ReduceTester(BaseCase):
         reduced = _FirstK().reduce(self.design, 4)
         self.assertFalse(hasattr(reduced, 'selection'))
 
+    def test_a_design_that_does_record_provenance_gets_stamped(self):
+        from pygsti.modelpacks import smq1Q_XYI
+        gst_design = smq1Q_XYI.create_gst_experiment_design(max_max_length=1)
+        keep = sorted(gst_design.all_circuits_needing_data, key=len)[:5]
+        reduced = DesignReducer.cast(lambda d, n: keep).reduce(gst_design, 5)
+        # Same record whether the caller went through the design method or the reducer.
+        self.assertEqual(len(reduced.selection.circuits), 5)
+        self.assertEqual(list(reduced.selection.circuits),
+                         list(gst_design.reduce_with(lambda d, n: keep, 5).selection.circuits))
+
 
 class CastTester(BaseCase):
     def setUp(self):
