@@ -1086,12 +1086,30 @@ class CircuitStitcherTester(BaseCase):
         self.assertIs(restored.func, _stub_stitcher)
         self.assertEqual(restored.kwargs, {'extra': 7})
 
-    def test_a_lambda_backed_callable_stitcher_does_not_round_trip(self):
-        """Documented limitation of the escape hatch, pinned so it stays documented."""
+    def test_a_lambda_backed_callable_stitcher_loads_with_a_warning_but_cannot_stitch(self):
+        """The design still loads; only calling stitch()/restitch() on it fails."""
         state = CallableStitcher(lambda *a, **kw: []).to_nice_serialization()
+        with self.assertWarns(UserWarning) as ctx:
+            restored = CircuitStitcher.from_nice_serialization(state)
+        self.assertIn('lambda', str(ctx.warning))
+        self.assertIsInstance(restored, CallableStitcher)
+        self.assertIsNone(restored.func)
+
+    def test_a_stitcher_function_with_no_qualified_name_loads_with_a_warning_but_cannot_stitch(self):
+        """Same graceful-degrade path as the lambda case, but for the earlier
+        state['func'] is None branch (a function with no __module__/__qualname__)."""
+        state = CallableStitcher(_stub_stitcher).to_nice_serialization()
+        state['func'] = None
+        with self.assertWarns(UserWarning):
+            restored = CircuitStitcher.from_nice_serialization(state)
+        self.assertIsInstance(restored, CallableStitcher)
+        self.assertIsNone(restored.func)
+
+    def test_stitching_with_an_unrestored_callable_stitcher_raises_a_clear_error(self):
+        stitcher = CallableStitcher(None)
         with self.assertRaises(ValueError) as ctx:
-            CircuitStitcher.from_nice_serialization(state)
-        self.assertIn('lambda', str(ctx.exception))
+            self._stitch_with(stitcher)
+        self.assertIn('could not be restored', str(ctx.exception))
 
 
 class SeedRecordTester(BaseCase):
