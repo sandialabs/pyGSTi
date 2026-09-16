@@ -24,6 +24,7 @@ from pygsti.circuits.circuit import Circuit
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label, LabelTup
 
+from pygsti.tools.edesigntools import BlockDoptReducer as _BlockDoptReducer
 from pygsti.tools.graphcoloring import (
     canonical_edges, find_neighbors, switchboard_find_edge_coloring,
 )
@@ -470,7 +471,10 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
             mapped, mapped_processor_spec, mapped_circuit_lists,
             qubit_labels=mapped.vertices, nested=self.nested
         )
-        mapped._register_auxfile_types()  # ...which resets auxfile_types, so re-declare ours
+        # ...and resets `selection` to None along with auxfile_types, so restore it:
+        # relabelling renames qubits, it does not re-select circuits.
+        mapped.selection = self.selection
+        mapped._register_auxfile_types()  # re-declare ours, which __init__ also reset
         return mapped
 
     def as_circuit_lists_design(self) -> GateSetTomographyDesign:
@@ -553,6 +557,42 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         # what recomputes all_circuits_needing_data.
         base._truncate_to_circuits_inplace({c for lst in kept for c in lst})
         return base
+
+    def reduce_by_dopt(self, model, num_circuits, *, ridge=1.0, dtype=np.float64,
+                       warn_on_target_model=True) -> "SimultaneousGSTDesign":
+        """
+        A copy of this design keeping only its `num_circuits` most informative circuits.
+
+        Shorthand for ``self.reduce_with(BlockDoptReducer(model, ...), num_circuits)``,
+        here so the feature is findable from the class that most needs it: a stitched
+        design carries O(10,000) circuits to fit a model with O(100) parameters. Use
+        :meth:`reduce_with` directly for any other selection rule.
+
+        Pass a model at a plausible noisy point, not a target model --
+        :meth:`pygsti.tools.edesigntools.BlockDoptReducer.from_target_model` produces one,
+        and :func:`pygsti.tools.edesigntools.perturb_errorgen_rates` explains why it is
+        needed. Passing a target model here warns.
+
+        Parameters
+        ----------
+        model : Model
+            Whose parameters the reduced design should be informative about.
+
+        num_circuits : int
+            The budget.
+
+        ridge, dtype, warn_on_target_model
+            As for :class:`~pygsti.tools.edesigntools.BlockDoptReducer`.
+
+        Returns
+        -------
+        SimultaneousGSTDesign
+            Its `selection` attribute holds the reducer and its score curve; read
+            ``selection.scores`` to see where the budget stopped buying information.
+        """
+        reducer = _BlockDoptReducer(model, ridge=ridge, dtype=dtype,
+                                    warn_on_target_model=warn_on_target_model)
+        return self.reduce_with(reducer, num_circuits)
 
     # endregion
 
