@@ -40,6 +40,7 @@ class EdesignLayoutTester(BaseCase):
                   '_fisher': ['calculate_fisher_information_per_circuit',
                               'calculate_fisher_information_matrix',
                               'calculate_fisher_information_matrices_by_L'],
+                  '_reduction': ['CircuitSelection', 'DesignReducer', 'CallableReducer'],
         }
         for modname, names in owners.items():
             mod = importlib.import_module('pygsti.tools.edesigntools.' + modname)
