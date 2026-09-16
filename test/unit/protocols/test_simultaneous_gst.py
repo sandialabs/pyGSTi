@@ -1138,6 +1138,40 @@ class SeedRecordTester(BaseCase):
         self.assertIn('re-stitch', str(ctx.warning))
 
 
+class DefaultSeedTester(_SGSTFixture, BaseCase):
+    """An omitted `seed` still records something restitchable -- it must not go
+    through the same silently-non-reproducible path as an unrecordable live Generator."""
+
+    COLOR_PATCHES = {0: [(0, 1)], 1: [(1, 2)]}
+
+    def _build(self, **kwargs):
+        return SimultaneousGSTDesign(self.pspec, self.oneq, self.twoq, self.COLOR_PATCHES,
+                                     debug_check=False, **kwargs)
+
+    def test_an_omitted_seed_is_still_recorded(self):
+        self.assertIsNotNone(self._build().stitch_seed)
+
+    def test_an_omitted_seed_still_restitches_identically(self):
+        design = self._build()
+        restitched = design.restitch()
+        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+                         [list(cl) for cl in design.circuit_lists])
+
+    def test_two_designs_with_omitted_seeds_still_differ(self):
+        # The fix records a recoverable seed -- it must not make separate unseeded
+        # constructions deterministic, only restitch() of the same one.
+        d1, d2 = self._build(), self._build()
+        self.assertNotEqual([list(cl) for cl in d1.circuit_lists],
+                            [list(cl) for cl in d2.circuit_lists])
+
+    def test_a_live_generator_cannot_restitch(self):
+        with self.assertWarns(UserWarning):
+            design = self._build(seed=np.random.default_rng(0))
+        with self.assertRaises(ValueError) as ctx:
+            design.restitch()
+        self.assertIn('no recorded seed', str(ctx.exception))
+
+
 class SerializationTester(_SGSTFixture, BaseCase):
     """
     Cover ``SimultaneousGSTDesign.write`` / ``from_dir``.
