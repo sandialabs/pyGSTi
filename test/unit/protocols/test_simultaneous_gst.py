@@ -993,6 +993,14 @@ class CircuitStitcherTester(BaseCase):
             CircuitStitcher.cast(RandomizedPatchStitcher(), share_same_shape_schedules=False)
         self.assertIn('share_same_shape_schedules', str(ctx.exception))
 
+    def test_casting_an_uninstantiated_stitcher_class_says_so(self):
+        """A forgotten `()` (e.g. circuit_stitcher=RandomizedPatchStitcher) is callable
+        but not an instance -- it must not be silently wrapped in a CallableStitcher."""
+        with self.assertRaises(TypeError) as ctx:
+            CircuitStitcher.cast(RandomizedPatchStitcher)
+        self.assertIn('RandomizedPatchStitcher', str(ctx.exception))
+        self.assertIn('instance', str(ctx.exception))
+
     def test_casting_a_non_callable_says_what_is_accepted(self):
         with self.assertRaises(TypeError):
             CircuitStitcher.cast('randomized')

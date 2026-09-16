@@ -125,7 +125,9 @@ class CircuitStitcher(_NicelySerializable):
         ----------
         obj : CircuitStitcher or callable
             A callable is adapted by :class:`CallableStitcher`, which also carries the
-            serialization caveat that comes with one.
+            serialization caveat that comes with one. A `CircuitStitcher` subclass
+            passed uninstantiated (a forgotten `()`) is rejected with a targeted error
+            rather than silently treated as a plain callable.
 
         **kwargs
             Extra keyword arguments for a wrapped callable; ignored when `obj` is
@@ -141,6 +143,10 @@ class CircuitStitcher(_NicelySerializable):
                     f"Options passed alongside an already-built {type(obj).__name__}: "
                     f"{sorted(kwargs)}. Set them on the stitcher instead.")
             return obj
+        if isinstance(obj, type) and issubclass(obj, CircuitStitcher):
+            raise TypeError(
+                f"{obj.__name__} is a CircuitStitcher subclass, not an instance -- did "
+                f"you forget the parentheses? Pass {obj.__name__}() instead.")
         if callable(obj):
             return CallableStitcher(obj, **kwargs)
         raise TypeError("A circuit stitcher must be a CircuitStitcher or a callable; got "
