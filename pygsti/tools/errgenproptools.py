@@ -30,7 +30,7 @@ from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel 
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
-from functools import wraps as _wrapsf
+from functools import wraps as _wraps
 from itertools import chain, product
 from math import factorial
 from typing import Literal, Optional, Union, Callable, Iterable, Iterator, TypeVar, cast as _cast
