@@ -230,7 +230,7 @@ class TestReport(ReportBaseCase):
         pygsti.report.merge_helpers.merge_jinja_template(qtys, temp_files + "/inline_report.html",
                                                          template_dir=compare_files, template_name="report_dashboard_template.html",
                                                          auto_open=False, precision=None, link_to=linkto,
-                                                         connected=False, toggles=toggles, render_math=True,
+                                                         enable_offline_mode=True, toggles=toggles, render_math=True,
                                                          resizable=True, autosize='none', verbosity=printer)
 
     def test_table_formatting(self):
@@ -302,16 +302,16 @@ class TestReport(ReportBaseCase):
         import pygsti.report.merge_helpers as mh
 
         # ---- insert_resource ----
-        mh.insert_resource(connected=True, online_url="http://myurl.com/myfile.js",
+        mh.insert_resource(enable_offline_mode=False, online_url="http://myurl.com/myfile.js",
                            offline_filename="myOfflineFile.js")
-        mh.insert_resource(connected=True, online_url="http://myurl.com/myfile.js",
+        mh.insert_resource(enable_offline_mode=False, online_url="http://myurl.com/myfile.js",
                            offline_filename=None, integrity="TEST", crossorigin="TEST")
 
         with self.assertRaises(ValueError):
-            mh.insert_resource(connected=True, online_url=None, offline_filename="myOfflineFile.foobar")
+            mh.insert_resource(enable_offline_mode=False, online_url=None, offline_filename="myOfflineFile.foobar")
             #unknown resource type (extension)
         with self.assertRaises(ValueError):
-            mh.insert_resource(connected=False, online_url=None, offline_filename="myOfflineFile.foobar")
+            mh.insert_resource(enable_offline_mode=True, online_url=None, offline_filename="myOfflineFile.foobar")
             #unknown resource type (extension)
 
         # ---- rsync_offline_dir ----
@@ -340,11 +340,6 @@ class TestReport(ReportBaseCase):
         if os.path.exists(dirname):
             shutil.rmtree(dirname) #make sure no directory exists
         mh.create_empty_dir(dirname)
-
-
-        # ---- fill_std_qtys ---- Not a function anymore
-        #qtys = {}
-        #mh.fill_std_qtys(qtys, connected=True, render_math=True, CSSnames=[]) #test connected=True case HERE
 
         # ---- evaluate_call ----
         printer = pygsti.baseobjs.VerbosityPrinter(1)

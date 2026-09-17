@@ -29,6 +29,7 @@
 * `CloudNoiseModel` member dictionaries now enforce the same key prefix namespaces that #903 gave `LocalNoiseModel` (`rho`, `M`, `G` or `{`, and `I`), including its two additional `cloudnoise` blocks. Relatedly, `QuditProcessorSpec` and `QubitProcessorSpec` now validate gate names at construction: every name in `gate_names`, `nonstd_gate_unitaries` and `nonstd_gate_num_qudits`/`nonstd_gate_num_qubits` must begin with `G` or be a brace-wrapped implicit name such as `{idle}`, as the docstrings have always specified. `rename_gate_inplace` applies the same rule to its new name.
 * **`IBMQExperiment` job submission and batching:** `submit()` now defaults to a `qiskit_ibm_runtime.Batch` runtime mode instead of `Session`, since `Batch` mode only bills for actual QPU hardware time, not IBM-side preprocessing. `circuits_per_batch`'s default is raised from `75` to `3000` (the old value came from a per-job circuit-count cap no longer enforced by IBM), and it now also accepts `circuits_per_batch="auto"` to compute a cost-aware batch size from the backend's own gate-duration data; `transpile()` validates every batch against IBM's currently-published hard job/circuit limits before submission. `retrieve_results()` gains a `checkpointing_mode` parameter (`"data"` by default) that persists only the newly-retrieved outcome counts instead of always re-serializing the entire on-disk experiment state. (#899)
 * `pygsti.tools.edesigntools` is now a subpackage rather than a module. This shouldn't be visible to end-users.
+* Report generation now assumes an internet connection by default, so HTML reports and notebooks no longer write an `offline/` resource directory unless asked to. The `connected` keyword argument of `Report.write_html()`, `Report.write_notebook()`, `Workspace.init_notebook_mode()`, and the drift/idle-tomography report functions is renamed to `enable_offline_mode`, with the opposite sense: `connected=False` becomes `enable_offline_mode=True`, and the new default is `False`. (#909)
 
 ### Deprecated
 * `StaticStandardOp` and the `'static standard'` operation parameterization type are deprecated in favor of `StaticArbitraryOp` (and `StaticArbitraryOp.from_standard_gate_name`) and `StaticUnitaryOp` (and `StaticUnitaryOp.from_standard_gate_name`). Default static gate preference is now `('static unitary', 'static')`. Deserializing legacy models containing `StaticStandardOp` automatically converts them to `StaticArbitraryOp` with a `pyGSTiDeprecationWarning`.
@@ -36,6 +37,7 @@
 
 ### Removed
  * `pygsti.tools.edesigntools.pad_edesign_with_idle_lines`. This helper function had no consumer code in pyGSTi.
+* The `create_general_report`, `create_standard_report`, `create_nqnoise_report`, and `create_report_notebook` functions in `pygsti.report.factory`, deprecated since 0.9.9. Use the `construct_*` factory functions and the `Report` class's `write_*` methods instead. (#909)
 
 ## [0.10.2] - 2026-07-30
 
