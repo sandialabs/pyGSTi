@@ -210,8 +210,13 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
         self.gg = ggrp.TensorProductGaugeGroup([self.factor, self.factor], self.state_space, 'pp')
         self.v = np.array([0.3, -0.2, 0.5, 0.1, 0.7, -0.4])
 
+    @staticmethod
+    def _changes_of_basis_are_identity(gg):
+        return [isinstance(C, IdentityOperator)
+                for C in gg._factor_changes_of_basis + gg._factor_changes_of_basis_inverse]
+
     def test_pp_on_qubits_needs_no_change_of_basis(self):
-        self.assertIsInstance(self.gg._change_of_basis, IdentityOperator)
+        self.assertTrue(all(self._changes_of_basis_are_identity(self.gg)))
 
     def test_tensor_product_builtin_bases_whitelist_is_accurate(self):
         # _TENSOR_PRODUCT_BUILTIN_BASES claims B(d1*d2) == B(d1) (x) B(d2).  Verify that claim
@@ -227,34 +232,48 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
                                  msg=f"{name} {d1}x{d2}")
 
     def test_pauli_product_basis_builds_no_transform_matrix(self):
-        # The structural check must settle pp before any transform matrix is built: building one
-        # is O(dim^2) and dominates construction cost.
+        # The structural check must settle pp before any full-space transform matrix is built, for
+        # the TensorProdBasis pyGSTi models carry and for the builtin pp of the full dimension alike.
+        # (The factor groups' own construction legitimately changes basis at the factor dimension.)
         def boom(self, other):
-            raise AssertionError("built a transform matrix for a Pauli-product basis")
+            raise AssertionError("built a full-space transform matrix for a Pauli-product basis")
         with unittest.mock.patch.object(TensorProdBasis, 'create_transform_matrix', boom), \
              unittest.mock.patch.object(TensorProdBasis, 'reverse_transform_matrix', boom):
             for ss in (QubitSpace(2), QubitSpace(5)):
-                gg = ggrp.TensorProductGaugeGroup.local_unitary(ss, Basis.cast('pp', ss))
-                self.assertIsInstance(gg._change_of_basis, IdentityOperator)
-                self.assertIsInstance(gg._change_of_basis_inverse, IdentityOperator)
+                for basis in (Basis.cast('pp', ss), Basis.cast('pp', ss.dim)):
+                    gg = ggrp.TensorProductGaugeGroup.local_unitary(ss, basis)
+                    self.assertTrue(all(self._changes_of_basis_are_identity(gg)))
 
     def test_sparse_bases_keep_change_of_basis_sparse(self):
-        # C and its inverse are used only via matmul, so there's no reason to densify them.
+        # C_j and its inverse are used only via matmul, so there's no reason to densify them.
+        ss = QuditSpace(2, 3)
         gm9 = Basis.cast('gm', 9, sparse=True)
         factor = ggrp.UnitaryGaugeGroup(QuditSpace(1, 3), 'gm')
-        gg = ggrp.TensorProductGaugeGroup([factor, factor], QuditSpace(2, 3),
-                                          Basis.cast('gm', 81, sparse=True),
+        gg = ggrp.TensorProductGaugeGroup([factor, factor], ss, Basis.cast('l2p1', ss, sparse=True),
                                           factor_bases=[gm9, gm9])
-        self.assertTrue(sps.issparse(gg._change_of_basis))
-        self.assertTrue(sps.issparse(gg._change_of_basis_inverse))
+        self.assertTrue(all(sps.issparse(C) for C in gg._factor_changes_of_basis))
+        self.assertTrue(all(sps.issparse(C) for C in gg._factor_changes_of_basis_inverse))
         el = gg.compute_element(0.1 * self.rng.normal(size=gg.num_params))
         mx = el.transform_matrix
         self.assertIsInstance(mx, np.ndarray)  # conjugation still yields a dense transform
         self.assertArraysAlmostEqual(el.transform_matrix_inverse @ mx, np.eye(81))
         # and it agrees with the same group built from dense bases
-        dense = ggrp.TensorProductGaugeGroup([factor, factor], QuditSpace(2, 3), Basis.cast('gm', 81))
+        dense = ggrp.TensorProductGaugeGroup([factor, factor], ss, Basis.cast('l2p1', ss))
         dense_el = dense.compute_element(el.to_vector())
         self.assertArraysAlmostEqual(mx, dense_el.transform_matrix)
+
+    def test_coupled_model_basis_is_rejected(self):
+        # The builtin gm (or std) of the full dimension is not gm (x) gm: the change of basis from
+        # the factors' tensor product couples the factors, so it isn't supported.
+        qutrit = ggrp.UnitaryGaugeGroup(QuditSpace(1, 3), 'gm')
+        with self.assertRaisesRegex(ValueError, "couples the factors"):
+            ggrp.TensorProductGaugeGroup([qutrit, qutrit], QuditSpace(2, 3), Basis.cast('gm', 81))
+        with self.assertRaisesRegex(ValueError, "couples the factors"):
+            ggrp.TensorProductGaugeGroup([self.factor, self.factor], self.state_space, Basis.cast('std', 16))
+        # but a single factor on the whole space has nothing to couple
+        whole = ggrp.UnitaryGaugeGroup(QuditSpace(2, 3), Basis.cast('gm', 81))
+        gg = ggrp.TensorProductGaugeGroup([whole], QuditSpace(2, 3), Basis.cast('gm', 81))
+        self.assertTrue(all(self._changes_of_basis_are_identity(gg)))
 
     def test_element_is_kronecker_product_of_factors(self):
         el = self.gg.compute_element(self.v)
@@ -273,7 +292,7 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
         # Models built by pyGSTi carry a TensorProdBasis ('pp*pp') rather than the builtin pp of dim 16.
         tpb = TensorProdBasis([Basis.cast('pp', 4)] * 2)
         gg = ggrp.TensorProductGaugeGroup([self.factor, self.factor], self.state_space, tpb)
-        self.assertIsInstance(gg._change_of_basis, IdentityOperator)
+        self.assertTrue(all(self._changes_of_basis_are_identity(gg)))
         self.assertArraysAlmostEqual(gg.compute_element(self.v).transform_matrix,
                                      self.gg.compute_element(self.v).transform_matrix)
 
@@ -348,15 +367,24 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
         self.assertEqual(el.deriv_wrt_params([]).shape, (256, 0))
 
     def test_deriv_wrt_params_with_change_of_basis(self):
-        qutrit = ggrp.UnitaryGaugeGroup(QuditSpace(1, 3), 'gm')
-        gg = ggrp.TensorProductGaugeGroup([qutrit, qutrit], QuditSpace(2, 3), Basis.cast('gm', 81))
-        self.assertNotIsInstance(gg._change_of_basis, IdentityOperator)
+        # Factors in one single-qutrit basis, model in another: the change of basis is per factor.
+        ss = QuditSpace(2, 3)
+        gm = Basis.cast('gm', ss)
+        l2p1 = Basis.cast('l2p1', 9)
+        qutrit = ggrp.UnitaryGaugeGroup(QuditSpace(1, 3), l2p1)
+        gg = ggrp.TensorProductGaugeGroup([qutrit, qutrit], ss, gm)
+        self.assertFalse(any(self._changes_of_basis_are_identity(gg)))
+        self.assertEqual([C.shape for C in gg._factor_changes_of_basis], [(9, 9), (9, 9)])
         v = 0.3 * self.rng.normal(size=gg.num_params)
         el, fd = self._finite_difference_deriv(gg, v)
         self.assertArraysAlmostEqual(el.deriv_wrt_params(), fd, places=6)
-        # and the element itself agrees with the direct unitary computation in the builtin gm basis
-        Ua, Ub = (superop_to_unitary(m, 'gm') for m in el.factor_matrices)
-        self.assertArraysAlmostEqual(el.transform_matrix, unitary_to_superop(np.kron(Ua, Ub), Basis.cast('gm', 81)))
+        # the element agrees with the direct unitary computation in the model's basis ...
+        Ua, Ub = (superop_to_unitary(m, l2p1) for m in el.factor_matrices)
+        self.assertArraysAlmostEqual(el.transform_matrix, unitary_to_superop(np.kron(Ua, Ub), gm))
+        # ... and with conjugating the whole Kronecker product by the full-space change of basis
+        C = TensorProdBasis([l2p1, l2p1]).create_transform_matrix(gm)
+        Sa, Sb = el.factor_matrices
+        self.assertArraysAlmostEqual(el.transform_matrix, C @ np.kron(Sa, Sb) @ np.linalg.inv(C))
 
     def test_inverse_element_deriv(self):
         el = self.gg.compute_element(self.v)
@@ -370,13 +398,13 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
         self.assertEqual(gg.num_params, 6)
         self.assertTrue(all(isinstance(f, ggrp.UnitaryGaugeGroup) for f in gg.factors))
         self.assertEqual([f.state_space.tensor_product_blocks_labels[0] for f in gg.factors], [(0,), (1,)])
-        self.assertIsInstance(gg._change_of_basis, IdentityOperator)
+        self.assertTrue(all(self._changes_of_basis_are_identity(gg)))
         self.assertArraysAlmostEqual(gg.compute_element(self.v).transform_matrix,
                                      self.gg.compute_element(self.v).transform_matrix)
         # with the TensorProdBasis that pyGSTi-built models carry
         tpb = TensorProdBasis([Basis.cast('pp', 4)] * 2)
         gg2 = ggrp.TensorProductGaugeGroup.local_unitary(self.state_space, tpb)
-        self.assertIsInstance(gg2._change_of_basis, IdentityOperator)
+        self.assertTrue(all(self._changes_of_basis_are_identity(gg2)))
         self.assertArraysAlmostEqual(gg2.compute_element(self.v).transform_matrix,
                                      self.gg.compute_element(self.v).transform_matrix)
 
@@ -423,8 +451,8 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
         import json
         for gg in (self.gg,
                    ggrp.TensorProductGaugeGroup.local_unitary(ExplicitStateSpace(['Q0', 'L', 'Q1'], [2, 1, 3]), 'gm'),
-                   ggrp.TensorProductGaugeGroup([ggrp.UnitaryGaugeGroup(QuditSpace(1, 3), 'gm')] * 2,
-                                                QuditSpace(2, 3), Basis.cast('gm', 81))):
+                   ggrp.TensorProductGaugeGroup([ggrp.UnitaryGaugeGroup(QuditSpace(1, 3), 'l2p1')] * 2,
+                                                QuditSpace(2, 3), Basis.cast('gm', QuditSpace(2, 3)))):
             state = gg.to_nice_serialization()
             json.dumps(state)  # "nice" means JSON-able
             gg2 = ggrp.GaugeGroup.from_nice_serialization(state)
@@ -432,14 +460,16 @@ class TensorProductGaugeGroupTester(GaugeGroupBase, BaseCase):
             self.assertEqual(gg2.num_params, gg.num_params)
             self.assertEqual(gg2.state_space, gg.state_space)
             self.assertEqual([type(f) for f in gg2.factors], [type(f) for f in gg.factors])
-            self.assertEqual(isinstance(gg2._change_of_basis, IdentityOperator),
-                             isinstance(gg._change_of_basis, IdentityOperator))
+            self.assertEqual(self._changes_of_basis_are_identity(gg2), self._changes_of_basis_are_identity(gg))
             v = 0.3 * self.rng.normal(size=gg.num_params)
             el, el2 = gg.compute_element(v), gg2.compute_element(v)
             self.assertArraysAlmostEqual(el.transform_matrix, el2.transform_matrix)
             # element round trip (like other Op-based elements, this keeps the matrices, not the parameterization)
             estate = el.to_nice_serialization()
             json.dumps(estate)
+            # both C_j and C_j^-1 are stored, so loading doesn't invert anything
+            self.assertEqual([C is None for C in estate['factor_changes_of_basis_inverse']],
+                             [C is None for C in estate['factor_changes_of_basis']])
             el3 = ggrp.GaugeGroupElement.from_nice_serialization(estate)
             self.assertIsInstance(el3, ggrp.TensorProductGaugeGroupElement)
             self.assertArraysAlmostEqual(el.transform_matrix, el3.transform_matrix)
