@@ -269,3 +269,21 @@ class ExperimentDesignTester(BaseCase):
                         for ta_data, tc_circ in zip(ta_list, tc_list):
                             untruncated_idx = c_list.index(tc_circ)
                             self.assertTrue(a_list[untruncated_idx] == ta_data)
+
+    def test_truncate_to_design_with_plain_circuit_lists(self):
+        # CircuitListsDesign accepts plain lists of Circuits -- __init__ picks
+        # auxfile_types['circuit_lists'] based on whether any list is a CircuitList --
+        # so every truncation hook has to cope with them. _truncate_to_design_inplace
+        # used to call .truncate() on the list directly and raise AttributeError.
+        from pygsti.protocols import CircuitListsDesign
+
+        circuits = pygsti.circuits.to_circuits(["{}@(0)", "Gxpi2:0", "Gypi2:0"], line_labels=(0,))
+        self.assertIsInstance(circuits, list)
+
+        design = CircuitListsDesign([circuits[:2], circuits])
+        other = CircuitListsDesign([circuits[:1], circuits[:2]])
+
+        truncated = design.truncate_to_design(other)
+        self.assertEqual([list(cl) for cl in truncated.circuit_lists],
+                         [circuits[:1], circuits[:2]])
+        self.assertEqual(set(truncated.all_circuits_needing_data), set(circuits[:2]))

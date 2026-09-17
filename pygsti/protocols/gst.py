@@ -392,11 +392,31 @@ class StandardGSTDesign(GateSetTomographyDesign):
                                        " and/or aliases is not implemented yet."))
 
         dscheck = None; action_if_missing = 'raise'; verbosity = 0  # values we could add as arguments later if desired.
-        return StandardGSTDesign(pspec, prep_fiducials, meas_fiducials,
-                                 germs, self.maxlengths, self.germ_length_limits, fiducial_pairs,
-                                 self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
-                                 self.circuit_rules, self.aliases, dscheck, action_if_missing, qubit_labels,
-                                 verbosity, add_default_protocol=False)
+        mapped = StandardGSTDesign(pspec, prep_fiducials, meas_fiducials,
+                                   germs, self.maxlengths, self.germ_length_limits, fiducial_pairs,
+                                   self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
+                                   self.circuit_rules, self.aliases, dscheck, action_if_missing, qubit_labels,
+                                   verbosity, add_default_protocol=False)
+
+        # The constructor above *regenerates* the circuit lists from germs, fiducials and
+        # max lengths, which describe the design as originally generated -- not as it
+        # stands if circuits have since been dropped by `truncate_to_circuits` or another
+        # truncation route. Left alone, relabelling a truncated design silently restores
+        # every circuit that was removed.
+        #
+        # So when the reconstruction disagrees with what this design actually holds,
+        # install the real lists instead, relabelled: renaming qubits is not a reason to
+        # regenerate an experiment. Regenerating cannot be trusted to reproduce the
+        # binning either -- `nested` is a *generation* option to this constructor but
+        # only a description on an existing design, and truncation clears it.
+        mapped_all = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        if set(mapped_all) != set(mapped.all_circuits_needing_data):
+            mapped.circuit_lists = [_CircuitList.cast([c.map_state_space_labels(mapper)
+                                                       for c in circuit_list])
+                                    for circuit_list in self.circuit_lists]
+            mapped.all_circuits_needing_data = _CircuitList.cast(mapped_all)
+            mapped.nested = self.nested
+        return mapped
 
 
 class GSTInitialModel(_NicelySerializable):

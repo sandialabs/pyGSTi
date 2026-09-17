@@ -59,6 +59,11 @@ class ImplicitOpModel(_mdl.OpModel):
         represented, allowing compatibility checks with (super)operator
         objects.
     """
+    # Declares this model's member dictionaries as (attribute name, inner key, accepted
+    # prefix or prefixes) triples, consumed by `_init_member_dicts`.  A prefix of `None`
+    # leaves the corresponding dictionary's keys unconstrained.
+    _member_prefixes = ()
+
     def __init__(self,
                  state_space,
                  layer_rules,
@@ -72,6 +77,27 @@ class ImplicitOpModel(_mdl.OpModel):
         self.factories = _collections.OrderedDict()
 
         super(ImplicitOpModel, self).__init__(state_space, basis, evotype, layer_rules, simulator)
+
+    def _init_member_dicts(self, modelmembers=None):
+        """Build the member dictionaries declared by `_member_prefixes`.
+
+        Parameters
+        ----------
+        modelmembers : dict, optional
+            Members to populate the dictionaries with, keyed as in the serialization
+            format (e.g. `'operation_blks|gates'`).  Used when deserializing; when
+            `None` every dictionary starts empty.
+        """
+        flags = {'auto_embed': False, 'match_parent_statespace': False,
+                 'match_parent_evotype': True, 'cast_to_type': None}
+        if modelmembers is None:
+            modelmembers = {}
+
+        for attr_name, inner_key, prefix in self._member_prefixes:
+            outer_dict: dict[str, _OrderedMemberDict] = getattr(self, attr_name)
+            serialization_key = f'{attr_name}|{inner_key}'
+            items = modelmembers.get(serialization_key, [])
+            outer_dict[inner_key] = _OrderedMemberDict(self, None, prefix, flags, items)
 
     @property
     def _primitive_prep_label_dict(self):
