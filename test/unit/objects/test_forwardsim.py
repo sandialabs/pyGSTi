@@ -769,6 +769,7 @@ def test_torch_circuit_store_is_reused_across_calls():
     assert not np.allclose(J, J2)
 
 
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
 def test_torch_circuit_store_is_invalidated_by_reparameterization():
     """The store bakes each modelmember's *type* and stateless data, so identity of the model
     object is not enough to key the cache on: `convert_members_inplace` swaps member objects under
@@ -802,6 +803,7 @@ def test_torch_circuit_store_is_invalidated_by_reparameterization():
     assert np.allclose(J, Jfresh, atol=1e-12)
 
 
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
 @pytest.mark.parametrize("ptype1,ptype2", [
     ('CPTPLND', 'GLND'),
     ('H', 'S'),
@@ -842,3 +844,79 @@ def test_torch_circuit_store_invalidated_by_type_preserving_reparameterization(p
     J2 = np.empty((layout2.num_elements, model2.num_params))
     model2.sim.bulk_fill_dprobs(J2, layout2, None)
     assert np.allclose(J, J2, atol=1e-12)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+@pytest.mark.parametrize("instrument_cls,seed", [(Instrument, 61), (TPInstrument, 62)])
+def test_torch_plan_instrument_jacobian(instrument_cls, seed):
+    """An instrument is one parameterized member whose torch_base stacks several expanded ops
+    (Iz_plus, Iz_minus, ...), so those ops share one column block of the Jacobian and the plan has
+    to accumulate their rank-one contributions into that block before writing it. Check that the
+    plan really routes more than one op into one member's block, and that the resulting Jacobian
+    matches MatrixForwardSimulator's element-wise (the consistency Testers above only check
+    colinearity across simulators)."""
+    import torch
+    model = _iz_instrument_model(instrument_cls, seed=seed)
+    circuits = _iz_instrument_circuits()
+
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    layout = model.sim.create_layout(circuits, array_types=('ep',))
+    store = model.sim._circuit_store(layout)
+    plan = store.eval_plan
+    iz = L('Iz', 0)
+    assert len(plan.instrument_expansions[iz]) == 2
+    ops_in_plan = {op for g in plan.groups for op in g.positions}
+    assert set(plan.instrument_expansions[iz]) <= ops_in_plan, \
+        "both instrument members must appear as gate positions in the plan"
+
+    ref_P, ref_J = _dprobs_in_canonical_order(model, circuits, MatrixForwardSimulator())
+    P, J = _dprobs_in_canonical_order(model, circuits, TorchForwardSimulator(dtype=torch.float64))
+    assert np.allclose(P, ref_P, atol=1e-12)
+    assert np.allclose(J, ref_J, atol=1e-9)
+
+
+@pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+def test_torch_plan_scattered_output_rows_jacobian():
+    """When a dataset-built layout observes a circuit's outcomes in a different order than
+    povm.keys(), or only a subset of them, the plan's dense (circuit, effect) rows no longer line
+    up with the layout's element indices and every write goes through the gather-and-scatter
+    fallback rather than the contiguous slice. test_torch_dataset_ordered_layout covers that
+    path for probabilities; this covers it for the Jacobian (and the probabilities produced
+    alongside it)."""
+    import torch
+    model = smq1Q_XYI.target_model()
+    model.convert_members_inplace(to_type='full TP')
+    model = model.depolarize(op_noise=0.05, spam_noise=0.025)
+
+    c1 = Circuit([L('Gxpi2', 0), L('Gxpi2', 0)], line_labels=(0,))
+    c2 = Circuit([L('Gxpi2', 0), L('Gypi2', 0)], line_labels=(0,))
+    c3 = Circuit([L('Gypi2', 0)], line_labels=(0,))
+    ds = DataSet(outcome_labels=[('0',), ('1',)])
+    ds.add_count_dict(c1, OrderedDict([(('1',), 95), (('0',), 5)]))   # reversed order
+    ds.add_count_dict(c2, {('1',): 50})                                # strict subset
+    ds.add_count_dict(c3, OrderedDict([(('0',), 50), (('1',), 50)]))   # povm.keys() order
+    ds.done_adding_data()
+    circuits = [c1, c2, c3]
+
+    ref = model.copy()
+    ref.sim = MatrixForwardSimulator()
+    ref_J = ref.sim.bulk_dprobs(circuits)   # circuit -> {outcome: row of the Jacobian}
+    ref_P = ref.sim.bulk_probs(circuits)
+
+    model.sim = TorchForwardSimulator(dtype=torch.float64)
+    layout = model.sim.create_layout(circuits, dataset=ds, array_types=('ep',))
+    plan = model.sim._circuit_store(layout).eval_plan
+    assert not any(g.contiguous_out for g in plan.groups), \
+        "this layout is meant to exercise the scattered-write fallback"
+
+    J = np.full((layout.num_elements, model.num_params), np.nan)
+    P = np.full(layout.num_elements, np.nan)
+    model.sim.bulk_fill_dprobs(J, layout, P)
+    assert layout.num_elements == 5 and not np.isnan(J).any() and not np.isnan(P).any()
+
+    all_idx = np.arange(layout.num_elements)
+    for c in circuits:
+        inds, outcomes = layout.indices_and_outcomes(c)
+        for idx, outcome in zip(all_idx[inds], outcomes):
+            assert abs(P[idx] - ref_P[c][outcome]) < 1e-12
+            assert np.allclose(J[idx], ref_J[c][outcome], atol=1e-9)
