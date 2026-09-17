@@ -231,12 +231,16 @@ print("observables:", [str(p) for p in d.paulis])
 print("ideal expectation values:", d.ideal_expectations)
 ```
 
-For this circuit the fourth qubit is the virtual qubit, so `+___Z` is the MCM outcome $\langle Z_v\rangle$ and `+_Z_Z` is its correlation with the final measurement of qubit 1.  Let us look at the block of the design matrix belonging to the MCM parameters:
+For this circuit the fourth qubit is the virtual qubit, so `+___Z` is the MCM outcome $\langle Z_v\rangle$ and `+_Z_Z` is its correlation with the final measurement of qubit 1.  The full design matrix of this circuit has one row per observable and one column per model parameter, i.e. it is $10 \times 47$.  Its columns come in blocks, one per ansatz key; let us look at the $10 \times 13$ block belonging to the MCM parameters, labelling the columns by their FOMGI names:
 
 ```{code-cell} ipython3
 mcm_columns = params.indices_for_key(('Iz', mcm_qubit))
 fomgi_names = list(mg.fomgi_names_for_ansatz(error_model[('Iz', mcm_qubit)].keys()).values())
-pd.DataFrame(d.design_matrix[:, mcm_columns], index=[str(p) for p in d.paulis], columns=fomgi_names)
+mcm_block = d.design_matrix[:, mcm_columns]
+
+print("full design matrix of this circuit:", d.design_matrix.shape, "(observables x parameters)")
+print("MCM block:", mcm_block.shape, "(observables x MCM parameters), columns", mcm_columns[0], "-", mcm_columns[-1])
+pd.DataFrame(mcm_block, index=[str(p) for p in d.paulis], columns=fomgi_names)
 ```
 
 Observables whose ideal value is $\pm1$ are first-order sensitive to stochastic errors only, and observables whose ideal value is $0$ to coherent errors only -- this is what allows the H and S sectors to be solved separately.  You can see it at work above: in this circuit the qubit is in a superposition when it is measured, so the MCM outcome is random ($\langle Z_v\rangle = 0$) but perfectly correlated with the final measurement of qubit 1 ($\langle Z_1 Z_v\rangle = 1$).  The pure readout error `s_read` and the post-measurement bit flip `s_prep` each reduce this correlation by $2s$, whereas `s_meas` -- a bit flip *before* the measurement, which flips the record together with the state -- leaves it intact.  The coherent tilt of the measurement axis `r_meas_x`, on the other hand, shifts the ideally vanishing expectation values $\langle Z_1\rangle$ and $\langle Z_v\rangle$.
@@ -316,6 +320,30 @@ plt.tight_layout(); plt.show()
 ```
 
 The statistical uncertainty scales as $1/\sqrt{N}$ with the number of shots and roughly as $1/\sqrt{K}$ with the number of circuits, and linearized GST cannot amplify errors with deep circuits the way standard GST does -- so it typically needs more shots per circuit than GST to reach the same precision.
+
+Here is the complete list of the 47 estimated rates -- the gate errors (including the coherent $Z$ crosstalk terms), the SPAM bit flips and the 13 MCM parameters -- next to the true values.  The estimates are in the same order as `params`; `estimated_rates_dict` provides human-readable labels with explicit qubit supports (`v` denotes the virtual qubit).  Note that the stochastic estimates are never negative (they come from a non-negative least-squares solve), whereas the Hamiltonian estimates are unconstrained.
+
+```{code-cell} ipython3
+def parameter_labels(params):
+    """(operation, error generator) labels for every parameter, in the order of `params`."""
+    labels = {}
+    for key, errgens in lgst.estimated_rates_dict(params, np.arange(len(params))).items():
+        op = key if isinstance(key, str) else ':'.join(map(str, key))
+        for (typ, *paulis), index in errgens.items():
+            labels[int(index)] = (op, typ + ' ' + ' '.join(paulis))
+    return [labels[i] for i in range(len(params))]
+
+fomgi_column = np.full(len(params), '', dtype=object)
+fomgi_column[mcm_columns] = fomgi_names
+
+all_rates = pd.DataFrame({'FOMGI name': fomgi_column,
+                          'true': true_rates,
+                          'estimate (no shot noise)': rates_exact,
+                          'estimate (%d shots)' % num_shots: rates_data,
+                          'error bar': error_bars},
+                         index=pd.MultiIndex.from_tuples(parameter_labels(params), names=['operation', 'error generator']))
+all_rates.round(4)
+```
 
 ## 7. Interpreting the mid-circuit measurement
 
