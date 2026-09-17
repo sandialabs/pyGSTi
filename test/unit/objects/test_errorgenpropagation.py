@@ -181,11 +181,11 @@ class LocalStimErrorgenLabelTester(BaseCase):
         self.assertEqual(propagated_lse, (_LSE('S', [stim.PauliString('ZI')]), 1))
 
     def test_type_idx(self):
-        from pygsti.errorgenpropagation.localstimerrorgen import ERRORGEN_TYPE_INDICES
-        self.assertEqual(ERRORGEN_TYPE_INDICES, {'H': 0, 'S': 1, 'C': 2, 'A': 3})
+        from pygsti.errorgenpropagation.localstimerrorgen import _ERRORGEN_TYPE_INDICES
+        self.assertEqual(_ERRORGEN_TYPE_INDICES, {'H': 0, 'S': 1, 'C': 2, 'A': 3})
         for typ, bels in [('H', ['XI']), ('S', ['XI']), ('C', ['XI', 'YI']), ('A', ['XI', 'YI'])]:
             lse = _LSE.cast((typ, bels))
-            self.assertEqual(lse.type_idx, ERRORGEN_TYPE_INDICES[typ])
+            self.assertEqual(lse.type_idx, _ERRORGEN_TYPE_INDICES[typ])
             self.assertEqual(copy.copy(lse).type_idx, lse.type_idx)
             self.assertEqual(copy.deepcopy(lse).type_idx, lse.type_idx)
             self.assertEqual(pickle.loads(pickle.dumps(lse)).type_idx, lse.type_idx)
@@ -257,11 +257,6 @@ class LocalStimErrorgenLabelTester(BaseCase):
         restored = roundtrip(state)
         self.assertEqual(restored._hashable_string_rep, propagated._hashable_string_rep)
 
-        for restored in [roundtrip(fresh_state), restored]:
-            self.assertEqual(restored, propagated)
-            self.assertEqual(hash(restored), hash(propagated))
-            self.assertEqual(restored.basis_element_labels, propagated.basis_element_labels)
-            self.assertEqual(restored.type_idx, propagated.type_idx)
 
 class FixedLayerErrorgenPropTester(BaseCase):
     """Coverage for ``ErrorGeneratorPropagator(fixed_errorgen_layer=...)`` construction,

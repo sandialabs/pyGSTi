@@ -88,8 +88,7 @@ class ComposedPOVM(_POVM, _Torchable):
         # `matrix_basis` is constructed lazily (see the property below): casting a basis to
         # the full state space overflows for very large (e.g. 100-qubit) error maps, and the
         # basis is only needed by a few dense-matrix code paths and by serialization.
-        self._mx_basis_arg = mx_basis
-        self._matrix_basis = None
+        self._matrix_basis = mx_basis
 
         self.errormap = errormap
         items = []  # init as empty (lazy creation of members)
@@ -124,7 +123,7 @@ class ComposedPOVM(_POVM, _Torchable):
         # explicitly passed `mx_basis` or one already constructed). Forcing construction here
         # would overflow for very large state spaces; on load, a missing entry is re-derived
         # lazily from the error map.
-        matrix_basis = self._matrix_basis if self._matrix_basis is not None else self._mx_basis_arg
+        matrix_basis = self._matrix_basis
         if isinstance(matrix_basis, _Basis):
             mm_dict['matrix_basis'] = matrix_basis.to_nice_serialization()
         elif isinstance(matrix_basis, str):
@@ -152,14 +151,12 @@ class ComposedPOVM(_POVM, _Torchable):
         built) remain usable on code paths that never need it.
         """
         if self._matrix_basis is None:
-            mx_basis = self._mx_basis_arg
-            if mx_basis is None:
-                errormap = self.error_map
-                if isinstance(errormap, _ErrorGeneratorContainer) and isinstance(errormap.errorgen, _op.LindbladErrorgen):
-                    mx_basis = errormap.errorgen.matrix_basis
-                else:
-                    raise ValueError(f"Cannot extract a matrix-basis from `errormap` (type {type(errormap)})")
-            self._matrix_basis = _Basis.cast(mx_basis, self.state_space)
+            errormap = self.error_map
+            if isinstance(errormap, _ErrorGeneratorContainer) and isinstance(errormap.errorgen, _op.LindbladErrorgen):
+                mx_basis = errormap.errorgen.matrix_basis
+            else:
+                raise ValueError(f"Cannot extract a matrix-basis from `errormap` (type {type(errormap)})")
+        self._matrix_basis = _Basis.cast(mx_basis, self.state_space)
         return self._matrix_basis
 
     def __contains__(self, key):
@@ -212,7 +209,7 @@ class ComposedPOVM(_POVM, _Torchable):
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
-        return (ComposedPOVM, (self.error_map.copy(), self.base_povm.copy(), self._mx_basis_arg),
+        return (ComposedPOVM, (self.error_map.copy(), self.base_povm.copy(), self._matrix_basis),
                 {'_gpindices': self._gpindices})  # preserve gpindices (but not parent)
 
     def submembers(self):

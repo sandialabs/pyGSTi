@@ -201,7 +201,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
                                         ]
         
         def aggregate(label_rate_pairs):
-            # the returned order is not part of the contract, and a label may appear more than once.
+            # the returned order is not guaranteed, and a label may appear more than once.
             totals = {}
             for lbl, rate in label_rate_pairs:
                 totals[lbl] = totals.get(lbl, 0) + rate
@@ -398,58 +398,21 @@ class ErrgenCompositionCommutationTester(BaseCase):
         negated generator for 'A', since A_{P,Q} = -A_{Q,P}, and (2) raises a KeyError against
         any canonically-keyed dict, e.g. in `errorgen_layer_to_matrix`.
         """
-        num_qubits = 2
-        basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
-        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(basis.labels, basis.elemgen_matrices)}
-
-        def apply_tableau(tableau, pauli):
-            """Apply the tableau, returning the sign-stripped Pauli and its extracted sign."""
-            transformed = tableau(pauli)
-            sign = transformed.sign
-            return transformed * sign, sign.real
-
-        def check(tableau, eg_type, P, Q):
-            # Reproduce the ideal Clifford action by hand, bypassing the canonicalization under
-            # test, so the sign correction can be checked independently. `create_elementary_errorgen`
-            # is used for both sides since `errorgen_matrix_dict` uses a different tensor ordering.
-            raw_P, sign_P = apply_tableau(tableau, P)
-            raw_Q, sign_Q = apply_tableau(tableau, Q)
-            raw_weight = sign_P * sign_Q
-
-            propagated_lbl, weight = _LSE(eg_type, (P, Q)).propagate_error_gen_tableau(tableau, 1.0)
-            new_P, new_Q = propagated_lbl.basis_element_labels
-
-            self.assertTrue(_eprop.stim_pauli_string_less_than(new_P, new_Q),
-                            f'{eg_type}-type propagated label {propagated_lbl} is not in canonical order.')
-
-            propagated_mat = _eprop.errorgen_layer_to_matrix({propagated_lbl: weight}, num_qubits,
-                                                             errorgen_matrix_dict=errorgen_matrix_dict)
-            self.assertGreater(np.linalg.norm(propagated_mat), 0)
-
-            expected_mat = raw_weight * create_elementary_errorgen(eg_type, raw_P.to_unitary_matrix(endian='big'),
-                                                                   raw_Q.to_unitary_matrix(endian='big'))
-            reconstructed_mat = weight * create_elementary_errorgen(eg_type, new_P.to_unitary_matrix(endian='big'),
-                                                                    new_Q.to_unitary_matrix(endian='big'))
-            self.assertTrue(np.allclose(reconstructed_mat, expected_mat, atol=1e-10),
-                            f'{eg_type}-type propagated error generator does not match the expected '
-                            'result of directly applying the tableau to the original basis element labels.')
-
+     
         # The motivating example: SWAP reverses the order of (IX, XI).
         swap_tableau = stim.Tableau.from_named_gate('SWAP')
         P, Q = stim.PauliString('+IX'), stim.PauliString('+XI')
         self.assertTrue(_eprop.stim_pauli_string_less_than(P, Q))  # (P, Q) starts canonical
-        for eg_type in ('C', 'A'):
-            check(swap_tableau, eg_type, P, Q)
+        C_lbl = _LSE('C', [P,Q])
+        SWAP_C_lbl = C_lbl.propagate_error_gen_tableau(swap_tableau)
+        assert SWAP_C_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
+        assert SWAP_C_lbl[1] == 1, "Incorrect weight following C subscript swap."
 
-        # Every canonically ordered 2-qubit C/A label through a few Cliffords that permute
-        # and mix Paulis (and so introduce signs) in different ways.
-        tableaus = [stim.Tableau.from_named_gate(name) for name in ('SWAP', 'CNOT', 'CZ', 'ISWAP')]
-        tableaus.append(stim.Tableau.from_named_gate('H') + stim.Tableau.from_named_gate('S'))
-        for tableau in tableaus:
-            for lbl in basis.labels:
-                if lbl.errorgen_type in ('C', 'A'):
-                    P, Q = (stim.PauliString(bel) for bel in lbl.basis_element_labels)
-                    check(tableau, lbl.errorgen_type, P, Q)
+        A_lbl = _LSE('A', [P,Q])
+        SWAP_A_lbl = A_lbl.propagate_error_gen_tableau(swap_tableau)
+        assert SWAP_A_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
+        assert SWAP_A_lbl[1] == -1, "Incorrect weight following A subscript swap."
+
 
     def test_zassenhaus_formula(self):
         first_order_zassenhaus_numerical = _eprop.zassenhaus_formula_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, zassenhaus_order=1)

@@ -15,9 +15,6 @@ try:
     import stim
 except ImportError:
     pass
-import numpy as _np
-from pygsti.tools import change_basis
-from pygsti.tools.lindbladtools import create_elementary_errorgen
 
 
 def bel_str(pauli: stim.PauliString) -> str:
@@ -55,7 +52,7 @@ def bel_less_than(pauli1: stim.PauliString, pauli2: stim.PauliString) -> bool:
 # index of a label's `errorgen_type` in this table; `pygsti.tools.errgenproptools` uses
 # `4*type_idx_1 + type_idx_2` to index its per-type-pair dispatch tables for the error
 # generator commutator and composition, so the order here and there must agree.
-ERRORGEN_TYPE_INDICES: dict[str, int] = {'H': 0, 'S': 1, 'C': 2, 'A': 3}
+_ERRORGEN_TYPE_INDICES: dict[str, int] = {'H': 0, 'S': 1, 'C': 2, 'A': 3}
 
 
 #TODO: Split this into a parent class and subclass for markovian and non-markovian
@@ -71,14 +68,14 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
     evaluation of non-Markovian error propagators using cumulant expansion based techniques.
 
     Besides the `errorgen_type` string, each label carries the integer `type_idx`
-    (`ERRORGEN_TYPE_INDICES[errorgen_type]`, i.e. H=0, S=1, C=2, A=3) that the error generator
+    (`_ERRORGEN_TYPE_INDICES[errorgen_type]`, i.e. H=0, S=1, C=2, A=3) that the error generator
     commutator and composition routines in `pygsti.tools.errgenproptools` use to index their
     per-type-pair dispatch tables.
     """
 
     @classmethod
     def cast(cls, obj: Union[_ElementaryErrorgenLabel, tuple, list],
-             sslbls: Optional[Sequence[Any]] = None) -> LocalStimErrorgenLabel:
+             sslbls: Optional[Sequence[int, str]] = None) -> LocalStimErrorgenLabel:
         """
         Method for casting objects to instances of LocalStimErrorgenLabel.
 
@@ -190,9 +187,9 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         """
         self.errorgen_type = errorgen_type
         try:
-            self.type_idx = ERRORGEN_TYPE_INDICES[errorgen_type]
+            self.type_idx = _ERRORGEN_TYPE_INDICES[errorgen_type]
         except KeyError:
-            raise ValueError(f"Unknown error generator type {errorgen_type!r}; expected one of 'H', 'S', 'C', 'A'.")
+            raise ValueError(f"Unknown error generator type {errorgen_type}; expected one of 'H', 'S', 'C', 'A'.")
         self.basis_element_labels = tuple(basis_element_labels) 
         self.label = label
         self.circuit_time = circuit_time
@@ -241,7 +238,7 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         if 'initial_label' in state:
             state['_initial_label'] = state.pop('initial_label')
         if 'type_idx' not in state:
-            state['type_idx'] = ERRORGEN_TYPE_INDICES[state['errorgen_type']]
+            state['type_idx'] = _ERRORGEN_TYPE_INDICES[state['errorgen_type']]
         if '_hashable_basis_element_labels' not in state:
             state['_hashable_basis_element_labels'] = tuple([bel_str(ps) for ps in state['basis_element_labels']])
         # always rebuilt: the format of this string has changed between versions.
