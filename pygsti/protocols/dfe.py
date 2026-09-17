@@ -19,32 +19,34 @@ from pygsti import tools as _tools
 from pygsti.algorithms import dfe as _dfe
 from pygsti.protocols import rb as _rb
 
+
 class DFEDesign(_vb.BenchmarkingDesign):
     """
+    An experiment design for direct fidelity estimation of a set of Clifford circuits.
+
+    For each circuit, `num_samples` DFE circuits are sampled with
+    :func:`~pygsti.algorithms.dfe.sample_dfe_circuit`.
+
     This currently only works if `circuits` are all on the same qubits
     b/c it is built on BenchmarkingDesign. Code will likely silently
     break if this isn't true
     """
     def __init__(self, pspec, circuits, clifford_compilations, num_samples,
-                 descriptor='A DFE experiment', add_default_protocol=False):
+                 descriptor='A DFE experiment', add_default_protocol=False, seed=None):
 
         circuit_lists = []
         measurements = []
         signs = []
 
-        # Need to add back in the seed but don't know how to correctly propagate it down 
-        # to the sampling function
-        #if seed is None:
-        #    self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
-        #else:
-        #    self.seed = seed
+        rand_state = _np.random.RandomState(seed)  # Ok if seed is None
 
         for c in circuits:
             dfe_circuits_for_c = []
             measurements_for_c = []
             signs_for_c = []
             for sample_num in range(num_samples):
-                dfe_circ, meas, sign = _dfe.sample_dfe_circuit(pspec, c, clifford_compilations, None)
+                dfe_circ, meas, sign = _dfe.sample_dfe_circuit(pspec, c, clifford_compilations,
+                                                               seed=rand_state.randint(0, 2**31))
                 dfe_circuits_for_c.append(dfe_circ)
                 measurements_for_c.append(meas)
                 signs_for_c.append(int(sign))
@@ -56,7 +58,7 @@ class DFEDesign(_vb.BenchmarkingDesign):
         self._init_foundation(circuit_lists, measurements, signs, num_samples, descriptor,
                               add_default_protocol)
 
-    def _init_foundation(self, circuit_lists, measurements, signs, num_samples,  descriptor,
+    def _init_foundation(self, circuit_lists, measurements, signs, num_samples, descriptor,
                          add_default_protocol):
         # Pair these attributes with circuit data so that we serialize/truncate properly
         self.paired_with_circuit_attrs = ["measurements", "signs"]
