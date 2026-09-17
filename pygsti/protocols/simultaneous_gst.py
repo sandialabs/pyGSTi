@@ -112,8 +112,8 @@ def _recordable_seed(seed: Optional[SeedLike]) -> Optional[Union[int, Dict[str, 
         return {'entropy': seed.entropy, 'spawn_key': list(seed.spawn_key)}
     _warnings.warn("A SimultaneousGSTDesign was seeded with a live Generator, whose state "
                    "cannot be recorded. The design's circuits are unaffected, but it will "
-                   "not be able to re-stitch them after a reload. Pass an int or a "
-                   "SeedSequence for a design that can.")
+                   "not be able to re-stitch them -- not even in memory, no reload needed "
+                   "to see it. Pass an int or a SeedSequence for a design that can.")
     return None
 
 
@@ -146,7 +146,10 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
     seed (optional): Anything ``np.random.default_rng`` accepts -- an int, a SeedSequence,
         or an already-built Generator -- used to seed the randgen handed to the stitcher.
         Recorded as ``stitch_seed``, so an int or a SeedSequence lets a reloaded design
-        re-stitch its circuits; a live Generator cannot be recorded.
+        re-stitch its circuits. Left as the default ``None``, a fresh ``SeedSequence`` is
+        generated and recorded automatically -- the resulting circuits are exactly as
+        random as an explicit ``None`` always was, but the design can still restitch. An
+        already-built ``Generator`` is the one case that still cannot be recorded.
     nested (bool): Whether ``circuit_stitcher``'s output is nested, i.e. whether
         ``circuit_lists[L+1]`` contains every circuit in ``circuit_lists[L]``. The
         default stitcher always produces nested lists, hence the default of True;
@@ -209,6 +212,8 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         self.color_patches = _normalize_coloring(edge_coloring)
         self.circuit_stitcher = CircuitStitcher.cast(
             RandomizedPatchStitcher() if circuit_stitcher is None else circuit_stitcher)
+        if seed is None:
+            seed = np.random.SeedSequence()
         self.stitch_seed = _recordable_seed(seed)
 
         self.circuit_lists = self.circuit_stitcher.stitch(
@@ -222,9 +227,12 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
     def restitch(self, verbosity: int = 0, debug_check: bool = True) -> "SimultaneousGSTDesign":
         """Rebuild this design's circuits from its recorded stitcher and seed.
 
-        Equal to `self` in circuit content whenever `stitch_seed` was recordable -- an int
-        or a SeedSequence, but not a live Generator. Useful as a round-trip check after a
-        write/load, and as the way to regenerate a design whose circuits were not kept.
+        Equal to `self` in circuit content for any design built the normal way, since an
+        omitted `seed` now generates and records one automatically. The two exceptions are
+        a design built with a live `Generator` (whose state can't be recorded) and one
+        loaded from a directory written before seeds were recorded at all. Useful as a
+        round-trip check after a write/load, and as the way to regenerate a design whose
+        circuits were not kept.
 
         Returns
         -------
@@ -233,11 +241,20 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         Raises
         ------
         ValueError
-            If this design has no stitcher to run, which happens only when it was loaded
-            from a directory written before the stitcher became a serializable object.
+            If this design has no stitcher to run (loaded from a directory written before
+            the stitcher became a serializable object), or no recorded seed to restitch
+            from (built with a live Generator, or loaded from a directory written before
+            seeds were recorded).
         """
         if self.circuit_stitcher is None:
             raise ValueError("This SimultaneousGSTDesign has no circuit_stitcher to run.")
+        if self.stitch_seed is None:
+            raise ValueError(
+                "This SimultaneousGSTDesign has no recorded seed to restitch from -- it "
+                "was either built with a live Generator (whose state can't be recorded) "
+                "or loaded from a design saved before seeds were recorded. Rebuild it "
+                "with an int or a SeedSequence, or let seed default, to make it "
+                "restitchable.")
         return SimultaneousGSTDesign(
             self.processor_spec, self.oneq_gstdesign, self.twoq_gstdesign,
             self.color_patches, circuit_stitcher=self.circuit_stitcher,

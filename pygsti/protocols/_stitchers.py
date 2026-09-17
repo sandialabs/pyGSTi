@@ -14,6 +14,7 @@ import numpy as np
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import tqdm as _tqdm
+import warnings as _warnings
 
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.circuits.circuit import Circuit
@@ -124,7 +125,9 @@ class CircuitStitcher(_NicelySerializable):
         ----------
         obj : CircuitStitcher or callable
             A callable is adapted by :class:`CallableStitcher`, which also carries the
-            serialization caveat that comes with one.
+            serialization caveat that comes with one. A `CircuitStitcher` subclass
+            passed uninstantiated (a forgotten `()`) is rejected with a targeted error
+            rather than silently treated as a plain callable.
 
         **kwargs
             Extra keyword arguments for a wrapped callable; ignored when `obj` is
@@ -140,6 +143,10 @@ class CircuitStitcher(_NicelySerializable):
                     f"Options passed alongside an already-built {type(obj).__name__}: "
                     f"{sorted(kwargs)}. Set them on the stitcher instead.")
             return obj
+        if isinstance(obj, type) and issubclass(obj, CircuitStitcher):
+            raise TypeError(
+                f"{obj.__name__} is a CircuitStitcher subclass, not an instance -- did "
+                f"you forget the parentheses? Pass {obj.__name__}() instead.")
         if callable(obj):
             return CallableStitcher(obj, **kwargs)
         raise TypeError("A circuit stitcher must be a CircuitStitcher or a callable; got "
@@ -262,6 +269,12 @@ class CallableStitcher(CircuitStitcher):
 
     def _stitch(self, oneq_gstdesign, twoq_gstdesign, vertices, color_patches, randgen,
                 verbosity):
+        if self.func is None:
+            raise ValueError(
+                "This CallableStitcher's function could not be restored after a reload "
+                "(it was a lambda, a closure, or a function defined inside another "
+                "function). Rebuild the design with a real circuit_stitcher to "
+                "regenerate its circuits.")
         return self.func(oneq_gstdesign, twoq_gstdesign, vertices, color_patches,
                          randgen=randgen, verbosity=verbosity, **self.kwargs)
 
@@ -277,21 +290,26 @@ class CallableStitcher(CircuitStitcher):
     def _from_nice_serialization(cls, state):
         name = state.get('func')
         if name is None:
-            raise ValueError("Cannot restore a CallableStitcher: its function had no "
-                             "module and qualified name to record. Subclass "
-                             "CircuitStitcher for a stitcher that reloads.")
+            _warnings.warn(
+                "Restoring a CallableStitcher whose function had no module and "
+                "qualified name to record. The design still loads, but its "
+                "stitch()/restitch() will raise until it's given a real "
+                "circuit_stitcher. Subclass CircuitStitcher for a stitcher that reloads.")
+            return cls(None, **state.get('kwargs', {}))
         try:
             from pygsti.io.metadir import _class_for_name as _resolve_name
             func = _resolve_name(name)
         except Exception as e:
-            # Raised as a ValueError rather than passed through: `_class_for_name` on a
-            # lambda's qualname fails with whatever import error the dotted path happens
-            # to produce, which says nothing about the actual problem.
-            raise ValueError(
+            # Warned rather than raised: a load-time failure here used to take the
+            # entire design down with it, not just this stitcher's ability to re-stitch.
+            _warnings.warn(
                 f"Could not restore the CallableStitcher function {name!r} ({e}). This is "
                 "expected for a lambda, a closure, or a function defined inside another "
-                "function -- none of them can be imported by name. Subclass "
-                "CircuitStitcher if the design needs to record how it was built.") from e
+                "function -- none of them can be imported by name. The design still "
+                "loads, but its stitch()/restitch() will raise until it's given a real "
+                "circuit_stitcher. Subclass CircuitStitcher if the design needs to "
+                "record how it was built.")
+            return cls(None, **state.get('kwargs', {}))
         return cls(func, **state.get('kwargs', {}))
 
 

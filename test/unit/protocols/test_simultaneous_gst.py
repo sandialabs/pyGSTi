@@ -993,6 +993,14 @@ class CircuitStitcherTester(BaseCase):
             CircuitStitcher.cast(RandomizedPatchStitcher(), share_same_shape_schedules=False)
         self.assertIn('share_same_shape_schedules', str(ctx.exception))
 
+    def test_casting_an_uninstantiated_stitcher_class_says_so(self):
+        """A forgotten `()` (e.g. circuit_stitcher=RandomizedPatchStitcher) is callable
+        but not an instance -- it must not be silently wrapped in a CallableStitcher."""
+        with self.assertRaises(TypeError) as ctx:
+            CircuitStitcher.cast(RandomizedPatchStitcher)
+        self.assertIn('RandomizedPatchStitcher', str(ctx.exception))
+        self.assertIn('instance', str(ctx.exception))
+
     def test_casting_a_non_callable_says_what_is_accepted(self):
         with self.assertRaises(TypeError):
             CircuitStitcher.cast('randomized')
@@ -1086,12 +1094,30 @@ class CircuitStitcherTester(BaseCase):
         self.assertIs(restored.func, _stub_stitcher)
         self.assertEqual(restored.kwargs, {'extra': 7})
 
-    def test_a_lambda_backed_callable_stitcher_does_not_round_trip(self):
-        """Documented limitation of the escape hatch, pinned so it stays documented."""
+    def test_a_lambda_backed_callable_stitcher_loads_with_a_warning_but_cannot_stitch(self):
+        """The design still loads; only calling stitch()/restitch() on it fails."""
         state = CallableStitcher(lambda *a, **kw: []).to_nice_serialization()
+        with self.assertWarns(UserWarning) as ctx:
+            restored = CircuitStitcher.from_nice_serialization(state)
+        self.assertIn('lambda', str(ctx.warning))
+        self.assertIsInstance(restored, CallableStitcher)
+        self.assertIsNone(restored.func)
+
+    def test_a_stitcher_function_with_no_qualified_name_loads_with_a_warning_but_cannot_stitch(self):
+        """Same graceful-degrade path as the lambda case, but for the earlier
+        state['func'] is None branch (a function with no __module__/__qualname__)."""
+        state = CallableStitcher(_stub_stitcher).to_nice_serialization()
+        state['func'] = None
+        with self.assertWarns(UserWarning):
+            restored = CircuitStitcher.from_nice_serialization(state)
+        self.assertIsInstance(restored, CallableStitcher)
+        self.assertIsNone(restored.func)
+
+    def test_stitching_with_an_unrestored_callable_stitcher_raises_a_clear_error(self):
+        stitcher = CallableStitcher(None)
         with self.assertRaises(ValueError) as ctx:
-            CircuitStitcher.from_nice_serialization(state)
-        self.assertIn('lambda', str(ctx.exception))
+            self._stitch_with(stitcher)
+        self.assertIn('could not be restored', str(ctx.exception))
 
 
 class SeedRecordTester(BaseCase):
@@ -1118,6 +1144,40 @@ class SeedRecordTester(BaseCase):
         with self.assertWarns(Warning) as ctx:
             self.assertIsNone(_recordable_seed(np.random.default_rng(0)))
         self.assertIn('re-stitch', str(ctx.warning))
+
+
+class DefaultSeedTester(_SGSTFixture, BaseCase):
+    """An omitted `seed` still records something restitchable -- it must not go
+    through the same silently-non-reproducible path as an unrecordable live Generator."""
+
+    COLOR_PATCHES = {0: [(0, 1)], 1: [(1, 2)]}
+
+    def _build(self, **kwargs):
+        return SimultaneousGSTDesign(self.pspec, self.oneq, self.twoq, self.COLOR_PATCHES,
+                                     debug_check=False, **kwargs)
+
+    def test_an_omitted_seed_is_still_recorded(self):
+        self.assertIsNotNone(self._build().stitch_seed)
+
+    def test_an_omitted_seed_still_restitches_identically(self):
+        design = self._build()
+        restitched = design.restitch()
+        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+                         [list(cl) for cl in design.circuit_lists])
+
+    def test_two_designs_with_omitted_seeds_still_differ(self):
+        # The fix records a recoverable seed -- it must not make separate unseeded
+        # constructions deterministic, only restitch() of the same one.
+        d1, d2 = self._build(), self._build()
+        self.assertNotEqual([list(cl) for cl in d1.circuit_lists],
+                            [list(cl) for cl in d2.circuit_lists])
+
+    def test_a_live_generator_cannot_restitch(self):
+        with self.assertWarns(UserWarning):
+            design = self._build(seed=np.random.default_rng(0))
+        with self.assertRaises(ValueError) as ctx:
+            design.restitch()
+        self.assertIn('no recorded seed', str(ctx.exception))
 
 
 class SerializationTester(_SGSTFixture, BaseCase):
