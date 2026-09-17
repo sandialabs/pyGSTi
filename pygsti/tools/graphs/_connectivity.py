@@ -57,6 +57,7 @@ __all__ = [
     'within_hops_matrix',
     'qubits_within_hops',
     'connected_supports',
+    'random_connected_subgraph',
 ]
 
 # Absolute tolerance used when checking a bare matrix for (disallowed) negative entries, and
@@ -643,3 +644,82 @@ def connected_supports(qubit_graph: Any, max_size: int, hops: int,
         return []
     close = within_hops_matrix(qubit_graph, hops, qubit_labels=qubit_labels)
     return _connected_supports_from_close(close, int(max_size))
+
+
+def random_connected_subgraph(qubit_graph: Any, width: int,
+                              rand_state: _np.random.RandomState | None = None,
+                              qubit_labels: list | None = None) -> set:
+    """
+    Sample a uniformly-rooted random set of `width` qubits that induces a connected subgraph of
+    `qubit_graph`, by growing outward from a random starting qubit.
+
+    The sample is not uniform over all connected `width`-subsets: it starts at a uniformly
+    random qubit and then repeatedly picks a random already-chosen qubit and a random unchosen
+    neighbor of it, backtracking off qubits whose neighbors are exhausted. That is the behavior
+    `pygsti.circuits.subcircuit_selection` has always relied on for snipping subcircuits out of
+    a device, and it is preserved exactly here.
+
+    Parameters
+    ----------
+    qubit_graph : graph-like
+        See `qubit_graph_to_networkx`.
+    width : int
+        The number of qubits to select. Must be at least 1.
+    rand_state : numpy.random.RandomState, optional
+        Source of randomness. A fresh, unseeded `RandomState` is used if None.
+    qubit_labels : list, optional
+        See `qubit_graph_to_networkx`.
+
+    Returns
+    -------
+    set
+        `width` node labels of `qubit_graph` whose induced subgraph is connected.
+
+    Raises
+    ------
+    RuntimeError
+        If the connected component containing the starting qubit has fewer than `width`
+        qubits, so no connected extension of the required size exists from that start.
+    """
+    if not isinstance(width, (int, _np.integer)) or width < 1:
+        raise ValueError(f"width must be a positive integer; got {width!r}.")
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
+    G = qubit_graph_to_networkx(qubit_graph, qubit_labels=qubit_labels)
+    nodes = list(G.nodes())
+    if not nodes:
+        raise RuntimeError(f'Could not generate a subgraph with {width} nodes from an empty graph')
+
+    # Index-based `choice` draws the same random integer that `choice(nodes)` would (both reduce
+    # to `randint(len(nodes))`), but hands back the node object itself rather than a numpy
+    # scalar, so string labels come back as `str` and not `numpy.str_`.
+    starting_node = nodes[rand_state.choice(len(nodes))]
+
+    used_nodes = {starting_node}
+    plausible_growth_nodes = {starting_node}
+
+    for _ in range(width - 1):
+        valid_node_found = False
+        while not valid_node_found and plausible_growth_nodes:
+            growth_candidates = list(plausible_growth_nodes)
+            growth_node = growth_candidates[rand_state.choice(len(growth_candidates))]
+            new_neighbors = list(set(G.neighbors(growth_node)).difference(used_nodes))
+            if new_neighbors:
+                new_node = new_neighbors[rand_state.choice(len(new_neighbors))]
+                used_nodes.add(new_node)
+                plausible_growth_nodes.add(new_node)
+                valid_node_found = True
+            else:
+                plausible_growth_nodes.remove(growth_node)
+
+        if not valid_node_found:
+            # Every chosen qubit's neighbors are exhausted: the starting qubit's connected
+            # component has fewer than `width` qubits.
+            raise RuntimeError(f'Could not generate a subgraph with {width} nodes')
+
+    assert len(used_nodes) == width, \
+        f'set of selected nodes has length {len(used_nodes)} but should have length {width}'
+    assert _nx.is_connected(G.subgraph(used_nodes)), \
+        f'subgraph on nodes {used_nodes} should be connected but is not'
+    return used_nodes

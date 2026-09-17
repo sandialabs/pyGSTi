@@ -45,7 +45,7 @@ from ....helpers.coloring_graphs import (
 
 # The wall-clock scaling suite that used to live here -- the timeout-guarded
 # runner, the dense-graph termination guard, and GraphColoringScalingTester --
-# now lives in test/performance/test_graphcoloring_scaling.py. Everything below
+# now lives in test/performance/test_coloring_scaling.py. Everything below
 # runs in-process and asserts nothing about elapsed time, so it is safe to run
 # on a loaded machine.
 

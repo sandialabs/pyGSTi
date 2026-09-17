@@ -17,6 +17,7 @@ from ._connectivity import (
     within_hops_matrix,
     qubits_within_hops,
     connected_supports,
+    random_connected_subgraph,
 )
 from . import coloring
 
@@ -31,5 +32,6 @@ __all__ = [
     "within_hops_matrix",
     "qubits_within_hops",
     "connected_supports",
+    "random_connected_subgraph",
     "coloring",
 ]

@@ -188,7 +188,7 @@ def test_deterministic_algorithm_colors_dense_graph(algorithm, name, graph):
 # Scaling / algorithm-selection suite.
 #
 # These tests characterize *which algorithm to use in which situation*. They are
-# not pure correctness tests (those live in test/unit/tools/test_graphcoloring.py);
+# not pure correctness tests (those live in test/unit/tools/graphs/test_coloring.py);
 # instead they run every algorithm across graph families and sizes, recording
 # runtime, color count (quality), and whether the algorithm produced a proper+
 # complete coloring at all. Findings are printed as a table (visible with

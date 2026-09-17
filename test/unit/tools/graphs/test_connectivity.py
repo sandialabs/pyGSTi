@@ -505,3 +505,56 @@ class ConnectedSupportsTester(BaseCase):
         candidates = [sum(len(list(itertools.combinations(range(16), w)))
                           for w in range(1, max_size + 1)) for max_size in range(1, 5)]
         self.assertEqual(candidates, [16, 136, 696, 2516])
+
+
+class RandomConnectedSubgraphTester(BaseCase):
+    # `random_connected_subgraph` moved here from `pygsti.circuits.subcircuit_selection`, which
+    # keeps a re-export. These tests pin the behavior that module relies on.
+
+    def test_sizes_and_connectedness(self):
+        rand_state = np.random.RandomState(0)
+        n = 100
+        g = nx.gnp_random_graph(n, 2 * np.log(n) / n, seed=0)
+        widths = list(range(1, 21))
+        subgraphs = [graphs.random_connected_subgraph(g, width, rand_state) for width in widths]
+        self.assertEqual([len(s) for s in subgraphs], widths)
+        self.assertTrue(all(nx.is_connected(g.subgraph(s)) for s in subgraphs))
+        self.assertTrue(all(isinstance(s, set) for s in subgraphs))
+
+    def test_reproducibility(self):
+        n = 100
+        g = nx.gnp_random_graph(n, 2 * np.log(n) / n, seed=0)
+        widths = list(range(1, 21))
+        subgraphs_1 = [graphs.random_connected_subgraph(g, w, np.random.RandomState(w)) for w in widths]
+        subgraphs_2 = [graphs.random_connected_subgraph(g, w, np.random.RandomState(w)) for w in widths]
+        self.assertEqual(subgraphs_1, subgraphs_2)
+
+    def test_re_export_from_subcircuit_selection(self):
+        from pygsti.circuits import subcircuit_selection
+        self.assertIs(subcircuit_selection.random_connected_subgraph, graphs.random_connected_subgraph)
+
+    def test_string_labels_come_back_as_str(self):
+        g = graphs.qubit_graph_from_edges([('Q0', 'Q1'), ('Q1', 'Q2')], ['Q0', 'Q1', 'Q2'])
+        chosen = graphs.random_connected_subgraph(g, 2, np.random.RandomState(3))
+        self.assertEqual(len(chosen), 2)
+        self.assertTrue(all(type(q) is str for q in chosen))
+
+    def test_accepts_other_representations(self):
+        edges = [(0, 1), (1, 2), (2, 3)]
+        line_adj = np.array([[0, 1, 0, 0], [1, 0, 1, 0], [0, 1, 0, 1], [0, 0, 1, 0]])
+        for qubit_graph in (line_adj,
+                            QubitGraph.common_graph(4, "line", qubit_labels=[0, 1, 2, 3]),
+                            _ProcessorSpec(4, ['Gxpi2', 'Gypi2', 'Gcphase'], {},
+                                           {'Gcphase': edges}, qubit_labels=[0, 1, 2, 3])):
+            chosen = graphs.random_connected_subgraph(qubit_graph, 3, np.random.RandomState(1))
+            self.assertEqual(len(chosen), 3)
+            # Any 3 vertices of a 4-vertex path are connected iff they are consecutive.
+            self.assertEqual(max(chosen) - min(chosen), 2, f"input type {type(qubit_graph).__name__}")
+
+    def test_component_too_small_raises(self):
+        # Two disjoint edges: no connected 3-subset exists from any start.
+        g = graphs.qubit_graph_from_edges([(0, 1), (2, 3)], [0, 1, 2, 3])
+        with self.assertRaises(RuntimeError):
+            graphs.random_connected_subgraph(g, 3, np.random.RandomState(0))
+        with self.assertRaises(ValueError):
+            graphs.random_connected_subgraph(g, 0)
