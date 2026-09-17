@@ -28,6 +28,7 @@ parts:
         - file: markdown/gst/Overview-functionbased
         - file: markdown/gst/Driverfunctions
         - file: markdown/gst/LowLevel
+    - file: markdown/protocols/LinearizedGST
     - file: markdown/protocols/IdleTomography
     - file: markdown/protocols/DriftCharacterization
     - file: markdown/protocols/RobustPhaseEstimation
