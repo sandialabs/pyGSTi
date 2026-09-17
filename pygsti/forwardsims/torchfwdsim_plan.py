@@ -51,6 +51,16 @@ first factor is built by one scatter-add of outer products, and the contraction 
 matrix-matrix product. Both map perfectly onto a GPU.
 
 The result is a Jacobian computed in a few hundred kernel launches instead of ~10^5 * n_params.
+
+Relation to :class:`~pygsti.layouts.prefixtable.PrefixTable`
+------------------------------------------------------------
+:class:`MapForwardSimulator` exploits the same prefix redundancy through a ``PrefixTable``, which
+orders circuits so that a state cached for one circuit can seed the next. The prefix DAG here is
+the same idea in a different shape: ``PrefixTable`` walks its table serially, one state
+propagation per entry, whereas the DAG is grouped by (depth, op label) so that a whole level is one
+batched matmul. The suffix DAG has no counterpart in ``PrefixTable``: ``MapForwardSimulator``
+differentiates by finite differences, one probability evaluation per model parameter, while the
+suffix states here give an analytic Jacobian with no per-parameter pass over the circuits.
 """
 from __future__ import annotations
 

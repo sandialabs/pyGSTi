@@ -472,7 +472,7 @@ class TorchForwardSimulator(ForwardSimulator):
             probs_out = torch.empty(smcs.outcome_probs_dim, dtype=self.dtype, device=self.device)
 
         J_val = smcs.circuit_jacobian_from_free_params(free_params, probs_out=probs_out)
-        _copy_to_numpy(J_val, array_to_fill)
+        _copy_to_numpy(J_val, array_to_fill[:smcs.outcome_probs_dim, :])
         if probs_out is not None:
             _copy_to_numpy(probs_out, pr_array_to_fill[:smcs.outcome_probs_dim])
         return
