@@ -148,7 +148,7 @@ class _BlockParameterization:
         given the stateless data `sd` returned by `torch_stateless_data`."""
         raise NotImplementedError
 
-    def _coefficient_polynomial(self, blk, index, pio, mpv):
+    def _coefficient_polynomial(self, blk, index: int | tuple[int, int], pio: int, mpv: int) -> _Polynomial:
         """Return the _Polynomial for one block_data entry.
 
         Evaluating the returned polynomial at the block's parameter vector
@@ -209,7 +209,7 @@ class _StaticParam(_BlockParameterization):
     def block_data_torch(sd, t_param):
         return sd[0]
 
-    def _coefficient_polynomial(self, blk, index, pio, mpv):
+    def _coefficient_polynomial(self, blk, index: int | tuple[int, int], pio: int, mpv: int) -> _Polynomial:
         val = blk.block_data[index]
         return _Polynomial({(): val}, mpv)
 
@@ -240,7 +240,7 @@ class _RealVectorElements(_BlockParameterization):
     def block_data_torch(sd, t_param):
         return t_param
 
-    def _coefficient_polynomial(self, blk, index, pio, mpv):
+    def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
         return _Polynomial({(pio + index,): 1.0}, mpv)
 
 
@@ -316,7 +316,7 @@ class _DiagCholesky(_BlockParameterization):
     def block_data_torch(sd, t_param):
         return t_param**2
 
-    def _coefficient_polynomial(self, blk, index, pio, mpv):
+    def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
         var = pio + index
         return _Polynomial({(var, var): 1.0}, mpv)
 
@@ -359,7 +359,7 @@ class _Depol(_BlockParameterization):
         n = sd[0]
         return (t_param[0]**2) * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
 
-    def _coefficient_polynomial(self, blk, index, pio, mpv):
+    def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
         var = pio
         return _Polynomial({(var, var): 1.0}, mpv)
 
@@ -400,7 +400,7 @@ class _RelDepol(_BlockParameterization):
         n = sd[0]
         return t_param[0] * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
 
-    def _coefficient_polynomial(self, blk, index, pio, mpv):
+    def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
         return _Polynomial({(pio,): 1.0}, mpv)
 
 
@@ -482,7 +482,7 @@ class _OtherElements(_BlockParameterization):
         Imag = lowPT - lowPT.T
         return _torch.complex(Re, Imag)
 
-    def _coefficient_polynomial(self, blk, index, pio, mpv):
+    def _coefficient_polynomial(self, blk, index: tuple[int, int], pio: int, mpv: int) -> _Polynomial:
         i, j = index
         num_bels = len(blk._bel_labels)
         if i == j:
@@ -634,7 +634,7 @@ class _OtherCholesky(_BlockParameterization):
         C = _torch.complex(Cre, Cim)
         return C @ C.conj().T
 
-    def _coefficient_polynomial(self, blk, index, pio, mpv):
+    def _coefficient_polynomial(self, blk, index: tuple[int, int], pio: int, mpv: int) -> _Polynomial:
         i, j = index
         num_bels = len(blk._bel_labels)
 
