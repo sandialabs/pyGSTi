@@ -173,7 +173,6 @@ class _BlockParameterization:
         """
         raise NotImplementedError
 
-    _block_data_polynomial = _coefficient_polynomial
 
 
 class _StaticParam(_BlockParameterization):
