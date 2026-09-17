@@ -14,6 +14,7 @@ from pygsti.baseobjs.basis import Basis as _Basis
 import warnings as _warnings
 
 from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
+from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LinbladErrorGen
 
 
 # Idea:
@@ -50,7 +51,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         of the EmbeddedErrorgen.
     """
 
-    def __init__(self, state_space, target_labels, errgen_to_embed):
+    def __init__(self, state_space, target_labels, errgen_to_embed: _LinbladErrorGen):
         _EmbeddedOp.__init__(self, state_space, target_labels, errgen_to_embed)
 
         # set "API" error-generator members (to interface properly w/other objects)
@@ -139,16 +140,26 @@ class EmbeddedErrorgen(_EmbeddedOp):
             Where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
             `"C"`(Correlation)  or `"A"` (Affine).  Hamiltonian and S terms always have a
             single basis label while 'C' and 'A' terms have two.
-        """
-        coeffs_to_embed = self.embedded_op.coefficients(return_basis, logscale_nonham, label_type)
 
+        basis : `Basis` (if return_basis==True)
+            A Basis mapping the basis labels used in the keys of basis-labels of the
+            underlying (pre-embedding) error generator coeffs to basis matrices.
+        """
+        if return_basis:
+            coeffs_to_embed, basis = self.embedded_op.coefficients(return_basis, logscale_nonham, label_type)
+        else:
+            coeffs_to_embed = self.embedded_op.coefficients(return_basis, logscale_nonham, label_type)
+        
         if coeffs_to_embed:
             embedded_labels = self.coefficient_labels(label_type=label_type, identity_label=identity_label)
             embedded_coeffs = {lbl:val for lbl, val in zip(embedded_labels, coeffs_to_embed.values())}
         else:
             embedded_coeffs = dict()
 
-        return embedded_coeffs
+        if return_basis:
+            return embedded_coeffs, basis
+        else:
+            return embedded_coeffs
 
     def coefficient_labels(self, label_type='global', identity_label='I'):
         """

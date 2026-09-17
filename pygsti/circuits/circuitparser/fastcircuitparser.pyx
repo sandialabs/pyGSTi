@@ -28,20 +28,18 @@ from cython.operator cimport dereference as deref, preincrement as inc
 cimport cython
 
 
-#from cpython.ref cimport PyObject
-#cdef extern from "Python.h":
-#    Py_UCS4* PyUnicode_4BYTE_DATA(PyObject* o)
-
 from ...baseobjs import label as _lbl
+
+# Shared with the pure-Python parser rather than reimplemented here.  Neither helper
+# has anything Cython can type -- both are generic operations on Python objects, so a
+# compiled copy runs no faster than the imported one and only invites the two
+# definitions to drift apart.
+from .slowcircuitparser import _layer_is_canonical, _to_int_or_strip
 
 
 #Use 64-bit integers
 ctypedef long long INT
 ctypedef unsigned long long UINT
-
-
-def _to_int_or_strip(x):
-    return int(x) if x.strip().isdigit() else x.strip()
 
 
 @cython.boundscheck(False) # turn off bounds-checking for entire function
@@ -74,10 +72,6 @@ def parse_circuit(unicode code, bool create_subcircuits, bool integerize_sslbls)
     result = []; interlayer_marker_inds = []
     code = code.replace(u'*',u'')  # multiplication is implicit (no need for '*' ops)
     i = 0; end = len(code); segment = 0
-    #print "DB -FASTPARSE: ", code
-
-    #cdef Py_UCS4* codep = PyUnicode_4BYTE_DATA(<PyObject*>code)
-
     while i < end:
         if code[i] == interlayer_marker:
             interlayer_marker_inds.append(len(result) - 1); i += 1
@@ -172,9 +166,15 @@ cdef get_next_lbls(unicode s, INT start, INT end, bool create_subcircuits, bool 
         if len(lbls_list) == 0:
             to_exponentiate = _lbl.LabelTupTup( () )
         elif len(lbls_list) > 1:
-            time = max([l.time for l in lbls_list])
+            time = max([lbl.time if hasattr(lbl, 'time') else 0.0 for lbl in lbls_list], default=0.0)
             to_exponentiate = _lbl.LabelTupTup(tuple(lbls_list)) if (time == 0.0) \
                 else _lbl.LabelTupTupWithTime(tuple(lbls_list), time)  # create a layer label - a label of the labels within square brackets
+            # Canonicalize here rather than leaving it to the caller: `Circuit._fastinit`
+            # applies no sort, and io/stdinput.py builds every parsed circuit through it,
+            # so source order would otherwise decide equality and hash (issue #757).
+            # Must stay in lockstep with slowcircuitparser.py.
+            if not _layer_is_canonical(lbls_list):
+                to_exponentiate = to_exponentiate.with_sorted_inner_labels()
         else:
             to_exponentiate = lbls_list[0]
         return [to_exponentiate] * exponent, i, segment, ()
@@ -192,7 +192,6 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
     cdef Py_UCS4 c
     cdef double time
     cdef bool is_int
-    #cdef Py_UCS4* sp = PyUnicode_4BYTE_DATA(<PyObject*>s)
 
     i = start
     c = s[i]
@@ -248,10 +247,10 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
         last = i; is_float = True
         while i < end:
             c = s[i]
-            if u'a' <= c <= u'z' or c == u'_' or c == u'Q' or c == u'/':
-                i += 1; is_float = False
-            elif u'0' <= c <= u'9' or c == u'.' or c == u'-':
+            if u'0' <= c <= u'9' or c == u'.' or c == u'-' or c == u'e': #last case for scientific notation
                 i += 1
+            elif u'a' <= c <= u'z' or c == u'_' or c == u'Q' or c == u'/':
+                i += 1; is_float = False
             else:
                 break
         args.append(float(s[last:i]) if is_float else s[last:i]); last = i
@@ -259,19 +258,36 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
     sslbls = []
     while i < end and s[i] == u':':
         i += 1
-        last = i; is_int = True
+        last = i
+        is_int = True
         while i < end:
             c = s[i]
             if u'0' <= c <= u'9':
                 i += 1
-            elif u'a' <= c <= u'z' or c == u'_' or c == u'Q':
-                i += 1; is_int = False
+            elif u'a' <= c <= u'z' or c == u'_':
+                # Labels can contain any combination of lowercase letters and underscores.
+                i += 1
+                is_int = False
+            elif c in (u'G', u'M', u'I', u'S'):
+                # These reserved characters (all uppercase letters) indicate that we've already
+                # seen everything there is to see for the most recent/current label.
+                break
+            elif last == i and c in (u'Q', u'T', u'L', u'A', u'D'):
+                # Labels can start with reserved uppercase letters Q, T, and L, per the 
+                # StateSpace documentation. Also added A and D for "auxiliary" or "data" qubits
+                # for interfacing with LoQS/futureproofing for QEC
+                i += 1
+                is_int = False
+            elif last == i and u'A' <= c <= u'Z':
+                msg = f"Invalid target label: {s[last:i + 1]!r}. Labels can't start with uppercase letters other than Q, T, and L."
+                raise ValueError(msg)
             else:
                 break
         if integerize_sslbls and is_int:
-            sslbls.append(int(s[last:i])); last = i
+            sslbls.append(int(s[last:i]))
         else:
-            sslbls.append(sys.intern(s[last:i])); last = i
+            sslbls.append(sys.intern(s[last:i]))
+        last = i
 
     if i < end and s[i] == u'!':
         i += 1
@@ -304,7 +320,6 @@ cdef parse_exponent(unicode s, INT i, INT end):
     cdef Py_UCS4 c
     cdef INT last
     cdef INT exponent = 1
-    #cdef Py_UCS4* sp = PyUnicode_4BYTE_DATA(<PyObject*>s)
 
     if i < end and s[i] == u'^':
         i += 1

@@ -18,6 +18,8 @@ import zipfile as _zipfile
 
 import numpy as _np
 
+from typing import Union
+
 from pygsti.report import Report as _Report
 from pygsti.report import autotitle as _autotitle
 from pygsti.report import merge_helpers as _merge
@@ -106,6 +108,59 @@ def _get_viewable_crf(est, est_lbl, mdl_lbl, verbosity=0):
     return None
 
 
+def basis_aware_display(switchboard, name, ordinary, leakage):
+    """
+    Register (once, keyed by `name`) and return a per-cell display ``SwitchValue`` for a
+    gates-vs-target table.
+
+    Each cell's column tuple is chosen from that cell's model basis together with the
+    interactive "Metrics" switch: the leakage (subspace-restricted) columns are used only
+    when the cell's model basis implies leakage modeling *and* the reader has the "Metrics"
+    switch in its 0-th ("Subspace") position; otherwise the ordinary full-space columns are
+    used.  Because ``display`` is thereby a per-cell switched value, the metric *headers* a
+    reader sees always match the metric *computation* used to fill them, and a report whose
+    cells have different bases simply renders different columns per switch position.
+
+    Parameters
+    ----------
+    switchboard : Switchboard
+        The report's master switchboard.  Must have ``mdl_final`` populated and a
+        ``metric_space_switch_index`` attribute (both set in ``_create_master_switchboard``).
+
+    name : str
+        Key under which the display ``SwitchValue`` is registered on ``switchboard``.  If a
+        value is already registered under this key it is returned unchanged (idempotent
+        across repeated / multi-brevity renders).
+
+    ordinary : tuple
+        The full-space column-name tuple (e.g. ``('inf', 'trace', 'diamond', ...)``).
+
+    leakage : tuple
+        The subspace/leakage column-name tuple (e.g. ``('sub-inf', 'sub-trace', ...)``).
+
+    Returns
+    -------
+    SwitchValue
+    """
+    if name in switchboard:
+        return switchboard[name]
+
+    ms_idx = switchboard.metric_space_switch_index
+    deps = tuple(switchboard.mdl_final.dependencies) + (ms_idx,)
+    switchboard.add(name, deps)
+    sv = switchboard[name]
+
+    mdl_base = switchboard.mdl_final.base
+    for idx in _np.ndindex(sv.base.shape):
+        model_idx, ms = idx[:-1], idx[-1]
+        mdl = mdl_base[model_idx]
+        basis = getattr(mdl, 'basis', None)
+        leaky = (not isinstance(mdl, _ws.NotApplicable)) and basis is not None \
+            and bool(getattr(basis, 'implies_leakage_modeling', False))
+        sv.base[idx] = leakage if (ms == 0 and leaky) else ordinary
+    return sv
+
+
 def create_offline_zip(output_dir="."):
     """
     Creates a zip file containing the a directory ("offline") of files need to display "offline" reports.
@@ -184,8 +239,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     Ls = None
 
     for results in results_dict.values():
-        est_labels = _add_new_estimate_labels(est_labels, results.estimates,
-                                              combine_robust)
+        est_labels = _add_new_estimate_labels(est_labels, results.estimates, combine_robust)
         loc_Ls = results.circuit_lists['final'].xs \
             if isinstance(results.circuit_lists['final'], _PlaquetteGridCircuitStructure) else [0]
         Ls = _add_new_labels(Ls, loc_Ls)
@@ -207,13 +261,37 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     multiGO = bool(len(gauge_opt_labels) > 1)
     #multiL = bool(len(swLs) > 1)
 
+    # Does any model in any estimate carry a basis that implies leakage modeling? If so,
+    # we expose an interactive "Metrics" switch letting the reader flip the gates-vs-target
+    # tables between subspace-restricted (leakage-aware) and standard full-space columns.
+    # The per-cell column choice is made in `basis_aware_display` (defined above).
+    any_leakage = False
+    for results in results_dict.values():
+        for est in results.estimates.values():
+            for mdl in est.models.values():
+                basis = getattr(mdl, 'basis', None)
+                if basis is not None and getattr(basis, 'implies_leakage_modeling', False):
+                    any_leakage = True
+                    break
+            if any_leakage:
+                break
+        if any_leakage:
+            break
+
     switchBd = ws.Switchboard(
-        ["Dataset", "Estimate", "Gauge-Opt", "max(L)"],
-        [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs))],
-        ["dropdown", "dropdown", "buttons", "slider"], [0, 0, 0, len(swLs) - 1],
-        show=[multidataset, multiest, multiGO, False],  # "global" switches only + gauge-opt (OK if doesn't apply)
+        ["Dataset", "Estimate", "Gauge-Opt", "max(L)", "Metrics"],
+        [dataset_labels, est_labels, gauge_opt_labels, list(map(str, swLs)),
+         ["Subspace", "Full-space"]],
+        ["dropdown", "dropdown", "buttons", "slider", "buttons"],
+        [0, 0, 0, len(swLs) - 1, 0],
+        # "global" switches only + gauge-opt (OK if doesn't apply); the "Metrics" switch is
+        # shown only when some basis implies leakage (otherwise both positions coincide).
+        show=[multidataset, multiest, multiGO, False, any_leakage],
         use_loadable_items=embed_figures
     )
+    # Switch index of the "Metrics" (Subspace | Full-space) toggle, read by the
+    # gates-vs-target figure factories via `basis_aware_display`.
+    switchBd.metric_space_switch_index = 4
 
     switchBd.add("ds", (0,))
     switchBd.add("prep_fiducials", (0,))
@@ -248,12 +326,18 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     switchBd.add("mdl_all_modvi", (0, 1))
     switchBd.add("circuits_all", (0,))  # a list of circuit lists, one per L-val (iteration)
     switchBd.add("mdl_final_grid", (2,))
-
     switchBd.add("idtresults", (0,))
+    
+
+    switchBd.add('current_mdc_store', (0, 1, 3))#mdc stores for this estimate/dataset indexed by L
+    switchBd.add('mdc_store_all', (0,1)) #list of all the mdc stores for this estimate/dataset
+    switchBd.add('final_mdc_store', (0, 1))
+    switchBd.add('mdl_final_modvi', (0, 1))
 
     if confidence_level is not None:
         switchBd.add("cri", (0, 1, 2))
         switchBd.add("cri_gaugeinv", (0, 1))
+        switchBd.add("cri_target_and_final", (0, 1, 2)) 
 
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
@@ -305,12 +389,15 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             else:
                 est_modvi = est
 
-            switchBd.objfn_builder[d, i] = est.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
-            switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder[d, i] = est.parameters.get('final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+            switchBd.objfn_builder_modvi[d, i] = _objfns.ObjectiveFunctionBuilder.create_from('logl')
             switchBd.params[d, i] = est.parameters
+            
+            #add the final mdc store
+            switchBd.final_mdc_store[d,i]= est.parameters.get('final_mdc_store', None)
+            switchBd.mdc_store_all[d,i] = est.parameters.get('per_iter_mdc_store', None)
 
+            #TODO: Fix this next block
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
                 switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(
@@ -367,6 +454,9 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
             switchBd.mdl_target[d, i] = est.models['target']
             switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
+            
+            switchBd.mdl_final_modvi[d, i]= est.models['final iteration estimate']
+            
             try:
                 switchBd.mdl_gaugeinv_ep[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
                                                                                      est.models['target'])
@@ -391,6 +481,11 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                     k = loc_Ls.index(L)
                     switchBd.mdl_current[d, i, iL] = est.models['iteration %d estimate' % k]
                     switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration %d estimate' % k]
+                    #add the intermediate iteration mdc stores.
+                    if est.parameters.get('per_iter_mdc_store', None):
+                        switchBd.current_mdc_store[d,i,iL] = est.parameters['per_iter_mdc_store'][k]
+                    else:
+                        switchBd.current_mdc_store[d,i,iL] = None
             switchBd.mdl_all[d, i] = [est.models['iteration %d estimate' % k] for k in range(est.num_iterations)]
             switchBd.mdl_all_modvi[d, i] = [est_modvi.models['iteration %d estimate' % k]
                                             for k in range(est_modvi.num_iterations)]
@@ -401,6 +496,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
                         switchBd.cri[d, i, il] = None  # default
+                        switchBd.cri_target_and_final[d, i, il] = [None, None] #default
                         crf = _get_viewable_crf(est, lbl, l, printer - 2)
 
                         if crf is not None:
@@ -411,8 +507,13 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                             region_type = "normal" if misfit_sigma <= nmthreshold \
                                           else "non-markovian"
                             switchBd.cri[d, i, il] = crf.view(confidence_level, region_type)
+                            #Now that we have identifies the gauge-optimization with the CRI
+                            #add this to the switchboard.
+                            switchBd.cri_target_and_final[d,i,il] = [None, crf.view(confidence_level, region_type)]
+                    else: 
+                        switchBd.cri[d, i, il] = NA
+                        switchBd.cri_target_and_final[d, i, il] = NA
 
-                    else: switchBd.cri[d, i, il] = NA
 
                 # "Gauge Invariant Representation" model
                 # If we can't compute CIs for this, ignore SILENTLY, since any
@@ -645,7 +746,7 @@ def create_standard_report(results, filename, title="auto",
         files, respectively.  "tex" creates latex source files for
         tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
         Python versions of plots (pickled python data) and tables (pickled
-        pandas DataFrams).
+        pandas DataFrames).
 
     brevity : int, optional
         Amount of detail to include in the report.  Larger values mean smaller
@@ -838,7 +939,7 @@ def create_nqnoise_report(results, filename, title="auto",
         files, respectively.  "tex" creates latex source files for
         tables; "pdf" renders PDFs of tables and plots ; "pkl" creates
         Python versions of plots (pickled python data) and tables (pickled
-        pandas DataFrams).
+        pandas DataFrames).
 
     brevity : int, optional
         Amount of detail to include in the report.  Larger values mean smaller
@@ -1103,10 +1204,28 @@ def find_std_clifford_compilation(model, verbosity=0):
     return None
 
 
+def _validated_confidence_level(cl: Union[float, int, None]):
+    if cl is None:
+        return cl
+    if cl < 1:
+        msg = \
+        f"""
+        Confidence level should be specified as a percent from 0 to 100. Reasonable
+        values for this argument are usually between 80 and 99.5.
+        
+        We received confidence level={cl}, which we assume was accidentally passed as
+        a proportion. We'll multiply by 100 and proceed. 
+        """
+        _warnings.warn(msg)
+        cl = cl * 100
+    assert 0 < cl and cl < 100
+    return cl
+
+
 # TODO these factories should really be Report subclasses
 def construct_standard_report(results, title="auto",
                               confidence_level=None, comm=None, ws=None,
-                              advanced_options=None, verbosity=1):
+                              advanced_options=None, verbosity=1) -> _Report:
     """
     Create a "standard" GST report, containing details about each estimate in `results` individually.
 
@@ -1172,19 +1291,50 @@ def construct_standard_report(results, title="auto",
         - idt_idle_oplabel : Label, optional
             The label identifying the idle gate (for use with idle tomography).
 
+        - skip_sections : tuple[str], optional
+             Contains names of standard report sections that should be skipped
+             in this particular report. Strings will be cast to lowercase, 
+             stripped of white space, and then mapped to omitted Section classes
+             as follows
+
+                {
+                    'summary'         : SummarySection,
+                    'goodness'        : GoodnessSection,
+                    'colorbox'        : GoodnessColorBoxPlotSection,
+                    'invariantgates'  : GaugeInvariantsGatesSection,
+                    'invariantgerms'  : GaugeInvariantsGermsSection,
+                    'variant'         : GaugeVariantSection,
+                    'variantraw'      : GaugeVariantsRawSection,
+                    'variantdecomp'   : GaugeVariantsDecompSection,
+                    'varianterrorgen' : GaugeVariantsErrorGenSection,
+                    'input'           : InputSection,
+                    'meta'            : MetaSection,
+                    'help'            : HelpSection
+                }
+            
+            A KeyError will be raised if skip_sections contains a string
+            that is not in the keys of the above dict (after casting to
+            lower case and stripping white space).
+
     verbosity : int, optional
         How much detail to send to stdout.
 
     Returns
     -------
-    Workspace
-        The workspace object used to create the report
+    Report
     """
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
+    confidence_level = _validated_confidence_level(confidence_level)
 
     advanced_options = advanced_options or {}
+    if 'leakage_modeling' in advanced_options or 'n_leak' in advanced_options:
+        _warnings.warn(
+            "'leakage_modeling'/'n_leak' in advanced_options are deprecated and ignored: "
+            "leakage metrics are now shown automatically wherever a model's basis permits, "
+            "with an interactive Subspace/Full-space 'Metrics' switch in the report.",
+            DeprecationWarning)
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
@@ -1199,17 +1349,35 @@ def construct_standard_report(results, title="auto",
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "GST Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results = results if isinstance(results, dict) else {"unique": results}
+
+    if confidence_level is not None:
+        # Error bars are rendered from Hessian-based confidence region factories, which
+        # are expensive and therefore never computed here. Warn now if they're missing,
+        # rather than letting the report silently come out bare.
+        missing = []
+        for res_key, res in results.items():
+            for est_key, est in res.estimates.items():
+                if est_key == 'Target':
+                    continue
+                if not any(_get_viewable_crf(est, est_key, mdl_lbl) is not None
+                           for mdl_lbl in est.goparameters):
+                    missing.append(est_key if len(results) == 1 else f"{res_key}:{est_key}")
+        if missing:
+            _warnings.warn(
+                f"confidence_level={confidence_level} requests error bars, but no "
+                f"confidence region factory with a computed Hessian was found for "
+                f"estimate(s) {missing}. These estimates will be rendered without "
+                f"error bars. Call ModelEstimateResults.add_hessians() on your "
+                f"results object(s) before report generation to compute the "
+                f"necessary Hessians."
+            )
 
     # set flags
     flags = set()
@@ -1240,20 +1408,30 @@ def construct_standard_report(results, title="auto",
         flags.add('CombineRobust')
 
     # build section list
-    sections = [
-        _section.SummarySection(),
-        _section.GoodnessSection(),
-        _section.GoodnessColorBoxPlotSection(),
-        _section.GaugeInvariantsGatesSection(),
-        _section.GaugeInvariantsGermsSection(),
-        _section.GaugeVariantSection(),
-        _section.GaugeVariantsRawSection(),
-        _section.GaugeVariantsDecompSection(),
-        _section.GaugeVariantsErrorGenSection(),
-        _section.InputSection(),
-        _section.MetaSection(),
-        _section.HelpSection()
-    ]
+    possible_sections = {
+        'summary'         : _section.SummarySection(),
+        'goodness'        : _section.GoodnessSection(),
+        'colorbox'        : _section.GoodnessColorBoxPlotSection(),
+        'invariantgates'  : _section.GaugeInvariantsGatesSection(),
+        'invariantgerms'  : _section.GaugeInvariantsGermsSection(),
+        'variant'         : _section.GaugeVariantSection(),
+        'variantraw'      : _section.GaugeVariantsRawSection(),
+        'variantdecomp'   : _section.GaugeVariantsDecompSection(),
+        'varianterrorgen' : _section.GaugeVariantsErrorGenSection(),
+        'input'           : _section.InputSection(),
+        'meta'            : _section.MetaSection(),
+        'help'            : _section.HelpSection()
+    }
+
+    skip_sections = advanced_options.get('skip_sections', tuple())
+    if skip_sections:
+        if isinstance(skip_sections, str):
+            skip_sections = [skip_sections]
+        skip_sections = [s.lower().replace(' ','') for s in skip_sections]
+        for s in skip_sections:
+            possible_sections.pop(s)
+    sections = list(possible_sections.values())
+    # ^ This whole process won't affect ordering of objects in "sections".
 
     if 'ShowScaling' in flags:
         sections.append(_section.GoodnessScalingSection())
@@ -1266,7 +1444,11 @@ def construct_standard_report(results, title="auto",
     try:
         idt_results = _construct_idtresults(idtIdleOp, idtPauliDicts, results, printer)
     except Exception as e:
-        _warnings.warn("Idle tomography failed:\n" + str(e))
+        if isinstance(e, ValueError) and 'Expected matrix of shape' in str(e):
+            msg = "Idle tomography skipped. Currently, this is only supported for 2-level systems."
+            printer.log(msg)
+        else:
+            _warnings.warn("Idle tomography unexpectedly failed:\n" + str(e))
         idt_results = {}
     if len(idt_results) > 0:
         sections.append(_section.IdleTomographySection())
@@ -1441,12 +1623,8 @@ def construct_nqnoise_report(results, title="auto",
                           " confidence interval - please note the updated function signature"))
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "GST Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
@@ -1602,12 +1780,8 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
     ws = ws or _ws.Workspace()
 
     if title is None or title == "auto":
-        autoname = _autotitle.generate_name()
+        autoname = _autotitle.generate_name(log_warning=True)
         title = "Drift Report for " + autoname
-        _warnings.warn(("You should really specify `title=` when generating reports,"
-                        " as this makes it much easier to identify them later on.  "
-                        "Since you didn't, pyGSTi has generated a random one"
-                        " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
                ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]

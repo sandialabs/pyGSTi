@@ -33,7 +33,8 @@ def sample_dfe_circuit(pspec, circuit, clifford_compilations, create_same_measur
         rand_pauli, rand_sign, pauli_circuit = _rc._sample_random_pauli_with_identities_fixed(n = n, is_identity = fixed_identity_locations, pspec = pspec, qubit_labels=qubit_labels,
                                                                        absolute_compilation = clifford_compilations, circuit = True)
 
-    s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = _rc._sample_stabilizer(rand_pauli, rand_sign, clifford_compilations, qubit_labels)
+    s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = _rc._sample_stabilizer(
+        rand_pauli, rand_sign, clifford_compilations, qubit_labels, randomize_for_identity=False)
     
     s_pc, p_pc = _symp.symplectic_rep_of_clifford_circuit(pauli_circuit, pspec=pspec.subset(gate_names_to_include='all', qubit_labels_to_keep=qubit_labels)) #note: if the pspec contains gates not in pyGSTi, this
     

@@ -18,6 +18,7 @@ from hashlib import blake2b as _blake2b
 
 import numpy as _np
 
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 
 _dummy_profiler = _DummyProfiler()
@@ -107,7 +108,6 @@ class ResourceAllocation(object):
         my_hostid = int(_blake2b(my_hostname.encode('utf-8'), digest_size=4).hexdigest(), 16) % (1 << 31)
         self.host_comm = self.comm.Split(color=int(my_hostid), key=int(my_rank))  # Note: 32-bit ints only for mpi4py
         self.host_ranks = tuple(self.host_comm.allgather(my_rank))  # store all the original ranks on our host
-        #print("CREATED HOSTCOMM: ",my_hostname, my_hostid, self.host_comm.size, self.host_comm.rank)
 
         hostnames_by_rank = self.comm.allgather(my_hostname)  # ~"node id" of each processor in self.comm
         ranks_by_hostname = _collections.OrderedDict()
@@ -318,7 +318,6 @@ class ResourceAllocation(object):
             result[slice_of_global] = local
         else:
             if all_gather:
-                #OLD: gathered_data = gather_comm.allgather(local)  # could change this to Allgatherv (?)
                 slices = gather_comm.allgather(slice_of_global if participating else None)
                 shapes = gather_comm.allgather(local.shape if participating else (0,))
                 sizes = [_np.prod(shape) for shape in shapes]
@@ -326,7 +325,6 @@ class ResourceAllocation(object):
                 gather_comm.Allgatherv(local.flatten() if participating
                                        else _np.empty(0, dtype=local.dtype), (gathered_data, sizes))
             else:
-                #OLD: gathered_data = gather_comm.gather(local, root=0)  # could change this to Gatherv (?)
                 shapes = gather_comm.gather(local.shape if participating else (0,), root=0)
                 slices = gather_comm.gather(slice_of_global if participating else None, root=0)
 
@@ -343,7 +341,7 @@ class ResourceAllocation(object):
                 offset = 0
                 for slc_or_indx_array, shape, size in zip(slices, shapes, sizes):
                     if slc_or_indx_array is None: continue  # signals a non-unit-leader proc that shouldn't do anything
-                    data = gathered_data[offset:offset + size]; offset += size; data.shape = shape
+                    data = gathered_data[offset:offset + size]; offset += size; data = _compat.reshape_no_copy(data, shape)
                     result[slc_or_indx_array] = data
 
         self.comm.barrier()  # make sure result is completely filled before returniing
@@ -492,7 +490,7 @@ class ResourceAllocation(object):
             # Round robin additions of contributions to result (to load balance all the host procs)
             for slc in _itertools.chain(slices[intrahost_rank:], slices[0:intrahost_rank]):
                 result[slc] += participating_local[slc]  # adds *in place* (relies on numpy implementation)
-                self.host_comm.barrier()  # synchonize adding to shared mem
+                self.host_comm.barrier()  # synchronize adding to shared mem
 
             # Sum contributions across hosts
             my_size = my_slice.stop - my_slice.start
@@ -589,7 +587,7 @@ class ResourceAllocation(object):
             for i in range(self.host_comm.size):
                 if i == self.host_comm.rank and participating:
                     _np.minimum(result, local, out=result)
-                self.host_comm.barrier()  # synchonize adding to shared mem
+                self.host_comm.barrier()  # synchronize adding to shared mem
             if self.host_comm.rank == 0:
                 mind_across_hosts = self.interhost_comm.allreduce(result, op=MPI.MIN)
                 result[(slice(None, None),) * result.ndim] = mind_across_hosts
@@ -647,7 +645,7 @@ class ResourceAllocation(object):
             for i in range(self.host_comm.size):
                 if i == self.host_comm.rank and participating:
                     _np.maximum(result, local, out=result)
-                self.host_comm.barrier()  # synchonize adding to shared mem
+                self.host_comm.barrier()  # synchronize adding to shared mem
             if self.host_comm.rank == 0:
                 maxed_across_hosts = self.interhost_comm.allreduce(result, op=MPI.MAX)
                 result[(slice(None, None),) * result.ndim] = maxed_across_hosts

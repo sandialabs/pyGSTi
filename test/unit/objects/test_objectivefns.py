@@ -270,12 +270,6 @@ class TimeIndependentMDSObjectiveFunctionTesterBase(ObjectiveFunctionData):
         super().setUp()
         self.objfns = self.build_objfns()
 
-    def test_builder(self):
-        #All objective function should be of the same type
-        cls = self.objfns[0].__class__
-        builder = cls.builder("test_name", "test_description")
-        self.assertTrue(isinstance(builder, _objfns.ObjectiveFunctionBuilder))
-
     def test_value(self):
         for objfn in self.objfns:
             terms = objfn.terms().copy()

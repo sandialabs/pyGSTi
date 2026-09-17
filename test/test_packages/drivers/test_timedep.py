@@ -1,4 +1,6 @@
 import logging
+
+import pygsti.objectivefns
 mpl_logger = logging.getLogger('matplotlib')
 mpl_logger.setLevel(logging.WARNING)
 
@@ -109,33 +111,12 @@ class TimeDependentTestCase(BaseTestCase):
         target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
         self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 57)
         
-        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
+        builder = pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.TimeDependentPoissonPicLogLFunction)
+        builders = pygsti.protocols.GSTObjFnBuilders([builder], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                                  objfn_builders=builders,
                                                  optimizer={'maxiter':2,'tol': 1e-4})
         results = gst.run(data)
-
-        # Normal GST used as a check - should get same answer since data is time-independent
-        #We aren't actually doing this comparison atm (relevant tests are commented out) so no point
-        #doing the computation. For some reason this fit also took very long to run, which is strange (I don't see
-        #any reason why it would)
-        #results2 = pygsti.run_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
-        #                                        germs, maxLengths, verbosity=3,
-        #                                        advanced_options={'starting_point': 'target',
-        #                                                          'always_perform_mle': True,
-        #                                                          'only_perform_mle': True}, gauge_opt_params=False)
-        
-        #These check FAIL on some TravisCI machines for an unknown reason (but passes on Eriks machines) -- figure out why this is in FUTURE.
-        #Check that "timeDependent=True" mode matches behavior or "timeDependent=False" mode when model and data are time-independent.
-        #self.assertAlmostEqual(pygsti.tools.chi2(results.estimates['default'].models['iteration estimates'][0], results.dataset, results.circuit_lists['iteration'][0]),
-        #                       pygsti.tools.chi2(results2.estimates['default'].models['iteration estimates'][0], results2.dataset, results2.circuit_lists['iteration'][0]),
-        #                       places=0)
-        #self.assertAlmostEqual(pygsti.tools.chi2(results.estimates['default'].models['iteration estimates'][1], results.dataset, results.circuit_lists['iteration'][1]),
-        #                       pygsti.tools.chi2(results2.estimates['default'].models['iteration estimates'][1], results2.dataset, results2.circuit_lists['iteration'][1]),
-        #                       places=0)
-        #self.assertAlmostEqual(pygsti.tools.two_delta_logl(results.estimates['default'].models['final iteration estimate'], results.dataset),
-        #                       pygsti.tools.two_delta_logl(results2.estimates['default'].models['final iteration estimate'], results2.dataset),
-        #                       places=0)
 
     def test_time_dependent_gst(self):
         #run GST in a time-dependent mode:
@@ -162,7 +143,8 @@ class TimeDependentTestCase(BaseTestCase):
         target_model.operations['Gi',0] = MyTimeDependentIdle(0)  # start assuming no time dependent decay
         target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
 
-        builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
+        builder = pygsti.objectivefns.ObjectiveFunctionBuilder(pygsti.objectivefns.TimeDependentPoissonPicLogLFunction)
+        builders = pygsti.protocols.GSTObjFnBuilders([builder], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                                  objfn_builders=builders, optimizer={'maxiter':10,'tol': 1e-4})
         data = pygsti.protocols.ProtocolData(edesign, ds)

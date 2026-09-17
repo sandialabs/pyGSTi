@@ -9,11 +9,12 @@ Defines OrderedDict-derived classes used to store specific pyGSTi objects
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 # ***************************************************************************************************
-
+from __future__ import annotations
 import copy as _copy
 import numbers as _numbers
 import sys as _sys
 import numpy as _np
+from typing import Union
 
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
@@ -26,8 +27,13 @@ class StateSpace(_NicelySerializable):
     as the direct sum of one or more tensor products of Hilbert spaces.
     """
 
+    Castable = Union['StateSpace',
+                     int,
+                     list[int],
+                     list[str]] # Type alias to use when one wants to cast to a StateSpace.
+
     @classmethod
-    def cast(cls, obj):
+    def cast(cls, obj: StateSpace.Castable):
         """
         Casts `obj` into a :class:`StateSpace` object if possible.
 
@@ -418,7 +424,7 @@ class StateSpace(_NicelySerializable):
         StateSpace
         """
         # Default, generic, implementation constructs an explicit state space
-        labels = set(labels)
+        labels = sorted(set(labels))
         sub_tpb_labels = []
         sub_tpb_udims = []
         sub_tpb_types = []
@@ -535,7 +541,6 @@ class StateSpace(_NicelySerializable):
 
         return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
     
-
     def difference(self, other_state_space):
         """
         Create a state space whose labels are the difference of the labels of this space and one other.
@@ -564,7 +569,7 @@ class StateSpace(_NicelySerializable):
             ret_lbls = []; ret_udims = []; ret_types = []
             for lbl, udim, typ in zip(lbls, udims, typs):
                 #If the label does appear in the other state space, verify that the 
-                #properties of the label are consistently defined accross the two state spaces
+                #properties of the label are consistently defined across the two state spaces
                 #otherwise raise an error.
                 if other_state_space.contains_label(lbl):
                     other_iTPB = other_state_space.label_tensor_product_block_index(lbl)
@@ -705,7 +710,8 @@ class QuditSpace(StateSpace):
 
     @property
     def qudit_udims(self):
-        """Integer Hilbert (unitary operator) space dimensions of the qudits in ths quantum state space."""
+        """Integer Hilbert (unitary operator) space dimensions of the qudits in the quantum state space."""
+        return self._qudit_udims
 
     @property
     def udim(self):
@@ -1049,7 +1055,7 @@ class ExplicitStateSpace(StateSpace):
         Most generally, this can be a list of tuples, where each tuple
         contains the state-space labels (which can be strings or integers)
         for a single "tensor product block" formed by taking the tensor
-        product of the spaces asociated with the labels.  The full state
+        product of the spaces associated with the labels.  The full state
         space is the direct sum of all the tensor product blocks.
         E.g. `[('Q0','Q1'), ('Q2',)]`.
 
@@ -1084,15 +1090,6 @@ class ExplicitStateSpace(StateSpace):
     """
 
     def __init__(self, label_list, udims=None, types=None):
-
-        #Allow initialization via another CustomStateSpace object
-        #if isinstance(label_list, CustomStateSpace):
-        #    assert(dims is None and types is None), "Clobbering non-None 'dims' and/or 'types' arguments"
-        #    dims = [tuple((label_list.labeldims[lbl] for lbl in tpbLbls))
-        #            for tpbLbls in label_list.labels]
-        #    types = [tuple((label_list.label_types[lbl] for lbl in tpbLbls))
-        #             for tpbLbls in label_list.labels]
-        #    label_list = label_list.labels
 
         #Step1: convert label_list (and dims, if given) to a list of
         # elements describing each "tensor product block" - each of

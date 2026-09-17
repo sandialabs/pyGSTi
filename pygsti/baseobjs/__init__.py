@@ -13,7 +13,7 @@ A sub-package holding utility objects
 from .smartcache import SmartCache
 from .verbosityprinter import VerbosityPrinter
 from .profiler import Profiler
-from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis
+from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis, BasisLike
 from .label import Label, CircuitLabel
 from .nicelyserializable import NicelySerializable
 from .mongoserializable import MongoSerializable

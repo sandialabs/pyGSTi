@@ -20,7 +20,6 @@ import scipy.sparse as _sps
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel, _init_spam_layers
 from pygsti.models.layerrules import LayerRules as _LayerRules
-from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator as _MapFSim
@@ -89,7 +88,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         function is meant to identify that cloud.  This is used to keep track
         of which primitive layer-labels correspond to the same cloud - e.g.
         the cloud-key for ("Gx",2) and ("Gy",2) might be the same and could
-        be processed together when selecing sequences that amplify the parameters
+        be processed together when selecting sequences that amplify the parameters
         in the cloud-noise operations for these two labels.  The return value
         should be something hashable with the property that two noise
         which act on the same qudits should have the same cloud key.
@@ -144,6 +143,21 @@ class CloudNoiseModel(_ImplicitOpModel):
         An integer >= 0 dictating how must output to send to stdout.
     """
 
+    # Same namespaces as LocalNoiseModel._member_prefixes, plus the 'cloudnoise' blocks
+    # that are unique to this class.  Every 'cloudnoise' key is a Label built from a
+    # processor-spec gate name, so those blocks take the operation namespaces too.
+    _member_prefixes = (
+        ('prep_blks', 'layers', 'rho'),
+        ('povm_blks', 'layers', 'M'),
+        ('operation_blks', 'gates', ('G', '{')),
+        ('operation_blks', 'cloudnoise', ('G', '{')),
+        ('operation_blks', 'layers', ('G', '{')),
+        ('instrument_blks', 'layers', 'I'),
+        ('factories', 'gates', ('G', '{')),
+        ('factories', 'cloudnoise', ('G', '{')),
+        ('factories', 'layers', ('G', '{')),
+    )
+
     def __init__(self, processor_spec, gatedict,
                  prep_layers=None, povm_layers=None,
                  build_cloudnoise_fn=None, build_cloudkey_fn=None,
@@ -185,7 +199,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         global_idle_name = self.processor_spec.global_idle_gate_name
 
         # Set noisy_global_idle_layer = pspec.global_idle_layer_label if the global idle gate isn't the perfect identity
-        #  and if we're generating cloudnoise members (if we're not then layer rules could encouter a key error
+        #  and if we're generating cloudnoise members (if we're not then layer rules could encounter a key error
         #  if we let noisy_global_idle_layer be non-None).
         global_idle_gate = mm_gatedict.get(global_idle_name, None)
         if (global_idle_gate is not None) and (build_cloudnoise_fn is not None) \
@@ -209,17 +223,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                                            noisy_global_idle_layer)
         super(CloudNoiseModel, self).__init__(state_space, layer_rules, "pp", simulator=simulator, evotype=evotype)
 
-        flags = {'auto_embed': False, 'match_parent_statespace': False,
-                 'match_parent_evotype': True, 'cast_to_type': None}
-        self.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['cloudnoise'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
-        self.factories['cloudnoise'] = _OrderedMemberDict(self, None, None, flags)
-        self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
+        self._init_member_dicts()
 
         printer = _VerbosityPrinter.create_printer(verbosity)
         printer.log("Creating a %d-qudit cloud-noise model" % self.processor_spec.num_qudits)
@@ -355,22 +359,7 @@ class CloudNoiseModel(_ImplicitOpModel):
                                   simulator=simulator, evotype=state['evotype'])
 
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
-        flags = {'auto_embed': False, 'match_parent_statespace': False,
-                 'match_parent_evotype': True, 'cast_to_type': None}
-        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
-        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('povm_blks|layers', []))
-        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                         modelmembers.get('operation_blks|gates', []))
-        mdl.operation_blks['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                              modelmembers.get('operation_blks|cloudnoise', []))
-        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                          modelmembers.get('operation_blks|layers', []))
-        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                           modelmembers.get('instrument_blks|layers', []))
-        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))
-        mdl.factories['cloudnoise'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                         modelmembers.get('factories|cloudnoise', []))
-        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|layers', []))
+        mdl._init_member_dicts(modelmembers)
 
         mdl._clouds = _collections.OrderedDict()
         mdl._clean_paramvec()
@@ -395,7 +384,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         if not normalized_elem_gens:
             def rescale(coeffs):
                 """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
-                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         to be coefficients for the usual un-normalized-Pauli-basis elementary gens.  This
                          is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
                          factor of d2 baked into it.
                 """
@@ -436,9 +425,9 @@ class CloudNoiseLayerRules(_LayerRules):
         if implicit_idle_mode is None or implicit_idle_mode == "none":  # no noise on idles
             pass  # just use defaults above
         elif implicit_idle_mode == "only_global" and self.implied_global_idle_label is not None:
-            self._use_global_idle = True  # use global idle only in emtpy (implied global idle) layers
+            self._use_global_idle = True  # use global idle only in empty (implied global idle) layers
         elif implicit_idle_mode == "add_global" and self.implied_global_idle_label is not None:
-            self._use_global_idle = True  # use global idle in emtpy (implied global idle) layers
+            self._use_global_idle = True  # use global idle in empty (implied global idle) layers
             self._add_global_idle_to_all_layers = True    # add global idle to all layers
         elif implicit_idle_mode == "pad_1Q" and self.single_qubit_idle_layer_labels is not None:
             self._add_padded_idle = True
@@ -657,7 +646,7 @@ class CloudNoiseLayerRules(_LayerRules):
         if isinstance(complbl, _CircuitLabel):
             raise NotImplementedError("Cloud noise models cannot simulate circuits with partial-layer subcircuits.")
             # In the FUTURE, could easily implement this for errcomp_type == "gates", but it's unclear what to
-            #  do for the "errorgens" case - how do we gate an error generator of an entire (mulit-layer) sub-circuit?
+            #  do for the "errorgens" case - how do we gate an error generator of an entire (multi-layer) sub-circuit?
             # Maybe we just need to expand the label and create a composition of those layers?
         elif complbl in model.operation_blks['layers']:
             return model.operation_blks['layers'][complbl]
@@ -708,6 +697,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
         else:
             for complbl in complbl_list:
+                complbl = complbl.strip_args() if complbl.collect_args() else complbl
                 if complbl in cache:
                     ret.append(cache[complbl])  # caches['cloudnoise-layers'] would hold "simplified" instrument members
                 elif complbl in model.operation_blks['cloudnoise']:

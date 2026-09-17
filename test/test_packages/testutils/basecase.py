@@ -49,13 +49,17 @@ class BaseTestCase(unittest.TestCase):
 
         print('Running tests from %s' % os.getcwd())
 
-        #Set Model objects to "strict" mode for testing
+        # Set Model objects to "strict" mode for testing.  Save the prior value
+        # and restore it in tearDown so this class-level flag can't leak into
+        # other test suites (e.g. test/unit) sharing the same process/worker.
+        self._prev_strict = pygsti.models.ExplicitOpModel._strict
         pygsti.models.ExplicitOpModel._strict = True
 
         #enable extra paramter-vector integrity checking
         pygsti.models.Model._pcheck = True
 
     def tearDown(self):
+        pygsti.models.ExplicitOpModel._strict = self._prev_strict
         os.chdir(self.old)
 
     def assertArraysAlmostEqual(self,a,b,places=7):

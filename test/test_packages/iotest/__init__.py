@@ -2,10 +2,12 @@
 
 import functools
 import types
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..testutils.basecase import temp_files, BaseTestCase
 
 TEMP_FILE_PATH = Path(__file__).parent.parent.absolute() / temp_files
@@ -134,5 +136,12 @@ class IOBase(BaseTestCase):
         """
         file_path = TEMP_FILE_PATH / filename
         if not file_path.exists():
-            generator.write(file_path)
+            # Regenerating a reference fixture is test scaffolding, not the
+            # behavior under test. Some legacy fixtures (e.g. .txt models) emit
+            # a pyGSTiDeprecationWarning on write; we neither require nor mind
+            # it here, so suppress it rather than letting pytest.ini's
+            # error-on-warning config fail the test on a clean checkout.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", pyGSTiDeprecationWarning)
+                generator.write(file_path)
         return str(file_path)

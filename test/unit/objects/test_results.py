@@ -73,7 +73,7 @@ class PopulatedResultsTester(ResultsBase, BaseCase):
         data = ProtocolData(edesign, pkg.dataset)
         res2 = ModelEstimateResults(data, Protocol("test-protocol2"))
 
-        res2.add_estimates(self.res, ['default'])
+        res2.add_estimates(self.res, ['default'], silent_steal=True)
 
     def test_rename_estimate(self):
         # rename estimates

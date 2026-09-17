@@ -20,10 +20,9 @@ from numpy.random import RandomState as _RandomState
 from .statereps import StateRepDensePure as _StateRepDensePure
 from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
-from ...tools import basistools as _bt
 from ...tools import internalgates as _itgs
 from ...tools import optools as _ot
-
+from pygsti import SpaceT
 
 class OpRep(_basereps.OpRep):
     def __init__(self, state_space):
@@ -49,12 +48,12 @@ class OpRep(_basereps.OpRep):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDensePure(_np.ascontiguousarray(v, complex), self.state_space, basis=None)
-            return self.acton(in_state).to_dense('Hilbert')
+            return self.acton(in_state).to_dense("Hilbert")
 
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDensePure(_np.ascontiguousarray(v, complex), self.state_space, basis=None)
-            return self.adjoint_acton(in_state).to_dense('Hilbert')
+            return self.adjoint_acton(in_state).to_dense("Hilbert")
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
     def copy(self):
@@ -74,7 +73,7 @@ class OpRepDenseUnitary(OpRep):
     def base_has_changed(self):
         pass
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         if on_space in ('minimal', 'Hilbert'):
             return self.base
         elif on_space == 'HilbertSchmidt':
@@ -91,20 +90,6 @@ class OpRepDenseUnitary(OpRep):
 
     def __str__(self):
         return "OpRepDenseUnitary:\n" + str(self.base)
-
-
-class OpRepStandard(OpRepDenseUnitary):
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        self.name = name
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        state_space = _StateSpace.cast(state_space)
-        assert(U.shape[0] == state_space.udim)
-
-        super(OpRepStandard, self).__init__(U, basis, state_space)
 
 
 class OpRepComposed(OpRep):
@@ -429,7 +414,7 @@ class OpRepRandomUnitary(OpRep):
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    def to_dense(self, on_space):
+    def to_dense(self, on_space: SpaceT = 'minimal'):
         assert(on_space == 'HilbertSchmidt')  # below code only works in this case
         return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
 

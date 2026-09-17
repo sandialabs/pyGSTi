@@ -10,8 +10,8 @@ class DataComparatorTester(BaseCase):
     @classmethod
     def setUpClass(cls):
         #Let's make our underlying model have a little bit of random unitary noise.
-        cls.mdl_exp_0 = std1Q_XYI.target_model().randomize_with_unitary(.01, seed=0)
-        cls.mdl_exp_1 = std1Q_XYI.target_model().randomize_with_unitary(.01, seed=1234)
+        cls.mdl_exp_0 = std1Q_XYI.target_model().randomize_with_unitary(0.01, seed=0)
+        cls.mdl_exp_1 = std1Q_XYI.target_model().randomize_with_unitary(0.01, seed=1234)
 
         germs = std1Q_XYI.germs
         fiducials = std1Q_XYI.fiducials

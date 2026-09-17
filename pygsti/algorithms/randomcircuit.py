@@ -404,7 +404,7 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
     Samples a random circuit layer using the specified list of "compatible two-qubit gates" (co2_q_gates).
 
     That is, the user inputs a list (`co2_q_gates`) specifying 2-qubit gates that are
-    "compatible" -- meaning that they can be implemented simulatenously -- and a distribution
+    "compatible" -- meaning that they can be implemented simultaneously -- and a distribution
     over the different compatible sets, and a layer is sampled from this via:
 
     1. Pick a set of compatible two-qubit gates from the list `co2_q_gates`, according to the
@@ -587,7 +587,7 @@ def sample_circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_nam
     pdist : 'uniform' or list of floats, optional
         If a list, they are unnormalized probabilities to sample each of the 1-qubit gates
         in the list `one_q_gate_names`. If this is not 'uniform', then oneQgatename` must not
-        be 'all' (it must be a list so that it is unambigious which probability correpsonds
+        be 'all' (it must be a list so that it is unambiguous which probability corresponds
         to which gate). So if not 'uniform', `pdist` is a list of non-negative floats of the
         same length as `one_q_gate_names`. If 'uniform', then the uniform distribution over
         the gates is used.
@@ -884,7 +884,7 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
     given by `length` and may be any integer >= 0. An n-qubit DRB circuit consists of (1) a circuit
     the prepares a uniformly random stabilizer state; (2) a length-l circuit (specified by `length`)
     consisting of circuit layers sampled according to some user-specified distribution (specified by
-    `sampler`), (3) a circuit that maps the output of the preceeding circuit to a computational
+    `sampler`), (3) a circuit that maps the output of the preceding circuit to a computational
     basis state. See arXiv:1807.07975 (2018) for further details.
 
     Parameters
@@ -945,7 +945,7 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         This setting is useful for, e.g., detecting leakage/loss/measurement-bias etc.
 
     cliffordtwirl : bool, optional
-        Wether to begin the circuit with a sequence that generates a random stabilizer state. For
+        Whether to begin the circuit with a sequence that generates a random stabilizer state. For
         standard DRB this should be set to True. There are a variety of reasons why it is better
         to have this set to True.
 
@@ -988,7 +988,7 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
     Returns
     -------
     Circuit or list of Circuits
-        If partioned is False, a random DRB circuit sampled as specified. If partioned is True, a list of
+        If partitioned is False, a random DRB circuit sampled as specified. If partitioned is True, a list of
         three circuits consisting of (1) the stabilizer-prep circuit, (2) the core random circuit,
         (3) the pre-measurement circuit. In that case the full circuit is obtained by appended (2) to (1)
         and then (3) to (1) [except in the case of cliffordtwirl=False, when it is a list of two circuits].
@@ -1158,7 +1158,7 @@ def _sample_clifford_circuit(pspec, clifford_compilations, qubit_labels, citerat
         For more information on these options, see the `:func:compile_clifford()` docstring.
     
     exact_compilation_key: str, optional
-        The key into `clifford_compilations` to use for exact deterministic complation of Cliffords.
+        The key into `clifford_compilations` to use for exact deterministic compilation of Cliffords.
         The underlying :class:`CompilationRules` object must provide compilations for all possible
         n-qubit Cliffords that will be generated. This also requires the pspec is able to generate the
         symplectic representations for all n-qubit Cliffords in :meth:`compute_clifford_symplectic_reps`.
@@ -1316,7 +1316,7 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         Whether to return the number of native gates in the first `length`+1 compiled Cliffords
     
     exact_compilation_key: str, optional
-        The key into `clifford_compilations` to use for exact deterministic complation of Cliffords.
+        The key into `clifford_compilations` to use for exact deterministic compilation of Cliffords.
         The underlying :class:`CompilationRules` object must provide compilations for all possible
         n-qubit Cliffords that will be generated. This also requires the pspec is able to generate the
         symplectic representations for all n-qubit Cliffords in :meth:`compute_clifford_symplectic_reps`.
@@ -1388,7 +1388,7 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
 
     # If we want to randomize the expected output then randomize the p_inverse vector, so that
-    # the final bit of circuit will only invert the preceeding circuit up to a random Pauli.
+    # the final bit of circuit will only invert the preceding circuit up to a random Pauli.
     if randomizeout: p_for_inversion = _symp.random_phase_vector(s_inverse, n, rand_state=rand_state)
     else: p_for_inversion = p_inverse
 
@@ -1679,7 +1679,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
     # are length 0 this is skipped.
     circuit_inv.map_names_inplace(gate_inverse)
 
-    # If we are Pauli randomizing, we add a indepedent uniformly random Pauli layer, as a compiled circuit, after
+    # If we are Pauli randomizing, we add a independent uniformly random Pauli layer, as a compiled circuit, after
     # every layer in the "out" and "back" circuits. If the circuits are length 0 we do nothing here.
     if paulirandomize:
         for i in range(random_natives_circuit_length):
@@ -2149,13 +2149,10 @@ def _symplectic_to_pauli(s,p):
         x_pow = s[i]
         z_pow = s[n+i]
         if x_pow != 0 and z_pow != 0: # Have XZ in the i-th slot, ie product is a Y
-            #print('need to undo a Y, apply HP^(-1)')
             pauli.append('Y')
         elif x_pow != 0 and z_pow == 0: # Have X in the i-th slot, ie product is an X
-            #print('need to undo an X, so apply inverse Hadamard, ie a Hadamard')
             pauli.append('X')
         elif x_pow == 0 and z_pow != 0: # Have Z or I in the i-th slot, so nothing needs to be done
-            #print('need to undo a Z or I, ie leave it be')
             pauli.append('Z')
         else:
             pauli.append('I')
@@ -2297,12 +2294,12 @@ def _compose_initial_cliffords(prep_circuit):
         sign_gate = sign_layer[i]
         circ_gate = circ_layer[i]
         new_gate = circ_gate
-        if sign_gate == 'C3': # we know that what follows must prep a X, Y, or Z stablizer
+        if sign_gate == 'C3': # we know that what follows must prep a X, Y, or Z stabilizer
             new_gate = composition_rules[circ_gate]
         composed_layer.append(new_gate)
     return composed_layer
 
-def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=None, randomize_for_identity=False):
+def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=None, randomize_for_identity=True):
     # Samples a random stabilizer of a Pauli, s = s_1 \otimes ... \otimes s_n. For each s_i,
     # we perform the following gates:
     #     - s_i = X: H
@@ -2341,10 +2338,15 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, seed=Non
                  'Z': 'C0'}
     
     x_layer = [symp_reps['I'] if zvals[i] == 0 else symp_reps['X'] for i in range(len(zvals))]
+    # For an identity Pauli the stabilizer preparation is unconstrained. By default a random
+    # single-qubit Clifford is used. Passing randomize_for_identity=False leaves those qubits
+    # idle instead, which is what direct fidelity estimation on a fixed circuit shape needs:
+    # the width and two-qubit gate density of the circuit must not depend on which Paulis were
+    # drawn.
     if randomize_for_identity:
-        circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(rng.integers(24)) for i in pauli]
+        circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C' + str(rng.integers(24)) for i in pauli]
     else:
-        circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(0) for i in pauli]
+        circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C0' for i in pauli]
 
     init_layer = [symp_reps[circ_layer[i]] for i in range(len(pauli))]
     

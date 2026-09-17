@@ -13,7 +13,7 @@ Utility functions for computing and working with first-order-gauge-invariant (FO
 import numpy as _np
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
-
+import scipy as _scp
 from . import matrixtools as _mt
 from . import optools as _ot
 
@@ -50,10 +50,6 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
     nonzero_row_labels = {}
     TOL = 1e-12  # ~ machine precision
 
-    #print("DB fogi action mx: outer iter, initial action mx shape = %s"  % (str(action_mx.shape)))  # DEBUG REMOVE
-    #print("DB superop = \n", clifford_superop_mx)  # DEBUG REMOVE
-    #import bpdb; bpdb.set_trace()  # REMOVE
-    #db_seen_sslbls = set()  # DEBUG!!!  REMOVE
     for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices):  # BOTTLENECK eval attribute
         action_sslbls = tuple(sorted(set(gen_sslbls).union(target_sslbls)))  # (union) - joint support of ops
         action_space = model_state_space.create_subspace(action_sslbls)
@@ -70,26 +66,13 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         # - a full basis for gauge_action_deriv
         #global_row_space.add_labels(row_space.labels)  # labels would need to contain sslbls too
         action_row_labels = action_row_basis.labels
-        global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True)
-
-        #DEBUG REMOVE
-        #db_num_skipped = db_num_nonzero = 0
-        #db_row_lbl = elemgen_gauge_basis.labels[j]
-        #print("U_expanded embeds ", target_sslbls, " onto ", action_sslbls)  # DEBUG
-        #print("gen_expanded embeds ", db_row_lbl, gen_sslbls, " onto ", action_sslbls)  # DEBUG
-        #import bpdb; bpdb.set_trace()
-        #if gen_sslbls not in db_seen_sslbls:
-        #    db_num_skipped = db_num_nonzero = 0
-        #    print("DB fogi action mx: inner iter for gen_sslbls=%s; action_sslbls=%s, action_row_basis size = %d"
-        #          % (str(gen_sslbls), str(action_sslbls), len(global_row_indices)))
+        global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True) 
 
         # Note: can avoid this projection and conjugation math above if we know gen is Pauli action and U is clifford
         for i, row_label, (gen2_sslbls, gen2) in zip(global_row_indices, action_row_labels,
                                                      action_row_basis.elemgen_supports_and_dual_matrices):
             #if not is_subset(gen2_sslbls, space):
             if not set(gen2_sslbls).issubset(action_sslbls):
-                #print("  -> ", row_label, ' skipped b/c gen ssbls not fully within action space')  # REMOVE
-                #db_num_skipped += 1  # REMOVE
                 continue  # no overlap/component when gen2 is nontrivial (and assumed orthogonal to identity)
                 # on a factor space where gauge_action_deriv is zero
 
@@ -111,17 +94,10 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
 
             assert(abs(val.imag) < TOL)  # all values should be real, I think...
             if abs(val) > TOL:
-                #print("  -> ", db_row_lbl, ", ", row_label, ' val = ', val)  # REMOVE
-                #db_num_nonzero += 1   # REMOVE
                 if i not in nonzero_rows:
                     nonzero_rows.add(i)
                     nonzero_row_labels[i] = row_label
                 action_mx[i, j] = val
-
-        #DEBUG REMOVE
-        #if gen_sslbls not in db_seen_sslbls:
-            #print("  -- skipped %d, processed %d -- %d of which were nonzero" % (db_num_skipped, len(global_row_indices) - db_num_skipped, db_num_nonzero))
-            #db_seen_sslbls.add(gen_sslbls)
 
         #TODO HERE: check that decomposition into components adds to entire gauge_action_deriv
         #  (checks "completeness" of row basis)
@@ -130,7 +106,6 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
 
     #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
     # just construct a new matrix and basis
-    #print("DB fogi action mx: beginning matrix reduction...")  # REMOVE
     nonzero_row_indices = list(sorted(nonzero_rows))
     labels = [nonzero_row_labels[i] for i in nonzero_row_indices]
 
@@ -142,7 +117,6 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
     culled_action_mx = _sps.csr_matrix((data, col_indices, rowptr),
                                        shape=(len(nonzero_rows), len(elemgen_gauge_basis)), dtype=action_mx.dtype)
     updated_row_basis = _ExplicitElementaryErrorgenBasis(elemgen_row_basis.state_space, labels)
-    #print("DB fogi action mx: culled action matrix to shape", culled_action_mx.shape)  # REMOVE
 
     return culled_action_mx, updated_row_basis
 
@@ -339,7 +313,14 @@ def _create_op_errgen_indices_dict(primitive_op_labels, errorgen_coefficient_lab
 def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                               errorgen_coefficient_labels, op_errgen_indices, gauge_space,
                               op_label_abbrevs=None, dependent_fogi_action='drop', norm_order=None):
-    """ TODO: docstring """
+    """ TODO: docstring 
+    Parameters
+    ----------
+    dependent_fogi_action : 'drop' or 'mark'
+        'drop' ensures the set of FOGI quantities returned is linearly independent. 'mark' ensures 
+
+
+    """
     assert(dependent_fogi_action in ('drop', 'mark'))
     orthogonalize_relationals = True
 
@@ -386,18 +367,13 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
             # Note intersection_space is a subset of the *gauge-space*, and so its basis,
             # placed under gaugespace_dirs keys, is for gauge-space, not errorgen-space.
 
-            #DEBUG REMOVE
-            #print("DB: name = ",name, " norm order = ",norm_orders[j])
-            #print("Norm order = ", norm_orders[j], ":", [el for el in vecs_to_add[:,j].toarray()[:,0] if not _np.isclose(el, 0)])
-            #print("Post scaling = ", [el for el in dirs_to_add[:,j].toarray()[:,0] if not _np.isclose(el, 0)], '\n')
-
         return resulting_dirs
 
     def resolve_norm_order(vecs_to_normalize, label_lists, given_norm_order):
         """Turn user-supplied norm-order into an array of norm orders based, sometimes, on the vecs being normalized """
         if isinstance(given_norm_order, int):
             norm_order_array = _np.ones(local_fogi_dirs.shape[1], dtype=_np.int64) * given_norm_order
-        elif given_norm_order == "auto":  # automaticaly choose norm order based on fogi direction composition
+        elif given_norm_order == "auto":  # automatically choose norm order based on fogi direction composition
             lbl_lookup = {}; off = 0
             for label_list in label_lists:
                 lbl_lookup.update({i + off: lbl for i, lbl in enumerate(label_list)})
@@ -414,7 +390,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         return norm_order_array
 
     for op_label in primitive_op_labels:
-        #FOGI DEBUG print("##", op_label)
         ga = gauge_action_matrices[op_label]
         # currently `ga` is a dense matrix, if SPARSE need to update nullspace and pinv math below
 
@@ -427,7 +402,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
             commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
             complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op is faithful rep
             ccomms[(op_label,)] = complement
-            #FOGI DEBUG print("  Skipping - SPAM, no intrinsic qtys")
             continue
 
         #Get commutant and communtant-complement spaces
@@ -446,7 +420,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         local_fogi_vecs = _mt.normalize_columns(local_fogi_dirs, ord=ord_to_use)  # this gives us *vec*-norm we want
         vector_L2_norm2s = [_np.linalg.norm(local_fogi_vecs[:, j])**2 for j in range(local_fogi_vecs.shape[1])]
         local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives *dir*-norm we want # DUAL NORM
-        #FOGI DEBUG print("  New intrinsic qtys = ", local_fogi_dirs.shape[1])
         #assert(_np.linalg.norm(local_fogi_dirs.imag) < 1e-6)  # ok for H+S but not for CPTP models
 
         assert(_mt.columns_are_orthogonal(local_fogi_dirs))  # Not for Cnot in 2Q_XYICNOT (check?)
@@ -474,10 +447,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         ccomms[(op_label,)] = complement
         #gauge_action_for_op[op_label] = ga
 
-        #print("Commutant:"); _mt.print_mx(commutant)
-        #print("Names: ", errgen_names)
-        #print("Complement:"); _mt.print_mx(complement)
-
     smaller_sets = [(op_label,) for op_label in primitive_op_labels]
     max_size = len(primitive_op_labels)
     for set_size in range(1, max_size):
@@ -488,8 +457,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                 if op_label in existing_set: continue
                 new_set = tuple(sorted(existing_set + (op_label,)))
                 if new_set in larger_sets: continue
-
-                #FOGI DEBUG print("\n##", existing_set, "+", op_label)
 
                 # Merge existing set + op_label => new set of larger size
                 ccommA = ccomms.get(existing_set, None)  # Note: commutant-complements are in *gauge* space,
@@ -505,7 +472,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                     #assert(_mt.columns_are_orthogonal(intersection_space))  # Not always true
 
                     if intersection_space.shape[1] > 0:
-                        #FOGI DEBUG print(" ==> intersection space dim = ", intersection_space.shape[1])
                         # Then each basis vector of the intersection space defines a gauge-invariant ("fogi")
                         # direction via the difference between that gauge direction's action on A and B:
                         gauge_action = _np.concatenate([gauge_action_matrices[ol] for ol in existing_set]
@@ -553,9 +519,35 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # (A,B are faithful reps of gauge on intersection space, so pinv(ga_A) * ga_A
                         # restricted to intersection space is I:   int_spc.T * pinv(ga_A) * ga_A * int_spc == I
                         # (when int_spc vecs are orthonormal) and so the above redues to I - I = 0
+                        def scipy_pinv(A, rcond):
+                            # Step 1: Compute SVD
+                            U, S, VT = _scp.linalg.svd(A, lapack_driver='gesvd')
 
-                        inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7),
-                                                                 -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)),
+                            # Step 2: Compute Sigma+
+                            S_plus = _np.zeros((VT.shape[0],U.shape[0]))
+                            for i in range(len(S)):
+                                if _np.abs(S[i]) > rcond:
+                                    S_plus[i, i] = 1 / S[i]
+
+                            # Step 3: Compute the pseudoinverse
+                            return VT.T @ S_plus @ U.T
+
+                        try:
+                            inverse1 = _np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7)
+                        except Exception as e:
+                            print('Pinverse failed with message: ', e, '\n Attempting gesvd algorithm for SVD')
+                            inverse1 = scipy_pinv(gauge_action[0:n, :], rcond=1e-7)
+                            print('success')
+                        
+                        try:
+                            inverse2 = -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)
+                        except Exception as e:
+                            print('Pinverse failed with message: ', e, '\n Attempting gesvd algorithm for SVD')
+                            inverse2 = -scipy_pinv(gauge_action[n:, :], rcond=1e-7)
+                            print('success')
+
+                        inv_diff_gauge_action = _np.concatenate((inverse1,
+                                                                 inverse2),
                                                                 axis=1).T
 
                         #Equivalent:
@@ -581,11 +573,6 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                                                         #intersection_space,
                                                         [gauge_space.elemgen_basis.labels],
                                                         norm_order)
-                        #DEBUG!!! REMOVE
-                        #print("DB: gauge norm_order to use = ", ord_to_use)
-                        #if list(ord_to_use) == [2, 2, 2, 2, 2, 2, 1, 1, 1]:
-                        #    import bpdb; bpdb.set_trace()
-                        #    print("HERE")
 
                         int_vecs_in_geb = _mt.normalize_columns(int_space_in_gauge_elemgen_basis, ord=ord_to_use)
                         int_vecs = _np.linalg.pinv(gauge_space.vectors) @ int_vecs_in_geb
@@ -675,8 +662,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         new_fogi_dirs = new_fogi_dirs.tocsc()
 
                         # figure out which directions are independent
-                        indep_cols = _mt.independent_columns(new_fogi_dirs, fogi_dirs)
-                        #FOGI DEBUG print(" ==> %d independent columns" % len(indep_cols))
+                        indep_cols = _mt.independent_columns(new_fogi_dirs.toarray(), fogi_dirs.toarray())
 
                         if dependent_fogi_action == "drop":
                             dep_cols_to_add = []
@@ -707,20 +693,11 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         #if dependent_fogi_action == "drop":  # we could construct these, but would make fogi qtys messy
                         #    assert(_mt.columns_are_orthogonal(fogi_dirs))
 
-                        #print("Fogi vecs:\n"); _mt.print_mx(local_fogi_dirs)
-                        #print("Ham Intersection names: ", intersection_names)
-
                     ccomms[new_set] = union_space
-                    #print("Complement:\n"); _mt.print_mx(union_space)
 
                 larger_sets.append(new_set)
 
         smaller_sets = larger_sets
-
-    #big_gauge_action = _np.concatenate([other_gauge_action[ol] for ol in primitive_op_labels], axis=0)  # DEBUG
-    #print("Fogi directions:\n"); _mt.print_mx(fogi_dirs, width=5, prec=1)
-    #print("Names = \n", '\n'.join(["%d: %s" % (i, v) for i, v in enumerate(fogi_names)]))
-    #print("Rank = ", _np.linalg.matrix_rank(fogi_dirs))
 
     #Convert to real matrices if possible (otherwise we can get pinv or nullspace being complex when it doesn't
     # need to be, and this causes, e.g. an attempt to set imaginary Hamiltonian coefficients of ops)
@@ -825,7 +802,6 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
             errgen_vec = _np.dot(_np.dot(ga, _np.linalg.pinv(ga)), errgen_vec)
 
             #jangle = _mt.jamiolkowski_angle(_create_errgen_op(errgen_vec, gauge_basis_mxs))
-            #FOGI DEBUG print("From ", debug, " jangle = ", jangle)
             best_gauge_vecs.append(running_best_gauge_vec)
 
     def _create_errgen_op(vec, list_of_mxs):
@@ -839,7 +815,6 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
 
     for op_label_to_compute_max_for in primitive_op_labels:
 
-        #FOGI DEBUG print("Computing for", op_label_to_compute_max_for)
         running_gauge_vec = _np.zeros(gaugeSpaceDim, 'd')
         initial_allowed_gauge_directions = _np.identity(gaugeSpaceDim, 'd')
         resulting_best_gauge_vecs = []
@@ -860,7 +835,6 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
             jamiol_angles.append(_mt.jamiolkowski_angle(_create_errgen_op(errgen_vec, gauge_basis_mxs)))
 
         max_relational_jangle = max(jamiol_angles)
-        #FOGI DEBUG print(max_relational_jangle)
         ret[op_label_to_compute_max_for] = max_relational_jangle
     return ret
 

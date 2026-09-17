@@ -312,7 +312,7 @@ def write_obj_to_mongodb_auxtree(obj, mongodb, collection_name, doc_id, auxfile_
         this object.  Usually you should just leave this empty.
 
     include_attributes : list or tuple or None
-        A list of (string-valued) names of attributs to specifically include
+        A list of (string-valued) names of attributes to specifically include
         when serializing this object.  If `None`, then *all* attributes are
         included except those specifically omitted via `omit_attributes`.
         If `include_attributes` is not `None` then `omit_attributes` is
@@ -336,7 +336,7 @@ def write_obj_to_mongodb_auxtree(obj, mongodb, collection_name, doc_id, auxfile_
     Returns
     -------
     bson.objectid.ObjectId
-        The identifer of the root document that was written.
+        The identifier of the root document that was written.
     """
     from bson.objectid import ObjectId
 
@@ -395,7 +395,7 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
     mongodb : pymongo.database.Database
         The MongoDB instance that is planned to be written to.  Used to test for existing
         records and *not* to write to, as writing is assumed to be done later, potentially as
-        a bulk write operaiton.
+        a bulk write operation.
 
     collection_name : str
         the MongoDB collection within `mongodb` that is planned to write to.
@@ -410,7 +410,7 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
         this object.  Usually you should just leave this empty.
 
     include_attributes : list or tuple or None
-        A list of (string-valued) names of attributs to specifically include
+        A list of (string-valued) names of attributes to specifically include
         when serializing this object.  If `None`, then *all* attributes are
         included except those specifically omitted via `omit_attributes`.
         If `include_attributes` is not `None` then `omit_attributes` is
@@ -429,7 +429,7 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
     Returns
     -------
     bson.objectid.ObjectId
-        The identifer of the root document that was written.
+        The identifier of the root document that was written.
     """
     # Note: include_attributes = None means include everything not omitted
     # Note2: include_attributes takes precedence over omit_attributes
@@ -519,7 +519,7 @@ def write_auxtree_to_mongodb(mongodb, collection_name, doc_id, valuedict, auxfil
     Returns
     -------
     bson.objectid.ObjectId
-        The identifer of the root document that was written.
+        The identifier of the root document that was written.
     """
     from bson.objectid import ObjectId
 
@@ -574,7 +574,7 @@ def add_auxtree_write_ops_and_update_doc(doc, write_ops, mongodb, collection_nam
     mongodb : pymongo.database.Database
         The MongoDB instance that is planned to be written to.  Used to test for existing
         records and *not* to write to, as writing is assumed to be done later, potentially as
-        a bulk write operaiton.
+        a bulk write operation.
 
     collection_name : str
         the MongoDB collection within `mongodb` that is planned to write to.
@@ -605,7 +605,7 @@ def add_auxtree_write_ops_and_update_doc(doc, write_ops, mongodb, collection_nam
     Returns
     -------
     bson.objectid.ObjectId
-        The identifer of the root document that was written.
+        The identifier of the root document that was written.
     """
     from pymongo import InsertOne, ReplaceOne
     to_insert = {}
@@ -955,7 +955,7 @@ def add_dict_to_mongodb_write_ops(d, write_ops, mongodb, collection_name, identi
     mongodb : pymongo.database.Database
         The MongoDB instance that is planned to be written to.  Used to test for existing
         records and *not* to write to, as writing is assumed to be done later, potentially as
-        a bulk write operaiton.
+        a bulk write operation.
 
     collection_name : str
         the MongoDB collection within `mongodb` that is planned to write to.

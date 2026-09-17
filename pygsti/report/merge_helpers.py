@@ -41,20 +41,8 @@ def _read_contents(filename):
     -------
     str
     """
-    contents = None
-    try:  # on Windows using python3 open can fail when trying to read text files. encoding fixes this
-        f = open(str(filename))
+    with open(filename, 'r', encoding='utf-8') as f:
         contents = f.read()
-    except UnicodeDecodeError:
-        f = open(str(filename), encoding='utf-8')  # try this, but not available in python 2.7!
-        contents = f.read()
-
-    f.close()
-
-    try:  # to convert to unicode since we use unicode literals
-        contents = contents.decode('utf-8')
-    except AttributeError: pass  # Python3 case when unicode is read in natively (no need to decode)
-
     return contents
 
 
@@ -584,8 +572,9 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
 
     # Render main page template to output path
     template = env.get_template(template_name)
-    with open(str(output_filename), 'w') as outfile:
-        outfile.write(template.render(render_params))
+    with open(str(output_filename), 'w', encoding='utf-8') as outfile:
+        contents = template.render(render_params)
+        outfile.write(contents)
 
     if auto_open:
         url = 'file://' + _os.path.abspath(str(output_filename))
@@ -684,7 +673,7 @@ def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name=
         figDir.mkdir(exist_ok=True)
 
         if embed_figures is False:
-            with open(str(figDir / 'test.html'), 'w') as f:
+            with open(str(figDir / 'test.html'), 'w', encoding='utf-8') as f:
                 f.write("<div>Dummy to test ajax loading</div>")
     else:
         figDir = None
@@ -715,7 +704,7 @@ def merge_jinja_template_dir(qtys, output_dir, template_dir=None, template_name=
     # Render main page template to output path
     template = env.get_template(template_name)
     outputFilename = str(out_path / template_name)
-    with open(outputFilename, 'w') as outfile:
+    with open(outputFilename, 'w', encoding='utf-8') as outfile:
         outfile.write(template.render(render_params))
 
     if auto_open:
@@ -839,7 +828,7 @@ def merge_latex_template(qtys, template_filename, output_filename,
                 (("true" if val else "false"), toggleNm)
 
     template = ''
-    with open(template_filename, 'r') as templatefile:
+    with open(template_filename, 'r', encoding='utf-8') as templatefile:
         template = templatefile.read()
     template = template.replace("{", "{{").replace("}", "}}")  # double curly braces (for format processing)
     # Replace template field markers with `str.format` fields.
@@ -848,7 +837,7 @@ def merge_latex_template(qtys, template_filename, output_filename,
     # Replace str.format fields with values and write to output file
     filled_template = template.format_map(qtys_latex)
 
-    with open(output_filename, 'w') as outputfile:
+    with open(output_filename, 'w', encoding='utf-8') as outputfile:
         outputfile.write(filled_template)
 
 
@@ -880,7 +869,7 @@ def compile_latex_report(report_filename, latex_call, printer, auto_open):
     Raises
     ------
     subprocess.CalledProcessException
-        If the call to the process comiling the PDF returns non-zero exit
+        If the call to the process compiling the PDF returns non-zero exit
         status.
     """
     report_dir = _os.path.dirname(report_filename)

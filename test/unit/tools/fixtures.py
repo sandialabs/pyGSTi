@@ -40,7 +40,7 @@ def mdl_lgst(self):
 
 @ns.memo
 def mdl_lgst_go(self):
-    return pygsti.gaugeopt_to_target(self.mdl_lgst, self.model, {'spam': 1.0, 'gates': 1.0}, check_jac=True)
+    return pygsti.gaugeopt_to_target(self.mdl_lgst, self.model, item_weights={'spam': 1.0, 'gates': 1.0}, check_jac=True)
 
 
 @ns.memo
@@ -58,10 +58,13 @@ def lsgstStrings(self):
 
 @ns.memo
 def mdl_lsgst(self):
-    chi2_builder = pygsti.objectivefns.Chi2Function.builder(
+    from pygsti.objectivefns.objectivefns import ObjectiveFunctionBuilder, Chi2Function
+    chi2_builder = ObjectiveFunctionBuilder(
+        Chi2Function,
         regularization={'min_prob_clip_for_weighting': 1e-6},
-        penalties={'prob_clip_interval': (-1e6, 1e6)})
-    models, _, _ = pygsti.algorithms.core.run_iterative_gst(
+        penalties={'prob_clip_interval': (-1e6, 1e6)}
+    )
+    models, _, _, _ = pygsti.algorithms.core.run_iterative_gst(
         self.dataset, self.mdl_clgst, self.lsgstStrings,
         optimizer=None,
         iteration_objfn_builders=[chi2_builder],
@@ -75,4 +78,4 @@ def mdl_lsgst(self):
 @ns.memo
 def mdl_lsgst_go(self):
     # Was previously written to disk as 'analysis.model'
-    return pygsti.gaugeopt_to_target(self.mdl_lsgst, self.model, {'spam': 1.0})
+    return pygsti.gaugeopt_to_target(self.mdl_lsgst, self.model, item_weights={'spam': 1.0})

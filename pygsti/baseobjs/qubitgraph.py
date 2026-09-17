@@ -37,7 +37,7 @@ class QubitGraph(_NicelySerializable):
         connectivity of the graph.  If an integer array, then 0 indicates
         no edge and positive integers indicate present edges in the
         "direction" given by the positive integer.  For example `1` may
-        corresond to "left" and `2` to "right".  Names must be associated
+        correspond to "left" and `2` to "right".  Names must be associated
         with these directions using `direction_names`.  If a boolean array,
         if there's an edge from qubit `i` to `j` then
         `initial_connectivity[i,j]=True` (integer indices of qubit
@@ -157,7 +157,7 @@ class QubitGraph(_NicelySerializable):
             connectivity of the graph.  If an integer array, then 0 indicates
             no edge and positive integers indicate present edges in the
             "direction" given by the positive integer.  For example `1` may
-            corresond to "left" and `2` to "right".  Names must be associated
+            correspond to "left" and `2` to "right".  Names must be associated
             with these directions using `direction_names`.  If a boolean array,
             if there's an edge from qubit `i` to `j` then
             `initial_connectivity[i,j]=True` (integer indices of qubit
@@ -333,7 +333,7 @@ class QubitGraph(_NicelySerializable):
         """
         All the node labels of this graph.
 
-        These correpond to integer indices where appropriate,
+        These correspond to integer indices where appropriate,
         e.g. for :meth:`shortest_path_distance_matrix`.
 
         Returns
@@ -853,7 +853,7 @@ class QubitGraph(_NicelySerializable):
         self._refresh_dists_and_predecessors()
         return self._predecessors.copy()
 
-    def subgraph(self, nodes_to_keep, reset_nodes=False):
+    def subgraph(self, nodes_to_keep, reset_nodes=False, include_directions=True):
         """
         Return a graph that includes only `nodes_to_keep` and the edges between them.
 
@@ -867,6 +867,10 @@ class QubitGraph(_NicelySerializable):
             be the integers starting at 0 (in 1-1 correspondence
             with the ordering in `nodes_to_keep`).
 
+        include_directions : bool, optional
+            Whether the subgraph should retain the direction information
+            of the parent graph. Defaults to True.
+
         Returns
         -------
         QubitGraph
@@ -878,7 +882,7 @@ class QubitGraph(_NicelySerializable):
             qubit_labels = nodes_to_keep
 
         edges = []
-        for edge in self.edges():
+        for edge in self.edges(include_directions=include_directions):
             if edge[0] in nodes_to_keep and edge[1] in nodes_to_keep:
                 if reset_nodes:
                     edges.append((labelmap[edge[0]], labelmap[edge[1]]))

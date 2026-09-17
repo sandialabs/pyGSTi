@@ -13,9 +13,9 @@ Defines the Workspace class and supporting functionality.
 import collections as _collections
 import inspect as _inspect
 import itertools as _itertools
+import linecache as _linecache
 import os as _os
 import pickle as _pickle
-# import uuid        as _uuid
 import random as _random
 import shutil as _shutil
 import subprocess as _subprocess
@@ -62,7 +62,7 @@ def display_ipynb(content):
     -------
     None
     """
-    from IPython.core.display import display, HTML
+    from IPython.display import display, HTML
     display(HTML(content))
 
 
@@ -158,14 +158,14 @@ def ws_custom_digest(md5, v):
     if isinstance(v, NotApplicable):
         md5.update("NOTAPPLICABLE".encode('utf-8'))
     elif isinstance(v, SwitchValue):
-        md5.update(v.base.tostring())  # don't recurse to parent switchboard
+        md5.update(v.base.tobytes())  # don't recurse to parent switchboard
     else:
         raise _CustomDigestError()
 
 
 def random_id():
     """
-    Returns a random document-objet-model (DOM) ID
+    Returns a random document-object-model (DOM) ID
 
     Returns
     -------
@@ -274,27 +274,52 @@ class Workspace(object):
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
 
-        # Strip default values out of parameters so that we don't override the true incoming values with defaults
+        # Strip default values out of parameters so that we don't override the true incoming values with
+        # defaults, but keep the annotations so that they appear in the generated function's source/signature.
         newargparams = [p.replace(default=_inspect.Parameter.empty) for p in argsig.parameters.values()][2:]
         newargsig = _inspect.Signature(newargparams)
 
-        signature = str(newargsig)
-        signature = signature[1:-1]  # strip off parenthesis from ends of "(signature)"
+        signature_def = str(newargsig)[1:-1]  # strip off parenthesis from ends of "(signature_def)"
 
+        # For the function call inside the body, construct argument names (without annotations/defaults/separators like '*').
+        call_args = []
+        for p in newargparams:
+            if p.kind == _inspect.Parameter.VAR_POSITIONAL:
+                call_args.append(f"*{p.name}")
+            elif p.kind == _inspect.Parameter.VAR_KEYWORD:
+                call_args.append(f"**{p.name}")
+            elif p.kind == _inspect.Parameter.KEYWORD_ONLY:
+                call_args.append(f"{p.name}={p.name}")
+            else:
+                call_args.append(p.name)
+        signature_call = ", ".join(call_args)
+
+        # 'from __future__ import annotations' makes all annotations in the generated def be treated as
+        # strings, so unresolvable type hints in the signature won't raise NameError when the function is
+        # defined.  The call expression in the body is kept annotation-free so it always compiles.
         if autodisplay:
             factory_func_def = (
-                'def factoryfn(%(signature)s):\n'
-                '    ret = cls(self, %(signature)s); ret.display(); return ret' %
-                {'signature': signature})
+                'from __future__ import annotations\n'
+                'def factoryfn(%(signature_def)s):\n'
+                '    ret = cls(self, %(signature_call)s); ret.display(); return ret' %
+                {'signature_def': signature_def, 'signature_call': signature_call})
         else:
             factory_func_def = (
-                'def factoryfn(%(signature)s):\n'
-                '    return cls(self, %(signature)s)' %
-                {'signature': signature})
+                'from __future__ import annotations\n'
+                'def factoryfn(%(signature_def)s):\n'
+                '    return cls(self, %(signature_call)s)' %
+                {'signature_def': signature_def, 'signature_call': signature_call})
 
         #print("FACTORY FN DEF = \n",new_func)
+        # Register the generated source with linecache under a unique pseudo-filename so that
+        # inspect.getsource(factoryfn) (and debuggers) can display the generated function body.
+        filename = '<factoryfn for %s.%s #%d>' % (cls.__module__, cls.__name__, id(cls))
+        source_lines = [line + '\n' for line in factory_func_def.splitlines()]
+        _linecache.cache[filename] = (len(factory_func_def), None, source_lines, filename)
+
         exec_globals = {'cls': cls, 'self': self}
-        exec(factory_func_def, exec_globals)
+        code = compile(factory_func_def, filename, 'exec')
+        exec(code, exec_globals)
         factoryfn = exec_globals['factoryfn']
 
         #Copy cls.__init__ info over to factory function
@@ -303,6 +328,11 @@ class Workspace(object):
         factoryfn.__module__ = cls.__init__.__module__
         factoryfn.__dict__ = cls.__init__.__dict__
         factoryfn.__defaults__ = cls.__init__.__defaults__
+
+        # Copy annotations directly to factoryfn to preserve them in the signature of the generated function
+        init_annotations = getattr(cls.__init__, '__annotations__', {})
+        factory_annotations = {k: v for k, v in init_annotations.items() if k not in ('self', 'ws')}
+        factoryfn.__annotations__ = factory_annotations
 
         return factoryfn
 
@@ -963,8 +993,13 @@ class Switchboard(_collections.OrderedDict):
 
                 if view_suffix:
                     js += "\n".join((
+                        "var connected_%s_base = false;" % ID,
+                        "var connect_%s_base_timer = null;" % ID,
                         "function connect_%s_to_base(){" % ID,
+                        "  if(connected_%s_base) return;" % ID,  # re-entrant: event and timer may both fire
                         "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    connected_%s_base = true;" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s');" % ID,
                         "    $('#%s').on('change', function(event, ui) {" % baseID,
                         "      var v = $(\"#%s > input[name='%s']:checked\").val();" % (baseID, baseID),
                         "      var el = $(\"#%s > input[name='%s'][value=\" + v + \"]\");" % (ID, ID),
@@ -982,7 +1017,11 @@ class Switchboard(_collections.OrderedDict):
                         "    $('#%s').trigger('change');" % baseID,
                         "  }",
                         "  else {",  # need to wait for base switch
-                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s')" % ID +
+                        ".one('pygsti-switch-initialized.%s', connect_%s_to_base);" % (ID, ID),
+                        #one live backstop timer, else each event wake adds another chain
+                        "    clearTimeout(connect_%s_base_timer);" % ID,
+                        "    connect_%s_base_timer = setTimeout(connect_%s_to_base, 500);" % (ID, ID),
                         "    console.log('%s base NOT initialized: Waiting...');" % ID,
                         "  }",
                         "};",
@@ -1002,8 +1041,13 @@ class Switchboard(_collections.OrderedDict):
 
                 if view_suffix:
                     js += "\n".join((
+                        "var connected_%s_base = false;" % ID,
+                        "var connect_%s_base_timer = null;" % ID,
                         "function connect_%s_to_base(){" % ID,
+                        "  if(connected_%s_base) return;" % ID,  # re-entrant: event and timer may both fire
                         "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    connected_%s_base = true;" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s');" % ID,
                         "    $('#%s').on('selectmenuchange', function(event, ui) {" % baseID,
                         "      var v = $('#%s').val();" % baseID,
                         "      var el = $('#%s');" % ID,
@@ -1022,7 +1066,11 @@ class Switchboard(_collections.OrderedDict):
                         "    console.log('%s connected to base');\n" % ID,
                         "  }",
                         "  else {",  # need to wait for base switch
-                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s')" % ID +
+                        ".one('pygsti-switch-initialized.%s', connect_%s_to_base);" % (ID, ID),
+                        #one live backstop timer, else each event wake adds another chain
+                        "    clearTimeout(connect_%s_base_timer);" % ID,
+                        "    connect_%s_base_timer = setTimeout(connect_%s_to_base, 500);" % (ID, ID),
                         "    console.log('%s base NOT initialized: Waiting...');" % ID,
                         "  }",
                         "};",
@@ -1115,8 +1163,13 @@ class Switchboard(_collections.OrderedDict):
                     # which causes a change event to fire.  Views handle this event
                     # to update their own slider values.
                     js += "\n".join((
+                        "var connected_%s_base = false;" % ID,
+                        "var connect_%s_base_timer = null;" % ID,
                         "function connect_%s_to_base(){" % ID,
+                        "  if(connected_%s_base) return;" % ID,  # re-entrant: event and timer may both fire
                         "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    connected_%s_base = true;" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s');" % ID,
                         "    $('#%s').on('slidechange', function(event, ui) {" % baseID,
                         "      $('#%s').slider('value', ui.value);" % ID,
                         "      $('#%s-handle').text( $('#%s-handle').text() );" % (ID, baseID),
@@ -1125,7 +1178,11 @@ class Switchboard(_collections.OrderedDict):
                         "    $('#%s').trigger('slidechange', mock_ui);" % baseID,
                         "  }",
                         "  else {",  # need to wait for base switch
-                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s')" % ID +
+                        ".one('pygsti-switch-initialized.%s', connect_%s_to_base);" % (ID, ID),
+                        #one live backstop timer, else each event wake adds another chain
+                        "    clearTimeout(connect_%s_base_timer);" % ID,
+                        "    connect_%s_base_timer = setTimeout(connect_%s_to_base, 500);" % (ID, ID),
                         "    console.log('%s base NOT initialized: Waiting...');" % ID,
                         "  }",
                         "};",
@@ -1136,6 +1193,9 @@ class Switchboard(_collections.OrderedDict):
                 raise ValueError("Unknown switch type: %s" % styp)
 
             js += "$('#%s').addClass('initializedSwitch');\n" % ID
+            #let anything waiting on this switch connect immediately rather than
+            #discovering it on its next 500ms poll
+            js += "$(document).trigger('pygsti-switch-initialized');\n"
 
             switch_html.append(html)
             switch_js.append(js)
@@ -1626,7 +1686,7 @@ class WorkspaceOutput(object):
             self.__dict__['ws'] = None
 
     # Note: hashing not needed because these objects are not *inputs* to
-    # other WorspaceOutput objects or computation functions - these objects
+    # other WorkspaceOutput objects or computation functions - these objects
     # are cached using call_key.
 
     def render(self, typ="html"):
@@ -1690,7 +1750,7 @@ class WorkspaceOutput(object):
             An absolute index into the list of different switched "versions"
             of this object's data.  In most cases, the object being saved
             doesn't depend on any switch boards and has only a single "version",
-            in which caes this can be left as the default.
+            in which case this can be left as the default.
 
         verbosity : int, optional
             Controls the level of detail printed to stdout.
@@ -1829,7 +1889,8 @@ class WorkspaceOutput(object):
 
             #Create separate files with div contents
             for divContent, divFilenm in zip(div_contents, div_filenames):
-                with open(_os.path.join(str(link_to_files_dir), divFilenm), 'w') as f:
+                filepath = _os.path.join(str(link_to_files_dir), divFilenm)
+                with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(divContent)
         html += "\n</div>\n"  # ends pygsti-wsoutput-group div
 
@@ -1855,8 +1916,13 @@ class WorkspaceOutput(object):
 
         #define fn to "connect" output object to switchboard, i.e.
         #  register event handlers for relevant switches so output object updates
+        js += "var connected_%s = false;\n" % id
+        js += "var connect_%s_timer = null;\n" % id
         js += "function connect_%s_to_switches(){\n" % id
+        js += "  if(connected_%s) return;\n" % id  # re-entrant: event and timer may both fire
         js += "  if(%s) {\n" % cnd  # "if switches are ready"
+        js += "    connected_%s = true;\n" % id
+        js += "    $(document).off('pygsti-switch-initialized.%s');\n" % id
         # loop below adds event bindings to the body of this if-block
 
         #build a handler function to get all of the relevant switch positions,
@@ -1880,7 +1946,7 @@ class WorkspaceOutput(object):
             handler_js += "  divToShow.show();\n"
             handler_js += "  divToShow.parentsUntil('#%s').show();\n" % id
             handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "  pygsti_set_caption_width(caption, divToShow);\n"
         else:
             handler_js += "  if( divToShow.children().length == 0 ) {\n"
             handler_js += "    $(`#${idToShow}`).load(`figures/${idToShow}.html`, function() {\n"
@@ -1897,14 +1963,14 @@ class WorkspaceOutput(object):
                 handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
                 handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
             handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "        caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "        pygsti_set_caption_width(caption, divToShow);\n"
             handler_js += "    });\n"  # end load-complete handler
             handler_js += "  }\n"
             handler_js += "  else {\n"
             handler_js += "    divToShow.show();\n"
             handler_js += "    divToShow.parentsUntil('#%s').show();\n" % id
             handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "    pygsti_set_caption_width(caption, divToShow);\n"
             handler_js += "  }\n"
         handler_js += "}\n"  # end <id>_onchange function
 
@@ -1926,7 +1992,11 @@ class WorkspaceOutput(object):
         js += "    $( '#%s' ).show()\n" % id  # visibility updates are done: show parent container
         js += "  }\n"  # ends if-block
         js += "  else {\n"  # switches aren't ready - so wait
-        js += "    setTimeout(connect_%s_to_switches, 500);\n" % id
+        js += "    $(document).off('pygsti-switch-initialized.%s')" % id
+        js += ".one('pygsti-switch-initialized.%s', connect_%s_to_switches);\n" % (id, id)
+        #one live backstop timer, else each event wake adds another chain
+        js += "    clearTimeout(connect_%s_timer);\n" % id
+        js += "    connect_%s_timer = setTimeout(connect_%s_to_switches, 500);\n" % (id, id)
         js += "    console.log('%s switches NOT initialized: Waiting...');\n" % id
         js += "  }\n"
         js += "};\n"  # end of connect function
@@ -2293,7 +2363,7 @@ class WorkspaceTable(WorkspaceOutput):
             An absolute index into the list of different switched "versions"
             of this object's data.  In most cases, the object being saved
             doesn't depend on any switch boards and has only a single "version",
-            in which caes this can be left as the default.
+            in which case this can be left as the default.
 
         verbosity : int, optional
             Controls the level of detail printed to stdout.
@@ -2447,7 +2517,7 @@ class WorkspacePlot(WorkspaceOutput):
 
     def __init__(self, ws, fn, *args):
         """
-        Create a new WorkspaceTable.  Usually not called directly.
+        Create a new WorkspacePlot.  Usually not called directly.
 
         Parameters
         ----------
@@ -2461,6 +2531,9 @@ class WorkspacePlot(WorkspaceOutput):
             The arguments to `fn`.
         """
         super(WorkspacePlot, self).__init__(ws)
+        #add a plot specific option for aspect ratios
+        self.options['lock_aspect_ratio'] = True 
+
         '''
         # LSaldyt: removed plotfn for easier pickling? It doesn't seem to be used anywhere
         self.plotfn = fn
@@ -2497,6 +2570,7 @@ class WorkspacePlot(WorkspaceOutput):
         overrideIDs = self.options.get('switched_item_id_overrides', {})
         switched_item_mode = self.options.get('switched_item_mode', 'inline')
         output_dir = self.options.get('output_dir', None)
+        lock_aspect_ratio = self.options.get('lock_aspect_ratio', True)
 
         if valign == 'top':
             abswrap_cls = 'abswrap'
@@ -2540,7 +2614,7 @@ class WorkspacePlot(WorkspaceOutput):
                     #fig.plotlyfig.update_layout(template=DEFAULT_PLOTLY_TEMPLATE)  #slow: set default theme in plot_ex
                     fig_dict = _plotly_ex.plot_ex(
                         fig.plotlyfig, show_link=False, resizable=resizable,
-                        lock_aspect_ratio=True, master=True, validate=VALIDATE_PLOTLY,  # bool(i==iMaster)
+                        lock_aspect_ratio=lock_aspect_ratio, master=True, validate=VALIDATE_PLOTLY,  # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID,
                         rel_figure_dir=_os.path.basename(
@@ -2669,7 +2743,7 @@ class WorkspacePlot(WorkspaceOutput):
             An absolute index into the list of different switched "versions"
             of this object's data.  In most cases, the object being saved
             doesn't depend on any switch boards and has only a single "version",
-            in which caes this can be left as the default.
+            in which case this can be left as the default.
 
         verbosity : int, optional
             Controls the level of detail printed to stdout.
@@ -2994,7 +3068,7 @@ class WorkspaceText(WorkspaceOutput):
             An absolute index into the list of different switched "versions"
             of this object's data.  In most cases, the object being saved
             doesn't depend on any switch boards and has only a single "version",
-            in which caes this can be left as the default.
+            in which case this can be left as the default.
 
         verbosity : int, optional
             Controls the level of detail printed to stdout.
@@ -3098,7 +3172,7 @@ class WorkspaceText(WorkspaceOutput):
                 '  CollapsibleLists.applyTo(el[0]);\n'
                 '}}\n'
                 'caption = el.closest("figure").children("figcaption:first");\n'
-                'caption.css("width", Math.round(el.width()*0.9) + "px");\n'
+                'pygsti_set_caption_width(caption, el);\n'
             ).format(textid=text_id)
         else:
             init_text_js = ""  # no per-div init needed

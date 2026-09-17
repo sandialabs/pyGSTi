@@ -21,27 +21,41 @@ class SummarySection(_Section):
         return workspace.FitComparisonBarPlot(
             max_lengths, switchboard.circuits_all, switchboard.mdl_all_modvi,
             switchboard.modvi_ds, switchboard.objfn_builder_modvi,
-            'L', comm=comm
+            'L', comm=comm, mdc_stores = switchboard.mdc_store_all
         )
 
     @_Section.figure_factory()
     def final_model_fit_histogram(workspace, switchboard=None, linlog_percentile=5, comm=None, bgcolor='white',
                                   **kwargs):
         return workspace.ColorBoxPlot(
-            switchboard.objfn_builder, switchboard.circuits_final,
-            switchboard.modvi_ds, switchboard.mdl_current_modvi,
+            switchboard.objfn_builder_modvi,
+            switchboard.circuits_final,
+            switchboard.modvi_ds, switchboard.mdl_final_modvi,
             linlg_pcntle=linlog_percentile / 100,
-            typ='histogram', comm=comm, bgcolor=bgcolor
+            typ='histogram', comm=comm, bgcolor=bgcolor,
+            mdc_store= switchboard.final_mdc_store
         )
 
     @_Section.figure_factory()
     def final_gates_vs_target_table_insummary(workspace, switchboard=None, confidence_level=None, ci_brevity=1,
                                               show_unmodeled_error=False, **kwargs):
-        summary_display = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
+        # Columns are chosen per-cell from each model's basis and the interactive "Metrics"
+        # switch (see basis_aware_display).  NOTE: the ordinary tuple's 'evinf'/'evdiamond'
+        # remain basis-aware internally (reportables.eigenvalue_entanglement_infidelity),
+        # so under the "Full-space" selection those two columns still use the subspace
+        # computation for a leakage basis; 'inf'/'trace'/'diamond' are genuinely full-space.
+        ordinary = ('inf', 'trace', 'diamond', 'evinf', 'evdiamond')
+        leakage = ('sub-inf', 'sub-trace', 'sub-diamond', 'plf-sub-diamond', 'leak-rate-max')
+        name = 'gv_summary_display'
         wildcardBudget = None
         if show_unmodeled_error:
-            summary_display += ('unmodeled',)
+            ordinary += ('unmodeled',)
+            leakage += ('unmodeled',)
             wildcardBudget = switchboard.wildcard_budget_optional
+            name += '_wc'
+        from pygsti.report.factory import basis_aware_display as _basis_aware_display
+        # ^ deferred to avoid a circular import: factory imports the section package.
+        summary_display = _basis_aware_display(switchboard, name, ordinary, leakage)
 
         if confidence_level is not None and ci_brevity <= 1:
             cri = switchboard.cri
@@ -74,9 +88,11 @@ class SummarySection(_Section):
             circuitsGrid = [[na_to_none(switchboard.circuits_final[i])] * Ne for i in range(Nd)]
             mdlGrid = [[na_to_none(switchboard.mdl_current_modvi[d, i, -1]) for i in est_inds_mt]
                        for d in range(Nd)]
+            mdc_store_grid = [[na_to_none(switchboard.final_mdc_store[d, i]) for i in est_inds_mt]
+                       for d in range(Nd)]
             return workspace.FitComparisonBoxPlot(
                 est_lbls_mt, dataset_labels, circuitsGrid, mdlGrid, dsGrid, grid_objfn_builder,
-                comm=comm
+                comm=comm, mdc_stores=mdc_store_grid
             )
         else:
             dsGrid = [na_to_none(switchboard.modvi_ds[0, i]) for i in est_inds_mt]
@@ -85,7 +101,9 @@ class SummarySection(_Section):
                 mdlGrid = [None for i in est_inds_mt]
             else:
                 mdlGrid = [na_to_none(switchboard.mdl_current_modvi[0, i, -1]) for i in est_inds_mt]
+            mdc_store_grid = [na_to_none(switchboard.final_mdc_store[0, i]) for i in est_inds_mt]
+
             return workspace.FitComparisonBarPlot(
                 est_lbls_mt, circuitsGrid, mdlGrid, dsGrid, grid_objfn_builder, 'Estimate',
-                comm=comm
+                comm=comm, mdc_stores=mdc_store_grid
             )

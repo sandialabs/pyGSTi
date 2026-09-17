@@ -86,7 +86,7 @@ class VerbosityPrinterFileInstance(object):
 class VerbosityPrinterLevel0Tester(VerbosityPrinterMethodBase, VerbosityPrinterStreamInstance, BaseCase):
     verbosity = 0
     expected_log = ""
-    expected_warn = "\nWARNING: {}\n".format(warn_message)
+    expected_warn = "\nWARNING: {}\n\n".format(warn_message)
     expected_error = "\nERROR: {}\n".format(error_message)
     expected_progress = ["", "", ""]
 
@@ -117,7 +117,7 @@ class VerbosityPrinterLevel3Tester(VerbosityPrinterLevel2Tester):
 class VerbosityPrinterFileLevel0Tester(VerbosityPrinterMethodBase, VerbosityPrinterFileInstance, BaseCase):
     verbosity = 0
     expected_log = ""
-    expected_warn = "\nWARNING: {}\n".format(warn_message)
+    expected_warn = "\nWARNING: {}\n\n".format(warn_message)
     expected_error = "\nERROR: {}\n".format(error_message)
     expected_progress = ["", "", ""]
 

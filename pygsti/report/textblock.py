@@ -88,7 +88,7 @@ class ReportText(object):
                             if li_open: out += "</li>\n"  # end last (open) li
                             while level < currentLevel:
                                 out += "</ul>\n</li>\n"; currentLevel -= 1  # end open lists
-                            out += "<li>"  # add li for curren item
+                            out += "<li>"  # add li for current item
                         elif level > currentLevel:  # more-indented level -- open new list(s) within already open li
                             if not li_open: out += "<li>(unnamed level)"  # open an li to put ul tag within
                             out += "<ul>\n<li>"; currentLevel += 1

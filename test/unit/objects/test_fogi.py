@@ -2,13 +2,14 @@ import pickle
 
 import sys
 import numpy as np
-
-from ..util import BaseCase
+from ..util import BaseCase, with_temp_path
 from pygsti.modelpacks import smq1Q_XYI as std
+from pygsti.modelpacks import smq1Q_XY as std2
+from pygsti.modelpacks import smq1Q_XZ as std3
 from pygsti.baseobjs import Basis, CompleteElementaryErrorgenBasis
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import create_crosstalk_free_model
-from pygsti.models import create_cloud_crosstalk_model_from_hops_and_weights
+from pygsti.models import create_cloud_crosstalk_model_from_hops_and_weights, Model
 
 
 class FogiTester(BaseCase):
@@ -228,3 +229,90 @@ class FogiTester(BaseCase):
         w = np.random.rand(mdl.num_params)
         w[0:nprefix] = 0 # zero out all unused params (these can be SPAM and can't be any value?)
         mdl.from_vector(w)
+
+    def test_equal_method(self):
+
+        def equal_fogi_models(fogi_model, fogi_model2):
+            return fogi_model.fogi_store.__eq__(fogi_model2.fogi_store) and fogi_model.param_interposer.__eq__(fogi_model2.param_interposer)
+        
+        model = std.target_model('GLND')
+        model2 = std2.target_model('GLND')
+        model3 = std3.target_model('GLND')
+
+        basis1q = Basis.cast('pp', 4)
+        gauge_basis = CompleteElementaryErrorgenBasis(
+            basis1q, model.state_space, elementary_errorgen_types='HSCA')
+        gauge_basis2 = CompleteElementaryErrorgenBasis(
+            basis1q, model2.state_space, elementary_errorgen_types='HSCA')
+        gauge_basis3 = CompleteElementaryErrorgenBasis(
+            basis1q, model3.state_space, elementary_errorgen_types='HSCA')
+        
+        model.setup_fogi(gauge_basis, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        model2.setup_fogi(gauge_basis2, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        model3.setup_fogi(gauge_basis3, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        
+        msg = 'FOGI models that are the same are identified as different by __eq__ methods'
+        self.assertTrue(equal_fogi_models(model, model), msg=msg)
+        self.assertTrue(equal_fogi_models(model2, model2), msg=msg)
+        self.assertTrue(equal_fogi_models(model3, model3), msg=msg)
+
+        msg = 'FOGI models that are different are not recognized as different by __eq__ methods'
+        self.assertFalse(equal_fogi_models(model, model2), msg=msg)
+        self.assertFalse(equal_fogi_models(model, model3), msg=msg)
+        self.assertFalse(equal_fogi_models(model2, model3), msg=msg)
+
+    #TODO: should this be in test_nice_serialization instead?
+    @with_temp_path
+    def test_fogi_serialization(self, temp_pth):
+        def equal_fogi_models(fogi_model, fogi_model2):
+            return fogi_model.fogi_store.__eq__(fogi_model2.fogi_store) and fogi_model.param_interposer.__eq__(fogi_model2.param_interposer)
+        
+        model = std.target_model('GLND')
+        model2 = std2.target_model('GLND')
+        model3 = std3.target_model('GLND')
+
+        basis1q = Basis.cast('pp', 4)
+        gauge_basis = CompleteElementaryErrorgenBasis(
+            basis1q, model.state_space, elementary_errorgen_types='HSCA')
+        gauge_basis2 = CompleteElementaryErrorgenBasis(
+            basis1q, model2.state_space, elementary_errorgen_types='HSCA')
+        gauge_basis3 = CompleteElementaryErrorgenBasis(
+            basis1q, model3.state_space, elementary_errorgen_types='HSCA')
+        
+        model.setup_fogi(gauge_basis, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        model2.setup_fogi(gauge_basis2, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        model3.setup_fogi(gauge_basis3, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+
+        model.write(temp_pth + '.json')
+        loaded_model = Model.read(temp_pth + '.json')
+        model2.write(temp_pth + '.json')
+        loaded_model2 = Model.read(temp_pth + '.json')
+        model3.write(temp_pth + '.json')
+        loaded_model3 = Model.read(temp_pth + '.json')
+
+        self.assertTrue(equal_fogi_models(model, loaded_model))
+        self.assertTrue(equal_fogi_models(model2, loaded_model2))
+        self.assertTrue(equal_fogi_models(model3, loaded_model3))
+        
+    def test_set_param_values(self):
+        
+        model = std.target_model('GLND')
+        cp = model.copy()
+
+        basis1q = Basis.cast('pp', 4)
+        gauge_basis = CompleteElementaryErrorgenBasis(
+            basis1q, model.state_space, elementary_errorgen_types='HSCA')
+
+        model.setup_fogi(gauge_basis, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+        cp.setup_fogi(gauge_basis, None, None, reparameterize=True, dependent_fogi_action='drop', include_spam=True)
+
+        test_vec = np.arange(model.num_params) * 1e-3
+        cp.set_parameter_values(np.arange(model.num_params), test_vec)
+        model.from_vector(test_vec)
+        self.assertAlmostEqual(np.linalg.norm(model.to_vector() - cp.to_vector()), 0)
+        #TODO: Uncomment when issue #600 is resolved, remove line above
+        #self.assertTrue(cp.is_equivalent(cp2))
+        
+        
+
+

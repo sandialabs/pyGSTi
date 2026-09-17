@@ -19,7 +19,7 @@ def tvd(p, q):
     The distributions must be dictionaries, where keys are events (e.g., bit strings) and values are the
     probabilities. If an event in the keys of one dictionary isn't in the keys of the other
     then that probability is assumed to be zero. There are no checks that the input probability
-    distributions are valid (i.e., that the probabilities sum up to one and are postiive).
+    distributions are valid (i.e., that the probabilities sum up to one and are positive).
 
     Parameters
     ----------
@@ -54,7 +54,7 @@ def classical_fidelity(p, q):
     The distributions must be dictionaries, where keys are events (e.g., bit strings) and values are the
     probabilities. If an event in the keys of one dictionary isn't in the keys of the other
     then that probability is assumed to be zero. There are no checks that the input probability
-    distributions are valid (i.e., that the probabilities sum up to one and are postiive).
+    distributions are valid (i.e., that the probabilities sum up to one and are positive).
 
     Parameters
     ----------

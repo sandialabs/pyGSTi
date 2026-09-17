@@ -16,7 +16,10 @@ from pygsti.modelmembers.states.densestate import DenseState as _DenseState
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.tools import matrixtools as _mt
+
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -132,21 +135,20 @@ class CPTPState(_DenseState):
         if not _np.isclose(trc, 1.0):  # truncate to trace == 1
             density_mx -= _np.identity(dmDim, 'd') / dmDim * (trc - 1.0)
 
-        #push any slightly negative evals of density_mx positive
+        # push any slightly negative evals of density_mx positive
         # so that the Cholesky decomp will work.
-        evals, U = _np.linalg.eig(density_mx)
-        Ui = _np.linalg.inv(U)
+        U, evals, Ui = _mt.eigendecomposition(density_mx, assume_hermitian=True)
 
         assert(truncate or all([ev >= -1e-12 for ev in evals])), \
             "`vec` must correspond to a positive density matrix (truncate == False)!"
 
         pos_evals = evals.clip(1e-16, 1e100)
-        density_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+        density_mx = U @ _np.diag(pos_evals) @ Ui
         try:
             Lmx = _np.linalg.cholesky(density_mx)
         except _np.linalg.LinAlgError:  # Lmx not postitive definite?
             pos_evals = evals.clip(1e-12, 1e100)  # try again with 1e-12
-            density_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+            density_mx =  U @ _np.diag(pos_evals) @ Ui
             Lmx = _np.linalg.cholesky(density_mx)
 
         #check TP condition: that diagonal els of Lmx squared add to 1.0
@@ -314,12 +316,12 @@ class CPTPState(_DenseState):
 
         # Derivative of vector wrt params; shape == [vecLen,dmDim,dmDim] *not dealing with TP condition yet*
         # (first get derivative assuming last diagonal el of Lmx *is* a parameter, then use chain rule)
-        dVdp = _np.einsum('aml,mb,ab->lab', conj_basis_mxs, Lbar, F1)  # only a >= b nonzero (F1)
-        dVdp += _np.einsum('mal,mb,ab->lab', conj_basis_mxs, L, F1)    # ditto
-        dVdp += _np.einsum('bml,ma,ab->lab', conj_basis_mxs, Lbar, F2)  # only b > a nonzero (F2)
-        dVdp += _np.einsum('mbl,ma,ab->lab', conj_basis_mxs, L, F2.conjugate())  # ditto
+        dVdp  = _np.einsum('aml,mb,ab->lab', conj_basis_mxs, Lbar, F1)         # only a >= b nonzero (F1)
+        dVdp += _np.einsum('mal,mb,ab->lab', conj_basis_mxs, L,    F1)         # ditto
+        dVdp += _np.einsum('bml,ma,ab->lab', conj_basis_mxs, Lbar, F2)         # only b > a nonzero (F2)
+        dVdp += _np.einsum('mbl,ma,ab->lab', conj_basis_mxs, L,    F2.conj())  # ditto
 
-        dVdp.shape = [dVdp.shape[0], nP]  # jacobian with respect to "p" params,
+        dVdp = _compat.reshape_no_copy(dVdp, [dVdp.shape[0], nP])  # jacobian with respect to "p" params,
         # which don't include normalization for TP-constraint
 
         #Now get jacobian of actual params wrt the params used above. Denote the actual
@@ -362,28 +364,3 @@ class CPTPState(_DenseState):
         bool
         """
         return True
-
-    def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
-        """
-        Construct the Hessian of this state vector with respect to its parameters.
-
-        This function returns a tensor whose first axis corresponds to the
-        flattened operation matrix and whose 2nd and 3rd axes correspond to the
-        parameters that are differentiated with respect to.
-
-        Parameters
-        ----------
-        wrt_filter1 : list or numpy.ndarray
-            List of parameter indices to take 1st derivatives with respect to.
-            (None means to use all the this operation's parameters.)
-
-        wrt_filter2 : list or numpy.ndarray
-            List of parameter indices to take 2nd derivatives with respect to.
-            (None means to use all the this operation's parameters.)
-
-        Returns
-        -------
-        numpy array
-            Hessian with shape (dimension, num_params1, num_params2)
-        """
-        raise NotImplementedError("TODO: add hessian computation for CPTPState")

@@ -601,7 +601,8 @@ def determine_paulidicts(model):
         # StaticArbitraryOp, LindbladDenseOp, other gates...
         if len(cur_sslbls) == 1 and cur_sslbls[0] == ql:
             mx = g.to_dense()
-            assert(mx.shape == (4, 4))
+            if mx.shape != (4,4):
+                raise ValueError(f'Expected matrix of shape (4,4), got {mx.shape}.')
             return mx
         else:
             mx = g.to_dense()

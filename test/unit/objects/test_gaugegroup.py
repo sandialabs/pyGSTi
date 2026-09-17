@@ -2,14 +2,17 @@ import numpy as np
 
 from pygsti.modelmembers import operations as op
 from pygsti.models import gaugegroup as ggrp
-from pygsti.baseobjs.statespace import QubitSpace
+from pygsti.baseobjs.statespace import QubitSpace, ExplicitStateSpace
 from ..util import BaseCase
 
 
 class GaugeGroupBase(object):
 
+    HAS_DERIV_WRT_PARAMS = True
+
     def setUp(self):
         self.state_space = QubitSpace(1)
+        self.rng = np.random.default_rng(0)
     
     def test_construction(self):
         params = self.gg.initial_params
@@ -35,23 +38,29 @@ class GaugeGroupBase(object):
         self.assertArraysAlmostEqual(np.linalg.inv(mx), inv)
 
     def test_element_deriv_wrt_params(self):
-        el = self.gg.compute_element(self.gg.initial_params)
-        deriv = el.deriv_wrt_params()
-        # TODO assert correctness
+        if self.HAS_DERIV_WRT_PARAMS:
+            el = self.gg.compute_element(self.gg.initial_params)
+            deriv = el.deriv_wrt_params()
+            # TODO assert correctness
 
-    def test_element_to_vector(self):
+    def test_element_to_from_vector(self):
         el = self.gg.compute_element(self.gg.initial_params)
-        v = el.to_vector()
-        # TODO assert correctness
-
-    def test_element_from_vector(self):
-        ip = self.gg.initial_params
-        el = self.gg.compute_element(ip)
-        el2 = self.gg.compute_element(ip)
-        v = el.to_vector()
-        el2.from_vector(v)
-        self.assertArraysAlmostEqual(el.transform_matrix, el2.transform_matrix)
-        # TODO does this actually assert correctness?
+        v0 = el.to_vector().copy()
+        m0 = el.transform_matrix.copy()
+        num_params = v0.size
+        if num_params > 0:
+            v1 = self.rng.random(size=(num_params,))
+            el.from_vector(v1)
+            m1 = el.transform_matrix.copy()
+            self.assertGreater(np.linalg.norm(m1 - m0), 0.0)
+            el.from_vector(v0)
+            m2 = el.transform_matrix.copy()
+            self.assertArraysAlmostEqual(m0, m2)
+        else:
+            # we just check that from_vector raises no error when provided 
+            # with a vector of length zero.
+            el.from_vector(v0)
+        return
 
 
 class GaugeGroupTester(GaugeGroupBase, BaseCase):
@@ -68,7 +77,7 @@ class GaugeGroupTester(GaugeGroupBase, BaseCase):
         inv = el.transform_matrix_inverse
         self.assertIsNone(inv)
 
-    def test_element_from_vector(self):
+    def test_element_to_from_vector(self):
         pass  # abstract
 
 
@@ -134,3 +143,49 @@ class TrivialGaugeGroupTester(GaugeGroupBase, BaseCase):
     def setUp(self):
         GaugeGroupBase.setUp(self)
         self.gg = ggrp.TrivialGaugeGroup(self.state_space)
+
+
+class DirectSumGaugeGroupTester(GaugeGroupBase, BaseCase):
+    n_params = 3
+    element_type = ggrp.DirectSumUnitaryGroupElement
+    HAS_DERIV_WRT_PARAMS = False
+
+    def setUp(self):
+        GaugeGroupBase.setUp(self)
+        self.state_space = ExplicitStateSpace(['dummy'],[5])
+        g1 = ggrp.TrivialGaugeGroup(ExplicitStateSpace(['T0']))
+        g2 = ggrp.UnitaryGaugeGroup(QubitSpace(1), 'pp')
+        self.gg = ggrp.DirectSumUnitaryGroup((g1, g2), 'std')
+
+
+class U1GroupTester(GaugeGroupBase, BaseCase):
+    n_params = 1
+    element_type = ggrp.U1GroupElement
+    HAS_DERIV_WRT_PARAMS = False
+
+    def setUp(self):
+        GaugeGroupBase.setUp(self)
+        self.gg = ggrp.U1Group()
+
+    def test_identity_transform(self):
+        el = self.gg.compute_element(np.array([0.0]))
+        self.assertArraysAlmostEqual(el.transform_matrix, np.array([[1.0 + 0.0j]]))
+
+    def test_transform_matrix_is_unitary(self):
+        el = self.gg.compute_element(np.array([1.2]))
+        M = el.transform_matrix
+        self.assertArraysAlmostEqual(M @ M.conj().T, np.eye(1, dtype=complex))
+
+    def test_angle_wrapping(self):
+        angle = 0.5
+        el = self.gg.compute_element(self.gg.initial_params)
+        el.from_vector(np.array([angle]))
+        mx1 = el.transform_matrix.copy()
+        el.from_vector(np.array([angle + 2 * np.pi]))
+        mx2 = el.transform_matrix.copy()
+        self.assertArraysAlmostEqual(mx1, mx2)
+
+    def test_inverse_gives_identity(self):
+        el = self.gg.compute_element(np.array([0.7]))
+        product = el.transform_matrix @ el.inverse().transform_matrix
+        self.assertArraysAlmostEqual(product, np.eye(1, dtype=complex))

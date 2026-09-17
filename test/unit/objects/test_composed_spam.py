@@ -18,7 +18,7 @@ import pygsti.modelmembers.states as sv
 # Is the composed SPAM vec equivalent to applying each component separately?
 class ComposedSpamvecBase(object):
     base_prep_vec = sv.ComputationalBasisState([0], 'pp', 'default')
-    base_noise_op = op.StaticStandardOp('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
+    base_noise_op = op.StaticArbitraryOp.from_standard_gate_name('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
     base_povm = pv.ComputationalBasisPOVM(1, 'default') # Z-basis measurement
     expected_out = ld.OutcomeLabelDict([(('0',), 0.5), (('1',), 0.5)])
 
@@ -47,12 +47,12 @@ class ComposedSpamvecBase(object):
         indep_mdl['rho0'] = pure_vec
         indep_mdl['G0'] = noise_op
         indep_mdl['Mdefault'] = self.base_povm
-        indep_mdl.num_params  # triggers paramvec rebuild
-        
+        indep_mdl._rebuild_paramvec()  # trigger paramvec rebuild directly.
+
         composed_mdl = ExplicitOpModel(['Q0'], evotype='default')
         composed_mdl['rho0'] = self.vec
         composed_mdl['Mdefault'] = self.base_povm
-        composed_mdl.num_params  # triggers paramvec rebuild
+        composed_mdl._rebuild_paramvec()  # trigger paramvec rebuild directly.
         
         # Sanity check
         indep_circ = Circuit(['rho0', 'G0', 'Mdefault'])
@@ -144,7 +144,7 @@ class FullDenseComposedSpamvecTester(MutableComposedSpamvecBase, BaseCase):
 # Is the composed POVM equivalent to applying each component separately?
 class ComposedPovmBase(object):
     base_prep = sv.ComputationalBasisState([0], 'pp', 'default') # 0 state prep
-    base_noise_op = op.StaticStandardOp('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
+    base_noise_op = op.StaticArbitraryOp.from_standard_gate_name('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
     base_povm = pv.ComputationalBasisPOVM(1, 'default') # Z-basis measurement
     expected_out = ld.OutcomeLabelDict([(('0',), 0.5), (('1',), 0.5)])
     
@@ -167,7 +167,7 @@ class ComposedPovmBase(object):
         indep_mdl['rho0'] = self.base_prep
         indep_mdl['G0'] = noise_op.copy()
         indep_mdl['Mdefault'] = pure_povm
-        indep_mdl._clean_paramvec()
+        indep_mdl._rebuild_paramvec()
         
         composed_mdl = ExplicitOpModel(['Q0'], evotype='default')
         composed_mdl['rho0'] = self.base_prep

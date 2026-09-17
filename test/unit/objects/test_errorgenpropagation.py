@@ -7,6 +7,7 @@ from pygsti.models.modelconstruction import create_crosstalk_free_model, create_
 from pygsti.baseobjs import Label, BuiltinBasis, QubitSpace, CompleteElementaryErrorgenBasis, QubitGraph
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel, LocalElementaryErrorgenLabel
 from pygsti.tools import errgenproptools as _eprop
+from pygsti.tools import errgenpolytools as _epoly
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from pygsti.tools.matrixtools import print_mx
 from itertools import product
@@ -14,6 +15,7 @@ from math import floor
 from pygsti.modelpacks import smq2Q_XYCPHASE
 import numpy as np
 import stim
+import unittest
 
 
 class ErrorgenPropTester(BaseCase):
@@ -27,8 +29,8 @@ class ErrorgenPropTester(BaseCase):
         self.circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
         self.circuit_length_1 = create_random_circuit(pspec, 1, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
         typ = 'H'
-        max_stochastic = {'S': .0005, 'H': 0, 'H+S': .0001}
-        max_hamiltonian = {'S': 0, 'H': .00005, 'H+S': .0001}
+        max_stochastic = {'S': 0.0005, 'H': 0, 'H+S': 0.0001}
+        max_hamiltonian = {'S': 0, 'H': 0.00005, 'H+S': 0.0001}
         max_strengths = {1: {'S': max_stochastic[typ], 'H': max_hamiltonian[typ]},
                         2: {'S': 3*max_stochastic[typ], 'H': 3*max_hamiltonian[typ]}
                         }
@@ -47,11 +49,11 @@ class ErrorgenPropTester(BaseCase):
 
     def test_approx_propagation_probabilities_BCH(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
-        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1)
-        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2)
-        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3)
-        probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4)
-        probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5)
+        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='pairwise')
+        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='pairwise')
+        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='pairwise')
+        probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4, bch_mode='pairwise')
+        probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5, bch_mode='pairwise')
         probabilities_forward_simulation = probabilities_fwdsim(self.error_model, self.circuit)
 
         #use a much looser constraint on the agreement between the BCH results and forward simulation. Mostly testing to catch things exploding.
@@ -70,6 +72,26 @@ class ErrorgenPropTester(BaseCase):
 
         #also assert that the TVDs get smaller in general as you go up in order.
         self.assertTrue((TVD_order_1>TVD_order_2) and (TVD_order_2>TVD_order_3) and (TVD_order_3>TVD_order_4) and (TVD_order_4>TVD_order_5))
+        
+    def test_approx_propagation_probabilities_magnus(self):
+        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
+        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='magnus')
+        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='magnus')
+        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='magnus')
+        probabilities_forward_simulation = probabilities_fwdsim(self.error_model, self.circuit)
+
+        #use a much looser constraint on the agreement between the BCH results and forward simulation. Mostly testing to catch things exploding.
+        TVD_order_1 = np.linalg.norm(probabilities_BCH_order_1 - probabilities_forward_simulation, ord=1)
+        TVD_order_2 = np.linalg.norm(probabilities_BCH_order_2 - probabilities_forward_simulation, ord=1)
+        TVD_order_3 = np.linalg.norm(probabilities_BCH_order_3 - probabilities_forward_simulation, ord=1)
+        
+        #loose bound is just to make sure nothing exploded.
+        self.assertTrue(TVD_order_1 < 1e-2)
+        self.assertTrue(TVD_order_2 < 1e-2)
+        self.assertTrue(TVD_order_3 < 1e-2)
+
+        #also assert that the TVDs get smaller in general as you go up in order.
+        self.assertTrue((TVD_order_1>TVD_order_2) and (TVD_order_2>TVD_order_3))
         
     def test_eoc_error_channel(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
@@ -97,32 +119,18 @@ class ErrorgenPropTester(BaseCase):
         assert errorgen_input_output_map[(_LSE('S', (stim.PauliString("+X___"),)), 2)] == (_LSE('S', (stim.PauliString("+Z___"),)),  1.0)
         assert errorgen_input_output_map[(_LSE('H', (stim.PauliString("+X___"),)), 3)] == (_LSE('H', (stim.PauliString("+Z___"),)), -1.0)
 
-    def test_errorgen_gate_contributors(self):
-        error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
-        test_1 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XIII']), self.circuit, 1, include_spam=True) 
-        assert test_1 == [Label(('Gypi2', 0))]
-    
-        test_2 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IYII']), self.circuit, 2, include_spam=False) 
-        assert test_2 == [Label(('Gypi2', 1))]
-
-        test_3 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIIX']), self.circuit, 3, include_spam=True) 
-        assert test_3 == [Label(('Gxpi2', 3))]
-
-        test_4 = error_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IIYX']), self.circuit, 4, include_spam=True) 
-        assert test_4 == [Label(('Gcphase', 2, 3))]
-
     def test_explicit_model(self):
         
         target_model = smq2Q_XYCPHASE.target_model('full TP')
         noisy_model = target_model.copy()
-        noisy_model = noisy_model.rotate(max_rotate = .01)
+        noisy_model = noisy_model.rotate(max_rotate = 0.01)
         noisy_model.set_all_parameterizations('GLND')
         errorgen_propagator = ErrorGeneratorPropagator(noisy_model)
         circuit_2Q = list(smq2Q_XYCPHASE.create_gst_experiment_design(4).all_circuits_needing_data)[-1]
 
         #make sure that the various methods don't die.
         propagated_errorgens = errorgen_propagator.propagate_errorgens(circuit_2Q)
-        gate_contributors = errorgen_propagator.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['XI']), circuit_2Q, 1, include_spam=True) 
+        gate_contributors = _epoly.errorgen_gate_contributors(noisy_model, LocalElementaryErrorgenLabel('H', ['XI']), circuit_2Q, 1, include_spam=True) 
 
     def test_cloud_crosstalk_model(self):
         oq=['Gxpi2','Gypi2','Gzpi2']
@@ -140,7 +148,7 @@ class ErrorgenPropTester(BaseCase):
         mdl_cloudnoise = create_cloud_crosstalk_model(ps, lindblad_error_coeffs=lindblad_error_coeffs, errcomp_type="errorgens")
         errorgen_prop=ErrorGeneratorPropagator(mdl_cloudnoise)
         propagated_errorgens = errorgen_prop.propagate_errorgens(self.circuit)
-        gate_contributors = errorgen_prop.errorgen_gate_contributors(LocalElementaryErrorgenLabel('H', ['IZZI']), self.circuit, 1, include_spam=True) 
+        gate_contributors = _epoly.errorgen_gate_contributors(mdl_cloudnoise, LocalElementaryErrorgenLabel('H', ['IZZI']), self.circuit, 1, include_spam=True) 
 
 class LocalStimErrorgenLabelTester(BaseCase):
     def setUp(self):
@@ -170,13 +178,138 @@ class LocalStimErrorgenLabelTester(BaseCase):
         propagated_lse = lse.propagate_error_gen_tableau(self.tableau, 1)
         self.assertEqual(propagated_lse, (_LSE('S', [stim.PauliString('ZI')]), 1))
 
+class FixedLayerErrorgenPropTester(BaseCase):
+    """Coverage for ``ErrorGeneratorPropagator(fixed_errorgen_layer=...)`` construction,
+    validation, SPAM layer counts, copy/aliasing behavior, and the (currently broken)
+    matrix output path in fixed-layer mode.
+    """
+
+    def setUp(self):
+        # a 2-qubit local-label fixed error generator layer
+        self.fixed_local = {
+            LocalElementaryErrorgenLabel('H', ['XX']): 0.01,
+            LocalElementaryErrorgenLabel('S', ['ZZ']): 0.02,
+        }
+        self.empty_circuit = Circuit([], line_labels=(0, 1))
+        self.two_layer_circuit = Circuit([[('Gxpi2', 0)], [('Gxpi2', 1)]], line_labels=(0, 1))
+
+    # ------------------------------------------------------------------
+    # construction + label casting
+    # ------------------------------------------------------------------
+
+    def test_construct_with_local_labels_casts_to_lse(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        self.assertIsNone(prop.model)
+        # keys are cast to LocalStimErrorgenLabel, rates preserved.
+        self.assertTrue(all(isinstance(k, _LSE) for k in prop.fixed_errorgen_layer))
+        self.assertEqual(prop.fixed_errorgen_layer[_LSE('H', [stim.PauliString('XX')])], 0.01)
+        self.assertEqual(prop.fixed_errorgen_layer[_LSE('S', [stim.PauliString('ZZ')])], 0.02)
+
+    def test_construct_with_global_labels_int_state_space(self):
+        fixed_global = {GlobalElementaryErrorgenLabel('H', ['XX'], (0, 1)): 0.01}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_global, state_space_labels=2)
+        self.assertEqual(list(prop.fixed_errorgen_layer.keys()), [_LSE('H', [stim.PauliString('XX')])])
+
+    def test_construct_with_global_labels_list_state_space(self):
+        fixed_global = {GlobalElementaryErrorgenLabel('H', ['XX'], (0, 1)): 0.01}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_global, state_space_labels=[0, 1])
+        self.assertEqual(list(prop.fixed_errorgen_layer.keys()), [_LSE('H', [stim.PauliString('XX')])])
+
+    # ------------------------------------------------------------------
+    # constructor validation
+    # ------------------------------------------------------------------
+
+    def test_cannot_specify_both_model_and_fixed_layer(self):
+        model = smq2Q_XYCPHASE.target_model('full TP')
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator(model=model, fixed_errorgen_layer=self.fixed_local)
+
+    def test_must_specify_model_or_fixed_layer(self):
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator()
+
+    def test_global_labels_require_state_space_labels(self):
+        fixed_global = {GlobalElementaryErrorgenLabel('H', ['XX'], (0, 1)): 0.01}
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator(fixed_errorgen_layer=fixed_global)
+
+    def test_mixed_width_labels_raise(self):
+        mixed = {
+            LocalElementaryErrorgenLabel('H', ['XX']): 0.01,
+            LocalElementaryErrorgenLabel('S', ['Z']): 0.02,
+        }
+        with self.assertRaises(AssertionError):
+            ErrorGeneratorPropagator(fixed_errorgen_layer=mixed)
+
+    # ------------------------------------------------------------------
+    # construct_errorgen_layers behavior
+    # ------------------------------------------------------------------
+
+    def test_circuit_width_mismatch_raises(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)  # 2-qubit support
+        three_qubit_circuit = Circuit([], line_labels=(0, 1, 2))
+        with self.assertRaises(AssertionError):
+            prop.construct_errorgen_layers(three_qubit_circuit, 3, include_spam=True)
+
+    def test_spam_layer_counts(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        # empty circuit: 0 layers, +2 for spam.
+        self.assertEqual(len(prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True)), 2)
+        self.assertEqual(len(prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=False)), 0)
+        # depth-2 circuit: 2 layers, +2 for spam.
+        self.assertEqual(len(prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=True)), 4)
+        self.assertEqual(len(prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=False)), 2)
+
+    def test_each_layer_matches_fixed_layer(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        layers = prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=True)
+        for layer in layers:
+            self.assertEqual(layer, prop.fixed_errorgen_layer)
+
+    def test_layers_are_independent_copies(self):
+        # the per-layer .copy() must keep layers (and the stored fixed layer) from aliasing.
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        layers = prop.construct_errorgen_layers(self.two_layer_circuit, 2, include_spam=True)
+        key = next(iter(layers[0]))
+        layers[0][key] = 999.0
+        self.assertNotEqual(layers[1][key], 999.0)
+        self.assertNotEqual(prop.fixed_errorgen_layer[key], 999.0)
+
+    def test_empty_fixed_layer_constructs_empty_layers(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer={})
+        self.assertEqual(prop.fixed_errorgen_layer, {})
+        layers = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True)
+        self.assertEqual(layers, [{}, {}])
+
+    def test_fixed_rate_overrides_all_rates(self):
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        # fixed_rate=None keeps the stored rates.
+        default_layers = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True, fixed_rate=None)
+        self.assertEqual(set(default_layers[0].values()), {0.01, 0.02})
+        # fixed_rate=1 sets every rate to 1.
+        ones = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True, fixed_rate=1)
+        self.assertEqual(set(ones[0].values()), {1})
+        # fixed_rate=0 sets every rate to 0 (the `is not None` behavior, not falsy fall-through).
+        zeros = prop.construct_errorgen_layers(self.empty_circuit, 2, include_spam=True, fixed_rate=0)
+        self.assertEqual(set(zeros[0].values()), {0})
+        self.assertEqual(len(zeros[0]), len(prop.fixed_errorgen_layer))
+
+
+    def test_eoc_channel_fixed_errorgen(self):
+        #confirm dense EOC channel array works with fixed error gener
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=self.fixed_local)
+        channel = prop.eoc_error_channel(self.empty_circuit)
+        self.assertEqual(channel.shape, (4 ** 2, 4 ** 2))
+
+
 #Helper Functions:
-def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14):
+def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch=False, bch_order=1, truncation_threshold=1e-14, bch_mode='magnus'):
     #get the eoc error channel, and the process matrix for the ideal circuit:
     if use_bch:
         eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True, use_bch=use_bch,
                                                         bch_kwargs={'bch_order':bch_order,
-                                                                    'truncation_threshold':truncation_threshold})
+                                                                    'truncation_threshold':truncation_threshold,
+                                                                    'mode':bch_mode})
     else:
         eoc_channel = error_propagator.eoc_error_channel(circuit, include_spam=True)
     ideal_channel = target_model.sim.product(circuit)
@@ -188,7 +321,7 @@ def probabilities_errorgen_prop(error_propagator, target_model, circuit, use_bch
     for i, effect in enumerate(ideal_meas.values()):
         dense_effect = effect.to_dense().copy()
         dense_prep = ideal_prep.to_dense().copy()
-        prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1,len(dense_effect))), eoc_channel, ideal_channel, dense_prep.reshape((len(dense_prep),1))])
+        prob_vec[i] = np.linalg.multi_dot([dense_effect.reshape((1, -1)), eoc_channel, ideal_channel, dense_prep.reshape((-1, 1))]).item()
     return prob_vec
 
 def probabilities_fwdsim(noise_model, circuit):

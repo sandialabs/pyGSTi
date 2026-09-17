@@ -100,7 +100,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
 
                         #Now add these outcomes to `expanded_nospam_circuit_outcomes` - note that multiple "unique_i"'s
                         # may exist for the same expanded & without-spam circuit (exp_nospam_c) and so we need to
-                        # keep track of a list of unique_i indices for each circut and spam tuple below.
+                        # keep track of a list of unique_i indices for each circuit and spam tuple below.
                         if exp_nospam_c not in _expanded_nospam_circuit_outcomes:
                             _expanded_nospam_circuit_outcomes[exp_nospam_c] = {st:(outcome, [unique_i]) for st, outcome in zip(spam_tuples, outcomes)}
                         else:
@@ -261,7 +261,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         A 1- or 2-tuple of integers specifying how many parameter-block processors are
         used when dividing the physical processors into a grid.  The first and second
         elements correspond to counts for the first and second parameter dimensions,
-        respecively.
+        respectively.
 
     param_dimensions : tuple, optional
         The number of parameters along each parameter dimension.  Can be an
@@ -298,7 +298,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         #    - heuristically find groups of circuits that meet criteria
         # 3. separately create a tree of no-spam expanded circuits originating from each group => self.atoms
         # 4. assign "cache" and element indices so that a) all elements of a tree are contiguous
-        #    and b) elements with the same spam-tuple are continguous.
+        #    and b) elements with the same spam-tuple are contiguous.
         # 5. initialize base class with given per-original-circuit element indices.
 
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)

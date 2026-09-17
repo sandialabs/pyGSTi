@@ -35,7 +35,8 @@ class FullTPOp(_DenseOperator, _Torchable):
     An operation matrix that is fully parameterized except for
     the first row, which is frozen to be [1 0 ... 0] so that the action
     of the operation, when interpreted in the Pauli or Gell-Mann basis, is
-    trace preserving (TP).
+    trace preserving (TP). Bases other than Pauli or Gell-Mann are supported
+    only if their first element is the identity matrix.
 
     Parameters
     ----------
@@ -43,7 +44,7 @@ class FullTPOp(_DenseOperator, _Torchable):
         a square 2D array-like or LinearOperator object representing the operation action.
         The shape of m sets the dimension of the operation.
 
-    basis : Basis or {'pp','gm','std'} or None
+    basis : Basis or {'pp','gm'} or None
         The basis used to construct the Hilbert-Schmidt space representation
         of this state as a super-operator.  If None, certain functionality,
         such as access to Kraus operators, will be unavailable.
@@ -71,8 +72,12 @@ class FullTPOp(_DenseOperator, _Torchable):
         _DenseOperator.__init__(self, mx, basis, evotype, state_space)
         assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
         assert(isinstance(self._ptr, _ProtectedArray))
-        self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)],
-                                    dtype=object)
+        self._paramlbls = _np.array(
+            ["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)], dtype=object
+        )
+        if self._basis is not None:
+            assert self._basis.first_element_is_identity  # type: ignore
+        return
 
     @property
     def _ptr(self):
@@ -164,14 +169,14 @@ class FullTPOp(_DenseOperator, _Torchable):
         self._ptr_has_changed()  # because _rep.base == _ptr (same memory)
         self.dirty = dirty_value
 
-    def stateless_data(self) -> Tuple[int]:
-        return (self.dim,)
+    def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[int, _torch.Tensor]:
+        t_const = _torch.zeros(size=(1, self.dim), dtype=real_dtype, device=device)
+        t_const[0,0] = 1.0
+        return (self.dim, t_const)
 
     @staticmethod
-    def torch_base(sd: Tuple[int], t_param: _torch.Tensor) -> _torch.Tensor:
-        dim = sd[0]
-        t_const = _torch.zeros(size=(1, dim), dtype=_torch.double)
-        t_const[0,0] = 1.0
+    def torch_base(sd: Tuple[int, _torch.Tensor], t_param: _torch.Tensor) -> _torch.Tensor:
+        dim, t_const = sd
         t_param_mat = t_param.reshape((dim - 1, dim))
         t = _torch.row_stack((t_const, t_param_mat))
         return t

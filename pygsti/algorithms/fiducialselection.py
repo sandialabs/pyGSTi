@@ -468,7 +468,7 @@ def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True
         if assume_clifford:
             #Leverage the fact that we know that the PTMs for clifford circuits
             #should correspond to signed permutation matrices. Take each of the
-            #permuation matrices, flatten them, then get a list of the non-zero
+            #permutation matrices, flatten them, then get a list of the non-zero
             #indices. Then for these non-zero indices construct a second list of
             #the sign of these entries. This should uniquely identify each of the
             #signed permutations.
@@ -528,7 +528,7 @@ def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True
                     trace_split_points.append(unique_count+trace_split_points[i-1])
                 #now split the array
                 split_circs_trace= _np.split(sorted_circs, trace_split_points)
-            #otherwise don't split and set split_circs_trace to a list containting
+            #otherwise don't split and set split_circs_trace to a list containing
             #sorted_circs as a sublist
             else:
                 split_circs_trace = [sorted_circs]
@@ -553,7 +553,7 @@ def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True
                             nonzero_split_points.append(unique_count+nonzero_split_points[i-1])
                     #now split the array
                     split_circs_nonzero= _np.split(sorted_circs_nonzero, nonzero_split_points)
-                #otherwise don't split and set split_circs_nonzero to a list containting
+                #otherwise don't split and set split_circs_nonzero to a list containing
                 #sorted_circs_nonzero as a sublist
                 else:
                     split_circs_nonzero = [sorted_circs_nonzero]
@@ -614,7 +614,7 @@ def create_circuit_cache(model, circuit_list):
         The model (associates operation matrices with operation labels).
 
     ckt_list : list of Circuits
-        Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
+        Full list of all fiducial circuits available for constructing an informationally complete state preparation.
     
     Returns
     -------
@@ -649,7 +649,7 @@ def create_prep_cache(model, available_prep_fid_list, circuit_cache=None):
         The model (associates operation matrices with operation labels).
 
     available_prep_fid_list : list of Circuits
-        Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
+        Full list of all fiducial circuits available for constructing an informationally complete state preparation.
 
     circuit_cache : dict
         dictionary of PTMs for the circuits in the available_prep_fid_list
@@ -694,7 +694,7 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
         The model (associates operation matrices with operation labels).
 
     available_meas_fid_list : list of Circuits
-        Full list of all fiducial circuits avalable for constructing an informationally complete measurements.
+        Full list of all fiducial circuits available for constructing an informationally complete measurements.
         
     circuit_cache : dict
         dictionary of PTMs for the circuits in the available_meas_fid_list
@@ -1308,9 +1308,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
         printer.log("Total number of fiducial sets to be checked is%s"
                     % numFidLists, 1)
         printer.warning("If this is very large, you may wish to abort.")
-#        print "Num bits:", numBits
-#        print "Num Fid Options:", hammingWeight
-        # Now a non auxillary function:
+        # Now a non auxiliary function:
         bitVecMat = build_bitvec_mx(numBits, hammingWeight)
 
         if force_empty:
@@ -1324,7 +1322,6 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
             # If scores are within machine precision, we want the fiducial set
             # that requires fewer total button operations.
             if abs(temp_score - best_score) < 1e-8:
-                #                print "Within machine precision!"
                 bestFidList = []
                 for index, val in enumerate(best_weights):
                     if val == 1:
@@ -1335,8 +1332,6 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
                         tempFidList.append(fid_list[index])
                 tempLen = sum(len(i) for i in tempFidList)
                 bestLen = sum(len(i) for i in bestFidList)
-#                print tempLen, bestLen
-#                print temp_score, best_score
                 if tempLen < bestLen:
                     best_score = temp_score
                     best_weights = weights
@@ -1500,11 +1495,11 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         other objective function can help avoid such minima in different
         circumstances.)
 
-    op_penalty : float, optional (defailt is 0.0)
+    op_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
 
-    l1_penalty : float, optional (defailt is 0.0)
+    l1_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
         
@@ -1667,11 +1662,11 @@ def _find_fiducials_greedy(model, fids_list, prep_or_meas, op_penalty=0.0,
     prep_or_meas : string ("prep" or "meas")
         Are we testing preparation or measurement fiducials?
 
-    op_penalty : float, optional (defailt is 0.0)
+    op_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
 
-    l1_penalty : float, optional (defailt is 0.0)
+    l1_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
         
@@ -1861,11 +1856,10 @@ def construct_compact_evd_cache(model, fids_list, prep_or_meas, fid_cache, eigen
         fid_mat= _np.concatenate(fidArrayList, axis=1)
         fid_mat_gramian = fid_mat@fid_mat.conj().T
         
-        e, U = compact_EVD(fid_mat_gramian, eigenvalue_tolerance)
+        e, U = compact_EVD(fid_mat_gramian, eigenvalue_tolerance, assume_hermitian=True)
         sqrteU_dict[fiducial]= U@_np.diag(_np.sqrt(e))  
         
         #check reconstruction:
-        #print('Norm to reconstruction: ', _np.linalg.norm(fid_mat_gramian- (U@_np.diag(_np.sqrt(e)))@(U@_np.diag(_np.sqrt(e))).conj().T))
     return sqrteU_dict        
     
 def add_penalties_greedy(unpenalized_score, fid_list, l1_penalty=0, op_penalty=0, gate_penalty=None):

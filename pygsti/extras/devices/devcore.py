@@ -11,8 +11,9 @@
 import numpy as _np
 
 import warnings
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 warnings.warn("The pygsti.devices.devcore module is deprecated. See pygsti.extras.devices.experimentaldevice instead.",
-              DeprecationWarning)
+              _pyGSTiDeprecationWarning)
 
 from . import ibmq_algiers      # New system
 from . import ibmq_athens

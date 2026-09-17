@@ -6,23 +6,45 @@ import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-
+from platform import python_version_tuple
 import numpy as np
+import importlib.util
+
+
+py_version_major, py_version_minor = map(int, python_version_tuple()[:2])
+
+__cvxpy_not_importable__ = importlib.util.find_spec('cvxpy') is None
+
+__deap_not_importable__  = importlib.util.find_spec('deap')  is None
+
+__csaps_not_importable__ = importlib.util.find_spec('csaps') is None
 
 
 def needs_cvxpy(fn):
     """Shortcut decorator for skipping tests that require CVXPY"""
-    return unittest.skipIf('SKIP_CVXPY' in os.environ, "skipping cvxpy tests")(fn)
+    cond = __cvxpy_not_importable__ or ('SKIP_CVXPY' in os.environ)
+    return unittest.skipIf(cond, "skipping cvxpy tests")(fn)
 
 
 def needs_deap(fn):
     """Shortcut decorator for skipping tests that require deap"""
-    return unittest.skipIf('SKIP_DEAP' in os.environ, "skipping deap tests")(fn)
+    cond = __deap_not_importable__ or ('SKIP_DEAP' in os.environ)
+    return unittest.skipIf(cond, "skipping deap tests")(fn)
 
 
 def needs_matplotlib(fn):
     """Shortcut decorator for skipping tests that require matplotlib"""
-    return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")(fn)
+    try:
+        import matplotlib
+        return unittest.skipIf('SKIP_MATPLOTLIB' in os.environ, "skipping matplotlib tests")(fn)
+    except ImportError:
+        return unittest.skip('matplotlib is not installed')
+
+
+def needs_csaps(fn):
+    """Shortcut decorator for skipping tests that require CSAPS"""
+    cond = __csaps_not_importable__ or ('SKIP_CSAPS' in os.environ)
+    return unittest.skipIf(cond, "skipping csaps tests")(fn)
 
 
 def with_temp_path(fn):
@@ -116,7 +138,10 @@ class BaseCase(unittest.TestCase):
         """
 
         filename = filename or "temp_file"  # yeah looks random to me
-        with TemporaryDirectory() as tmpdir:
+        kwargs = dict()
+        if py_version_major > 3 or py_version_minor >= 10:
+            kwargs['ignore_cleanup_errors'] = True
+        with TemporaryDirectory(**kwargs) as tmpdir:
             tmp_path = Path(tmpdir) / filename
             # Yield to context with temporary path
             yield str(tmp_path)

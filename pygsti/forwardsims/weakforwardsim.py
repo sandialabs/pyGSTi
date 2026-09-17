@@ -20,7 +20,7 @@ from pygsti.baseobjs import outcomelabeldict as _ld
 class WeakForwardSimulator(_ForwardSimulator):
     """
     A calculator of circuit outcome probabilities from a "weak" forward simulator
-    (i.e. probabilites taken as average frequencies over a number of "shots").
+    (i.e. probabilities taken as average frequencies over a number of "shots").
 
     Due to their ability to only sample outcome probabilities, WeakForwardSimulators
     rely heavily on implementing the _compute_sparse_circuit_outcome_probabilities
@@ -38,7 +38,7 @@ class WeakForwardSimulator(_ForwardSimulator):
         model : Model
             Optional parent Model to be stored with the Simulator
         base_seed: int, optional
-            Base seed for RNG of probabilitic operations during circuit simulation.
+            Base seed for RNG of probabilistic operations during circuit simulation.
             Incremented for every shot such that deterministic seeding behavior can be
             carried out with both serial or MPI execution.
             If not provided, falls back to using time.time() to get a valid seed.

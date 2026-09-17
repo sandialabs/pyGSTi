@@ -14,15 +14,37 @@ except ImportError:
     pymongo = None
     PYMONGO_IMPORTED = False
 
+MONGODB_URI = "mongodb://localhost:27017/"
 
+
+def _mongodb_server_available():
+    """Return True if a MongoDB server is reachable at ``MONGODB_URI``.
+
+    The mongo tests talk to a real server (there is no mongomock in use), so
+    importing ``pymongo`` is not sufficient -- a live server must be running.
+    """
+    if pymongo is None:
+        return False
+    try:
+        # serverSelectionTimeoutMS keeps this fast when nothing is listening.
+        client = pymongo.MongoClient(MONGODB_URI, serverSelectionTimeoutMS=500)
+        client.admin.command('ping')
+        client.close()
+        return True
+    except Exception:
+        return False
+
+
+MONGODB_AVAILABLE = _mongodb_server_available()
+
+
+@unittest.skipUnless(PYMONGO_IMPORTED, "pymongo not installed")
+@unittest.skipUnless(MONGODB_AVAILABLE, "no MongoDB server reachable at %s" % MONGODB_URI)
 class MongoDBTester(BaseCase):
 
     def setUp(self):
-        if pymongo is not None:
-            myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-            self.mydb = myclient["pygsti_unittest_database"]
-        else:
-            self.mydb = None
+        myclient = pymongo.MongoClient(MONGODB_URI)
+        self.mydb = myclient["pygsti_unittest_database"]
 
     @unittest.skipUnless(PYMONGO_IMPORTED, "pymongo not installed")
     def test_mongodb_edesign(self):

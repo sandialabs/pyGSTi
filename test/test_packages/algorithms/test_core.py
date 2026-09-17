@@ -18,7 +18,7 @@ class TestCoreMethods(AlgorithmsBase):
         mdl_lgst_verb = self.runSilent(pygsti.run_lgst, ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=10)
         self.assertAlmostEqual(mdl_lgst.frobeniusdist(mdl_lgst_verb),0)
 
-        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, self.model, {'spam':1.0, 'gates': 1.0}, check_jac=True)
+        mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, self.model, item_weights={'spam':1.0, 'gates': 1.0}, check_jac=True)
         mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
 
 
@@ -31,7 +31,7 @@ class TestCoreMethods(AlgorithmsBase):
         pygsti.data.dataset.Repcount_type = oldType
 
         mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
-        mdl_lgst = pygsti.gaugeopt_to_target(mdl_lgst, self.datagen_gateset, {'spam':1.0, 'gates': 1.0}, check_jac=False)
+        mdl_lgst = pygsti.gaugeopt_to_target(mdl_lgst, self.datagen_gateset, item_weights={'spam':1.0, 'gates': 1.0}, check_jac=False)
         self.assertAlmostEqual( mdl_lgst.frobeniusdist(self.datagen_gateset), 0, places=4)
 
     def test_LGST_1overSqrtN_dependence(self):
@@ -43,7 +43,7 @@ class TestCoreMethods(AlgorithmsBase):
             ds = pygsti.data.simulate_data(my_datagen_gateset, self.lgstStrings, nSamples,
                                                    sample_error='binomial', seed=100)
             mdl_lgst = pygsti.run_lgst(ds, self.fiducials, self.fiducials, self.model, svd_truncate_to=4, verbosity=0)
-            mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, my_datagen_gateset, {'spam':1.0, 'gate': 1.0}, check_jac=True)
+            mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, my_datagen_gateset, item_weights={'spam':1.0, 'gate': 1.0}, check_jac=True)
             diffs.append( my_datagen_gateset.frobeniusdist(mdl_lgst_go) )
 
         diffs = np.array(diffs, 'd')

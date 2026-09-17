@@ -30,7 +30,7 @@ class ReportTable(object):
         Names of default column heading formatters.
 
     custom_header : dict
-        Dictionary of overriden headers.
+        Dictionary of overridden headers.
 
     col_heading_labels : list
         Labels for column headings (tooltips).
@@ -68,7 +68,7 @@ class ReportTable(object):
         formatters : list
             names of default column heading formatters
         custom_header : dict
-            dictionary of overriden headers
+            dictionary of overridden headers
         col_heading_labels : list
             labels for column headings (tooltips)
         confidence_region_info : ConfidenceRegion, optional
@@ -182,7 +182,7 @@ class ReportTable(object):
             allow a table to be automatically sized
 
         fontsize : int
-            override fontsize of a tabel
+            override fontsize of a table
 
         complex_as_polar : bool
             render complex numbers as polars

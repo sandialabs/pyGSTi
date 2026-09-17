@@ -45,7 +45,7 @@ class TestTimedBlock(BaseCase):
 
     def test_timer(self):
 
-        duration = .5
+        duration = 0.5
         timeDict = {}
         with opt.timed_block('time', timeDict):
             sleep(duration)

@@ -13,9 +13,9 @@ Common functions used in scoring germ and fiducial sets.
 from functools import total_ordering
 
 import numpy as _np
+from typing import Literal
 
-
-def list_score(input_array, score_func='all'):
+def list_score(input_array: _np.ndarray, score_func: Literal['all', 'worst']='all') -> float:
     """
     Score an array of eigenvalues. Smaller scores are better.
 
@@ -68,7 +68,7 @@ class CompositeScore():
     eigenvalues (higher `N`) will always compare as less than a score that has
     fewer non-zero eigenvalues (lower `N`), with ties for `N` being resolved by
     comparing the minor score in the straightforward manner (since the non-AC
-    `score` is assumed to be better for lower values).  For bookeeping, the
+    `score` is assumed to be better for lower values).  For bookkeeping, the
     CompositeScore object also separately holds the  number of non-zero eigenvalues,
     as this may not always be recovered from the major part of the score.
 
@@ -84,7 +84,7 @@ class CompositeScore():
         Number of non-zero eigenvalues.
     """
 
-    def __init__(self, major, minor, n):
+    def __init__(self, major: float, minor: float, n: int):
         self.major = major
         self.minor = minor
         self.N = n
@@ -107,13 +107,13 @@ class CompositeScore():
             self.major, self.minor, self.N)
 
 
-def filter_composite_rcl(candidate_scores, alpha):
+def filter_composite_rcl(candidate_scores: CompositeScore, alpha: float):
     """
     Create a restricted candidate list (RCL) based on CompositeScore objects.
 
     Parameters
     ----------
-    candidate_scores : list of CompositScore
+    candidate_scores : list of CompositeScore
         List of scores to be sorted in RCL and not RCL.
 
     alpha : float

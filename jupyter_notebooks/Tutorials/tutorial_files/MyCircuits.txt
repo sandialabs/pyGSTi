@@ -1,4 +1,0 @@
-# Some circuits to import
-{}
-[Gc11:0Gc18:1Gc12:2Gcnot:4:3][Gcnot:1:0Gc22:2Gc23:3Gc22:4][Gc12:0Gcnot:1:2Gc16:3Gc21:4]
-[Gc6:0Gc0:1Gcnot:2:3Gc9:4][Gc4:0Gc20:1Gc11:2Gc13:3Gc17:4][Gc5:0Gc23:1Gc12:2Gcnot:4:3][Gcnot:1:0Gc9:2Gc2:3Gc1:4][Gc15:0Gcnot:1:2Gc11:3Gc2:4][Gcnot:1:0Gc12:2Gc0:3Gc13:4][Gc13:0Gc12:1Gc13:2Gcnot:4:3]

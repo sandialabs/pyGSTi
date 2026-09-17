@@ -1,5 +1,0 @@
-## Columns = DS0 0 count, DS0 1 count, DS1 0 frequency, DS1 count total                                
-{} 0 100 0 100                                                                                                      
-Gx 10 90 0.1 100                                                                                                    
-GxGy 40 60 0.4 100                                                                                                  
-Gx^4 20 80 0.2 100                                                                                                  

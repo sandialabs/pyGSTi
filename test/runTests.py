@@ -12,7 +12,7 @@ from helpers.automation_tools import directory, get_changed_packages
 '''
 Script for running the test suite.
 
-see pyGSTi/doc/repotools/test.md, or try running ./runTests.py -h
+Try running ./runTests.py -h for available options.
 '''
 
 def run_mpi_coverage_tests(coverage_cmd, nproc=4):

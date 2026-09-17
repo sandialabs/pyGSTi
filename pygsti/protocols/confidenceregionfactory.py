@@ -16,11 +16,13 @@ import itertools as _itertools
 import warnings as _warnings
 
 import numpy as _np
+import scipy.linalg as _la
 import scipy.stats as _stats
 
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.models.explicitcalc import P_RANK_TOL
+from pygsti.baseobjs import _compatibility as _compat
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
@@ -64,7 +66,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
     non-gauge space.
 
     Alternative (non-Hessian-based) means of computing confidence intervals
-    are also available, such as by using so-called "linear reponse error bars".
+    are also available, such as by using so-called "linear response error bars".
 
     Parameters
     ----------
@@ -89,7 +91,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
     non_mark_radius_sq : float, optional
         The non-Markovian radius associated with the goodness of fit found
         at the point where `hessian` was computed.  This must be specified
-        whenver `hessian` is, and should be left as `None` when `hessian`
+        whenever `hessian` is, and should be left as `None` when `hessian`
         is not specified.
     """
     collection_name = "pygsti_confidence_region_factories"
@@ -122,7 +124,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         non_mark_radius_sq : float, optional
             The non-Markovian radius associated with the goodness of fit found
             at the point where `hessian` was computed.  This must be specified
-            whenver `hessian` is, and should be left as `None` when `hessian`
+            whenever `hessian` is, and should be left as `None` when `hessian`
             is not specified.
         """
         super().__init__()
@@ -541,7 +543,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         model optimizations needed to compute error bars on quantities.
 
         'linear response' mode obtains elements of the Hessian via the
-        linear response of a "forcing term".  This requres a likelihood
+        linear response of a "forcing term".  This requires a likelihood
         optimization for *every* computed error bar, but avoids pre-
         computation of the entire Hessian matrix, which can be
         prohibitively costly on large parameter spaces.
@@ -654,16 +656,21 @@ class ConfidenceRegionFactory(_NicelySerializable):
         # to transform H -> H' in another coordinate system v -> w = B @ v:
         # v.T @ H @ v = some 2nd deriv = v.T @ B.T @ H' @ B @ v in another basis
         # so H' = invB.T @ H @ invB
-        assert(_np.allclose(hessian, hessian.T))
-        invB = _np.concatenate([nongauge_space, gauge_space], axis=1)  # takes (nongauge,guage) -> orig coords
+        TOL = 1e-7
+        assert(_la.norm(hessian.imag) == 0)
+        sym_err_abs = _la.norm(hessian - hessian.T)
+        sym_err_rel = sym_err_abs / _la.norm(hessian)
+        assert(sym_err_rel < TOL)
+        hessian += hessian.T
+        hessian /= 2
+        invB = _np.concatenate([nongauge_space, gauge_space], axis=1)  # takes (nongauge,gauge) -> orig coords
         B = _np.linalg.inv(invB)  # takes orig -> (nongauge,gauge) coords
         Hprime = invB.T @ hessian @ invB
-        #assert(_np.allclose(Hprime, Hprime.T))  # doesn't handle large magnituge Hessians well
-        assert(_np.linalg.norm(Hprime - Hprime.T) / _np.linalg.norm(Hprime) < 1e-7)
+        assert(_la.norm(Hprime.imag) == 0)
 
         if gradient is not None:  # Check that Hprime is block-diagonal -- off-diag should be ~O(gradient)
             coupling = Hprime[0:nongauge_space.shape[1], nongauge_space.shape[1]:]
-            if _np.linalg.norm(coupling) / (1e-6 + _np.linalg.norm(gradient)) > 5:
+            if _np.linalg.norm(coupling) / (10*TOL + _np.linalg.norm(gradient)) > 5:
                 _warnings.warn("Gauge-nongauge mixed partials have unusually high magnitude: \n"
                                + "|off-diag blk| = %.2g should be ~ |gradient| = %.2g" %
                                (_np.linalg.norm(coupling), _np.linalg.norm(gradient)))
@@ -816,11 +823,11 @@ class ConfidenceRegionFactoryView(object):
 
     n_non_gauge_params : int
         The numbers of non-gauge parameters.  This could be computed from `model`
-        but can be passed in to save compuational time.
+        but can be passed in to save computational time.
 
     n_gauge_params : int
         The numbers of gauge parameters.  This could be computed from `model`
-        but can be passed in to save compuational time.
+        but can be passed in to save computational time.
     """
 
     def __init__(self, model, inv_projected_hessian, mlgst_params, confidence_level,
@@ -861,7 +868,7 @@ class ConfidenceRegionFactoryView(object):
 
         n_non_gauge_params, n_gauge_params : int
             The numbers of non-gauge and gauge parameters, respectively.  These could be
-            computed from `model` but they're passed in to save compuational time.
+            computed from `model` but they're passed in to save computational time.
         """
 
         # Scale projected Hessian for desired confidence level => quadratic form for confidence region assume hessian
@@ -1013,6 +1020,58 @@ class ConfidenceRegionFactoryView(object):
             raise ValueError(("Invalid item label (%s) for computing" % label)
                              + "profile likelihood confidence intervals")
 
+    def compute_grad_f(self, fn_obj, f0, nParams, eps=1e-7):
+        #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
+        gradF = _create_empty_grad_f(f0, nParams)
+
+        fn_dependencies = fn_obj.list_dependencies()
+        if 'all' in fn_dependencies:
+            fn_dependencies = ['all']  # no need to do anything else
+        if 'spam' in fn_dependencies:
+            fn_dependencies = [("prep", l) for l in self.model.preps.keys()] + \
+                              [("povm", l) for l in self.model.povms.keys()]
+
+        #elements of fn_dependencies are either 'all', 'spam', or
+        # the "type:label" of a specific gate or spam vector.
+        all_gpindices = []
+        mdl = self.model
+        for dependency in fn_dependencies:
+            if dependency == 'all':
+                all_gpindices.extend(range(mdl.num_params))
+            else:
+                # copy objects because we add eps to them below
+                typ, lbl = dependency
+                if isinstance(mdl, _ExplicitOpModel):
+                    if typ == "gate": modelObj = mdl.operations[lbl]
+                    elif typ == "prep": modelObj = mdl.preps[lbl]
+                    elif typ == "povm": modelObj = mdl.povms[lbl]
+                    elif typ == "instrument": modelObj = mdl.instruments[lbl]
+                    else: raise ValueError("Invalid dependency type: %s" % typ)
+                else:
+                    if typ == "gate": modelObj = mdl.operation_blks['gates'][lbl]
+                    elif typ == "prep": modelObj = mdl.prep_blks['layers'][lbl]
+                    elif typ == "povm": modelObj = mdl.povm_blks['layers'][lbl]
+                    elif typ == "instrument": modelObj = mdl.instrument_blks['layers'][lbl]
+                    else: raise ValueError("Invalid dependency type: %s" % typ)
+                all_gpindices.extend(modelObj.gpindices_as_array())
+        all_gpindices = sorted(list(set(all_gpindices)))  # remove duplicates
+        
+        vec0 = mdl.to_vector()
+        for igp in all_gpindices:  # iterate over "global" Model-parameter indices
+            vec = vec0.copy(); vec[igp] += eps
+            mdl.from_vector(vec)
+            f = fn_obj.evaluate_nearby(mdl)
+            if isinstance(f0, dict):  # special behavior for dict: process each item separately
+                for ky in gradF:
+                    gradF[ky][igp] = (f[ky] - f0[ky]) / eps
+            else:
+                assert(_np.linalg.norm(_np.imag(f - f0)) < 1e-12 or _np.iscomplexobj(gradF)
+                       ), "gradF seems to be the wrong type!"
+                gradF[igp] = _np.real_if_close(f - f0) / eps
+        mdl.from_vector(vec0)
+        
+        return gradF
+
     def compute_confidence_interval(self, fn_obj, eps=1e-7,
                                     return_fn_val=False, verbosity=0):
         """
@@ -1055,56 +1114,7 @@ class ConfidenceRegionFactoryView(object):
         f0 = fn_obj.evaluate(self.model)  # function value at "base point"
 
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
-        gradF = _create_empty_grad_f(f0, nParams)
-
-        fn_dependencies = fn_obj.list_dependencies()
-        if 'all' in fn_dependencies:
-            fn_dependencies = ['all']  # no need to do anything else
-        if 'spam' in fn_dependencies:
-            fn_dependencies = [("prep", l) for l in self.model.preps.keys()] + \
-                              [("povm", l) for l in self.model.povms.keys()]
-
-        #elements of fn_dependencies are either 'all', 'spam', or
-        # the "type:label" of a specific gate or spam vector.
-        all_gpindices = []
-        for dependency in fn_dependencies:
-            mdl = self.model.copy()  # copy that will contain the "+eps" model
-
-            if dependency == 'all':
-                all_gpindices.extend(range(mdl.num_params))
-            else:
-                # copy objects because we add eps to them below
-                typ, lbl = dependency
-                if isinstance(mdl, _ExplicitOpModel):
-                    if typ == "gate": modelObj = mdl.operations[lbl]
-                    elif typ == "prep": modelObj = mdl.preps[lbl]
-                    elif typ == "povm": modelObj = mdl.povms[lbl]
-                    elif typ == "instrument": modelObj = mdl.instruments[lbl]
-                    else: raise ValueError("Invalid dependency type: %s" % typ)
-                else:
-                    if typ == "gate": modelObj = mdl.operation_blks['gates'][lbl]
-                    elif typ == "prep": modelObj = mdl.prep_blks['layers'][lbl]
-                    elif typ == "povm": modelObj = mdl.povm_blks['layers'][lbl]
-                    elif typ == "instrument": modelObj = mdl.instrument_blks['layers'][lbl]
-                    else: raise ValueError("Invalid dependency type: %s" % typ)
-                all_gpindices.extend(modelObj.gpindices_as_array())
-
-        vec0 = mdl.to_vector()
-        all_gpindices = sorted(list(set(all_gpindices)))  # remove duplicates
-
-        for igp in all_gpindices:  # iterate over "global" Model-parameter indices
-            vec = vec0.copy(); vec[igp] += eps
-            mdl.from_vector(vec)
-            mdl.basis = self.model.basis  # we're still in the same basis (maybe needed by fn_obj)
-
-            f = fn_obj.evaluate_nearby(mdl)
-            if isinstance(f0, dict):  # special behavior for dict: process each item separately
-                for ky in gradF:
-                    gradF[ky][igp] = (f[ky] - f0[ky]) / eps
-            else:
-                assert(_np.linalg.norm(_np.imag(f - f0)) < 1e-12 or _np.iscomplexobj(gradF)
-                       ), "gradF seems to be the wrong type!"
-                gradF[igp] = _np.real_if_close(f - f0) / eps
+        gradF = self.compute_grad_f(fn_obj, f0, nParams, eps)
 
         return self._compute_return_from_grad_f(gradF, f0, return_fn_val, verbosity)
 
@@ -1142,10 +1152,10 @@ class ConfidenceRegionFactoryView(object):
         # to that expected by _do_mlgst_base, which is
         # (flat_f0_size, num_params)
         if len(grad_f.shape) == 1:
-            grad_f.shape = (1, grad_f.shape[0])
+            grad_f = _compat.reshape_no_copy(grad_f, (1, grad_f.shape[0]))
         else:
             flatDim = _np.prod(f0.shape)
-            grad_f.shape = (grad_f.shape[0], flatDim)
+            grad_f = _compat.reshape_no_copy(grad_f, (grad_f.shape[0], flatDim))
             grad_f = _np.transpose(grad_f)  # now shape == (flatDim, num_params)
         assert(len(grad_f.shape) == 2)
 
@@ -1159,17 +1169,17 @@ class ConfidenceRegionFactoryView(object):
         _, bestGS = _alg.core.run_gst_fit_simple(**mlgst_args)
         bestGS = _alg.gaugeopt_to_target(bestGS, self.model)  # maybe more params here?
         norms = _np.array([_np.dot(grad_f[i], grad_f[i]) for i in range(grad_f.shape[0])])
-        delta2 = _np.abs(_np.dot(grad_f, bestGS.to_vector() - self.model.to_vector())
-                         * _np.where(norms > 1e-10, 1.0 / norms, 0.0))
+        with _np.errstate(divide='ignore', invalid='ignore'):
+            delta2 = _np.abs(_np.dot(grad_f, bestGS.to_vector() - self.model.to_vector())
+                            * _np.where(norms > 1e-10, 1.0 / norms, 0.0))
         delta2 *= self._C1  # scaling appropriate for confidence level
         delta = _np.sqrt(delta2)  # error^2 -> error
 
         if hasattr(f0, 'shape'):
-            delta.shape = f0.shape  # reshape to un-flattened
+            delta = _compat.reshape_no_copy(delta, f0.shape)  # reshape to un-flattened
         else:
             assert(isinstance(f0, float))
-            delta = float(delta)
-
+            delta = delta.item()
         return delta
 
     def _compute_df_from_grad_f_hessian(self, grad_f, f0, verbosity):

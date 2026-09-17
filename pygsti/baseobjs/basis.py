@@ -9,12 +9,19 @@ Defines the Basis object and supporting functions
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
+from __future__ import annotations
+# Used to allow certain type annotations. (e.g. class method returning instance of the class).
 
+from typing import Sequence
 import copy as _copy
 import itertools as _itertools
+import re as _re
 import warnings as _warnings
 from functools import lru_cache
-from typing import Union, Tuple, List
+from typing import (
+    Union,
+    Optional,
+)
 
 import numpy as _np
 import scipy.sparse as _sps
@@ -51,6 +58,49 @@ def _sparse_equal(a, b, atol=1e-8):
     return _np.allclose(V1, V2, atol=atol)
 
 
+def default_basis_for_udims(udims: Sequence[int]):
+    """
+    Pick a default basis spec for a system whose per-qudit Hilbert-space dimensions
+    are given by `udims`.
+
+    Qubits (dimension 2) get 'pp' -- the entrenched pyGSTi convention, and one that
+    downstream code special-cases -- and every other dimension gets 'gm', which is
+    valid for all d. Note that a dimension-4 entry means a single ququart (and hence
+    'gm'); callers who mean two qubits should pass ``[2, 2]``, not ``[4]``.
+
+    Returns a basis-name string when every qudit has the same dimension, because a
+    name is dimension-agnostic and resolves correctly at every downstream use site
+    (e.g. when a single-qudit sub-op needs the per-qudit basis rather than the full
+    product basis). Only genuinely mixed-dimension systems return an explicit
+    `TensorProdBasis`.
+    """
+    udim_to_name = {2: 'pp'}
+    if all(u == udims[0] for u in udims):
+        return udim_to_name.get(udims[0], 'gm')
+    return TensorProdBasis([(udim_to_name.get(u, 'gm'), u * u) for u in udims])
+
+
+_EYE_LABEL_REGEX = _re.compile(r'^(?:I|C\[I+\])+$')
+# ^ Matches labels that can denote (a projection of) the identity: any concatenation of
+#   'I' characters and 'C[I...I]' groups. The 'C[I...I]' form is the convention used by
+#   leakage-implying bases (see pygsti.leakage); bare 'I' runs cover ordinary bases like
+#   'pp' and 'gm', legacy leakage bases labeled before the 'C[...]' convention existed,
+#   and the per-factor segments that TensorProdBasis concatenates into its labels
+#   (e.g. 'IC[I]' for pp ⊗ l2p1).
+
+
+def _eye_label(basis) -> str:
+    assert hasattr(basis, 'labels')
+    candidates = [ell for ell in basis.labels if _EYE_LABEL_REGEX.match(ell)]
+    if len(candidates) == 0:
+        return ''
+    # Prefer the candidate with the most 'I' characters (ties broken by string length).
+    # On legacy bases, whose candidates are all-'I' strings, this reduces to the old
+    # rule of taking the longest such label.
+    lbl = max(candidates, key=lambda ell: (ell.count('I'), len(ell)))
+    return lbl
+
+
 class Basis(_NicelySerializable):
     """
     An ordered set of labeled matrices/vectors.
@@ -72,10 +122,10 @@ class Basis(_NicelySerializable):
     of the elements (such as viewing them as matrices) that can
     be helpful for their display and interpretation.  The elements
     are also sometimes referred to as the "natural elements" because
-    they represent how to display the element in a natrual way.  A
+    they represent how to display the element in a natural way.  A
     non-simple basis occurs when vector_elements need to be stored as
     elements in a larger "embedded" way so that these elements can be
-    displayed and interpeted naturally.
+    displayed and interpreted naturally.
 
     A second important note is that there is assumed to be some underlying
     "standard" basis underneath all the bases in pyGSTi.  The elements in
@@ -94,14 +144,14 @@ class Basis(_NicelySerializable):
     matrices.  The `size` of this basis is `2`, as there are two elements
     (and two vector elements).  Since vector elements are the length-4
     flattened Pauli matrices, the dimension (`dim`) is `4`.  Since the
-    elements are 2x2 Pauli matrices, the `elshape` is `(2,2)`.
+    elements are 2x2 Pauli matrices, the `elshape` is `(2, 2)`.
 
     As another example consider a basis which spans all the diagonal
     2x2 matrices.  The elements of this basis are the two matrix units
-    with a 1 in the (0,0) or (1,1) location.  The vector elements,
-    however, are the length-2 [1,0] and [0,1] vectors obtained by extracting
+    with a 1 in the (0, 0) or (1, 1) location.  The vector elements,
+    however, are the length-2 [1, 0] and [0, 1] vectors obtained by extracting
     just the diagonal entries from each basis element.  Thus, for this
-    basis, `size=2`, `dim=2`, and `elshape=(2,2)` - so the dimension is
+    basis, `size=2`, `dim=2`, and `elshape=(2, 2)` - so the dimension is
     not just the product of `elshape` entries (equivalently, `elsize`).
 
     Parameters
@@ -142,7 +192,7 @@ class Basis(_NicelySerializable):
     elshape : int
         The shape of each element.  Typically either a length-1 or length-2
         tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
         in the sparse case).
 
     elndim : int
@@ -155,11 +205,17 @@ class Basis(_NicelySerializable):
         The "vectors" of this basis, always 1D (sparse or dense) arrays.
     """
 
+    # Declared for static analysis; concrete storage is provided by subclasses
+    # (LazyBasis via @property, ExplicitBasis via instance attributes).
+    labels: tuple
+    elements: _np.ndarray
+    ellookup: dict
+
     # Implementation note: casting functions are classmethods, but current implementations
     # could be static methods.
 
     @classmethod
-    def cast_from_name_and_statespace(cls, name: str, state_space: _StateSpace, sparse=None):
+    def cast_from_name_and_statespace(cls, name: str, state_space: _StateSpace, sparse: Optional[bool] = None) -> Basis:
         tpbBases = []
         block_labels = state_space.tensor_product_blocks_labels
         if len(block_labels) == 1 and len(block_labels[0]) == 1:
@@ -175,15 +231,15 @@ class Basis(_NicelySerializable):
                     tpbBases.append(BuiltinBasis(nm, state_space.label_dimension(tpbLabels[0]), sparse))
                 else:
                     tpbBases.append(TensorProdBasis([
-                        BuiltinBasis(name if (state_space.label_type(l) == 'Q') else 'cl',
-                                        state_space.label_dimension(l), sparse) for l in tpbLabels]))
+                        BuiltinBasis(name if (state_space.label_type(lbl) == 'Q') else 'cl',
+                                        state_space.label_dimension(lbl), sparse) for lbl in tpbLabels]))
         if len(tpbBases) == 1:
             return tpbBases[0]
         else:
             return DirectSumBasis(tpbBases)
 
     @classmethod
-    def cast_from_name_and_dims(cls, name: str, dim: Union[int,list,tuple], sparse=None):
+    def cast_from_name_and_dims(cls, name: str, dim: Union[int, list, tuple], sparse: Optional[bool] = None) -> Basis:
         if isinstance(dim, (list, tuple)):  # list/tuple of block dimensions
             tpbBases = []
             for tpbDim in dim:
@@ -199,48 +255,47 @@ class Basis(_NicelySerializable):
                 return DirectSumBasis(tpbBases)
         else:
             return BuiltinBasis(name, dim, sparse)
-        
+
     @classmethod
-    def cast_from_basis(cls, basis, dim=None, sparse=None):
+    def cast_from_basis(cls, basis: Basis, dim=None, sparse: Optional[bool] = None) -> Basis:
         #then just check to make sure consistent with `dim` & `sparse`
         if dim is not None:
             if isinstance(dim, _StateSpace):
                 state_space = dim
                 if hasattr(basis, 'state_space'):  # TODO - should *all* basis objects have a state_space?
-                    assert(state_space.is_compatible_with(basis.state_space)), \
+                    assert (state_space.is_compatible_with(basis.state_space)), \
                         "Basis object has incompatible state space: %s != %s" % (str(state_space),
-                                                                                    str(basis.state_space))
+                                                                                str(basis.state_space))
             else:  # assume dim is an integer
-                assert(dim == basis.dim or dim == basis.elsize), \
+                assert (dim == basis.dim or dim == basis.elsize), \
                     "Basis object has unexpected dimension: %d != %d or %d" % (dim, basis.dim, basis.elsize)
         if sparse is not None:
             basis = basis.with_sparsity(sparse)
         return basis
 
     @classmethod
-    def cast_from_arrays(cls, arrays, dim=None, sparse=None):
+    def cast_from_arrays(cls, arrays: _np.ndarray, dim=None, sparse: Optional[bool] = None) -> Basis:
         b = ExplicitBasis(arrays, sparse=sparse)
         if dim is not None:
-            assert(dim == b.dim), "Created explicit basis has unexpected dimension: %d vs %d" % (dim, b.dim)
+            assert (dim == b.dim), "Created explicit basis has unexpected dimension: %d vs %d" % (dim, b.dim)
         if sparse is not None:
-            assert(sparse == b.sparse), "Basis object has unexpected sparsity: %s" % (b.sparse)
+            assert (sparse == b.sparse), "Basis object has unexpected sparsity: %s" % (b.sparse)
         return b
 
     @classmethod
-    def cast(cls, arg, dim=None, sparse=None):
-        #print("DB: CAST = ",arg,dim)
+    def cast(cls, arg, dim=None, sparse: Optional[bool] = None) -> Basis:
         if isinstance(arg, Basis):
             return cls.cast_from_basis(arg, dim, sparse)
         if isinstance(arg, str):
             if isinstance(dim, _StateSpace):
                 return cls.cast_from_name_and_statespace(arg, dim, sparse)
             return cls.cast_from_name_and_dims(arg, dim, sparse)
-        if (arg is None) or (hasattr(arg,'__len__') and len(arg) == 0):
+        if (arg is None) or (hasattr(arg, '__len__') and len(arg) == 0):
             return ExplicitBasis([], [], "*Empty*", "Empty (0-element) basis", False, sparse)
             # ^ The original implementation would return this value under two conditions.
-            #   Either arg was None, or isinstance(arg,(tuple,list,ndarray)) and len(arg) == 0.
+            #   Either arg was None, or isinstance(arg, (tuple, list, ndarray)) and len(arg) == 0.
             #   We're just slightly relaxing the type requirement by using this check instead.
-        
+
         # At this point, original behavior would check that arg is a tuple, list, or ndarray.
         # Instead, we'll just require that arg[0] is well-defined. This is enough to discern
         # between the two cases we can still support.
@@ -252,13 +307,14 @@ class Basis(_NicelySerializable):
 
         raise ValueError("Can't cast %s to be a basis!" % str(type(arg)))
 
-
-    def __init__(self, name, longname, real, sparse):
+    def __init__(self, name: str, longname: str, real: bool, sparse: bool):
         super().__init__()
         self.name = name
         self.longname = longname
         self.real = real  # whether coefficients must be real (*not* whether elements are real - they're always complex)
         self.sparse = sparse  # whether elements are stored as sparse vectors/matrices
+        self._is_hermitian : Optional[bool] = None
+        self._implies_leakage : Optional[bool] = None
 
     @property
     def dim(self):
@@ -283,7 +339,7 @@ class Basis(_NicelySerializable):
         """
         The shape of each element.  Typically either a length-1 or length-2
         tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
         in the sparse case).
         """
         # shape of "natural" elements - size may be > self.dim (to display naturally)
@@ -314,6 +370,64 @@ class Basis(_NicelySerializable):
         return int(_np.prod(self.elshape))
 
     @property
+    def implies_leakage_modeling(self) -> Optional[bool]:
+        """
+        True if this basis designates a proper subspace of Hilbert space as "computational."
+
+        A basis implies leakage modeling when all three of the following hold:
+
+        1. It has an *identity-candidate* label: a label matching ``^(?:I|C\\[I+\\])+$``,
+           i.e. any concatenation of 'I' characters and 'C[I...I]' groups (see
+           `_EYE_LABEL_REGEX`). When several labels qualify, the one containing the most
+           'I' characters is used. This is how the basis *names* the element that plays
+           the role of "identity on the computational subspace": ordinary bases like
+           'pp' and 'gm' have exactly one such label ('I', 'II', ...), leakage bases use
+           the 'C[I...I]' convention, and tensor products concatenate per-factor
+           segments (e.g. 'IC[I]' for pp ⊗ l2p1).
+
+        2. The element carrying that label is proportional to a *real orthogonal
+           projector* E. This is what makes "the computational subspace" well defined:
+           we take C = range(E). An element that is not (proportional to) a projector
+           doesn't single out a subspace, so no leakage interpretation is possible; the
+           probe below fails and we return False.
+
+        3. rank(E) is strictly less than the Hilbert-space dimension, i.e. C is a
+           *proper* subspace of H. When E is proportional to the full identity (as in
+           'pp' or 'gm'), there is no leakage level to model, and this property is
+           False even though condition 2 holds.
+
+        Example: the built-in 'l2p1' basis (a qutrit basis, "leakage-2-plus-1") has an
+        element labeled 'C[I]' proportional to diag(1, 1, 0). That element is a rank-2
+        projector on a 3-dimensional Hilbert space, so ``Basis.cast('l2p1', 9)``
+        implies leakage modeling with C spanned by the first two levels. By contrast,
+        'gm' of the same dimension has identity-candidate 'I' with element
+        proportional to diag(1, 1, 1) — a full-rank projector — so it does not.
+
+        Conditions 2 and 3 are checked by calling :func:`matrixtools.induced_projector`
+        as a probe: it returns the projector onto range(E) if the labeled element is
+        proportional to a real orthogonal projector, and we treat a probe failure as
+        "no leakage modeling" rather than an error.
+
+        See :mod:`pygsti.leakage.core` for the functions this property drives
+        (`computational_effect`, `computational_superkets`, `computational_projector`).
+        """
+        if (not hasattr(self, '_implies_leakage')) or (not isinstance(self._implies_leakage, bool)):
+            label = _eye_label(self)
+            if len(label) == 0:
+                self._implies_leakage = False
+                return False
+            I_before = self.ellookup[label]
+            from pygsti.tools.matrixtools import induced_projector
+            try:
+                I_after = induced_projector(I_before, require_real=True)
+                self._implies_leakage = round(_np.trace(I_after).real)**2 < I_after.size
+            except ValueError:
+                # The identity-candidate element is not proportional to a real
+                # orthogonal projector, so it doesn't designate a computational subspace.
+                self._implies_leakage = False
+        return self._implies_leakage
+
+    @property
     def first_element_is_identity(self):
         """
         True if the first element of this basis is *proportional* to the identity matrix, False otherwise.
@@ -322,7 +436,7 @@ class Basis(_NicelySerializable):
         d = self.elshape[0]
         return _np.allclose(self.elements[0], _np.identity(d) * (_np.linalg.norm(self.elements[0]) / _np.sqrt(d)))
 
-    def is_simple(self):
+    def is_simple(self) -> bool:
         """
         Whether the flattened-element vector space is the *same* space as the space this basis's vectors belong to.
 
@@ -332,7 +446,7 @@ class Basis(_NicelySerializable):
         """
         return self.elsize == self.dim
 
-    def is_complete(self):
+    def is_complete(self) -> bool:
         """
         Whether this is a complete basis, i.e. this basis's vectors span the entire space that they live in.
 
@@ -342,7 +456,7 @@ class Basis(_NicelySerializable):
         """
         return self.dim == self.size
 
-    def is_partial(self):
+    def is_partial(self) -> bool:
         """
         The negative of :meth:`is_complete`, effectively "is_incomplete".
 
@@ -351,6 +465,16 @@ class Basis(_NicelySerializable):
         bool
         """
         return not self.is_complete()
+
+    def is_hermitian(self) -> bool:
+        from pygsti.tools.matrixtools import is_hermitian as matrix_is_hermitian
+        if self.elndim != 2 or self.elshape[0] != self.elshape[1]:
+            return False
+        if not hasattr(self, '_is_hermitian') or self._is_hermitian is None:
+            tol = self.dim * _np.finfo(self.elements[0].dtype).eps
+            is_hermitian = all([matrix_is_hermitian(el, tol=tol) for el in self.elements])
+            self._is_hermitian = is_hermitian
+        return self._is_hermitian
 
     @property
     def vector_elements(self):
@@ -368,7 +492,7 @@ class Basis(_NicelySerializable):
             # Use flatten (rather than ravel) to ensure a copy is made.
             return [el.flatten() for el in self.elements]
 
-    def copy(self):
+    def copy(self) -> Basis:
         """
         Make a copy of this Basis object.
 
@@ -378,7 +502,7 @@ class Basis(_NicelySerializable):
         """
         return _copy.deepcopy(self)
 
-    def with_sparsity(self, desired_sparsity):
+    def with_sparsity(self, desired_sparsity: bool) -> Basis:
         """
         Returns either this basis or a copy of it with the desired sparsity.
 
@@ -400,7 +524,7 @@ class Basis(_NicelySerializable):
         else:
             return self._copy_with_toggled_sparsity()
 
-    def _copy_with_toggled_sparsity(self):
+    def _copy_with_toggled_sparsity(self) -> Basis:
         raise NotImplementedError("Derived classes should implement this!")
 
     def __str__(self):
@@ -418,7 +542,7 @@ class Basis(_NicelySerializable):
     def __eq__(self, other):
         return self.is_equivalent(other, sparseness_must_match=True)
 
-    def is_equivalent(self, other, sparseness_must_match=True):
+    def is_equivalent(self, other, sparseness_must_match: bool = True) -> bool:
         """
         Tests whether this basis is equal to another basis, optionally ignoring sparseness.
 
@@ -454,7 +578,7 @@ class Basis(_NicelySerializable):
                 return _np.array_equal(self.elements, other.elements)
             else:
                 return _np.array_equal(self.elements, other)
-    
+
     @lru_cache(maxsize=4)
     def create_transform_matrix(self, to_basis):
         """
@@ -480,7 +604,6 @@ class Basis(_NicelySerializable):
         if to_basis.sparse:
             return to_basis.from_std_transform_matrix.dot(self.to_std_transform_matrix)
         elif self.sparse:
-            #return _sps.csr_matrix(to_basis.from_std_transform_matrix).dot(self.to_std_transform_matrix)
             return _np.dot(to_basis.from_std_transform_matrix, self.to_std_transform_matrix.toarray())
         else:
             return _np.dot(to_basis.from_std_transform_matrix, self.to_std_transform_matrix)
@@ -510,7 +633,6 @@ class Basis(_NicelySerializable):
         if self.sparse:
             return self.from_std_transform_matrix.dot(from_basis.to_std_transform_matrix)
         elif from_basis.sparse:
-            #return _sps.csr_matrix(to_basis.from_std_transform_matrix).dot(self.to_std_transform_matrix)
             return _np.dot(self.from_std_transform_matrix, from_basis.to_std_transform_matrix.toarray())
         else:
             return _np.dot(self.from_std_transform_matrix, from_basis.to_std_transform_matrix)
@@ -528,7 +650,7 @@ class Basis(_NicelySerializable):
         """
         if self.elndim == 2:
             for i, mx in enumerate(self.elements):
-                t = _np.linalg.norm(mx) # == sqrt(tr(mx mx))
+                t = _np.linalg.norm(mx)  # == sqrt(tr(mx mx))
                 if not _np.isclose(t, 1.0): return False
             return True
         elif self.elndim == 1:
@@ -575,10 +697,10 @@ class Basis(_NicelySerializable):
             if self.is_complete():
                 return _spsl.inv(self.to_std_transform_matrix.tocsc()).tocsr()
             else:
-                assert(self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
+                assert (self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
                 # we'd need to construct a different pseudo-inverse if the above assert fails
 
-                A = self.to_std_transform_matrix  # shape (dim,size) - should have indep *cols*
+                A = self.to_std_transform_matrix  # shape (dim, size) - should have indep *cols*
                 Adag = A.getH()        # shape (size, dim)
                 invAdagA = _spsl.inv(Adag.tocsr().dot(A.tocsc())).tocsr()
                 return invAdagA.dot(Adag.tocsc())
@@ -586,10 +708,10 @@ class Basis(_NicelySerializable):
             if self.is_complete():
                 return _inv(self.to_std_transform_matrix)
             else:
-                assert(self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
+                assert (self.size < self.dim), "Basis seems to be overcomplete: size > dimension!"
                 # we'd need to construct a different pseudo-inverse if the above assert fails
 
-                A = self.to_std_transform_matrix  # shape (dim,size) - should have indep *cols*
+                A = self.to_std_transform_matrix  # shape (dim, size) - should have indep *cols*
                 Adag = A.transpose().conjugate()  # shape (size, dim)
                 return _np.dot(_inv(_np.dot(Adag, A)), Adag)
 
@@ -616,7 +738,7 @@ class Basis(_NicelySerializable):
         # *is* a standard representation of the vector space this basis or partial-basis
         # acts upon (this is *not* true for direct-sum bases, where the flattened
         # elements represent vectors in a larger "embedding" space (w/larger dim than actual space).
-        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of to_elementstd_transform_matrix"
+        assert self.is_simple(), "Incorrectly using a simple-assuming implementation of to_elementstd_transform_matrix"
         return self.to_std_transform_matrix
 
     @property
@@ -661,7 +783,7 @@ class Basis(_NicelySerializable):
         Basis
         """
         #This default implementation assumes that this basis is simple.
-        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of create_equivalent()"
+        assert (self.is_simple()), "Incorrectly using a simple-assuming implementation of create_equivalent()"
         return BuiltinBasis(builtin_basis_name, self.dim, sparse=self.sparse)
 
     #TODO: figure out if we actually need the return value from this function to
@@ -692,11 +814,11 @@ class Basis(_NicelySerializable):
         Basis
         """
         #This default implementation assumes that this basis is simple.
-        assert(self.is_simple()), "Incorrectly using a simple-assuming implementation of create_simple_equivalent()"
+        assert (self.is_simple()), "Incorrectly using a simple-assuming implementation of create_simple_equivalent()"
         if builtin_basis_name is None: return self.copy()
         else: return self.create_equivalent(builtin_basis_name)
 
-    def is_compatible_with_state_space(self, state_space):
+    def is_compatible_with_state_space(self, state_space: _StateSpace) -> bool:
         """
         Checks whether this basis is compatible with a given state space.
 
@@ -712,6 +834,9 @@ class Basis(_NicelySerializable):
         #FUTURE - need a way to deal with many qubits where total dim will overflow an int64
         #if self.state_space.dim is None:  # `None` indicates that dim is effectively infinite?
         return bool(self.dim == state_space.dim)
+
+
+BasisLike = Union[Basis, str]
 
 
 class LazyBasis(Basis):
@@ -758,7 +883,7 @@ class LazyBasis(Basis):
         The basis labels
     """
 
-    def __init__(self, name, longname, real, sparse):
+    def __init__(self, name, longname, real, sparse: bool):
         """
         Creates a new LazyBasis.  Parameters are the same as those to
         :meth:`Basis.__init__`.
@@ -790,6 +915,22 @@ class LazyBasis(Basis):
                 self._lazy_build_labels()
             self._ellookup = {lbl: el for lbl, el in zip(self._labels, self._elements)}
         return self._ellookup
+    
+    @property
+    def elindlookup(self) -> dict:
+        """
+        A dictionary mapping labels to the index in self.elements that holds
+        that label's basis element.
+
+        Returns
+        -------
+        dict
+        """
+        if self._ellookup is None:
+            if self._labels is None:
+                self._lazy_build_labels()
+            self._elindlookup = {lbl: ind for ind, lbl in enumerate(self._labels)}
+        return self._elindlookup
 
     @property
     def elements(self):
@@ -830,7 +971,7 @@ class ExplicitBasis(Basis):
     A `Basis` whose elements are specified directly.
 
     All explicit bases are simple: their vector space is taken to be that
-    of the the flattened elements unless separate `vector_elements` are given.
+    of the flattened elements unless separate `vector_elements` are given.
 
     Parameters
     ----------
@@ -870,7 +1011,9 @@ class ExplicitBasis(Basis):
     """
     Count = 0  # The number of custom bases, used for serialized naming
 
-    def __init__(self, elements, labels=None, name=None, longname=None, real=False, sparse=None, vector_elements=None):
+    def __init__(self, elements: _np.ndarray, labels: Optional[list] = None, name: Optional[str] = None,
+                 longname: Optional[str] = None, real: Optional[bool] = False, sparse: Optional[bool] = None,
+                 vector_elements: Optional[_np.ndarray] = None):
         '''
         Create a new ExplicitBasis.
 
@@ -935,13 +1078,13 @@ class ExplicitBasis(Basis):
                         el = _np.array(el)  # try to convert to a numpy array
 
                 if elshape is None: elshape = el.shape
-                else: assert(elshape == el.shape), "Inconsistent element shapes!"
+                else: assert (elshape == el.shape), "Inconsistent element shapes!"
                 self.elements.append(el)
             dim = int(_np.prod(elshape))
         self.ellookup = {lbl: el for lbl, el in zip(self.labels, self.elements)}  # fast by-label element lookup
 
         if vector_elements is not None:
-            assert(len(vector_elements) == size), "Must have the same number of `elements` and `vector_elements`"
+            assert (len(vector_elements) == size), "Must have the same number of `elements` and `vector_elements`"
             if sparse:
                 self._vector_elements = [(el if _sps.issparse(el) else _sps.lil_matrix(el)) for el in vector_elements]
             else:
@@ -970,7 +1113,7 @@ class ExplicitBasis(Basis):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):
+    def _from_nice_serialization(cls, state) -> ExplicitBasis:
         vels = [cls._decodemx(vel) for vel in state['vector_elements']] \
             if (state.get('vector_elements', None) is not None) else None
         return cls([cls._decodemx(el) for el in state['elements']],
@@ -1000,7 +1143,7 @@ class ExplicitBasis(Basis):
         """
         The shape of each element.  Typically either a length-1 or length-2
         tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
         in the sparse case).
         """
         # shape of "natural" elements - size may be > self.dim (to display naturally)
@@ -1021,7 +1164,7 @@ class ExplicitBasis(Basis):
         else:
             return Basis.vector_elements.fget(self)  # call base class get-property fn
 
-    def _copy_with_toggled_sparsity(self):
+    def _copy_with_toggled_sparsity(self) -> ExplicitBasis:
         return ExplicitBasis(self.elements, self.labels, self.name, self.longname, self.real, not self.sparse,
                              self._vector_elements)
 
@@ -1032,7 +1175,6 @@ class ExplicitBasis(Basis):
         else:
             els_to_hash = tuple((_np.round(el, 6).tobytes() for el in self.elements))
         return hash((self.dim, self.elshape, self.sparse, self.labels, els_to_hash))  # TODO: hash vector els?
-        # OLD return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
 
 
 class BuiltinBasis(LazyBasis):
@@ -1060,17 +1202,20 @@ class BuiltinBasis(LazyBasis):
         or dense numpy arrays (the default).
     """
 
-    def __init__(self, name, dim_or_statespace, sparse=False):
+    def __init__(self, name, dim_or_statespace, sparse: Optional[bool] = False):
         from pygsti.baseobjs import statespace as _statespace
-        assert(name in _basis_constructor_dict), "Unknown builtin basis name '%s'!" % name
+        assert (name in _basis_constructor_dict), "Unknown builtin basis name '%s'!" % name
         if sparse is None: sparse = False  # choose dense matrices by default (when sparsity is "unspecified")
 
-        if name == 'cl':  # HACK for now, until we figure out better classical state spaces
-            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
-                else _statespace.ExplicitStateSpace([('L%d' % i,) for i in range(dim_or_statespace)])
+        if isinstance(dim_or_statespace, _statespace.StateSpace):
+            self.state_space = dim_or_statespace
+        elif name == 'cl':  # HACK for now, until we figure out better classical state spaces
+            self.state_space = _statespace.ExplicitStateSpace([('L%d' % i, ) for i in range(dim_or_statespace)])
+        elif name == "sv":
+            # A state vector can have any shape. It does not need to be a perfect square root.
+            self.state_space = _statespace.default_space_for_udim(dim_or_statespace)
         else:
-            self.state_space = dim_or_statespace if isinstance(dim_or_statespace, _statespace.StateSpace) \
-                else _statespace.default_space_for_dim(dim_or_statespace)
+            self.state_space = _statespace.default_space_for_dim(dim_or_statespace)
 
         longname = _basis_constructor_dict[name].longname
         real = _basis_constructor_dict[name].real
@@ -1079,9 +1224,9 @@ class BuiltinBasis(LazyBasis):
         super(BuiltinBasis, self).__init__(name, longname, real, sparse)
 
         #precompute some properties
-        self._size, self._dim, self._elshape = _basis_constructor_dict[self.name].sizes(dim=self.state_space.dim, sparse=self.sparse)
+        self._size, self._dim, self._elshape = _basis_constructor_dict[self.name].sizes(dim=self._get_dimension_to_pass_to_constructor(), sparse=self.sparse)
         #Check that sparse is True only when elements are *matrices*
-        assert(not self.sparse or len(self._elshape) == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
+        assert (not self.sparse or len(self._elshape) == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -1092,9 +1237,16 @@ class BuiltinBasis(LazyBasis):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):
+    def _from_nice_serialization(cls, state) -> BuiltinBasis:
         statespace = _StateSpace.from_nice_serialization(state['state_space'])
         return cls(state['name'], statespace, state['sparse'])
+
+    def _get_dimension_to_pass_to_constructor(self) -> int:
+        """
+        A basis in the state-vector (name= 'sv') case will correspond to a basis of vectors of length d.
+        This means that it will be operated on by matrices of shape (d \times d).
+        """
+        return self.state_space.udim if self.name == "sv" else self.state_space.dim
 
     @property
     def dim(self):
@@ -1117,7 +1269,7 @@ class BuiltinBasis(LazyBasis):
         """
         The shape of each element.  Typically either a length-1 or length-2
         tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
         in the sparse case).
         """
         return self._elshape
@@ -1134,19 +1286,21 @@ class BuiltinBasis(LazyBasis):
 
     def _lazy_build_elements(self):
         f = _basis_constructor_dict[self.name].constructor
-        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
-        self._elements = _np.array(f(**cargs))  # a list of (dense) mxs -> ndarray (possibly sparse in future?)
-        assert(len(self._elements) == self.size), "Logic error: wrong number of elements were created!"
+
+        cargs = {'dim': self._get_dimension_to_pass_to_constructor(), 'sparse': self.sparse}
+        self._elements = _np.array(f(**cargs))  # a list of (dense) mxs or vectors -> ndarray (possibly sparse in future?)
+        assert (len(self._elements) == self.size), "Logic error: wrong number of elements were created!"
 
     def _lazy_build_labels(self):
         f = _basis_constructor_dict[self.name].labeler
-        cargs = {'dim': self.state_space.dim, 'sparse': self.sparse}
+        cargs = {'dim': self._get_dimension_to_pass_to_constructor(), 'sparse': self.sparse}
         self._labels = f(**cargs)
+        assert (len(self._labels) == self.size)
 
-    def _copy_with_toggled_sparsity(self):
+    def _copy_with_toggled_sparsity(self) -> BuiltinBasis:
         return BuiltinBasis(self.name, self.state_space, not self.sparse)
 
-    def is_equivalent(self, other, sparseness_must_match=True):
+    def is_equivalent(self, other, sparseness_must_match: bool = True) -> bool:
         """
         Tests whether this basis is equal to another basis, optionally ignoring sparseness.
 
@@ -1189,11 +1343,11 @@ class DirectSumBasis(LazyBasis):
     component_bases : iterable
         A list of the component bases.  Each list elements may be either
         a Basis object or a tuple of arguments to :func:`Basis.cast`,
-        e.g. `('pp',4)`.
+        e.g. `('pp', 4)`.
 
     name : str, optional
         The name of this basis.  If `None`, the names of the component bases
-        joined with "+" is used.
+        joined with " + " is used.
 
     longname : str, optional
         A longer description of this basis.  If `None`, then a long name is
@@ -1205,7 +1359,7 @@ class DirectSumBasis(LazyBasis):
         The "vectors" of this basis, always 1D (sparse or dense) arrays.
     """
 
-    def __init__(self, component_bases, name=None, longname=None):
+    def __init__(self, component_bases, name: Optional[str] = None, longname: Optional[str] = None):
         '''
         Create a new DirectSumBasis - a basis for a space that is the direct-sum
         of the spaces spanned by other "component" bases.
@@ -1215,17 +1369,17 @@ class DirectSumBasis(LazyBasis):
         component_bases : iterable
             A list of the component bases.  Each list elements may be either
             a Basis object or a tuple of arguments to :func:`Basis.cast`,
-            e.g. `('pp',4)`.
+            e.g. `('pp', 4)`.
 
         name : str, optional
             The name of this basis.  If `None`, the names of the component bases
-            joined with "+" is used.
+            joined with " + " is used.
 
         longname : str, optional
             A longer description of this basis.  If `None`, then a long name is
             automatically generated.
         '''
-        assert(len(component_bases) > 0), "Must supply at least one component basis"
+        assert (len(component_bases) > 0), "Must supply at least one component basis"
 
         self._component_bases = []
         self._vector_elements = None  # vectorized elements: 1D arrays
@@ -1234,19 +1388,19 @@ class DirectSumBasis(LazyBasis):
             if isinstance(compbasis, Basis):
                 self._component_bases.append(compbasis)
             else:
-                #compbasis can be a list/tuple of args to Basis.cast, e.g. ('pp',2)
+                #compbasis can be a list/tuple of args to Basis.cast, e.g. ('pp', 2)
                 self._component_bases.append(Basis.cast(*compbasis))
 
         if name is None:
-            name = "+".join([c.name for c in self._component_bases])
+            name = " + ".join([c.name for c in self._component_bases])
         if longname is None:
             longname = "Direct-sum basis with components " + ", ".join(
                 [c.name for c in self._component_bases])
 
         real = all([c.real for c in self._component_bases])
         sparse = all([c.sparse for c in self._component_bases])
-        assert(all([c.real == real for c in self._component_bases])), "Inconsistent `real` value among component bases!"
-        assert(all([c.sparse == sparse for c in self._component_bases])), "Inconsistent sparsity among component bases!"
+        assert (all([c.real == real for c in self._component_bases])), "Inconsistent `real` value among component bases!"
+        assert (all([c.sparse == sparse for c in self._component_bases])), "Inconsistent sparsity among component bases!"
 
         #precompute various basis properties. can add more as they are deemed frequently accessed.
         self._dim = sum([c.dim for c in self._component_bases])
@@ -1263,7 +1417,7 @@ class DirectSumBasis(LazyBasis):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):
+    def _from_nice_serialization(cls, state) -> DirectSumBasis:
         component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
         return cls(component_bases, state['name'], state['longname'])
 
@@ -1293,16 +1447,16 @@ class DirectSumBasis(LazyBasis):
         """
         The shape of each element.  Typically either a length-1 or length-2
         tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
         in the sparse case).
         """
         elndim = len(self._component_bases[0].elshape)
-        assert(all([len(c.elshape) == elndim for c in self._component_bases])
-               ), "Inconsistent element ndims among component bases!"
+        assert (all([len(c.elshape) == elndim for c in self._component_bases])), \
+            "Inconsistent element ndims among component bases!"
         return tuple([sum([c.elshape[k] for c in self._component_bases]) for k in range(elndim)])
 
     def __hash__(self):
-        return hash((self.name,)+tuple((hash(comp) for comp in self._component_bases)))
+        return hash((self.name, ) + tuple((hash(comp) for comp in self._component_bases)))
 
     def _lazy_build_vector_elements(self):
         if self.sparse:
@@ -1313,7 +1467,7 @@ class DirectSumBasis(LazyBasis):
         i, start = 0, 0
         for compbasis in self._component_bases:
             for lbl, vel in zip(compbasis.labels, compbasis.vector_elements):
-                assert(_sps.issparse(vel) == self.sparse), "Inconsistent sparsity!"
+                assert (_sps.issparse(vel) == self.sparse), "Inconsistent sparsity!"
                 if self.sparse:
                     mx = _sps.lil_matrix((self.dim, 1), dtype='complex')
                     mx[start:start + compbasis.dim, 0] = vel
@@ -1323,7 +1477,7 @@ class DirectSumBasis(LazyBasis):
                 i += 1
             start += compbasis.dim
 
-        assert(i == self.size)
+        assert (i == self.size)
         self._vector_elements = compMxs
 
     def _lazy_build_elements(self):
@@ -1444,7 +1598,7 @@ class DirectSumBasis(LazyBasis):
             elements are 4x4 matrices) and `size` is the size of this basis (its
             number of vectors).
         """
-        assert(not self.sparse), "to_elementstd_transform_matrix not implemented for sparse mode"
+        assert (not self.sparse), "to_elementstd_transform_matrix not implemented for sparse mode"
         expanddim = self.elsize  # == _np.prod(self.elshape)
         if self.sparse:
             toSimpleStd = _sps.lil_matrix((expanddim, self.size), dtype='complex')
@@ -1459,7 +1613,7 @@ class DirectSumBasis(LazyBasis):
             toSimpleStd[:, i] = vel
         return toSimpleStd
 
-    def create_equivalent(self, builtin_basis_name):
+    def create_equivalent(self, builtin_basis_name) -> DirectSumBasis:
         """
         Create an equivalent basis with components of type `builtin_basis_name`.
 
@@ -1480,7 +1634,7 @@ class DirectSumBasis(LazyBasis):
         equiv_components = [c.create_equivalent(builtin_basis_name) for c in self._component_bases]
         return DirectSumBasis(equiv_components)
 
-    def create_simple_equivalent(self, builtin_basis_name=None):
+    def create_simple_equivalent(self, builtin_basis_name=None) -> BuiltinBasis:
         """
         Create a basis of type `builtin_basis_name` whose elements are compatible with this basis.
 
@@ -1529,7 +1683,7 @@ class TensorProdBasis(LazyBasis):
     component_bases : iterable
         A list of the component bases.  Each list elements may be either
         a Basis object or a tuple of arguments to :func:`Basis.cast`,
-        e.g. `('pp',4)`.
+        e.g. `('pp', 4)`.
 
     name : str, optional
         The name of this basis.  If `None`, the names of the component bases
@@ -1540,7 +1694,7 @@ class TensorProdBasis(LazyBasis):
         automatically generated.
     """
 
-    def __init__(self, component_bases, name=None, longname=None):
+    def __init__(self, component_bases, name: Optional[str] = None, longname: Optional[str] = None):
         '''
         Create a new TensorProdBasis whose elements are the tensor products
         of the elements of a set of "component" bases.
@@ -1550,7 +1704,7 @@ class TensorProdBasis(LazyBasis):
         component_bases : iterable
             A list of the component bases.  Each list elements may be either
             a Basis object or a tuple of arguments to :func:`Basis.cast`,
-            e.g. `('pp',4)`.
+            e.g. `('pp', 4)`.
 
         name : str, optional
             The name of this basis.  If `None`, the names of the component bases
@@ -1560,14 +1714,14 @@ class TensorProdBasis(LazyBasis):
             A longer description of this basis.  If `None`, then a long name is
             automatically generated.
         '''
-        assert(len(component_bases) > 0), "Must supply at least one component basis"
+        assert (len(component_bases) > 0), "Must supply at least one component basis"
 
         self._component_bases = []
         for compbasis in component_bases:
             if isinstance(compbasis, Basis):
                 self._component_bases.append(compbasis)
             else:
-                #compbasis can be a list/tuple of args to Basis.cast, e.g. ('pp',2)
+                #compbasis can be a list/tuple of args to Basis.cast, e.g. ('pp', 2)
                 self._component_bases.append(Basis.cast(*compbasis))
 
         if name is None:
@@ -1578,17 +1732,17 @@ class TensorProdBasis(LazyBasis):
 
         real = all([c.real for c in self._component_bases])
         sparse = all([c.sparse for c in self._component_bases])
-        #assert(all([c.real == real for c in self._component_bases])), "Inconsistent `real` value among component bases!"
-        assert(all([c.sparse == sparse for c in self._component_bases])), "Inconsistent sparsity among component bases!"
+        assert (all([c.sparse == sparse for c
+                     in self._component_bases])), "Inconsistent sparsity among component bases!"
 
         #precompute certain properties. Can add more as deemed frequently accessed.
         self._dim = int(_np.prod([c.dim for c in self._component_bases]))
 
         #NOTE: this is actually to restrictive -- what we need is a test/flag for whether the elements of a
-        # basis are in their "natrual" representation where it makes sense to take tensor products.  For
+        # basis are in their "natural" representation where it makes sense to take tensor products.  For
         # example, a direct-sum basis may hold elements in a compact way that violate this... but I'm not sure if they
         # do and this needs to be checked.  For now, we could just disable this overly-restrictive assert:
-        assert(all([c.is_simple() for c in self._component_bases])), \
+        assert (all([c.is_simple() for c in self._component_bases])), \
             "Components of a tensor product basis must be *simple* (have vector-dimension == size of elements)"
         # because we use the natural representation to take tensor (kronecker) products.
         # Note: this assertion also means dim == product(component_elsizes) == elsize, so basis is *simple*
@@ -1604,7 +1758,7 @@ class TensorProdBasis(LazyBasis):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):
+    def _from_nice_serialization(cls, state) -> TensorProdBasis:
         component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
         return cls(component_bases, state['name'], state['longname'])
 
@@ -1634,7 +1788,7 @@ class TensorProdBasis(LazyBasis):
         """
         The shape of each element.  Typically either a length-1 or length-2
         tuple, corresponding to vector or matrix elements, respectively.
-        Note that *vector elements* always have shape `(dim,)` (or `(dim,1)`
+        Note that *vector elements* always have shape `(dim, )` (or `(dim, 1)`
         in the sparse case).
         """
         elndim = max([c.elndim for c in self._component_bases])
@@ -1646,14 +1800,14 @@ class TensorProdBasis(LazyBasis):
         return tuple(elshape)
 
     def __hash__(self):
-        return hash((self.name,) + tuple((hash(comp) for comp in self._component_bases)))
+        return hash((self.name, ) + tuple((hash(comp) for comp in self._component_bases)))
 
     def _lazy_build_elements(self):
         #LAZY building of elements (in case we never need them)
         if self.sparse:
             compMxs = [None] * self.size
         else:
-            compMxs = _np.zeros((self.size,) + self.elshape, 'complex')
+            compMxs = _np.zeros((self.size, ) + self.elshape, 'complex')
 
         #Take kronecker product of *natural* reps of component-basis elements
         # then reshape to vectors at the end.  This requires that the vector-
@@ -1678,7 +1832,7 @@ class TensorProdBasis(LazyBasis):
         for i, factor_lbls in enumerate(_itertools.product(*comp_lbls)):
             self._labels.append(''.join(factor_lbls))
 
-    def _copy_with_toggled_sparsity(self):
+    def _copy_with_toggled_sparsity(self) -> TensorProdBasis:
         return TensorProdBasis([cb._copy_with_toggled_sparsity() for cb in self._component_bases],
                                self.name, self.longname)
 
@@ -1725,7 +1879,7 @@ class TensorProdBasis(LazyBasis):
         TensorProdBasis
         """
         # FUTURE: we may want a way of creating a 'std' equivalent of tensor product bases that include classical lines.
-        # This is a part of what woudl go into that... but it's not complete.
+        # This is a part of what would go into that... but it's not complete.
         # if builtin_basis_name == 'std':  # special case when we change classical components to 'cl'
         #     equiv_components = []
         #     for c in self._component_bases:
@@ -1758,14 +1912,6 @@ class TensorProdBasis(LazyBasis):
         -------
         Basis
         """
-        #if builtin_basis_name == 'std':  # special case when we change classical components to 'clmx'
-        #    equiv_components = []
-        #    for c in self._component_bases:
-        #        if c.elndim == 1: equiv_components.append(BuiltinBasis('clmx', c.dim**2, sparse=self.sparse))
-        #        # c.create_simple_equivalent('clmx'))
-        #        else: equiv_components.append(c.create_simple_equivalent('std'))
-        #    expanded_basis = TensorProdBasis(equiv_components)
-        #    return BuiltinBasis('std', expanded_basis.elsize, sparse=expanded_basis.sparse)
 
         if builtin_basis_name is None:
             builtin_basis_name = self.name  # default

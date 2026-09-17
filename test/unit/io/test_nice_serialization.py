@@ -8,11 +8,12 @@ from pygsti.modelpacks import smq1Q_XYI
 
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import create_crosstalk_free_model, create_cloud_crosstalk_model
+from pygsti.modelmembers.operations import StaticArbitraryOp
 
 
 class NiceSerializationTester(BaseCase):
 
-    def helper_serialize(self, obj, temp_pth):
+    def helper_serialize(self, obj, temp_pth, return_file_obj=False):
         s = obj.dumps()
         obj2 = obj.__class__.loads(s)
 
@@ -20,7 +21,7 @@ class NiceSerializationTester(BaseCase):
         obj_from_file = obj.__class__.read(temp_pth + ".json")
         self.assertTrue(isinstance(obj_from_file, type(obj)))
 
-        return obj2
+        return (obj2, obj_from_file) if return_file_obj else obj2
 
     def setUp(self):
         self.gst_design = smq1Q_XYI.create_gst_experiment_design(4, qubit_labels=[0])
@@ -51,12 +52,39 @@ class NiceSerializationTester(BaseCase):
     def test_localnoise_model(self, pth):
         mdl_local = create_crosstalk_free_model(self.pspec_2Q,
                                                 ideal_gate_type='H+S', ideal_spam_type='tensor product H+S',
-                                                independent_gates=False,                                                                                                                       
+                                                independent_gates=False,
                                                 ensure_composed_gates=False)
-        mdl_local2 = self.helper_serialize(mdl_local, pth)
+        mdl_local2, mdl_from_file = self.helper_serialize(mdl_local, pth, return_file_obj=True)
         self.assertTrue(mdl_local.is_similar(mdl_local2))
         self.assertTrue(mdl_local.is_equivalent(mdl_local2))
-        #TODO: assert correctness
+
+        for m in (mdl_local2, mdl_from_file):
+            self.assertIs(m['rho0'], m.prep_blks['layers']['rho0'])
+            self.assertIs(m['Gx'], m.operation_blks['gates']['Gx'])
+            with self.assertRaises(KeyError):
+                m.operation_blks['gates']['rho_bad'] = m['Gx'].copy()
+
+    @with_temp_path
+    def test_localnoise_model_with_global_idle(self, pth):
+        noisy_idle = StaticArbitraryOp(np.diag([1, 0.9, 0.9, 0.9]))
+        pspec = QubitProcessorSpec(
+            2, ('Gx', 'Gy', 'Gcnot', 'Gidle'), geometry="line",
+            availability={'Gidle': [('qb0',), ('qb1',)]},
+            qubit_labels=['qb0', 'qb1']
+        )
+
+        mdl_idle = create_crosstalk_free_model(
+            pspec, {'Gidle': noisy_idle}, ideal_gate_type='static',
+            independent_gates=False, ensure_composed_gates=False,
+            implicit_idle_mode='add_global'
+        )
+        self.assertIn('{auto_global_idle}', mdl_idle.operation_blks['layers'])
+
+        mdl_idle2, mdl_idle_file = self.helper_serialize(mdl_idle, pth, return_file_obj=True)
+        for m in (mdl_idle2, mdl_idle_file):
+            self.assertIs(m['{auto_global_idle}'], m.operation_blks['layers']['{auto_global_idle}'])
+            with self.assertRaises(KeyError):
+                m.operation_blks['layers']['rho_bad'] = m['{auto_global_idle}'].copy()
 
     @with_temp_path
     def test_cloudnoise_model(self, pth):
@@ -67,58 +95,5 @@ class NiceSerializationTester(BaseCase):
         mdl_cloud2 = self.helper_serialize(mdl_cloud, pth)
         self.assertTrue(mdl_cloud.is_similar(mdl_cloud2))
         self.assertTrue(mdl_cloud.is_equivalent(mdl_cloud2))
-
-
-class ModelEquivalenceTester(BaseCase):
-
-    def setUp(self):
-        nQubits = 2
-        self.pspec_2Q = QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot'), geometry="line",
-                                           qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
-
-    def check_model(self, mdl):
-        mcopy = mdl.copy()
-        self.assertFalse(mdl is mcopy)
-        self.assertTrue(mcopy.is_similar(mdl))
-        self.assertTrue(mcopy.is_equivalent(mdl))
-
-        if mdl.num_params > 0:
-            r = np.random.random(mdl.num_params)
-            if np.linalg.norm(r) < 1e6:  # just in case we randomly get all zeros!
-                r = 0.1 * np.ones(mcopy.num_params)
-            v_prime = mdl.to_vector() + r
-            mcopy.from_vector(v_prime)
-            self.assertTrue(mcopy.is_similar(mdl))
-            self.assertFalse(mcopy.is_equivalent(mdl))
-
-    def test_explicit_model_equal(self):
-        mdl_explicit = smq1Q_XYI.target_model()
-        self.check_model(mdl_explicit)
-
-    def test_local_model_equal(self):
-        mdl_local = create_crosstalk_free_model(self.pspec_2Q,
-                                                ideal_gate_type='H+S', ideal_spam_type='tensor product H+S',
-                                                independent_gates=False,
-                                                ensure_composed_gates=False)
-        self.check_model(mdl_local)
-
-        mdl_local = create_crosstalk_free_model(self.pspec_2Q,
-                                                ideal_gate_type='H+S', ideal_spam_type='computational',
-                                                independent_gates=True,
-                                                ensure_composed_gates=True)
-        self.check_model(mdl_local)
-
-    def test_cloud_model_equal(self):
-        mdl_cloud = create_cloud_crosstalk_model(self.pspec_2Q, depolarization_strengths={'Gx': 0.05},
-                                                 stochastic_error_probs={'Gy': (0.01, 0.02, 0.03)},
-                                                 lindblad_error_coeffs={'Gcnot': {('H','ZZ'): 0.07, ('S','XX'): 0.10}},
-                                                 independent_gates=False, independent_spam=True, verbosity=2)
-        self.check_model(mdl_cloud)
-
-        mdl_cloud = create_cloud_crosstalk_model(self.pspec_2Q, depolarization_strengths={'Gx': 0.05},
-                                                 stochastic_error_probs={'Gy': (0.01, 0.02, 0.03)},
-                                                 lindblad_error_coeffs={'Gcnot': {('H','ZZ'): 0.07, ('S','XX'): 0.10}},
-                                                 independent_gates=True, independent_spam=True, verbosity=2)
-        self.check_model(mdl_cloud)
 
 

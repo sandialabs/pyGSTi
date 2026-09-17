@@ -10,6 +10,7 @@ Package of objective functions of a model and data set, which can be optimized.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from . import objectivefns
 from .objectivefns import ObjectiveFunctionBuilder, \
     ObjectiveFunction, RawChi2Function, RawChiAlphaFunction, RawFreqWeightedChi2Function, \
     RawPoissonPicDeltaLogLFunction, RawDeltaLogLFunction, RawMaxLogLFunction, RawTVDFunction, \

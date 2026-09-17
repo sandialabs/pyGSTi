@@ -10,24 +10,59 @@ The standard unitaries and gate names, used internal compilers and short-hand mo
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Dict, List, Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    try:
+        import qiskit
+    except:
+        pass
+    
 import numpy as _np
 import scipy.linalg as _spl
+
+from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
 
 from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
 from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
 from pygsti.tools.gatetools import sigmax, sigmay, sigmaz, sigmaxz
 
-
 class Gzr(_UnitaryGateFunction):
     shape = (2, 2)
 
     def __call__(self, theta):
-        return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
+        return _np.array([[1., 0.], [0., _np.exp(1j * float(theta[0]))]])
 
     @classmethod
     def _from_nice_serialization(cls, state):
         return super(Gzr, cls)._from_nice_serialization(state)
+
+
+class Gxr(_UnitaryGateFunction):
+    shape = (2, 2)
+
+    def __call__(self, theta):
+        theta = float(theta[0])
+        return _np.array([[_np.cos(theta / 2), -1j * _np.sin(theta / 2)],
+                          [-1j * _np.sin(theta / 2), _np.cos(theta / 2)]], complex)
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return super(Gxr, cls)._from_nice_serialization(state)
+
+
+class Gyr(_UnitaryGateFunction):
+    shape = (2, 2)
+
+    def __call__(self, theta):
+        theta = float(theta[0])
+        return _np.array([[_np.cos(theta / 2), -_np.sin(theta / 2)],
+                          [_np.sin(theta / 2), _np.cos(theta / 2)]], complex)
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return super(Gyr, cls)._from_nice_serialization(state)
 
 
 class Gczr(_UnitaryGateFunction):
@@ -35,12 +70,25 @@ class Gczr(_UnitaryGateFunction):
 
     def __call__(self, theta):
         return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.],
-                          [0., 0., 0., _np.exp(-1j * float(theta[0]))]], complex)
+                          [0., 0., 0., _np.exp(1j * float(theta[0]))]], complex)
 
     @classmethod
     def _from_nice_serialization(cls, state):
         return super(Gczr, cls)._from_nice_serialization(state)
 
+
+
+class Gu3(_UnitaryGateFunction):
+    shape = (2,2)
+    def __call__(self, arg):
+        theta, phi, lamb = (float(arg[0]), float(arg[1]), float(arg[2]))
+        return _np.array([[_np.cos(theta/2), -_np.exp(1j*lamb)*_np.sin(theta/2)],
+                         [_np.exp(1j*phi)*_np.sin(theta/2), _np.exp(1j*(phi + lamb))*_np.cos(theta/2)]])
+    
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return super(Gu3, cls)._from_nice_serialization(state)
+    
 
 def internal_gate_unitaries():
     """
@@ -113,7 +161,7 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
 
     The correspondence between the standard names and unitaries is w.r.t the
     internally-used gatenames (see internal_gate_unitaries()).  For example, one use
-    of this function is to check whether some gate specifed by a user with the name
+    of this function is to check whether some gate specified by a user with the name
     'Ghadamard' is the Hadamard gate, denoted internally by 'H'.
 
     Parameters
@@ -196,12 +244,18 @@ def standard_gatename_unitaries():
       * 'Gsqrtiswap' : square-root of ISWAP gate, used in some superconducting qubit platforms.
       * 'Gxx', 'Gzz' : MS-style parity gates
       * 'Gcres', 'Gecres' : Cross-resonance and echoed cross-resonance gates. Native gate operations common on transmon systems (including IBM).
-      
+      * 'Gecr' : alternative name for the echoed cross-resonance gate, matching OpenQASM / IBM conventions.
+
     * Non-Clifford gates:
 
       * 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
       * 'Gzr' : a parameterized gate that is a Z rotation by an angle, where when the angle = pi then it equals Z.
+      * 'Gxr', 'Gyr' : parameterized gates that are X and Y rotations by an angle theta, defined as
+        expm(-1j*theta*sigma/2) (i.e., matching the Qiskit RXGate/RYGate convention), where when the
+        angle = pi they equal X and Y (up to global phase).
+      * 'Gczr' : a parameterized controlled-Z-rotation gate, diag(1,1,1,exp(1j*theta)).
       * 'Gn' : N gate, pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere, native gate in some spin qubit systems.
+      * 'Gu3' : parameterized gate that can encode any single-qubit rotation with three parameters (theta, phi, lambda).
       
     Mostly, pyGSTi does not assume that a gate with one of these names is indeed
     the unitary specified here. Instead, these names are intended as short-hand
@@ -252,7 +306,7 @@ def standard_gatename_unitaries():
     
     #N gate, pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere
     #native gate in some spin qubit systems.
-    std_unitaries['Gn'] = _spl.expm(-1j*(_np.pi/4)*((_np.sqrt(3)/2)*sigmax - (.5)*sigmaz))
+    std_unitaries['Gn'] = _spl.expm(-1j*(_np.pi/4)*((_np.sqrt(3)/2)*sigmax - (0.5)*sigmaz))
 
     # The 1-qubit Clifford group.
     std_unitaries['Gc0'] = _np.array([[1, 0], [0, 1]], complex)                                         # This is Gi
@@ -302,9 +356,14 @@ def standard_gatename_unitaries():
     std_unitaries['Gcres'] = _spl.expm(-1j*_np.pi/4*sigmaxz)
     std_unitaries['Gecres'] = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                                         [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
-
+    std_unitaries['Gecr'] = std_unitaries['Gecres']  # alias
+    
     std_unitaries['Gzr'] = Gzr()
+    std_unitaries['Gxr'] = Gxr()
+    std_unitaries['Gyr'] = Gyr()
     std_unitaries['Gczr'] = Gczr()
+
+    std_unitaries['Gu3'] = Gu3()
 
     #Add these at the end, since we don't want unitary_to_standard_gatenames to return these "shorthand" names
     std_unitaries['Gx'] = std_unitaries['Gxpi2']
@@ -363,8 +422,8 @@ def unitary_to_standard_gatename(unitary, up_to_phase = False, return_phase = Fa
                         return std_name, phase
                     else:
                         return std_name
-
     return None
+
 def standard_gatenames_stim_conversions():
     """
     A dictionary converting the gates with standard names to stim tableus for these gates. Currently is only capable of converting
@@ -398,11 +457,40 @@ def standard_gatenames_stim_conversions():
     'Gzz'   : stim.Tableau.from_named_gate('SQRT_ZZ'),
     'Gcnot' : stim.Tableau.from_named_gate('CNOT'),
     'Gswap' : stim.Tableau.from_named_gate('SWAP'),
-    'Gcphase' : stim.Tableau.from_named_gate('CZ')
+    'Gcphase' : stim.Tableau.from_named_gate('CZ'),
+    'Giswap' : stim.Tableau.from_named_gate('ISWAP')
+
     }
     ecr_unitary = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
                              [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
     gate_dict['Gecres'] = stim.Tableau.from_unitary_matrix(ecr_unitary, endian='big')
+    gate_dict['Gecr'] = gate_dict['Gecres']
+
+    gate_dict['Gc0']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, 1]], complex), endian='big')   # This is Gi
+    gate_dict['Gc1']  = stim.Tableau.from_unitary_matrix(_np.array([[1, -1j], [1, 1j]], complex) / _np.sqrt(2), endian='big')   # This is H Pdag
+    gate_dict['Gc2']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [1j, -1j]], complex) / _np.sqrt(2), endian='big')   # This is P H
+    gate_dict['Gc3']  = stim.Tableau.from_unitary_matrix(_np.array([[0, 1], [1, 0]], complex), endian='big')   # This is Gxpi (up to phase)
+    gate_dict['Gc4']  = stim.Tableau.from_unitary_matrix(_np.array([[-1, -1j], [1, -1j]], complex) / _np.sqrt(2), endian='big')   # This is H Pdag X
+    gate_dict['Gc5']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [-1j, 1j]], complex) / _np.sqrt(2), endian='big')   # This is Pdag H
+    gate_dict['Gc6']  = stim.Tableau.from_unitary_matrix(_np.array([[0, -1j], [1j, 0]], complex), endian='big')   # This is Gypi (up to phase)
+    gate_dict['Gc7']  = stim.Tableau.from_unitary_matrix(_np.array([[1j, 1], [-1j, 1]], complex) / _np.sqrt(2), endian='big')   # This is H P X
+    gate_dict['Gc8']  = stim.Tableau.from_unitary_matrix(_np.array([[1j, -1j], [1, 1]], complex) / _np.sqrt(2), endian='big')   # This is Pdag X H
+    gate_dict['Gc9']  = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, -1]], complex), endian='big')   # This is Gzpi
+    gate_dict['Gc10'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 1j], [1, -1j]], complex) / _np.sqrt(2), endian='big')  # This is H P
+    gate_dict['Gc11'] = stim.Tableau.from_unitary_matrix(_np.array([[1, -1], [1j, 1j]], complex) / _np.sqrt(2), endian='big')  # This is P X H
+    gate_dict['Gc12'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [1, -1]], complex) / _np.sqrt(2), endian='big')  # This is Gh
+    gate_dict['Gc13'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 - 0.5j, 0.5 + 0.5j], [0.5 + 0.5j, 0.5 - 0.5j]], complex), endian='big')  # This is Gxmpi2 (up to phase)
+    gate_dict['Gc14'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, 1j]], complex), endian='big')  # This is Gzpi2 / Gp (up to phase)
+    gate_dict['Gc15'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 1], [-1, 1]], complex) / _np.sqrt(2), endian='big')  # This is Gympi2 (up to phase)
+    gate_dict['Gc16'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, 0.5 - 0.5j], [0.5 - 0.5j, 0.5 + 0.5j]], complex), endian='big')  # This is Gxpi2 (up to phase)
+    gate_dict['Gc17'] = stim.Tableau.from_unitary_matrix(_np.array([[0, 1], [1j, 0]], complex), endian='big')  # This is P X
+    gate_dict['Gc18'] = stim.Tableau.from_unitary_matrix(_np.array([[1j, -1j], [-1j, -1j]], complex) / _np.sqrt(2), endian='big')  # This is Y H
+    gate_dict['Gc19'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, -0.5 + 0.5j], [0.5 - 0.5j, -0.5 - 0.5j]], complex), endian='big')  # This is Pdag H P
+    gate_dict['Gc20'] = stim.Tableau.from_unitary_matrix(_np.array([[0, -1j], [-1, 0]], complex), endian='big')  # This is Pdag X
+    gate_dict['Gc21'] = stim.Tableau.from_unitary_matrix(_np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2), endian='big')  # This is Gypi2 (up to phase)
+    gate_dict['Gc22'] = stim.Tableau.from_unitary_matrix(_np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex), endian='big')  # This is P H Pdag
+    gate_dict['Gc23'] = stim.Tableau.from_unitary_matrix(_np.array([[1, 0], [0, -1j]], complex), endian='big') # This is Gzmpi2 / Gpdag (up to phase)
+
 
     return gate_dict
 
@@ -453,17 +541,30 @@ def standard_gatenames_cirq_conversions():
     std_gatenames_to_cirq['Gh'] = cirq.H
     std_gatenames_to_cirq['Gt'] = cirq.T
     std_gatenames_to_cirq['Gtdag'] = cirq.T**-1
-    std_gatenames_to_cirq['Gn'] = cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
-                                                    x_exponent=0.4195693767448338, 
+    std_gatenames_to_cirq['Gn'] = cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326,
+                                                    x_exponent=0.4195693767448338,
                                                     z_exponent=-0.2951672353008665)
+
+    #parameterized gates: these map to callables (angle(s) -> cirq gate) rather than a fixed
+    #cirq gate object, since the pyGSTi gate names refer to a whole family of gates parameterized
+    #by the args carried on the gate's Label. convert_to_cirq() special-cases these by calling
+    #the entry with the label's args before calling .on(*qubits) on the result.
+    std_gatenames_to_cirq['Gzr'] = lambda theta: cirq.ZPowGate(exponent=float(theta) / _np.pi)
+    std_gatenames_to_cirq['Gxr'] = lambda theta: cirq.XPowGate(exponent=float(theta) / _np.pi)
+    std_gatenames_to_cirq['Gyr'] = lambda theta: cirq.YPowGate(exponent=float(theta) / _np.pi)
+    std_gatenames_to_cirq['Gu3'] = lambda theta, phi, lamb: cirq.PhasedXZGate(
+        axis_phase_exponent=0.5 - float(lamb) / _np.pi,
+        x_exponent=float(theta) / _np.pi,
+        z_exponent=(float(phi) + _np.pi / 2) / _np.pi - (0.5 - float(lamb) / _np.pi))
 
     #two-qubit gates
 
     std_gatenames_to_cirq['Gcphase'] = cirq.CZ
+    std_gatenames_to_cirq['Gczr'] = lambda theta: cirq.CZPowGate(exponent=float(theta) / _np.pi)
     std_gatenames_to_cirq['Gcnot'] = cirq.CNOT
     std_gatenames_to_cirq['Gswap'] = cirq.SWAP
-    std_gatenames_to_cirq['Gzz'] = cirq.ZZPowGate(exponent=.5, global_shift=-.5)
-    std_gatenames_to_cirq['Gxx'] = cirq.XXPowGate(exponent=.5, global_shift=-.5)
+    std_gatenames_to_cirq['Gzz'] = cirq.ZZPowGate(exponent=0.5, global_shift=-0.5)
+    std_gatenames_to_cirq['Gxx'] = cirq.XXPowGate(exponent=0.5, global_shift=-0.5)
     std_gatenames_to_cirq['Giswap'] = cirq.ISWAP
     std_gatenames_to_cirq['Gsqrtiswap'] = cirq.SQRT_ISWAP
     #I don't presently see a one-to-one conversion for cross-resonance
@@ -516,8 +617,13 @@ def cirq_gatenames_standard_conversions():
         raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
 
 
-    #reverse the mapping in standard_gatenames_cirq_conversions
-    cirq_to_standard_mapping = {value: key for key,value in standard_gatenames_cirq_conversions().items()}
+    #reverse the mapping in standard_gatenames_cirq_conversions. Skip the plain-function entries
+    #(the parameterized gate families, e.g. 'Gzr' -> lambda theta: ...) since they don't correspond
+    #to a single fixed cirq gate object that could ever be looked up on the reversed side.
+    #Note cirq.Gate instances are themselves callable (calling one applies it to qubits), so we
+    #can't use a bare `callable(value)` check here -- that would also exclude every real gate.
+    cirq_to_standard_mapping = {value: key for key, value in standard_gatenames_cirq_conversions().items()
+                               if isinstance(value, cirq.Gate)}
 
     #A direct reversing doesn't quite do what we want since the originally mapping was not
     #one-to-one (some pyGSTi gate names refer to the same cirq Circuit, primarily because of the cliffords). 
@@ -533,6 +639,67 @@ def cirq_gatenames_standard_conversions():
     cirq_to_standard_mapping[cirq.H] = 'Gh'
 
     return cirq_to_standard_mapping
+
+
+def cirq_parameterized_gatenames_standard_conversions():
+    """
+    An ordered list of `(cirq gate class, pygsti gate name, args function)` tuples used by
+    `Circuit.from_cirq` to convert cirq operations whose gate is a member of a continuously
+    parameterized family (e.g. `cirq.ZPowGate`) into a pyGSTi standard parameterized gate
+    (e.g. 'Gzr') with args computed from the cirq gate's parameters.
+
+    This is checked (via `isinstance`) only after an exact dictionary lookup in
+    `cirq_gatenames_standard_conversions` has failed, so exact matches (e.g. `cirq.Z`,
+    `cirq.CZ`, the 24 Clifford `PhasedXZGate`s) are unaffected and continue to map to their
+    existing fixed pyGSTi gate names.
+
+    Note that `cirq.Rx`, `cirq.Ry`, and `cirq.Rz` are subclasses of `cirq.XPowGate`,
+    `cirq.YPowGate`, and `cirq.ZPowGate`, respectively, so they are covered by the same
+    `isinstance` checks without needing separate entries.
+
+    `Gzr`/`Gczr` match `cirq.unitary` exactly when the matched gate's `global_shift` is 0;
+    all other cases match up to a global phase. Since a global phase is unobservable, the
+    conversion is applied regardless of `global_shift`.
+
+    Returns
+    -------
+    list of (type, str, callable)
+        Each callable maps a cirq gate instance to a tuple of args suitable for use in
+        `Label(pygsti_name, qubits, args=args_fn(gate))`.
+    """
+    try:
+        import cirq
+    except ImportError:
+        raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+    def _zpow_args(gate):
+        return (float(gate.exponent) * _np.pi,)
+
+    def _xpow_args(gate):
+        return (float(gate.exponent) * _np.pi,)
+
+    def _ypow_args(gate):
+        return (float(gate.exponent) * _np.pi,)
+
+    def _czpow_args(gate):
+        return (float(gate.exponent) * _np.pi,)
+
+    def _phasedxz_args(gate):
+        a = float(gate.axis_phase_exponent)
+        x = float(gate.x_exponent)
+        z = float(gate.z_exponent)
+        theta = _np.pi * x
+        phi = _np.pi * (z + a) - _np.pi / 2
+        lamb = _np.pi / 2 - _np.pi * a
+        return (theta, phi, lamb)
+
+    return [
+        (cirq.ZPowGate, 'Gzr', _zpow_args),
+        (cirq.XPowGate, 'Gxr', _xpow_args),
+        (cirq.YPowGate, 'Gyr', _ypow_args),
+        (cirq.CZPowGate, 'Gczr', _czpow_args),
+        (cirq.PhasedXZGate, 'Gu3', _phasedxz_args),
+    ]
 
 
 def standard_gatenames_quil_conversions():
@@ -764,12 +931,14 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gc23'] = ['u3(0, 0, 4.71238898038469)']  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['u3(0, 0, ' + str(gatearg[0]) + ')']
         std_gatenames_to_argmap['Gczr'] = lambda gatearg: ['crz(' + str(gatearg[0]) + ')']
         std_gatenames_to_argmap['Gu3'] = lambda gatearg: ['u3(' + str(gatearg[0]) + ', '
                                                           + str(gatearg[1]) + ', ' + str(gatearg[2]) + ')']
+        std_gatenames_to_argmap['Gdelay'] = lambda gatearg: ['delay(' + str(gatearg[0]) + ')']
 
     elif version == 'x-sx-rz':
         std_gatenames_to_qasm = {}
@@ -819,6 +988,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
 
         std_gatenames_to_qasm['Gecr'] = ['ecr']
+        std_gatenames_to_qasm['Gecres'] = ['ecr']
 
         std_gatenames_to_argmap = {}
         std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['rz(' + str(gatearg[0]) + ')']
@@ -826,10 +996,101 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_argmap['Gu3'] = lambda gatearg: ['rz(' + str(gatearg[2]) + ')', 'sx',
                                                           'rz(' + str(float(gatearg[0]) + _np.pi) + ')', 'sx',
                                                           'rz(' + str(float(gatearg[1]) + _np.pi) + ')']
+        std_gatenames_to_argmap['Gdelay'] = lambda gatearg: ['delay(' + str(gatearg[0]) + ')']
     else:
         raise ValueError("Unknown version!")
 
     return std_gatenames_to_qasm, std_gatenames_to_argmap
+
+
+def qiskit_gatenames_standard_conversions() -> Dict[str, List[str, bool]]:   
+    """
+    A dictionary converting Qiskit gates (based on Instruction.name)
+    to built-in pyGSTi names for these gates.
+    Additional flag in dict value indicates if the gate has params.
+
+    Does not currently support conversion of all qiskit gate types.
+
+    Returns
+    ---------
+    Dictionary mapping qiskit gate names to pyGSTi gate names and a flag
+    for whether or not the gate has parameters.
+    """
+
+    qiskit_to_standard_mapping = {}
+
+    qiskit_to_standard_mapping['id'] = ['Gi', False]
+    qiskit_to_standard_mapping['x'] = ['Gxpi', False]
+    qiskit_to_standard_mapping['y'] = ['Gypi', False]
+    qiskit_to_standard_mapping['z'] = ['Gzpi', False]
+    qiskit_to_standard_mapping['sx'] = ['Gxpi2', False]
+    qiskit_to_standard_mapping['sxdg'] = ['Gxmpi2', False]
+    qiskit_to_standard_mapping['t'] = ['Gt', False]
+    qiskit_to_standard_mapping['h'] = ['Gh', False]
+
+    qiskit_to_standard_mapping['rz'] = ['Gzr', True]
+    qiskit_to_standard_mapping['ry'] = ['Gyr', True]
+    qiskit_to_standard_mapping['rx'] = ['Gxr', True]
+    qiskit_to_standard_mapping['u'] = ['Gu3', True]
+    qiskit_to_standard_mapping['u3'] = ['Gu3', True]
+
+    qiskit_to_standard_mapping['cx'] = ['Gcnot', False]
+    qiskit_to_standard_mapping['cz'] = ['Gcphase', False]
+    qiskit_to_standard_mapping['ecr'] = ['Gecres', False]
+    qiskit_to_standard_mapping['swap'] = ['Gswap', False]
+
+    qiskit_to_standard_mapping['delay'] = ['Gdelay', True]
+
+    return qiskit_to_standard_mapping
+
+
+def standard_gatenames_qiskit_conversions() -> Dict[str, Tuple[qiskit.circuit.Instruction, str, bool]]:
+    """
+    A dictionary converting the gates with standard names to the Qiskit gates/names.
+
+    See :func:`standard_gatename_unitaries`.
+
+    Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
+    are not enforced to correspond to the expected unitaries. So, if the user
+    as, say, defined 'Gh' to be something other than the Hadamard gate this
+    conversion dictionary will be incorrect.
+
+    Later versions of qiskit may be able to utilize an accelerated circuit append.
+
+    Returns
+    -------
+    dict[str, tuple[qiskit.circuit.Instruction, str, bool]]
+        Maps pyGSTi gatenames to tuples of the qiskit gate class, gatename, and a boolean
+        that indicates whether the append of the gate to the circuit can be accelerated in
+        a later version of qiskit.
+    """
+
+    _check_qiskit_version('standard_gatenames_qiskit_conversions()')
+    from qiskit.circuit import Delay
+    from qiskit.circuit.library import standard_gates
+
+    std_gatenames_to_qiskit = {}
+
+    # third entry of tuple indicates whether the gate is a accelerateable standard Qiskit gate.
+
+    std_gatenames_to_qiskit['Gcphase'] = (standard_gates.CZGate, 'cz', False)
+    std_gatenames_to_qiskit['Gcnot'] = (standard_gates.CXGate, 'cx', False)
+    std_gatenames_to_qiskit['Gecres'] = (standard_gates.ECRGate, 'ecr', False)
+    std_gatenames_to_qiskit['Gxpi2'] = (standard_gates.SXGate, 'sx', False)
+    std_gatenames_to_qiskit['Gzr'] = (standard_gates.RZGate, 'rz', False)
+    std_gatenames_to_qiskit['Gyr'] = (standard_gates.RYGate, 'ry', False)
+    std_gatenames_to_qiskit['Gxr'] = (standard_gates.RXGate, 'rx', False)
+    std_gatenames_to_qiskit['Gxpi'] = (standard_gates.XGate, 'x', False)
+    std_gatenames_to_qiskit['Gzpi'] = (standard_gates.ZGate, 'z', False)
+    std_gatenames_to_qiskit['Gypi'] = (standard_gates.YGate, 'y', False)
+    std_gatenames_to_qiskit['Gi'] = (standard_gates.IGate, 'id', False)
+    std_gatenames_to_qiskit['Gu3'] = (standard_gates.UGate, 'u', False)
+    std_gatenames_to_qiskit['Gh'] = (standard_gates.HGate, 'h', False)
+
+    std_gatenames_to_qiskit['Gdelay'] = (Delay, 'delay', False)
+
+    
+    return std_gatenames_to_qiskit
 
 
 def qasm_u3(theta, phi, lamb, output='unitary'):

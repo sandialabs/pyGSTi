@@ -1,0 +1,6 @@
+# Differential-corpus allowlist: mismatches between baseline and candidate
+# fingerprint files that are EXPECTED and approved. One entry per line:
+# field<TAB>circuit-str<TAB>reason
+# The circuit-str column is the Python repr of the baseline circuit string
+# exactly as shown in compare output, including the surrounding quotes.
+# (No entries yet — every future entry must come with a written reason.)

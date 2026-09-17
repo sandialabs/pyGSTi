@@ -25,18 +25,18 @@ class RPEConstructionFuncBase(object):
     def test_make_parameterized_rpe_gateset(self):
         # These numbers have no significance
         A = rc.create_parameterized_rpe_model(
-            1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001,
+            1.57079632679, 1.57079632679, 0.78539816339, 0.001, 0.001,
             rpeconfig_inst=self.config
         )
         B = rc.create_parameterized_rpe_model(
-            1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001,
+            1.57079632679, 1.57079632679, 0.78539816339, 0.001, 0.001,
             rpeconfig_inst=self.config
         )
         self.assertEqual(A.frobeniusdist(B), 0.0)
 
         # Again, no significance in these numbers
         C = rc.create_parameterized_rpe_model(
-            1.56079632679, 1.56079632679, .78539816339, 0.001, 0.001,
+            1.56079632679, 1.56079632679, 0.78539816339, 0.001, 0.001,
             True, rpeconfig_inst=self.config
         )
         self.assertAlmostEqual(A.frobeniusdist(C), 0.0, 2)
@@ -66,7 +66,7 @@ class RPEConstructionFuncBase(object):
 
     def test_make_rpe_data_set(self):
         A = rc.create_parameterized_rpe_model(
-            1.57079632679, 1.57079632679, .78539816339, 0.001, 0.001,
+            1.57079632679, 1.57079632679, 0.78539816339, 0.001, 0.001,
             rpeconfig_inst=self.config
         )
         d = rc.create_rpe_angle_circuits_dict(3, self.config)

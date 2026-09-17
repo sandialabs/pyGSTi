@@ -71,7 +71,7 @@ class Notebook(object):
         """
         template_filename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                           'templates', template_filename)
-        with open(str(template_filename), 'r') as infile:
+        with open(str(template_filename), 'r', encoding='utf-8') as infile:
             notebookDict = _json.load(infile)
         notebookDict['cells'].extend([c.to_json_dict() for c in self.cells])
         return notebookDict
@@ -93,7 +93,7 @@ class Notebook(object):
         None
         """
         jsonDict = self.to_json_dict(template_filename)
-        with open(str(output_filename), 'w') as outfile:
+        with open(str(output_filename), 'w', encoding='utf-8') as outfile:
             _json.dump(jsonDict, outfile)
 
     def add(self, cell):
@@ -146,7 +146,7 @@ class Notebook(object):
         -------
         None
         """
-        with open(str(filename), 'r') as infile:
+        with open(str(filename), 'r', encoding='utf-8') as infile:
             block = infile.read()
         self.add_block(block, cell_type)
 
@@ -266,7 +266,7 @@ class Notebook(object):
         -------
         None
         """
-        with open(str(filename), 'r') as infile:
+        with open(str(filename), 'r', encoding='utf-8') as infile:
             self.add_notebook_text(infile.read())
 
     def add_notebook_text_files(self, filenames):
@@ -298,7 +298,7 @@ class Notebook(object):
         -------
         None
         """
-        with open(str(filename), 'r') as infile:
+        with open(str(filename), 'r', encoding='utf-8') as infile:
             notebookDict = _json.load(infile)
         for cell in notebookDict['cells']:
             self.add(NotebookCell(cell['cell_type'], cell['source']))

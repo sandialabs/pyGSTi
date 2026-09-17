@@ -11,8 +11,43 @@ Tools for general compatibility.
 #***************************************************************************************************
 
 import numbers as _numbers
-import uuid as _uuid
-from contextlib import contextmanager as _contextmanager
+
+import numpy as _np
+from numpy.lib import NumpyVersion as _NumpyVersion
+
+# The ``copy`` keyword of ``numpy.reshape`` was added in NumPy 2.1; direct
+# assignment to ``ndarray.shape`` was deprecated in NumPy 2.5.
+_NUMPY_HAS_RESHAPE_COPY = _NumpyVersion(_np.__version__) >= '2.1.0'
+
+
+def reshape_no_copy(a, shape):
+    """
+    Return a view of `a` with the given `shape` without copying its data.
+
+    Forward-compatible replacement for the idiom ``a.shape = shape``, which was
+    deprecated in NumPy 2.5. Like that idiom, this raises (rather than copying)
+    if the requested shape is incompatible with `a`'s memory layout, preserving
+    the no-copy guarantee that callers rely on.
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        Array to reshape.
+
+    shape : int or tuple or list of int
+        The new shape. May be a single int, or a tuple/list of ints that may
+        contain a single ``-1`` to infer one dimension.
+
+    Returns
+    -------
+    numpy.ndarray
+        A view of `a` (sharing its memory) with the requested shape.
+    """
+    if _NUMPY_HAS_RESHAPE_COPY:            # numpy >= 2.1
+        return _np.reshape(a, shape, copy=False)
+    view = a.view()                        # numpy < 2.1: copy= kwarg unavailable
+    view.shape = shape                     # in-place; raises if a copy is needed; not deprecated < 2.5
+    return view
 
 
 def isint(x):
@@ -44,26 +79,3 @@ def _numpy14einsumfix():
             return _np.orig_einsum(str(s), *args, **kwargs)
         _np.orig_einsum = _np.einsum
         _np.einsum = fixed_einsum
-
-
-@_contextmanager
-def patched_uuid():
-    """
-    Monkeypatch the uuid module with a fake SafeUUID
-
-    `uuid.SafeUUID` is new in Python 3.7. This is a workaround to
-    allow unpickling objects from >= 3.7 in < 3.7.
-
-    TODO: objects should be serialized correctly and this should be deprecated.
-    """
-    if 'SafeUUID' not in dir(_uuid):
-        class dummy_SafeUUID(object):  # noqa N803
-            def __new__(cls, *args):
-                return _uuid.UUID.__new__(_uuid.UUID, *args)
-        _uuid.SafeUUID = dummy_SafeUUID
-
-        yield  # context block
-
-        _uuid.__delattr__('SafeUUID')
-    else:
-        yield

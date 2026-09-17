@@ -1301,6 +1301,3 @@ def fast_triu_indices(int n):
             curr_idx += 1
 
     return row_indices_np, col_indices_np
-
-
-

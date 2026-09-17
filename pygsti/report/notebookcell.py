@@ -57,7 +57,7 @@ class NotebookCell(object):
             templateFilename = 'CodeCell.json'
         templateFilename = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                          'templates', templateFilename)
-        with open(templateFilename, 'r') as infile:
+        with open(templateFilename, 'r',  encoding='utf-8') as infile:
             cellDict = _json.load(infile)
         cellDict['source'].extend(self.source)
         return cellDict
