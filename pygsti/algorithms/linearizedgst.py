@@ -77,7 +77,8 @@ __all__ = ['ModelParameter', 'ModelParameterList', 'build_model_parameter_indexi
            'calculate_sensitivity_vector_probs', 'ideal_pauli_expectations', 'CircuitDesign',
            'create_circuit_design_matrix', 'create_design_matrix_list', 'create_design_matrix',
            'create_design_matrix_list_parallel_pathos', 'compute_pauli_expectations', 'probability_dicts_from_dataset',
-           'observed_expectation_shifts', 'solve_linearized_gst', 'estimate_error_rates', 'estimated_rates_dict',
+           'unidentifiable_directions', 'observed_expectation_shifts', 'solve_linearized_gst', 'estimate_error_rates',
+           'estimated_rates_dict',
            'mcm_fomgi_estimates', 'make_bit_string_vector', 'int_to_bin', 'int_to_pauli', 'rate_to_model']
 
 
@@ -969,6 +970,46 @@ def _as_design_arrays(design_matrices):
             arrays.append(_np.asarray(d))
             infos.append(None)
     return arrays, infos
+
+
+def unidentifiable_directions(design_matrices, model_parameter_indexing, tol=1e-10):
+    """
+    Parameter combinations that the given circuits and observables cannot distinguish.
+
+    These are the null-space directions of the stacked design matrix.  A non-empty result means the
+    design matrix is rank deficient, either because the error model has a genuine gauge freedom or because the
+    circuits are not diverse enough (e.g. if every layer contains a gate on every qubit, crosstalk from "the
+    gate on qubit A" cannot be told apart from crosstalk from "the gate on qubit B").  In the latter case adding
+    circuits with different structure restores identifiability.
+
+    Parameters
+    ----------
+    design_matrices : list of CircuitDesign or numpy.ndarray, or a single 2D numpy.ndarray
+    model_parameter_indexing : ModelParameterList
+    tol : float, optional
+        Relative singular-value cutoff passed to `scipy.linalg.null_space`.
+
+    Returns
+    -------
+    list of dict
+        One dictionary per null-space direction, mapping :class:`ModelParameter` objects to coefficients
+        (scaled so the largest absolute coefficient is 1; entries below ``1e-8`` are dropped).  An empty list
+        means the design matrix has full column rank.
+    """
+    from scipy.linalg import null_space as _null_space
+    if isinstance(design_matrices, _np.ndarray) and design_matrices.ndim == 2:
+        design_matrix = design_matrices
+    else:
+        design_matrix = _np.vstack(_as_design_arrays(design_matrices)[0])
+    if design_matrix.shape[1] != len(model_parameter_indexing):
+        raise ValueError("Design matrix has %d columns but %d parameters were given"
+                         % (design_matrix.shape[1], len(model_parameter_indexing)))
+    directions = []
+    for vec in _null_space(design_matrix, rcond=tol).T:
+        vec = vec / vec[_np.argmax(_np.abs(vec))]
+        directions.append(_collections.OrderedDict((model_parameter_indexing[j], float(x))
+                                                   for j, x in enumerate(vec) if abs(x) > 1e-8))
+    return directions
 
 
 def observed_expectation_shifts(design_matrices, probability_dict_list, measurement_list=None):

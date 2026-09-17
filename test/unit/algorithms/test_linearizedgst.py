@@ -225,6 +225,30 @@ class DesignMatrixTester(BaseCase):
         self.assertArraysAlmostEqual(p_ideal, design.ideal_expectations)
         self.assertLess(np.abs((p_obs - p_ideal) - design.design_matrix @ self.true_rates).max(), 5e-4)
 
+    def test_unidentifiable_directions(self):
+        # crosstalk onto qubit 1 from gates on qubit 0 vs. from gates on qubit 2 cannot be told apart when
+        # every layer contains a gate on both qubits 0 and 2
+        ansatz = {('Gxpi2', 0): {('H', 'X'): 0.01, ('H', 'Z:1'): 0.005}, ('Gxpi2', 2): {('H', 'Z:1'): 0.004},
+                  ('Gxpi2', 1): {('H', 'X'): 0.01}, ('Gypi2', 1): {('H', 'Y'): 0.01}}
+        params, _ = lgst.build_model_parameter_indexing(ansatz, 3)
+        full_layers = [Label([Label('Gxpi2', 0), Label(g, 1), Label('Gxpi2', 2)]) for g in ('Gxpi2', 'Gypi2')]
+        degenerate = [Circuit([full_layers[0], full_layers[1]], line_labels=(0, 1, 2)),
+                      Circuit([full_layers[1], full_layers[0], full_layers[1]], line_labels=(0, 1, 2)),
+                      Circuit([full_layers[0]], line_labels=(0, 1, 2)),
+                      Circuit([full_layers[1], full_layers[0], full_layers[0]], line_labels=(0, 1, 2))]
+        designs = lgst.create_design_matrix_list(degenerate, params, return_info=True)
+        directions = lgst.unidentifiable_directions(designs, params)
+        self.assertEqual(len(directions), 1)
+        self.assertEqual(set(directions[0].keys()), {params[1], params[2]})
+        self.assertAlmostEqual(directions[0][params[1]] + directions[0][params[2]], 0.0)
+        # same result from a stacked array
+        self.assertEqual(len(lgst.unidentifiable_directions(np.vstack(designs), params)), 1)
+        # a circuit in which qubit 2 idles (and the crosstalk is subsequently observable) restores identifiability
+        diverse = degenerate + [Circuit([Label([Label('Gxpi2', 0), Label('Gypi2', 1)]), full_layers[0]], line_labels=(0, 1, 2))]
+        self.assertEqual(lgst.unidentifiable_directions(lgst.create_design_matrix_list(diverse, params), params), [])
+        with self.assertRaises(ValueError):
+            lgst.unidentifiable_directions(np.zeros((3, 2)), params)
+
     @pytest.mark.skipif(importlib.util.find_spec('pathos') is None, reason="pathos not installed")
     def test_parallel_pathos(self):
         serial = lgst.create_design_matrix_list(self.circuits[:6], self.params)
