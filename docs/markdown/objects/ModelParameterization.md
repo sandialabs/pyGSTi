@@ -57,12 +57,12 @@ For a brief overview of the available options, here is an incomplete list of par
 - `gate_type` for `modelmember.operations`:
   - `"static"` $\rightarrow$ `StaticArbitraryOp`
   - `"full"` $\rightarrow$ `FullArbitraryOp`
-  - `"static standard"` $\rightarrow$ `StaticStandardOp`
-  - `"static clifford"` $\rightarrow$ `StaticCliffordOp`
   - `"static unitary"` $\rightarrow$ `StaticUnitaryOp`
+  - `"static clifford"` $\rightarrow$ `StaticCliffordOp`
   - `"full unitary"` $\rightarrow$ `FullUnitaryOp`
   - `"full TP"` $\rightarrow$ `FullTPOp`
   - `"CPTP"`, `"H+S"`, etc. $\rightarrow$ `ExpErrorgenOp` + `LindbladErrorgen`
+  - `"static standard"` $\rightarrow$ [Deprecated] aliases `('static unitary', 'static')`
 
 
 - `prep_type` for `modelmember.states`:
@@ -84,7 +84,7 @@ For a brief overview of the available options, here is an incomplete list of par
   
 For convenience, the `prep_type` and `povm_type` arguments also accept `"auto"`, which will try to set the parameterization based on the given `gate_type`. An incomplete list of this `gate_type` $\rightarrow$ `prep_type` / `povm_type` mapping is:
 
-- `"auto"`, `"static standard"`, `"static clifford"` $\rightarrow$ `"computational"`
+- `"auto"`, `"static unitary"`, `"static clifford"` $\rightarrow$ `"computational"`
 - `"unitary"` $\rightarrow$ `"pure"`
 - All others map directly
 

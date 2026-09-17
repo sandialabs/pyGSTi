@@ -15,6 +15,10 @@ import numpy as _np
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers.torchable import StaticTorchable as _StaticTorchable
+from pygsti.tools import internalgates as _itgs
+from pygsti.tools import optools as _ot
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
+from pygsti.modelmembers import term as _term
 
 
 class StaticArbitraryOp(_DenseOperator, _NoErrorGeneratorInterface, _StaticTorchable):
@@ -45,9 +49,111 @@ class StaticArbitraryOp(_DenseOperator, _NoErrorGeneratorInterface, _StaticTorch
         _DenseOperator.__init__(self, m, basis, evotype, state_space)
         #(default DenseOperator/LinearOperator methods implement an object with no parameters)
 
+    @classmethod
+    def from_standard_gate_name(cls, name, basis='pp', evotype="default", state_space=None):
+        """
+        Alternative constructor which builds the operation from a string corresponding to a 
+        built-in standard gate name. See `tools.internalgates.standard_gatename_unitaries`.
+        """
+        std_unitaries = _itgs.standard_gatename_unitaries()
+        if name not in std_unitaries:
+            raise ValueError(f"{name} does not name a standard operation")
+        U = std_unitaries[name]
+        superop = _ot.unitary_to_superop(U, basis)
+        return cls(superop, basis, evotype, state_space)
+
+
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
             the same local structure, i.e., not considering parameter values or submembers """
         # static objects must also test their values in is_similar, since these aren't parameters.
         return (super()._is_similar(other, rtol, atol)
                 and _np.allclose(self.to_dense(), other.to_dense(), rtol=rtol, atol=atol))
+
+    def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
+        """
+        Get the `order`-th order Taylor-expansion terms of this operation.
+
+        This function either constructs or returns a cached list of the terms at
+        the given order.  Each term is "rank-1", meaning that its action on a
+        density matrix `rho` can be written:
+
+        `rho -> A rho B`
+
+        The coefficients of these terms are typically polynomials of the operation's
+        parameters, where the polynomial's variable indices index the *global*
+        parameters of the operation's parent (usually a :class:`Model`), not the
+        operation's local parameter array (i.e. that returned from `to_vector`).
+
+        Parameters
+        ----------
+        order : int
+            Which order terms (in a Taylor expansion of this :class:`LindbladOp`)
+            to retrieve.
+
+        max_polynomial_vars : int, optional
+            maximum number of variables the created polynomials can have.
+
+        return_coeff_polys : bool
+            Whether a parallel list of locally-indexed (using variable indices
+            corresponding to *this* object's parameters rather than its parent's)
+            polynomial coefficients should be returned as well.
+
+        Returns
+        -------
+        terms : list
+            A list of :class:`RankOneTerm` objects.
+        coefficients : list
+            Only present when `return_coeff_polys == True`.
+            A list of *compact* polynomial objects, meaning that each element
+            is a `(vtape,ctape)` 2-tuple formed by concatenating together the
+            output of :meth:`Polynomial.compact`.
+        """
+        #Same as unitary op -- assume this op acts as a single unitary term -- consolidate in FUTURE?
+        if order == 0:  # only 0-th order term exists
+            coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
+            terms = [_term.RankOnePolynomialOpTerm.create_from(coeff, self, self,
+                                                               self._evotype, self.state_space)]
+            if return_coeff_polys:
+                coeffs_as_compact_polys = coeff.compact(complex_coeff_tape=True)
+                return terms, coeffs_as_compact_polys
+            else:
+                return terms
+        else:
+            if return_coeff_polys:
+                vtape = _np.empty(0, _np.int64)
+                ctape = _np.empty(0, complex)
+                return [], (vtape, ctape)
+            else:
+                return []
+
+    @property
+    def total_term_magnitude(self):
+        """
+        Get the total (sum) of the magnitudes of all this operator's terms.
+
+        The magnitude of a term is the absolute value of its coefficient, so
+        this function returns the number you'd get from summing up the
+        absolute-coefficients of all the Taylor terms (at all orders!) you
+        get from expanding this operator in a Taylor series.
+
+        Returns
+        -------
+        float
+        """
+        return 1.0
+
+    @property
+    def total_term_magnitude_deriv(self):
+        """
+        The derivative of the sum of *all* this operator's terms.
+
+        Computes the derivative of the total (sum) of the magnitudes of all this
+        operator's terms with respect to the operators (local) parameters.
+
+        Returns
+        -------
+        numpy array
+            An array of length self.num_params
+        """
+        return _np.empty((0,), 'd')

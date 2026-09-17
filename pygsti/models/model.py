@@ -2614,8 +2614,8 @@ class OpModel(Model):
                 nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
                 tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
                 U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect
-            elif isinstance(op, _op.StaticStandardOp):
-                op_mx = op.to_dense()
+            elif isinstance(op, (_op.StaticStandardOp, _op.StaticArbitraryOp, _op.StaticUnitaryOp, _op.DenseOperator)):
+                op_mx = op.to_dense(on_space='HilbertSchmidt')
                 nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
                 tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
                 U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect

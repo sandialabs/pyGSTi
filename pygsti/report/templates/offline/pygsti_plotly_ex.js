@@ -10,6 +10,28 @@ function max_height(els) {
     return Math.max.apply(null, hs);
 }
 
+/* Pin each element's current `prop` ("width"/"height") as an explicit style.
+
+   Reads every element before writing any of them.  Reading a geometry property
+   flushes pending layout and writing one invalidates it again, so interleaving
+   the two costs a forced reflow per element -- and these loops run over every
+   cell of every switch value of every table.
+
+   `only_simple` restricts the operation to cells with exactly one child, which
+   is what the pre-plot-creation pass wants. */
+function lock_cell_sizes(els, prop, only_simple) {
+    var targets = [], values = [];
+    els.each( function(i, el) {
+	var $el = $(el);
+	if(only_simple && $el.children().length != 1) return;
+	targets.push($el);
+	values.push(prop == "width" ? $el.width() : $el.height());
+    });
+    for(var i = 0; i < targets.length; i++) {
+	targets[i].css(prop, values[i]);
+    }
+}
+
 function get_wsobj_group(id) {
     var obj = $("#" + id);
     if(obj.hasClass("pygsti-wsoutput-group")) {
@@ -19,8 +41,22 @@ function get_wsobj_group(id) {
     }
 }
 
+/* Set a <figure>'s caption width from the content div it describes.
+
+   Deferred to the next animation frame and guarded against a zero measurement:
+   on a switch change the content div is measured in the same frame it's shown,
+   before layout has run, which used to write width:0px and leave the caption
+   collapsed until the plot queue happened to drain. */
+function pygsti_set_caption_width(caption, contentEl) {
+    if(caption.length == 0) return;
+    requestAnimationFrame( function() {
+	var w = contentEl.width();
+	if(w > 0) { caption.css('width', Math.round(w*0.9) + 'px'); }
+    });
+}
+
 function make_wstable_resizable(id) {
-    wsgroup = get_wsobj_group(id);
+    var wsgroup = get_wsobj_group(id);
     if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
     
     wsgroup.resizable({
@@ -52,7 +88,7 @@ function make_wstable_resizable(id) {
 }
 
 function make_wsplot_resizable(id) {
-    wsgroup = get_wsobj_group(id);
+    var wsgroup = get_wsobj_group(id);
     if( wsgroup.hasClass('ui-resizable')) return; //already make resizable
     
     wsgroup.resizable({
@@ -92,14 +128,11 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	var fnForSingleTableDivs = function(k,div) {
             var was_visible = $(div).css('display') != 'none'; //is(":visible");
             $(div).show();
-            $(div).find("td").not(".plotContainingTD").each(
-                function(i,el){
-		    if($(el).children().length == 1) {
-			$(el).css("width", $(el).width()); } });
-	    $(div).find("th").each(
-		function(i,el){
-		    if($(el).children().length == 1) {
-			$(el).css("height", $(el).height()); } });
+	    // Read every cell first, then write.  Interleaving a .width() read with
+	    // a .css() write forces a synchronous reflow per cell; a large report
+	    // has thousands of cells and this loop runs once per switch value.
+	    lock_cell_sizes($(div).find("td").not(".plotContainingTD"), "width", true);
+	    lock_cell_sizes($(div).find("th"), "height", true);
             if(!was_visible) { $(div).hide(); }
         }
 	if(wstable.hasClass("single_switched_value")) {
@@ -111,14 +144,14 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 
 	//1) set widths & heights of plot-containing TDs to the
 	//   "desired" or "native" values
-	TDtoCheck = null; // the TD element used to check for width settling
+	var TDtoCheck = null; // the TD element used to check for width settling
 	wstable.find("td.plotContainingTD").each( function(k,td) {
 	    var plots = $(td).find(".plotly-graph-div");
 	    var padding = $(td).css("padding-left");
 	    if(padding == "") { padding = 0; }
 	    else { padding = parseFloat(padding); }
-	    desiredW =	max_width(plots)+2*padding;
-            desiredH =	max_height(plots)+2*padding
+	    var desiredW = max_width(plots)+2*padding;
+            var desiredH = max_height(plots)+2*padding
             $(td).css("min-width", desiredW);
             $(td).css("height", desiredH);
         console.log("desired width: ", desiredW)
@@ -127,7 +160,7 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	    if(TDtoCheck === null) TDtoCheck = $(td); //just take the first one
 
 	    if(!initial_autosize) {
-		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
+		var firstChild = $(td).children("div.pygsti-wsoutput-group").first()
 		firstChild.css("width", max_width(plots)+2*padding);  // these don't seem to do 
 		firstChild.css("height", max_height(plots)+2*padding);// anything... (?)
 		//console.log("DEBUG: SETTING width/height CSS of first child! ID=" + firstChild.attr("id"))
@@ -141,25 +174,58 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	//  it takes some time for the browser to respond to the desired withs set above
 	//  and update the widths of the TD elements in the table.  The code below
 	//  waits for this settling to occur before proceeding to step 2.
-	last_w = 0; cnt = 0; 
-	nSettle = 2; //number of times we need to get the same width to call it "settled"
-        var intervalFn = setInterval( function() {
+	// Per-table state read across animation frames.  These used to be implicit
+	// globals, so two tables initializing at once (the Raw Estimates tab has
+	// two) clobbered each other's settling state and one could settle on the
+	// other's width.
+	var last_w = 0, cnt = 0;
+	var nSettle = 2; //number of times we need to get the same width to call it "settled"
+        // Poll on animation frames rather than a fixed 200ms timer.  The widths
+	// normally settle within a frame or two, but the old timer needed three
+	// equal readings 200ms apart, imposing a ~600ms floor before any plot
+	// could be created.
+	//
+	// Sampling per frame makes "unchanged for N samples" a much weaker signal
+	// than it was at 200ms spacing, and web fonts are the async width source
+	// that matters here: a late-arriving face changes text metrics and so
+	// changes cell widths.  So don't call anything settled until font loading
+	// has finished.  document.fonts.ready resolves promptly when the faces are
+	// already loaded (or have already failed), so this costs nothing in the
+	// common case.
+	var fontsReady = true;
+	if(document.fonts && document.fonts.ready) {
+	    fontsReady = false;
+	    document.fonts.ready.then( function() { fontsReady = true; } );
+	}
+
+	// Budget in frames, not wall-clock.  requestAnimationFrame doesn't fire
+	// while the page is hidden, so a wall-clock deadline would be burned by
+	// time spent in a background tab and fire on the first frame after the
+	// user returns, before any width had been observed as stable.
+	var framesLeft = 180; //~3s of visible time, then proceed regardless
+	var settleStep = function() {
 	    if(TDtoCheck === null) {
-		clearInterval(intervalFn);
 		wstable.trigger("after_widths_settle");
+		return;
 	    }
-	    else {
-		w = TDtoCheck.width();
-		if(last_w == parseFloat(w)) {
-		    if(cnt < 2) cnt += 1;
-		    else {
-			clearInterval(intervalFn);
-			wstable.trigger("after_widths_settle");
-		    }
+	    var w = TDtoCheck.width();
+	    if(last_w == parseFloat(w)) {
+		if(cnt < nSettle) cnt += 1;
+		else if(fontsReady) {
+		    wstable.trigger("after_widths_settle");
+		    return;
 		}
-		else last_w = parseFloat(w);
 	    }
-	}, 200);
+	    else { last_w = parseFloat(w); cnt = 0; }
+
+	    if(--framesLeft <= 0) {
+		console.log("Width settling timed out for " + id + "; proceeding anyway.");
+		wstable.trigger("after_widths_settle");
+		return;
+	    }
+	    requestAnimationFrame(settleStep);
+	};
+	requestAnimationFrame(settleStep);
     });
     
     $("#"+id).on("after_widths_settle", function(event) {
@@ -181,10 +247,8 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 	var fnForSingleTableDivs = function(k,div) {
             var was_visible = $(div).css('display') != 'none'; //is(":visible");
             $(div).show();
-            $(div).find("td").not(".plotContainingTD").each(
-                function(i,el){ $(el).css("width", $(el).width()); });
-	    $(div).find("th").each(
-		function(i,el){ $(el).css("height", $(el).height()); });
+	    lock_cell_sizes($(div).find("td").not(".plotContainingTD"), "width", false);
+	    lock_cell_sizes($(div).find("th"), "height", false);
             if(!was_visible) { $(div).hide(); }
         }
 
@@ -241,16 +305,14 @@ function trigger_wstable_plot_creation(id, initial_autosize) {
 
 	// 6) If this table is within a <figure> tag try to set
 	//    caption detail's width based on rendered table width
-	caption = wstable.closest('figure').children('figcaption:first');
-	if(caption.length > 0) {
-            caption.css('width', Math.round(wstable.width()*0.9) + 'px');
-	}
+	var caption = wstable.closest('figure').children('figcaption:first');
+	pygsti_set_caption_width(caption, wstable);
 
 	// 7) Remove the hard-set width and height of the plot-containing
 	//   div used to prevent initial auto-sizing.
 	if(!initial_autosize) {
 	    wstable.find("td.plotContainingTD").each( function(k,td) {
-		firstChild = $(td).children("div.pygsti-wsoutput-group").first()
+		var firstChild = $(td).children("div.pygsti-wsoutput-group").first()
 		firstChild.css("width", "");
 		firstChild.css("height", "");
 	    });
@@ -304,7 +366,7 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
     console.log("Max desired size = " + maxDesiredWidth + ", " + maxDesiredHeight);
 
     //3) update the max-height of this container based on the maximum desired height
-    existing_max_height = wsplotgroup.css("max-height");
+    var existing_max_height = wsplotgroup.css("max-height");
     if(existing_max_height != "none") {
 	wsplotgroup.css("max-height",Math.min(maxDesiredHeight,parseFloat(existing_max_height)));
     } else { wsplotgroup.css("max-height", maxDesiredHeight); }
@@ -324,10 +386,8 @@ function trigger_wsplot_plot_creation(id, initial_autosize) {
 
     // 6) If this table is within a <figure> tag try to set
     //    caption detail's width based on rendered table width
-    caption = wsplotgroup.closest('figure').children('figcaption:first');
-    if(caption.length > 0) {
-        caption.css('width', Math.round(wsplotgroup.width()*0.9) + 'px');
-    }
+    var caption = wsplotgroup.closest('figure').children('figcaption:first');
+    pygsti_set_caption_width(caption, wsplotgroup);
 
 }
 
@@ -389,10 +449,10 @@ function pex_update_plotdiv_size(el, aspect_ratio, frac_width, frac_height, orig
     var	minfrac	= 0.0; //maybe adjust this later as a possible option?
     if(el.hasClass("pygsti-group-slave")) {
 	//just set requested fractional widths and height
-        fw = Math.max(minfrac, frac_width);
-        fh = Math.max(minfrac, frac_height);
-        ow = parseFloat(orig_width);
-        oh = parseFloat(orig_height);
+        var fw = Math.max(minfrac, frac_width);
+        var fh = Math.max(minfrac, frac_height);
+        var ow = parseFloat(orig_width);
+        var oh = parseFloat(orig_height);
         el.css("width", fw*ow);
         el.css("height",fh*oh);
         //console.log("SLAVE Updating orig (" + ow + "," + oh + ") => ("
@@ -509,42 +569,59 @@ function pex_resize_slaves(el, orig_width, orig_height) {
 function PlotManager(){
     this.queue = [];
     this.labelqueue = [];
-    this.busy = false;
     this.processor = null;
 }
 
 PlotManager.prototype.run = function(){
     console.log("PLOTMANAGER: starting run queue execution");
-    
-    if (this.processor !== null) {
-	clearInterval(processor);
-    }
+
+    if (this.processor !== null) return; //already draining
+
     $("#status").show();
-    this.processor = setInterval(function(pm) {
-	if (!pm.busy) {
-	    pm.busy = true;
-	    if (pm.queue.length){
-		var label = pm.labelqueue.shift(); //pop();
-		var callback = pm.queue.shift(); //pop();
+    var pm = this;
+    var BUDGET_MS = 16; //one frame's worth of work before yielding
+
+    // Drain as many queued plots as fit in a frame, then yield.  This used to
+    // create exactly one plot per 200ms tick, which left the browser idle
+    // between plots and made a tab of N plots take 200*N ms regardless of how
+    // little work each one was.
+    var step = function() {
+	try {
+	    var t0 = performance.now();
+	    while (pm.queue.length && (performance.now() - t0) < BUDGET_MS) {
+		var label = pm.labelqueue.shift();
+		var callback = pm.queue.shift();
 		$("#status").text(label + " (" + pm.queue.length + " remaining)");
 		console.log("PLOTMANAGER: " + label + " (" + pm.queue.length + " remaining)");
 		try {
 		    callback();
-		} finally {
-		    pm.busy = false; // in case an error occurs, don't block queue
+		} catch(err) {
+		    // Keep draining, but don't let the failure pass silently:
+		    // rethrow out-of-band so it reaches window.onerror the way it
+		    // did before the queue was wrapped.
+		    console.error("PLOTMANAGER: " + label + " failed", err);
+		    setTimeout( function(){ throw err; }, 0);
 		}
 	    }
-	    else {
-		pm.busy = false;
-	    }
-	}
-	if (pm.queue.length <= 0) {
-	    console.log("PLOTMANAGER: queue empty!");
-            clearInterval(pm.processor);
+	} catch(fatal) {
+	    // A throw from the loop scaffolding itself would otherwise leave
+	    // pm.processor non-null forever, and enqueue() only restarts the
+	    // drain when it is null -- i.e. the report would stop rendering
+	    // silently.  Release it before rethrowing.
 	    pm.processor = null;
-            $("#status").hide();
+	    $("#status").hide();
+	    throw fatal;
 	}
-    }, 200, this); //pass this as "pm" argument to function
+
+	if (pm.queue.length) {
+	    pm.processor = requestAnimationFrame(step);
+	} else {
+	    console.log("PLOTMANAGER: queue empty!");
+	    pm.processor = null;
+	    $("#status").hide();
+	}
+    };
+    pm.processor = requestAnimationFrame(step);
 }
 
 PlotManager.prototype.enqueue = function(callback, label, autostart=true){

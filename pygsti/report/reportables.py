@@ -2288,8 +2288,19 @@ def general_decomposition(model_a, model_b):
         failed = False
         try:
             if _np.any(_np.isclose(target_evals, -1.0)):
-                target_logG = _tools.unitary_superoperator_matrix_log(targetOp, mxBasis)
-                logG = _tools.approximate_matrix_log(gate, target_logG)
+                # `targetOp` has an eigenvalue of -1 (e.g. a pi-rotation), which means its logarithm has a
+                # pair of eigenvalues differing by exactly 2*pi*i. The Frechet derivative of expm is
+                # singular there, so `gate` generically has no real logarithm at all and a direct log is
+                # neither unique nor a smooth function of `gate`. Both properties are needed here, since
+                # this quantity gets finite differenced to produce error bars. The BCH construction sides-
+                # steps this by taking the (unique, smooth) logarithm of the near-identity error map
+                # inv(targetOp) @ gate and adding it to the analytically known logarithm of the target.
+                # The BCH order is HARDCODED to 3. Order 4 was not found to measurably add anything. 
+                # Order 5 was found to be unsafe in empircally representative use cases. 
+                # The BCH series converges only while the spectral radius of ad_{log(targetOp)} 
+                # stays below 2*pi, and that radius is *exactly* 2*pi for a single-qubit pi rotation and can 
+                # exceed it for multi-qubit targets. Order 3 empirically stays accurate past that boundary.
+                logG = _tools.approximate_matrix_log_BCH(gate, targetOp, mxBasis, order=3)
             else:
                 logG = _tools.real_matrix_log(gate, "warn")
                 if _np.linalg.norm(logG.imag) > 1e-6:

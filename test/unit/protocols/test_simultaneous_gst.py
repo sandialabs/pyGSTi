@@ -120,11 +120,13 @@ _STUB_CIRCUIT_LISTS = [[Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1, 2))
                         Circuit([Label('Gcnot', (1, 2))], line_labels=(0, 1, 2))]]
 
 
-def _tiny_dataset():
-    """A DataSet holding a couple of 3-qubit circuits, for truncation tests."""
+def _dataset_over(circuits):
+    """A DataSet with an entry for each of `circuits`, for truncate_to_available_data.
+
+    The counts are arbitrary: truncation only asks which circuits the dataset has.
+    """
     dataset = pygsti.data.DataSet(outcome_labels=['000', '111'])
-    for circuit in (Circuit([Label('Gxpi2', 0)], line_labels=(0, 1, 2)),
-                    Circuit([Label('Gxpi2', 1)], line_labels=(0, 1, 2))):
+    for circuit in circuits:
         dataset.add_count_dict(circuit, {'000': 10, '111': 10})
     dataset.done_adding_data()
     return dataset
@@ -422,12 +424,49 @@ class NestingTester(BaseCase):
             for c in germ_power_list[half:]:
                 self.assertEqual(_cnot_edges(c), {(1, 2)})
 
+    def test_one_component_may_add_no_circuits_at_a_germ_power(self):
+        # A valid nested StandardGSTDesign can repeat a circuit list when no
+        # selected germ changes between adjacent maximum lengths.  The other
+        # component's new circuits must still be stitchable against a sample
+        # from the repeated component's cumulative pool.
+        circuit_lists = self._run(
+            oneq_lens=[3, 5], twoq_lens=[4, 4],
+            color_patches={0: [(0, 1)]}, vertices=[0, 1, 2],
+        )
+        self.assertEqual([len(circuit_list) for circuit_list in circuit_lists], [4, 6])
+        self._assert_patchwise_containment(
+            circuit_lists, [0, 1, 2], {0: [(0, 1)]}
+        )
+        self._assert_no_duplicates(circuit_lists)
+
+    def test_a_component_with_no_circuits_at_all_is_rejected(self):
+        # The cumulative-pool fallback cannot help at the first maximum length:
+        # there is nothing earlier to fall back on.  Fail with a message about
+        # component designs rather than out of numpy.
+        with self.assertRaises(ValueError) as ctx:
+            self._run(
+                oneq_lens=[0, 3], twoq_lens=[4, 6],
+                color_patches={0: [(0, 1)]}, vertices=[0, 1, 2],
+            )
+        self.assertIn('empty component-design pool', str(ctx.exception))
+
+    def test_either_component_may_add_no_circuits_at_a_germ_power(self):
+        circuit_lists = self._run(
+            oneq_lens=[3, 3], twoq_lens=[4, 6],
+            color_patches={0: [(0, 1)]}, vertices=[0, 1, 2],
+        )
+        self.assertEqual([len(circuit_list) for circuit_list in circuit_lists], [4, 6])
+        self._assert_patchwise_containment(
+            circuit_lists, [0, 1, 2], {0: [(0, 1)]}
+        )
+        self._assert_no_duplicates(circuit_lists)
+
 
 class _SGSTFixture:
     """A 3-qubit line device and the simultaneous-GST design built on it.
 
     Class-scoped, so a tester that might mutate the design must copy it first (see
-    ``UnsupportedOperationsTester._fresh_design``). Mixed in ahead of ``BaseCase`` so
+    ``TruncationTester._fresh_design``). Mixed in ahead of ``BaseCase`` so
     that subclasses adding their own setup can chain via ``super().setUpClass()``.
     """
 
@@ -552,15 +591,20 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
 
     # -- debug_check wiring in SimultaneousGSTDesign.__init__ ------
 
-    @staticmethod
-    def _malformed_stitcher(oneq_gstdesign, twoq_gstdesign, vertices,
+    #: The malformed stitcher's output: a 2Q gate on (0, 2), which is not an edge of
+    #: either color patch below. The explicit Gi keeps the implicit-idle check from
+    #: firing first, so the patch-membership check is what actually rejects it.
+    _OFF_PATCH_LISTS = [[Circuit([[Label('Gcnot', (0, 2)), Label('I', 1)]],
+                                 line_labels=(0, 1, 2))]]
+
+    @classmethod
+    def _malformed_stitcher(cls, oneq_gstdesign, twoq_gstdesign, vertices,
                             color_patches, **kwargs):
         """A stitcher returning output that cannot be a valid stitching.
 
-        One circuit cannot split evenly into the two color patches below. The
-        inputs are ignored so the (slow) real stitching is never run.
+        The inputs are ignored so the (slow) real stitching is never run.
         """
-        return [[Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1, 2))]]
+        return [[c.copy() for c in cl] for cl in cls._OFF_PATCH_LISTS]
 
     def _build_with_malformed_stitcher(self, **kwargs):
         return SimultaneousGSTDesign(
@@ -570,7 +614,7 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
     def test_malformed_stitcher_output_is_rejected_when_debug_check_true(self):
         with self.assertRaises(AssertionError) as ctx:
             self._build_with_malformed_stitcher(debug_check=True)
-        self.assertIn('split evenly', str(ctx.exception))
+        self.assertIn('not an edge of any color patch', str(ctx.exception))
 
     def test_debug_check_defaults_to_true(self):
         # The self-check is the documented safety net for swapped-in stitchers,
@@ -582,38 +626,88 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
         design = self._build_with_malformed_stitcher(debug_check=False)
         # The malformed lists must land unchanged: debug_check switches the
         # verification off, it does not repair anything.
-        self.assertEqual(
-            [list(cl) for cl in design.circuit_lists],
-            [[Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1, 2))]])
+        self.assertEqual([list(cl) for cl in design.circuit_lists], self._OFF_PATCH_LISTS)
 
     # -- detection power of the helpers themselves -------------------------
 
-    def test_all_patches_are_verified_not_just_the_first(self):
-        """Corrupting a *later* patch's chunk must still be caught.
+    #: Two patches on a 3-qubit line, so a circuit can be off-patch or span both.
+    _TWO_PATCHES = {0: [(0, 1)], 1: [(1, 2)]}
 
-        The patch chunks are checked in a loop, so an off-by-one in the slice
-        bounds can leave every patch after the first silently unverified.
-        """
-        color_patches = self.design.color_patches
-        num_patches = len(color_patches)
-        self.assertGreaterEqual(
-            num_patches, 2, msg="need >1 patch for this test to mean anything")
-
-        # Overwrite the second chunk with a copy of the first, so the circuits
-        # sit on patch 0's edge while occupying patch 1's chunk. Total length is
-        # unchanged, so the even-split assertion cannot fire first and mask this.
-        corrupted = []
-        for circuit_list in self.design.circuit_lists:
-            chunk = len(circuit_list) // num_patches
-            corrupted.append(list(circuit_list[:chunk]) + list(circuit_list[:chunk])
-                             + list(circuit_list[2 * chunk:]))
-        self.assertEqual([len(cl) for cl in corrupted],
-                         [len(cl) for cl in self.design.circuit_lists])
-
+    def _assert_rejects(self, layers, fragment, color_patches=None, line_labels=(0, 1, 2)):
+        """A one-circuit design built from `layers` must be rejected, naming `fragment`."""
+        circuit = Circuit(layers, line_labels=line_labels)
         with self.assertRaises(AssertionError) as ctx:
             assert_circuit_lists_match_color_patches(
-                corrupted, self.design.vertices, color_patches)
-        self.assertIn('Patch 1', str(ctx.exception))
+                [[circuit]], (0, 1, 2), color_patches or self._TWO_PATCHES)
+        self.assertIn(fragment, str(ctx.exception))
+
+    def test_multiqubit_gate_on_a_non_patch_edge_is_rejected(self):
+        # (0, 2) is not an edge of either patch. Circuits carry their patch in their
+        # content, so a gate on no patch's edge means the circuit belongs nowhere.
+        self._assert_rejects([[Label('Gcnot', (0, 2)), Label('I', 1)]],
+                             'not an edge of any color patch')
+
+    def test_a_circuit_spanning_two_patches_is_rejected(self):
+        # Gcnot on (0, 1) is patch 0's, on (1, 2) is patch 1's. A simultaneous-GST
+        # circuit runs one patch at a time; both in one circuit is not a stitching.
+        self._assert_rejects([[Label('Gcnot', (0, 1)), Label('I', 2)],
+                              [Label('Gcnot', (1, 2)), Label('I', 0)]],
+                             'spans two color patches')
+
+    def test_a_circuit_missing_a_vertex_is_rejected(self):
+        # Every patch's tensored lines cover all the vertices, so a circuit that
+        # does not name qubit 2 is not a full-register circuit. This one has no
+        # implicit idle -- both its lines are busy -- so the line-label check is
+        # what has to catch it.
+        circuit = Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1))
+        with self.assertRaises(AssertionError) as ctx:
+            assert_circuit_lists_match_color_patches(
+                [[circuit]], (0, 1, 2), self._TWO_PATCHES)
+        self.assertEqual(ctx.exception.args[0], ({0, 1}, {0, 1, 2}))
+
+    def test_implicit_idles_are_rejected(self):
+        # Same circuit content as the accepted case below but without the explicit
+        # Gi, so the line labels are right and only the implicit idle is wrong.
+        self._assert_rejects([Label('Gcnot', (0, 1))], 'Implicit idle gate')
+
+    def test_a_reversed_orientation_edge_is_accepted(self):
+        # The coloring records (1, 2); a Gcnot on (2, 1) is the same edge with the
+        # control and target swapped, which is a legitimate circuit on that patch.
+        circuit = Circuit([[Label('Gcnot', (2, 1)), Label('I', 0)]], line_labels=(0, 1, 2))
+        assert_circuit_lists_match_color_patches([[circuit]], (0, 1, 2), self._TWO_PATCHES)
+
+    def test_a_circuit_with_no_multiqubit_gates_is_accepted(self):
+        # It is consistent with every patch, so there is nothing to reject.
+        circuit = Circuit([[Label('Gxpi2', 0), Label('I', 1), Label('I', 2)]],
+                          line_labels=(0, 1, 2))
+        assert_circuit_lists_match_color_patches([[circuit]], (0, 1, 2), self._TWO_PATCHES)
+
+    def test_an_edge_in_two_patches_is_rejected(self):
+        # Not a proper coloring: the circuit's patch would not be determined by its
+        # content, so the validator refuses the coloring rather than guess.
+        circuit = Circuit([[Label('Gcnot', (0, 1)), Label('I', 2)]], line_labels=(0, 1, 2))
+        with self.assertRaises(AssertionError) as ctx:
+            assert_circuit_lists_match_color_patches(
+                [[circuit]], (0, 1, 2), {0: [(0, 1)], 1: [(0, 1)]})
+        self.assertIn('appears in both patch', str(ctx.exception))
+
+    def test_every_circuit_is_verified_not_just_the_first(self):
+        """A bad circuit anywhere in the lists must be caught.
+
+        The old validator sliced each germ-power list into equal patch-major chunks
+        and checked each chunk against its patch, so an off-by-one in the slice
+        bounds could leave later patches unverified. Content-based validation has no
+        slices, but it still walks a list, so a bad circuit in a later position -- or
+        in a later list -- must still raise.
+        """
+        good = Circuit([[Label('Gcnot', (0, 1)), Label('I', 2)]], line_labels=(0, 1, 2))
+        bad = Circuit([[Label('Gcnot', (0, 2)), Label('I', 1)]], line_labels=(0, 1, 2))
+        for name, lists in (('last in the first list', [[good, bad]]),
+                            ('alone in a later list', [[good], [good, bad]])):
+            with self.subTest(name):
+                with self.assertRaises(AssertionError):
+                    assert_circuit_lists_match_color_patches(
+                        lists, (0, 1, 2), self._TWO_PATCHES)
 
     def test_multiqubit_gate_outside_patch_edges_is_rejected(self):
         """A 2Q gate on an edge the patch does not own must be caught."""
@@ -812,21 +906,26 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
         self.assertEqual(self.design.circuit_lists[-1][0].line_labels, (0, 1, 2))
 
     def test_debug_check_rejects_a_design_that_was_already_malformed(self):
-        # A design built with debug_check=False cannot launder itself clean by relabelling.
+        # A design built with debug_check=False cannot launder itself clean by
+        # relabelling. Gcnot on (0, 2) belongs to neither patch, and the relabelled
+        # (Q0, Q2) belongs to neither relabelled patch either -- so this also checks
+        # the validator sees the *mapped* content, not the original.
+        bad = Circuit([[Label('Gcnot', (0, 2)), Label('I', 1)]], line_labels=(0, 1, 2))
         malformed = SimultaneousGSTDesign(
             self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
-            circuit_stitcher=(lambda *a, **kw: [[Circuit([Label('Gcnot', (0, 1))],
-                                                         line_labels=(0, 1, 2))]]),
+            circuit_stitcher=(lambda *a, **kw: [[bad.copy()]]),
             debug_check=False)
 
         with self.assertRaises(AssertionError) as ctx:
             malformed.map_qubit_labels(self.mapper)
-        self.assertIn('split evenly', str(ctx.exception))
+        message = str(ctx.exception)
+        self.assertIn('not an edge of any color patch', message)
+        self.assertIn("'Q0', 'Q2'", message)
 
         # ...and debug_check=False switches that verification off here too.
         relabelled = malformed.map_qubit_labels(self.mapper, debug_check=False)
         self.assertEqual([list(cl) for cl in relabelled.circuit_lists],
-                         [[Circuit([Label('Gcnot', ('Q0', 'Q1'))],
+                         [[Circuit([[Label('Gcnot', ('Q0', 'Q2')), Label('I', 'Q1')]],
                                    line_labels=('Q0', 'Q1', 'Q2'))]])
 
 
@@ -1022,88 +1121,135 @@ class SerializationTester(_SGSTFixture, BaseCase):
                          [list(cl) for cl in design.circuit_lists])
 
 
-class UnsupportedOperationsTester(_SGSTFixture, BaseCase):
+class TruncationTester(_SGSTFixture, BaseCase):
     """
-    Cover the operations ``SimultaneousGSTDesign`` refuses, and the escape hatch.
+    Cover dropping circuits from a ``SimultaneousGSTDesign``.
 
-    ``circuit_lists`` is ordered germ-power-major then patch-major, with every patch
-    contributing an equal contiguous chunk per germ power. The inherited truncation and
-    merge methods filter or concatenate circuits without regard to that structure, so they
-    produce a design that fails ``assert_circuit_lists_match_color_patches`` -- and return
-    a downgraded ``CircuitListsDesign`` while doing it. Both failures are silent, which is
-    why every entry point gets a test.
+    A circuit carries its patch in its content -- which multi-qubit gates act on which
+    edges -- so removing circuits leaves the survivors valid. What the inherited
+    machinery gets wrong is ``nested``: ``CircuitListsDesign._truncate_to_circuits_inplace``
+    clears it unconditionally, because filtering circuit lists need not preserve
+    containment in general. Here it does, since every germ-power list is filtered by one
+    common keep-set. Losing ``nested=True`` is silent and would make iterative GST
+    re-derive the full circuit set by unioning the lists, so each route gets a test.
     """
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.some_circuits = list(cls.design.all_circuits_needing_data)[:5]
+        # Take the keep-set from the *first* germ-power list so that a nested design
+        # keeps circuits at every length; slicing all_circuits_needing_data (the last
+        # list) would be biased toward the deepest circuits.
+        cls.some_circuits = list(cls.design.circuit_lists[0])[:5]
 
     def _fresh_design(self):
-        """A private copy of the shared design, for tests that might mutate it.
-
-        The in-place hooks below are exactly what would corrupt ``setUpClass``'s shared
-        design if a refusal ever stopped working, silently poisoning a later test's
-        baseline. Copying is cheaper than re-stitching.
-        """
+        """A private copy of the class-scoped design, for tests that mutate in place."""
         return _copy.deepcopy(self.design)
 
-    def _assert_refused(self, fn, named):
-        """Assert `fn` refuses, and that the message names `named` specifically.
+    def _assert_is_a_valid_truncation(self, truncated, expected_circuits):
+        """The result is a SimultaneousGSTDesign that still satisfies every invariant."""
+        self.assertIsInstance(truncated, SimultaneousGSTDesign)
+        self.assertEqual(set(truncated.all_circuits_needing_data), set(expected_circuits))
+        self.assertTrue(truncated.nested)
+        # Still a well-formed stitching: content-based validation does not care that
+        # the equal-chunk patch-major layout is gone.
+        assert_circuit_lists_match_color_patches(
+            truncated.circuit_lists, truncated.vertices, truncated.color_patches)
+        # Nesting is a claim about the lists, so check it rather than trusting the flag.
+        for lower, higher in zip(truncated.circuit_lists, truncated.circuit_lists[1:]):
+            self.assertTrue(set(lower).issubset(set(higher)))
+        # The simultaneous-GST structure survives. Truncation deepcopies, so the
+        # sub-designs are copies rather than the same objects -- compare their content.
+        self.assertEqual(truncated.color_patches, self.design.color_patches)
+        for attr in ('oneq_gstdesign', 'twoq_gstdesign'):
+            self.assertEqual(
+                list(getattr(truncated, attr).all_circuits_needing_data),
+                list(getattr(self.design, attr).all_circuits_needing_data))
+        self.assertEqual(truncated.vertices, self.design.vertices)
+        self.assertEqual(truncated.processor_spec.qubit_labels,
+                         self.design.processor_spec.qubit_labels)
 
-        The name matters: with a public override removed the call still reaches the
-        ``_truncate_to_*_inplace`` backstop and still raises, just with that hook's
-        wording. Asserting only "it raised" -- or only on the shared tail of the
-        message -- would pass either way.
-        """
+    def test_truncate_to_circuits_keeps_the_class_and_the_nesting(self):
+        truncated = self.design.truncate_to_circuits(self.some_circuits)
+        self._assert_is_a_valid_truncation(truncated, self.some_circuits)
+
+    def test_truncate_to_circuits_does_not_mutate_the_original(self):
+        before = [list(cl) for cl in self.design.circuit_lists]
+        self.design.truncate_to_circuits(self.some_circuits)
+        self.assertEqual([list(cl) for cl in self.design.circuit_lists], before)
+        self.assertTrue(self.design.nested)
+
+    def test_truncate_to_available_data_keeps_the_class_and_the_nesting(self):
+        dataset = _dataset_over(self.some_circuits)
+        truncated = self.design.truncate_to_available_data(dataset)
+        self._assert_is_a_valid_truncation(truncated, self.some_circuits)
+
+    def test_truncate_to_design_keeps_the_class_and_the_nesting(self):
+        other = self.design.truncate_to_circuits(self.some_circuits)
+        truncated = self.design.truncate_to_design(other)
+        self._assert_is_a_valid_truncation(truncated, self.some_circuits)
+
+    def test_truncate_to_design_against_an_unnested_design_drops_the_flag(self):
+        # Truncating list L against *other*'s list L is a different keep-set per list,
+        # so containment survives only if the other design is nested too. Claiming
+        # nested=True here would be a lie about the lists.
+        other = self.design.as_circuit_lists_design().truncate_to_circuits(self.some_circuits)
+        self.assertFalse(other.nested)
+        self.assertFalse(self.design.truncate_to_design(other).nested)
+
+    def test_truncate_to_lists_keeps_the_class(self):
+        # CircuitListsDesign.truncate_to_lists builds a plain CircuitListsDesign, which
+        # would silently discard the pspec, the coloring and the sub-designs.
+        truncated = self.design.truncate_to_lists([0])
+        self.assertIsInstance(truncated, SimultaneousGSTDesign)
+        self.assertEqual(len(truncated.circuit_lists), 1)
+        self.assertEqual(list(truncated.circuit_lists[0]), list(self.design.circuit_lists[0]))
+        self.assertEqual(set(truncated.all_circuits_needing_data),
+                         set(self.design.circuit_lists[0]))
+        self.assertTrue(truncated.nested)
+        self.assertEqual(truncated.color_patches, self.design.color_patches)
+
+    def test_truncation_from_a_parent_design_works(self):
+        # ExperimentDesign._truncate_to_available_data_inplace loops over its children,
+        # so a nested SimultaneousGSTDesign is reached without any direct call.
+        parent = CombinedExperimentDesign({'sgst': self._fresh_design()})
+        truncated = parent.truncate_to_available_data(_dataset_over(self.some_circuits))
+        self._assert_is_a_valid_truncation(truncated['sgst'], self.some_circuits)
+
+    def test_the_result_is_still_truncatable(self):
+        once = self.design.truncate_to_circuits(self.some_circuits)
+        twice = once.truncate_to_circuits(self.some_circuits[:2])
+        self._assert_is_a_valid_truncation(twice, self.some_circuits[:2])
+
+    @with_temp_path
+    def test_a_truncated_design_round_trips_through_disk(self, root_path):
+        # Truncation swaps the stitcher's plain lists for CircuitLists, so the objects
+        # being written are no longer the kind CircuitListsDesign.__init__ inspected when
+        # it chose auxfile_types['circuit_lists'] = 'list:text-circuit-list'. That is
+        # survivable -- CircuitList.cast on a plain list produces one with no aliases or
+        # weights, so text is a lossless encoding of it -- but it is survivable by
+        # coincidence, and truncation is now a normal thing to do to this class.
+        truncated = self.design.truncate_to_circuits(self.some_circuits)
+        root = pathlib.Path(root_path) / 'truncated'
+        truncated.write(root)
+        loaded = SimultaneousGSTDesign.from_dir(root)
+        self.assertEqual([list(cl) for cl in loaded.circuit_lists],
+                         [list(cl) for cl in truncated.circuit_lists])
+        self.assertEqual(set(loaded.all_circuits_needing_data), set(self.some_circuits))
+        self.assertEqual(loaded.nested, truncated.nested)
+        self.assertEqual(loaded.color_patches, truncated.color_patches)
+
+    # -- what is still refused ----------------------------------------------
+
+    def test_merge_with_is_still_refused(self):
+        # Unlike truncation, merging has no rule for combining two edge colorings.
         with self.assertRaises(NotImplementedError) as ctx:
-            fn()
+            self.design.merge_with(self.design)
         message = str(ctx.exception)
-        self.assertIn('%s is not supported' % named, message)
-        # Every refusal must also point at the way forward, or it is just a dead end.
+        self.assertIn('merge_with is not supported', message)
         self.assertIn('as_circuit_lists_design', message)
 
-    def test_public_methods_are_refused(self):
-        """Each must name *itself*, not fall through to a hook's generic wording."""
-        for method, args in (('truncate_to_circuits', (self.some_circuits,)),
-                             ('truncate_to_available_data', (_tiny_dataset(),)),
-                             ('truncate_to_design', (self.design,)),
-                             ('truncate_to_lists', ([0],)),
-                             ('merge_with', (self.design,))):
-            with self.subTest(method):
-                self._assert_refused(
-                    lambda m=method, a=args: getattr(self._fresh_design(), m)(*a), named=method)
-
-    def test_truncation_from_a_parent_design_is_refused(self):
-        # ExperimentDesign._truncate_to_available_data_inplace loops over its children, so
-        # a nested SimultaneousGSTDesign is reachable without any direct call. Overriding
-        # only the public methods would leave this path producing a broken child.
-        parent = CombinedExperimentDesign({'sgst': self._fresh_design()})
-        with self.assertRaises(NotImplementedError):
-            parent.truncate_to_available_data(_tiny_dataset())
-
-    def test_inplace_hooks_refuse_before_mutating_anything(self):
-        """Each in-place hook must refuse *immediately*, not on the way out.
-
-        ``CircuitListsDesign``'s versions overwrite ``self.circuit_lists`` and only then
-        delegate upwards, so a hook that relied on the ``_truncate_to_circuits_inplace``
-        backstop instead of refusing on its own account would leave a half-truncated
-        design behind -- here, all 1814 circuits replaced by none. Each hook gets its own
-        copy so that one leaking cannot hide behind another.
-        """
-        expected = [list(cl) for cl in self.design.circuit_lists]
-        for hook, args, named in (
-                ('_truncate_to_circuits_inplace', (self.some_circuits,), 'Truncating to a subset of circuits'),
-                ('_truncate_to_design_inplace', (self.design,), 'Truncating to another design'),
-                ('_truncate_to_available_data_inplace', (_tiny_dataset(),), 'Truncating to available data')):
-            with self.subTest(hook=hook):
-                design = self._fresh_design()
-                with self.assertRaises(NotImplementedError) as ctx:
-                    getattr(design, hook)(*args)
-                self.assertIn('%s is not supported' % named, str(ctx.exception))
-                self.assertEqual([list(cl) for cl in design.circuit_lists], expected)
-
-    # -- the escape hatch ----------------------------------------------------
+    # -- the plain-design hatch ----------------------------------------------
 
     def test_as_circuit_lists_design_returns_a_plain_gst_design(self):
         plain = self.design.as_circuit_lists_design()
@@ -1116,11 +1262,12 @@ class UnsupportedOperationsTester(_SGSTFixture, BaseCase):
         # The pspec is what lets write_empty_protocol_data still work on the result.
         self.assertIs(plain.processor_spec, self.design.processor_spec)
 
-    def test_as_circuit_lists_design_can_be_truncated(self):
-        # The whole point of the hatch: it does what this class refuses to.
-        truncated = self.design.as_circuit_lists_design().truncate_to_circuits(
-            self.some_circuits)
-        self.assertEqual(set(truncated.all_circuits_needing_data), set(self.some_circuits))
+    def test_as_circuit_lists_design_supports_merging(self):
+        # The remaining reason to reach for the hatch.
+        merged = self.design.as_circuit_lists_design().merge_with(
+            self.design.as_circuit_lists_design())
+        self.assertEqual(set(merged.all_circuits_needing_data),
+                         set(self.design.all_circuits_needing_data))
 
     def test_as_circuit_lists_design_does_not_alias_the_original(self):
         # It hands out its own lists, so truncating the copy cannot reach the original.

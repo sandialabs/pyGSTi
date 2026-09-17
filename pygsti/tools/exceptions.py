@@ -166,6 +166,18 @@ class QiskitInteropWarning(UserWarning):
     pass
 
 
+class CirqInteropWarning(UserWarning):
+    """
+    Inform the user about a cirq-interoperability issue: a lossy conversion
+    (e.g., pyGSTi circuit mapping that discards Cirq measurement keys, or
+    drops terminal measurements), or a fallback/diagnostic notice (e.g., no
+    exact gate-name match found, falling back to a unitary-matching search).
+    Distinct from MissingDependencyWarning, which is raised when cirq is not
+    installed at all.
+    """
+    pass
+
+
 class ForwardSimDiagnosticWarning(UserWarning):
     """
     Inner-loop numerical-scaling diagnostic from the forward simulator

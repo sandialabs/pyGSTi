@@ -68,7 +68,7 @@ The evotype, the modelmember parameterization, and the forward simulator are **e
 - [`StateSpace`](../pygsti/baseobjs/statespace.py#L22) describes *what state space exists*: how many qudits, of what dimension, with what labels. Concrete subclasses include [`QuditSpace`](../pygsti/baseobjs/statespace.py#L657), [`QubitSpace`](../pygsti/baseobjs/statespace.py#L869), and [`ExplicitStateSpace`](../pygsti/baseobjs/statespace.py#L1044). **pyGSTi is not qubit-only** — `QuditSpace` is a first-class concept. At the same time, there are surely bugs in pyGSTi that only show up when someone tries to use qudits. These bugs should be fixed immediately after they're found.
 - [`Basis`](../pygsti/baseobjs/basis.py#L59) describes *what coordinate system the matrices are written in*: Pauli-product, Gell-Mann, std (computational), etc. Standard subclasses include [`BuiltinBasis`](../pygsti/baseobjs/basis.py#L1063), [`ExplicitBasis`](../pygsti/baseobjs/basis.py#L851), and [`DirectSumBasis`](../pygsti/baseobjs/basis.py#L1213). The first of these can be specified with a string literal like `'pp'` or `'gm'`, and is why type annotations with Basis objects should really use BasisLike (a small union type).
 
-Code that reconstructs a gate from a dense matrix must receive *both* a `StateSpace` and a `Basis` to unambiguously invert the representation. Confusing the two can create
+Code that reconstructs a gate from a dense matrix must receive *both* a `StateSpace` and a `Basis` to unambiguously invert the representation. Confusing the two can create dimension-mismatch errors that surface far from their cause — or, when the dimensions happen to agree, silently wrong matrices.
 
 ### 5. `ExplicitOpModel` vs. `ImplicitOpModel` is a real fork in the road
 
@@ -98,7 +98,7 @@ Here are the names that come up over and over again in the subpackage. Use this 
 | [`ExpErrorgenOp`](../pygsti/modelmembers/operations/experrorgenop.py#L34) | [modelmembers/operations/experrorgenop.py](../pygsti/modelmembers/operations/experrorgenop.py) | Wraps an error generator into a CPTP gate via matrix exponential. |
 | `FullArbitraryOp`, `FullTPOp`, `StaticArbitraryOp`, `StaticCliffordOp`, `StaticUnitaryOp`, `ComposedOp`, `DepolarizeOp`, etc. | [modelmembers/operations/](../pygsti/modelmembers/operations/) | Concrete gate parameterizations (full / TP / static / Clifford / composed / specialized). |
 | `FullState`, `TPState`, `StaticState`, `ComposedState`, `ComputationalState` | [modelmembers/states/](../pygsti/modelmembers/states/) | State-preparation parameterizations. |
-| [`POVM`](../pygsti/modelmembers/povms/povm.py#L60), `UnconstrainedPOVM`, `TPPOVM`, `ComputationalBasisPOVM`, `MarginalizedPOVM`, `ComposedPOVM` | [modelmembers/povms/](../pygsti/modelmembers/povms/) | Measurement parameterizations. The `POVM` base has known structural issues — see [known-debt.md](known-debt.md#17-povm-inheritance-structure-refactor). |
+| [`POVM`](../pygsti/modelmembers/povms/povm.py#L60), `UnconstrainedPOVM`, `TPPOVM`, `ComputationalBasisPOVM`, `MarginalizedPOVM`, `ComposedPOVM` | [modelmembers/povms/](../pygsti/modelmembers/povms/) | Measurement parameterizations. The `POVM` base has known structural issues — see [known-debt.md](known-debt.md#15-povm-inheritance-structure-refactor). |
 | [`Instrument`](../pygsti/modelmembers/instruments/instrument.py#L26), `TPInstrument` | [modelmembers/instruments/](../pygsti/modelmembers/instruments/) | Quantum instruments (mid-circuit conditional ops with classical outcomes). |
 | [`Evotype`](../pygsti/evotypes/evotype.py#L9) | [evotypes/evotype.py](../pygsti/evotypes/evotype.py) | Representation-strategy factory. |
 | [`ModelMemberGraph`](../pygsti/modelmembers/modelmembergraph.py) | [modelmembers/modelmembergraph.py](../pygsti/modelmembers/modelmembergraph.py) | DAG of member dependencies for serialization. |
@@ -142,7 +142,7 @@ A few notes on the structure:
 
 `"CPTPLND"` is the parameterization mode you should expect to see when CPTP modeling is being done seriously. It composes three layers:
 
-1. Each **gate** becomes a [`ComposedOp`](../pygsti/modelmembers/operations/composedop.py#L33), whose constituents are some kind of ideal static operator (e.g., [`StaticUnitaryOp`](../pygsti/modelmembers/operations/staticunitaryop.py#L21)) and a parameterized [`ExpErrorgenOp`](../pygsti/modelmembers/operations/experrorgenop.py#L34) error channel. The latter wraps a [`LindbladErrorgen`](../pygsti/modelmembers/operations/lindbladerrorgen.py#L40), which is parameterized by Lindbladian coefficients (Hamiltonian, stochastic, affine, and other blocks per [`LindbladCoefficientBlock`](../pygsti/modelmembers/operations/lindbladcoefficients.py)). Applying `exp` to the error generator gives a guaranteed-CPTP gate.
+1. Each **gate** becomes a [`ComposedOp`](../pygsti/modelmembers/operations/composedop.py#L33), whose constituents are some kind of ideal static operator (e.g., [`StaticUnitaryOp`](../pygsti/modelmembers/operations/staticunitaryop.py#L21)) and a parameterized [`ExpErrorgenOp`](../pygsti/modelmembers/operations/experrorgenop.py#L34) error channel. The latter wraps a [`LindbladErrorgen`](../pygsti/modelmembers/operations/lindbladerrorgen.py#L40), which is parameterized by Lindbladian coefficients grouped into blocks by [`LindbladCoefficientBlock`](../pygsti/modelmembers/operations/lindbladcoefficients.py) (block types `ham`, `other_diagonal`, `other`, `other_unconstrained`). Whether applying `exp` to a LindbladErrorGen produces a CP gate depends on the types of its underlying blocks.
 
 2. Each **state prep** becomes a [`ComposedState`](../pygsti/modelmembers/states/composedstate.py) of a "perfect" prep with a `LindbladErrorgen`-driven noisy operation. Each **POVM** becomes a [`ComposedPOVM`](../pygsti/modelmembers/povms/composedpovm.py) with the same pattern.
 
@@ -168,15 +168,12 @@ The third layer has a non-obvious consequence: **representation degeneracies in 
 
 - **CPTPLND representation degeneracies** — see the deep-dive above.
 
-- **Cython `_slow` fallback applies here.** See [AGENTS.md](AGENTS.md#cython-_slow-fallback). If forward-sim performance is surprising in either direction, check which `_rep` class actually got instantiated — the C extension and the `_slow` numpy path can win on different workloads ([#713](https://github.com/sandialabs/pyGSTi/issues/713)).
-
 - **Idle-gate ambiguity in Circuits.** See mental-model section 2 above.
 
 ## Architectural debt
 
 - The `baseobjs` ↔ `protocols` circular import — [known-debt.md #3](known-debt.md#3-baseobjs--protocols-circular-import).
-- POVM class hierarchy structural issues — [known-debt.md #17](known-debt.md#17-povm-inheritance-structure-refactor) and [sandialabs/pyGSTi#727](https://github.com/sandialabs/pyGSTi/issues/727).
-- `tools/leakage.py` is a complete domain feature (with leakage-aware Model construction code) misfiled inside `tools` — [known-debt.md #2](known-debt.md#2-toolsleakagepy--pygstileakage-move).
+- POVM class hierarchy structural issues — [known-debt.md #15](known-debt.md#15-povm-inheritance-structure-refactor) and [sandialabs/pyGSTi#727](https://github.com/sandialabs/pyGSTi/issues/727).
 
 ## Canonical examples
 
