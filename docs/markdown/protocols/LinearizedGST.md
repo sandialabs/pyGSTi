@@ -29,6 +29,7 @@ import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import stim
 
 import pygsti
 from pygsti.baseobjs import Label
@@ -183,12 +184,32 @@ example = next(c for c in circuits if mg.num_mcms(c) == 1 and 2 <= mg.mcm_infos(
 print(example)
 ```
 
+`pygsti.circuits.Circuit` doesn't have a `stim`-style `.diagram()` method, but since every gate here is Clifford we can build the equivalent `stim.Circuit` ourselves and reuse `stim`'s pretty printer, which draws `Iz` as a mid-circuit measurement:
+
+```{code-cell} ipython3
+# maps this tutorial's gate names to their stim equivalents; 'Iz' is a non-destructive Z measurement
+STIM_GATE_NAMES = {'Gxpi2': 'SQRT_X', 'Gypi2': 'SQRT_Y', 'Gxmpi2': 'SQRT_X_DAG', 'Gympi2': 'SQRT_Y_DAG',
+                    'Gcphase': 'CZ', 'Gcnot': 'CX', 'Iz': 'M'}
+
+def to_stim_circuit(circuit):
+    sc = stim.Circuit()
+    for i in range(circuit.depth):
+        layer = circuit.layer_label(i)
+        for component in (layer.components if hasattr(layer, 'components') else [layer]):
+            sc.append(STIM_GATE_NAMES[component.name], component.qubits)
+        sc.append('TICK')
+    return sc
+
+print(to_stim_circuit(example).diagram('timeline-text'))
+```
+
 Internally, each MCM is replaced by a CNOT onto a new virtual qubit line (appended after the data qubits).  You never need to do this yourself, but it is instructive to look at the expanded circuit:
 
 ```{code-cell} ipython3
 expanded, mcm_infos = mg.expand_mcm_circuit(example)
 print(expanded)
 print(mcm_infos)
+print(to_stim_circuit(expanded).diagram('timeline-text'))
 ```
 
 A quick sanity check that every operation appearing in the circuits has an entry in the ansatz (an operation without one is silently assumed to be perfect):
