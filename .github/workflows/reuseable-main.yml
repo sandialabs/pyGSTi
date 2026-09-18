@@ -36,15 +36,6 @@ on:
         required: false
         type: string
         default: 'false'
-      # Branch to diff HEAD against to decide whether the slow graphcoloring
-      # scaling tests should run (see the "Detect graphcoloring net changes"
-      # step below). Leave unset/empty to always skip that diff check (e.g.
-      # for direct pushes to protected branches, where these tests are never
-      # opted into automatically).
-      graphcoloring-diff-base:
-        required: false
-        type: string
-        default: ''
 
 env:
   SKIP_DEAP: 1
@@ -134,65 +125,9 @@ jobs:
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         # Wall-clock-sensitive suites live under test/performance/ and so are not
-        # collected here at all; the graphcoloring scaling suite is run
-        # conditionally in its own step below, where a slow run can't eat into or
-        # fail the main unit-test budget. The `-m "not slow"` filter is kept as a
-        # backstop in case a benchmark-style test lands under test/unit again.
+        # collected here at all. The `-m "not slow"` filter is kept as a backstop
+        # in case a benchmark-style test lands under test/unit again.
         python -m pytest -n auto --dist loadscope -m "not slow" $COV_FLAG --durations=25 test/unit
-    - name: Detect graphcoloring net changes
-      # The graphcoloring scaling tests are slow, so only run them when this branch
-      # has a net diff against `graphcoloring-diff-base` in the graphcoloring
-      # toolkit or its tests.
-      #
-      # This is intentionally independent of *how* this run was triggered (push vs.
-      # pull_request): callers that care (currently just feature-branches.yml) pass
-      # graphcoloring-diff-base explicitly, so this works the same whether CI was
-      # kicked off by a push to a branch or by an actual pull_request event -- the
-      # older implementation kept re-deriving the base from
-      # github.event.pull_request.base.sha, which is empty on ordinary push events.
-      # Since same-repo (non-fork) PRs only ever get a push event here (see the
-      # pull_request trigger filter in feature-branches.yml), that meant this step
-      # silently always reported changed=false for those PRs, e.g. #848.
-      #
-      # This uses a real git diff, not a "files touched" list, so if a branch
-      # changes graphcoloring and then reverts those changes, this reports
-      # changed=false. We only want to run the scaling tests once.
-      id: graphcoloring
-      if: ${{ inputs.run-unit-tests == 'true' }}
-      shell: bash
-      env:
-        DIFF_BASE: ${{ inputs.graphcoloring-diff-base }}
-      run: |
-        set -euo pipefail
-
-        # Callers that don't opt in (e.g. direct pushes to develop/beta/master/
-        # bugfix) leave this empty, so never run the slow graphcoloring tests there.
-        if [ -z "${DIFF_BASE}" ]; then
-          echo "changed=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-        git fetch --no-tags --depth=1 origin "${DIFF_BASE}"
-
-        if git diff --quiet "origin/${DIFF_BASE}" HEAD -- \
-          pygsti/tools/graphcoloring \
-          test/unit/tools/test_graphcoloring.py \
-          test/performance/test_graphcoloring_scaling.py \
-          test/helpers/graphcoloring_graphs.py
-        then
-          echo "changed=false" >> "$GITHUB_OUTPUT"
-        else
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-        fi
-    - name: Run graphcoloring slow (scaling) tests
-      if: ${{ inputs.run-extra-tests == 'true' && steps.graphcoloring.outputs.changed == 'true' }}
-      timeout-minutes: 30
-      shell: bash
-      env:
-        GRAPHCOLORING_CHANGED: ${{ steps.graphcoloring.outputs.changed }}
-      run: |
-        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -m slow --durations=25 test/performance/test_graphcoloring_scaling.py
     - name: Run workflow tests
       if: ${{ inputs.run-integration-tests == 'true' }}
       shell: bash

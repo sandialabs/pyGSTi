@@ -24,9 +24,10 @@ from pygsti.circuits.circuit import Circuit
 from pygsti.circuits.split_circuits_into_lanes import batch_tensor
 from pygsti.baseobjs.label import Label, LabelTup
 
-from pygsti.tools.graphcoloring import (
-    canonical_edges, find_neighbors, switchboard_find_edge_coloring,
+from pygsti.tools.graphs import (
+    canonical_edges, find_neighbors, max_degree,
 )
+from pygsti.tools.graphs.coloring import switchboard_find_edge_coloring
 
 # Type aliases for the graph / stitching data structures used throughout.
 Vertex = Union[int, str]
@@ -112,7 +113,7 @@ def make_simultaneous_gst_design(
     vertices = cast(List[Vertex] , list(nq_pspec.qubit_labels))
     edges = canonical_edges(nq_pspec.compute_2Q_connectivity().edges())
     neighbors = find_neighbors(vertices, edges)
-    deg = max(len(neighbors[v]) for v in vertices)
+    deg = max_degree(neighbors)
     coloring_seed, stitcher_seed = np.random.SeedSequence(seed).spawn(2)
     coloring_seed = np.random.default_rng(coloring_seed)
     edge_coloring = switchboard_find_edge_coloring(
@@ -726,7 +727,7 @@ def build_edge_to_patch_index(patch_infos: List[Dict[str, Any]]) -> Dict[Edge, i
 
     Raises ``AssertionError`` if an edge belongs to two patches. A proper edge
     coloring never does that (see
-    :func:`pygsti.tools.graphcoloring.check_valid_edge_coloring`), and if it did,
+    :func:`pygsti.tools.graphs.coloring.check_valid_edge_coloring`), and if it did,
     a circuit's patch could not be recovered from the gates it contains.
     """
     lookup: Dict[Edge, int] = {}
