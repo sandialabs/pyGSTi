@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -143,5 +143,3 @@ print("\ngaugeopt_to_target output:")
 mdl_go7 = pygsti.gaugeopt_to_target(mdl, target_model, verbosity=3) # show output
 print("Final frobenius distance between mdl_go7 and target_model = ", mdl_go7.frobeniusdist(target_model))
 ```
-
-

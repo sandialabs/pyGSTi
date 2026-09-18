@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -117,5 +117,3 @@ opstr = list(DS_1.keys())[20]
 print(opstr.format_display_str(80))
 print(comparator_1_2.jsd(opstr))
 ```
-
-

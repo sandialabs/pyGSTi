@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -108,4 +108,3 @@ We're done creating our 2-qubit model, `target_model`, printed below.  To run 2-
 ```{code-cell} ipython3
 print(target_model)
 ```
-
