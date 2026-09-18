@@ -7877,7 +7877,7 @@ def phi_numerical(tableau, desired_bitstring, P, Q):
 
     return phi*scale
 
-def alpha(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, desired_bitstring: str) -> float:
+def alpha(errorgen: Union[_LSE, _LEEL], tableau: Union[stim.Tableau, stim.TableauSimulator], desired_bitstring: str) -> float:
     """
     First-order error generator sensitivity function for probability.
     
@@ -7886,8 +7886,8 @@ def alpha(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, desired_bitstring
     errorgen : `LocalStimElementaryErrorgenLabel` or `LocalElementaryErrorgenLabel`
         Error generator label for which to calculate sensitivity.
     
-    tableau : stim.Tableau
-        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+    tableau : stim.Tableau or stim.TableauSimulator
+        Stim Tableau or TableauSimulator corresponding to the stabilizer state to calculate the sensitivity for.
         
     desired_bitstring : str
         Bit string to calculate the sensitivity for.
@@ -7898,36 +7898,11 @@ def alpha(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, desired_bitstring
         Linear sensitivity of the probability of the desired bitstring to the
         specified elementary error generator for the given stabilizer state.
     """
+    sensitivity = slow_bulk_alpha([errorgen], tableau, [desired_bitstring]).item()
     
-    errgen_type = errorgen.errorgen_type
-    basis_element_labels = errorgen.basis_element_labels
-    
-    if not isinstance(basis_element_labels[0], stim.PauliString):
-        basis_element_labels = tuple([stim.PauliString(lbl) for lbl in basis_element_labels])
-    
-    identity_pauli = stim.PauliString('I'*len(basis_element_labels[0]))
-    
-    if errgen_type == 'H':
-        sensitivity = 2*phi(tableau, desired_bitstring, basis_element_labels[0], identity_pauli).imag
-    elif errgen_type == 'S':
-        sensitivity = (phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[0]) \
-                    - phi(tableau, desired_bitstring, identity_pauli, identity_pauli)).real
-    elif errgen_type == 'C': 
-        first_term = 2*phi(tableau, desired_bitstring, basis_element_labels[0], basis_element_labels[1])
-        sensitivity = first_term.real
-        if basis_element_labels[0].commutes(basis_element_labels[1]):
-            second_term = 2*phi(tableau, desired_bitstring, basis_element_labels[0]*basis_element_labels[1], identity_pauli)
-            sensitivity -= second_term.real
-    else: # A
-        first_term = phi(tableau, desired_bitstring, basis_element_labels[1], basis_element_labels[0])
-        if not basis_element_labels[0].commutes(basis_element_labels[1]):
-            second_term = phi(tableau, desired_bitstring, basis_element_labels[1]*basis_element_labels[0], identity_pauli)
-            sensitivity = 2*((first_term + second_term).imag)
-        else:
-            sensitivity = 2*first_term.imag
     return sensitivity
 
-def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bitstrings: list[str]) -> _np.ndarray[_np.double]:
+def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: Union[stim.Tableau, stim.TableauSimulator], desired_bitstrings: list[str]) -> _np.ndarray[_np.double]:
     """
     First-order error generator sensitivity function for probability.
     
@@ -7936,8 +7911,8 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
     errorgens : iterable of `LocalStimErrogenLabels`.
         Error generator label for which to calculate sensitivity.
     
-    tableau : stim.Tableau
-        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+    tableau : stim.Tableau or stim.TableauSimulator
+        Stim Tableau or TableauSimulator corresponding to the stabilizer state to calculate the sensitivity for.
         
     desired_bitstrings : list of str
         Bit string to calculate the sensitivity for.
@@ -7954,8 +7929,13 @@ def slow_bulk_alpha(errorgens: Iterable[_LSE], tableau: stim.Tableau, desired_bi
         return _np.array([], dtype=_np.double)
 
     #pre-compute the stim.TableauSimulator we'll need for all of the computations.
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(tableau**-1)
+    if isinstance(tableau, stim.TableauSimulator):
+        # call chain that touches sim is slow_bulk_alpha -> bulk_phi -> bulk_amplitude_of_state
+        # bulk_amplitude_of_state resets simulator state after use, so safe not to do so here.
+        sim = tableau
+    else:
+        sim = stim.TableauSimulator()
+        sim.set_inverse_tableau(tableau**-1)
 
     #pre-compute an appropriate length identity pauli string.
     identity_pauli = stim.PauliString('I'*sim.num_qubits)
@@ -8079,7 +8059,7 @@ def alpha_numerical(errorgen, tableau, desired_bitstring):
     
     return alpha
 
-def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) -> float:
+def alpha_pauli(errorgen: _LSE, tableau: Union[stim.Tableau, stim.TableauSimulator], pauli: stim.PauliString) -> float:
     """
     First-order error generator sensitivity function for pauli expectations.
     
@@ -8088,8 +8068,8 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
     errorgen : `LocalStimElementaryErrorgenLabel` or `LocalElementaryErrorgenLabel`
         Error generator label for which to calculate sensitivity.
     
-    tableau : stim.Tableau
-        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+    tableau : stim.Tableau or stim.TableauSimulator
+        Stim Tableau or TableauSimulator corresponding to the stabilizer state to calculate the sensitivity for.
         
     pauli : stim.PauliString
         Pauli to calculate the sensitivity for.
@@ -8100,92 +8080,9 @@ def alpha_pauli(errorgen: _LSE, tableau: stim.Tableau, pauli: stim.PauliString) 
         Linear sensitivity of the expectation value of the desired pauli observable to the
         specified elementary error generator for the given stabilizer state.
     """
-    
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(tableau**-1)
-    
-    errgen_type = errorgen.errorgen_type
-    basis_element_labels = errorgen.basis_element_labels
-    
-    if not isinstance(basis_element_labels[0], stim.PauliString):
-        basis_element_labels = tuple([stim.PauliString(lbl) for lbl in basis_element_labels])
-    
-    identity_pauli = stim.PauliString('I'*len(basis_element_labels[0]))
-    
-    if errgen_type == 'H':
-        pauli_bel_0_comm = com(pauli, basis_element_labels[0])
-        if pauli_bel_0_comm is not None:
-            sign = -1j*pauli_bel_0_comm[0]
-            expectation  = sim.peek_observable_expectation(pauli_bel_0_comm[1])
-            return _real_if_close(sign*expectation)
-        else: 
-            return 0 
-    elif errgen_type == 'S':
-        if pauli.commutes(basis_element_labels[0]):
-            return 0
-        else:
-            expectation  = sim.peek_observable_expectation(pauli)
-            return _real_if_close(-2*expectation)
-    elif errgen_type == 'C': 
-        A = basis_element_labels[0]
-        B = basis_element_labels[1]
-        com_AP = A.commutes(pauli)
-        com_BP = B.commutes(pauli) # TODO: can skip computing this in some cases for minor performance boost.
-        if A.commutes(B):
-            if com_AP:
-                return 0
-            else:
-                if com_BP:
-                    return 0
-                else:
-                    ABP = pauli_product(A*B, pauli)
-                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _real_if_close(-4*expectation)
-        else: # {A,B} = 0
-            if com_AP:
-                if com_BP:
-                    return 0
-                else:
-                    ABP = pauli_product(A*B, pauli)
-                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _real_if_close(-2*expectation)
-            else:
-                if com_BP:
-                    ABP = pauli_product(A*B, pauli)
-                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _real_if_close(2*expectation)
-                else:
-                    return 0
-    else: # A
-        A = basis_element_labels[0]
-        B = basis_element_labels[1]
-        com_AP = A.commutes(pauli)
-        com_BP = B.commutes(pauli) # TODO: can skip computing this in some cases for minor performance boost.
-        if A.commutes(B):
-            if com_AP:
-                if com_BP:
-                    return 0
-                else:
-                    ABP = pauli_product(A*B, pauli)
-                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _real_if_close(1j*2*expectation)
-            else:
-                if com_BP:
-                    ABP = pauli_product(A*B, pauli)
-                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _real_if_close(-1j*2*expectation)
-                else:
-                    return 0
-        else: # {A,B} = 0
-            if com_AP:
-                return 0
-            else:
-                if com_BP:
-                    return 0
-                else:
-                    ABP = pauli_product(A*B, pauli)
-                    expectation = ABP[0]*sim.peek_observable_expectation(ABP[1])
-                    return _real_if_close(1j*4*expectation)
+    sensitivity = slow_bulk_alpha_pauli([errorgen], tableau, [pauli]).item()
+
+    return sensitivity
 
 def alpha_pauli_numerical(errorgen: Union[_LSE, _LEEL], tableau: stim.Tableau, pauli: stim.PauliString):
     """
@@ -8250,7 +8147,7 @@ def _real_if_close(val: complex) -> float:
     else:
         return val.real
 
-def slow_bulk_alpha_pauli(errorgens: Iterable[_LSE], tableau: stim.Tableau, paulis: list[stim.PauliString]) -> _np.ndarray[_np.double]:
+def slow_bulk_alpha_pauli(errorgens: Iterable[_LSE], tableau: Union[stim.Tableau, stim.TableauSimulator], paulis: list[stim.PauliString]) -> _np.ndarray[_np.double]:
     """
     First-order error generator sensitivity function for pauli expectations.
     
@@ -8259,8 +8156,8 @@ def slow_bulk_alpha_pauli(errorgens: Iterable[_LSE], tableau: stim.Tableau, paul
     errorgens : iterable of `LocalStimElementaryErrorgenLabel`
         Error generator label for which to calculate sensitivity.
     
-    tableau : stim.Tableau
-        Stim Tableau corresponding to the stabilizer state to calculate the sensitivity for.
+    tableau : stim.Tableau or stim.TableauSimulator
+        Stim Tableau or TableauSimulator corresponding to the stabilizer state to calculate the sensitivity for.
         
     pauli : stim.PauliString
         Pauli to calculate the sensitivity for.
@@ -8273,8 +8170,14 @@ def slow_bulk_alpha_pauli(errorgens: Iterable[_LSE], tableau: stim.Tableau, paul
         two dimensional numpy array, with rows indexed by paulis, and columns indexed by error
         generators.
     """
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(tableau**-1)
+    #pre-compute the stim.TableauSimulator we'll need for all of the computations.
+    if isinstance(tableau, stim.TableauSimulator):
+        # sim is only touched by peek_observable_expectation which doesn't modify state
+        # so safe not to reset following use.
+        sim = tableau
+    else:
+        sim = stim.TableauSimulator()
+        sim.set_inverse_tableau(tableau**-1)
 
     sensitivities_by_pauli = _np.empty((len(paulis), len(errorgens)), dtype=_np.double)
 
