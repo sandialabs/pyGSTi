@@ -953,11 +953,16 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha(object errorgens_iter,
         return np.array([], dtype=np.double)        
         
     #
-    # 1) Build the simulator & remember how to restore it if needed.
+    # 1) Build the simulator
     #
     cdef object sim
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(tableau**-1)
+    if isinstance(tableau, stim.TableauSimulator):
+        # call chain that touches sim is fast_bulk_alpha -> fast_bulk_phi -> fast_bulk_amplitude_of_state
+        # fast_bulk_amplitude_of_state resets simulator state after use, so safe not to do so here.
+        sim = tableau
+    else:
+        sim = stim.TableauSimulator()
+        sim.set_inverse_tableau(tableau**-1)
 
     #
     # 2) Pre‐allocate identity pauli for reuse.
@@ -1118,7 +1123,7 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha_pauli(object errorgens_iter, ob
     errorgens : iterable of LocalStimElementaryErrorgenLabel
         Error generator labels for which to calculate sensitivity.
     
-    tableau : stim.Tableau
+    tableau : stim.Tableau or stim.TableauSimulator
         Stim Tableau corresponding to the stabilizer state.
         
     paulis : list of stim.PauliString
@@ -1146,8 +1151,12 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha_pauli(object errorgens_iter, ob
         object res  # temporary for the result of com()
     
     # Build the simulator and set its inverse tableau.
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(tableau**-1)
+    if isinstance(tableau, stim.TableauSimulator):
+        #only things that touch sim are peek_observable_expectation which preserves state.
+        sim = tableau
+    else:
+        sim = stim.TableauSimulator()
+        sim.set_inverse_tableau(tableau**-1)
         
     n_paulis    = len(paulis)
     n_errorgens = len(errorgens)

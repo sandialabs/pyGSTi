@@ -5,10 +5,11 @@ from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis
 from pygsti.algorithms.randomcircuit import create_random_circuit
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
+from pygsti.tools.lindbladtools import create_elementary_errorgen
 from ..util import BaseCase
 from itertools import product, chain
 import random
@@ -16,7 +17,7 @@ import stim
 from pygsti.processors import QubitProcessorSpec
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 
-#TODO: errorgen_layer_to_matrix, stim_pauli_string_less_than 
+#TODO: errorgen_layer_to_matrix 
 
 class ErrgenCompositionCommutationTester(BaseCase):
 
@@ -199,9 +200,19 @@ class ErrgenCompositionCommutationTester(BaseCase):
                                            (_LSE('C', (stim.PauliString("+_X"), stim.PauliString("+X_"))), -1)]                                          
                                         ]
         
+        def aggregate(label_rate_pairs):
+            # the returned order is not guaranteed, and a label may appear more than once.
+            totals = {}
+            for lbl, rate in label_rate_pairs:
+                totals[lbl] = totals.get(lbl, 0) + rate
+            return {lbl: rate for lbl, rate in totals.items() if abs(rate) > 1e-12}
+
         for lbls, rates, correct_lbls in zip(test_labels, rates, correct_iterative_compositions):
-            iterated_composition = _eprop.iterative_error_generator_composition(lbls, rates)
-            self.assertEqual(iterated_composition, correct_lbls)
+            iterated_composition = aggregate(_eprop.iterative_error_generator_composition(lbls, rates))
+            correct = aggregate(correct_lbls)
+            self.assertEqual(set(iterated_composition), set(correct))
+            for lbl, rate in correct.items():
+                self.assertAlmostEqual(iterated_composition[lbl], rate)
 
         _compare_analytic_numeric_iterative_composition(2)
         
@@ -281,6 +292,127 @@ class ErrgenCompositionCommutationTester(BaseCase):
                                             if pauli_action is not None else np.zeros((2**len(pauli),2**len(pauli)))
                 pauli_action_numerical = _eprop.errorgen_pauli_action_numerical(eglbl, pauli)
                 assert np.linalg.norm(pauli_action_dense-pauli_action_numerical) < 1e-14, f'Numerical and analytical results differ, {eglbl=}, {pauli=}'
+
+    def test_term_emitters(self):
+        """
+        Check the four term emitters `_H`, `_S`, `_C`, `_A` against the "Extended elementary
+        error generator conventions" of the module docstring: for every signed (possibly
+        identity or repeated) index combination the emitted canonical terms must sum to the
+        superoperator obtained by substituting the signed Paulis literally into the defining
+        sandwich expressions, and every emitted label must be canonical.
+        """
+        from pygsti.errorgenpropagation.localstimerrorgen import bel_less_than, bel_str
+
+        def sandwich(M, N):  # rho -> M rho N on row-stacked vec(rho), pyGSTi's convention
+            return np.kron(M, N.T)
+
+        def ext_H(M, I):
+            return -1j * (sandwich(M, I) - sandwich(I, M))
+
+        def ext_S(M, I):
+            return sandwich(M, M.conj().T) - sandwich(I, I)
+
+        def ext_C(M, N, I):
+            anti = M @ N + N @ M
+            return sandwich(M, N) + sandwich(N, M) - 0.5 * (sandwich(anti, I) + sandwich(I, anti))
+
+        def ext_A(M, N, I):
+            comm = M @ N - N @ M
+            return 1j * (sandwich(M, N) - sandwich(N, M) + 0.5 * (sandwich(comm, I) + sandwich(I, comm)))
+
+        def label_matrix(lbl, I):
+            mats = [p.to_unitary_matrix(endian='big') for p in lbl.basis_element_labels]
+            fn = {'H': ext_H, 'S': ext_S, 'C': ext_C, 'A': ext_A}[lbl.errorgen_type]
+            return fn(*mats, I)
+
+        phases = [1, -1, 1j, -1j]
+        for num_qubits in (1, 2):
+            dim = 2**num_qubits
+            I = np.eye(dim)
+            paulis = [stim.PauliString(''.join(p)) for p in product('IXYZ', repeat=num_qubits)]
+            identity = stim.PauliString(num_qubits)
+            identity_str = 'I' * num_qubits
+            # tie the sandwich definitions to pyGSTi's standard elementary error generators
+            # for the ordinary (Hermitian, non-identity) case.
+            P0, Q0 = paulis[1], paulis[-1]
+            m0, m1 = P0.to_unitary_matrix(endian='big'), Q0.to_unitary_matrix(endian='big')
+            for typ, mats in [('H', (m0,)), ('S', (m0,)), ('C', (m0, m1)), ('A', (m0, m1))]:
+                self.assertArraysAlmostEqual(label_matrix(_LSE(typ, (P0, Q0)[:len(mats)]), I),
+                                             create_elementary_errorgen(typ, *mats))
+
+            for P in paulis:
+                MP = P.to_unitary_matrix(endian='big')
+                for w in phases:
+                    for c in (0.7, -0.3j):
+                        for emitter, expected in [(_eprop._H, c * ext_H(w * MP, I)), (_eprop._S, c * ext_S(w * MP, I))]:
+                            terms = []
+                            emitter(terms, (w, P), c, identity_str)
+                            # the pre-rendered-string form must give the identical result.
+                            terms_pre = []
+                            emitter(terms_pre, (w, P, bel_str(P)), c, identity_str)
+                            self.assertEqual(terms_pre, terms)
+                            total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))
+                            self.assertArraysAlmostEqual(total, expected)
+                            for lbl, rate in terms:
+                                self.assertNotEqual(lbl.basis_element_labels[0], identity)
+                                self.assertEqual(lbl._hashable_basis_element_labels, lbl.bel_to_strings())
+                            self.assertLessEqual(len(terms), 1)
+                        # a None index (vanishing commutator / anticommutator) is a zero term.
+                        terms = []
+                        _eprop._H(terms, None, c, identity_str)
+                        _eprop._S(terms, None, c, identity_str)
+                        _eprop._C(terms, None, (w, P), c, identity_str)
+                        _eprop._A(terms, (w, P), None, c, identity_str)
+                        self.assertEqual(terms, [])
+
+            for P, Q in product(paulis, repeat=2):
+                MP, MQ = P.to_unitary_matrix(endian='big'), Q.to_unitary_matrix(endian='big')
+                for w, v in product(phases, repeat=2):
+                    c = 0.7 - 0.3j
+                    for emitter, expected in [(_eprop._C, c * ext_C(w * MP, v * MQ, I)),
+                                              (_eprop._A, c * ext_A(w * MP, v * MQ, I))]:
+                        terms = []
+                        emitter(terms, (w, P), (v, Q), c, identity_str)
+                        terms_pre = []
+                        emitter(terms_pre, (w, P, bel_str(P)), (v, Q, bel_str(Q)), c, identity_str)
+                        self.assertEqual(terms_pre, terms)
+                        self.assertEqual([r for _, r in terms_pre], [r for _, r in terms])
+                        total = sum((rate * label_matrix(lbl, I) for lbl, rate in terms), np.zeros((dim**2, dim**2), complex))
+                        self.assertArraysAlmostEqual(total, expected)
+                        self.assertLessEqual(len(terms), 1)
+                        for lbl, rate in terms:
+                            self.assertEqual(lbl._hashable_basis_element_labels, lbl.bel_to_strings())
+                            self.assertNotIn(identity, lbl.basis_element_labels)
+                            if lbl.errorgen_type in ('C', 'A'):
+                                self.assertTrue(bel_less_than(*lbl.basis_element_labels))
+                            else:  # degenerate outcomes of the two-index emitters
+                                self.assertEqual(len(lbl.basis_element_labels), 1)
+
+    def test_CA_label_ordering_preserved_by_tableau_propagation(self):
+        """
+        Regression test: `propagate_error_gen_tableau` must return C/A labels whose basis
+        element label pair is still in canonical (sorted) order.
+
+        A Clifford need not preserve the relative order of the two transformed Paulis (SWAP
+        maps (IX, XI) -> (XI, IX)). Without a re-sort the propagated label (1) represents the
+        negated generator for 'A', since A_{P,Q} = -A_{Q,P}, and (2) raises a KeyError against
+        any canonically-keyed dict, e.g. in `errorgen_layer_to_matrix`.
+        """
+     
+        # The motivating example: SWAP reverses the order of (IX, XI).
+        swap_tableau = stim.Tableau.from_named_gate('SWAP')
+        P, Q = stim.PauliString('+IX'), stim.PauliString('+XI')
+        self.assertTrue(bel_less_than(P, Q))  # (P, Q) starts canonical
+        C_lbl = _LSE('C', [P,Q])
+        SWAP_C_lbl = C_lbl.propagate_error_gen_tableau(swap_tableau, weight=1)
+        assert SWAP_C_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
+        assert SWAP_C_lbl[1] == 1, "Incorrect weight following C subscript swap."
+
+        A_lbl = _LSE('A', [P,Q])
+        SWAP_A_lbl = A_lbl.propagate_error_gen_tableau(swap_tableau, weight=1)
+        assert SWAP_A_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
+        assert SWAP_A_lbl[1] == -1, "Incorrect weight following A subscript swap."
+
 
     def test_zassenhaus_formula(self):
         first_order_zassenhaus_numerical = _eprop.zassenhaus_formula_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, zassenhaus_order=1)
@@ -449,7 +581,7 @@ class ApproxStabilizerMethodTester(BaseCase):
                 raise ValueError('Bulk and individually computed phi values are different.')        
 
     def test_alpha(self):
-        bit_strings_3Q = list(product(['0','1'], repeat=3))
+        bit_strings_3Q =  [''.join(bit_tup) for bit_tup in product(['0','1'], repeat=3)]
         complete_errorgen_basis_3Q = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local')
         rng = np.random.default_rng()
         random_errorgens = rng.choice(np.fromiter(complete_errorgen_basis_3Q.labels, dtype=object), size=100, replace=False)
