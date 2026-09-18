@@ -5,7 +5,7 @@ from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis
 from pygsti.algorithms.randomcircuit import create_random_circuit
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
@@ -17,7 +17,7 @@ import stim
 from pygsti.processors import QubitProcessorSpec
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 
-#TODO: errorgen_layer_to_matrix, stim_pauli_string_less_than 
+#TODO: errorgen_layer_to_matrix 
 
 class ErrgenCompositionCommutationTester(BaseCase):
 
@@ -402,7 +402,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
         # The motivating example: SWAP reverses the order of (IX, XI).
         swap_tableau = stim.Tableau.from_named_gate('SWAP')
         P, Q = stim.PauliString('+IX'), stim.PauliString('+XI')
-        self.assertTrue(_eprop.stim_pauli_string_less_than(P, Q))  # (P, Q) starts canonical
+        self.assertTrue(bel_less_than(P, Q))  # (P, Q) starts canonical
         C_lbl = _LSE('C', [P,Q])
         SWAP_C_lbl = C_lbl.propagate_error_gen_tableau(swap_tableau)
         assert SWAP_C_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
