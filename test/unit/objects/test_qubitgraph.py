@@ -7,10 +7,10 @@ libraries -- but it had no dedicated test module. These tests pin its current be
 changes to it (in particular to the Floyd-Warshall caching in `_refresh_dists_and_predecessors`)
 can be shown to preserve it.
 
-Several tests below deliberately pin behaviour that is *wrong*. Those are marked with a
-`KNOWN BUG` comment giving the offending line. They are here so that a future fix has exactly
-one place to change and an explicit record of what the old answer was -- not because the
-behaviour is endorsed.
+Four of the behaviours below were bugs when these tests were first written (a node reported as
+not connected to itself, direction indices used as edge weights, an undirected subgraph
+connectivity check seeded from node 0, and `subgraph` dropping the parent's direction names).
+The tests marked `FIXED BUG` pin the corrected behaviour and record what the old answer was.
 """
 import numpy as np
 
@@ -190,13 +190,17 @@ class QubitGraphPathTester(BaseCase):
         with self.assertRaises(AssertionError):
             g.shortest_path(0, 2)
 
-    def test_is_connected_of_a_node_with_itself_is_false(self):
-        # KNOWN BUG (qubitgraph.py:539). `is_connected` tests `_predecessors[i, j] >= 0`, and
-        # Floyd-Warshall writes -9999 on the diagonal, so a node is reported as not connected
-        # to itself even though its distance to itself is 0.
+    def test_is_connected_of_a_node_with_itself(self):
+        # FIXED BUG. `is_connected` used to test `_predecessors[i, j] >= 0`, and Floyd-Warshall
+        # writes -9999 on the diagonal, so a node was reported as not connected to itself even
+        # though its distance to itself is 0.
         g = line(3)
-        self.assertFalse(g.is_connected(0, 0))
+        self.assertTrue(g.is_connected(0, 0))
         self.assertEqual(g.shortest_path_distance(0, 0), 0.0)
+        # ... and unrelated components are still not connected.
+        h = QubitGraph([0, 1, 2], initial_edges=[(0, 1)], directed=False)
+        self.assertTrue(h.is_connected(2, 2))
+        self.assertFalse(h.is_connected(0, 2))
 
     def test_single_node_graph(self):
         g = QubitGraph([0], directed=False)
@@ -215,23 +219,22 @@ class QubitGraphPathTester(BaseCase):
         self.assertEqual(g.shortest_path_distance(0, 2), 2.0)
         self.assertTrue(np.isinf(g.shortest_path_distance(2, 0)))
 
-    def test_direction_indices_are_used_as_edge_weights(self):
-        # KNOWN BUG (qubitgraph.py:308-310). `_connectivity` stores `direction_index + 1` when
-        # direction names are in use, and Floyd-Warshall is called with `unweighted=False`, so
-        # those direction indices become edge *weights*. Every string-geometry
-        # QubitProcessorSpec builds its graph this way (processorspec.py:279), and
-        # compilers.py:1393 routes on the result.
+    def test_direction_indices_are_not_edge_weights(self):
+        # FIXED BUG. `_connectivity` stores `direction_index + 1` when direction names are in
+        # use, and Floyd-Warshall used to be called with `unweighted=False`, so those direction
+        # indices became edge *weights*: on this grid 0->8 was reported as 8.0 rather than 4
+        # hops, because 'right' (index 2, so weight 3) cost three times as much as 'down'.
+        # Every string-geometry QubitProcessorSpec builds its graph this way, and the compilers
+        # route on the result.
         g = QubitGraph.common_graph(9, "grid", directed=True, all_directions=True)
         self.assertEqual(g.directions, ['down', 'left', 'right', 'up'])
         self.assertEqual(sorted(set(g._connectivity.flatten().tolist())), [0, 1, 2, 3, 4])
-        # 0->8 is 4 hops on a 3x3 grid, but is reported as 8.0 because 'right' (index 2, so
-        # weight 3) costs three times as much as 'down' (index 0, so weight 1).
-        self.assertEqual(g.shortest_path_distance(0, 8), 8.0)
-        self.assertEqual(g.shortest_path_distance(0, 1), 3.0)   # adjacent, via 'right'
+        self.assertEqual(g.shortest_path_distance(0, 8), 4.0)
+        self.assertEqual(g.shortest_path_distance(0, 1), 1.0)   # adjacent, via 'right'
         self.assertEqual(g.shortest_path_distance(0, 3), 1.0)   # adjacent, via 'down'
-        # The unweighted answer, for comparison, is 4 hops:
         undirected = QubitGraph.common_graph(9, "grid", directed=False)
-        self.assertEqual(undirected.shortest_path_distance(0, 8), 4.0)
+        self.assertArraysEqual(g.shortest_path_distance_matrix(),
+                               undirected.shortest_path_distance_matrix())
 
 
 class QubitGraphCacheInvalidationTester(BaseCase):
@@ -358,15 +361,17 @@ class QubitGraphStructureTester(BaseCase):
         self.assertFalse(g.is_connected_subgraph([0, 3]))
 
     def test_is_connected_subgraph_not_containing_node_zero(self):
-        # KNOWN BUG (qubitgraph.py:596). For undirected graphs the flood fill is seeded with the
-        # hard-coded node *index 0* rather than a member of the requested subset, so a connected
-        # subset that node 0 cannot reach through the subset is misreported as disconnected.
+        # FIXED BUG. For undirected graphs the flood fill used to be seeded with the hard-coded
+        # node *index 0* rather than a member of the requested subset, so a connected subset
+        # that node 0 could not reach through the subset was misreported as disconnected
+        # (e.g. [2, 3] on the line 0-1-2-3).
         g = line(4)                                  # 0-1-2-3
-        self.assertFalse(g.is_connected_subgraph([2, 3]))   # WRONG: 2-3 is an edge
-        self.assertTrue(g.is_connected_subgraph([1, 2]))    # right, but only because 0 reaches 1
-        self.assertTrue(g.is_connected_subgraph([3]))       # right, via the len < 2 short-circuit
-        # A 5-node line makes the pattern unmistakable: the subset gets further from node 0.
-        self.assertFalse(line(5).is_connected_subgraph([3, 4]))     # WRONG: 3-4 is an edge
+        self.assertTrue(g.is_connected_subgraph([2, 3]))
+        self.assertTrue(g.is_connected_subgraph([1, 2]))
+        self.assertTrue(g.is_connected_subgraph([3]))
+        self.assertFalse(g.is_connected_subgraph([1, 3]))
+        self.assertTrue(line(5).is_connected_subgraph([3, 4]))
+        self.assertFalse(line(5).is_connected_subgraph([2, 4]))
 
     def test_is_connected_subgraph_trivial_and_unknown_nodes(self):
         g = line(3)
@@ -375,12 +380,14 @@ class QubitGraphStructureTester(BaseCase):
         self.assertFalse(g.is_connected_subgraph(['nope']))
 
     def test_connected_combos(self):
-        # KNOWN BUG: inherits the `is_connected_subgraph` seeding bug above, so this undercounts.
-        # On the line 0-1-2-3 the correct size-2 count is 3 (the three edges), not 2.
+        # Used to inherit the `is_connected_subgraph` seeding bug above and report 2 for size 2.
         g = line(4)
-        self.assertEqual(g.connected_combos([0, 1, 2, 3], 2), 2)   # WRONG: should be 3
+        self.assertEqual(g.connected_combos([0, 1, 2, 3], 2), 3)   # the three edges
         self.assertEqual(g.connected_combos([0, 1, 2, 3], 3), 2)   # (0,1,2) and (1,2,3)
         self.assertEqual(g.connected_combos([0, 1, 2, 3], 4), 1)
+        # Directed graphs take the other branch of `_is_connected_subgraph`, which was correct.
+        d = QubitGraph.common_graph(4, "line", directed=True, all_directions=True)
+        self.assertEqual(d.connected_combos([0, 1, 2, 3], 2), 3)
 
     def test_radius(self):
         g = line(5)                                  # 0-1-2-3-4
@@ -413,16 +420,19 @@ class QubitGraphStructureTester(BaseCase):
         sub = QubitGraph.common_graph(9, "grid", directed=False).subgraph([0, 1, 2])
         self.assertEqual(sub.edges(), [(0, 1), (1, 2)])          # the column edges are gone
 
-    def test_subgraph_recollects_direction_names(self):
-        # KNOWN BUG (qubitgraph.py:892). `subgraph` does not pass `direction_names` through, so
-        # the child re-derives the list from whichever directions survived. The child is
-        # self-consistent, but its `.directions` list -- and hence the integer stored in
-        # `_connectivity` for a given direction name -- differs from its parent's.
+    def test_subgraph_keeps_parent_direction_names(self):
+        # FIXED BUG. `subgraph` did not pass `direction_names` through, so the child re-derived
+        # the list from whichever directions survived (['left', 'right'] here), and the integer
+        # stored in `_connectivity` for a given direction name differed from its parent's.
         parent = QubitGraph.common_graph(9, "grid", directed=True, all_directions=True)
         self.assertEqual(parent.directions, ['down', 'left', 'right', 'up'])
         child = parent.subgraph([0, 1, 2])
-        self.assertEqual(child.directions, ['left', 'right'])
-        self.assertEqual(child.move_in_direction(0, 'right'), 1)  # still self-consistent
+        self.assertEqual(child.directions, parent.directions)
+        self.assertEqual(child.move_in_direction(0, 'right'), 1)
+        self.assertEqual(child.edges(include_directions=True),
+                         [(0, 1, 'right'), (1, 0, 'left'), (1, 2, 'right'), (2, 1, 'left')])
+        # Dropping directions still yields a direction-free child.
+        self.assertIsNone(parent.subgraph([0, 1, 2], include_directions=False).directions)
 
     def test_copy_is_independent(self):
         g = line(3)
