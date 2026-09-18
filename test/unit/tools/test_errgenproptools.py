@@ -404,12 +404,12 @@ class ErrgenCompositionCommutationTester(BaseCase):
         P, Q = stim.PauliString('+IX'), stim.PauliString('+XI')
         self.assertTrue(bel_less_than(P, Q))  # (P, Q) starts canonical
         C_lbl = _LSE('C', [P,Q])
-        SWAP_C_lbl = C_lbl.propagate_error_gen_tableau(swap_tableau)
+        SWAP_C_lbl = C_lbl.propagate_error_gen_tableau(swap_tableau, weight=1)
         assert SWAP_C_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
         assert SWAP_C_lbl[1] == 1, "Incorrect weight following C subscript swap."
 
         A_lbl = _LSE('A', [P,Q])
-        SWAP_A_lbl = A_lbl.propagate_error_gen_tableau(swap_tableau)
+        SWAP_A_lbl = A_lbl.propagate_error_gen_tableau(swap_tableau, weight=1)
         assert SWAP_A_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
         assert SWAP_A_lbl[1] == -1, "Incorrect weight following A subscript swap."
 
@@ -581,7 +581,7 @@ class ApproxStabilizerMethodTester(BaseCase):
                 raise ValueError('Bulk and individually computed phi values are different.')        
 
     def test_alpha(self):
-        bit_strings_3Q = list(product(['0','1'], repeat=3))
+        bit_strings_3Q =  [''.join(bit_tup) for bit_tup in product(['0','1'], repeat=3)]
         complete_errorgen_basis_3Q = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local')
         rng = np.random.default_rng()
         random_errorgens = rng.choice(np.fromiter(complete_errorgen_basis_3Q.labels, dtype=object), size=100, replace=False)
