@@ -78,6 +78,43 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 print_mx(analytic_commutator_mat)
                 raise ValueError()
 
+    def test_errorgen_commutator_disjoint_support(self):
+        # Error generators supported on disjoint sets of qubits commute exactly, and
+        # error_generator_commutator detects this from the labels' support masks and returns
+        # an empty list instead of terms that would only cancel after aggregation. Check the
+        # shortcut agrees with the numerical commutator on a 3-qubit basis: every disjoint
+        # pair gives no terms and every overlapping pair still matches the numerics. Also
+        # check that the layerwise accumulation (which skips such pairs before the call) gives
+        # the same aggregated result as summing the per-pair commutators.
+        errorgen_basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local', max_weights={'H': 1, 'S': 1, 'C': 1, 'A': 1})
+        errorgen_lbls = errorgen_basis.labels
+        errorgen_lbl_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+        stim_lbls = [_LSE.cast(lbl) for lbl in errorgen_lbls]
+        num_disjoint = 0
+        for (lbl1, slbl1), (lbl2, slbl2) in product(zip(errorgen_lbls, stim_lbls), repeat=2):
+            analytic = _eprop.error_generator_commutator(slbl1, slbl2)
+            if slbl1.support_mask & slbl2.support_mask == 0:
+                num_disjoint += 1
+                self.assertEqual(analytic, [])
+            numeric = _eprop.error_generator_commutator_numerical(lbl1, lbl2, errorgen_lbl_matrix_dict)
+            analytic_mat = _eprop.errorgen_layer_to_matrix(analytic, 3, errorgen_lbl_matrix_dict)
+            self.assertLess(np.linalg.norm(numeric - analytic_mat), 1e-10)
+        self.assertGreater(num_disjoint, 0)
+
+        rng = np.random.default_rng(1)
+        layer_1 = {lbl: r for lbl, r in zip(stim_lbls, rng.normal(size=len(stim_lbls)))}
+        layer_2 = {lbl: r for lbl, r in zip(stim_lbls, rng.normal(size=len(stim_lbls)))}
+        accumulated = {}
+        _eprop._accumulate_layer_pairwise_commutators(accumulated, layer_1, layer_2, 'III', addl_weight=0.5)
+        expected = {}
+        for lbl1, r1 in layer_1.items():
+            for lbl2, r2 in layer_2.items():
+                for lbl, rate in _eprop.error_generator_commutator(lbl1, lbl2, weight=0.5 * r1 * r2, identity='III'):
+                    expected[lbl] = expected.get(lbl, 0) + rate
+        self.assertEqual(set(accumulated), set(expected))
+        for lbl, rate in expected.items():
+            self.assertAlmostEqual(accumulated[lbl], rate, places=12)
+
     def test_errorgen_commutator_S_A_degenerate_case(self):
         # Regression test for a bug in error_generator_commutator's 'S'-'A' branch: it referenced
         # an undefined local variable `ptup` (should have been `ptup1`) inside the

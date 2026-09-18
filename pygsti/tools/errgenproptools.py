@@ -631,10 +631,20 @@ def _accumulate_layer_pairwise_commutators(target: dict[_LSE, complex], errorgen
     term. `target` is not truncated; callers
     apply their threshold after all contributions are in. `identity` is the 'I'*n string
     (callers pass None only when `errorgen_layer_1` is empty, in which case nothing is computed).
+
+    Pairs of labels with disjoint supports commute exactly and are skipped here, before the
+    call into `error_generator_commutator` (which would detect the same thing, but only after
+    paying the call overhead). The support bitmasks of the inner layer are gathered once
+    instead of being re-read for each label of the outer layer.
     """
     get = target.get
+    layer_2_items = [(error2, error2_val, error2.support_mask) for error2, error2_val in errorgen_layer_2.items()]
     for error1, error1_val in errorgen_layer_1.items():
-        for error2, error2_val in errorgen_layer_2.items():
+        mask1 = error1.support_mask
+        for error2, error2_val, mask2 in layer_2_items:
+            # disjoint supports: the commutator is identically zero.
+            if mask1 & mask2 == 0:
+                continue
             weight = addl_weight*error1_val*error2_val
             # avoid computing commutators which will be effectively zero.
             if abs(weight) < truncation_threshold:
@@ -903,7 +913,16 @@ def error_generator_commutator(errorgen_1: _LSE, errorgen_2: _LSE, weight: compl
     corresponding to a component of the commutator of the two input error generators.
     The second element is the rate of that term, additionally weighted by the specified
     value of `weight`. The same label may appear in more than one tuple.
+
+    Error generators supported on disjoint sets of qubits commute exactly, and this is
+    detected up front from the labels' cached support bitmasks: such pairs return an empty
+    list without evaluating the commutation relations (whose terms would only cancel after
+    aggregation). At large qubit counts almost every pair of labels is of this kind. Note
+    that no such shortcut exists for `error_generator_composition`: the composition of two
+    error generators on disjoint supports is a genuine (non-zero) term.
     """
+    if errorgen_1.support_mask & errorgen_2.support_mask == 0:
+        return []
     if identity is None:
         identity = 'I' * len(errorgen_1._hashable_basis_element_labels[0])
     return _COMMUTATOR_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx](errorgen_1, errorgen_2, weight, identity)
