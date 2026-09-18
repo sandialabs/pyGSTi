@@ -91,6 +91,59 @@ cdef inline bint pauli_flip_ascii(unsigned char op):
     """
     return (op == 88 or op == 89)  # 'X' (88) or 'Y' (89)
 
+
+cpdef object fast_support_mask(tuple bel_strings):
+    """
+    Support bitmask of an error generator label from its 'I'-padded basis element label
+    strings (as cached by `LocalStimErrorgenLabel._hashable_basis_element_labels`): bit q of
+    the returned python int is set iff some string is not 'I' (or '_') at position q.
+    Optimized equivalent of `pygsti.errorgenpropagation.localstimerrorgen._slow_support_mask`.
+
+    Strings of up to 64 characters are handled in a single C integer; longer strings are
+    processed in 64-character chunks that are shifted into an arbitrary-precision python int.
+
+    Parameters
+    ----------
+    bel_strings : tuple of str
+        One or two Pauli strings of equal length made of the characters 'I', '_', 'X', 'Y', 'Z'.
+
+    Returns
+    -------
+    int
+    """
+    cdef:
+        unsigned long long chunk
+        Py_ssize_t n, start, stop, i
+        const char* p
+        object mask = 0
+        object chunk_mask
+        str s
+
+    for s in bel_strings:
+        p = PyUnicode_AsUTF8(s)
+        n = len(s)
+        if n <= 64:
+            chunk = 0
+            for i in range(n):
+                if p[i] != 73 and p[i] != 95:  # 'I' (73), '_' (95)
+                    chunk |= (<unsigned long long>1) << i
+            if chunk:
+                mask |= chunk
+        else:
+            start = 0
+            while start < n:
+                stop = start + 64 if start + 64 < n else n
+                chunk = 0
+                for i in range(start, stop):
+                    if p[i] != 73 and p[i] != 95:
+                        chunk |= (<unsigned long long>1) << (i - start)
+                if chunk:
+                    chunk_mask = chunk
+                    mask |= chunk_mask << start
+                start = stop
+    return mask
+
+
 @cython.wraparound(False)   # Deactivate negative indexing.
 cpdef tuple fast_pauli_phase_update_all_zeros(str pauli_str, bint dual=False):
     """

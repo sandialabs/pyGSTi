@@ -257,6 +257,50 @@ class LocalStimErrorgenLabelTester(BaseCase):
         restored = roundtrip(state)
         self.assertEqual(restored._hashable_string_rep, propagated._hashable_string_rep)
 
+        # (5) state written before the cached support mask existed (or pickled before the mask
+        #     was first built): it must be built on demand.
+        state = dict(fresh_state)
+        self.assertNotIn('_support_mask', state)
+        restored = roundtrip(state)
+        self.assertEqual(restored.support_mask, propagated.support_mask)
+        self.assertIn('_support_mask', restored.__dict__)
+
+    def test_support_mask(self):
+        from pygsti.errorgenpropagation import localstimerrorgen as _lse_mod
+        # bit q of the mask is set iff some basis element label is non-identity on qubit q.
+        self.assertEqual(_LSE.cast(('H', ['XI'])).support_mask, 0b01)
+        self.assertEqual(_LSE.cast(('S', ['IZ'])).support_mask, 0b10)
+        self.assertEqual(_LSE.cast(('C', ['XI', 'IY'])).support_mask, 0b11)
+        self.assertEqual(_LSE.cast(('A', ['IIX', 'IIZ'])).support_mask, 0b100)
+        self.assertEqual(_LSE.cast(('H', ['I' * 70 + 'Y' + 'I' * 29])).support_mask, 1 << 70)
+        # the mask is built lazily, cached, and survives copies and pickling.
+        lbl = _LSE.cast(('C', ['XI', 'IY']))
+        self.assertNotIn('_support_mask', lbl.__dict__)
+        self.assertEqual(lbl.support_mask, 0b11)
+        self.assertEqual(lbl.__dict__['_support_mask'], 0b11)
+        for other in [copy.copy(lbl), copy.deepcopy(lbl), pickle.loads(pickle.dumps(lbl))]:
+            self.assertEqual(other.support_mask, 0b11)
+        # the pure-python builder and the one in use (cython when built) agree with an
+        # independent construction from stim's `pauli_indices`, for random labels of all
+        # types at a range of qubit counts (including the 64-bit chunk boundaries).
+        rng = np.random.default_rng(0)
+        for n in (1, 2, 3, 63, 64, 65, 100, 129):
+            for _ in range(25):
+                typ = rng.choice(['H', 'S', 'C', 'A'])
+                bels = []
+                for _ in range(1 if typ in 'HS' else 2):
+                    s = ['I'] * n
+                    for q in rng.choice(n, size=rng.integers(1, n + 1), replace=False):
+                        s[q] = rng.choice(['X', 'Y', 'Z'])
+                    bels.append(stim.PauliString(''.join(s)))
+                lbl = _LSE(typ, bels)
+                expected = 0
+                for p in bels:
+                    for q in p.pauli_indices():
+                        expected |= 1 << q
+                self.assertEqual(lbl.support_mask, expected)
+                self.assertEqual(_lse_mod._slow_support_mask(lbl._hashable_basis_element_labels), expected)
+                self.assertEqual(_lse_mod.support_mask_from_strings(lbl._hashable_basis_element_labels), expected)
 
 class FixedLayerErrorgenPropTester(BaseCase):
     """Coverage for ``ErrorGeneratorPropagator(fixed_errorgen_layer=...)`` construction,

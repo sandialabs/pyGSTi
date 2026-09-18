@@ -55,6 +55,32 @@ def bel_less_than(pauli1: stim.PauliString, pauli2: stim.PauliString) -> bool:
 _ERRORGEN_TYPE_INDICES: dict[str, int] = {'H': 0, 'S': 1, 'C': 2, 'A': 3}
 
 
+def _slow_support_mask(bel_strings: tuple[str, ...]) -> int:
+    """
+    Pure-python construction of the support bitmask of an error generator label from its
+    'I'-padded basis element label strings: bit q is set iff some string is not 'I' at
+    position q. Scanning with `str.find` per Pauli letter is several times faster than a
+    per-character python loop and, for the low-weight labels that dominate in practice,
+    also faster than collecting `stim.PauliString.pauli_indices()`.
+    """
+    mask = 0
+    for s in bel_strings:
+        for letter in 'XYZ':
+            i = s.find(letter)
+            while i != -1:
+                mask |= 1 << i
+                i = s.find(letter, i + 1)
+    return mask
+
+
+# Use the cython implementation of the mask construction when the extensions are built
+# (2-8x faster than the pure-python version); fall back to the latter otherwise.
+try:
+    from pygsti.tools.fasterrgencalc import fast_support_mask as support_mask_from_strings
+except ImportError:
+    support_mask_from_strings = _slow_support_mask
+
+
 #TODO: Split this into a parent class and subclass for markovian and non-markovian
 #propagation. There is some overhead in instantiating the NM version of these labels
 #which we can avoid and make markovian applications much more efficient (label instantiation
@@ -208,6 +234,28 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         #materialized on first access; see the `initial_label` property.)
         self._initial_label = initial_label
     #TODO: Update various methods to account for additional metadata that has been added.
+
+    # Cache slot for the `support_mask` property: the class-level default stands in for "not
+    # built yet" so that constructing a label (which the commutator/composition routines do
+    # in great numbers) does not pay for one more instance attribute; the instance attribute
+    # is only created when the mask is first needed. Instances from older pickles (without
+    # the attribute) are covered by the same default.
+    _support_mask: Optional[int] = None
+
+    @property
+    def support_mask(self) -> int:
+        """
+        The support of this error generator as a bitmask: bit q is set iff at least one of
+        the basis element labels acts non-trivially on qubit q. Two error generators whose
+        masks have no common bit (`m1 & m2 == 0`) act on disjoint sets of qubits and hence
+        commute exactly; `pygsti.tools.errgenproptools.error_generator_commutator` uses this
+        to skip such pairs, which are the vast majority at large qubit counts. Built on first
+        access and cached, since the same label is typically tested against many others.
+        """
+        mask = self._support_mask
+        if mask is None:
+            mask = self._support_mask = support_mask_from_strings(self._hashable_basis_element_labels)
+        return mask
 
     @property
     def initial_label(self) -> _ElementaryErrorgenLabel:
