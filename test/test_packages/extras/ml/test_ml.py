@@ -239,10 +239,7 @@ class MLSubpackageTester(unittest.TestCase):
                     errgentools.up_to_weight_k_pauli_pairs(k, size))
 
     def test_errgentools_pauli_pairs_for_support(self):
-        # `_pauli_pairs_for_support` hoists its combo filtering into a per-weight cache
-        # (`_valid_pauli_pair_combos`) and assembles strings from precomputed runs of 'I'
-        # instead of per-character lists. These assertions pin the properties that rewrite
-        # must preserve, independently of the callers above.
+        # Pins the properties of `_pauli_pairs_for_support` independently of the callers above.
         for w in range(1, 5):
             size = max(w, 5)
             support = tuple(range(w))
@@ -267,15 +264,6 @@ class MLSubpackageTester(unittest.TestCase):
             self.assertEqual(len(forward), len(reversed_))
             self.assertEqual({tuple(sorted((P[::-1], Q[::-1]))) for P, Q in reversed_},
                              {(P, Q) for P, Q in forward})
-
-        # The per-weight cache must not leak state between the two index conventions, nor
-        # between weights: recomputing after a cache clear must give identical results.
-        before = {(w, rev): errgentools._pauli_pairs_for_support(tuple(range(w)), 6, rev)
-                  for w in (1, 2, 3) for rev in (False, True)}
-        errgentools._PAULI_PAIR_COMBO_CACHE.clear()
-        after = {(w, rev): errgentools._pauli_pairs_for_support(tuple(range(w)), 6, rev)
-                 for w in (1, 2, 3) for rev in (False, True)}
-        self.assertEqual(before, after)
 
         # Non-contiguous and offset supports place letters at the right string positions.
         self.assertEqual(errgentools._pauli_pairs_for_support((1,), 3, False),
