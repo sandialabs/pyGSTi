@@ -570,6 +570,13 @@ def _error_generator_layer_pairwise_commutator_symbolic_polynomial(errorgen_laye
     var_list = []
     coeff_list = []
     
+    # TODO (when this function is next refactored): skip pairs of error generators with disjoint
+    # supports before calling error_generator_commutator, as
+    # errgenproptools._accumulate_layer_pairwise_commutators does, i.e.
+    #     if final_error1[0].support_mask & final_error2[0].support_mask == 0: continue
+    # Such pairs commute exactly; their commutation relations still emit 2-4 terms per pair that
+    # only cancel in the polynomial coefficients below. At large qubit counts they are ~98% of the
+    # pairs and dominate both the runtime of this loop and the size of the intermediate lists.
     for initial_error1, final_error1 in errorgen_layer_1.items():
         for initial_error2, final_error2 in errorgen_layer_2.items():
             # get the list of error generator labels

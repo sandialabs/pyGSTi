@@ -248,9 +248,10 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         The support of this error generator as a bitmask: bit q is set iff at least one of
         the basis element labels acts non-trivially on qubit q. Two error generators whose
         masks have no common bit (`m1 & m2 == 0`) act on disjoint sets of qubits and hence
-        commute exactly; `pygsti.tools.errgenproptools.error_generator_commutator` uses this
-        to skip such pairs, which are the vast majority at large qubit counts. Built on first
-        access and cached, since the same label is typically tested against many others.
+        commute exactly; the layerwise commutator accumulation in
+        `pygsti.tools.errgenproptools` uses this to skip such pairs, which are the vast
+        majority at large qubit counts. Built on first access and cached, since the same
+        label is typically tested against many others.
         """
         mask = self._support_mask
         if mask is None:

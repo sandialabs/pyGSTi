@@ -632,10 +632,14 @@ def _accumulate_layer_pairwise_commutators(target: dict[_LSE, complex], errorgen
     apply their threshold after all contributions are in. `identity` is the 'I'*n string
     (callers pass None only when `errorgen_layer_1` is empty, in which case nothing is computed).
 
-    Pairs of labels with disjoint supports commute exactly and are skipped here, before the
-    call into `error_generator_commutator` (which would detect the same thing, but only after
-    paying the call overhead). The support bitmasks of the inner layer are gathered once
-    instead of being re-read for each label of the outer layer.
+    Pairs of labels with disjoint supports act on different tensor factors and so commute
+    exactly; they are skipped here, before calling `error_generator_commutator` (which does
+    not test for this itself and would emit terms that only cancel after aggregation). At
+    large qubit counts these are the vast majority of pairs and, previously, the source of
+    most of the entries of `target`. The support bitmasks of the inner layer are gathered
+    once instead of being re-read for each label of the outer layer. No analogous shortcut
+    exists for compositions: the composition of two error generators on disjoint supports is
+    a genuine (non-zero) term.
     """
     get = target.get
     layer_2_items = [(error2, error2_val, error2.support_mask) for error2, error2_val in errorgen_layer_2.items()]
@@ -914,15 +918,12 @@ def error_generator_commutator(errorgen_1: _LSE, errorgen_2: _LSE, weight: compl
     The second element is the rate of that term, additionally weighted by the specified
     value of `weight`. The same label may appear in more than one tuple.
 
-    Error generators supported on disjoint sets of qubits commute exactly, and this is
-    detected up front from the labels' cached support bitmasks: such pairs return an empty
-    list without evaluating the commutation relations (whose terms would only cancel after
-    aggregation). At large qubit counts almost every pair of labels is of this kind. Note
-    that no such shortcut exists for `error_generator_composition`: the composition of two
-    error generators on disjoint supports is a genuine (non-zero) term.
+    Error generators supported on disjoint sets of qubits commute exactly, but this function
+    does not special-case them: the commutation relations are evaluated and the returned
+    terms cancel only once aggregated. Callers looping over many pairs (at large qubit counts
+    almost every pair is of this kind) should skip such pairs beforehand by testing the labels'
+    `support_mask`s for a common bit, as `_accumulate_layer_pairwise_commutators` does.
     """
-    if errorgen_1.support_mask & errorgen_2.support_mask == 0:
-        return []
     if identity is None:
         identity = 'I' * len(errorgen_1._hashable_basis_element_labels[0])
     return _COMMUTATOR_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx](errorgen_1, errorgen_2, weight, identity)
