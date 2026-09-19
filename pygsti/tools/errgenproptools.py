@@ -387,117 +387,45 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
         rates combined according to the selected order of the magnus expansion.
     """
 
-    new_errorgen_layer = []
+    if magnus_order > 3:
+        raise NotImplementedError("Magnus expansions beyond third order are not implemented yet.")
+    if magnus_order < 1:
+        return {}
 
-    for curr_order in range(magnus_order):
-        # first-order magnus terms:
-        # \sum_{t1} A_{t1}
-        if curr_order == 0:
-            # Get a combined set of error generator coefficient labels for the list of dictionaries.
-            current_combined_coeff_lbls = {key: None for key in chain(*errorgen_layers)}            
+    # first-order magnus term: \sum_{t1} A(t1)
+    # Get a combined set of error generator coefficient labels for the list of dictionaries.
+    current_combined_coeff_lbls = {key: None for key in chain(*errorgen_layers)}
 
-            first_order_dict = dict()
-            # loop through the combined set of coefficient labels and add them to the new dictionary for the current BCH
-            # approximation order. If present in both we sum the rates.
-            for coeff_lbl in current_combined_coeff_lbls:
-                # only add to the first order dictionary if the coefficient exceeds the truncation threshold.
-                first_order_rate = sum([errgen_layer.get(coeff_lbl, 0) for errgen_layer in errorgen_layers])  
-                if abs(first_order_rate) > truncation_threshold:
-                    first_order_dict[coeff_lbl] = first_order_rate
-            
-            # allow short circuiting to avoid an expensive bunch of recombination logic when only using first order BCH
-            # which will likely be a common use case.
-            if magnus_order==1:
-                return first_order_dict
-            new_errorgen_layer.append(first_order_dict)
-        
-        # second-order magnus terms:
-        # (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
-        elif curr_order == 1:            
-            # precompute an identity string for comparisons in commutator calculations.
-            if errorgen_layers:
-                for layer in errorgen_layers:
-                    if layer:
-                        identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
-                        break
-            second_order_comm_dict = _second_order_magnus_term(errorgen_layers, identity, truncation_threshold)
-            new_errorgen_layer.append(second_order_comm_dict)
+    first_order_dict = dict()
+    # loop through the combined set of coefficient labels and add them to the new dictionary for the current BCH
+    # approximation order. If present in both we sum the rates.
+    for coeff_lbl in current_combined_coeff_lbls:
+        # only add to the first order dictionary if the coefficient exceeds the truncation threshold.
+        first_order_rate = sum([errgen_layer.get(coeff_lbl, 0) for errgen_layer in errorgen_layers])
+        if abs(first_order_rate) > truncation_threshold:
+            first_order_dict[coeff_lbl] = first_order_rate
 
-        # third order magnus terms
-        # (1/6)*\sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} ( [A(t1), [A(t2), A(t3)]] - [A(t3), [A(t1), A(t2)]] )
-        #  -> (1/6)*\sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t1), [A(t2), A(t3)]]  
-        #    -(1/6)*\sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t3), [A(t1), A(t2)]]
-        # First term is zero when t2=t3, so last sum upper bound can be set to t2-1
-        # Second term is zero when t1=t2, so second sum upperbound can be set to t1-1.
-        # We've already computed the commutator [A(t1), A(t2)] in the second term (up to a factor of 1/2) and can reuse that here. 
-        elif curr_order == 2:
-            third_order_comm_dict_1 = {}
-            third_order_comm_dict_2 = {}
+    # allow short circuiting to avoid an expensive bunch of recombination logic when only using first order BCH
+    # which will likely be a common use case.
+    if magnus_order == 1:
+        return first_order_dict
+    new_errorgen_layer = [first_order_dict]
 
-            # (1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t1), [A(t2), A(t3)]] # use linearity
-            # -> (1/6) \sum_{t1=1}^{n} [A(t1), \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t2), A(t3)]]
-            # when t1=t2 we pick up an extra factor of 1/2 from boundary effect in the discretization of the time-ordered integral.
+    # precompute an identity string for comparisons in commutator calculations (None if every layer is empty,
+    # in which case no commutators are computed).
+    identity = None
+    for layer in errorgen_layers:
+        if layer:
+            identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
+            break
 
-            # this is a version of the running sum without the extra 1/2 from boundaries, in the time-ordered integral which is what will get propagated
-            # forward through the computation.
-            running_23_commutator_sum = {}
-            for i in range(len(errorgen_layers)): # t1
-                # the new inner commutators [A(t2), A(t3)] with t2 = t1, accumulated with the half weight (1/12).
-                new_23_commutator_terms = {}
-                for k in range(i): # t3
-                    _accumulate_layer_pairwise_commutators(new_23_commutator_terms, errorgen_layers[i], errorgen_layers[k], identity,
-                                                           addl_weight=(1/12), truncation_threshold=truncation_threshold)
-                # with the way terms are being accumulated it is always the case at this point that t2=t1, so we need the extra
-                # factor of 1/2 on the new terms for the computation of the outer commutator with A(t1) with running_23_sum,
-                # but for future iterations we want to adjust the weights we added to undo this factor of 1/2 for later iterations.
-                for lbl, rate in new_23_commutator_terms.items():
-                    running_23_commutator_sum[lbl] = running_23_commutator_sum.get(lbl, 0) + rate
-                # truncate any terms which are below the truncation threshold following aggregation.
-                curr_iter_23_commutator_sum = _truncated(running_23_commutator_sum, truncation_threshold)
-
-                # and finally compute the commutator of the running sum with the t1 error generator layer
-                _accumulate_layer_pairwise_commutators(third_order_comm_dict_1, errorgen_layers[i], curr_iter_23_commutator_sum, identity,
-                                                       truncation_threshold=truncation_threshold)
-                # adjust the weights in running_23_commutator_sum to double the contribution added earlier bringing the weight from
-                # the Magnus expansion up to 1/6 for future iterations.
-                for lbl, rate in new_23_commutator_terms.items():
-                    running_23_commutator_sum[lbl] += rate
-                running_23_commutator_sum = _truncated(running_23_commutator_sum, truncation_threshold)
-
-            # -(1/6) \sum_{t1=1}^{n} \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} [A(t3), [A(t1), A(t2)]]
-            # This sum can be reordered as follows (this was nonobvious to me until I confirmed explicitly)
-            # -(1/6) \sum_{t3=1}^{n-1} \sum_{t2=t3}^{n-1} \sum_{t1=t2+1}^{n} [A(t3), [A(t1), A(t2)]]
-            # -(1/6) \sum_{t3=1}^{n-1} \sum_{t1=t2+1}^{n} [A(t3), \sum_{t2=t3}^{n-1} [A(t1), A(t2)]] # applying linearity
-            # when t3=t2 we pick up an extra factor of 1/2 from the discretization of the time-ordered integral. (see computation of previous term for implementation details).
-            # The inner commutator sum can be accumulated in a running fashion, and this is easiest done if we run over the outer sum index in reverse.
-            running_12_commutator_sum = {}
-            for k in range(len(errorgen_layers)-2, -1, -1): # t3
-                # the new inner commutators [A(t1), A(t2)] with t2 = t3, accumulated with the half weight (-1/12).
-                new_12_commutator_terms = {}
-                for i in range(k+1, len(errorgen_layers)): # t1
-                    _accumulate_layer_pairwise_commutators(new_12_commutator_terms, errorgen_layers[i], errorgen_layers[k], identity,
-                                                           addl_weight=-(1/12), truncation_threshold=truncation_threshold)
-                for lbl, rate in new_12_commutator_terms.items():
-                    running_12_commutator_sum[lbl] = running_12_commutator_sum.get(lbl, 0) + rate
-                # truncate any terms which are below the truncation threshold following aggregation.
-                curr_iter_12_commutator_sum = _truncated(running_12_commutator_sum, truncation_threshold)
-
-                # and finally compute the commutator of the running sum with the t3 error generator layer
-                _accumulate_layer_pairwise_commutators(third_order_comm_dict_2, errorgen_layers[k], curr_iter_12_commutator_sum, identity,
-                                                       truncation_threshold=truncation_threshold)
-                for lbl, rate in new_12_commutator_terms.items():
-                    running_12_commutator_sum[lbl] += rate
-                running_12_commutator_sum = _truncated(running_12_commutator_sum, truncation_threshold)
-
-            # finally sum these two dictionaries, keeping only terms which are greater than the threshold.
-            third_order_comm_dict = third_order_comm_dict_1.copy()
-            for lbl, rate in third_order_comm_dict_2.items():
-                third_order_comm_dict[lbl] = third_order_comm_dict.get(lbl, 0) + rate
-            third_order_comm_dict = _truncated(third_order_comm_dict, truncation_threshold)
-            new_errorgen_layer.append(third_order_comm_dict)
-
-        else: 
-            raise NotImplementedError("Magnus expansions beyond third order are not implemented yet.")
+    if magnus_order == 2:
+        # second-order magnus term: (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
+        new_errorgen_layer.append(_second_order_magnus_term(errorgen_layers, identity, truncation_threshold))
+    else:
+        # the third-order term is built from the same pairwise layer commutators as the second-order one,
+        # so both are produced by a single pass over the layer pairs.
+        new_errorgen_layer.extend(_second_and_third_order_magnus_terms(errorgen_layers, identity, truncation_threshold))
 
     # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.
     new_errorgen_layer_dict = {}
@@ -557,6 +485,105 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
     # truncate any terms which are below the truncation threshold following aggregation.
     second_order_comm_dict = _truncated(second_order_comm_dict, truncation_threshold)
     return second_order_comm_dict
+
+def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
+                                         truncation_threshold: float = 1e-14) -> tuple[_ErrorgenDict, _ErrorgenDict]:
+    r"""
+    Helper function for computing the second- and third-order correction terms in the
+    magnus expansion together, from a single pass over the pairwise layer commutators.
+
+    Omega_2 = (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
+    Omega_3 = (1/6)\sum_{t1=1}^n \sum_{t2=1}^{t1} \sum_{t3=1}^{t2} ( [A(t1), [A(t2), A(t3)]] - [A(t3), [A(t1), A(t2)]] )
+
+    where terms of Omega_3 with coinciding indices carry an extra factor of 1/2 from the
+    discretization of the time-ordered integral.
+
+    Parameters:
+    ----------
+    errorgen_layers : list of dicts
+        List of dictionaries of the error generator coefficients and rates for a circuit layer.
+        The error generator coefficients are represented using LocalStimErrorgenLabel.
+
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n, used to detect
+        identity indices in the commutator calculations. May be None only if every layer is
+        empty.
+
+    truncation_threshold : float, optional (default 1e-14)
+        Threshold for which any error generators with magnitudes below this value
+        are truncated.
+
+    Returns
+    -------
+    second_order_comm_dict, third_order_comm_dict : dict
+        Dictionaries with the same general structure as those in `errorgen_layers`, holding the
+        second- and third-order terms of the magnus expansion respectively.
+    """
+    # Write P_ik = [A(i), A(k)] for i > k for the pairwise layer commutators and group them by
+    # their larger or their smaller index:
+    #
+    #   row_i = \sum_{k<i} P_ik          col_k = \sum_{i>k} P_ik
+    #
+    # The commutators with coinciding indices vanish, so Omega_2 = (1/2) \sum_i row_i. In Omega_3,
+    # using linearity, the first term is a sum over t1 of A(t1) commuted with a PREFIX of the rows
+    # and (after reordering the sums so that t3 is outermost) the second is a sum over t3 of A(t3)
+    # commuted with a SUFFIX of the columns, the coinciding-index row/column entering at half weight:
+    #
+    #   Omega_3 = (1/6) \sum_i [ A(i),  \sum_{j<i} row_j + (1/2) row_i ]
+    #           - (1/6) \sum_k [ A(k),  \sum_{j>k} col_j + (1/2) col_k ]
+    #
+    # Every P_ik lies in exactly one row and one column, so a single forward pass over i computes
+    # each P_ik once and files it into both. row_i is consumed on the spot (second-order term,
+    # running prefix sum and the outer commutator with A(i)); col_k is complete only when the
+    # pass ends (its last contribution comes from i = n-1), so the columns are held until then
+    # and consumed by a descending pass over k. The running sums are truncated at the threshold
+    # before each outer commutator; the held columns are small (the disjoint-support skip in
+    # `_accumulate_layer_pairwise_commutators` removes the pairs that would otherwise dominate
+    # them) and are truncated when consumed.
+    num_layers = len(errorgen_layers)
+    second_order_comm_dict = {}
+    third_order_comm_dict = {}
+    held_columns = [{} for _ in range(num_layers)]
+
+    # forward pass: rows, consumed immediately.
+    running_row_sum = {}  # \sum_{j<i} row_j at weight 1/6, plus (1/12) row_i during the outer commutator.
+    for i in range(num_layers):
+        row = {}
+        for k in range(i):
+            pairwise_comm = {}
+            _accumulate_layer_pairwise_commutators(pairwise_comm, errorgen_layers[i], errorgen_layers[k], identity,
+                                                   truncation_threshold=truncation_threshold)
+            column = held_columns[k]
+            for lbl, rate in pairwise_comm.items():
+                row[lbl] = row.get(lbl, 0) + rate
+                column[lbl] = column.get(lbl, 0) + rate
+        for lbl, rate in row.items():
+            second_order_comm_dict[lbl] = second_order_comm_dict.get(lbl, 0) + 0.5*rate
+            running_row_sum[lbl] = running_row_sum.get(lbl, 0) + (1/12)*rate
+        _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[i],
+                                               _truncated(running_row_sum, truncation_threshold), identity,
+                                               truncation_threshold=truncation_threshold)
+        # bring row_i up to the full weight of 1/6 for the later iterations.
+        for lbl, rate in row.items():
+            running_row_sum[lbl] += (1/12)*rate
+        running_row_sum = _truncated(running_row_sum, truncation_threshold)
+
+    # descending pass: columns (col_{n-1} is empty).
+    running_column_sum = {}  # -\sum_{j>k} col_j at weight 1/6, plus -(1/12) col_k during the outer commutator.
+    for k in range(num_layers-2, -1, -1):
+        column = _truncated(held_columns[k], truncation_threshold)
+        held_columns[k] = None
+        for lbl, rate in column.items():
+            running_column_sum[lbl] = running_column_sum.get(lbl, 0) - (1/12)*rate
+        _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[k],
+                                               _truncated(running_column_sum, truncation_threshold), identity,
+                                               truncation_threshold=truncation_threshold)
+        for lbl, rate in column.items():
+            running_column_sum[lbl] -= (1/12)*rate
+        running_column_sum = _truncated(running_column_sum, truncation_threshold)
+
+    return (_truncated(second_order_comm_dict, truncation_threshold),
+            _truncated(third_order_comm_dict, truncation_threshold))
 
 @_with_cyclic_gc_paused
 def zassenhaus_formula(errorgen_groups: list[_ErrorgenDict], zassenhaus_order: Literal[1,2] = 1,
