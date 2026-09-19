@@ -839,19 +839,6 @@ def _prod(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> O
     return (pauli_1[0] * pauli_2[0] * phase, PQ)
 
 
-def _reversed(pauli_1: _SignedPauli, pauli_2: _SignedPauli,
-              product: Optional[tuple[complex, stim.PauliString]]) -> Optional[tuple[complex, stim.PauliString]]:
-    """
-    The product pauli_2 * pauli_1, given `product` = `_prod(pauli_1, pauli_2)`: identical when
-    the two commute, sign-flipped when they anticommute. Cheaper than a second product.
-    """
-    if product is None:
-        return None
-    if pauli_1[1].commutes(pauli_2[1]):
-        return product
-    return (-product[0], product[1])
-
-
 def _com(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[tuple[complex, stim.PauliString]]:
     """
     Commutator [pauli_1, pauli_2] of two signed Paulis as a signed Pauli (phase +-2, +-2i);
@@ -972,6 +959,15 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: comp
 # commutation relation it transcribes (notation of the paper's Supplemental Note; where the
 # paper and the previously validated implementation (see v0.10 for previous validated implementation)
 # differ, the latter is kept). The six reversed pairs use [X, Y] = -[Y, X].
+#
+# Pairs of terms whose indices are the same two products in opposite order, such as
+# A_{AP,QB} + A_{BQ,PA}, are emitted as a single term. Writing s_XY = +1 if the Paulis X, Y
+# commute and -1 if they anticommute, reversing a product only changes its sign
+# (QB = s_BQ BQ, PA = s_AP AP), and bilinearity plus the (anti)symmetry of C/A give
+#     A_{AP,QB} + A_{BQ,PA} = (s_BQ - s_AP) A_{AP,BQ},   C_{AP,QB} - C_{PA,BQ} = (s_BQ - s_AP) C_{AP,BQ},
+# i.e. zero unless exactly one of the pairs (A,P), (B,Q) anticommutes, and then twice a
+# single term. Without this, every such pair costs two label constructions that cancel
+# only after aggregation (at 100 qubits, 99% of the terms these handlers emitted).
 # ---------------------------------------------------------------------------------------
 
 def _commutator_HH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
@@ -1039,18 +1035,17 @@ def _commutator_SC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
     P = _index(errorgen_1, 0)
     A = _index(errorgen_2, 0)
     B = _index(errorgen_2, 1)
-    PA = _prod(P, A)
-    PB = _prod(P, B)
-    AP = _reversed(P, A, PA)
-    BP = _reversed(P, B, PB)
     terms = []
-    _A(terms, PA, BP, -1j*w, identity)
-    _A(terms, PB, AP, -1j*w, identity)
-    # With X = {A,B}: A_{XP,P} + A_{P,PX} vanishes if [X,P] = 0 (PX = XP), and equals
-    # 2 A_{XP,P} otherwise (PX = -XP).
-    X = _acom(A, B)
-    if X is not None and not X[1].commutes(P[1]):
-        _A(terms, _prod(X, P), P, -1j*w, identity)
+    # Both groups vanish unless P anticommutes with exactly one of A, B:
+    #   A_{PA,BP} + A_{PB,AP} = (s_PB - s_PA) A_{PA,PB}, and with X = {A,B} (which is
+    #   proportional to AB, so s_XP = s_PA s_PB), A_{XP,P} + A_{P,PX} = (1 - s_XP) A_{XP,P}.
+    cPA = P[1].commutes(A[1])
+    cPB = P[1].commutes(B[1])
+    if cPA != cPB:
+        _A(terms, _prod(P, A), _prod(P, B), -2j*w if cPB else 2j*w, identity)
+        X = _acom(A, B)
+        if X is not None:
+            _A(terms, _prod(X, P), P, -1j*w, identity)
     return terms
 
 
@@ -1064,14 +1059,15 @@ def _commutator_SA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
     P = _index(errorgen_1, 0)
     A = _index(errorgen_2, 0)
     B = _index(errorgen_2, 1)
-    PA = _prod(P, A)
-    PB = _prod(P, B)
-    AP = _reversed(P, A, PA)
-    BP = _reversed(P, B, PB)
     terms = []
-    _C(terms, PA, BP, 1j*w, identity)
-    _C(terms, PB, AP, -1j*w, identity)
-    _A(terms, P, _com(P, _com(A, B)), -0.5*w, identity)
+    # Both groups vanish unless P anticommutes with exactly one of A, B:
+    #   C_{PA,BP} - C_{PB,AP} = (s_PB - s_PA) C_{PA,PB}, and [P,[A,B]] = 0 unless P
+    #   anticommutes with AB, i.e. s_PA s_PB = -1.
+    cPA = P[1].commutes(A[1])
+    cPB = P[1].commutes(B[1])
+    if cPA != cPB:
+        _C(terms, _prod(P, A), _prod(P, B), 2j*w if cPB else -2j*w, identity)
+        _A(terms, P, _com(P, _com(A, B)), -0.5*w, identity)
     return terms
 
 
@@ -1088,21 +1084,18 @@ def _commutator_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
     B = _index(errorgen_1, 1)
     P = _index(errorgen_2, 0)
     Q = _index(errorgen_2, 1)
-    AP = _prod(A, P)
-    AQ = _prod(A, Q)
-    BP = _prod(B, P)
-    BQ = _prod(B, Q)
-    PA = _reversed(A, P, AP)
-    QA = _reversed(A, Q, AQ)
-    PB = _reversed(B, P, BP)
-    QB = _reversed(B, Q, BQ)
     X = _acom(A, B)
     Y = _acom(P, Q)
     terms = []
-    _A(terms, AP, QB, -1j*w, identity)
-    _A(terms, AQ, PB, -1j*w, identity)
-    _A(terms, BP, QA, -1j*w, identity)
-    _A(terms, BQ, PA, -1j*w, identity)
+    # A_{AP,QB} + A_{BQ,PA} = (s_BQ - s_AP) A_{AP,BQ};  A_{AQ,PB} + A_{BP,QA} = (s_BP - s_AQ) A_{AQ,BP}
+    cAP = A[1].commutes(P[1])
+    cAQ = A[1].commutes(Q[1])
+    cBP = B[1].commutes(P[1])
+    cBQ = B[1].commutes(Q[1])
+    if cAP != cBQ:
+        _A(terms, _prod(A, P), _prod(B, Q), -2j*w if cBQ else 2j*w, identity)
+    if cAQ != cBP:
+        _A(terms, _prod(A, Q), _prod(B, P), -2j*w if cBP else 2j*w, identity)
     _A(terms, _com(P, X), Q, -0.5j*w, identity)
     _A(terms, _com(Q, X), P, -0.5j*w, identity)
     _A(terms, _com(Y, A), B, -0.5j*w, identity)
@@ -1119,21 +1112,18 @@ def _commutator_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
     B = _index(errorgen_1, 1)
     P = _index(errorgen_2, 0)
     Q = _index(errorgen_2, 1)
-    AP = _prod(A, P)
-    AQ = _prod(A, Q)
-    BP = _prod(B, P)
-    BQ = _prod(B, Q)
-    PA = _reversed(A, P, AP)
-    QA = _reversed(A, Q, AQ)
-    PB = _reversed(B, P, BP)
-    QB = _reversed(B, Q, BQ)
     X = _acom(A, B)
     Y = _com(P, Q)
     terms = []
-    _C(terms, AP, QB, 1j*w, identity)
-    _C(terms, AQ, PB, -1j*w, identity)
-    _C(terms, BP, QA, 1j*w, identity)
-    _C(terms, PA, BQ, -1j*w, identity)
+    # C_{AP,QB} - C_{PA,BQ} = (s_BQ - s_AP) C_{AP,BQ};  C_{BP,QA} - C_{AQ,PB} = (s_AQ - s_BP) C_{AQ,BP}
+    cAP = A[1].commutes(P[1])
+    cAQ = A[1].commutes(Q[1])
+    cBP = B[1].commutes(P[1])
+    cBQ = B[1].commutes(Q[1])
+    if cAP != cBQ:
+        _C(terms, _prod(A, P), _prod(B, Q), 2j*w if cBQ else -2j*w, identity)
+    if cAQ != cBP:
+        _C(terms, _prod(A, Q), _prod(B, P), 2j*w if cAQ else -2j*w, identity)
     _A(terms, _com(A, Y), B, 0.5*w, identity)
     _A(terms, _com(B, Y), A, 0.5*w, identity)
     _C(terms, _com(P, X), Q, 0.5j*w, identity)
@@ -1155,21 +1145,18 @@ def _commutator_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
     B = _index(errorgen_1, 1)
     P = _index(errorgen_2, 0)
     Q = _index(errorgen_2, 1)
-    AP = _prod(A, P)
-    AQ = _prod(A, Q)
-    BP = _prod(B, P)
-    BQ = _prod(B, Q)
-    PA = _reversed(A, P, AP)
-    QA = _reversed(A, Q, AQ)
-    PB = _reversed(B, P, BP)
-    QB = _reversed(B, Q, BQ)
     X = _com(A, B)
     Y = _com(P, Q)
     terms = []
-    _A(terms, QB, AP, -1j*w, identity)
-    _A(terms, PA, BQ, -1j*w, identity)
-    _A(terms, BP, QA, -1j*w, identity)
-    _A(terms, AQ, PB, -1j*w, identity)
+    # A_{QB,AP} + A_{PA,BQ} = (s_AP - s_BQ) A_{AP,BQ};  A_{BP,QA} + A_{AQ,PB} = (s_BP - s_AQ) A_{AQ,BP}
+    cAP = A[1].commutes(P[1])
+    cAQ = A[1].commutes(Q[1])
+    cBP = B[1].commutes(P[1])
+    cBQ = B[1].commutes(Q[1])
+    if cAP != cBQ:
+        _A(terms, _prod(A, P), _prod(B, Q), -2j*w if cAP else 2j*w, identity)
+    if cAQ != cBP:
+        _A(terms, _prod(A, Q), _prod(B, P), -2j*w if cBP else 2j*w, identity)
     _C(terms, _com(B, Y), A, 0.5*w, identity)
     _C(terms, _com(A, Y), B, -0.5*w, identity)
     _C(terms, _com(P, X), Q, 0.5*w, identity)
