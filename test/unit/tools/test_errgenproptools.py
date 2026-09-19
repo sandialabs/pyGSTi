@@ -9,7 +9,7 @@ from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel 
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
-from pygsti.tools.lindbladtools import create_elementary_errorgen
+from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_error_generator_rates
 from ..util import BaseCase
 from itertools import product, chain
 import random
@@ -319,6 +319,92 @@ class ErrgenCompositionCommutationTester(BaseCase):
         exact_vs_third_order_norm  = np.linalg.norm(third_order_magnus_analytical-exact_errorgen)
         
         self.assertTrue((exact_vs_first_order_norm > exact_vs_second_order_norm) and (exact_vs_second_order_norm > exact_vs_third_order_norm))
+
+    def test_magnus_expansion_all_sectors(self):
+        # The model of setUp has H errors only, so magnus_expansion's commutator terms exercise
+        # a single type-pair branch there and the third-order term is ~1e-12. This model has
+        # seeded random rates ~1e-2 from all four sectors on every gate (a subset of a random
+        # CPTP rate dictionary; not itself CP, which is irrelevant for propagation), giving a
+        # third-order term of norm ~2e-4 that involves every commutator branch and running-sum
+        # bookkeeping path. With truncation disabled the analytic expansion must match the
+        # dense oracle to machine precision at every order; with the default threshold the
+        # error is set by the dropped sub-threshold terms and must stay small relative to the
+        # third-order term.
+        pspec = QubitProcessorSpec(4, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(0, 1), (1, 2), (2, 3), (3, 0)]})
+        rates = {'Gxpi2': _all_sector_rate_subset(1, 2, seed=100), 'Gypi2': _all_sector_rate_subset(1, 2, seed=101),
+                 'Gcphase': _all_sector_rate_subset(2, 2, seed=200)}
+        model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=rates, lindblad_parameterization='GLND')
+        circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4, ], rand_state=12345)
+        propagator = ErrorGeneratorPropagator(model.copy())
+        layers = propagator.propagate_errorgens(circuit)
+        self.assertEqual(len(layers), 6)
+        self.assertEqual({lbl.errorgen_type for layer in layers for lbl in layer}, set('HSCA'))
+
+        numerical = [_eprop.magnus_numerical(layers, propagator, magnus_order=order) for order in (1, 2, 3)]
+        for order, numerical_mat in zip((1, 2, 3), numerical):
+            analytic = _eprop.magnus_expansion(layers, magnus_order=order, truncation_threshold=0)
+            analytic_mat = propagator.errorgen_layer_dict_to_errorgen(analytic, mx_basis='pp')
+            self.assertLess(np.linalg.norm(analytic_mat - numerical_mat), 1e-14)
+        third_order_term_norm = np.linalg.norm(numerical[2] - numerical[1])
+        self.assertGreater(third_order_term_norm, 1e-5)
+        analytic = _eprop.magnus_expansion(layers, magnus_order=3)
+        analytic_mat = propagator.errorgen_layer_dict_to_errorgen(analytic, mx_basis='pp')
+        self.assertLess(np.linalg.norm(analytic_mat - numerical[2]), 1e-6 * third_order_term_norm)
+
+    def test_magnus_expansion_third_order_bookkeeping(self):
+        # Check the third-order Magnus term against its row/column form, evaluated explicitly
+        # for n = 4 layers with the pairwise commutators P_ik = [A(i), A(k)] (i > k):
+        #   T1 = (1/6) sum_i [A(i), sum_{j<i} row_j + row_i/2],   row_i = sum_{k<i} P_ik
+        #   T2 = -(1/6) sum_k [A(k), sum_{j>k} col_j + col_k/2],  col_k = sum_{i>k} P_ik
+        # (the 1/2 is the boundary weight of the discretized time-ordered integral). This is
+        # independent of how magnus_expansion organizes the running sums, and cheap enough to
+        # run at full precision on two qubits with random labels from all sectors.
+        rng = np.random.default_rng(7)
+        basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(2), default_label_type='local')
+        stim_lbls = [_LSE.cast(lbl) for lbl in basis.labels]
+        layers = []
+        for _ in range(4):
+            chosen = rng.choice(len(stim_lbls), size=6, replace=False)
+            layers.append({stim_lbls[i]: 1e-2 * rng.standard_normal() for i in chosen})
+        n, identity = len(layers), 'II'
+
+        def commutator(layer_1, layer_2, weight=1.0):
+            out = {}
+            _eprop._accumulate_layer_pairwise_commutators(out, layer_1, layer_2, identity, addl_weight=weight, truncation_threshold=0)
+            return out
+
+        def add(target, source, scale=1.0):
+            for lbl, rate in source.items():
+                target[lbl] = target.get(lbl, 0) + scale * rate
+
+        P = {(i, k): commutator(layers[i], layers[k]) for i in range(n) for k in range(i)}
+        rows = [{} for _ in range(n)]
+        cols = [{} for _ in range(n)]
+        for (i, k), p in P.items():
+            add(rows[i], p)
+            add(cols[k], p)
+        expected = {}
+        for m in range(n):
+            bracket_1, bracket_2 = {}, {}
+            for j in range(m):
+                add(bracket_1, rows[j])
+            add(bracket_1, rows[m], 0.5)
+            for j in range(m + 1, n):
+                add(bracket_2, cols[j])
+            add(bracket_2, cols[m], 0.5)
+            add(expected, commutator(layers[m], bracket_1), 1 / 6)
+            add(expected, commutator(layers[m], bracket_2), -1 / 6)
+        expected = {lbl: rate.real for lbl, rate in expected.items() if abs(rate) > 1e-20}
+
+        second = _eprop.magnus_expansion(layers, magnus_order=2, truncation_threshold=0)
+        third = _eprop.magnus_expansion(layers, magnus_order=3, truncation_threshold=0)
+        actual = {lbl: third.get(lbl, 0) - second.get(lbl, 0) for lbl in set(third) | set(second)}
+        actual = {lbl: rate for lbl, rate in actual.items() if abs(rate) > 1e-20}
+        self.assertGreater(len(expected), 10)
+        self.assertEqual(set(actual), set(expected))
+        scale = max(abs(rate) for rate in expected.values())
+        for lbl, rate in expected.items():
+            self.assertLess(abs(actual[lbl] - rate), 1e-11 * scale)
 
     def test_error_generator_pauli_action(self):
         egbasis_HS = CompleteElementaryErrorgenBasis('PP', QubitSpace(3), default_label_type='local', elementary_errorgen_types=('H','S'))
@@ -864,6 +950,23 @@ def select_random_items_from_multiple_lists(input_lists, num_items, seed=None):
     indices = random.sample(range(list_length), num_items)
     
     return [[lst[i] for i in indices] for lst in input_lists]
+
+def _all_sector_rate_subset(num_qubits, num_per_sector, seed):
+    """
+    A seeded random subset of a random CPTP error generator rate dictionary on `num_qubits`
+    qubits, keeping `num_per_sector` labels from each of the H, S, C and A sectors. The subset
+    is generally not CP (S terms supporting the kept C/A terms may be dropped), which is
+    irrelevant for error generator propagation.
+    """
+    full = random_CPTP_error_generator_rates(num_qubits, errorgen_types=('H', 'S', 'C', 'A'), H_params=(0, .01),
+                                             SCA_params=(0, .01), label_type='local', seed=seed)
+    rng = np.random.default_rng(seed + 1)
+    subset = {}
+    for sector in 'HSCA':
+        lbls = [lbl for lbl in full if lbl.errorgen_type == sector]
+        for i in sorted(rng.choice(len(lbls), min(num_per_sector, len(lbls)), replace=False)):
+            subset[lbls[i]] = float(full[lbls[i]])
+    return subset
 
 def sample_error_rates_dict(pspec, strengths, seed=None):
     """
