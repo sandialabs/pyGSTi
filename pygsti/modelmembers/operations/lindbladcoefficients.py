@@ -413,6 +413,12 @@ class _OtherElements(_BlockParameterization):
         return len(blk._bel_labels)**2
 
     def params_to_block_data(self, blk, v):
+        # Maps real parameter vector v to complex Hermitian block_data.
+        # Parameter matrix P = reshape(v, (n, n)):
+        #   diag:  block_data[i, i] = P[i, i]
+        #   lower: block_data[i, j] = P[i, j] + 1j * P[j, i]  (i > j)
+        #   upper: block_data[i, j] = P[j, i] - 1j * P[i, j]  (i < j, by Hermiticity)
+        # Keep conventions in sync with _coefficient_polynomial().
         num_bels = len(blk._bel_labels)
         params = v.reshape((num_bels, num_bels))
         params_upper_indices = triu_indices(num_bels)
@@ -483,6 +489,11 @@ class _OtherElements(_BlockParameterization):
         return _torch.complex(Re, Imag)
 
     def _coefficient_polynomial(self, blk, index: tuple[int, int], pio: int, mpv: int) -> _Polynomial:
+        # Parameter matrix P = reshape(v, (n, n)) encodes Hermitian block_data:
+        #   diag:  block_data[i, i] = P[i, i] (real)
+        #   lower: block_data[i, j] = P[i, j] + 1j * P[j, i]  (i > j)
+        #   upper: block_data[i, j] = P[j, i] - 1j * P[i, j]  (i < j, by Hermiticity)
+        # Keep conventions in sync with params_to_block_data().
         i, j = index
         num_bels = len(blk._bel_labels)
         if i == j:
@@ -507,6 +518,9 @@ class _OtherCholesky(_BlockParameterization):
         return len(blk._bel_labels)**2
 
     def params_to_block_data(self, blk, v):
+        # Maps real parameter vector v to positive semidefinite block_data = C @ C^dag,
+        # where C is lower-triangular with real diagonal elements.
+        # Keep conventions in sync with _coefficient_polynomial().
         num_bels = len(blk._bel_labels)
         params = v.reshape((num_bels, num_bels))
         params_upper_indices = triu_indices(num_bels)
@@ -635,6 +649,13 @@ class _OtherCholesky(_BlockParameterization):
         return C @ C.conj().T
 
     def _coefficient_polynomial(self, blk, index: tuple[int, int], pio: int, mpv: int) -> _Polynomial:
+        # block_data = C @ C^dag where lower-triangular Cholesky factor C has:
+        #   Re(C[a, b]) = P[a, b]  for b <= a
+        #   Im(C[a, b]) = P[b, a]  for b < a  (and 0 for b == a)
+        #
+        # block_data[i, j] = sum_k C[i, k] * conj(C[j, k])
+        #                  = sum_k (Re(C[i, k]) + 1j*Im(C[i, k])) * (Re(C[j, k]) - 1j*Im(C[j, k]))
+        # Keep conventions in sync with params_to_block_data().
         i, j = index
         num_bels = len(blk._bel_labels)
 
