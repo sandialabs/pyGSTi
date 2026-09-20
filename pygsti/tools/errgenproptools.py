@@ -995,6 +995,18 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: comp
 # i.e. zero unless exactly one of the pairs (A,P), (B,Q) anticommutes, and then twice a
 # single term. Without this, every such pair costs two label constructions that cancel
 # only after aggregation (at 100 qubits, 99% of the terms these handlers emitted).
+#
+# The same four cross-pair booleans s_AP, s_AQ, s_BP, s_BQ decide every other bracket in
+# these handlers, because commutation signs are multiplicative: a Pauli anticommutes with a
+# product XY iff it anticommutes with exactly one of X, Y. With X = {A,B} or [A,B] (whichever
+# is nonzero is proportional to AB) and Y = {P,Q} or [P,Q] (proportional to PQ),
+#     [P, X] != 0 iff s_AP != s_BP,   [Q, X] != 0 iff s_AQ != s_BQ,
+#     [Y, A] != 0 iff s_AP != s_AQ,   [Y, B] != 0 iff s_BP != s_BQ,
+#     [X, Y] != 0 iff an odd number of the four cross pairs anticommute,
+# and a nonzero commutator of two Paulis is twice their product. So after the four
+# `commutes()` tests those brackets are formed with `_prod` (no further commutation test)
+# under the matching condition, with the factor of 2 folded into the coefficient; only the
+# own-pair brackets X and Y themselves still go through `_com`/`_acom`.
 # ---------------------------------------------------------------------------------------
 
 def _commutator_HH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
@@ -1089,12 +1101,13 @@ def _commutator_SA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
     terms = []
     # Both groups vanish unless P anticommutes with exactly one of A, B:
     #   C_{PA,BP} - C_{PB,AP} = (s_PB - s_PA) C_{PA,PB}, and [P,[A,B]] = 0 unless P
-    #   anticommutes with AB, i.e. s_PA s_PB = -1.
+    #   anticommutes with AB, i.e. s_PA s_PB = -1. Under that condition [P, Y] = 2 PY for
+    #   Y = [A,B] (see the section comment), so only Y itself needs a commutation test.
     cPA = P[1].commutes(A[1])
     cPB = P[1].commutes(B[1])
     if cPA != cPB:
         _C(terms, _prod(P, A), _prod(P, B), 2j*w if cPB else -2j*w, identity)
-        _A(terms, P, _com(P, _com(A, B)), -0.5*w, identity)
+        _A(terms, P, _prod(P, _com(A, B)), -1.0*w, identity)
     return terms
 
 
@@ -1123,11 +1136,22 @@ def _commutator_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
         _A(terms, _prod(A, P), _prod(B, Q), -2j*w if cBQ else 2j*w, identity)
     if cAQ != cBP:
         _A(terms, _prod(A, Q), _prod(B, P), -2j*w if cBP else 2j*w, identity)
-    _A(terms, _com(P, X), Q, -0.5j*w, identity)
-    _A(terms, _com(Q, X), P, -0.5j*w, identity)
-    _A(terms, _com(Y, A), B, -0.5j*w, identity)
-    _A(terms, _com(Y, B), A, -0.5j*w, identity)
-    _H(terms, _com(X, Y), 0.25j*w, identity)
+    # The remaining brackets are decided by the same four booleans (see the section comment):
+    # [P,X] != 0 iff cAP != cBP, [Q,X] iff cAQ != cBQ, [Y,A] iff cAP != cAQ, [Y,B] iff cBP != cBQ,
+    # [X,Y] iff an odd number of the cross pairs anticommute; each nonzero bracket is twice the
+    # product, and that factor of 2 is folded into the coefficients below.
+    if X is not None:
+        if cAP != cBP:
+            _A(terms, _prod(P, X), Q, -1j*w, identity)
+        if cAQ != cBQ:
+            _A(terms, _prod(Q, X), P, -1j*w, identity)
+    if Y is not None:
+        if cAP != cAQ:
+            _A(terms, _prod(Y, A), B, -1j*w, identity)
+        if cBP != cBQ:
+            _A(terms, _prod(Y, B), A, -1j*w, identity)
+    if X is not None and Y is not None and (cAP ^ cAQ ^ cBP ^ cBQ):
+        _H(terms, _prod(X, Y), 0.5j*w, identity)
     return terms
 
 
@@ -1151,11 +1175,22 @@ def _commutator_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
         _C(terms, _prod(A, P), _prod(B, Q), 2j*w if cBQ else -2j*w, identity)
     if cAQ != cBP:
         _C(terms, _prod(A, Q), _prod(B, P), 2j*w if cAQ else -2j*w, identity)
-    _A(terms, _com(A, Y), B, 0.5*w, identity)
-    _A(terms, _com(B, Y), A, 0.5*w, identity)
-    _C(terms, _com(P, X), Q, 0.5j*w, identity)
-    _C(terms, _com(Q, X), P, -0.5j*w, identity)
-    _H(terms, _com(Y, X), -0.25*w, identity)
+    # The remaining brackets are decided by the same four booleans (see the section comment):
+    # [P,X] != 0 iff cAP != cBP, [Q,X] iff cAQ != cBQ, [Y,A] iff cAP != cAQ, [Y,B] iff cBP != cBQ,
+    # [X,Y] iff an odd number of the cross pairs anticommute; each nonzero bracket is twice the
+    # product, and that factor of 2 is folded into the coefficients below.
+    if Y is not None:
+        if cAP != cAQ:
+            _A(terms, _prod(A, Y), B, 1.0*w, identity)
+        if cBP != cBQ:
+            _A(terms, _prod(B, Y), A, 1.0*w, identity)
+    if X is not None:
+        if cAP != cBP:
+            _C(terms, _prod(P, X), Q, 1j*w, identity)
+        if cAQ != cBQ:
+            _C(terms, _prod(Q, X), P, -1j*w, identity)
+    if X is not None and Y is not None and (cAP ^ cAQ ^ cBP ^ cBQ):
+        _H(terms, _prod(Y, X), -0.5*w, identity)
     return terms
 
 
@@ -1184,11 +1219,22 @@ def _commutator_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
         _A(terms, _prod(A, P), _prod(B, Q), -2j*w if cAP else 2j*w, identity)
     if cAQ != cBP:
         _A(terms, _prod(A, Q), _prod(B, P), -2j*w if cBP else 2j*w, identity)
-    _C(terms, _com(B, Y), A, 0.5*w, identity)
-    _C(terms, _com(A, Y), B, -0.5*w, identity)
-    _C(terms, _com(P, X), Q, 0.5*w, identity)
-    _C(terms, _com(Q, X), P, -0.5*w, identity)
-    _H(terms, _com(Y, X), 0.25j*w, identity)
+    # The remaining brackets are decided by the same four booleans (see the section comment):
+    # [P,X] != 0 iff cAP != cBP, [Q,X] iff cAQ != cBQ, [Y,A] iff cAP != cAQ, [Y,B] iff cBP != cBQ,
+    # [X,Y] iff an odd number of the cross pairs anticommute; each nonzero bracket is twice the
+    # product, and that factor of 2 is folded into the coefficients below.
+    if Y is not None:
+        if cBP != cBQ:
+            _C(terms, _prod(B, Y), A, 1.0*w, identity)
+        if cAP != cAQ:
+            _C(terms, _prod(A, Y), B, -1.0*w, identity)
+    if X is not None:
+        if cAP != cBP:
+            _C(terms, _prod(P, X), Q, 1.0*w, identity)
+        if cAQ != cBQ:
+            _C(terms, _prod(Q, X), P, -1.0*w, identity)
+    if X is not None and Y is not None and (cAP ^ cAQ ^ cBP ^ cBQ):
+        _H(terms, _prod(Y, X), 0.5j*w, identity)
     return terms
 
 
