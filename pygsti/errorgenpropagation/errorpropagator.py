@@ -32,6 +32,7 @@ import pygsti.tools.errgenproptools as _eprop
 import pygsti.tools.basistools as _bt
 import pygsti.tools.matrixtools as _mt
 import pygsti.tools.optools as _ot
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti.models.model import OpModel as _OpModel
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel as _ImplicitOpModel
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
@@ -292,8 +293,8 @@ class ErrorGeneratorPropagator:
             Circuit to construct a set of post gate error generators for.
 
         bch_order : int, optional (default 1)
-            Order of the BCH approximation to use. A maximum value of 4 is
-            currently supported.
+            Order of the BCH approximation to use. Up to third order is supported
+            in 'magnus' mode (up to fifth order in the deprecated 'pairwise' mode).
  
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
@@ -309,6 +310,11 @@ class ErrorGeneratorPropagator:
             the pairwise BCH of the given order 'pairwise'. 'magnus' mode supports up to 
             the third-order Magnus expansion, while 'pairwise' supports up to fifth-order
             in the BCH approximation.
+
+            .. deprecated::
+                'pairwise' mode is deprecated and will be removed in a future release; using
+                it emits a `pyGSTiDeprecationWarning`. Migrate to the Magnus expansion
+                implementation ('magnus').
         
         circuit_conversion_kwargs : dict, optional (default None)
             A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
@@ -317,17 +323,26 @@ class ErrorGeneratorPropagator:
             values.
         """
 
+        if mode == 'pairwise':
+            warnings.warn("The 'pairwise' mode of ErrorGeneratorPropagator.propagate_errorgens_bch (repeated pairwise "
+                          "application of the BCH approximation) is deprecated and will be removed in a future release "
+                          "of pyGSTi. Please migrate to the Magnus expansion implementation, mode='magnus' (the "
+                          "default), which supports bch_order values of 1, 2 and 3.",
+                          _pyGSTiDeprecationWarning, stacklevel=2)
+        elif mode != 'magnus':
+            raise ValueError(f"Unrecognized mode '{mode}'; expected 'magnus' or 'pairwise'.")
+
         propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
         #if length one no need to do anything.
         if len(propagated_errorgen_layers)==1:
             return propagated_errorgen_layers[0]
         
         if mode == 'magnus':
-            assert bch_order<=3, 'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
+            assert bch_order<=3, f'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
             combined_err_layer = _eprop.magnus_expansion(propagated_errorgen_layers, magnus_order=bch_order, truncation_threshold=truncation_threshold)
 
-        elif mode == 'pairwise':
-            assert bch_order<=5, 'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
+        else:  # 'pairwise' (deprecated, see above)
+            assert bch_order<=5, f'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
             #iterate through in reverse order (the propagated layers are
             #in circuit ordering and not matrix multiplication ordering at the moment)
             #and combine the terms pairwise
@@ -335,8 +350,6 @@ class ErrorGeneratorPropagator:
             for i in range(len(propagated_errorgen_layers)-2, -1, -1):
                 combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
                                                                 bch_order=bch_order, truncation_threshold=truncation_threshold)
-        else:
-            NotImplementedError(f'Unrecognized mode {mode}')
 
         return combined_err_layer
         

@@ -145,7 +145,7 @@ print(propagated_errorgen_layer_first_order)
 ```
 
 This method supports a number of additional arguments beyond those already for `propagate_errorgens`:
-- `bch_order`: An integer from 1 to 5 specifying the order of the BCH approximation to apply (5 is the current maximum). Note that the computational cost of higher order BCH can scale rapidly,    so keep this in mind when balancing the need for accuracy and speed of computation.
+- `bch_order`: An integer from 1 to 3 specifying the order of the BCH approximation to apply (3 is the current maximum for the default Magnus expansion implementation, `mode='magnus'`; the older `mode='pairwise'`, which applied the pairwise BCH formula repeatedly and supported orders up to 5, is deprecated and will be removed). Note that the computational cost of higher order BCH can scale rapidly, so keep this in mind when balancing the need for accuracy and speed of computation.
 - `truncation_threshold`: This argument allows you to specify a minimum threshold (in terms of error generator rate) below which rates are truncated to zero. This can improve performance      by allowing one to skip the computation of terms corresponding to very small corrections.
 Some interesting emergent behavior starts to occur when we begin to look at higher-order BCH corrections.
 

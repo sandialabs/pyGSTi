@@ -10,6 +10,8 @@ from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_error_generator_rates
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+import warnings
 from ..util import BaseCase
 from itertools import product, chain
 import random
@@ -260,7 +262,24 @@ class ErrgenCompositionCommutationTester(BaseCase):
         _compare_analytic_numeric_iterative_composition(2)
         
 
+    def test_pairwise_mode_deprecated(self):
+        with self.assertWarns(pyGSTiDeprecationWarning) as cm:
+            pairwise = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, mode='pairwise')
+        self.assertIn("mode='magnus'", str(cm.warning))
+        magnus = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1)
+        self.assertEqual(set(pairwise), set(magnus))
+        for lbl, rate in magnus.items():
+            self.assertAlmostEqual(pairwise[lbl], rate, places=14)
+        with self.assertRaises(ValueError):
+            self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, mode='not_a_mode')
+
     def test_bch_approximation(self):
+        # exercises the deprecated 'pairwise' mode (bch_approximation itself is not deprecated).
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', pyGSTiDeprecationWarning)
+            self._check_bch_approximation()
+
+    def _check_bch_approximation(self):
         first_order_bch_numerical = _eprop.bch_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, bch_order=1)
         propagated_errorgen_layers_bch_order_1 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1, mode='pairwise')
         first_order_bch_analytical = self.errorgen_propagator.errorgen_layer_dict_to_errorgen(propagated_errorgen_layers_bch_order_1,mx_basis='pp')

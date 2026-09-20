@@ -16,6 +16,8 @@ from pygsti.modelpacks import smq2Q_XYCPHASE
 import numpy as np
 import stim
 import unittest
+import warnings
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import copy
 import pickle
 
@@ -51,11 +53,14 @@ class ErrorgenPropTester(BaseCase):
 
     def test_approx_propagation_probabilities_BCH(self):
         error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
-        probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='pairwise')
-        probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='pairwise')
-        probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='pairwise')
-        probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4, bch_mode='pairwise')
-        probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5, bch_mode='pairwise')
+        # exercises the deprecated 'pairwise' mode.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', pyGSTiDeprecationWarning)
+            probabilities_BCH_order_1 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=1, bch_mode='pairwise')
+            probabilities_BCH_order_2 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=2, bch_mode='pairwise')
+            probabilities_BCH_order_3 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=3, bch_mode='pairwise')
+            probabilities_BCH_order_4 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=4, bch_mode='pairwise')
+            probabilities_BCH_order_5 = probabilities_errorgen_prop(error_propagator, self.target_model, self.circuit, use_bch=True, bch_order=5, bch_mode='pairwise')
         probabilities_forward_simulation = probabilities_fwdsim(self.error_model, self.circuit)
 
         #use a much looser constraint on the agreement between the BCH results and forward simulation. Mostly testing to catch things exploding.
