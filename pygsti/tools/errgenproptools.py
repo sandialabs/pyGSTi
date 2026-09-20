@@ -349,15 +349,15 @@ def bch_approximation(errgen_layer_1: _ErrorgenDict, errgen_layer_2: _ErrorgenDi
             raise NotImplementedError("Higher orders beyond fifth order are not implemented yet.")
 
     # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.
+    # The per-order dictionaries are each truncated, but their sums can still fall below the threshold (or cancel
+    # exactly) when the orders combine, so the merged result is truncated once more.
     new_errorgen_layer_dict = {}
     get = new_errorgen_layer_dict.get
     for order_dict in new_errorgen_layer:
         for lbl, rate in order_dict.items():
             new_errorgen_layer_dict[lbl] = get(lbl, 0) + rate.real
 
-    # Future: Possibly do one last truncation pass in case any of the different order cancel out when aggregated?
-
-    return new_errorgen_layer_dict
+    return _truncated(new_errorgen_layer_dict, truncation_threshold)
 
 @_with_cyclic_gc_paused
 def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal[1,2,3] = 1,
@@ -428,14 +428,15 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
         new_errorgen_layer.extend(_second_and_third_order_magnus_terms(errorgen_layers, identity, truncation_threshold))
 
     # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.
+    # The per-order dictionaries are each truncated, but their sums can still fall below the threshold (or cancel
+    # exactly) when the orders combine, so the merged result is truncated once more.
     new_errorgen_layer_dict = {}
     get = new_errorgen_layer_dict.get
     for order_dict in new_errorgen_layer:
         for lbl, rate in order_dict.items():
             new_errorgen_layer_dict[lbl] = get(lbl, 0) + rate.real
 
-    # Future: Possibly do one last truncation pass in case any of the different orders cancel out when aggregated?
-    return new_errorgen_layer_dict
+    return _truncated(new_errorgen_layer_dict, truncation_threshold)
 
 def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
                               truncation_threshold: float = 1e-14) -> _ErrorgenDict:

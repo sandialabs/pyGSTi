@@ -297,6 +297,27 @@ class ErrgenCompositionCommutationTester(BaseCase):
                         and (exact_vs_third_order_norm > exact_vs_fourth_order_norm) and (exact_vs_fourth_order_norm > exact_vs_fifth_order_norm))
         
 
+    def test_merged_orders_are_truncated(self):
+        # The per-order terms of bch_approximation and magnus_expansion are each truncated, but a
+        # label's contributions from different orders can cancel when they are summed. Arrange an
+        # exact cancellation: the second-order term (1/2)[H_X a, H_Y b] has an H_Z component of rate
+        # r; giving H_Z the first-order rate -r must then remove H_Z from the merged output rather
+        # than leave a zero (or sub-threshold) entry behind.
+        H_X, H_Y, H_Z = (_LSE.cast(LEEL('H', [p])) for p in ('X', 'Y', 'Z'))
+        layer_1 = {H_X: 1e-2}
+        layer_2 = {H_Y: 3e-3}
+        r = _eprop.bch_approximation(layer_1, layer_2, bch_order=2)[H_Z]
+        self.assertGreater(abs(r), 1e-14)
+        combined = _eprop.bch_approximation(layer_1, {H_Y: 3e-3, H_Z: -r}, bch_order=2)
+        self.assertNotIn(H_Z, combined)
+        self.assertTrue(all(abs(rate) > 1e-14 for rate in combined.values()))
+        # magnus: layers ordered so that (1/2)[A(2), A(1)] reproduces the same second-order term.
+        r = _eprop.magnus_expansion([layer_2, layer_1], magnus_order=2)[H_Z]
+        self.assertGreater(abs(r), 1e-14)
+        combined = _eprop.magnus_expansion([{H_Y: 3e-3, H_Z: -r}, layer_1], magnus_order=2)
+        self.assertNotIn(H_Z, combined)
+        self.assertTrue(all(abs(rate) > 1e-14 for rate in combined.values()))
+
     def test_magnus_expansion(self):
         first_order_magnus_numerical = _eprop.magnus_numerical(self.propagated_errorgen_layers, self.errorgen_propagator, magnus_order=1)
         propagated_errorgen_layers_magnus_order_1 = self.errorgen_propagator.propagate_errorgens_bch(self.circuit, bch_order=1)
