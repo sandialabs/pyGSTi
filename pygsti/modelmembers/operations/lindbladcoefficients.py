@@ -1251,11 +1251,18 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
             scale, U = _mt.to_unitary(self._basis[bel_label])
             coeff_poly = self._parameterization._coefficient_polynomial(self, k, pio, mpv)
 
+            U_dag = U.conjugate().T
+
             # Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                (-1j * scale) * coeff_poly, U, None, evotype, state_space))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                (1j * scale) * coeff_poly, None, U.conjugate().T, evotype, state_space))
+            poly_left = (-1j * scale) * coeff_poly
+            term_left = _term.RankOnePolynomialOpTerm.create_from(
+                poly_left, U, None, evotype, state_space)
+
+            poly_right = (1j * scale) * coeff_poly
+            term_right = _term.RankOnePolynomialOpTerm.create_from(
+                poly_right, None, U_dag, evotype, state_space)
+
+            Lterms.extend([term_left, term_right])
         return Lterms
 
     def _elementary_errorgen_indices_impl(self):
@@ -1308,12 +1315,20 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
 
             # Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
             # e.g. in 2nd term, _np.dot(Ln_dag, Lm) == adjoint(_np.dot(Lm_dag,Ln))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                1.0 * base_poly, Ln, Lm, evotype, state_space))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                -0.5 * base_poly, None, _np.dot(Ln_dag, Lm), evotype, state_space))
-            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                -0.5 * base_poly, _np.dot(Lm_dag, Ln), None, evotype, state_space))
+            poly_sandwich = 1.0 * base_poly
+            term_sandwich = _term.RankOnePolynomialOpTerm.create_from(
+                poly_sandwich, Ln, Lm, evotype, state_space)
+
+            poly_anti = -0.5 * base_poly
+            op_post = _np.dot(Ln_dag, Lm)
+            term_post = _term.RankOnePolynomialOpTerm.create_from(
+                poly_anti, None, op_post, evotype, state_space)
+
+            op_pre = _np.dot(Lm_dag, Ln)
+            term_pre = _term.RankOnePolynomialOpTerm.create_from(
+                poly_anti, op_pre, None, evotype, state_space)
+
+            Lterms.extend([term_sandwich, term_post, term_pre])
         return Lterms
 
     def _elementary_errorgen_indices_impl(self):
@@ -1367,12 +1382,20 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
                 base_poly = coeff_poly * scale
 
                 # Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    1.0 * base_poly, Ln, Lm, evotype, state_space))
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    -0.5 * base_poly, None, _np.dot(Ln_dag, Lm), evotype, state_space))  # adjoint(dot(Lm_dag,Ln))
-                Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    -0.5 * base_poly, _np.dot(Lm_dag, Ln), None, evotype, state_space))
+                poly_sandwich = 1.0 * base_poly
+                term_sandwich = _term.RankOnePolynomialOpTerm.create_from(
+                    poly_sandwich, Ln, Lm, evotype, state_space)
+
+                poly_anti = -0.5 * base_poly
+                op_post = _np.dot(Ln_dag, Lm)  # adjoint(dot(Lm_dag,Ln))
+                term_post = _term.RankOnePolynomialOpTerm.create_from(
+                    poly_anti, None, op_post, evotype, state_space)
+
+                op_pre = _np.dot(Lm_dag, Ln)
+                term_pre = _term.RankOnePolynomialOpTerm.create_from(
+                    poly_anti, op_pre, None, evotype, state_space)
+
+                Lterms.extend([term_sandwich, term_post, term_pre])
         return Lterms
 
     def _elementary_errorgen_indices_impl(self):
@@ -1519,13 +1542,20 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
             #   - 0.5 {Um^dag Un, rho}.  Mirrors the construction in _OtherCoeffBlock.
             Um_dag = Um.conjugate().T
             Un_dag = Un.conjugate().T
-            return [
-                _term.RankOnePolynomialOpTerm.create_from(1.0 * poly, Un, Um, evotype, state_space),
-                _term.RankOnePolynomialOpTerm.create_from(-0.5 * poly, None, _np.dot(Un_dag, Um),
-                                                           evotype, state_space),
-                _term.RankOnePolynomialOpTerm.create_from(-0.5 * poly, _np.dot(Um_dag, Un), None,
-                                                           evotype, state_space),
-            ]
+            poly_sandwich = 1.0 * poly
+            term_sandwich = _term.RankOnePolynomialOpTerm.create_from(
+                poly_sandwich, Un, Um, evotype, state_space)
+
+            poly_anti = -0.5 * poly
+            op_post = _np.dot(Un_dag, Um)
+            term_post = _term.RankOnePolynomialOpTerm.create_from(
+                poly_anti, None, op_post, evotype, state_space)
+
+            op_pre = _np.dot(Um_dag, Un)
+            term_pre = _term.RankOnePolynomialOpTerm.create_from(
+                poly_anti, op_pre, None, evotype, state_space)
+
+            return [term_sandwich, term_post, term_pre]
 
         def coeff_poly(k, scalar):
             # polynomial multiplying an O-generator for the k-th elementary error generator
