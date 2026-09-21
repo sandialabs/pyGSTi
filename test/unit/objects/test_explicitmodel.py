@@ -58,6 +58,24 @@ class ExplicitOpModelToolTester(BaseCase):
             [('Q0', 'Q1')], ['Gix', 'Giy', 'Gxi', 'Gyi', 'Gcnot'],
             ["I(Q0):X(pi/2,Q1)", "I(Q0):Y(pi/2,Q1)", "X(pi/2,Q0):I(Q1)", "Y(pi/2,Q0):I(Q1)", "CX(pi,Q0,Q1)"])
 
+    def test_default_gauge_group_setter_strings(self):
+        from pygsti.models import gaugegroup as gg
+        m = self.gateset_2q
+        m.default_gauge_group = 'unitary'
+        self.assertIsInstance(m.default_gauge_group, gg.UnitaryGaugeGroup)
+        m.default_gauge_group = 'tp'
+        self.assertIsInstance(m.default_gauge_group, gg.TPGaugeGroup)
+        m.default_gauge_group = 'local unitary'
+        self.assertIsInstance(m.default_gauge_group, gg.TensorProductGaugeGroup)
+        self.assertEqual(m.default_gauge_group.num_params, 6)
+        self.assertTrue(all(isinstance(f, gg.UnitaryGaugeGroup) for f in m.default_gauge_group.factors))
+        m.default_gauge_group = 'Local TP'
+        self.assertIsInstance(m.default_gauge_group, gg.TensorProductGaugeGroup)
+        self.assertEqual(m.default_gauge_group.num_params, 24)
+        self.assertTrue(all(isinstance(f, gg.TPGaugeGroup) for f in m.default_gauge_group.factors))
+        with self.assertRaises(ValueError):
+            m.default_gauge_group = 'local full'
+
     def test_randomize_with_unitary(self):
         gateset_randu = self.model.randomize_with_unitary(0.01)
         gateset_randu = self.model.randomize_with_unitary(0.01, seed=1234)

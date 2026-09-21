@@ -751,43 +751,83 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device):
         """
-        Returns `(G, blocks)` where `G` is the constant `(N, d2, d2)` term-superoperator stack
-        (`combined_lindblad_term_superops`) as a torch tensor, and `blocks` is a list, in
-        `coefficient_blocks` order, of `blk.stateless_data(...)`.
-        
-        The error generator is linear in the (per-block) block_data, so `torch_base` rebuilds it as
-        `einsum('i,ijk->jk', concat(block torch_bases), G).real` -- the differentiable analog of
-        `to_dense('HilbertSchmidt')`.  Dense path only.
+        Returns `(G_re, G_im, superop_shape, blocks, param_dims, block_is_complex)`, the constant
+        data `torch_base` needs to rebuild this error generator from a parameter tensor. `blocks`
+        is a list, in `coefficient_blocks` order, of `blk.stateless_data(...)`.
+
+        The error generator is linear in the (per-block) block_data, so `to_dense('HilbertSchmidt')`
+        amounts to `einsum('i,ijk->jk', concat(block_datas), G).real` against the constant
+        term-superoperator stack `G` (= `combined_lindblad_term_superops`, shape `(N, d2, d2)`).
+        Because only the *real part* of that contraction is kept,
+
+            Re(sum_i c_i G_i) = Re(c) . Re(G) - Im(c) . Im(G),
+
+        so we store `G` pre-split into two real `(N, d2*d2)` matrices rather than one complex
+        `(N, d2, d2)` stack. Two consequences, both of which matter a lot when
+        `TorchForwardSimulator` differentiates this map with `torch.func`:
+
+          * the contraction is real arithmetic, which is half the flops of the complex one, and
+          * written as a plain 2-D matmul it *vectorizes into a GEMM* under `vmap`, whereas the
+            3-D `einsum` vectorized into a batched GEMV that ran an order of magnitude below the
+            GPU's matrix-multiply throughput.
+
+        `Im(G)` is only kept for the coefficient rows belonging to blocks whose block_data is
+        complex (the Hamiltonian block's coefficients are real), and is `None` if there are none.
+        Dense path only.
         """
         assert self._rep_type != 'sparse superop', \
             "LindbladErrorgen.stateless_data (the torch path) requires a dense representation."
         const = _np.ascontiguousarray(self.combined_lindblad_term_superops)
-        G_dtype = _torch.complex64 if real_dtype.itemsize == 4 else _torch.complex128
-        G = _torch.from_numpy(const)
-        G = G.to(device=device, dtype=G_dtype)
+        n_terms = const.shape[0]
+        superop_shape = const.shape[1:]
+
+        block_is_complex = tuple(_np.iscomplexobj(blk.block_data) for blk in self.coefficient_blocks)
+        block_sizes = [blk.block_data.size for blk in self.coefficient_blocks]
+        assert sum(block_sizes) == n_terms, \
+            "the term-superoperator stack must have one entry per coefficient-block element"
+
+        def _to_torch(mx):
+            return _torch.from_numpy(_np.ascontiguousarray(mx)).to(device=device, dtype=real_dtype)
+
+        G_re = _to_torch(const.real.reshape(n_terms, -1))
+        if any(block_is_complex):
+            keep = _np.concatenate([_np.full(sz, is_c) for sz, is_c
+                                    in zip(block_sizes, block_is_complex)])
+            G_im = _to_torch(const.imag[keep].reshape(int(keep.sum()), -1))
+        else:
+            G_im = None
+
         blocks     = [ blk.stateless_data(real_dtype, device) for blk in self.coefficient_blocks ]
         param_dims = [ blk.num_params for blk in self.coefficient_blocks ]
-        return (G, blocks, param_dims)
+        return (G_re, G_im, superop_shape, blocks, param_dims, block_is_complex)
 
     @staticmethod
     def torch_base(sd, t_param):
         """Differentiable dense HS error generator from the parameter tensor `t_param`.
 
         Mirrors `to_dense('HilbertSchmidt')`: split `t_param` per block (`coefficient_blocks` order),
-        rebuild each block's block_data via `LindbladCoefficientBlock.torch_base`, concatenate the
-        raveled block_datas, and contract against the constant superop stack `G`.
+        rebuild each block's block_data via `LindbladCoefficientBlock.torch_base`, and contract the
+        raveled block_datas against the constant term-superoperator stack. See `stateless_data` for
+        why that contraction is kept as two real matmuls.
         """
-        G, blocks, param_dims = sd
-        comb = []
+        G_re, G_im, superop_shape, blocks, param_dims, block_is_complex = sd
+        re_parts = []
+        im_parts = []
         off = 0
-        for blk_sd, nP in zip(blocks, param_dims):
+        for blk_sd, nP, is_complex in zip(blocks, param_dims, block_is_complex):
             t_slice = t_param[off:off + nP]
             off += nP
-            bd = _LindbladCoefficientBlock.torch_base(blk_sd, t_slice)
-            comb.append(bd.ravel().to(G.dtype))
-        comb = _torch.cat(comb)
-        egen = _torch.einsum('i,ijk->jk', comb, G)
-        return egen.real
+            bd = _LindbladCoefficientBlock.torch_base(blk_sd, t_slice).ravel()
+            if is_complex:
+                assert bd.is_complex(), "block_data dtype changed since stateless_data was built"
+                re_parts.append(bd.real)
+                im_parts.append(bd.imag)
+            else:
+                re_parts.append(bd.real if bd.is_complex() else bd)
+        egen = _torch.cat(re_parts) @ G_re
+        if im_parts:
+            egen = egen - _torch.cat(im_parts) @ G_im
+        return egen.reshape(superop_shape)
 
     def to_sparse(self, on_space: SpaceT='minimal'):
         """

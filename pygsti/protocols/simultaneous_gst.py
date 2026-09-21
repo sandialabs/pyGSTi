@@ -26,9 +26,10 @@ from pygsti.protocols._stitchers import (
     CallableStitcher, CircuitStitcher, Edge, RandomizedPatchStitcher, Vertex,
     assert_circuit_lists_match_color_patches, assign_the_designs_with_mapping,
 )
-from pygsti.tools.graphcoloring import (
-    canonical_edges, find_neighbors, switchboard_find_edge_coloring,
+from pygsti.tools.graphs import (
+    canonical_edges, find_neighbors, max_degree,
 )
+from pygsti.tools.graphs.coloring import switchboard_find_edge_coloring
 
 SeedLike = Union[int, np.random.SeedSequence, np.random.Generator]
 
@@ -78,7 +79,7 @@ def make_simultaneous_gst_design(
     vertices = cast(List[Vertex] , list(nq_pspec.qubit_labels))
     edges = canonical_edges(nq_pspec.compute_2Q_connectivity().edges())
     neighbors = find_neighbors(vertices, edges)
-    deg = max(len(neighbors[v]) for v in vertices)
+    deg = max_degree(neighbors)
     coloring_seed, stitcher_seed = np.random.SeedSequence(seed).spawn(2)
     coloring_seed = np.random.default_rng(coloring_seed)
     edge_coloring = switchboard_find_edge_coloring(

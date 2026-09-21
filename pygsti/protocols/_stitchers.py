@@ -499,7 +499,7 @@ def build_edge_to_patch_index(patch_infos: List[Dict[str, Any]]) -> Dict[Edge, i
 
     Raises ``AssertionError`` if an edge belongs to two patches. A proper edge
     coloring never does that (see
-    :func:`pygsti.tools.graphcoloring.check_valid_edge_coloring`), and if it did,
+    :func:`pygsti.tools.graphs.coloring.check_valid_edge_coloring`), and if it did,
     a circuit's patch could not be recovered from the gates it contains.
     """
     lookup: Dict[Edge, int] = {}

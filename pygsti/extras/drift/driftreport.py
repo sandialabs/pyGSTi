@@ -611,12 +611,12 @@ def create_drift_report(results, circuits, filename, title={'text': "auto"},
         else:
             resizable = advanced_options.get('resizable', True)
             autosize = advanced_options.get('autosize', 'initial')
-            connected = advanced_options.get('connected', False)
+            enable_offline_mode = advanced_options.get('enable_offline_mode', False)
             single_file = filename.endswith(".html")
 
             report.write_html(
                 filename, auto_open=auto_open, link_to=link_to,
-                connected=connected, build_options=advanced_options,
+                enable_offline_mode=enable_offline_mode, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 resizable=resizable, autosize=autosize,
                 single_file=single_file, verbosity=verbosity
