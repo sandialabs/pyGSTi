@@ -12,16 +12,19 @@ import pathlib as _pathlib
 import warnings as _warnings
 
 import numpy as np
+from numpy.typing import DTypeLike
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union, cast
 
 from pygsti import io as _io
 from pygsti.protocols.gst import GateSetTomographyDesign
+from pygsti.models.model import Model
 from pygsti.processors import QubitProcessorSpec
 
 from pygsti.protocols._stitchers import (
     CallableStitcher, CircuitStitcher, Edge, RandomizedPatchStitcher, Vertex,
     _validate_stitched_circuits,
 )
+from pygsti.tools.edesigntools import BlockDoptReducer as _BlockDoptReducer
 from pygsti.tools.graphs import (
     canonical_edges, find_neighbors, max_degree,
 )
@@ -445,12 +448,16 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         mapped.stitch_seed = self.stitch_seed
         mapped.circuit_lists = mapped_circuit_lists
 
-        # Sets processor_spec, qubit_labels, all_circuits_needing_data, auxfile_types, etc.
+        # Sets processor_spec, qubit_labels, all_circuits_needing_data, etc. It also
+        # rebuilds auxfile_types from scratch and sets `selection` to None.
         GateSetTomographyDesign.__init__(
             mapped, mapped_processor_spec, mapped_circuit_lists,
             qubit_labels=mapped.vertices, nested=self.nested
         )
-        mapped._register_auxfile_types()  # ...which resets auxfile_types, so re-declare ours
+        # Re-declare this class's auxfile types, and restore the reduction record:
+        # relabelling renames qubits, it does not re-select circuits.
+        mapped._register_auxfile_types()
+        mapped.selection = self.selection
         return mapped
 
     def as_circuit_lists_design(self) -> GateSetTomographyDesign:
@@ -533,6 +540,39 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         # what recomputes all_circuits_needing_data.
         base._truncate_to_circuits_inplace({c for lst in kept for c in lst})
         return base
+
+    def reduce_by_dopt(self, model: Model, num_circuits: int, *, ridge: float = 1.0,
+                       dtype: DTypeLike = np.float64,
+                       warn_on_target_model: bool = True) -> "SimultaneousGSTDesign":
+        """
+        A copy of this design keeping the circuits selected by the D-optimal objective.
+
+        Pass a model at a plausible noisy point, not a target model --
+        :meth:`pygsti.tools.edesigntools.BlockDoptReducer.from_target_model` produces one,
+        and :func:`pygsti.tools.edesigntools.perturb_errorgen_rates` explains why it is
+        needed. Passing a target model here warns.
+
+        Parameters
+        ----------
+        model : Model
+            Defines the parameter sensitivities used in selection. The objective uses
+            unweighted probability derivatives; it is not multinomial Fisher information.
+
+        num_circuits : int
+            The budget.
+
+        ridge, dtype, warn_on_target_model
+            As for :class:`~pygsti.tools.edesigntools.BlockDoptReducer`.
+
+        Returns
+        -------
+        SimultaneousGSTDesign
+            Its `selection` attribute holds the reducer and its score curve; read
+            ``selection.scores`` to inspect the objective as the budget grows.
+        """
+        reducer = _BlockDoptReducer(model, ridge=ridge, dtype=dtype,
+                                    warn_on_target_model=warn_on_target_model)
+        return self.reduce_with(reducer, num_circuits)
 
     # endregion
 
