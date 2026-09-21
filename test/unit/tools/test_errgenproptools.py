@@ -14,6 +14,7 @@ from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import warnings
 from ..util import BaseCase
 from itertools import product, chain
+from math import factorial
 import random
 import stim
 from pygsti.processors import QubitProcessorSpec
@@ -367,6 +368,90 @@ class ErrgenCompositionCommutationTester(BaseCase):
                          {_LSE('S', [stim.PauliString('XI')]): -1.0})
         self.assertEqual(aggregate(_eprop.pauli_conjugation_composition(stim.PauliString('XI'), _LSE('S', [stim.PauliString('YI')]))),
                          {_LSE('S', [stim.PauliString('ZI')]): 1.0, _LSE('S', [stim.PauliString('XI')]): -1.0})
+
+    def _random_errorgen_dicts(self, num_qubits, sizes, seed):
+        #random all-sector error generator dictionaries over the complete basis, with the basis' matrix
+        #dictionary for dense checks.
+        basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+        matrix_dict = {lbl: mat for lbl, mat in zip(basis.labels, basis.elemgen_matrices)}
+        rng = random.Random(seed)
+        by_type = {t: [lbl for lbl in basis.labels if lbl.errorgen_type == t] for t in 'HSCA'}
+        dicts = []
+        for size in sizes:
+            #`size` labels of each type (or all of them, for the small H/S sectors)
+            labels = [lbl for t in 'HSCA' for lbl in rng.sample(by_type[t], min(size, len(by_type[t])))]
+            dicts.append({_LSE.cast(lbl): rng.uniform(-1e-2, 1e-2) for lbl in labels})
+        return matrix_dict, dicts
+
+    def test_commuting_product(self):
+        #_commuting_product(L, M) must equal the dense product L @ M whenever [L, M] = 0: check the square
+        #L o L (same object passed twice), the cube L o L^2 (different objects) and the reversed L^2 o L,
+        #against the dense matrices, for random all-sector 2- and 3-qubit dictionaries.
+        for num_qubits, sizes, seed in ((2, (6, 15), 101), (3, (8, 18), 102)):
+            matrix_dict, dicts = self._random_errorgen_dicts(num_qubits, sizes, seed)
+            identity = 'I' * num_qubits
+            for errorgen_dict in dicts:
+                self.assertTrue({lbl.errorgen_type for lbl in errorgen_dict} == set('HSCA'))
+                dense = _eprop.errorgen_layer_to_matrix(errorgen_dict, num_qubits, matrix_dict)
+                square = _eprop._commuting_product(errorgen_dict, errorgen_dict, identity)
+                self.assertLess(np.linalg.norm(_eprop.errorgen_layer_to_matrix(square, num_qubits, matrix_dict) - dense @ dense), 1e-12)
+                cube = _eprop._commuting_product(errorgen_dict, square, identity)
+                self.assertLess(np.linalg.norm(_eprop.errorgen_layer_to_matrix(cube, num_qubits, matrix_dict) - dense @ dense @ dense), 1e-12)
+                cube_reversed = _eprop._commuting_product(square, errorgen_dict, identity)
+                self.assertEqual(set(cube), set(cube_reversed))
+                for lbl in cube:
+                    self.assertAlmostEqual(cube[lbl], cube_reversed[lbl], places=14)
+                #the bleed terms are added on the operands' own labels, which must not leave rates split
+                #between two keys for the same generator: every two-index key is in canonical order.
+                for lbl in chain(square, cube):
+                    if len(lbl.basis_element_labels) == 2:
+                        self.assertTrue(bel_less_than(*lbl.basis_element_labels), f'{lbl} not canonical')
+
+    def test_commuting_product_noncanonical_input_labels(self):
+        #labels taken straight from a model may have their two basis element labels in the other order
+        #(C_{Q,P} = C_{P,Q}, A_{Q,P} = -A_{P,Q}); the product must still be right and must not carry
+        #such labels through into its output beside the canonical ones.
+        matrix_dict, (errorgen_dict,) = self._random_errorgen_dicts(2, (10,), 103)
+        swapped = {}
+        for lbl, rate in errorgen_dict.items():
+            if len(lbl.basis_element_labels) == 2:
+                P, Q = lbl.basis_element_labels
+                swapped_lbl = _LSE(lbl.errorgen_type, (Q, P))
+                self.assertFalse(bel_less_than(*swapped_lbl.basis_element_labels))
+                swapped[swapped_lbl] = rate if lbl.errorgen_type == 'C' else -rate
+            else:
+                swapped[lbl] = rate
+        dense = _eprop.errorgen_layer_to_matrix(errorgen_dict, 2, matrix_dict)
+        square = _eprop._commuting_product(swapped, swapped, 'II')
+        for lbl in square:
+            if len(lbl.basis_element_labels) == 2:
+                self.assertTrue(bel_less_than(*lbl.basis_element_labels), f'{lbl} not canonical')
+        self.assertLess(np.linalg.norm(_eprop.errorgen_layer_to_matrix(square, 2, matrix_dict) - dense @ dense), 1e-12)
+        canonical_square = _eprop._commuting_product(errorgen_dict, errorgen_dict, 'II')
+        self.assertEqual(set(square), set(canonical_square))
+        for lbl in square:
+            self.assertAlmostEqual(square[lbl], canonical_square[lbl], places=14)
+
+    def test_error_generator_taylor_expansion_all_sectors(self):
+        #order-k term == L^k / k! from the dense matrix, at threshold 0, on random all-sector dictionaries;
+        #and the default threshold only removes terms below it.
+        for num_qubits, seed in ((2, 104), (3, 105)):
+            matrix_dict, (errorgen_dict,) = self._random_errorgen_dicts(num_qubits, (10,), seed)
+            dense = _eprop.errorgen_layer_to_matrix(errorgen_dict, num_qubits, matrix_dict)
+            terms = _eprop.error_generator_taylor_expansion(errorgen_dict, order=3, truncation_threshold=0.0)
+            self.assertEqual(len(terms), 3)
+            for k, order_dict in enumerate(terms, start=1):
+                expected = np.linalg.matrix_power(dense, k) / factorial(k)
+                self.assertLess(np.linalg.norm(_eprop.errorgen_layer_to_matrix(order_dict, num_qubits, matrix_dict) - expected), 1e-12)
+            truncated = _eprop.error_generator_taylor_expansion(errorgen_dict, order=3, truncation_threshold=1e-9)
+            for full, trunc in zip(terms, truncated):
+                self.assertTrue(set(trunc) <= set(full))
+                for lbl, rate in full.items():
+                    if abs(rate) > 1e-9:
+                        self.assertIn(lbl, trunc)
+                        self.assertEqual(trunc[lbl], rate)
+                    else:
+                        self.assertNotIn(lbl, trunc)
 
     def test_iterative_error_generator_composition(self):
         test_labels = [(_LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')])), 
@@ -1089,8 +1174,18 @@ class ApproxStabilizerMethodTester(BaseCase):
 
 
     def test_error_generator_taylor_expansion(self):
-        #this is just an integration test atm.
-        _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2)
+        #the propagated layer's expansion against the dense numerical one (sum of L^k / k!) at order 2; the
+        #order-3, all-sector check on random 2- and 3-qubit dictionaries is in ErrgenCompositionCommutationTester
+        #(the dense 4-qubit conversion of every label of the result is what makes this test expensive).
+        taylor_terms = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, truncation_threshold=0.0)
+        self.assertEqual(len(taylor_terms), 2)
+        total = {}
+        for order_dict in taylor_terms:
+            for lbl, rate in order_dict.items():
+                total[lbl] = total.get(lbl, 0) + rate
+        numerical = _eprop.error_generator_taylor_expansion_numerical(self.propagated_errorgen_layer, self.error_propagator, order=2)
+        analytic = self.error_propagator.errorgen_layer_dict_to_errorgen(total, 'pp')
+        self.assertLess(np.linalg.norm(numerical - analytic), 1e-12)
 
 class ErrorGenPropUtilsTester(BaseCase):
     pass
