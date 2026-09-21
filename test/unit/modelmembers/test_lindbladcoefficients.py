@@ -316,7 +316,7 @@ _TERM_SNAPSHOT_1Q = {
     ('other_diagonal', 'depol'): (9, (-0.1225, -0.1225, -0.1225, -0.1225, -0.1225, -0.1225, 0.245, 0.245, 0.245)),
     ('other_diagonal', 'reldepol'): (9, (-0.175, -0.175, -0.175, -0.175, -0.175, -0.175, 0.35, 0.35, 0.35)),
     ('other', 'static'): (27, (-48.5, -48.5, -30.5, -30.5, -30.5, -30.5, -19.25, -19.25, -12.5, -12.5, -12.5, -12.5, -8.0, -8.0, -8.0, -8.0, -3.5, -3.5, 7.0, 16.0, 16.0, 25.0, 25.0, 38.5, 61.0, 61.0, 97.0)),
-    ('other', 'elements'): (27, ((-0.1425-0.0775j), (-0.1425-0.0775j), (-0.11+0.02j), (-0.11+0.02j), (-0.105+0.025j), (-0.0775-0.1425j), (-0.0775-0.1425j), (-0.04+0.22j), (-0.0125+0.0525j), (-0.0125+0.0525j), -0.175j, -0.175j, -0.17j, -0.045j, -0.045j, 0.085j, 0.085j, 0.09j, 0.35j, (0.02-0.11j), (0.02-0.11j), (0.025-0.105j), (0.0525-0.0125j), (0.0525-0.0125j), (0.155+0.285j), (0.22-0.04j), (0.285+0.155j))),
+    ('other', 'elements'): (27, (-0.175, -0.175, -0.17, (-0.105-0.025j), (-0.105+0.025j), (-0.0775-0.1425j), (-0.0775-0.1425j), (-0.0775+0.1425j), (-0.0775+0.1425j), -0.045, -0.045, (-0.04-0.22j), (-0.04+0.22j), (0.02-0.11j), (0.02-0.11j), (0.02+0.11j), (0.02+0.11j), (0.0525-0.0125j), (0.0525-0.0125j), (0.0525+0.0125j), (0.0525+0.0125j), 0.085, 0.085, 0.09, (0.155-0.285j), (0.155+0.285j), 0.35)),
     ('other', 'cholesky'): (27,
       (-0.1225 +0.j     , -0.1225 +0.j     , -0.11335+0.j     ,
        -0.11335+0.j     , -0.09055+0.j     , -0.09055+0.j     ,
@@ -367,7 +367,13 @@ def test_create_lindblad_term_objects_snapshot_1q(bt, pm):
     else:
         blk.block_data[:] = np.array([0.1, 0.2, 0.3])[:len(blk.basis_element_labels)]
     blk._coefficients_need_update = True
-    terms = blk.create_lindblad_term_objects(0, 100, 'statevec', QubitSpace(1))
+    evotype = 'statevec'
+    try:
+        from pygsti.evotypes.evotype import Evotype
+        Evotype('statevec')
+    except (ImportError, ModuleNotFoundError):
+        evotype = 'statevec_slow'
+    terms = blk.create_lindblad_term_objects(0, 100, evotype, QubitSpace(1))
     expected_count, expected_coeffs = _TERM_SNAPSHOT_1Q[(bt, pm)]
     assert len(terms) == expected_count
     actual = _evaluated_term_coeffs(terms, blk.num_params)
@@ -477,3 +483,163 @@ def test_superop_deriv_other_matrix_structured(case):
     d_struct = blk.superop_deriv_wrt_params(G_struct, v, superops_are_flat=False)  # (d2, d2, n, n)
     d_flat = blk.superop_deriv_wrt_params(G_flat, v, superops_are_flat=True)        # (d2, d2, n*n)
     assert np.allclose(d_struct.reshape(d_flat.shape), d_flat, atol=1e-9)
+
+
+@pytest.mark.parametrize("case", ALL_CASES, ids=_config_as_string)
+def test_coefficient_polynomial_contract(case):
+    """Evaluating _coefficient_polynomial at the parameter vector equals the corresponding block_data entry."""
+    bname, dim, bt, pm = case
+    blk = make_block(*case, data_seed=42)
+    nP = blk.num_params
+    rng = np.random.default_rng(123)
+    if pm == 'static':
+        if blk.block_data.ndim == 2:
+            n = blk.block_data.shape[0]
+            A = rng.standard_normal((n, n)) + 1j * rng.standard_normal((n, n))
+            blk.block_data[:, :] = A @ A.conj().T
+        else:
+            blk.block_data[:] = rng.standard_normal(blk.block_data.shape)
+        v = np.empty(0, 'd')
+    else:
+        v = blk.to_vector().copy()
+
+    mpv = 1000
+    for pio in (0, 5):
+        full_v = np.zeros(pio + nP + 10, dtype=complex)
+        if nP > 0:
+            full_v[pio:pio + nP] = v
+
+        if blk.block_data.ndim == 2:
+            n = blk.block_data.shape[0]
+            for i in range(n):
+                for j in range(n):
+                    poly = blk._parameterization._coefficient_polynomial(blk, (i, j), pio, mpv)
+                    eval_val = poly.evaluate(full_v)
+                    assert np.isclose(eval_val, blk.block_data[i, j], atol=1e-12)
+        else:
+            for k in range(len(blk.block_data)):
+                poly = blk._parameterization._coefficient_polynomial(blk, k, pio, mpv)
+                eval_val = poly.evaluate(full_v)
+                assert np.isclose(eval_val, blk.block_data[k], atol=1e-12)
+
+
+# =====================================================================================================
+# Semantic regression tests verifying rank-1 term objects against dense LindbladErrorgen.to_dense():
+# reconstructs the standard-basis error-generator superoperator from create_lindblad_term_objects
+# and asserts equivalence with the dense superoperator across the full (block_type, param_mode)
+# validity matrix, nontrivial parameter offsets, and both compiled and pure-Python term evotypes.
+# =====================================================================================================
+
+def _std_superop_from_terms(blk, params, pio=0, mpv=100, evotype='statevec_slow'):
+    """Reconstruct the std-basis error-generator superoperator from create_lindblad_term_objects.
+
+    Each rank-1 term acts rho -> coeff * A rho B^dag. Under row-major vectorization,
+    the superoperator is coeff * kron(A, conj(B)).
+    """
+    from pygsti.baseobjs.statespace import QubitSpace
+    terms = blk.create_lindblad_term_objects(pio, mpv, evotype, QubitSpace(1))
+    d = blk._basis.elements[0].shape[0]
+    S = np.zeros((d * d, d * d), complex)
+    pt = {pio + i: params[i] for i in range(len(params))}
+    for t in terms:
+        c = complex(t.coeff.evaluate(pt))
+        A = np.eye(d, dtype=complex)
+        for op in t._rep.pre_ops:
+            A = A @ op.to_dense('Hilbert')
+        B = np.eye(d, dtype=complex)
+        for op in t._rep.post_ops:
+            B = B @ op.to_dense('Hilbert')
+        S += c * np.kron(A, np.conj(B))
+    return S
+
+
+def _dense_std_superop_from_block(blk):
+    """Compute the std-basis dense error-generator superoperator for a 1-qubit block."""
+    from pygsti.baseobjs.statespace import QubitSpace
+    from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen
+    from pygsti.tools import basistools as _bt
+
+    eg = LindbladErrorgen([blk], state_space=QubitSpace(1), mx_basis='pp')
+    return _bt.change_basis(eg.to_dense(), 'pp', 'std')
+
+
+def _setup_1q_block_with_deterministic_data(bt, pm):
+    """Construct a 1-qubit pp block initialized with deterministic, generic values so that
+    every diagonal and off-diagonal component is nonzero."""
+    pp = Basis.cast('pp', 4)
+    blk = LCB(bt, pp, param_mode=pm)
+    if pm == 'static':
+        if bt == 'other':
+            # Hermitian matrix with nonzero real diagonal and complex off-diagonals
+            blk.block_data[:, :] = np.array([
+                [1.0, 0.2 - 0.3j, -0.4 + 0.1j],
+                [0.2 + 0.3j, 1.5, 0.5 - 0.2j],
+                [-0.4 - 0.1j, 0.5 + 0.2j, 2.0]
+            ], dtype=complex)
+        elif bt == 'ham':
+            blk.block_data[:] = np.array([0.15, -0.25, 0.35])
+        elif bt == 'other_diagonal':
+            blk.block_data[:] = np.array([0.12, 0.22, 0.32])
+        elif bt == 'other_unconstrained':
+            blk.block_data[:] = np.array([0.2, 0.3, 0.4, 0.1, -0.15, 0.25, -0.05, 0.12, -0.18])
+        v = np.empty(0, dtype='d')
+    elif pm == 'cholesky' and bt == 'other':
+        # Parameter matrix for Cholesky factor C: positive diagonal and nonzero strictly-lower triangle
+        v = np.array([1.2, 0.3, -0.2, 0.4, 1.5, 0.5, -0.3, 0.6, 1.8])
+        blk.from_vector(v)
+    elif pm == 'cholesky' and bt == 'other_diagonal':
+        v = np.array([0.4, 0.5, 0.6])
+        blk.from_vector(v)
+    elif pm == 'depol':
+        v = np.array([0.3])
+        blk.from_vector(v)
+    elif pm == 'reldepol':
+        v = np.array([0.25])
+        blk.from_vector(v)
+    elif bt == 'other':
+        # Parameter matrix P: diag=real diag, lower=Re, upper=Im -> all nonzero
+        v = np.array([0.5, 0.1, -0.2, 0.3, 0.6, 0.4, -0.15, 0.25, 0.7])
+        blk.from_vector(v)
+    elif bt == 'other_unconstrained':
+        v = np.array([0.2, 0.3, 0.4, 0.1, -0.15, 0.25, -0.05, 0.12, -0.18])
+        blk.from_vector(v)
+    elif bt == 'ham':
+        v = np.array([0.15, -0.25, 0.35])
+        blk.from_vector(v)
+    elif bt == 'other_diagonal':
+        v = np.array([0.12, 0.22, 0.32])
+        blk.from_vector(v)
+    else:
+        raise ValueError(f"Unknown config: {bt}, {pm}")
+    return blk, v
+
+
+_ONE_QUBIT_CONFIGS = [(bt, pm) for bt, pms in VALID.items() for pm in pms]
+
+@pytest.mark.parametrize("bt,pm", _ONE_QUBIT_CONFIGS, ids=["%s-%s" % c for c in _ONE_QUBIT_CONFIGS])
+def test_term_objects_reconstruct_dense_errorgen_1q(bt, pm):
+    """The reconstructed superoperator from create_lindblad_term_objects matches the dense
+    (LindbladErrorgen) superoperator for every valid 1-qubit block/param_mode pair."""
+    blk, v = _setup_1q_block_with_deterministic_data(bt, pm)
+    pio = 7  # test with a nonzero parameter offset
+    mpv = 100
+    S_terms = _std_superop_from_terms(blk, v, pio=pio, mpv=mpv, evotype='statevec_slow')
+    S_dense = _dense_std_superop_from_block(blk)
+    assert np.allclose(S_terms, S_dense, atol=1e-9)
+
+
+@pytest.mark.parametrize("evotype", ['statevec', 'statevec_slow'])
+def test_term_objects_reconstruct_dense_errorgen_other_elements_evotypes(evotype):
+    """Focused test verifying other/elements term reconstruction with both statevec and statevec_slow."""
+    try:
+        from pygsti.evotypes.evotype import Evotype
+        Evotype(evotype)
+    except (ImportError, ModuleNotFoundError) as e:
+        pytest.skip(f"Evotype {evotype} not available: {e}")
+
+    blk, v = _setup_1q_block_with_deterministic_data('other', 'elements')
+    pio = 5
+    mpv = 100
+    S_terms = _std_superop_from_terms(blk, v, pio=pio, mpv=mpv, evotype=evotype)
+    S_dense = _dense_std_superop_from_block(blk)
+    assert np.allclose(S_terms, S_dense, atol=1e-9)
