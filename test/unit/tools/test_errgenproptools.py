@@ -1163,7 +1163,27 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertLess(np.linalg.norm(numerical - analytic), 1e-12)
 
 class ErrorGenPropUtilsTester(BaseCase):
-    pass
+
+    def test_bel_product_str(self):
+        """
+        `bel_product_str` (the string-level Pauli product the emitters use in place of a stim
+        product plus rendering) must agree with stim on every pair of single-qubit Paulis and
+        on random multi-qubit pairs, including the 'I'-padded strings of 100-qubit labels.
+        """
+        from pygsti.errorgenpropagation.localstimerrorgen import bel_product_str, bel_str
+        for a, b in product('IXYZ', repeat=2):
+            PQ = stim.PauliString(a) * stim.PauliString(b)
+            self.assertEqual(bel_product_str(a, b), bel_str(PQ / PQ.sign))
+        rng = np.random.default_rng(2024)
+        for num_qubits in (2, 3, 5, 100):
+            for _ in range(200):
+                strs = [''.join(rng.choice(list('IXYZ'), size=num_qubits, p=[0.7, 0.1, 0.1, 0.1])) for _ in range(2)]
+                PQ = stim.PauliString(strs[0]) * stim.PauliString(strs[1])
+                self.assertEqual(bel_product_str(*strs), bel_str(PQ / PQ.sign))
+        # the product with the identity and of a Pauli with itself
+        self.assertEqual(bel_product_str('IXYZ', 'IIII'), 'IXYZ')
+        self.assertEqual(bel_product_str('IXYZ', 'IXYZ'), 'IIII')
+
 #helper functions
 
 def select_random_items_from_multiple_lists(input_lists, num_items, seed=None):

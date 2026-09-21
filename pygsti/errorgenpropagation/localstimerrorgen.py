@@ -8,6 +8,7 @@
 #***************************************************************************************************
 
 from __future__ import annotations
+import functools as _functools
 from typing import Any, Iterable, Optional, Sequence, Union
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel, GlobalElementaryErrorgenLabel as _GEEL,\
 LocalElementaryErrorgenLabel as _LEEL
@@ -32,6 +33,45 @@ def bel_str(pauli: stim.PauliString) -> str:
     Hermitian Paulis.
     """
     return str(pauli)[1:].replace('_', 'I')
+
+
+# The single-qubit Pauli multiplication table with the phase dropped (X Y = iZ -> 'Z', etc.),
+# written out for all 16 ordered pairs.
+_BEL_PRODUCTS = {('I', 'I'): 'I', ('I', 'X'): 'X', ('I', 'Y'): 'Y', ('I', 'Z'): 'Z',
+                 ('X', 'I'): 'X', ('X', 'X'): 'I', ('X', 'Y'): 'Z', ('X', 'Z'): 'Y',
+                 ('Y', 'I'): 'Y', ('Y', 'X'): 'Z', ('Y', 'Y'): 'I', ('Y', 'Z'): 'X',
+                 ('Z', 'I'): 'Z', ('Z', 'X'): 'Y', ('Z', 'Y'): 'X', ('Z', 'Z'): 'I'}
+
+
+def _build_bel_product_table() -> bytes:
+    # bel_product_str: the bytewise XOR of the ASCII codes of two Pauli letters identifies the
+    # pair up to order (the seven values 0x00, 0x11, 0x10, 0x13, 0x01, 0x02, 0x03 are distinct,
+    # and the product is order-independent once the phase is dropped), so one 256-byte
+    # translation table maps the XOR of the two strings to the product string.
+    table = bytearray(range(256))
+    for (a, b), c in _BEL_PRODUCTS.items():
+        table[ord(a) ^ ord(b)] = ord(c)
+    return bytes(table)
+
+
+_BEL_PRODUCT_TABLE = _build_bel_product_table()
+
+
+@_functools.lru_cache(maxsize=2**16)
+def bel_product_str(bel_str_1: str, bel_str_2: str) -> str:
+    """
+    The `bel_str` form of the product of two Paulis given in `bel_str` form (equal length,
+    characters 'I', 'X', 'Y', 'Z'), with the phase dropped: `bel_product_str('XI', 'YZ')` ->
+    `'ZZ'` (since X Y = iZ). The product is computed character-wise on the strings (XOR of the
+    ASCII codes plus a translation table), which is several times cheaper than multiplying
+    the `stim.PauliString`s and rendering the result, in particular at large qubit counts
+    where rendering is linear in the number of qubits. Results are memoized (python caches
+    the hash of a string, so a repeated pair costs a dictionary lookup): the same pairs of
+    Paulis recur heavily in the commutator and composition drivers on few qubits.
+    """
+    n = len(bel_str_1)
+    return (int.from_bytes(bel_str_1.encode(), 'big') ^ int.from_bytes(bel_str_2.encode(), 'big')
+            ).to_bytes(n, 'big').translate(_BEL_PRODUCT_TABLE).decode()
 
 
 def bel_less_than(pauli1: stim.PauliString, pauli2: stim.PauliString) -> bool:

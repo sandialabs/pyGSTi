@@ -26,7 +26,7 @@ from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_str as _bel_str, canonicalize_errorgen_layer as _canonicalize_errorgen_layer
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_str as _bel_str, bel_product_str as _bel_product_str, canonicalize_errorgen_layer as _canonicalize_errorgen_layer
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
@@ -735,10 +735,11 @@ def _truncated(errorgen_dict: dict[_LSE, _Rate], truncation_threshold: float) ->
 # Each emitter appends one term of a formula, coeff * G_{index(es)}, to `terms` as a
 # (LocalStimErrorgenLabel, rate) pair - or appends nothing when the term is zero. An index
 # is a *signed Pauli* w P, passed as
-#     (w, P)        as returned by `pauli_product`, `com` and `acom`,
-#     (w, P, s)     the same with the 'I'-padded string s = bel_str(P) already rendered
-#                   (used for the input Paulis, whose strings the input labels cache in
-#                   `_hashable_basis_element_labels`, so they are not rendered again), or
+#     (w, P)        as returned by the public `pauli_product`, `com` and `acom`,
+#     (w, P, s)     the same with the 'I'-padded string s = bel_str(P): the input Paulis carry
+#                   the strings their labels cache (`_index`), and the private `_prod`, `_com`,
+#                   `_acom` derive the product's string from its operands' strings
+#                   (`bel_product_str`) instead of rendering the stim product, or
 #     None          a vanishing (anti)commutator, as returned by `com`/`acom`.
 # Strings not supplied are rendered once here; they serve the identity check (a compare
 # against the all-'I' string `identity`) and the canonical ordering, and are handed to the
@@ -893,41 +894,49 @@ def _A(terms: _ErrorgenTerms, pauli_1: Optional[_SignedPauli], pauli_2: Optional
 # or None, which propagates: a vanishing (anti)commutator anywhere inside a nested index
 # makes the whole index, and hence the term, vanish.
 
-def _prod(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[tuple[complex, stim.PauliString]]:
+def _prod(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[_SignedPauli]:
     """
     Product of two signed Paulis, `(w v phase, PQ)` with `PQ` unsigned; None if either is None.
+    When both operands carry their string, the product's string is derived from them
+    (`bel_product_str`) and returned as a third element, so the emitters need not render `PQ`.
     """
     if pauli_1 is None or pauli_2 is None:
         return None
     PQ = pauli_1[1] * pauli_2[1]
     phase = PQ.sign
     PQ.sign = 1
+    if len(pauli_1) == 3 and len(pauli_2) == 3:
+        return (pauli_1[0] * pauli_2[0] * phase, PQ, _bel_product_str(pauli_1[2], pauli_2[2]))
     return (pauli_1[0] * pauli_2[0] * phase, PQ)
 
 
-def _com(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[tuple[complex, stim.PauliString]]:
+def _com(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[_SignedPauli]:
     """
     Commutator [pauli_1, pauli_2] of two signed Paulis as a signed Pauli (phase +-2, +-2i);
-    None if either is None or they commute.
+    None if either is None or they commute. String handling as in `_prod`.
     """
     if pauli_1 is None or pauli_2 is None or pauli_1[1].commutes(pauli_2[1]):
         return None
     PQ = pauli_1[1] * pauli_2[1]
     phase = 2 * PQ.sign
     PQ.sign = 1
+    if len(pauli_1) == 3 and len(pauli_2) == 3:
+        return (pauli_1[0] * pauli_2[0] * phase, PQ, _bel_product_str(pauli_1[2], pauli_2[2]))
     return (pauli_1[0] * pauli_2[0] * phase, PQ)
 
 
-def _acom(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[tuple[complex, stim.PauliString]]:
+def _acom(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[_SignedPauli]:
     """
     Anticommutator {pauli_1, pauli_2} of two signed Paulis as a signed Pauli (phase +-2, +-2i);
-    None if either is None or they anticommute.
+    None if either is None or they anticommute. String handling as in `_prod`.
     """
     if pauli_1 is None or pauli_2 is None or not pauli_1[1].commutes(pauli_2[1]):
         return None
     PQ = pauli_1[1] * pauli_2[1]
     phase = 2 * PQ.sign
     PQ.sign = 1
+    if len(pauli_1) == 3 and len(pauli_2) == 3:
+        return (pauli_1[0] * pauli_2[0] * phase, PQ, _bel_product_str(pauli_1[2], pauli_2[2]))
     return (pauli_1[0] * pauli_2[0] * phase, PQ)
 
 
@@ -4823,25 +4832,26 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
         conjugation_block(perp_1, stoch_2, 1.0)
         conjugation_block(perp_2, stoch_1, 1.0)
 
-    # block 4: r m S_R per stochastic pair, R the phase-stripped product of the two Paulis
-    # (`_S` drops the phase and the identity); accumulated one row at a time.
+    # block 4: r m S_R per stochastic pair, R the phase-stripped product of the two Paulis.
+    # The phase is irrelevant here, so R is built from the two cached strings alone
+    # (`bel_product_str`) and the label's stim Pauli parsed from the result - cheaper than
+    # the stim product plus rendering; accumulated one row at a time (R = I only for P = Q,
+    # which cannot occur across distinct keys of one dictionary but can across two).
+    def stochastic_block(stoch_a, stoch_b_from, scale):
+        for i, (lbl_1, rate_1) in enumerate(stoch_a):
+            sP = lbl_1._hashable_basis_element_labels[0]
+            terms = []
+            for lbl_2, rate_2 in stoch_b_from(i):
+                sR = _bel_product_str(sP, lbl_2._hashable_basis_element_labels[0])
+                if sR != identity:
+                    terms.append((_LSE('S', (stim.PauliString(sR),), pauli_str_reps=(sR,)), scale * rate_1 * rate_2))
+            for lbl, rate in terms:
+                product[lbl] = get(lbl, 0) + rate
+
     if same:
-        for i, (lbl_1, rate_1) in enumerate(stoch_1):
-            P = _index(lbl_1, 0)
-            terms = []
-            for j in range(i + 1, len(stoch_1)):
-                lbl_2, rate_2 = stoch_1[j]
-                _S(terms, _prod(P, _index(lbl_2, 0)), 2.0 * rate_1 * rate_2, identity)
-            for lbl, rate in terms:
-                product[lbl] = get(lbl, 0) + rate
+        stochastic_block(stoch_1, lambda i: stoch_1[i + 1:], 2.0)
     else:
-        for lbl_1, rate_1 in stoch_1:
-            P = _index(lbl_1, 0)
-            terms = []
-            for lbl_2, rate_2 in stoch_2:
-                _S(terms, _prod(P, _index(lbl_2, 0)), rate_1 * rate_2, identity)
-            for lbl, rate in terms:
-                product[lbl] = get(lbl, 0) + rate
+        stochastic_block(stoch_1, lambda i: stoch_2, 1.0)
 
     # the bleed of all blocks, -R_M L - R_L M, on the existing keys (nothing to do for an
     # operand without stochastic terms).
