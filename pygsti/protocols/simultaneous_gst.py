@@ -565,7 +565,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
                        dtype: DTypeLike = np.float64,
                        warn_on_target_model: bool = True) -> "SimultaneousGSTDesign":
         """
-        A copy of this design keeping only its `num_circuits` most informative circuits.
+        A copy of this design keeping the circuits selected by the D-optimal objective.
 
         Pass a model at a plausible noisy point, not a target model --
         :meth:`pygsti.tools.edesigntools.BlockDoptReducer.from_target_model` produces one,
@@ -575,7 +575,8 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         Parameters
         ----------
         model : Model
-            Whose parameters the reduced design should be informative about.
+            Defines the parameter sensitivities used in selection. The objective uses
+            unweighted probability derivatives; it is not multinomial Fisher information.
 
         num_circuits : int
             The budget.
@@ -587,7 +588,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         -------
         SimultaneousGSTDesign
             Its `selection` attribute holds the reducer and its score curve; read
-            ``selection.scores`` to see where the budget stopped buying information.
+            ``selection.scores`` to inspect the objective as the budget grows.
         """
         reducer = _BlockDoptReducer(model, ridge=ridge, dtype=dtype,
                                     warn_on_target_model=warn_on_target_model)

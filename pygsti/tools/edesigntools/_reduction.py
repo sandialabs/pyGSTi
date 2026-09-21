@@ -12,6 +12,7 @@ Pluggable rules for cutting an experiment design down to a budget
 
 from __future__ import annotations
 
+import copy as _copy
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Optional, Sequence, Union
 
 import numpy as _np
@@ -46,10 +47,10 @@ class CircuitSelection(_NicelySerializable):
         meaningful order returns them in any order and should say so in `metadata`.
 
     scores : array-like, optional
-        One float per kept circuit.  The meaning belongs to the reducer -- see
-        `score_name` -- but for a greedy reducer reporting a cumulative objective it is
-        nondecreasing, and the point at which it flattens is the point past which the
-        budget is buying little.  Read it before trusting a budget.
+        A one-dimensional array with one float per kept circuit. The reducer defines
+        their meaning through `score_name`. For a greedy reducer reporting a
+        nondecreasing cumulative objective, a flattening score curve indicates that
+        additional circuits contribute little to that objective.
 
     score_name : str, optional
         What `scores` measures, short enough to label an axis with.
@@ -61,8 +62,10 @@ class CircuitSelection(_NicelySerializable):
     Attributes
     ----------
     reducer : DesignReducer or None
-        Stamped by :meth:`DesignReducer.select`, so a selection carries the policy that
-        produced it.  None if the selection was built by hand.
+        A deep copy of the reducer, stamped by :meth:`DesignReducer.select` so later
+        changes to the original reducer's configuration do not alter this record.
+        None if the selection was built by hand. See :class:`CallableReducer` for the
+        limitation on functions that depend on mutable state outside the reducer.
     """
 
     def __init__(self, circuits: Iterable[Circuit], scores: Optional[Sequence[float]] = None,
@@ -101,25 +104,33 @@ class CircuitSelection(_NicelySerializable):
 class DesignReducer(_NicelySerializable):
     """A rule for choosing which of an experiment design's circuits are worth keeping.
 
-    Subclasses implement :meth:`_select` and nothing else.  Callers use :meth:`select`
-    (to see the reducer's diagnostics) or :meth:`reduce` (to get a smaller design), both
-    of which validate what `_select` returned before it can do any damage.
+    Subclasses implement :meth:`_select` to choose circuits. Callers use :meth:`select`
+    for diagnostics or :meth:`reduce` for a smaller design. Both validate the selection.
 
-    A subclass defined anywhere -- in a user's own package, in a notebook module -- works
-    with no registration step, and serializes and reloads correctly, because
     :class:`~pygsti.baseobjs.nicelyserializable.NicelySerializable` records the defining
-    module and class name and re-imports on load.
+    module and class name and re-imports on load. A subclass needs no registration,
+    but it must be available in an importable module in the loading process. Classes
+    defined interactively do not provide that guarantee. Subclasses with configuration
+    must implement `_to_nice_serialization` and `_from_nice_serialization` to save and
+    restore it; the default loader only calls the constructor with no arguments.
 
     Reducers that need a model, a random seed or a weighting take it at construction: a
     reducer is a fully configured policy, so that :meth:`select` has the same signature
     whatever the reducer needs to do its job.
+
+    Each selection stores a deep copy of the reducer. Instance state must support
+    :func:`copy.deepcopy`, including independent copies of mutable configuration.
+    Subclasses holding resources that cannot be copied may implement `__deepcopy__`
+    to retain the configuration needed to describe their selection. Function closures
+    and mutable global variables are not copied; put durable configuration on the
+    instance instead.
 
     A subclass may use no model, one model, or several noisy models. The subclass
     handles model inputs, aggregation of per-model scores, and serialization of its
     model configuration; the base class does not inspect the number of models.
     """
 
-    # -- the one method a subclass writes ----------------------------------- #
+    # -- the selection rule ------------------------------------------------- #
 
     def _select(self, design: ExperimentDesign, num_circuits: Optional[int]) -> CircuitSelection:
         """Choose circuits from `design`; return a :class:`CircuitSelection`.
@@ -154,6 +165,7 @@ class DesignReducer(_NicelySerializable):
         Returns
         -------
         CircuitSelection
+            Includes a deep copy of this reducer taken after `_select` returns.
         """
         candidates = list(design.all_circuits_needing_data)
         if num_circuits is not None:
@@ -164,16 +176,21 @@ class DesignReducer(_NicelySerializable):
 
         selection = self._select(design, num_circuits)
         self._validate(selection, candidates, num_circuits)
-        selection.reducer = self
+        selection.reducer = _copy.deepcopy(self)
         selection.metadata.setdefault('num_candidates', len(candidates))
         return selection
 
     def reduce(self, design: ExperimentDesign, num_circuits: Optional[int] = None) -> ExperimentDesign:
         """A copy of `design` keeping only the circuits this reducer selects.
 
-        Works on any design with `all_circuits_needing_data` and `truncate_to_circuits`,
-        which is every :class:`~pygsti.protocols.ExperimentDesign`.  Designs that are
-        fitted to a model also expose this as `design.reduce_with(reducer, n)`.
+        Supports flat :class:`~pygsti.protocols.ExperimentDesign` objects with no child
+        experiments. Designs with children, such as `CombinedExperimentDesign` and
+        `SimultaneousExperimentDesign`, raise `NotImplementedError`: truncating their
+        root circuit list would leave the children inconsistent. You may still call
+        :meth:`select` on their root circuits. `SimultaneousGSTDesign` is supported;
+        its generation sub-designs are not child experiments.
+
+        Designs fitted to a model also expose this as `design.reduce_with(reducer, n)`.
 
         Parameters
         ----------
@@ -192,6 +209,15 @@ class DesignReducer(_NicelySerializable):
             attribute holds the :class:`CircuitSelection` that produced it.
         """
         selection = self.select(design, num_circuits)
+        return self._apply_selection(design, selection)
+
+    def _apply_selection(self, design: ExperimentDesign, selection: CircuitSelection) -> ExperimentDesign:
+        """Apply a validated result of :meth:`select`, preserving its provenance."""
+        if design.keys():
+            raise NotImplementedError(
+                "DesignReducer.reduce does not support designs with child experiments; "
+                "root-only truncation would leave their circuit requirements inconsistent. "
+                "Use select to inspect the root circuit selection without applying it.")
         reduced = design.truncate_to_circuits(selection.circuits)
         # Only where the class declared the member: it is written out as a
         # 'serialized-object' auxfile, and setting it on a design that has not registered
@@ -295,9 +321,13 @@ class DesignReducer(_NicelySerializable):
                 "`bulk_dprobs` deduplicates and reorders its input, so row block i "
                 "belongs to `list(jac_dict)[i]`.")
 
-        if selection.scores is not None and len(selection.scores) != len(chosen):
-            raise ValueError(f"{me}._select returned {len(selection.scores)} scores for "
-                             f"{len(chosen)} circuits; they must correspond one-to-one.")
+        if selection.scores is not None:
+            if selection.scores.ndim != 1:
+                raise ValueError(f"{me}._select returned scores with shape {selection.scores.shape}; "
+                                 "scores must be one-dimensional with one scalar per circuit.")
+            if len(selection.scores) != len(chosen):
+                raise ValueError(f"{me}._select returned {len(selection.scores)} scores for "
+                                 f"{len(chosen)} circuits; they must correspond one-to-one.")
 
         if len(chosen) == 0 and num_circuits != 0 and candidates:
             raise ValueError(
@@ -319,10 +349,12 @@ class CallableReducer(DesignReducer):
     The low-ceremony option, for a one-off reduction in a notebook or a test.  `f` may
     return a :class:`CircuitSelection` or a bare sequence of circuits.
 
-    Serialization records `f` by module and qualified name, so -- unlike a real
-    `DesignReducer` subclass -- it does not round-trip for a lambda, a closure, or a
-    function defined interactively.  If a reduced design needs to carry a durable record
-    of how it was reduced, subclass :class:`DesignReducer` instead.
+    Serialization records `f` by module and qualified name. Reloading requires that
+    function to be importable by name, which excludes lambdas, closures, and functions
+    defined interactively. Deep-copying the reducer does not copy a function's closure
+    or mutable global state, so these remain shared with the selection's reducer.
+    For a durable record, use an importable :class:`DesignReducer` subclass whose
+    configuration is stored on the instance and covered by its serialization methods.
 
     Parameters
     ----------

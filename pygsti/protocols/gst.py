@@ -194,7 +194,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         GateSetTomographyDesign
             Of the same class as `self`.  Its `selection` attribute holds the
             :class:`~pygsti.tools.edesigntools.CircuitSelection` that produced it -- read
-            `selection.scores` to see where the budget stopped buying information.
+            `selection.scores` to inspect the reducer's objective as the budget grows.
 
         Notes
         -----

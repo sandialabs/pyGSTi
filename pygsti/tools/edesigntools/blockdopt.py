@@ -154,7 +154,7 @@ def block_linear_dopt(A: _ArrayLike, block_size: int, max_blocks: int) -> tuple[
 
     Notes
     -----
-    Write `M_S = I_m + sum_{i in S} A_i A_i^T` for the ridged information matrix
+    Write `M_S = I_m + sum_{i in S} A_i A_i^T` for the regularized Gram matrix
     of the design chosen so far, and `R_S` for its upper-triangular factor,
     `R_S^T R_S = M_S`.  By the matrix determinant lemma,
 
@@ -191,7 +191,7 @@ def block_linear_dopt(A: _ArrayLike, block_size: int, max_blocks: int) -> tuple[
     Those swaps permute the survivors, so ties are resolved by the lowest
     *original* candidate index.
 
-    The identity block in `P_i` is a unit ridge on the information matrix.
+    The identity block in `P_i` is a unit ridge on the Gram matrix.
     Callers who want a different ridge `lambda` should scale `A` by
     `lambda**-0.5` before calling, which turns the objective into
     `0.5 * logdet(lambda * I + J_S^T J_S)` up to an additive constant.  Because
@@ -291,7 +291,7 @@ def _gram_blocks(A: _ArrayLike, block_size: int) -> _np.ndarray:
 
 
 def _half_logdet(M: _np.ndarray) -> _np.ndarray:
-    """Batched `0.5 * logdet(M)` over a stack of ridged information matrices.
+    """Batched `0.5 * logdet(M)` over a stack of regularized Gram matrices.
 
     Every `M` handed here is `I_m` plus a sum of Gram matrices, so it is
     symmetric positive definite with eigenvalues at least 1.  With `L` its
@@ -365,8 +365,8 @@ def greedy_path_log_volumes(A: _ArrayLike, block_size: int, block_pivots: Sequen
             `out[k] = 0.5 * logdet(I_m + sum_{i in block_pivots[:k]} A_i A_i^T)`
 
         so `out[0] == 0` and `out[1:]` is the score curve `block_linear_dopt`
-        returns for the same order.  Use it to see where a
-        budget stops buying information, or to score a selection the kernel did
+        returns for the same order.  Use it to see where
+        objective gains become small, or to score a selection the kernel did
         not produce (a random subset, say) on the same footing.
     """
     grams = _gram_blocks(A, block_size)
@@ -426,28 +426,33 @@ def jacobian_dict_to_array(jac_dict: Mapping[Circuit, Mapping[Any, _np.ndarray]]
 
 def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
                            seed: Union[int, _np.random.Generator, None] = None) -> Model:
-    """A copy of `model` with every error-generator rate set to a seeded value near `scale`.
+    """A copy of `model` with seeded Hamiltonian and stochastic error-generator coefficients.
 
     D-optimal selection needs a Jacobian that is representative of the model at a
     plausible noisy point.  Evaluating it at a *target* model does not give one,
     and the reason is easy to miss.
 
-    In the H+S parameterization, stochastic rates use `param_mode='cholesky'`
+    In the H+S parameterization, stochastic coefficients use `param_mode='cholesky'`
     (see `pygsti/modelmembers/operations/lindbladerrorgen.py`): the free
-    parameter is `theta` with `rate = theta**2`, which pyGSTi reports under names
-    like `'sqrt(X stochastic coefficient)'`.  So `d(rate)/d(theta) = 2*theta`,
+    parameter is `theta` with `coefficient = theta**2`, which pyGSTi reports under names
+    like `'sqrt(X stochastic coefficient)'`.  So `d(coefficient)/d(theta) = 2*theta`,
     which is **exactly zero** at the target model.  Every stochastic column of
     the Jacobian vanishes, and the selector optimizes as if those parameters did
     not exist.
 
-    Perturbing the raw parameter vector -- `model.from_vector(v + 1e-4 * noise)`
-    -- does not fix this.  It puts `theta` at `1e-4`, so those columns sit at
-    `2e-4` times their rate-derivative: still four orders of magnitude below the
-    Hamiltonian columns and far below the unit ridge, hence still invisible.
-    Setting the *rate* to `1e-3` puts `theta` near `0.03` and the columns within
-    a factor of ten of the Hamiltonian ones, which is what this function does.
-    (Measured on `smq1Q_XYI` H+S: median stochastic column norm 6e-7 at the
-    target, 6e-4 after a 1e-4 parameter-vector nudge, 0.24 after this.)
+    Perturbing the raw parameter vector by `1e-4` puts `theta` near `1e-4`
+    but the stochastic coefficient near `1e-8`, so the stochastic and
+    Hamiltonian coefficients would be sampled at different scales.
+    Setting the *coefficient* near `1e-3` puts `theta` near `0.03`, away from
+    the zero-derivative point.
+
+    For each member, Hamiltonian coefficients are sampled independently and
+    all diagonal stochastic (S) coefficients share one positive sample.
+    Correlation (C) and active (A) coefficients are set to zero.  For a full
+    CPTPLND error generator this produces a positive diagonal non-Hamiltonian
+    coefficient matrix while retaining the full parameterization: derivatives
+    with respect to off-diagonal Cholesky parameters remain nonzero.  The
+    common S coefficient also respects tied depolarizing parameterizations.
 
     Parameters
     ----------
@@ -455,8 +460,11 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
         Not modified; a copy is returned.
 
     scale : float, optional (default 1e-3)
-        Rates are drawn uniformly from `[0, scale)`.  This is a rate, not a
-        parameter value.
+        Positive, finite scale for the error-generator coefficients.
+        Hamiltonian coefficients are drawn uniformly from `[0, scale)`;
+        the common stochastic coefficient is drawn from `(0, scale]`.
+        This is a coefficient magnitude, not a free-parameter value or the
+        transformed channel error rate returned by `error_rates`.
 
     seed : int or numpy.random.Generator, optional
         Anything `numpy.random.default_rng` accepts.  Pass one, or the selection
@@ -465,14 +473,17 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
     Returns
     -------
     Model
-        A copy of `model` with perturbed rates.
+        A copy of `model` with the sampled coefficients and its original
+        parameterization.
 
     Notes
     -----
     Coefficients are set with `truncate=False`, so a member that cannot
-    represent a rate of this sign or size raises rather than being silently
+    represent coefficients of this sign or size raises rather than being silently
     clipped.  Members with no error generator are left alone.
     """
+    if not _np.isfinite(scale) or scale <= 0:
+        raise ValueError("scale must be positive and finite.")
     perturbed = model.copy()
     rng = _np.random.default_rng(seed)
     for _, member in perturbed._iter_parameterized_objs():
@@ -483,18 +494,31 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
         coefficients = getter()
         if not coefficients:
             continue
-        setter({lbl: scale * rng.random() for lbl in coefficients}, truncate=False)
+        stochastic = scale * (1.0 - rng.random())
+        sampled = {}
+        for lbl in coefficients:
+            if lbl.errorgen_type == 'H':
+                sampled[lbl] = scale * rng.random()
+            elif lbl.errorgen_type == 'S':
+                sampled[lbl] = stochastic
+            else:  # C and A are off-diagonal non-Hamiltonian coefficients.
+                sampled[lbl] = 0.0
+        setter(sampled, truncate=False)
     return perturbed
 
 
 def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuits: Optional[int] = None, *,
                           ridge: float = 1.0, dtype: _DTypeLike = _np.float64) -> tuple[list[Circuit], _np.ndarray]:
-    """Order circuits by how much information each adds about `model`'s parameters.
+    """Order circuits by their contribution to probability-Jacobian sensitivity.
 
     Greedy D-optimal selection over the per-circuit blocks of `model`'s Jacobian:
     each step takes the circuit that most increases
     `0.5 * logdet(ridge * I + J_S^T J_S)`, where `J_S` stacks the Jacobian rows of
     the circuits chosen so far.
+
+    Outcomes receive equal weight. This objective measures local sensitivity in the
+    supplied model's parameter coordinates; it is not multinomial Fisher information,
+    which weights outcome derivatives by inverse probabilities and shot counts.
 
     Pass a model that is *at* a plausible noisy point, not a target model -- see
     :func:`perturb_errorgen_rates`, which explains why and is the usual way to
@@ -515,7 +539,7 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
         whole priority order and lets a caller pick a budget afterwards.
 
     ridge : float, optional (default 1.0)
-        Weight of the identity prior on the information matrix.  Implemented by
+        Weight of the identity regularizer on the Jacobian Gram matrix. Implemented by
         scaling `J^T` by `ridge**-0.5`, which is exact up to an additive constant
         and so does not change the ordering; the returned scores are for the
         scaled matrix, i.e. `0.5 * logdet(I + J_S^T J_S / ridge)`.
@@ -527,12 +551,12 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
     Returns
     -------
     ranked : list of Circuit
-        In selection order: `ranked[0]` is the single most informative circuit,
+        In selection order: `ranked[0]` maximizes the single-circuit objective,
         and `ranked[:k]` is the greedy choice of `k`.
 
     scores : numpy.ndarray
         The cumulative objective after each pick, one per ranked circuit.
-        Nondecreasing; where it flattens, more circuits are buying little.
+        Nondecreasing; where it flattens, adding circuits gives little objective gain.
 
     Notes
     -----
@@ -549,7 +573,11 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
     """
     if ridge <= 0:
         raise ValueError(f"rank_circuits_by_dopt: ridge must be positive, got {ridge}.")
+    if max_circuits is not None and max_circuits < 0:
+        raise ValueError(f"rank_circuits_by_dopt: max_circuits must be nonnegative, got {max_circuits}.")
     unique = list(dict.fromkeys(circuits))
+    if not unique or max_circuits == 0:
+        return [], _np.empty(0, dtype=_np.float64)
     jac_dict = model.sim.bulk_dprobs(unique)
     jacobian, block_size = jacobian_dict_to_array(jac_dict)
     # bulk_dprobs may reorder and deduplicate, so block i is jac_keys[i], not unique[i].
@@ -568,16 +596,16 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
 
 def reduce_design_by_dopt(design: ExperimentDesign, model: Model, num_circuits: int, *,
                           ridge: float = 1.0, dtype: _DTypeLike = _np.float64) -> tuple[ExperimentDesign, _np.ndarray]:
-    """A copy of `design` keeping only its `num_circuits` most informative circuits.
+    """A copy of `design` keeping the circuits selected by the D-optimal objective.
 
     Ranks `design.all_circuits_needing_data` with :func:`rank_circuits_by_dopt`
     and truncates.  Stitched simultaneous-GST designs run O(10,000) circuits to
     fit models with O(100) parameters; this is the postprocessing step that cuts
     that down.
 
-    Equivalent to `BlockDoptReducer(model, ...).reduce(design, num_circuits)`, and
-    implemented that way.  Prefer the reducer object when you want the selection's
-    full diagnostics, when the design should record how it was reduced, or when
+    Equivalent to `BlockDoptReducer(model, ...).reduce(design, num_circuits)`, with
+    the score curve also returned. Prefer the reducer object for the selection's
+    full diagnostics or when
     D-optimality is one of several rules you are comparing; see
     :class:`~pygsti.tools.edesigntools.DesignReducer`.
 
@@ -589,7 +617,10 @@ def reduce_design_by_dopt(design: ExperimentDesign, model: Model, num_circuits: 
     Parameters
     ----------
     design : ExperimentDesign
-        Anything with `all_circuits_needing_data` and `truncate_to_circuits`.
+        A design with `all_circuits_needing_data` and `truncate_to_circuits`, and no
+        child experiments. Designs with experiment-tree children are rejected by
+        :meth:`DesignReducer.reduce`; generation sub-designs in a
+        `SimultaneousGSTDesign` are supported.
         The result is whatever that method returns, so a `SimultaneousGSTDesign`
         stays one.  Not modified.
 
@@ -611,12 +642,12 @@ def reduce_design_by_dopt(design: ExperimentDesign, model: Model, num_circuits: 
         The cumulative objective after each kept circuit.  Read it before
         trusting the budget: this is a *global* budget, so nothing stops it from
         spending everything on one germ power and leaving another nearly empty if
-        that germ power's circuits are individually less informative.  Where the
-        curve has flattened, the budget is past the point of buying much.
+        that germ power's circuits contribute less to the objective. A flat score
+        curve indicates small gains in unweighted probability sensitivity.
     """
     reducer = BlockDoptReducer(model, ridge=ridge, dtype=dtype, warn_on_target_model=False)
     selection = reducer.select(design, num_circuits)
-    reduced = design.truncate_to_circuits(selection.circuits)
+    reduced = reducer._apply_selection(design, selection)
     return reduced, selection.scores
 
 
@@ -657,7 +688,7 @@ def _looks_like_a_target_model(model: Model) -> bool:
 
 
 class BlockDoptReducer(_DesignReducer):
-    """Keep the circuits that say the most about a model's parameters.
+    """Select circuits by regularized, unweighted probability-Jacobian sensitivity.
 
     Greedy block D-optimal selection: each step takes the circuit that most increases
     `0.5 * logdet(ridge * I + J_S^T J_S)`, where `J_S` stacks the Jacobian rows of the
@@ -665,10 +696,14 @@ class BlockDoptReducer(_DesignReducer):
     `SimultaneousGSTDesign.reduce_by_dopt` use, and the reference against which another
     :class:`~pygsti.tools.edesigntools.DesignReducer` can be judged.
 
+    The objective uses the model's parameter coordinates and equal outcome weights.
+    It does not include the probability and shot weights of multinomial Fisher
+    information. See :func:`rank_circuits_by_dopt` for the precise score convention.
+
     Parameters
     ----------
     model : Model
-        Whose parameters the reduced design should be informative about.  This must be a
+        Defines the parameter sensitivities used in selection. This must be a
         model at a *plausible noisy point*, not a target model -- see
         :meth:`from_target_model`, which is the usual way to get one, and
         :func:`perturb_errorgen_rates`, which explains why at length.  The model's
@@ -676,7 +711,7 @@ class BlockDoptReducer(_DesignReducer):
         meaningful as its parameters are the ones you care about estimating.
 
     ridge : float, optional (default 1.0)
-        Weight of the identity prior on the information matrix.
+        Weight of the identity regularizer on the Jacobian Gram matrix.
 
     dtype : numpy dtype, optional (default numpy.float64)
         Working precision.  float32 halves the memory and changes selections at rounding

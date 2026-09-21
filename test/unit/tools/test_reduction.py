@@ -10,7 +10,7 @@ The D-optimal reducer built on this interface is tested in test_blockdopt.py.
 import numpy as np
 
 from pygsti.circuits.circuit import Circuit
-from pygsti.protocols import CircuitListsDesign
+from pygsti.protocols import CircuitListsDesign, CombinedExperimentDesign, SimultaneousExperimentDesign
 from pygsti.tools.edesigntools import CallableReducer, CircuitSelection, DesignReducer
 
 from ..util import BaseCase
@@ -53,6 +53,28 @@ class _ReturnsWhatever(DesignReducer):
         return self.payload
 
 
+class _ConfiguredFirstK(_FirstK):
+    """A serializable policy with nested mutable configuration."""
+
+    def __init__(self, configuration):
+        super().__init__()
+        self.configuration = configuration
+
+    def _select(self, design, num_circuits):
+        selection = super()._select(design, num_circuits)
+        selection.scores *= self.configuration['scores']['scale'][0]
+        return selection
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state['configuration'] = self.configuration
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['configuration'])
+
+
 class SelectionTester(BaseCase):
     def test_a_selection_reports_its_length_and_keeps_circuit_order(self):
         circuits = _circuits(4)
@@ -86,8 +108,24 @@ class SelectContractTester(BaseCase):
     def test_the_selection_is_stamped_with_the_reducer_and_the_candidate_count(self):
         reducer = _FirstK()
         selection = reducer.select(self.design, 4)
-        self.assertIs(selection.reducer, reducer)
+        self.assertIsInstance(selection.reducer, _FirstK)
+        self.assertIsNot(selection.reducer, reducer)
         self.assertEqual(selection.metadata['num_candidates'], 10)
+
+    def test_the_selection_preserves_nested_reducer_configuration_after_mutation(self):
+        configuration = {'scores': {'scale': [2.0]}}
+        reducer = _ConfiguredFirstK(configuration)
+        selection = reducer.select(self.design, 3)
+        configuration['scores']['scale'][0] = 9.0
+        reducer.configuration['new_option'] = True
+
+        self.assertEqual(selection.reducer.configuration, {'scores': {'scale': [2.0]}})
+        self.assertArraysAlmostEqual(selection.scores, [0.0, 2.0, 4.0])
+        # Saving after mutation must describe the policy that produced these scores.
+        restored = CircuitSelection.loads(selection.dumps())
+        self.assertEqual(restored.reducer.configuration, {'scores': {'scale': [2.0]}})
+        self.assertArraysAlmostEqual(restored.reducer.select(self.design, 3).scores,
+                                     [0.0, 2.0, 4.0])
 
     def test_a_reducer_may_report_its_own_candidate_count(self):
         """`setdefault`, not `[]=`: a reducer that counts differently is not overwritten."""
@@ -163,6 +201,18 @@ class ValidationTester(BaseCase):
         message = self._assert_raises_naming_the_subclass(payload)
         self.assertIn('scores', message)
 
+    def test_matrix_scores_are_rejected_even_when_the_first_dimension_matches(self):
+        payload = CircuitSelection(_circuits(1), scores=[[1.0, 2.0]])
+        message = self._assert_raises_naming_the_subclass(payload)
+        self.assertIn('one-dimensional', message)
+        self.assertIn('(1, 2)', message)
+
+    def test_scalar_scores_are_rejected_with_a_contract_error(self):
+        payload = CircuitSelection(_circuits(1), scores=1.0)
+        message = self._assert_raises_naming_the_subclass(payload)
+        self.assertIn('one-dimensional', message)
+        self.assertIn('scores', message)
+
     def test_returning_nothing_when_asked_for_something_is_rejected(self):
         message = self._assert_raises_naming_the_subclass(CircuitSelection([]))
         self.assertIn('no circuits', message)
@@ -192,6 +242,21 @@ class ReduceTester(BaseCase):
         """`reduce` goes through `select`, so a bad subclass cannot reach truncation."""
         with self.assertRaises(ValueError):
             _ReturnsWhatever(CircuitSelection(_circuits(9))).reduce(self.design, 2)
+
+    def test_reduce_rejects_designs_with_experiment_tree_children(self):
+        for design in (CombinedExperimentDesign({'child': self.design}),
+                       SimultaneousExperimentDesign([self.design])):
+            with self.subTest(design=type(design).__name__):
+                with self.assertRaisesRegex(NotImplementedError, 'child experiments'):
+                    _FirstK().reduce(design, 3)
+                self.assertEqual(len(design.all_circuits_needing_data), 10)
+                self.assertEqual(len(next(design.items())[1].all_circuits_needing_data), 10)
+
+    def test_select_can_inspect_a_hierarchical_design_without_applying_it(self):
+        design = CombinedExperimentDesign({'child': self.design})
+        selection = _FirstK().select(design, 3)
+        self.assertEqual(list(selection.circuits), _circuits(3))
+        self.assertEqual(len(design['child'].all_circuits_needing_data), 10)
 
     def test_a_design_that_does_not_record_provenance_gets_no_stray_attribute(self):
         """`selection` is written as a 'serialized-object' auxfile by the classes that

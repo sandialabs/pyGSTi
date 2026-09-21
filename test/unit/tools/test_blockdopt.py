@@ -657,6 +657,69 @@ class PerturbErrorgenRatesTester(_ModelFixture, BaseCase):
                  / small.to_vector()[self.is_stochastic])
         self.assertArraysAlmostEqual(ratio, np.full(ratio.shape, 10.0), places=6)
 
+    def test_cptplnd_factory_preserves_physicality_and_full_sensitivity(self):
+        from pygsti.modelpacks import smq1Q_XYI
+        from pygsti.tools.jamiolkowski import fast_jamiolkowski_iso_std
+
+        target = smq1Q_XYI.target_model('CPTPLND')
+        before = target.to_vector().copy()
+        samples = []
+        for seed in (0, 1):
+            with self.subTest(seed=seed):
+                model = bd.BlockDoptReducer.from_target_model(target, seed=seed).model
+                repeated = bd.perturb_errorgen_rates(target, seed=seed)
+                self.assertArraysEqual(model.to_vector(), repeated.to_vector())
+                self.assertEqual(model.num_params, target.num_params)
+                self.assertArraysEqual(model.parameter_labels, target.parameter_labels)
+                for label, op in model.operations.items():
+                    choi = fast_jamiolkowski_iso_std(op.to_dense(), model.basis)
+                    self.assertGreaterEqual(np.linalg.eigvalsh(choi).min(), -1e-12, label)
+                    self.assertArraysAlmostEqual(op.to_dense()[0], [1., 0., 0., 0.], places=12)
+                    # A diagonal noise sample must still expose all 12 gate
+                    # parameters, including off-diagonal Cholesky directions.
+                    singular_values = np.linalg.svd(op.deriv_wrt_params(), compute_uv=False)
+                    self.assertEqual(len(singular_values), 12)
+                    self.assertGreater(singular_values.min(), 1e-5, label)
+                samples.append(model.to_vector().copy())
+        self.assertFalse(np.allclose(samples[0], samples[1]))
+        self.assertArraysEqual(target.to_vector(), before)
+
+    def test_cptplnd_scale_changes_coefficients_linearly(self):
+        from pygsti.modelpacks import smq1Q_XYI
+
+        target = smq1Q_XYI.target_model('CPTPLND')
+        small = bd.perturb_errorgen_rates(target, scale=1e-4, seed=0)
+        large = bd.perturb_errorgen_rates(target, scale=1e-2, seed=0)
+        for label in target.operations:
+            small_coeffs = small.operations[label].errorgen_coefficients()
+            large_coeffs = large.operations[label].errorgen_coefficients()
+            self.assertArraysAlmostEqual(
+                np.array(list(large_coeffs.values())),
+                100 * np.array(list(small_coeffs.values())), places=12)
+            stochastic = [value for key, value in small_coeffs.items() if key.errorgen_type == 'S']
+            self.assertTrue(all(0 < value <= 1e-4 for value in stochastic))
+
+    def test_depolarizing_parameterizations_preserve_tied_rates(self):
+        from pygsti.modelpacks import smq1Q_XYI
+
+        for parameterization in ('H+D', 'D'):
+            with self.subTest(parameterization=parameterization):
+                target = smq1Q_XYI.target_model(parameterization)
+                model = bd.perturb_errorgen_rates(target, seed=0)
+                self.assertArraysEqual(model.parameter_labels, target.parameter_labels)
+                for label, op in model.operations.items():
+                    stochastic = [value for key, value in op.errorgen_coefficients().items()
+                                  if key.errorgen_type == 'S']
+                    self.assertEqual(len(stochastic), 3)
+                    self.assertTrue(all(value == stochastic[0] for value in stochastic), label)
+                    self.assertGreater(stochastic[0], 0)
+
+    def test_nonpositive_or_nonfinite_scale_is_rejected(self):
+        for scale in (0, -1e-3, np.nan, np.inf, -np.inf):
+            with self.subTest(scale=scale):
+                with self.assertRaisesRegex(ValueError, 'scale'):
+                    bd.perturb_errorgen_rates(self.target, scale=scale, seed=0)
+
 
 class RankCircuitsTester(_ModelFixture, BaseCase):
     @classmethod
@@ -686,6 +749,15 @@ class RankCircuitsTester(_ModelFixture, BaseCase):
         self.assertEqual(len(ranked), len(set(self.circuits)))
         self.assertEqual(len(ranked), len(set(ranked)))
 
+    def test_empty_candidates_and_zero_budget_do_not_simulate(self):
+        with unittest.mock.patch.object(self.model.sim, 'bulk_dprobs',
+                                        side_effect=AssertionError('No derivatives needed')):
+            for circuits, budget in (([], None), ([], 3), (self.circuits, 0)):
+                with self.subTest(circuits=len(circuits), budget=budget):
+                    ranked, scores = bd.rank_circuits_by_dopt(self.model, circuits, budget)
+                    self.assertEqual(ranked, [])
+                    self.assertEqual(scores.shape, (0,))
+
     def test_scores_are_the_log_volume_curve_of_the_ranking(self):
         """Cross-checked against the independent Cholesky scorer, on the same matrix."""
         ranked, scores = bd.rank_circuits_by_dopt(self.model, self.circuits, 8)
@@ -697,8 +769,8 @@ class RankCircuitsTester(_ModelFixture, BaseCase):
         self.assertArraysAlmostEqual(scores, expected[1:], places=8)
 
     def test_ridge_scales_the_objective(self):
-        # A bigger ridge is a stronger prior, so each circuit adds proportionally
-        # less; the reported curve is 0.5*logdet(I + J^T J / ridge).
+        # A bigger ridge scales down each circuit's contribution to the objective;
+        # the reported curve is 0.5*logdet(I + J^T J / ridge).
         _, unit = bd.rank_circuits_by_dopt(self.model, self.circuits, 5)
         _, heavy = bd.rank_circuits_by_dopt(self.model, self.circuits, 5, ridge=1e4)
         self.assertTrue(np.all(heavy < unit))
@@ -801,6 +873,54 @@ class BlockDoptReducerTester(_ModelFixture, BaseCase):
         self.assertEqual(set(by_function.all_circuits_needing_data),
                          set(by_object.all_circuits_needing_data))
         self.assertEqual(len(scores), 9)
+
+    def test_function_reduction_records_and_replaces_gst_provenance(self):
+        from pygsti.modelpacks import smq1Q_XYI
+        design = smq1Q_XYI.create_gst_experiment_design(max_max_length=1)
+        design = design.truncate_to_circuits(self.circuits[:12])
+        by_function, scores = bd.reduce_design_by_dopt(design, self.model, 4)
+        by_object = bd.BlockDoptReducer(self.model).reduce(design, 4)
+        self.assertIsNotNone(by_function.selection)
+        self.assertEqual(by_function.selection.circuits, by_object.selection.circuits)
+        self.assertArraysEqual(by_function.selection.scores, scores)
+
+        reduced, scores = bd.reduce_design_by_dopt(by_function, self.model, 2)
+        self.assertEqual(set(reduced.selection.circuits), set(reduced.all_circuits_needing_data))
+        self.assertEqual(len(reduced.selection.circuits), 2)
+        self.assertArraysEqual(reduced.selection.scores, scores)
+
+    def test_function_reduction_rejects_experiment_tree_children(self):
+        from pygsti.protocols import CombinedExperimentDesign
+        design = CombinedExperimentDesign({'child': self._design()})
+        with self.assertRaisesRegex(NotImplementedError, 'child'):
+            bd.reduce_design_by_dopt(design, self.model, 2)
+
+    def test_an_empty_reduced_design_can_be_reduced_again(self):
+        reducer = bd.BlockDoptReducer(self.model)
+        empty = reducer.reduce(self._design(), 0)
+        for budget in (None, 0, 3):
+            with self.subTest(budget=budget):
+                selection = reducer.select(empty, budget)
+                self.assertEqual(selection.circuits, ())
+                self.assertEqual(selection.scores.shape, (0,))
+                self.assertEqual(selection.metadata['num_candidates'], 0)
+                self.assertEqual(len(reducer.reduce(empty, budget).all_circuits_needing_data), 0)
+
+    def test_selection_serializes_the_model_and_settings_used_for_the_selection(self):
+        from pygsti.tools.edesigntools import CircuitSelection
+        model = self.model.copy()
+        before = model.to_vector().copy()
+        reducer = bd.BlockDoptReducer(model, ridge=2.0)
+        selection = reducer.select(self._design(), 2)
+        reducer.ridge = 10.0
+        changed = before.copy()
+        changed[0] += 1e-4
+        model.from_vector(changed)
+
+        restored = CircuitSelection.from_nice_serialization(selection.to_nice_serialization())
+        self.assertEqual(restored.reducer.ridge, 2.0)
+        self.assertEqual(restored.metadata['ridge'], 2.0)
+        self.assertArraysEqual(restored.reducer.model.to_vector(), before)
 
     def test_ridge_reaches_the_kernel(self):
         design = self._design()
