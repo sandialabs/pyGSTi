@@ -334,6 +334,7 @@ We'll specifically cover:
 - `approximate_stabilizer_probabilities`
 - `error_generator_commutator`
 - `error_generator_composition`
+- `pauli_conjugation_composition`
 
 ### `eoc_error_channel` : 
 This method provides a simple single function call for generating a dense representation of the end-of-circuit error channel (i.e. the exponentiated end-of-circuit error generator). This can be useful in few-qubit testing, but obviously doesn't not scale beyond a few qubits. This end-of-circuit error channel can be produced either exactly or without the BCH approximation. In the former case this is acheived by exponentiating and multiplying together all of the propagated error generator layers.
@@ -397,6 +398,15 @@ print(eprop.error_generator_composition(errorgen_1, errorgen_1))
 Both of these methods return their output as a list of two-element tuples. This list is a specification for the linear combination of elementary error generator coefficients corresponding to the commutator or composition of the two input elementary error generators. (First tuple element is an elementary error generator in the linear combination, and the second element is the coefficient of that elementary error generator in the linear combination).
 
 In the examples above we can see that the commutator of the specified H and S error generators gives rise to a pauli-correlation (C) error generator. This could potentially give rise to emergent C error generators when applying second-or-higher order BCH approximations for the effective end-of-circuit error generator, for example. Likewise the composition of these to error generators is a linear combination of a C error generator and an H error generator. And finally we see that squaring an H error generator (composing it with itself) gives rise to a pauli-stochastic (S) error generator.
+
+### `pauli_conjugation_composition`
+A companion of the functions above, with the same output format: it returns the action of the Pauli conjugation superoperator `ρ -> Q ρ Q` (which is the stochastic generator plus the identity, `S_Q + 1`) on an elementary error generator, which is again a combination of elementary error generators.
+
+```{code-cell} ipython3
+print(eprop.pauli_conjugation_composition(stim.PauliString('Z'), errorgen_1))
+```
+
+Here conjugating `H_X` by `Z` gives `-i C_{ZX, Z} = -i C_{iY, Z} = C_{Y,Z}`.
 
 There's a whole bunch of other functionality and utilities available, particularly in the `errgenproptools` module which have not been covered in this tutorial, so please check out the documentation for additional capabilities!
 

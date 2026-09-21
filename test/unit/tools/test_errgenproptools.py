@@ -232,7 +232,49 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 print('analytic_composition_mat=')
                 print_mx(analytic_composition_mat)
                 raise ValueError('Numeric and analytic error generator compositions were not found to be identical!')    
-    
+
+    def _label_pairs_2Q_and_3Q(self, num_3Q_labels=50, seed=1234):
+        """The (basis, matrix dict, ordered label pairs) fixtures shared by the conjugation tests
+        every pair of 2-qubit labels and a random selection of 3-qubit labels
+        (some relations for C and A terms need a third qubit)."""
+        fixtures = []
+        for num_qubits, num_labels in ((2, None), (3, num_3Q_labels)):
+            basis = CompleteElementaryErrorgenBasis('PP', QubitSpace(num_qubits), default_label_type='local')
+            matrix_dict = {lbl: mat for lbl, mat in zip(basis.labels, basis.elemgen_matrices)}
+            labels = list(basis.labels)
+            if num_labels is not None:
+                labels = random.Random(seed).sample(labels, num_labels)
+            stim_labels = [_LSE.cast(lbl) for lbl in labels]
+            fixtures.append((num_qubits, basis, matrix_dict, list(product(labels, repeat=2)), list(product(stim_labels, repeat=2))))
+        return fixtures
+
+    def test_pauli_conjugation_composition(self):
+        #confirm the analytic action of the Pauli conjugation superoperator Q rho Q on every type of
+        #elementary error generator against numerics (Q = S_Q + 1 in matrix form), for every
+        #(Pauli, label) pair at 2 qubits and a random selection at 3 qubits.
+        for num_qubits, basis, matrix_dict, label_pairs, stim_label_pairs in self._label_pairs_2Q_and_3Q():
+            labels = sorted({pair[0] for pair in label_pairs}, key=str)
+            stim_labels = [_LSE.cast(lbl) for lbl in labels]
+            paulis = sorted({lbl.basis_element_labels[0] for lbl in basis.labels if lbl.errorgen_type == 'S'})
+            if num_qubits == 3:
+                paulis = random.Random(4321).sample(paulis, 12)
+            for pauli_str in paulis:
+                pauli = stim.PauliString(pauli_str)
+                for lbl, stim_lbl in zip(labels, stim_labels):
+                    numeric = _eprop.pauli_conjugation_composition_numerical(pauli_str, lbl, matrix_dict)
+                    analytic = _eprop.pauli_conjugation_composition(pauli, stim_lbl)
+                    analytic_mat = _eprop.errorgen_layer_to_matrix(analytic, num_qubits, matrix_dict)
+                    norm_diff = np.linalg.norm(numeric - analytic_mat)
+                    if norm_diff > 1e-10:
+                        print(f'Difference in conjugation of {lbl} by {pauli_str} is greater than 1e-10.')
+                        print(f'{norm_diff=}')
+                        print(f'{analytic=}')
+                        raise ValueError('Numeric and analytic Pauli conjugation compositions were not found to be identical!')
+        #the sign of the conjugating Pauli is irrelevant
+        lbl = _LSE('C', [stim.PauliString('XY'), stim.PauliString('ZI')])
+        self.assertEqual(_eprop.pauli_conjugation_composition(stim.PauliString('-XZ'), lbl),
+                         _eprop.pauli_conjugation_composition(stim.PauliString('XZ'), lbl))
+
     def test_iterative_error_generator_composition(self):
         test_labels = [(_LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')])), 
                        (_LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('IX')]), _LSE('H', [stim.PauliString('XI')])),

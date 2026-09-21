@@ -151,6 +151,34 @@ Operand order and weights
     return a list of `(LocalStimErrorgenLabel, rate)` pairs, each rate already multiplied
     by the `weight` argument; the same label may appear more than once and the caller is
     expected to accumulate.
+
+Pauli conjugation
+    The stochastic generator is conjugation minus identity, S_Q = 𝒬 - 1 with 𝒬[rho] = Q rho Q,
+    and 𝒬 applied to any elementary error generator X is again a (trace-annihilating)
+    combination of elementary error generators, `pauli_conjugation_composition(Q, X)`:
+
+        𝒬 H_P     = -A_{QP,Q} if [Q,P] = 0,  -i C_{QP,Q} if {Q,P} = 0
+        𝒬 S_P     = S_R - S_Q,  R = QP / phase(QP)
+        𝒬 C_{P,R}, 𝒬 A_{P,R} : the S_Q o C / S_Q o A composition tables without their
+                               leading -C_{P,R} / -A_{P,R} term
+
+    (The S row: Q (P rho P - rho) Q = R rho R - Q rho Q = (R rho R - rho) - (Q rho Q - rho);
+    the phase of QP drops out because rho is conjugated by (QP) and (QP)^dag. Conjugation
+    composed with *conjugation*, 𝒬 o 𝒫 = ℛ = S_R + 1, is unital and is deliberately not
+    offered: it is not a combination of error generators.)
+
+    Writing an elementary error generator as a sum of monomials rho -> U rho V, conjugating
+    a monomial by 𝒬 on both sides multiplies it by (-1)^{ω(Q, UV)}, where ω(Q, T) is 0 if the
+    Paulis commute and 1 if they anticommute. All monomials of one generator share the
+    product UV up to phase - its *total Pauli* T_X: P for H_P, I for S_P, PR for C_{P,R} and
+    A_{P,R}. Hence 𝒬 X 𝒬 = (-1)^{ω(Q,T_X)} X and, since X o 𝒬 = 𝒬 o (𝒬 X 𝒬),
+
+        S_Q o X  = 𝒬X - X,      X o S_Q = (-1)^{ω(Q,T_X)} 𝒬X - X,
+        {S_Q, X} = (1 + (-1)^{ω(Q,T_X)}) 𝒬X - 2X .
+
+    The -X / -2X terms (the -1 inside S_Q acting on the partner) are called the *bleed*
+    terms below; when Q anticommutes with T_X the anticommutator is pure bleed, {S_Q, X} =
+    -2X.
 """
 
 # A list of (error generator label, rate) pairs, as produced by the commutator and
@@ -981,6 +1009,52 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: comp
     return _COMPOSITION_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx](errorgen_1, errorgen_2, weight, identity)
 
 
+def pauli_conjugation_composition(pauli: stim.PauliString, errorgen: _LSE, weight: complex = 1.0,
+                                  identity: Optional[str] = None) -> _ErrorgenTerms:
+    r"""
+    Returns the composition of the Pauli conjugation superoperator 𝒬[\rho] = Q \rho Q with
+    an elementary error generator, i.e. 𝒬[errorgen[\cdot]].
+
+    The conjugation by a Pauli is the stochastic generator plus the identity,
+    𝒬 = S_Q + 1, so this is `error_generator_composition(S_Q, errorgen)` with the
+    `-errorgen` term removed; see "Anticommutators and Pauli conjugation" in the module
+    docstring for the four relations (one per type of `errorgen`) and
+    `anticommutation_relations.tex` for their derivation. The result is a combination of
+    elementary error generators for every type of `errorgen`, including S
+    (𝒬 S_P = S_R - S_Q with R the phase-stripped product QP): conjugating a
+    trace-annihilating map leaves it trace annihilating.
+
+    Parameters
+    ----------
+    pauli : stim.PauliString
+        The conjugating Pauli Q. Its sign is irrelevant (Q and -Q conjugate identically)
+        and is ignored. Must not be the identity (𝒬 = 1 is not an error generator).
+
+    errorgen : `LocalStimErrorgenLabel`
+        The error generator being conjugated.
+
+    weight : float or complex, optional (default 1.0)
+        An optional weighting value to apply to the result.
+
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n. Built from
+        `errorgen` if not given.
+
+    Returns
+    -------
+    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`
+    corresponding to a component of 𝒬[errorgen[\cdot]], the second its rate, weighted by
+    `weight`. The same label may appear in more than one tuple.
+    """
+    if identity is None:
+        identity = 'I' * len(errorgen._hashable_basis_element_labels[0])
+    if pauli.sign != 1:
+        pauli = pauli.copy()
+        pauli.sign = 1
+    Q = (1, pauli, _bel_str(pauli))
+    return _CONJUGATION_HANDLERS[errorgen.type_idx](Q, errorgen, weight, identity)
+
+
 # ---------------------------------------------------------------------------------------
 # Commutator handlers, one per ordered type pair, called as handler(errorgen_1, errorgen_2,
 # weight, identity) with `identity` the 'I'*n string. Each forward handler is headed by the
@@ -1784,6 +1858,88 @@ def _composition_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
     return terms
 
 
+# ---------------------------------------------------------------------------------------
+# Pauli conjugation handlers, one per type of the conjugated generator, called as
+# handler(Q, errorgen, weight, identity) with Q the conjugating Pauli as a signed-Pauli
+# triple (1, Q, s) and computing 𝒬[errorgen[.]], 𝒬[rho] = Q rho Q. Since S_Q = 𝒬 - 1, each
+# is the S_Q o X composition table (`_composition_SH/SS/SC/SA`) with its leading -X term
+# removed; the case tables are written in the same slot notation as the composition
+# handlers. Each handler is headed by its relation (`anticommutation_relations.tex` §4).
+# ---------------------------------------------------------------------------------------
+
+def _conjugation_H(Q: _SignedPauli, errorgen: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # 𝒬 H_P = -A_{QP,Q}    if [Q,P] = 0
+    #       = -i C_{QP,Q}  if {Q,P} = 0
+    P = _index(errorgen, 0)
+    QP = _prod(Q, P)
+    terms = []
+    if Q[1].commutes(P[1]):
+        _A(terms, QP, Q, -w, identity)
+    else:
+        _C(terms, QP, Q, -1j*w, identity)
+    return terms
+
+
+def _conjugation_S(Q: _SignedPauli, errorgen: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # 𝒬 S_P = S_R - S_Q,  R = QP / phase(QP)
+    # (Q (P rho P - rho) Q = R rho R - Q rho Q, the phase dropping out because rho is
+    # conjugated by QP and its adjoint; `_S` discards the phase. For P = Q, R = I and only
+    # -S_Q remains: 𝒬 S_Q = 𝒬(𝒬 - 1) = 1 - 𝒬 = -S_Q.)
+    P = _index(errorgen, 0)
+    terms = []
+    _S(terms, _prod(Q, P), w, identity)
+    _S(terms, Q, -w, identity)
+    return terms
+
+
+def _conjugation_C(Q: _SignedPauli, errorgen: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # 𝒬 C_{P,R} = ½ (C_{QP,RQ} + C_{QR,PQ}) - i/2 (A_{QP,RQ} + A_{QR,PQ}) - ¼ C_{{Q,{P,R}},Q} + i/4 A_{[Q,{P,R}],Q}
+    #   (PQ,RQ) by (Q,P),(Q,R):  cc: +C   ca: -iA   ac: +iA   aa: -C
+    #   if {P,R} != 0:  (QPR,Q) by (Q,PR):  c: -C   a: +iA
+    P = _index(errorgen, 0)
+    R = _index(errorgen, 1)
+    com_QP = Q[1].commutes(P[1])
+    com_QR = Q[1].commutes(R[1])
+    PQ = _prod(P, Q)
+    RQ = _prod(R, Q)
+    terms = []
+    if com_QP == com_QR:
+        _C(terms, PQ, RQ, w if com_QP else -w, identity)
+    else:
+        _A(terms, PQ, RQ, -1j*w if com_QP else 1j*w, identity)
+    if P[1].commutes(R[1]):
+        QPR = _prod(Q, _prod(P, R))
+        if com_QP == com_QR:
+            _C(terms, QPR, Q, -w, identity)
+        else:
+            _A(terms, QPR, Q, 1j*w, identity)
+    return terms
+
+
+def _conjugation_A(Q: _SignedPauli, errorgen: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # 𝒬 A_{P,R} = ½ (A_{QP,RQ} - A_{QR,PQ}) + i/2 (C_{QP,RQ} - C_{QR,PQ}) + i/4 C_{{Q,[P,R]},Q} + ¼ A_{[Q,[P,R]],Q}
+    #   (PQ,RQ) by (Q,P),(Q,R):  cc: +A   ca: +iC   ac: -iC   aa: -A
+    #   if [P,R] != 0:  (QPR,Q) by (Q,PR):  c: +iC   a: +A
+    P = _index(errorgen, 0)
+    R = _index(errorgen, 1)
+    com_QP = Q[1].commutes(P[1])
+    com_QR = Q[1].commutes(R[1])
+    PQ = _prod(P, Q)
+    RQ = _prod(R, Q)
+    terms = []
+    if com_QP == com_QR:
+        _A(terms, PQ, RQ, w if com_QP else -w, identity)
+    else:
+        _C(terms, PQ, RQ, 1j*w if com_QP else -1j*w, identity)
+    if not P[1].commutes(R[1]):
+        QPR = _prod(Q, _prod(P, R))
+        if com_QP == com_QR:
+            _C(terms, QPR, Q, 1j*w, identity)
+        else:
+            _A(terms, QPR, Q, w, identity)
+    return terms
+
+
 # Dispatch tables for the error generator commutator and composition, indexed by
 # 4*errorgen_1.type_idx + errorgen_2.type_idx with the type order H=0, S=1, C=2, A=3 of
 # `pygsti.errorgenpropagation.localstimerrorgen._ERRORGEN_TYPE_INDICES`. Each entry is the
@@ -1801,6 +1957,12 @@ _COMPOSITION_HANDLERS: tuple[_PairHandler, ...] = (
     _composition_SH, _composition_SS, _composition_SC, _composition_SA,
     _composition_CH, _composition_CS, _composition_CC, _composition_CA,
     _composition_AH, _composition_AS, _composition_AC, _composition_AA,
+)
+
+# Pauli conjugation handlers, indexed by the type of the conjugated generator, called as
+# handler(Q, errorgen, weight, identity) with Q a signed-Pauli triple (1, Q, s).
+_CONJUGATION_HANDLERS: tuple[Callable[[_SignedPauli, _LSE, complex, str], _ErrorgenTerms], ...] = (
+    _conjugation_H, _conjugation_S, _conjugation_C, _conjugation_A,
 )
 
 def com(P1: stim.PauliString, P2: stim.PauliString) -> Optional[tuple[complex, stim.PauliString]]:
@@ -2202,6 +2364,64 @@ def error_generator_composition_numerical(errorgen1: _EEL, errorgen2: _EEL,
         else:
             comp = errorgen_matrix_dict[_LSE.cast(errorgen1)]@errorgen_matrix_dict[_LSE.cast(errorgen2)]
     return comp
+
+
+def pauli_conjugation_composition_numerical(pauli: Union[str, stim.PauliString], errorgen: _EEL,
+                                            errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                                            num_qubits: Optional[int] = None) -> _np.ndarray:
+    """
+    Numerically compute the composition of the Pauli conjugation superoperator rho -> Q rho Q
+    with the specified elementary error generator, i.e. the dense representation of
+    Q[errorgen[.]]. The conjugation is formed as the dense stochastic generator plus the
+    identity, Q = S_Q + 1.
+
+    Parameters
+    ----------
+    pauli : str or stim.PauliString
+        The conjugating Pauli Q, as an 'I'-padded string such as 'XIZ' or a `stim.PauliString`
+        (its sign is ignored). Must not be the identity.
+
+    errorgen : `LocalElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
+        The error generator being conjugated.
+
+    errorgen_matrix_dict : dict, optional (default None)
+        An optional dictionary mapping `ElementaryErrorgenLabel`s to numpy arrays for their dense representation.
+        If not specified this will be constructed from scratch each call, so specifying this can provide a performance
+        benefit.
+
+    num_qubits : int, optional (default None)
+        Number of qubits. Only required if `errorgen_matrix_dict` is None.
+
+    Returns
+    -------
+    ndarray
+        Numpy array corresponding to the dense representation of Q[errorgen[.]] in the standard basis.
+    """
+    assert isinstance(errorgen, (_LEEL, _LSE))
+    pauli_str = _bel_str(pauli) if isinstance(pauli, stim.PauliString) else pauli
+    assert set(pauli_str) != {'I'}, "The conjugating Pauli must not be the identity."
+
+    if errorgen_matrix_dict is None:
+        # create an error generator basis.
+        errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
+
+        # use this basis to construct a dictionary from error generator labels to their
+        # matrices.
+        errorgen_lbls = errorgen_basis.labels
+        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+
+    first_label = next(iter(errorgen_matrix_dict))
+
+    if isinstance(first_label, _LEEL):
+        s_key = _LEEL('S', (pauli_str,))
+        x_key = errorgen if isinstance(errorgen, _LEEL) else errorgen.to_local_eel()
+    else:
+        s_key = _LSE('S', (stim.PauliString(pauli_str),))
+        x_key = errorgen if isinstance(errorgen, _LSE) else _LSE.cast(errorgen)
+    s_mat = errorgen_matrix_dict[s_key]
+    conjugation = s_mat + _np.eye(s_mat.shape[0])
+    return conjugation@errorgen_matrix_dict[x_key]
+
 
 def bch_numerical(propagated_errorgen_layers: list[_np.ndarray],
                   error_propagator: _epropagator.ErrorGeneratorPropagator,
