@@ -4821,21 +4821,24 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
         conjugation_block(perp_2, stoch_1, 1.0)
 
     # block 4: r m S_R per stochastic pair, R the phase-stripped product of the two Paulis
-    # (`_S` drops the phase and the identity).
-    terms = []
+    # (`_S` drops the phase and the identity); accumulated one row at a time.
     if same:
         for i, (lbl_1, rate_1) in enumerate(stoch_1):
             P = _index(lbl_1, 0)
+            terms = []
             for j in range(i + 1, len(stoch_1)):
                 lbl_2, rate_2 = stoch_1[j]
                 _S(terms, _prod(P, _index(lbl_2, 0)), 2.0 * rate_1 * rate_2, identity)
+            for lbl, rate in terms:
+                product[lbl] = get(lbl, 0) + rate
     else:
         for lbl_1, rate_1 in stoch_1:
             P = _index(lbl_1, 0)
+            terms = []
             for lbl_2, rate_2 in stoch_2:
                 _S(terms, _prod(P, _index(lbl_2, 0)), rate_1 * rate_2, identity)
-    for lbl, rate in terms:
-        product[lbl] = get(lbl, 0) + rate
+            for lbl, rate in terms:
+                product[lbl] = get(lbl, 0) + rate
 
     # the bleed of all blocks, -R_M L - R_L M, on the existing keys (nothing to do for an
     # operand without stochastic terms).
