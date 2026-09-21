@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -116,5 +116,3 @@ implicit_mdl.sim = 'matrix'
 print("3Q implicit_mdl will simulate probabilities using the '%s' forward-simulation method." % implicit_mdl.sim)
 implicit_mdl.probabilities(c)
 ```
-
-

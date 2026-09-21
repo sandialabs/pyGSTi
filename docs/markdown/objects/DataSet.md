@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -147,5 +147,3 @@ print("Keepseparate-mode Dataset:\n",ds_sep)
 This concludes our overview of `DataSet` objects.  Here are a couple of related topics we didn't touch on that might be of interest:
 - the ability of a `DataSet` to store **time-dependent data** (in addition to the count data described above) is covered in the [timestamped data tutorial](TimestampedDataSets).
 - the `MultiDataSet` object, which is similar to a dictionary of `DataSets` is described in the [MultiDataSet tutorial](MultiDataSet).  `MultiDataSet` objects are useful when you have several data sets containing outcomes for the *same* set of circuits, like when you do multiple passes of the same experimental procedure.
-
-

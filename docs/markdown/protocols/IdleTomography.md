@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -90,5 +90,3 @@ Finally, if you'd like to see these same plots in an HTML report that you can se
 idt.create_idletomography_report(results, "../../tutorial_files/IDTTestReport",
                                  "Test idle tomography example report", auto_open=False)
 ```
-
-
