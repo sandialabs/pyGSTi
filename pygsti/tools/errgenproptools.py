@@ -4677,7 +4677,11 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
         # compositions for every leading generator). L and L^(k-1) commute, so the product is
         # formed by `_commuting_product` from anticommutators, L o L^(k-1) = ½{L, L^(k-1)} (see its
         # docstring). The powers are kept untruncated between orders (only the returned copies
-        # are truncated), which is what makes [L, L^(k-1)] = 0 exact.
+        # are truncated), which is what makes [L, L^(k-1)] = 0 exact. Only the square gets the
+        # unordered-pair halving of `_commuting_product`; forming even powers from two equal
+        # factors instead (L^4 = ½{L^2, L^2}) would extend it, but costs ½|L^2|^2 pairs against
+        # |L||L^3| and was measured at 0.8-0.9x on inputs with few generators and 2.3x slower on
+        # a 75-generator input (Part IV, Phase 20), so every power is L o L^(k-1).
         identity = 'I' * len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
         previous_power = errorgen_dict
         for current_order in range(2, order + 1):
