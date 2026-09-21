@@ -189,6 +189,13 @@ class AssignDesignsLengthPairingTester(BaseCase):
                 self.assertGreaterEqual(counts.get(2, 0), 1)
                 self.assertEqual(sum(counts.values()), expected)
 
+    def test_unused_legacy_options_warn_without_changing_the_circuits(self):
+        expected = self._run(3, 5)
+        with self.assertWarns(UserWarning) as ctx:
+            actual = _stitch(3, 5, share_same_shape_schedule=False)
+        self.assertIn('share_same_shape_schedule', str(ctx.warning))
+        self.assertEqual(actual, expected)
+
     def test_shorter_circuit_depths_padded_with_explicit_idles(self):
         oneq_len, twoq_len = 4, 4
         circuit_lists = self._run(oneq_len, twoq_len)
@@ -933,6 +940,12 @@ def _stub_stitcher(oneq_gstdesign, twoq_gstdesign, vertices, color_patches, **kw
     return [[c.copy() for c in cl] for cl in _STUB_CIRCUIT_LISTS]
 
 
+def _limited_stitcher(oneq, twoq, vertices, color_patches, *, num_circuits, randgen, verbosity):
+    circuit_lists = assign_the_designs_with_mapping(
+        oneq, twoq, vertices, color_patches, randgen=randgen, verbosity=verbosity)
+    return [circuits[:num_circuits] for circuits in circuit_lists]
+
+
 class _CountingStitcher(CircuitStitcher):
     """A stitcher subclass with configuration, to check that options round-trip."""
 
@@ -1289,6 +1302,17 @@ class SerializationTester(_SGSTFixture, BaseCase):
                          set(self.design.all_circuits_needing_data))
 
     # -- the circuit stitcher ------------------------------------------------
+
+    @with_temp_path
+    def test_a_public_callable_stitcher_preserves_its_options_after_loading(self, root_path):
+        stitcher = pygsti.protocols.CallableStitcher(_limited_stitcher, num_circuits=3)
+        design = SimultaneousGSTDesign(
+            self.pspec, self.oneq, self.twoq, self.design.color_patches,
+            circuit_stitcher=stitcher, seed=123)
+        self.assertTrue(all(len(cl) == 3 for cl in design.circuit_lists))
+        _, loaded = self._roundtrip(root_path, design)
+        self.assertEqual([list(cl) for cl in loaded.restitch().circuit_lists],
+                         [list(cl) for cl in design.circuit_lists])
 
     @with_temp_path
     def test_the_stitcher_is_restored_as_an_object(self, root_path):

@@ -130,8 +130,8 @@ class CircuitStitcher(_NicelySerializable):
             rather than silently treated as a plain callable.
 
         **kwargs
-            Extra keyword arguments for a wrapped callable; ignored when `obj` is
-            already a stitcher.
+            Extra keyword arguments for a wrapped callable. Raises `TypeError` if
+            `obj` is already a stitcher; set its options when constructing it.
 
         Returns
         -------
@@ -872,10 +872,9 @@ def assign_the_designs_with_mapping(
         suites produce no output.
 
     **kwargs
-        Ignored. Accepted so this stitcher matches the generic
-        ``circuit_stitcher(oneq, twoq, vertices, color_patches, **kwargs)``
-        calling convention used by ``SimultaneousGSTDesign``, allowing
-        it to be swapped with other stitchers that take extra options.
+        Accepted for compatibility with legacy callable stitchers, but ignored
+        with a warning naming the unused options. Use the named parameters above
+        to configure this helper.
 
     Returns
     -------
@@ -894,6 +893,11 @@ def assign_the_designs_with_mapping(
         supported; truncate the longer design (or rebuild both with the same
         ``max_lengths``) before calling.
     """
+    if kwargs:
+        _warnings.warn(
+            f"assign_the_designs_with_mapping ignored unused keyword arguments: {sorted(kwargs)}. "
+            "Check the option names or configure a RandomizedPatchStitcher instead.",
+            stacklevel=2)
     if randgen is None:
         randgen = np.random.default_rng(0)
 

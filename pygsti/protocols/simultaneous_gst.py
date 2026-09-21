@@ -23,7 +23,7 @@ from pygsti.processors import QubitProcessorSpec
 # `assert_circuit_lists_match_color_patches` are used below and re-exported in __all__,
 # as both were importable from here before the split.
 from pygsti.protocols._stitchers import (
-    CircuitStitcher, Edge, RandomizedPatchStitcher, Vertex,
+    CallableStitcher, CircuitStitcher, Edge, RandomizedPatchStitcher, Vertex,
     assert_circuit_lists_match_color_patches, assign_the_designs_with_mapping,
 )
 from pygsti.tools.graphcoloring import (
@@ -34,7 +34,7 @@ SeedLike = Union[int, np.random.SeedSequence, np.random.Generator]
 
 # This module is star-imported into ``pygsti.protocols``, so ``__all__`` is kept
 # to the documented public surface: the design class, its convenience
-# constructor, the default circuit stitcher and the stitcher base class
+# constructor, the default circuit stitcher, callable adapter and stitcher base class
 # (documented as pluggable, so callers need to be able to name them), and the
 # stitcher-agnostic output validator (which anyone writing their own stitcher is
 # expected to run). The remaining helpers are deliberately left out.
@@ -43,6 +43,7 @@ __all__ = [
     'make_simultaneous_gst_design',
     'CircuitStitcher',
     'RandomizedPatchStitcher',
+    'CallableStitcher',
     'assign_the_designs_with_mapping',
     'assert_circuit_lists_match_color_patches',
 ]
