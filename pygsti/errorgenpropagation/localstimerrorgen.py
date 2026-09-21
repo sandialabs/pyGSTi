@@ -252,6 +252,9 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         `pygsti.tools.errgenproptools` uses this to skip such pairs, which are the vast
         majority at large qubit counts. Built on first access and cached, since the same
         label is typically tested against many others.
+
+        Note: Bit mask returned is in reverse order compared to basis element label strings.
+        E.g. "XII" -> 001.
         """
         mask = self._support_mask
         if mask is None:

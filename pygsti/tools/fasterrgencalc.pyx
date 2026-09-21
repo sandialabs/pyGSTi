@@ -96,7 +96,7 @@ cpdef object fast_support_mask(tuple bel_strings):
     """
     Support bitmask of an error generator label from its 'I'-padded basis element label
     strings (as cached by `LocalStimErrorgenLabel._hashable_basis_element_labels`): bit q of
-    the returned python int is set iff some string is not 'I' (or '_') at position q.
+    the returned python int is set iff some string is not 'I' at position q.
     Optimized equivalent of `pygsti.errorgenpropagation.localstimerrorgen._slow_support_mask`.
 
     Strings of up to 64 characters are handled in a single C integer; longer strings are
@@ -105,7 +105,7 @@ cpdef object fast_support_mask(tuple bel_strings):
     Parameters
     ----------
     bel_strings : tuple of str
-        One or two Pauli strings of equal length made of the characters 'I', '_', 'X', 'Y', 'Z'.
+        One or two Pauli strings of equal length made of the characters 'I', 'X', 'Y', 'Z'.
 
     Returns
     -------
@@ -125,7 +125,7 @@ cpdef object fast_support_mask(tuple bel_strings):
         if n <= 64:
             chunk = 0
             for i in range(n):
-                if p[i] != 73 and p[i] != 95:  # 'I' (73), '_' (95)
+                if p[i] != 73:  # 'I' (73)
                     chunk |= (<unsigned long long>1) << i
             if chunk:
                 mask |= chunk
@@ -135,7 +135,7 @@ cpdef object fast_support_mask(tuple bel_strings):
                 stop = start + 64 if start + 64 < n else n
                 chunk = 0
                 for i in range(start, stop):
-                    if p[i] != 73 and p[i] != 95:
+                    if p[i] != 73:
                         chunk |= (<unsigned long long>1) << (i - start)
                 if chunk:
                     chunk_mask = chunk

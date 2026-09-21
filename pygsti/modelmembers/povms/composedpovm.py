@@ -156,7 +156,7 @@ class ComposedPOVM(_POVM, _Torchable):
                 mx_basis = errormap.errorgen.matrix_basis
             else:
                 raise ValueError(f"Cannot extract a matrix-basis from `errormap` (type {type(errormap)})")
-        self._matrix_basis = _Basis.cast(mx_basis, self.state_space)
+            self._matrix_basis = _Basis.cast(mx_basis, self.state_space)
         return self._matrix_basis
 
     def __contains__(self, key):

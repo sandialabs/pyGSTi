@@ -390,7 +390,7 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
     if magnus_order > 3:
         raise NotImplementedError("Magnus expansions beyond third order are not implemented yet.")
     if magnus_order < 1:
-        return {}
+        raise ValueError(f'Invalid magnus_order <1: {magnus_order}')
 
     # first-order magnus term: \sum_{t1} A(t1)
     # Get a combined set of error generator coefficient labels for the list of dictionaries.
