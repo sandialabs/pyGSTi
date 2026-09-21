@@ -113,6 +113,10 @@ class DesignReducer(_NicelySerializable):
     Reducers that need a model, a random seed or a weighting take it at construction: a
     reducer is a fully configured policy, so that :meth:`select` has the same signature
     whatever the reducer needs to do its job.
+
+    A subclass may use no model, one model, or several noisy models. The subclass
+    handles model inputs, aggregation of per-model scores, and serialization of its
+    model configuration; the base class does not inspect the number of models.
     """
 
     # -- the one method a subclass writes ----------------------------------- #
