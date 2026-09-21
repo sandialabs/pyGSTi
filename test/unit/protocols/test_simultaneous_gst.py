@@ -8,10 +8,14 @@
 #***************************************************************************************************
 
 import copy as _copy
+import functools
 import hashlib
 import json
 import pathlib
+import sys
+import types
 import warnings
+from unittest import mock
 
 import numpy as np
 
@@ -21,11 +25,13 @@ from pygsti.baseobjs.label import Label
 from pygsti.modelpacks import smq1Q_XYI, smq2Q_XYICNOT
 from pygsti.processors import QubitProcessorSpec
 from pygsti.protocols.simultaneous_gst import (
-    SimultaneousGSTDesign, _normalize_coloring, _resolve_stitcher_name, _stitcher_name,
-    assert_circuit_lists_match_color_patches,
-    assert_mapped_circuit_matches_patch,
-    assign_the_designs_with_mapping,
-    build_patch_infos, make_line_mapper, make_simultaneous_gst_design,
+    SimultaneousGSTDesign, _normalize_coloring, _recordable_seed, _seed_from_record,
+    make_simultaneous_gst_design,
+)
+from pygsti.protocols._stitchers import (
+    CallableStitcher, CircuitStitcher, RandomizedPatchStitcher,
+    _stitch_circuits, _validate_stitched_circuits,
+    assert_mapped_circuit_matches_patch, build_patch_infos, make_line_mapper,
 )
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign
@@ -61,11 +67,11 @@ def _stitch(oneq_lens, twoq_lens, vertices=(0, 1, 2), color_patches=None, seed=0
     twoq = _StubDesign([_make_2q_circuits(n) for n in twoq_lens], (0, 1))
     if 'randgen' not in kwargs and seed is not None:
         kwargs['randgen'] = np.random.default_rng(seed)
-    circuit_lists = assign_the_designs_with_mapping(
+    circuit_lists = _stitch_circuits(
         oneq, twoq, vertices, color_patches, **kwargs
     )
     if check:
-        assert_circuit_lists_match_color_patches(circuit_lists, vertices, color_patches)
+        _validate_stitched_circuits(circuit_lists, vertices, color_patches)
     return circuit_lists
 
 
@@ -313,7 +319,7 @@ class IndependentSchedulesTester(BaseCase):
 
     def test_independent_schedules_still_satisfy_the_output_contract(self):
         circuit_lists = self._run(share=False)
-        assert_circuit_lists_match_color_patches(
+        _validate_stitched_circuits(
             circuit_lists, self.VERTICES, self.COLOR_PATCHES
         )
         for L, germ_power_list in enumerate(circuit_lists):
@@ -506,11 +512,9 @@ class MakeSimultaneousGSTDesignTester(_SGSTFixture, BaseCase):
         # make_simultaneous_gst_design passes neither circuit_stitcher nor nested, so both
         # must land on their SimultaneousGSTDesign defaults. The default stitcher always
         # renests its output, so nested defaults to True.
-        self.assertIs(self.design.circuit_stitcher, assign_the_designs_with_mapping)
+        self.assertIsInstance(self.design.circuit_stitcher, RandomizedPatchStitcher)
+        self.assertTrue(self.design.circuit_stitcher.share_same_shape_schedules)
         self.assertTrue(self.design.nested)
-        self.assertEqual(list(self.design.stitcher_kwargs), ['randgen', 'verbosity'])
-        # verbosity defaults to 0, i.e. no progress bar from the stitcher.
-        self.assertEqual(self.design.stitcher_kwargs['verbosity'], 0)
 
     def test_edge_coloring_is_a_valid_proper_coloring(self):
         color_patches = self.design.color_patches
@@ -533,7 +537,7 @@ class MakeSimultaneousGSTDesignTester(_SGSTFixture, BaseCase):
         self.assertGreater(len(self.design.all_circuits_needing_data), 0)
         # Stitcher-agnostic structural check: no implicit idles, and every
         # circuit sits on its own patch's qubits/edges.
-        assert_circuit_lists_match_color_patches(
+        _validate_stitched_circuits(
             self.design.circuit_lists, self.design.vertices, self.design.color_patches)
 
     def test_stitcher_gets_the_second_spawned_seed(self):
@@ -585,7 +589,7 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
 
     These tests feed the helpers deliberately malformed input and require them
     to raise, and check that ``debug_check`` really does wire
-    ``assert_circuit_lists_match_color_patches`` into
+    ``_validate_stitched_circuits`` into
     ``SimultaneousGSTDesign.__init__``.
     """
 
@@ -609,7 +613,7 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
     def _build_with_malformed_stitcher(self, **kwargs):
         return SimultaneousGSTDesign(
             self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
-            circuit_stitcher=self._malformed_stitcher, **kwargs)
+            circuit_stitcher=CallableStitcher(self._malformed_stitcher), **kwargs)
 
     def test_malformed_stitcher_output_is_rejected_when_debug_check_true(self):
         with self.assertRaises(AssertionError) as ctx:
@@ -637,7 +641,7 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
         """A one-circuit design built from `layers` must be rejected, naming `fragment`."""
         circuit = Circuit(layers, line_labels=line_labels)
         with self.assertRaises(AssertionError) as ctx:
-            assert_circuit_lists_match_color_patches(
+            _validate_stitched_circuits(
                 [[circuit]], (0, 1, 2), color_patches or self._TWO_PATCHES)
         self.assertIn(fragment, str(ctx.exception))
 
@@ -661,7 +665,7 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
         # what has to catch it.
         circuit = Circuit([Label('Gcnot', (0, 1))], line_labels=(0, 1))
         with self.assertRaises(AssertionError) as ctx:
-            assert_circuit_lists_match_color_patches(
+            _validate_stitched_circuits(
                 [[circuit]], (0, 1, 2), self._TWO_PATCHES)
         self.assertEqual(ctx.exception.args[0], ({0, 1}, {0, 1, 2}))
 
@@ -674,20 +678,20 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
         # The coloring records (1, 2); a Gcnot on (2, 1) is the same edge with the
         # control and target swapped, which is a legitimate circuit on that patch.
         circuit = Circuit([[Label('Gcnot', (2, 1)), Label('I', 0)]], line_labels=(0, 1, 2))
-        assert_circuit_lists_match_color_patches([[circuit]], (0, 1, 2), self._TWO_PATCHES)
+        _validate_stitched_circuits([[circuit]], (0, 1, 2), self._TWO_PATCHES)
 
     def test_a_circuit_with_no_multiqubit_gates_is_accepted(self):
         # It is consistent with every patch, so there is nothing to reject.
         circuit = Circuit([[Label('Gxpi2', 0), Label('I', 1), Label('I', 2)]],
                           line_labels=(0, 1, 2))
-        assert_circuit_lists_match_color_patches([[circuit]], (0, 1, 2), self._TWO_PATCHES)
+        _validate_stitched_circuits([[circuit]], (0, 1, 2), self._TWO_PATCHES)
 
     def test_an_edge_in_two_patches_is_rejected(self):
         # Not a proper coloring: the circuit's patch would not be determined by its
         # content, so the validator refuses the coloring rather than guess.
         circuit = Circuit([[Label('Gcnot', (0, 1)), Label('I', 2)]], line_labels=(0, 1, 2))
         with self.assertRaises(AssertionError) as ctx:
-            assert_circuit_lists_match_color_patches(
+            _validate_stitched_circuits(
                 [[circuit]], (0, 1, 2), {0: [(0, 1)], 1: [(0, 1)]})
         self.assertIn('appears in both patch', str(ctx.exception))
 
@@ -706,7 +710,7 @@ class HelperRejectsMalformedInputTester(_SGSTFixture, BaseCase):
                             ('alone in a later list', [[good], [good, bad]])):
             with self.subTest(name):
                 with self.assertRaises(AssertionError):
-                    assert_circuit_lists_match_color_patches(
+                    _validate_stitched_circuits(
                         lists, (0, 1, 2), self._TWO_PATCHES)
 
     def test_multiqubit_gate_outside_patch_edges_is_rejected(self):
@@ -820,7 +824,7 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
 
     def test_mapped_design_passes_its_own_validator(self):
         # The relabelled circuits must still sit on the relabelled patches.
-        assert_circuit_lists_match_color_patches(
+        _validate_stitched_circuits(
             self.mapped.circuit_lists, self.mapped.vertices,
             self.mapped.color_patches)
 
@@ -860,7 +864,7 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
             raise AssertionError("circuit_stitcher must not be re-run when relabelling")
 
         original = self.design.circuit_stitcher
-        self.design.circuit_stitcher = _explode
+        self.design.circuit_stitcher = CallableStitcher(_explode)
         try:
             mapped = self.design.map_qubit_labels(self.mapper)
         finally:
@@ -894,7 +898,7 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
         mapped = self.design.map_qubit_labels(reversal)
         self.assertEqual(mapped.vertices, (2, 1, 0))
         self.assertEqual(sorted(mapped.edges), [(0, 1), (1, 2)])
-        assert_circuit_lists_match_color_patches(
+        _validate_stitched_circuits(
             mapped.circuit_lists, mapped.vertices, mapped.color_patches)
 
     def test_original_design_is_not_mutated(self):
@@ -913,8 +917,7 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
         bad = Circuit([[Label('Gcnot', (0, 2)), Label('I', 1)]], line_labels=(0, 1, 2))
         malformed = SimultaneousGSTDesign(
             self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
-            circuit_stitcher=(lambda *a, **kw: [[bad.copy()]]),
-            debug_check=False)
+            circuit_stitcher=CallableStitcher(lambda *a, **kw: [[bad.copy()]]), debug_check=False)
 
         with self.assertRaises(AssertionError) as ctx:
             malformed.map_qubit_labels(self.mapper)
@@ -929,52 +932,279 @@ class MapQubitLabelsTester(_SGSTFixture, BaseCase):
                                    line_labels=('Q0', 'Q1', 'Q2'))]])
 
 
-class _CallableStitcher:
-    """A stitcher supplied as a callable object rather than a function.
+def _stub_stitcher(oneq_gstdesign, twoq_gstdesign, vertices, color_patches, **kwargs):
+    """A module-level (hence importable) stitcher function, for the CallableStitcher tests."""
+    return [[c.copy() for c in cl] for cl in _STUB_CIRCUIT_LISTS]
 
-    Instances carry ``__module__`` (inherited from the class) but no
-    ``__qualname__``, which is the case :func:`_stitcher_name` has to reject.
-    """
+
+def _limited_stitcher(oneq, twoq, vertices, color_patches, *, config, randgen, verbosity):
+    circuit_lists = _stitch_circuits(
+        oneq, twoq, vertices, color_patches, randgen=randgen, verbosity=verbosity)
+    return [circuits[:config['limits'][0]] for circuits in circuit_lists]
+
+
+class _CallableInstance:
     def __call__(self, *args, **kwargs):
-        return _STUB_CIRCUIT_LISTS
+        return _stub_stitcher(*args, **kwargs)
 
 
-class StitcherNameTester(BaseCase):
+class _CountingStitcher(CircuitStitcher):
+    """A stitcher subclass with configuration, to check that options round-trip."""
+
+    def __init__(self, tag='default'):
+        super().__init__()
+        self.tag = tag
+
+    def _stitch(self, oneq_gstdesign, twoq_gstdesign, vertices, color_patches, randgen,
+                verbosity):
+        return [[c.copy() for c in cl] for cl in _STUB_CIRCUIT_LISTS]
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state['tag'] = self.tag
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['tag'])
+
+
+class _StatelessStitcher(CircuitStitcher):
+    """A stitcher subclass with no configuration, hence no serialization code."""
+
+    def _stitch(self, oneq_gstdesign, twoq_gstdesign, vertices, color_patches, randgen,
+                verbosity):
+        return [[c.copy() for c in cl] for cl in _STUB_CIRCUIT_LISTS]
+
+
+class CircuitStitcherTester(BaseCase):
+    """The stitcher interface itself: execution, validation, and serialization.
+
+    The stitching *algorithm* is covered by the many tests above that call
+    `_stitch_circuits` directly. What matters here is the wrapper.
     """
-    Cover ``_stitcher_name`` / ``_resolve_stitcher_name``, the write/read pair that
-    stands in for the un-serializable ``circuit_stitcher``.
 
-    A stitcher is an arbitrary caller-supplied callable, so it is recorded by qualified
-    name and imported back. Not every callable has one: ``functools.partial`` objects and
-    callable class instances have a ``__module__`` but no ``__qualname__``. Formatting the
-    two together would yield a bogus name like ``'functools.None'`` -- harmless, since it
-    fails to import into the same "None plus a warning" state as no name at all, but
-    misleading in meta.json, so the helper reports None instead.
-    """
+    VERTICES = ('Q0', 'Q1', 'Q2')
+    COLOR_PATCHES = {0: [('Q0', 'Q1')]}
 
-    def test_plain_function_round_trips(self):
-        name = _stitcher_name(assign_the_designs_with_mapping)
-        self.assertEqual(name, 'pygsti.protocols.simultaneous_gst.assign_the_designs_with_mapping')
-        with self.assertNoWarns():
-            self.assertIs(_resolve_stitcher_name(name), assign_the_designs_with_mapping)
+    def _stitch_with(self, stitcher, **kwargs):
+        return stitcher.stitch(None, None, self.VERTICES, self.COLOR_PATCHES,
+                               debug_check=False, **kwargs)
 
-    def test_lambda_is_named_but_not_importable(self):
-        # A lambda does have a qualname, so it is recorded -- it just cannot be
-        # imported back. The two failure modes are distinct and both end at None.
-        name = _stitcher_name(lambda *args, **kwargs: None)
-        self.assertIsNotNone(name)
-        self.assertIn('<lambda>', name)
-        with self.assertWarns(Warning):
-            self.assertIsNone(_resolve_stitcher_name(name))
+    def test_adapter_rejects_noncallables_at_construction(self):
+        for func in (None, 'randomized', 7):
+            with self.subTest(func=func), self.assertRaises(TypeError):
+                CallableStitcher(func)
 
-    def test_invalid_names_resolve_to_none_with_a_warning(self):
-        # Missing, unimportable module, missing member, class method, or bare names.
-        for name in (None, 'no_such_module_xyz.some_stitcher',
-                     'pygsti.protocols.simultaneous_gst.no_such_stitcher',
-                     '_CallableStitcher.__call__', 'stitcher_with_no_module'):
-            with self.subTest(name=name):
-                with self.assertWarns(Warning):
-                    self.assertIsNone(_resolve_stitcher_name(name))
+    def test_adapter_rejects_reserved_execution_controls_at_construction(self):
+        for option in ('randgen', 'verbosity'):
+            with self.subTest(option=option):
+                with self.assertRaises(TypeError) as ctx:
+                    CallableStitcher(_stub_stitcher, **{option: 0})
+                self.assertIn(option, str(ctx.exception))
+
+    def test_adapter_forwards_positional_inputs_options_and_shared_controls(self):
+        seen = {}
+
+        def function(oneq, twoq, vertices, patches, /, *, randgen, verbosity, repeat):
+            seen.update(inputs=(oneq, twoq, vertices, patches), randgen=randgen,
+                        verbosity=verbosity)
+            return [[Circuit([Label('Gx', 0)] * (repeat + int(randgen.integers(1, 10))),
+                             line_labels=(0,))]]
+
+        randgen = np.random.default_rng(123)
+        result = self._stitch_with(CallableStitcher(function, repeat=2), seed=randgen, verbosity=3)
+        self.assertEqual(seen['inputs'], (None, None, self.VERTICES, self.COLOR_PATCHES))
+        self.assertIs(seen['randgen'], randgen)
+        self.assertEqual(seen['verbosity'], 3)
+        self.assertEqual(result, [[Circuit([Label('Gx', 0)] * 3, line_labels=(0,))]])
+
+    def test_adapter_does_not_hide_signature_errors_or_retry_type_errors(self):
+        calls = []
+
+        def missing_controls(oneq, twoq, vertices, patches):
+            return []
+
+        def failing_function(*args, **kwargs):
+            calls.append(1)
+            raise TypeError('failure inside the function')
+
+        for function in (missing_controls, failing_function):
+            with self.subTest(function=function), self.assertRaises(TypeError):
+                self._stitch_with(CallableStitcher(function))
+        self.assertEqual(len(calls), 1)
+
+    def test_adapter_uses_the_base_output_validation(self):
+        for output in ('not circuit lists', [['not a circuit']]):
+            with self.subTest(output=output), self.assertRaises(TypeError):
+                self._stitch_with(CallableStitcher(lambda *a, **kw: output))
+
+    # -- the injected rng ----------------------------------------------------- #
+
+    def test_the_seed_reaches_stitch_as_a_generator(self):
+        seen = {}
+
+        class _Recording(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                seen['randgen'] = randgen
+                seen['draw'] = randgen.random()
+                return []
+
+        self._stitch_with(_Recording(), seed=1234)
+        self.assertIsInstance(seen['randgen'], np.random.Generator)
+        self.assertEqual(seen['draw'], np.random.default_rng(1234).random())
+
+    def test_an_unimplemented_stitch_says_what_to_implement(self):
+        with self.assertRaises(NotImplementedError) as ctx:
+            self._stitch_with(CircuitStitcher())
+        self.assertIn('_stitch', str(ctx.exception))
+
+    # -- validation ------------------------------------------------------------ #
+
+    def test_returning_something_other_than_a_list_is_rejected(self):
+        class _Bad(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                return 'not circuit lists'
+
+        with self.assertRaises(TypeError) as ctx:
+            self._stitch_with(_Bad())
+        self.assertIn('_Bad', str(ctx.exception))
+
+    def test_returning_bare_circuits_instead_of_lists_is_rejected(self):
+        """One level of nesting missing is an easy mistake and a confusing one later."""
+        class _Flat(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                return [Circuit([Label('Gi', 'Q0')], line_labels=('Q0',))]
+
+        with self.assertRaises(TypeError) as ctx:
+            self._stitch_with(_Flat())
+        self.assertIn('germ-power index 0', str(ctx.exception))
+
+    def test_returning_a_non_circuit_is_rejected(self):
+        class _Strings(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                return [['Gx']]
+
+        with self.assertRaises(TypeError):
+            self._stitch_with(_Strings())
+
+    def test_the_coloring_check_runs_for_direct_calls_too(self):
+        """It used to live in SimultaneousGSTDesign.__init__, so it did not."""
+        off_patch = [[Circuit([[Label('Gcnot', ('Q0', 'Q2')), Label('I', 'Q1')]],
+                              line_labels=self.VERTICES)]]
+
+        class _OffPatch(CircuitStitcher):
+            def _stitch(self, oneq, twoq, vertices, patches, randgen, verbosity):
+                return [[c.copy() for c in cl] for cl in off_patch]
+
+        with self.assertRaises(AssertionError) as ctx:
+            _OffPatch().stitch(None, None, self.VERTICES, self.COLOR_PATCHES,
+                               debug_check=True)
+        self.assertIn('not an edge of any color patch', str(ctx.exception))
+
+    # -- serialization ---------------------------------------------------------- #
+
+    def test_the_default_stitcher_round_trips_with_its_options(self):
+        stitcher = RandomizedPatchStitcher(share_same_shape_schedules=False)
+        restored = CircuitStitcher.from_nice_serialization(stitcher.to_nice_serialization())
+        self.assertIsInstance(restored, RandomizedPatchStitcher)
+        self.assertFalse(restored.share_same_shape_schedules)
+
+    def test_a_third_party_subclass_round_trips_without_being_registered(self):
+        restored = CircuitStitcher.from_nice_serialization(
+            _CountingStitcher('mine').to_nice_serialization())
+        self.assertIsInstance(restored, _CountingStitcher)
+        self.assertEqual(restored.tag, 'mine')
+
+    def test_a_stateless_subclass_needs_no_serialization_code(self):
+        restored = CircuitStitcher.from_nice_serialization(
+            _StatelessStitcher().to_nice_serialization())
+        self.assertIsInstance(restored, _StatelessStitcher)
+
+    def test_a_module_level_function_backed_callable_stitcher_round_trips(self):
+        stitcher = CallableStitcher(_stub_stitcher, extra=7)
+        restored = CircuitStitcher.from_nice_serialization(stitcher.to_nice_serialization())
+        self.assertIsInstance(restored, CallableStitcher)
+        self.assertIs(restored.func, _stub_stitcher)
+        self.assertEqual(restored.kwargs, {'extra': 7})
+
+    @with_temp_path
+    def test_unrelated_function_import_failures_propagate(self, root_path):
+        # A missing function reference is recoverable; failure inside its module is not.
+        pathlib.Path(root_path).mkdir()
+        sources = [
+            ('raise RuntimeError("broken import")', RuntimeError),
+            ('raise AttributeError("broken import")', AttributeError),
+            ('import nonexistent_stitcher_dependency_920', ModuleNotFoundError),
+        ]
+        for i, (source, error) in enumerate(sources):
+            name = 'broken_stitcher_module_%d' % i
+            pathlib.Path(root_path, name + '.py').write_text(source + '\n')
+            state = CallableStitcher(_stub_stitcher).to_nice_serialization()
+            state['func'] = name + '.stitch'
+            with self.subTest(source=source), mock.patch.object(sys, 'path', [root_path] + sys.path):
+                with self.assertRaises(error):
+                    CircuitStitcher.from_nice_serialization(state)
+
+
+class SeedRecordTester(BaseCase):
+    """`stitch_seed` is what lets a reloaded design re-stitch, so it has to be data."""
+
+    def test_an_int_is_recorded_as_itself(self):
+        self.assertEqual(_recordable_seed(7), 7)
+        self.assertEqual(_seed_from_record(7), 7)
+
+    def test_none_stays_none(self):
+        self.assertIsNone(_recordable_seed(None))
+        self.assertIsNone(_seed_from_record(None))
+
+    def test_a_seed_sequence_round_trips_to_the_same_stream(self):
+        original = np.random.SeedSequence(12345).spawn(2)[1]
+        record = _recordable_seed(original)
+        self.assertIsInstance(record, dict)
+        json.dumps(record)  # must survive meta.json
+        restored = _seed_from_record(record)
+        self.assertEqual(np.random.default_rng(restored).random(),
+                         np.random.default_rng(original).random())
+
+    def test_a_live_generator_cannot_be_recorded_and_says_so(self):
+        with self.assertWarns(Warning) as ctx:
+            self.assertIsNone(_recordable_seed(np.random.default_rng(0)))
+        self.assertIn('re-stitch', str(ctx.warning))
+
+
+class DefaultSeedTester(_SGSTFixture, BaseCase):
+    """An omitted `seed` still records something restitchable -- it must not go
+    through the same silently-non-reproducible path as an unrecordable live Generator."""
+
+    COLOR_PATCHES = {0: [(0, 1)], 1: [(1, 2)]}
+
+    def _build(self, **kwargs):
+        return SimultaneousGSTDesign(self.pspec, self.oneq, self.twoq, self.COLOR_PATCHES,
+                                     debug_check=False, **kwargs)
+
+    def test_an_omitted_seed_is_still_recorded(self):
+        self.assertIsNotNone(self._build().stitch_seed)
+
+    def test_an_omitted_seed_still_restitches_identically(self):
+        design = self._build()
+        restitched = design.restitch()
+        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+                         [list(cl) for cl in design.circuit_lists])
+
+    def test_two_designs_with_omitted_seeds_still_differ(self):
+        # The fix records a recoverable seed -- it must not make separate unseeded
+        # constructions deterministic, only restitch() of the same one.
+        d1, d2 = self._build(), self._build()
+        self.assertNotEqual([list(cl) for cl in d1.circuit_lists],
+                            [list(cl) for cl in d2.circuit_lists])
+
+    def test_a_live_generator_cannot_restitch(self):
+        with self.assertWarns(UserWarning):
+            design = self._build(seed=np.random.default_rng(0))
+        with self.assertRaises(ValueError) as ctx:
+            design.restitch()
+        self.assertIn('no recorded seed', str(ctx.exception))
 
 
 class SerializationTester(_SGSTFixture, BaseCase):
@@ -1011,9 +1241,8 @@ class SerializationTester(_SGSTFixture, BaseCase):
         self.assertEqual(loaded.qubit_labels, self.design.qubit_labels)
         self.assertEqual(loaded.processor_spec.qubit_labels,
                          self.design.processor_spec.qubit_labels)
-        # RNG is deliberately not preserved (stitcher_kwargs comes back empty)
-        self.assertEqual(loaded.stitcher_kwargs, {})
-        self.assertIn('randgen', self.design.stitcher_kwargs)
+        # The seed is preserved as data, so the loaded design can re-stitch.
+        self.assertEqual(loaded.stitch_seed, self.design.stitch_seed)
 
     @with_temp_path
     def test_color_patches_survive_with_int_keys_and_tuple_edges(self, root_path):
@@ -1059,7 +1288,7 @@ class SerializationTester(_SGSTFixture, BaseCase):
         # Ties the restored coloring to the restored circuits: every member above can
         # look individually plausible and still not describe the others.
         _, loaded = self._roundtrip(root_path)
-        assert_circuit_lists_match_color_patches(
+        _validate_stitched_circuits(
             loaded.circuit_lists, loaded.vertices, loaded.color_patches)
 
     @with_temp_path
@@ -1088,37 +1317,146 @@ class SerializationTester(_SGSTFixture, BaseCase):
 
     # -- the circuit stitcher ------------------------------------------------
 
-    def test_stitcher_name_is_recorded(self):
-        self.assertEqual(self.design.circuit_stitcher_name,
-                         'pygsti.protocols.simultaneous_gst.assign_the_designs_with_mapping')
+    def test_design_requires_an_explicit_stitcher_instance(self):
+        for value in (_stub_stitcher, RandomizedPatchStitcher, 'randomized'):
+            with self.subTest(value=value), self.assertRaises(TypeError):
+                SimultaneousGSTDesign(
+                    self.pspec, self.oneq, self.twoq, self.design.color_patches,
+                    circuit_stitcher=value, debug_check=False)
+
+    def _build_callable_design(self, function=_stub_stitcher, **options):
+        return SimultaneousGSTDesign(
+            self.pspec, self.oneq, self.twoq, self.design.color_patches,
+            circuit_stitcher=CallableStitcher(function, **options), seed=123, debug_check=False)
 
     @with_temp_path
-    def test_importable_stitcher_is_restored(self, root_path):
+    def test_unsupported_recipes_save_circuits_without_disabling_the_live_adapter(self, root_path):
+        main_function = types.FunctionType(_stub_stitcher.__code__, globals(), 'main_stitcher')
+        main_function.__module__ = '__main__'
+        shadowed_function = types.FunctionType(_stub_stitcher.__code__, globals())
+        instance = _CallableInstance()
+        captured = _STUB_CIRCUIT_LISTS
+
+        def closure(*args, **kwargs):
+            return [[c.copy() for c in cl] for cl in captured]
+
+        cycle_list = []
+        cycle_list.append(cycle_list)
+        cycle_dict = {}
+        cycle_dict['self'] = cycle_dict
+        cases = [
+            ('main', main_function, {}),
+            ('shadowed_function', shadowed_function, {}),
+            ('lambda', lambda *a, **kw: _stub_stitcher(*a, **kw), {}),
+            ('closure', closure, {}),
+            ('bound_method', instance.__call__, {}),
+            ('partial', functools.partial(_stub_stitcher), {}),
+            ('callable_instance', instance, {}),
+        ]
+        cases.extend((name, _stub_stitcher, {'option': value}) for name, value in [
+            ('tuple', {'nested': (1, 2)}), ('array', np.array([1, 2])),
+            ('object', object()), ('non_string_key', {1: 'one'}),
+            ('numpy_integer', np.int64(1)), ('numpy_float', np.float64(1)),
+            ('nan', float('nan')),
+            ('infinity', float('inf')), ('negative_infinity', -float('inf')),
+            ('list_cycle', cycle_list), ('dict_cycle', cycle_dict),
+        ])
+        for name, function, options in cases:
+            with self.subTest(recipe=name):
+                design = self._build_callable_design(function, **options)
+                expected = [list(cl) for cl in design.circuit_lists]
+                root = pathlib.Path(root_path) / name
+                with self.assertWarnsRegex(UserWarning, 'recipe'):
+                    design.write(root)
+                loaded = SimultaneousGSTDesign.from_dir(root)
+                self.assertEqual(loaded.circuit_stitcher.kwargs, {})
+                self.assertEqual([list(cl) for cl in loaded.circuit_lists], expected)
+                self.assertEqual(set(loaded.all_circuits_needing_data),
+                                 set(design.all_circuits_needing_data))
+                with self.assertRaisesRegex(ValueError, 'recipe.*restored'):
+                    loaded.restitch(debug_check=False)
+                self.assertEqual([list(cl) for cl in design.restitch(debug_check=False).circuit_lists],
+                                 expected)
+
+    @with_temp_path
+    def test_resaving_an_unavailable_recipe_preserves_its_failure_reason(self, root_path):
+        design = self._build_callable_design(option=(1, 2))
+        with self.assertWarns(UserWarning):
+            _, loaded = self._roundtrip(root_path, design, name='original')
+        with self.assertRaises(ValueError) as first:
+            loaded.restitch()
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', UserWarning)
+            _, reloaded = self._roundtrip(root_path, loaded, name='resaved')
+        with self.assertRaises(ValueError) as second:
+            reloaded.restitch()
+        self.assertEqual(str(second.exception), str(first.exception))
+        self.assertEqual([list(cl) for cl in reloaded.circuit_lists],
+                         [list(cl) for cl in design.circuit_lists])
+
+    @with_temp_path
+    def test_missing_function_references_load_saved_circuits_with_a_warning(self, root_path):
+        references = ['nonexistent_stitcher_module_920.stitch', __name__ + '.missing_stitcher']
+        for i, reference in enumerate(references):
+            with self.subTest(reference=reference):
+                design = self._build_callable_design()
+                root = pathlib.Path(root_path) / str(i)
+                design.write(root)
+                recipe_path = root / 'edesign' / 'circuit_stitcher.json'
+                state = json.loads(recipe_path.read_text())
+                state['func'] = reference
+                recipe_path.write_text(json.dumps(state))
+                with self.assertWarns(UserWarning):
+                    loaded = SimultaneousGSTDesign.from_dir(root)
+                self.assertEqual([list(cl) for cl in loaded.circuit_lists],
+                                 [list(cl) for cl in design.circuit_lists])
+                with self.assertRaisesRegex(ValueError, 'recipe.*restored'):
+                    loaded.restitch()
+
+    @with_temp_path
+    def test_a_public_callable_stitcher_preserves_its_options_after_loading(self, root_path):
+        limits = [3, None]
+        config = {'limits': limits, 'same_limits': limits,
+                  'enabled': True, 'scale': 0.5, 'label': 'small'}
+        stitcher = pygsti.protocols.CallableStitcher(_limited_stitcher, config=config)
+        design = SimultaneousGSTDesign(
+            self.pspec, self.oneq, self.twoq, self.design.color_patches,
+            circuit_stitcher=stitcher, seed=123)
+        self.assertTrue(all(len(cl) == 3 for cl in design.circuit_lists))
+        _, loaded = self._roundtrip(root_path, design)
+        self.assertEqual(loaded.circuit_stitcher.kwargs, {'config': config})
+        self.assertEqual([list(cl) for cl in loaded.restitch().circuit_lists],
+                         [list(cl) for cl in design.circuit_lists])
+
+    @with_temp_path
+    def test_the_stitcher_is_restored_as_an_object(self, root_path):
         _, loaded = self._roundtrip(root_path)
-        self.assertIs(loaded.circuit_stitcher, assign_the_designs_with_mapping)
+        self.assertIsInstance(loaded.circuit_stitcher, RandomizedPatchStitcher)
+        self.assertEqual(loaded.circuit_stitcher.share_same_shape_schedules,
+                         self.design.circuit_stitcher.share_same_shape_schedules)
 
     @with_temp_path
-    def test_unimportable_stitcher_loads_as_none_with_a_warning(self, root_path):
-        # A lambda has no importable name. Not fatal -- the stitcher is only called from
-        # __init__ -- but the design forgets how it was built, hence the warning.
+    def test_a_stitcher_defined_outside_pygsti_is_restored_too(self, root_path):
+        """The reason the stitcher is serialized rather than named: a subclass
+        anywhere round-trips, where an import path only works for a module-level def."""
         design = SimultaneousGSTDesign(
             self.pspec, self.oneq, self.twoq, {0: [(0, 1)], 1: [(1, 2)]},
-            circuit_stitcher=(lambda *args, **kwargs: _STUB_CIRCUIT_LISTS),
-            debug_check=False)
-
-        root = pathlib.Path(root_path) / 'lam'
+            circuit_stitcher=_CountingStitcher('from-a-test-module'), debug_check=False)
+        root = pathlib.Path(root_path) / 'custom'
         design.write(root)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter('always')
-            loaded = SimultaneousGSTDesign.from_dir(root)
+        loaded = SimultaneousGSTDesign.from_dir(root)
+        self.assertIsInstance(loaded.circuit_stitcher, _CountingStitcher)
+        self.assertEqual(loaded.circuit_stitcher.tag, 'from-a-test-module')
 
-        self.assertIsNone(loaded.circuit_stitcher)
-        self.assertTrue(any('circuit_stitcher' in str(w.message) for w in caught),
-                        msg='expected a warning naming circuit_stitcher, got %s'
-                            % [str(w.message) for w in caught])
-        # The circuits themselves are unaffected by the stitcher being unrestorable.
-        self.assertEqual([list(cl) for cl in loaded.circuit_lists],
-                         [list(cl) for cl in design.circuit_lists])
+    @with_temp_path
+    def test_a_loaded_design_can_restitch_its_own_circuits(self, root_path):
+        """What the callable stitcher could not do: `stitcher_kwargs` held a live
+        Generator, so a reloaded design reproduced its circuits but could not rebuild
+        them."""
+        _, loaded = self._roundtrip(root_path)
+        restitched = loaded.restitch()
+        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+                         [list(cl) for cl in self.design.circuit_lists])
 
 
 class TruncationTester(_SGSTFixture, BaseCase):
@@ -1153,7 +1491,7 @@ class TruncationTester(_SGSTFixture, BaseCase):
         self.assertTrue(truncated.nested)
         # Still a well-formed stitching: content-based validation does not care that
         # the equal-chunk patch-major layout is gone.
-        assert_circuit_lists_match_color_patches(
+        _validate_stitched_circuits(
             truncated.circuit_lists, truncated.vertices, truncated.color_patches)
         # Nesting is a claim about the lists, so check it rather than trusting the flag.
         for lower, higher in zip(truncated.circuit_lists, truncated.circuit_lists[1:]):
@@ -1358,7 +1696,7 @@ class MakeLineMapperValidationTester(BaseCase):
 
 
 class AssignDesignsDefaultRandgenTester(BaseCase):
-    """``assign_the_designs_with_mapping`` defaults ``randgen`` to ``default_rng(0)``."""
+    """``_stitch_circuits`` defaults ``randgen`` to ``default_rng(0)``."""
 
     def test_default_randgen_behavior(self):
         omitted = _stitch(3, 5, seed=None)  # no randgen/seed passed
@@ -1396,7 +1734,7 @@ class ReduceByDoptTester(_SGSTFixture, BaseCase):
         self.assertIsInstance(reduced, SimultaneousGSTDesign)
         self.assertEqual(len(reduced.all_circuits_needing_data), 8)
         self.assertTrue(reduced.nested)
-        assert_circuit_lists_match_color_patches(
+        _validate_stitched_circuits(
             reduced.circuit_lists, reduced.vertices, reduced.color_patches)
         self.assertEqual(reduced.color_patches, self.small.color_patches)
         self.assertTrue(set(reduced.all_circuits_needing_data)
@@ -1433,7 +1771,7 @@ class ReduceByDoptTester(_SGSTFixture, BaseCase):
         reduced = self.small.reduce_with(lambda design, n: shallowest, 7)
         self.assertIsInstance(reduced, SimultaneousGSTDesign)
         self.assertEqual(set(reduced.all_circuits_needing_data), set(shallowest))
-        assert_circuit_lists_match_color_patches(
+        _validate_stitched_circuits(
             reduced.circuit_lists, reduced.vertices, reduced.color_patches)
 
     def test_reduce_by_dopt_is_reduce_with_a_dopt_reducer(self):
@@ -1468,6 +1806,14 @@ class ReduceByDoptTester(_SGSTFixture, BaseCase):
         self.assertArraysAlmostEqual(loaded.selection.scores, reduced.selection.scores)
         self.assertEqual(set(loaded.all_circuits_needing_data),
                          set(reduced.all_circuits_needing_data))
+        self.assertIsInstance(loaded.circuit_stitcher, RandomizedPatchStitcher)
+        self.assertEqual(loaded.circuit_stitcher.share_same_shape_schedules,
+                         self.design.circuit_stitcher.share_same_shape_schedules)
+        self.assertEqual(loaded.stitch_seed, self.design.stitch_seed)
+        restitched = loaded.restitch()
+        self.assertIsNone(restitched.selection)
+        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+                         [list(cl) for cl in self.design.circuit_lists])
 
     def test_the_reduction_beats_taking_the_first_n_circuits(self):
         """Otherwise there is no point to any of this.
