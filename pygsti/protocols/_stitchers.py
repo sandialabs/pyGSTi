@@ -10,6 +10,10 @@ Circuit stitchers: the pluggable rules that combine 1Q and 2Q GST designs
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import importlib as _importlib
+import math as _math
+from types import FunctionType as _FunctionType
+
 import numpy as np
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -31,35 +35,36 @@ __all__ = [
     'CircuitStitcher',
     'RandomizedPatchStitcher',
     'CallableStitcher',
-    'assign_the_designs_with_mapping',
-    'assert_circuit_lists_match_color_patches',
-    'build_layer_mappers',
 ]
 
 
 class CircuitStitcher(_NicelySerializable):
     """A rule for combining 1Q and 2Q GST designs into simultaneous circuit lists.
 
-    Subclasses implement :meth:`_stitch` and nothing else.  Callers -- in practice
+    Subclasses implement :meth:`_stitch`. Callers -- in practice
     :class:`~pygsti.protocols.SimultaneousGSTDesign` -- use :meth:`stitch`, which checks
     the result against the coloring it was supposed to realize before anything downstream
     can trust it.
 
     A stitcher is **pure configuration**: its options are constructor arguments, and the
-    random stream it draws from is handed to :meth:`stitch` rather than held.  That is
-    what makes it serializable, and it is deliberate.  A simultaneous design has two
-    independent random choices -- which edges land in which patch, and which circuit
+    random stream it draws from is handed to :meth:`stitch` rather than held. A
+    simultaneous design has two independent random choices -- which edges land in which patch, and which circuit
     lands in which lane slot -- and
     :func:`~pygsti.protocols.make_simultaneous_gst_design` must derive both from one user
     seed via `SeedSequence.spawn`.  That coordination belongs to the thing that owns both
     streams, so a stitcher that owned its own seed would make the split either impossible
     or the caller's problem.
 
-    A subclass defined anywhere works with no registration step, and serializes and
-    reloads correctly, because
+    A subclass needs no registration step. To reload it, its defining module and class
+    must remain importable:
     :class:`~pygsti.baseobjs.nicelyserializable.NicelySerializable` records the defining
-    module and class name and re-imports on load.  A stitcher that holds no configuration
-    needs no serialization code at all.
+    module and class name and re-imports on load. A stitcher that holds no configuration
+    needs no serialization code; a configured subclass must encode and restore its options.
+
+    Saving a design preserves its circuit data even when a :class:`CallableStitcher`
+    cannot preserve its executable recipe. Such a loaded adapter raises when asked to
+    stitch. Reproducing circuits also requires an unchanged implementation, stable
+    configuration, and drawing randomness only from the supplied generator.
     """
 
     # -- the one method a subclass writes ----------------------------------- #
@@ -72,7 +77,7 @@ class CircuitStitcher(_NicelySerializable):
         caller controls reproducibility.  The result is indexed by germ power.
 
         Do not verify the output here: :meth:`stitch` runs
-        :func:`assert_circuit_lists_match_color_patches` against whatever this returns.
+        :func:`_validate_stitched_circuits` against whatever this returns.
         """
         raise NotImplementedError("CircuitStitcher subclasses must implement _stitch.")
 
@@ -101,7 +106,7 @@ class CircuitStitcher(_NicelySerializable):
             shows a progress bar over germ powers.
 
         debug_check : bool, optional (default True)
-            Whether to run :func:`assert_circuit_lists_match_color_patches` on the
+            Whether to run :func:`_validate_stitched_circuits` on the
             result.  It is stitcher-agnostic -- it checks that every circuit has no
             implicit idle gates and sits on its own patch's qubits -- so it runs here
             rather than in the design constructor, and therefore covers direct calls too.
@@ -116,41 +121,6 @@ class CircuitStitcher(_NicelySerializable):
                              randgen, verbosity)
         self._validate(lists, debug_check, vertices, color_patches)
         return lists
-
-    @classmethod
-    def cast(cls, obj, **kwargs):
-        """`obj` as a :class:`CircuitStitcher`: itself, or a callable wrapped in one.
-
-        Parameters
-        ----------
-        obj : CircuitStitcher or callable
-            A callable is adapted by :class:`CallableStitcher`, which also carries the
-            serialization caveat that comes with one. A `CircuitStitcher` subclass
-            passed uninstantiated (a forgotten `()`) is rejected with a targeted error
-            rather than silently treated as a plain callable.
-
-        **kwargs
-            Extra keyword arguments for a wrapped callable. Raises `TypeError` if
-            `obj` is already a stitcher; set its options when constructing it.
-
-        Returns
-        -------
-        CircuitStitcher
-        """
-        if isinstance(obj, CircuitStitcher):
-            if kwargs:
-                raise TypeError(
-                    f"Options passed alongside an already-built {type(obj).__name__}: "
-                    f"{sorted(kwargs)}. Set them on the stitcher instead.")
-            return obj
-        if isinstance(obj, type) and issubclass(obj, CircuitStitcher):
-            raise TypeError(
-                f"{obj.__name__} is a CircuitStitcher subclass, not an instance -- did "
-                f"you forget the parentheses? Pass {obj.__name__}() instead.")
-        if callable(obj):
-            return CallableStitcher(obj, **kwargs)
-        raise TypeError("A circuit stitcher must be a CircuitStitcher or a callable; got "
-                        f"{type(obj).__name__}.")
 
     # -- validation ----------------------------------------------------------- #
 
@@ -170,7 +140,7 @@ class CircuitStitcher(_NicelySerializable):
                                     f"{type(circuit).__name__} at germ-power index {i}; "
                                     "expected a Circuit.")
         if debug_check:
-            assert_circuit_lists_match_color_patches(lists, vertices, color_patches)
+            _validate_stitched_circuits(lists, vertices, color_patches)
 
     # -- serialization --------------------------------------------------------- #
 
@@ -204,9 +174,10 @@ class CircuitStitcher(_NicelySerializable):
 class RandomizedPatchStitcher(CircuitStitcher):
     """The default stitcher: a random per-germ-power schedule for each color patch.
 
-    A thin configuration wrapper over :func:`assign_the_designs_with_mapping`, which
-    remains a public function and is where the algorithm and its output ordering are
-    documented.
+    Circuit lists are indexed by germ power, then grouped by color patch in the input
+    order. Each patch contributes the same number of circuits at a given germ power.
+    The component designs are assumed to be nested; the output includes each earlier
+    germ power's circuits within every patch's group.
 
     Parameters
     ----------
@@ -225,7 +196,7 @@ class RandomizedPatchStitcher(CircuitStitcher):
 
     def _stitch(self, oneq_gstdesign, twoq_gstdesign, vertices, color_patches, randgen,
                 verbosity):
-        return assign_the_designs_with_mapping(
+        return _stitch_circuits(
             oneq_gstdesign, twoq_gstdesign, vertices, color_patches, randgen=randgen,
             share_same_shape_schedules=self.share_same_shape_schedules,
             verbosity=verbosity)
@@ -243,15 +214,28 @@ class RandomizedPatchStitcher(CircuitStitcher):
 class CallableStitcher(CircuitStitcher):
     """Adapts a plain stitcher function to the :class:`CircuitStitcher` interface.
 
-    The low-ceremony option, for a one-off stitcher in a notebook or a test.  `func` is
-    invoked as `func(oneq_gstdesign, twoq_gstdesign, vertices, color_patches,
-    randgen=..., verbosity=..., **kwargs)` -- the calling convention
-    :class:`~pygsti.protocols.SimultaneousGSTDesign` used before stitchers became objects.
+    Pass ``CallableStitcher(func, **options)`` as a design's ``circuit_stitcher``.
+    The adapter invokes ``func(oneq_gstdesign, twoq_gstdesign, vertices, color_patches,
+    randgen=..., verbosity=..., **options)``. The base class supplies the RNG and
+    validates the returned circuit lists. For reproducible results, use that RNG and
+    avoid changing configuration or depending on mutable external state.
 
-    Serialization records `func` by module and qualified name, so -- unlike a real
-    `CircuitStitcher` subclass -- it does not round-trip for a lambda, a closure, or a
-    function defined interactively, and a design built with one cannot be re-stitched
-    after a reload.  Subclass :class:`CircuitStitcher` if that matters.
+    A saved recipe can be restored only when `func` is an importable module-level
+    Python function and its options contain JSON-native values: string-key dictionaries,
+    lists, strings, booleans, Python integers, finite Python floats, and ``None``.
+    Functions defined in ``__main__``, lambdas, closures, bound methods, partials, and
+    callable instances work at runtime but cannot be saved as executable recipes.
+    Tuples, NumPy arrays, custom objects, and cyclic options are also unsupported.
+
+    Saving an unsupported recipe warns and records the reason without changing this
+    live adapter. An ordinary design load still restores saved circuits, but its
+    adapter raises on ``stitch()`` or ``restitch()``. A supported recipe whose function
+    is missing at load time warns and has the same limitation. Saving an unavailable
+    adapter again preserves that reason. Other import and serialization errors propagate.
+
+    Use an importable :class:`CircuitStitcher` subclass with explicit serialization
+    methods for configuration that needs custom encoding. Neither approach saves Python
+    code or guarantees reproducibility when the referenced implementation changes.
 
     Parameters
     ----------
@@ -259,58 +243,124 @@ class CallableStitcher(CircuitStitcher):
         The stitcher function.
 
     **kwargs
-        Extra keyword arguments forwarded to `func` on every call.
+        Extra keyword arguments forwarded to `func` on every call. ``randgen`` and
+        ``verbosity`` are execution controls and cannot be configured here.
     """
 
     def __init__(self, func, **kwargs):
         super().__init__()
+        if not callable(func):
+            raise TypeError("CallableStitcher requires a callable function.")
+        reserved = {'randgen', 'verbosity'}.intersection(kwargs)
+        if reserved:
+            raise TypeError(f"CallableStitcher options cannot include execution controls: {sorted(reserved)}.")
         self.func = func
         self.kwargs = kwargs
+        self._unavailable_reason = None
 
     def _stitch(self, oneq_gstdesign, twoq_gstdesign, vertices, color_patches, randgen,
                 verbosity):
         if self.func is None:
             raise ValueError(
-                "This CallableStitcher's function could not be restored after a reload "
-                "(it was a lambda, a closure, or a function defined inside another "
-                "function). Rebuild the design with a real circuit_stitcher to "
-                "regenerate its circuits.")
+                f"This CallableStitcher's recipe could not be restored: {self._unavailable_reason} "
+                "Rebuild the design with an executable circuit_stitcher to regenerate its circuits.")
         return self.func(oneq_gstdesign, twoq_gstdesign, vertices, color_patches,
                          randgen=randgen, verbosity=verbosity, **self.kwargs)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        module = getattr(self.func, '__module__', None)
-        qualname = getattr(self.func, '__qualname__', None)
-        state['func'] = None if (module is None or qualname is None) else f"{module}.{qualname}"
-        state['kwargs'] = self.kwargs
+        reason = self._unavailable_reason
+        if self.func is not None:
+            name = _function_reference(self.func)
+            if name is None:
+                reason = "The callable is not an importable module-level Python function."
+            else:
+                restored, reason = _resolve_stitcher_function(name)
+                if reason is None and restored is not self.func:
+                    reason = f"The function reference {name!r} resolves to a different object."
+                if reason is None:
+                    reason = _json_option_error(self.kwargs)
+            if reason is not None:
+                _warnings.warn(f"CallableStitcher recipe cannot be restored after loading: {reason} "
+                               "Saving an unavailable recipe; the live adapter is unchanged.", stacklevel=2)
+            else:
+                state['func'] = name
+                state['kwargs'] = self.kwargs
+        if reason is not None:
+            state['unavailable_reason'] = reason
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
-        name = state.get('func')
-        if name is None:
-            _warnings.warn(
-                "Restoring a CallableStitcher whose function had no module and "
-                "qualified name to record. The design still loads, but its "
-                "stitch()/restitch() will raise until it's given a real "
-                "circuit_stitcher. Subclass CircuitStitcher for a stitcher that reloads.")
-            return cls(None, **state.get('kwargs', {}))
-        try:
-            from pygsti.io.metadir import _class_for_name as _resolve_name
-            func = _resolve_name(name)
-        except Exception as e:
-            # Warned rather than raised: a load-time failure here used to take the
-            # entire design down with it, not just this stitcher's ability to re-stitch.
-            _warnings.warn(
-                f"Could not restore the CallableStitcher function {name!r} ({e}). This is "
-                "expected for a lambda, a closure, or a function defined inside another "
-                "function -- none of them can be imported by name. The design still "
-                "loads, but its stitch()/restitch() will raise until it's given a real "
-                "circuit_stitcher. Subclass CircuitStitcher if the design needs to "
-                "record how it was built.")
-            return cls(None, **state.get('kwargs', {}))
-        return cls(func, **state.get('kwargs', {}))
+        if 'unavailable_reason' in state:
+            return cls._unavailable(state['unavailable_reason'])
+        func, reason = _resolve_stitcher_function(state['func'])
+        if reason is not None:
+            _warnings.warn(f"CallableStitcher recipe could not be restored: {reason} "
+                           "Saved circuit data can still be loaded, but restitching is unavailable.", stacklevel=2)
+            return cls._unavailable(reason)
+        return cls(func, **state['kwargs'])
+
+    @classmethod
+    def _unavailable(cls, reason):
+        # Loading a marker bypasses the public constructor's callable requirement.
+        obj = cls.__new__(cls)
+        CircuitStitcher.__init__(obj)
+        obj.func = None
+        obj.kwargs = {}
+        obj._unavailable_reason = reason
+        return obj
+
+
+def _function_reference(func):
+    """Return the module-level reference supported by callable recipes, if any."""
+    if (not isinstance(func, _FunctionType) or not func.__module__
+            or func.__module__ == '__main__' or func.__closure__
+            or '.' in func.__qualname__ or '<' in func.__qualname__):
+        return None
+    return f"{func.__module__}.{func.__qualname__}"
+
+
+def _resolve_stitcher_function(name):
+    """Resolve a recipe reference, distinguishing missing code from broken imports."""
+    module_name, function_name = name.rsplit('.', 1)
+    try:
+        module = _importlib.import_module(module_name)
+    except ModuleNotFoundError as error:
+        if error.name and (module_name == error.name or module_name.startswith(error.name + '.')):
+            return None, f"The function's module {module_name!r} is unavailable."
+        raise
+    # Only actual module-level functions qualify; do not invoke dynamic __getattr__.
+    func = vars(module).get(function_name)
+    if _function_reference(func) is None:
+        return None, f"The reference {name!r} no longer names a supported module-level function."
+    return func, None
+
+
+def _json_option_error(value, active=None):
+    """Explain why options cannot round-trip as JSON-native values, or return None."""
+    kind = type(value)
+    if value is None or kind in (str, bool, int):
+        return None
+    if kind is float:
+        return None if _math.isfinite(value) else "Options contain a non-finite float."
+    if kind not in (list, dict):
+        return f"Options contain {kind.__name__}; only JSON-native values can be restored."
+    if kind is dict and any(type(key) is not str for key in value):
+        return "Options contain a dictionary with non-string keys."
+    if active is None:
+        active = set()
+    if id(value) in active:
+        return "Options contain a cycle."
+    active.add(id(value))
+    try:
+        for item in (value.values() if kind is dict else value):
+            reason = _json_option_error(item, active)
+            if reason is not None:
+                return reason
+    finally:
+        active.remove(id(value))
+    return None
 
 
 def build_layer_mappers(oneq_gstdesign: GateSetTomographyDesign, twoq_gstdesign: GateSetTomographyDesign) -> LayerMappers:
@@ -551,7 +601,7 @@ def identify_circuit_patch(circuit: Circuit,
     return patch_idx
 
 
-def assert_circuit_lists_match_color_patches(
+def _validate_stitched_circuits(
     circuit_lists: List[List[Circuit]],
     vertices: Sequence[Vertex],
     color_patches: Dict[int, List[Edge]],
@@ -562,7 +612,7 @@ def assert_circuit_lists_match_color_patches(
 
     This is stitcher-agnostic: it validates the *output* of whatever
     ``circuit_stitcher`` produced ``circuit_lists``, not just the built-in
-    ``assign_the_designs_with_mapping``, so it can (and is, by
+    ``_stitch_circuits``, so it can (and is, by
     ``SimultaneousGSTDesign.__init__``) be run regardless of which stitcher was
     actually used.
 
@@ -595,7 +645,7 @@ def assert_circuit_lists_match_color_patches(
     which leaves every circuit valid while destroying the equal-chunk positional
     structure.
     Tests that care about the stitcher's ordering should assert it on
-    ``assign_the_designs_with_mapping``'s output directly.
+    ``_stitch_circuits``'s output directly.
 
     Parameters
     ----------
@@ -734,7 +784,7 @@ def _nest_a_circuitlist(circuitlist: list[list[Circuit]], num_patches: int = 1) 
     return cop
 
 
-def assign_the_designs_with_mapping(
+def _stitch_circuits(
     oneq_gstdesign: GateSetTomographyDesign,
     twoq_gstdesign: GateSetTomographyDesign,
     vertices: Sequence[Vertex],
@@ -742,7 +792,6 @@ def assign_the_designs_with_mapping(
     randgen: Optional[np.random.Generator] = None,
     share_same_shape_schedules: bool = True,
     verbosity: int = 0,
-    **kwargs: Any,
 ) -> List[List[Circuit]]:
     """
     Given a 1Q GST design, a 2Q GST design, and an edge-colored graph of the topology of the
@@ -837,7 +886,7 @@ def assign_the_designs_with_mapping(
     - This function does not verify its own output (e.g. that no implicit idle
     gates remain, or that circuits landed on the correct patch). That
     verification is stitcher-agnostic and lives in
-    :func:`assert_circuit_lists_match_color_patches`, which
+    :func:`_validate_stitched_circuits`, which
     ``SimultaneousGSTDesign.__init__`` runs (by default) against
     whatever this or any other ``circuit_stitcher`` returns.
 
@@ -871,11 +920,6 @@ def assign_the_designs_with_mapping(
         stitching. Defaults to 0 (silent), so that library calls and test
         suites produce no output.
 
-    **kwargs
-        Accepted for compatibility with legacy callable stitchers, but ignored
-        with a warning naming the unused options. Use the named parameters above
-        to configure this helper.
-
     Returns
     -------
     list[list]
@@ -893,11 +937,6 @@ def assign_the_designs_with_mapping(
         supported; truncate the longer design (or rebuild both with the same
         ``max_lengths``) before calling.
     """
-    if kwargs:
-        _warnings.warn(
-            f"assign_the_designs_with_mapping ignored unused keyword arguments: {sorted(kwargs)}. "
-            "Check the option names or configure a RandomizedPatchStitcher instead.",
-            stacklevel=2)
     if randgen is None:
         randgen = np.random.default_rng(0)
 

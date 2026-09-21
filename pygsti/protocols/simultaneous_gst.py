@@ -18,13 +18,9 @@ from pygsti import io as _io
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.processors import QubitProcessorSpec
 
-# The stitching machinery lives in _stitchers; this module is the design class that
-# drives it.  `assign_the_designs_with_mapping` and
-# `assert_circuit_lists_match_color_patches` are used below and re-exported in __all__,
-# as both were importable from here before the split.
 from pygsti.protocols._stitchers import (
     CallableStitcher, CircuitStitcher, Edge, RandomizedPatchStitcher, Vertex,
-    assert_circuit_lists_match_color_patches, assign_the_designs_with_mapping,
+    _validate_stitched_circuits,
 )
 from pygsti.tools.graphs import (
     canonical_edges, find_neighbors, max_degree,
@@ -33,20 +29,13 @@ from pygsti.tools.graphs.coloring import switchboard_find_edge_coloring
 
 SeedLike = Union[int, np.random.SeedSequence, np.random.Generator]
 
-# This module is star-imported into ``pygsti.protocols``, so ``__all__`` is kept
-# to the documented public surface: the design class, its convenience
-# constructor, the default circuit stitcher, callable adapter and stitcher base class
-# (documented as pluggable, so callers need to be able to name them), and the
-# stitcher-agnostic output validator (which anyone writing their own stitcher is
-# expected to run). The remaining helpers are deliberately left out.
+# Public names exported by ``pygsti.protocols``.
 __all__ = [
     'SimultaneousGSTDesign',
     'make_simultaneous_gst_design',
     'CircuitStitcher',
     'RandomizedPatchStitcher',
     'CallableStitcher',
-    'assign_the_designs_with_mapping',
-    'assert_circuit_lists_match_color_patches',
 ]
 
 
@@ -143,8 +132,8 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         ``color_patches`` compares equal across designs however they were built (see
         :func:`_normalize_coloring`). Edge *orientation* is preserved as given.
     circuit_stitcher (CircuitStitcher): The rule that combines the two designs
-        (default: a :class:`RandomizedPatchStitcher`). A plain callable is accepted and
-        wrapped in a :class:`CallableStitcher`; see :meth:`CircuitStitcher.cast`.
+        (default: a :class:`RandomizedPatchStitcher`). Wrap a function explicitly in
+        :class:`CallableStitcher`, whose documentation describes its persistence limits.
     seed (optional): Anything ``np.random.default_rng`` accepts -- an int, a SeedSequence,
         or an already-built Generator -- used to seed the randgen handed to the stitcher.
         Recorded as ``stitch_seed``, so an int or a SeedSequence lets a reloaded design
@@ -174,8 +163,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         """
         Assume that the GST designs have the same Ls.
 
-        The default ``circuit_stitcher`` is a :class:`RandomizedPatchStitcher`, which
-        wraps :func:`assign_the_designs_with_mapping`.
+        The default ``circuit_stitcher`` is a :class:`RandomizedPatchStitcher`.
 
         A stitcher's *options* are its own constructor arguments, not keyword arguments
         here::
@@ -199,7 +187,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         (asserting ``Label(())`` never survives into a mapper's values), and
         ``batch_tensor`` re-checks that invariant. When ``debug_check`` is True
         (the default), the resulting ``circuit_lists`` are verified via
-        :func:`assert_circuit_lists_match_color_patches` -- checking that every
+        :func:`_validate_stitched_circuits` -- checking that every
         generated circuit has no implicit idle gates and is correctly stitched onto its
         own patch's qubits/edges. That check lives in :meth:`CircuitStitcher.stitch`, so
         it runs for any stitcher and for direct stitcher calls too.
@@ -212,8 +200,12 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         self.neighbors = find_neighbors(self.vertices, self.edges)
         self.deg = max([len(self.neighbors[v]) for v in self.vertices])
         self.color_patches = _normalize_coloring(edge_coloring)
-        self.circuit_stitcher = CircuitStitcher.cast(
-            RandomizedPatchStitcher() if circuit_stitcher is None else circuit_stitcher)
+        if circuit_stitcher is None:
+            circuit_stitcher = RandomizedPatchStitcher()
+        if not isinstance(circuit_stitcher, CircuitStitcher):
+            raise TypeError("circuit_stitcher must be a CircuitStitcher instance. "
+                            "Instantiate a stitcher class, or wrap a function in CallableStitcher.")
+        self.circuit_stitcher = circuit_stitcher
         if seed is None:
             seed = np.random.SeedSequence()
         self.stitch_seed = _recordable_seed(seed)
@@ -229,12 +221,12 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
     def restitch(self, verbosity: int = 0, debug_check: bool = True) -> "SimultaneousGSTDesign":
         """Rebuild this design's circuits from its recorded stitcher and seed.
 
-        Equal to `self` in circuit content for any design built the normal way, since an
-        omitted `seed` now generates and records one automatically. The two exceptions are
-        a design built with a live `Generator` (whose state can't be recorded) and one
-        loaded from a directory written before seeds were recorded at all. Useful as a
-        round-trip check after a write/load, and as the way to regenerate a design whose
-        circuits were not kept.
+        Reproduces the original circuits when the stitcher uses only the supplied RNG
+        and its implementation and configuration are unchanged. An omitted `seed`
+        generates and records one automatically; a live `Generator` cannot be recorded.
+        A loaded :class:`CallableStitcher` must also have a recoverable recipe. Saved
+        circuit data remains usable when the recipe is unavailable, but cannot be
+        regenerated by this method.
 
         Returns
         -------
@@ -246,7 +238,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
             If this design has no stitcher to run (loaded from a directory written before
             the stitcher became a serializable object), or no recorded seed to restitch
             from (built with a live Generator, or loaded from a directory written before
-            seeds were recorded).
+            seeds were recorded), or the callable recipe could not be restored.
         """
         if self.circuit_stitcher is None:
             raise ValueError("This SimultaneousGSTDesign has no circuit_stitcher to run.")
@@ -293,8 +285,8 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         for member in self._SUBDESIGN_DIRS:  # written/read by hand; see _SUBDESIGN_DIRS
             self.auxfile_types[member] = 'none'
 
-        # A CircuitStitcher is NicelySerializable, so it round-trips as data -- including
-        # a subclass defined outside pyGSTi, whose module and class name it records.
+        # Store the stitcher recipe, or an unavailable-recipe marker for callables
+        # whose function or options cannot be restored.
         # `stitch_seed` is a plain int or dict and needs no declaration; together they are
         # what lets a reloaded design re-stitch (see :meth:`restitch`).
         self.auxfile_types['circuit_stitcher'] = 'serialized-object'
@@ -338,12 +330,15 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
 
         Reconstructs the members that :meth:`_register_auxfile_types` marks ``'none'``:
         the graph members are recomputed from the processor spec as ``__init__`` does,
-        and the sub-designs are read back from their sub-directories. The stitcher comes
-        back as an object, not as an import path, so a stitcher subclass defined outside
-        pyGSTi is restored too.
+        and the sub-designs are read back from their sub-directories. A stitcher subclass
+        defined outside pyGSTi is restored if its class remains importable and its
+        serialization methods preserve its configuration.
 
-        With the stitcher and ``stitch_seed`` both restored, a loaded design can
-        regenerate its own circuits -- see :meth:`restitch`.
+        With an executable stitcher and ``stitch_seed`` restored, a loaded design can
+        regenerate its own circuits; see :meth:`restitch`. If a :class:`CallableStitcher`
+        recipe is unavailable, ordinary loading still restores the saved circuit data.
+        ``quick_load=True`` skips circuit data, including the component designs' lists;
+        an unavailable recipe provides no alternative source of circuits.
 
         Parameters
         ----------
@@ -413,7 +408,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
 
         debug_check : bool, optional
             If True (the default), verify the relabelled ``circuit_lists`` against the
-            relabelled coloring via :func:`assert_circuit_lists_match_color_patches`, the
+            relabelled coloring via :func:`_validate_stitched_circuits`, the
             same check ``__init__`` runs.
 
         Returns
@@ -432,7 +427,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
                                 for circuit_list in self.circuit_lists]
 
         if debug_check:
-            assert_circuit_lists_match_color_patches(
+            _validate_stitched_circuits(
                 mapped_circuit_lists, mapped_vertices, mapped_color_patches
             )
 
@@ -483,7 +478,7 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
 
     # Dropping circuits is safe here: a circuit carries its patch in its content -- which
     # multi-qubit gates it applies to which edges -- so the surviving circuits still
-    # validate against the coloring (see assert_circuit_lists_match_color_patches). Only
+    # validate against the coloring (see _validate_stitched_circuits). Only
     # the stitcher's equal-chunk patch-major *positional* layout is lost, and nothing
     # reads it off a built design.
     #
