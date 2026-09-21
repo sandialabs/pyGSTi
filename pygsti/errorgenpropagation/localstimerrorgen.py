@@ -48,6 +48,101 @@ def bel_less_than(pauli1: stim.PauliString, pauli2: stim.PauliString) -> bool:
     return bel_str(pauli1) < bel_str(pauli2)
 
 
+def _canonical_bel_strings(errorgen_type: str, bel_strs: Sequence[str]) -> tuple[Sequence[str], int]:
+    """
+    The canonical form of the basis element label strings of an error generator label, and the
+    sign the label's rate picks up in going to it. This is the single definition of the order
+    used by `LocalStimErrorgenLabel`, `bel_less_than` and the emitters of
+    `pygsti.tools.errgenproptools`: the two strings of a 'C' or 'A' label sorted as python
+    strings ('I' < 'X' < 'Y' < 'Z'). 'H' and 'S' labels, and 'C'/'A' labels already in order,
+    are returned unchanged with sign +1. A swap is free for C and negates the rate for A:
+
+        C_{Q,P} = C_{P,Q},      A_{Q,P} = -A_{P,Q}.
+
+    Parameters
+    ----------
+    errorgen_type : str
+        'H', 'S', 'C' or 'A'.
+
+    bel_strs : sequence of str
+        The 'I'-padded basis element label strings.
+
+    Returns
+    -------
+    tuple of (sequence of str, int)
+        The canonical strings and the sign (+1 or -1) to multiply the rate by.
+    """
+    if len(bel_strs) == 2 and bel_strs[1] < bel_strs[0]:
+        return (bel_strs[1], bel_strs[0]), (-1 if errorgen_type == 'A' else 1)
+    return bel_strs, 1
+
+
+def canonicalize_errorgen_layer(errorgen_layer: dict, sslbls: Optional[Sequence] = None) -> dict:
+    """
+    Convert a dictionary of error generator rates into one keyed by `LocalStimErrorgenLabel`s in
+    canonical form, i.e. with the two basis element labels of every 'C' and 'A' label in the order
+    used throughout the error generator propagation code (sorted as python strings, see
+    `bel_less_than`). Reordering is free for C (C_{Q,P} = C_{P,Q}) and negates the rate for A
+    (A_{Q,P} = -A_{P,Q}); rates of labels that become equal after reordering are summed.
+
+    Labels out of canonical order arise when a gate's coefficients are embedded into a permuted
+    set of target qubits (e.g. a two-qubit gate on qubits (1, 0)), and likewise when a
+    `GlobalElementaryErrorgenLabel` is cast to a local one: a pair sorted on the gate's own
+    qubits need not be sorted once padded to the full width. Every place error generator
+    dictionaries enter the propagation module (`ErrorGeneratorPropagator`, the stabilizer
+    probability approximations) passes them through this function, so that a given generator is
+    always represented by a single key downstream; `LocalStimErrorgenLabel.cast` refuses
+    non-canonical labels.
+
+    Parameters
+    ----------
+    errorgen_layer : dict
+        Dictionary from error generator labels to rates. The keys may be `LocalStimErrorgenLabel`,
+        `LocalElementaryErrorgenLabel` or `GlobalElementaryErrorgenLabel` objects (all of the same
+        kind).
+
+    sslbls : sequence, optional (default None)
+        The complete, ordered state space labels. Required when the keys are
+        `GlobalElementaryErrorgenLabel`s (to pad their basis element labels to the full width).
+
+    Returns
+    -------
+    dict
+        Dictionary from canonical `LocalStimErrorgenLabel`s to rates. When every key is already a
+        canonical `LocalStimErrorgenLabel` the input dictionary itself is returned.
+    """
+    if not errorgen_layer:
+        return errorgen_layer
+    first_key = next(iter(errorgen_layer))
+    if isinstance(first_key, LocalStimErrorgenLabel):
+        # fast path: one string compare per two-index key, no allocation.
+        if all(len(lbl._hashable_basis_element_labels) == 1 or lbl._hashable_basis_element_labels[0] <= lbl._hashable_basis_element_labels[1]
+               for lbl in errorgen_layer):
+            return errorgen_layer
+        entries = [(lbl.errorgen_type, lbl.basis_element_labels, lbl._hashable_basis_element_labels, rate, lbl)
+                   for lbl, rate in errorgen_layer.items()]
+    elif isinstance(first_key, _GEEL):
+        assert sslbls is not None, 'Must specify sslbls when the keys are `GlobalElementaryErrorgenLabel`s.'
+        entries = [(lbl.errorgen_type, None, lbl.padded_basis_element_labels(sslbls), rate, None)
+                   for lbl, rate in errorgen_layer.items()]
+    elif isinstance(first_key, _LEEL):
+        entries = [(lbl.errorgen_type, None, tuple(lbl.basis_element_labels), rate, None) for lbl, rate in errorgen_layer.items()]
+    else:
+        raise ValueError(f'Unsupported error generator label type {type(first_key)}.')
+
+    canonical_layer = {}
+    for errorgen_type, paulis, bel_strs, rate, lbl in entries:
+        new_strs, sign = _canonical_bel_strings(errorgen_type, bel_strs)
+        if lbl is None or sign != 1 or new_strs is not bel_strs:
+            if paulis is not None and new_strs is not bel_strs:
+                paulis = paulis[::-1]
+            elif paulis is None:
+                paulis = [stim.PauliString(s) for s in new_strs]
+            lbl = LocalStimErrorgenLabel(errorgen_type, paulis, pauli_str_reps=tuple(new_strs))
+        canonical_layer[lbl] = canonical_layer.get(lbl, 0) + sign * rate
+    return canonical_layer
+
+
 # Fixed numbering of the error generator sectors. `LocalStimErrorgenLabel.type_idx` is the
 # index of a label's `errorgen_type` in this table; `pygsti.tools.errgenproptools` uses
 # `4*type_idx_1 + type_idx_2` to index its per-type-pair dispatch tables for the error
@@ -97,6 +192,13 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
     (`_ERRORGEN_TYPE_INDICES[errorgen_type]`, i.e. H=0, S=1, C=2, A=3) that the error generator
     commutator and composition routines in `pygsti.tools.errgenproptools` use to index their
     per-type-pair dispatch tables.
+
+    The two basis element labels of a 'C' or 'A' label must always be given in canonical order
+    (sorted as python strings, `bel_less_than`): labels hash and compare on their string form,
+    so C_{P,Q} and C_{Q,P} would otherwise be two different keys for the same generator (and
+    A_{P,Q} = -A_{Q,P} would additionally hide a sign). The constructor does not check this;
+    `cast` does, and dictionaries of rates coming from a model or a user are put into canonical
+    form by `canonicalize_errorgen_layer` where they enter the propagation module.
     """
 
     @classmethod
@@ -117,6 +219,13 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         Returns
         -------
         `LocalStimErrorgenLabel`
+
+        Raises
+        ------
+        ValueError
+            If the two basis element labels of a 'C' or 'A' label are not in canonical order. A
+            reordered A label needs a sign on its rate, which a label cannot carry; use
+            `canonicalize_errorgen_layer` on the dictionary of rates instead.
         """
         if isinstance(obj, LocalStimErrorgenLabel):
             return obj
@@ -169,7 +278,13 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             else:
                 raise ValueError('Only str and `stim.PauliString` basis element labels are supported presently.')
             
-        return cls(errorgen_type, stim_bels, initial_label=initial_label)
+        label = cls(errorgen_type, stim_bels, initial_label=initial_label)
+        bel_strs = label._hashable_basis_element_labels
+        if len(bel_strs) == 2 and bel_strs[1] < bel_strs[0]:
+            raise ValueError(f"The basis element labels of {label} are not in canonical order ('{bel_strs[1]}' sorts "
+                             f"before '{bel_strs[0]}'). Use `canonicalize_errorgen_layer` to convert a dictionary of "
+                             "rates, which also applies the sign flip A_{Q,P} = -A_{P,Q}.")
+        return label
 
 
     def __init__(self, errorgen_type: str, basis_element_labels: Iterable[stim.PauliString],

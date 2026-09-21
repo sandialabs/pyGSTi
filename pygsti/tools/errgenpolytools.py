@@ -31,7 +31,7 @@ from pygsti.models import (ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel 
                           LocalNoiseModel as _LocalNoiseModel)
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL 
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than as _bel_less_than
 
 from typing import Literal, Optional, Union, Callable, Iterable, TYPE_CHECKING
 if TYPE_CHECKING:
@@ -252,6 +252,12 @@ def _truncate_lse_support(errorgen: _LSE, qubit_indices: Iterable[int], validate
             if not all([pauli_index==0 for qubit_idx, pauli_index in enumerate(pauli_index_list) if qubit_idx not in qubit_indices]):
                 msg = 'Some paulis outside of specified qubit indices are not identities, violating requested locality constraint.'
                 raise RuntimeError(msg)
+    # Restricting to the gate's qubits in the gate's own order can put the two basis element
+    # labels of a C/A label out of canonical (string-sorted) order; restore it. The truncated
+    # label only serves as an equivalence-class key (the errorgens of one gate parameter), so
+    # the sign flip that a reordered A label would carry on a rate is irrelevant here.
+    if len(new_bels) == 2 and not _bel_less_than(new_bels[0], new_bels[1]):
+        new_bels.reverse()
     new_errorgen = _LSE(errorgen.errorgen_type, new_bels)
     return new_errorgen
 

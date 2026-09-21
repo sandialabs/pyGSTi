@@ -26,7 +26,7 @@ from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GEEL
 from pygsti.baseobjs import QubitSpace as _QubitSpace
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_str as _bel_str
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_str as _bel_str, canonicalize_errorgen_layer as _canonicalize_errorgen_layer
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.circuits import Circuit as _Circuit
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
@@ -4474,10 +4474,11 @@ def approximate_stabilizer_probability(errorgen_dict: dict[_EEL, float], circuit
     else:
         raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
 
-    # recast keys to local stim ones if needed.
+    # recast keys to local stim ones if needed (in canonical basis element label order; a
+    # GlobalElementaryErrorgenLabel key was never supported here since no sslbls are available).
     first_lbl = next(iter(errorgen_dict))
     if isinstance(first_lbl, (_GEEL, _LEEL)):
-        errorgen_dict = {_LSE.cast(lbl):val for lbl,val in errorgen_dict.items()}
+        errorgen_dict = _canonicalize_errorgen_layer(errorgen_dict)
 
     ideal_prob = stabilizer_probability(tableau, desired_bitstring)
     correction = stabilizer_probability_correction(errorgen_dict, tableau, desired_bitstring, order, truncation_threshold)
@@ -4526,10 +4527,11 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict: dict[_EEL, float], c
     if isinstance(pauli, str):
         pauli = stim.PauliString(pauli)
 
-    # recast keys to local stim ones if needed.
+    # recast keys to local stim ones if needed (in canonical basis element label order; a
+    # GlobalElementaryErrorgenLabel key was never supported here since no sslbls are available).
     first_lbl = next(iter(errorgen_dict))
     if isinstance(first_lbl, (_GEEL, _LEEL)):
-        errorgen_dict = {_LSE.cast(lbl):val for lbl,val in errorgen_dict.items()}
+        errorgen_dict = _canonicalize_errorgen_layer(errorgen_dict)
 
     ideal_expectation = stabilizer_pauli_expectation(tableau, pauli)
     correction = stabilizer_pauli_expectation_correction(errorgen_dict, tableau, pauli, order, truncation_threshold)
@@ -4575,10 +4577,11 @@ def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict: dict[_EEL,
     
     tableau = circuit.convert_to_stim_tableau()
 
-    # recast keys to local stim ones if needed.
+    # recast keys to local stim ones if needed (in canonical basis element label order; a
+    # GlobalElementaryErrorgenLabel key was never supported here since no sslbls are available).
     first_lbl = next(iter(errorgen_dict))
     if isinstance(first_lbl, (_GEEL, _LEEL)):
-        errorgen_dict = {_LSE.cast(lbl):val for lbl,val in errorgen_dict.items()}
+        errorgen_dict = _canonicalize_errorgen_layer(errorgen_dict)
 
     ideal_expectation = stabilizer_pauli_expectation(tableau, pauli)
     correction = stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order)

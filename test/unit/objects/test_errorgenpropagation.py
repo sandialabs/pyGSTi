@@ -275,11 +275,11 @@ class LocalStimErrorgenLabelTester(BaseCase):
         # bit q of the mask is set iff some basis element label is non-identity on qubit q.
         self.assertEqual(_LSE.cast(('H', ['XI'])).support_mask, 0b01)
         self.assertEqual(_LSE.cast(('S', ['IZ'])).support_mask, 0b10)
-        self.assertEqual(_LSE.cast(('C', ['XI', 'IY'])).support_mask, 0b11)
+        self.assertEqual(_LSE.cast(('C', ['IY', 'XI'])).support_mask, 0b11)
         self.assertEqual(_LSE.cast(('A', ['IIX', 'IIZ'])).support_mask, 0b100)
         self.assertEqual(_LSE.cast(('H', ['I' * 70 + 'Y' + 'I' * 29])).support_mask, 1 << 70)
         # the mask is built lazily, cached, and survives copies and pickling.
-        lbl = _LSE.cast(('C', ['XI', 'IY']))
+        lbl = _LSE.cast(('C', ['IY', 'XI']))
         self.assertNotIn('_support_mask', lbl.__dict__)
         self.assertEqual(lbl.support_mask, 0b11)
         self.assertEqual(lbl.__dict__['_support_mask'], 0b11)
@@ -306,6 +306,113 @@ class LocalStimErrorgenLabelTester(BaseCase):
                 self.assertEqual(lbl.support_mask, expected)
                 self.assertEqual(_lse_mod._slow_support_mask(lbl._hashable_basis_element_labels), expected)
                 self.assertEqual(_lse_mod.support_mask_from_strings(lbl._hashable_basis_element_labels), expected)
+
+class CanonicalLabelOrderTester(BaseCase):
+    """The two basis element labels of every C/A `LocalStimErrorgenLabel` are in canonical
+    (string-sorted) order. A model embedding a two-qubit gate into reversed target qubits
+    produces local coefficient labels in the *other* order (e.g. C(XI, IX)); the propagation
+    module must reorder them where they enter it, negating the rate of a reordered A label
+    (A_{Q,P} = -A_{P,Q}), so that a generator is never held under two keys downstream."""
+
+    @staticmethod
+    def _is_canonical(lbl):
+        strs = lbl._hashable_basis_element_labels
+        return len(strs) == 1 or strs[0] < strs[1]
+
+    def setUp(self):
+        from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+        pspec = QubitProcessorSpec(2, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(1, 0)]})
+        rates = random_CPTP_error_generator_rates(2, errorgen_types=('H', 'S', 'C', 'A'), seed=7)
+        self.model = create_crosstalk_free_model(pspec, lindblad_error_coeffs={'Gcphase': rates}, lindblad_parameterization='GLND')
+        self.circuit = Circuit([('Gcphase', 1, 0), ('Gxpi2', 0), ('Gcphase', 1, 0)], line_labels=(0, 1))
+        self.propagator = ErrorGeneratorPropagator(self.model)
+        self.model_local_coeffs = self.model.circuit_layer_operator(self.circuit[0]).errorgen_coefficients(label_type='local')
+
+    def test_model_labels_are_not_canonical(self):
+        #the premise of the other tests: the model's local labels for the reversed-target gate are out of order.
+        noncanonical = [lbl for lbl, rate in self.model_local_coeffs.items()
+                        if rate != 0 and len(lbl.basis_element_labels) == 2 and lbl.basis_element_labels[1] < lbl.basis_element_labels[0]]
+        self.assertGreater(len(noncanonical), 0)
+        self.assertTrue(any(lbl.errorgen_type == 'A' for lbl in noncanonical))
+
+    def test_construct_errorgen_layers_canonical_and_exact(self):
+        layers = self.propagator.construct_errorgen_layers(self.circuit, 2, include_spam=True)
+        self.assertEqual(len(layers), 5)
+        for layer in layers:
+            for lbl in layer:
+                self.assertTrue(self._is_canonical(lbl), f'{lbl} not canonical')
+                #the pre-propagation label recorded on the label is the canonical form too
+                self.assertEqual(_LSE.cast(lbl.initial_label), lbl)
+        #the reordering (with the A sign flip) does not change the error generator: compare the dense
+        #matrix of the layer with that of the model's own labels, built without any reordering.
+        raw = {_LSE(lbl.errorgen_type, [stim.PauliString(b) for b in lbl.basis_element_labels]): rate
+               for lbl, rate in self.model_local_coeffs.items() if rate != 0}
+        self.assertFalse(all(self._is_canonical(lbl) for lbl in raw))
+        for layer_idx in (1, 3):  # the two Gcphase layers; 3 is the last gate layer, which is never propagated
+            self.assertEqual(len(layers[layer_idx]), len(raw))
+            self.assertArraysAlmostEqual(self.propagator.errorgen_layer_dict_to_errorgen(layers[layer_idx]),
+                                         self.propagator.errorgen_layer_dict_to_errorgen(raw))
+        #every A label that was reordered has its rate negated
+        for lbl, rate in self.model_local_coeffs.items():
+            if lbl.errorgen_type == 'A' and rate != 0 and lbl.basis_element_labels[1] < lbl.basis_element_labels[0]:
+                key = _LSE.cast(('A', lbl.basis_element_labels[::-1]))
+                self.assertEqual(layers[1][key], -rate)
+
+    def test_propagated_and_transform_map_keys_canonical(self):
+        layers = self.propagator.construct_errorgen_layers(self.circuit, 2, include_spam=True)
+        for order in (1, 2):
+            propagated = self.propagator.propagate_errorgens_bch(self.circuit, bch_order=order)
+            self.assertTrue(all(self._is_canonical(lbl) for lbl in propagated))
+        transform_map = self.propagator.errorgen_transform_map(self.circuit, include_spam=True)
+        for (input_lbl, layer_idx), (output_lbl, phase) in transform_map.items():
+            self.assertIn(input_lbl, layers[layer_idx])
+            self.assertTrue(self._is_canonical(output_lbl))
+            self.assertIn(phase, (1.0, -1.0))
+
+    def test_fixed_layer_is_canonicalized(self):
+        #non-canonical LEEL keys, including both orders of the same C label
+        layer = {LocalElementaryErrorgenLabel('A', ('YI', 'IX')): 2.0, LocalElementaryErrorgenLabel('C', ('YI', 'IX')): 3.0,
+                 LocalElementaryErrorgenLabel('C', ('IX', 'YI')): 1.0, LocalElementaryErrorgenLabel('H', ('XI',)): 5.0}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=layer)
+        fixed = prop.fixed_errorgen_layer
+        self.assertEqual(fixed, {_LSE.cast(('A', ('IX', 'YI'))): -2.0, _LSE.cast(('C', ('IX', 'YI'))): 4.0, _LSE.cast(('H', ('XI',))): 5.0})
+        #global labels, with sslbls given as an int
+        glayer = {GlobalElementaryErrorgenLabel('A', ('XY', 'YX'), (1, 0)): 1.0}
+        prop = ErrorGeneratorPropagator(fixed_errorgen_layer=glayer, state_space_labels=2)
+        self.assertTrue(all(self._is_canonical(lbl) for lbl in prop.fixed_errorgen_layer))
+
+    def test_canonicalize_errorgen_layer(self):
+        from pygsti.errorgenpropagation.localstimerrorgen import canonicalize_errorgen_layer
+        #already-canonical LSE keys: the same object comes back
+        ok = {_LSE.cast(('H', ('XI',))): 1.0, _LSE.cast(('C', ('IX', 'YI'))): 1.0}
+        self.assertIs(canonicalize_errorgen_layer(ok), ok)
+        self.assertEqual(canonicalize_errorgen_layer({}), {})
+        #LSE keys built directly out of order (outside the contract) are repaired and merged
+        bad = {_LSE('A', [stim.PauliString('YI'), stim.PauliString('IX')]): 2.0,
+               _LSE('A', [stim.PauliString('IX'), stim.PauliString('YI')]): 0.5}
+        self.assertEqual(canonicalize_errorgen_layer(bad), {_LSE.cast(('A', ('IX', 'YI'))): -1.5})
+        #LEEL and GEEL keys
+        leel = {LocalElementaryErrorgenLabel('C', ('ZI', 'IZ')): 1.0, LocalElementaryErrorgenLabel('S', ('ZZ',)): 2.0}
+        self.assertEqual(canonicalize_errorgen_layer(leel), {_LSE.cast(('C', ('IZ', 'ZI'))): 1.0, _LSE.cast(('S', ('ZZ',))): 2.0})
+        geel = {GlobalElementaryErrorgenLabel('A', ('XI', 'IY'), (1, 0)): 1.0}  # = A(IX, YI) on qubits (0, 1)
+        with self.assertRaises(AssertionError):
+            canonicalize_errorgen_layer(geel)
+        self.assertEqual(canonicalize_errorgen_layer(geel, sslbls=(0, 1)), {_LSE.cast(('A', ('IX', 'YI'))): 1.0})
+        geel = {GlobalElementaryErrorgenLabel('A', ('IY', 'XI'), (1, 0)): 1.0}  # = A(YI, IX): reordered, sign flipped
+        self.assertEqual(canonicalize_errorgen_layer(geel, sslbls=(0, 1)), {_LSE.cast(('A', ('IX', 'YI'))): -1.0})
+
+    def test_cast_rejects_noncanonical_labels(self):
+        with self.assertRaises(ValueError):
+            _LSE.cast(('A', ('YI', 'IX')))
+        with self.assertRaises(ValueError):
+            _LSE.cast(LocalElementaryErrorgenLabel('C', ('ZI', 'IZ')))
+        #canonical and single-index labels are fine, as is an already-built label
+        self.assertEqual(_LSE.cast(('C', ('IZ', 'ZI'))).errorgen_type, 'C')
+        lbl = _LSE('A', [stim.PauliString('YI'), stim.PauliString('IX')])
+        self.assertIs(_LSE.cast(lbl), lbl)
+        #pickling does not go through cast
+        self.assertEqual(pickle.loads(pickle.dumps(lbl)), lbl)
+
 
 class FixedLayerErrorgenPropTester(BaseCase):
     """Coverage for ``ErrorGeneratorPropagator(fixed_errorgen_layer=...)`` construction,

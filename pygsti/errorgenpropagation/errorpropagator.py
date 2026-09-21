@@ -18,7 +18,7 @@ except ImportError:
     warnings.warn(msg)
 import numpy as _np
 import scipy.linalg as _spl
-from .localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from .localstimerrorgen import LocalStimErrorgenLabel as _LSE, canonicalize_errorgen_layer as _canonicalize_errorgen_layer
 from numpy import zeros, complex128
 from numpy.linalg import multi_dot
 from scipy.linalg import expm
@@ -92,8 +92,9 @@ class ErrorGeneratorPropagator:
                 assert state_space_labels is not None, msg
                 if isinstance(state_space_labels, int):
                     state_space_labels = list(range(state_space_labels))
-            # cast all of the error generator labels to LSE.
-            fixed_errorgen_layer = {_LSE.cast(lbl, sslbls=state_space_labels):val for lbl, val in fixed_errorgen_layer.items()}
+            # cast all of the error generator labels to LSE, in canonical basis element label order
+            # (a reordered A label has its rate negated; see `canonicalize_errorgen_layer`).
+            fixed_errorgen_layer = _canonicalize_errorgen_layer(fixed_errorgen_layer, sslbls=state_space_labels)
             
             # validate that all of the new LSE keys have the same length (i.e. same number of qubits).
             msg = 'Error generators do not all have the same length!'
@@ -673,20 +674,27 @@ class ErrorGeneratorPropagator:
             for errgen_coeff_lbl, rate in layer_errorgen_coeff_dict.items(): #for an error in the accompanying error dictionary 
                 #only track this error generator if its rate is not exactly zero. #TODO: Add more flexible initial truncation logic.
                 if rate !=0 or fixed_rate is not None:
-                    #if isinstance(errgen_coeff_lbl, _LEEL):
                     initial_label = errgen_coeff_lbl
-                    #else:
-                    #    initial_label = None
                     #TODO: Can probably replace this function call with `padded_basis_element_labels` method of `GlobalElementaryErrorgenLabel`
                     paulis = _eprop.errgen_coeff_label_to_stim_pauli_strs(errgen_coeff_lbl, num_qubits)
                     pauli_strs = errgen_coeff_lbl.basis_element_labels #get the original python string reps from local labels
-                    if include_circuit_time:
-                        #TODO: Refactor the fixed rate stuff to reduce the number of if statement evaluations.
-                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j, 
-                                            initial_label=initial_label, pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
-                    else:
-                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, initial_label=initial_label, 
-                                            pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
+                    # The model's local labels keep the pair order of the gate they were embedded from,
+                    # which after padding to the full width need not be the canonical (string-sorted)
+                    # order every LocalStimErrorgenLabel must have. Reorder here, negating the rate for
+                    # A (A_{Q,P} = -A_{P,Q}; free for C); the label then records the canonical form as
+                    # its initial label (the lazy default) so that transform maps key on it too. A
+                    # `fixed_rate` is the rate *of the canonical label* and is not negated: the transform
+                    # maps (fixed_rate=1) must report only the propagation sign of the canonical label.
+                    if len(pauli_strs) == 2 and pauli_strs[1] < pauli_strs[0]:
+                        paulis = paulis[::-1]
+                        pauli_strs = pauli_strs[::-1]
+                        initial_label = None
+                        if errgen_coeff_lbl.errorgen_type == 'A':
+                            rate = -rate
+                    if fixed_rate is not None:
+                        rate = fixed_rate
+                    errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j if include_circuit_time else None,
+                                        initial_label=initial_label, pauli_str_reps=pauli_strs)] = rate
             errorgen_dicts_by_layer.append(errorgen_layer)
         return errorgen_dicts_by_layer
     
