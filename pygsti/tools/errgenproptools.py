@@ -4674,21 +4674,77 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
         # the k-th power is built from the aggregated (k-1)-th power, L^k = L o L^(k-1): every
         # generator of `errorgen_dict` is composed with every term of the previous power once,
         # instead of re-composing the tail of each k-tuple of generators (which repeats the same
-        # compositions for every leading generator).
+        # compositions for every leading generator). L and L^(k-1) commute, so the product is
+        # formed by `_commuting_product` from anticommutators, L o L^(k-1) = ½{L, L^(k-1)} (see its
+        # docstring). The powers are kept untruncated between orders (only the returned copies
+        # are truncated), which is what makes [L, L^(k-1)] = 0 exact.
         identity = 'I' * len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
         previous_power = errorgen_dict
         for current_order in range(2, order + 1):
             order_scale = 1 / factorial(current_order)
-            current_power = dict()
-            for lbl_1, rate_1 in errorgen_dict.items():
-                for lbl_2, rate_2 in previous_power.items():
-                    for lbl, rate in error_generator_composition(lbl_1, lbl_2, weight=rate_1 * rate_2, identity=identity):
-                        current_power[lbl] = current_power.get(lbl, 0) + rate
+            current_power = _commuting_product(errorgen_dict, previous_power, identity)
             taylor_order_terms[current_order - 1] = {lbl: order_scale * rate for lbl, rate in current_power.items()
                                                      if order_scale * abs(rate) > truncation_threshold}
             previous_power = current_power
 
     return taylor_order_terms
+
+
+def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],
+                       identity: str) -> dict[_LSE, complex]:
+    r"""
+    The composition L o M of two error generators given as label -> rate dictionaries, for
+    error generators that COMMUTE, [L, M] = 0 (e.g. M a power of L, as in the Taylor
+    expansion). The precondition is not checked.
+
+    For commuting L and M the composition is half the anticommutator, L o M = ½{L, M}, and
+    by bilinearity ½ Σ_ij r_i m_j {E_i, F_j} over the terms of the two dictionaries. The
+    anticommutator of two elementary error generators emits fewer terms than either of their
+    compositions (see `error_generator_anticommutator`), and when the two dictionaries are
+    the same object the symmetry {E_i, E_j} = {E_j, E_i} halves the pair loop: L o L =
+    Σ_{i<j} r_i r_j {E_i, E_j} + ½ Σ_i r_i² {E_i, E_i}.
+
+    Parameters
+    ----------
+    errorgen_dict_1, errorgen_dict_2 : dict
+        The two commuting error generators, as dictionaries from `LocalStimErrorgenLabel`
+        to rate. Pass the same object twice to compute a square.
+
+    identity : str
+        The all-identity Pauli string `'I'*n` for the number of qubits n.
+
+    Returns
+    -------
+    dict
+        The composition L o M as a dictionary from `LocalStimErrorgenLabel` to (complex)
+        rate, aggregated but not truncated.
+    """
+    handlers = _ANTICOMMUTATOR_HANDLERS
+    product = {}
+    get = product.get
+    if errorgen_dict_2 is errorgen_dict_1:
+        items = list(errorgen_dict_1.items())
+        for i, (lbl_1, rate_1) in enumerate(items):
+            for lbl_2, rate_2 in items[i:]:
+                # ½ (r_i r_j {E_i, E_j} + r_j r_i {E_j, E_i}) = r_i r_j {E_i, E_j} for i != j; ½ r_i² {E_i, E_i} for i == j
+                weight = rate_1 * rate_2 if lbl_2 is not lbl_1 else 0.5 * rate_1 * rate_1
+                if lbl_1.type_idx <= lbl_2.type_idx:
+                    terms = handlers[4 * lbl_1.type_idx + lbl_2.type_idx](lbl_1, lbl_2, weight, identity)
+                else:
+                    terms = handlers[4 * lbl_2.type_idx + lbl_1.type_idx](lbl_2, lbl_1, weight, identity)
+                for lbl, rate in terms:
+                    product[lbl] = get(lbl, 0) + rate
+    else:
+        for lbl_1, rate_1 in errorgen_dict_1.items():
+            for lbl_2, rate_2 in errorgen_dict_2.items():
+                weight = 0.5 * rate_1 * rate_2
+                if lbl_1.type_idx <= lbl_2.type_idx:
+                    terms = handlers[4 * lbl_1.type_idx + lbl_2.type_idx](lbl_1, lbl_2, weight, identity)
+                else:
+                    terms = handlers[4 * lbl_2.type_idx + lbl_1.type_idx](lbl_2, lbl_1, weight, identity)
+                for lbl, rate in terms:
+                    product[lbl] = get(lbl, 0) + rate
+    return product
 
 def error_generator_taylor_expansion_numerical(errorgen_dict: dict[_EEL, float],
                                                errorgen_propagator: _epropagator.ErrorGeneratorPropagator,

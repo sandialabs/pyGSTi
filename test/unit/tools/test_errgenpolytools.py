@@ -135,8 +135,14 @@ class ErrgenPolyToolsTester(BaseCase):
         return indexed
 
     def _assert_poly_dict_matches_numeric_dict(self, poly_dict, numeric_dict, paramvec, places=12):
+        # A label may be present in one dictionary and absent from the other when its rate is exactly
+        # zero (e.g. terms that cancel identically in the numeric composition are never emitted by
+        # the anticommutator-based Taylor expansion, but the symbolic expansion keeps them as zero
+        # polynomials); a missing entry counts as zero.
         for key, poly in poly_dict.items():
-            self.assertAlmostEqual(poly.evaluate(paramvec), numeric_dict[key], places=places)
+            self.assertAlmostEqual(poly.evaluate(paramvec), numeric_dict.get(key, 0.0), places=places)
+        for key in set(numeric_dict) - set(poly_dict):
+            self.assertAlmostEqual(0.0, numeric_dict[key], places=places)
 
     # ------------------------------------------------------------------
     # helper / mapping tests
