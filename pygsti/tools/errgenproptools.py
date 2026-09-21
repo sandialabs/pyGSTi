@@ -4849,38 +4849,25 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     rate_sum_2 = rate_sum_1 if same else sum(rate for _, rate in stoch_2)
     if same:
         if rate_sum_1 != 0:
-            _accumulate_scaled(product, errorgen_dict_1, -2.0 * rate_sum_1, identity)
+            _accumulate_scaled(product, errorgen_dict_1, -2.0 * rate_sum_1)
     else:
         if rate_sum_1 != 0:
-            _accumulate_scaled(product, errorgen_dict_2, -rate_sum_1, identity)
+            _accumulate_scaled(product, errorgen_dict_2, -rate_sum_1)
         if rate_sum_2 != 0:
-            _accumulate_scaled(product, errorgen_dict_1, -rate_sum_2, identity)
+            _accumulate_scaled(product, errorgen_dict_1, -rate_sum_2)
     return product
 
 
-def _accumulate_scaled(target: dict[_LSE, complex], errorgen_dict: dict[_LSE, _Rate], coeff: complex,
-                       identity: str) -> None:
+def _accumulate_scaled(target: dict[_LSE, complex], errorgen_dict: dict[_LSE, _Rate], coeff: complex) -> None:
     """
-    Add coeff * errorgen_dict to `target` in place, using the existing label objects as keys.
-
-    A two-index label whose basis element labels are not in the canonical order (possible for
-    labels taken straight from a model, which orders them by basis index rather than by the
-    string order the emitters use; see "Canonical ordering" in the module docstring) is
-    re-emitted through `_C` / `_A` instead, so that it merges with the terms the handlers
-    produce for the same generator rather than sitting beside them under a second key.
-    (`_C` also folds C_{P,P} into 2 S_P and `_A` drops A_{P,P}.)
+    Add coeff * errorgen_dict to `target` in place, on the existing label objects (no label is
+    constructed). Relies on the keys being in canonical basis element label order, which every
+    `LocalStimErrorgenLabel` is (see its class docstring): the handlers emit canonical labels,
+    so a non-canonical key here would sit beside the handlers' key for the same generator.
     """
     get = target.get
-    terms = []
     for lbl, rate in errorgen_dict.items():
-        if lbl.type_idx >= 2:
-            s0, s1 = lbl._hashable_basis_element_labels
-            if not s0 < s1:
-                (_C if lbl.type_idx == 2 else _A)(terms, _index(lbl, 0), _index(lbl, 1), coeff * rate, identity)
-                continue
         target[lbl] = get(lbl, 0) + coeff * rate
-    for lbl, rate in terms:
-        target[lbl] = get(lbl, 0) + rate
 
 
 def error_generator_taylor_expansion_numerical(errorgen_dict: dict[_EEL, float],

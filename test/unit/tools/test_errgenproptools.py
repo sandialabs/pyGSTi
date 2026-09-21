@@ -401,36 +401,11 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 self.assertEqual(set(cube), set(cube_reversed))
                 for lbl in cube:
                     self.assertAlmostEqual(cube[lbl], cube_reversed[lbl], places=14)
-                #the bleed terms are added on the operands' own labels, which must not leave rates split
-                #between two keys for the same generator: every two-index key is in canonical order.
+                #every two-index key of the result is in canonical order (the bleed terms are added on the
+                #operands' own labels, which are canonical by the label contract).
                 for lbl in chain(square, cube):
                     if len(lbl.basis_element_labels) == 2:
                         self.assertTrue(bel_less_than(*lbl.basis_element_labels), f'{lbl} not canonical')
-
-    def test_commuting_product_noncanonical_input_labels(self):
-        #labels taken straight from a model may have their two basis element labels in the other order
-        #(C_{Q,P} = C_{P,Q}, A_{Q,P} = -A_{P,Q}); the product must still be right and must not carry
-        #such labels through into its output beside the canonical ones.
-        matrix_dict, (errorgen_dict,) = self._random_errorgen_dicts(2, (10,), 103)
-        swapped = {}
-        for lbl, rate in errorgen_dict.items():
-            if len(lbl.basis_element_labels) == 2:
-                P, Q = lbl.basis_element_labels
-                swapped_lbl = _LSE(lbl.errorgen_type, (Q, P))
-                self.assertFalse(bel_less_than(*swapped_lbl.basis_element_labels))
-                swapped[swapped_lbl] = rate if lbl.errorgen_type == 'C' else -rate
-            else:
-                swapped[lbl] = rate
-        dense = _eprop.errorgen_layer_to_matrix(errorgen_dict, 2, matrix_dict)
-        square = _eprop._commuting_product(swapped, swapped, 'II')
-        for lbl in square:
-            if len(lbl.basis_element_labels) == 2:
-                self.assertTrue(bel_less_than(*lbl.basis_element_labels), f'{lbl} not canonical')
-        self.assertLess(np.linalg.norm(_eprop.errorgen_layer_to_matrix(square, 2, matrix_dict) - dense @ dense), 1e-12)
-        canonical_square = _eprop._commuting_product(errorgen_dict, errorgen_dict, 'II')
-        self.assertEqual(set(square), set(canonical_square))
-        for lbl in square:
-            self.assertAlmostEqual(square[lbl], canonical_square[lbl], places=14)
 
     def test_error_generator_taylor_expansion_all_sectors(self):
         #order-k term == L^k / k! from the dense matrix, at threshold 0, on random all-sector dictionaries;
