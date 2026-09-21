@@ -234,8 +234,8 @@ class ErrgenCompositionCommutationTester(BaseCase):
                 raise ValueError('Numeric and analytic error generator compositions were not found to be identical!')    
 
     def _label_pairs_2Q_and_3Q(self, num_3Q_labels=50, seed=1234):
-        """The (basis, matrix dict, ordered label pairs) fixtures shared by the conjugation tests
-        every pair of 2-qubit labels and a random selection of 3-qubit labels
+        """The (basis, matrix dict, ordered label pairs) fixtures shared by the anticommutator and
+        conjugation tests: every pair of 2-qubit labels and a random selection of 3-qubit labels
         (some relations for C and A terms need a third qubit)."""
         fixtures = []
         for num_qubits, num_labels in ((2, None), (3, num_3Q_labels)):
@@ -247,6 +247,58 @@ class ErrgenCompositionCommutationTester(BaseCase):
             stim_labels = [_LSE.cast(lbl) for lbl in labels]
             fixtures.append((num_qubits, basis, matrix_dict, list(product(labels, repeat=2)), list(product(stim_labels, repeat=2))))
         return fixtures
+
+    def test_errorgen_anticommutators(self):
+        #confirm we get the correct analytic anticommutators by comparing to numerics, in the same
+        #way as the commutator and composition tests above.
+        for num_qubits, basis, matrix_dict, label_pairs, stim_label_pairs in self._label_pairs_2Q_and_3Q():
+            for pair1, pair2 in zip(label_pairs, stim_label_pairs):
+                numeric_anticommutator = _eprop.error_generator_anticommutator_numerical(pair1[0], pair1[1], matrix_dict)
+                analytic_anticommutator = _eprop.error_generator_anticommutator(pair2[0], pair2[1])
+                analytic_anticommutator_mat = _eprop.errorgen_layer_to_matrix(analytic_anticommutator, num_qubits, matrix_dict)
+                norm_diff = np.linalg.norm(numeric_anticommutator - analytic_anticommutator_mat)
+                if norm_diff > 1e-10:
+                    print(f'Difference in anticommutators for pair {pair1} is greater than 1e-10.')
+                    print(f'{norm_diff=}')
+                    print('numeric_anticommutator=')
+                    print_mx(numeric_anticommutator)
+                    #Decompose the numerical anticommutator into rates.
+                    for lbl, dual in zip(basis.labels, basis.elemgen_dual_matrices):
+                        rate = np.trace(dual.conj().T@numeric_anticommutator)
+                        if abs(rate) > 1e-3:
+                            print(f'{lbl}: {rate}')
+                    print(f'{analytic_anticommutator=}')
+                    raise ValueError('Numeric and analytic error generator anticommutators were not found to be identical!')
+
+    def test_errorgen_anticommutator_matches_compositions(self):
+        #the anticommutator is the sum of the two compositions, and the composition is the mean of the
+        #commutator and the anticommutator, term by term (same labels, same rates once aggregated); the
+        #anticommutator is also symmetric in its arguments.
+        def aggregate(terms):
+            out = {}
+            for lbl, rate in terms:
+                out[lbl] = out.get(lbl, 0) + rate
+            return {lbl: rate for lbl, rate in out.items() if abs(rate) > 1e-12}
+
+        def assert_same(d1, d2, msg):
+            self.assertEqual(set(d1), set(d2), msg)
+            for lbl in d1:
+                self.assertAlmostEqual(d1[lbl], d2[lbl], places=12, msg=msg)
+
+        weight = 0.7 - 0.3j
+        _, _, _, _, stim_label_pairs = self._label_pairs_2Q_and_3Q()[0]
+        identity = 'II'
+        for lbl1, lbl2 in stim_label_pairs:
+            anticommutator = aggregate(_eprop.error_generator_anticommutator(lbl1, lbl2, weight, identity))
+            comp_12 = _eprop.error_generator_composition(lbl1, lbl2, weight, identity)
+            comp_21 = _eprop.error_generator_composition(lbl2, lbl1, weight, identity)
+            assert_same(anticommutator, aggregate(comp_12 + comp_21), f'{lbl1}, {lbl2}: {{e1, e2}} != e1 o e2 + e2 o e1')
+            assert_same(anticommutator, aggregate(_eprop.error_generator_anticommutator(lbl2, lbl1, weight, identity)),
+                        f'{lbl1}, {lbl2}: anticommutator not symmetric')
+            half_sum = aggregate([(lbl, 0.5 * rate) for lbl, rate in
+                                  _eprop.error_generator_commutator(lbl1, lbl2, weight, identity)
+                                  + _eprop.error_generator_anticommutator(lbl1, lbl2, weight, identity)])
+            assert_same(aggregate(comp_12), half_sum, f'{lbl1}, {lbl2}: e1 o e2 != ([e1, e2] + {{e1, e2}}) / 2')
 
     def test_pauli_conjugation_composition(self):
         #confirm the analytic action of the Pauli conjugation superoperator Q rho Q on every type of
@@ -274,6 +326,47 @@ class ErrgenCompositionCommutationTester(BaseCase):
         lbl = _LSE('C', [stim.PauliString('XY'), stim.PauliString('ZI')])
         self.assertEqual(_eprop.pauli_conjugation_composition(stim.PauliString('-XZ'), lbl),
                          _eprop.pauli_conjugation_composition(stim.PauliString('XZ'), lbl))
+
+    def test_pauli_conjugation_bleed_rule(self):
+        #{S_Q, X} = (1 + (-1)^omega(Q, T_X)) Q[X] - 2X with T_X the total Pauli of X (P for H_P, I for S_P,
+        #PR for C_{P,R} and A_{P,R}): the anticommutator is pure bleed (-2X) exactly when Q anticommutes
+        #with T_X, and otherwise -2X + 2 Q[X].
+        def aggregate(terms):
+            out = {}
+            for lbl, rate in terms:
+                out[lbl] = out.get(lbl, 0) + rate
+            return {lbl: rate for lbl, rate in out.items() if abs(rate) > 1e-12}
+
+        def total_pauli(lbl):
+            bels = lbl.basis_element_labels
+            if lbl.errorgen_type == 'S':
+                return None
+            return bels[0] if len(bels) == 1 else bels[0] * bels[1]
+
+        _, _, _, _, stim_label_pairs = self._label_pairs_2Q_and_3Q()[0]
+        stim_labels = sorted({pair[0] for pair in stim_label_pairs}, key=str)
+        s_labels = [lbl for lbl in stim_labels if lbl.errorgen_type == 'S']
+        num_pure_bleed = 0
+        for s_lbl in s_labels:
+            Q = s_lbl.basis_element_labels[0]
+            for x_lbl in stim_labels:
+                anticommutator = aggregate(_eprop.error_generator_anticommutator(s_lbl, x_lbl, identity='II'))
+                T = total_pauli(x_lbl)
+                expected = [(x_lbl, -2.0)]
+                if T is None or Q.commutes(T):
+                    expected += _eprop.pauli_conjugation_composition(Q, x_lbl, weight=2.0, identity='II')
+                else:
+                    num_pure_bleed += 1
+                expected = aggregate(expected)
+                self.assertEqual(set(anticommutator), set(expected), f'{s_lbl}, {x_lbl}')
+                for lbl in expected:
+                    self.assertAlmostEqual(anticommutator[lbl], expected[lbl], places=12, msg=f'{s_lbl}, {x_lbl}')
+        self.assertGreater(num_pure_bleed, 0)
+        #conjugation composed with S is the only case producing an S of the conjugating Pauli itself
+        self.assertEqual(aggregate(_eprop.pauli_conjugation_composition(stim.PauliString('XI'), _LSE('S', [stim.PauliString('XI')]))),
+                         {_LSE('S', [stim.PauliString('XI')]): -1.0})
+        self.assertEqual(aggregate(_eprop.pauli_conjugation_composition(stim.PauliString('XI'), _LSE('S', [stim.PauliString('YI')]))),
+                         {_LSE('S', [stim.PauliString('ZI')]): 1.0, _LSE('S', [stim.PauliString('XI')]): -1.0})
 
     def test_iterative_error_generator_composition(self):
         test_labels = [(_LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')]), _LSE('H', [stim.PauliString('X')])), 

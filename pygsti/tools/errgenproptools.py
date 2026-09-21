@@ -146,13 +146,22 @@ Canonical ordering
     C_{Q,P} = C_{P,Q},  A_{Q,P} = -A_{P,Q}.
 
 Operand order and weights
-    `error_generator_commutator(e1, e2)` computes [e1, e2] and
-    `error_generator_composition(e1, e2)` computes e1[e2[.]] (e1 applied after e2). Both
+    `error_generator_commutator(e1, e2)` computes [e1, e2],
+    `error_generator_anticommutator(e1, e2)` computes {e1, e2} = e1[e2[.]] + e2[e1[.]] and
+    `error_generator_composition(e1, e2)` computes e1[e2[.]] (e1 applied after e2). All
     return a list of `(LocalStimErrorgenLabel, rate)` pairs, each rate already multiplied
     by the `weight` argument; the same label may appear more than once and the caller is
     expected to accumulate.
 
-Pauli conjugation
+Anticommutators and Pauli conjugation
+    Every term of a composition e1[e2[.]] recurs in the reversed composition e2[e1[.]] with
+    the same label and a coefficient of the same magnitude, so it lands in exactly one of
+    the commutator (opposite signs) and the anticommutator (equal signs):
+    e1 o e2 = ½([e1, e2] + {e1, e2}) term by term. The anticommutation relations are thus
+    the even-sign complements of the commutation relations (`anticommutation_relations.tex`
+    alongside the paper's Supplemental Note; `composition_relations.tex` for the
+    compositions themselves).
+
     The stochastic generator is conjugation minus identity, S_Q = 𝒬 - 1 with 𝒬[rho] = Q rho Q,
     and 𝒬 applied to any elementary error generator X is again a (trace-annihilating)
     combination of elementary error generators, `pauli_conjugation_composition(Q, X)`:
@@ -178,7 +187,8 @@ Pauli conjugation
 
     The -X / -2X terms (the -1 inside S_Q acting on the partner) are called the *bleed*
     terms below; when Q anticommutes with T_X the anticommutator is pure bleed, {S_Q, X} =
-    -2X.
+    -2X. `_commuting_product` (used by the Taylor expansion) exploits this to recover all
+    bleed terms of a product in closed form instead of emitting them label by label.
 """
 
 # A list of (error generator label, rate) pairs, as produced by the commutator and
@@ -1007,6 +1017,58 @@ def error_generator_composition(errorgen_1: _LSE, errorgen_2: _LSE, weight: comp
     if identity is None:
         identity = 'I' * len(errorgen_1._hashable_basis_element_labels[0])
     return _COMPOSITION_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx](errorgen_1, errorgen_2, weight, identity)
+
+
+def error_generator_anticommutator(errorgen_1: _LSE, errorgen_2: _LSE, weight: complex = 1.0,
+                                   identity: Optional[str] = None) -> _ErrorgenTerms:
+    r"""
+    Returns the anticommutator of two error generators. I.e. {errorgen_1, errorgen_2} =
+    errorgen_1[errorgen_2[\cdot]] + errorgen_2[errorgen_1[\cdot]].
+
+    The result is assembled from the analytic anticommutation relations of the elementary
+    error generators (the even-sign complements of the commutation relations; see
+    "Anticommutators and Pauli conjugation" in the module docstring and
+    `anticommutation_relations.tex`). Together with `error_generator_commutator` it
+    decomposes the composition: e1 o e2 = ½([e1, e2] + {e1, e2}), term by term. The
+    anticommutator emits fewer terms than either composition, because the terms of a
+    composition that change sign under reversal (those making up the commutator) are
+    absent from it.
+
+    The anticommutator is symmetric in its arguments, and this is used directly: there
+    is one handler per *unordered* type pair, and the two arguments are ordered by type
+    (H, S, C, A) before dispatch, with no sign.
+
+    Parameters
+    ----------
+    errorgen_1 : `LocalStimErrorgenLabel`
+        First error generator.
+
+    errorgen_2 : `LocalStimErrorgenLabel`
+        Second error generator.
+
+    weight : float or complex, optional (default 1.0)
+        An optional weighting value to apply to the value of the anticommutator.
+
+    identity : str, optional (default None)
+        The all-identity Pauli string `'I'*n` for the number of qubits n, used to detect
+        identity indices. Built from `errorgen_1` if not given; passing it avoids
+        rebuilding it when calling this function many times.
+
+    Returns
+    -------
+    list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`
+    corresponding to a component of the anticommutator of the two input error generators.
+    The second element is the rate of that term, additionally weighted by the specified
+    value of `weight`. The same label may appear in more than one tuple.
+
+    Unlike the commutator, the anticommutator of error generators with disjoint supports
+    does not vanish: it is twice their composition.
+    """
+    if identity is None:
+        identity = 'I' * len(errorgen_1._hashable_basis_element_labels[0])
+    if errorgen_1.type_idx > errorgen_2.type_idx:
+        errorgen_1, errorgen_2 = errorgen_2, errorgen_1
+    return _ANTICOMMUTATOR_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx](errorgen_1, errorgen_2, weight, identity)
 
 
 def pauli_conjugation_composition(pauli: stim.PauliString, errorgen: _LSE, weight: complex = 1.0,
@@ -1940,6 +2002,249 @@ def _conjugation_A(Q: _SignedPauli, errorgen: _LSE, w: complex, identity: str) -
     return terms
 
 
+# ---------------------------------------------------------------------------------------
+# Anticommutator handlers, one per *unordered* type pair (the anticommutator is symmetric;
+# `error_generator_anticommutator` orders its arguments by type before dispatch, so each
+# handler sees the lower type index first). Called as handler(errorgen_1, errorgen_2,
+# weight, identity). Each is headed by its relation (`anticommutation_relations.tex` §2) and
+# its Pauli case table in the slot notation of the composition handlers. The tables are the
+# even-sign complements of the commutator's: a two-index slot such as (PA,QB) contributes
+# C_{PA,QB} + C_{AP,BQ} = (1 + s_AP s_BQ) C_{PA,QB}, i.e. twice one term when the pairs (A,P)
+# and (B,Q) commute alike and nothing otherwise (the commutator takes the other case), and
+# the bracket slots are present when the bracket Pauli commutes with the product, i.e. when
+# the corresponding pairs commute alike (see the section comment of the commutator handlers
+# for why the four cross-pair booleans decide every bracket). The H_{ABPQ} term of the C/A
+# compositions always cancels in the anticommutator and is never formed. Products are formed
+# inside the gate of the slot that uses them (each two-index product serves exactly one slot
+# here), never up front as in the composition handlers.
+#
+# Handlers with an S operand emit the "bleed" term -2X (the -1 in S_Q = 𝒬 - 1 acting on the
+# partner X, see the module docstring) as a fresh label through the emitters, like every
+# other term, and then the conjugation part (1 + (-1)^ω(Q,T_X)) 𝒬X through the conjugation
+# handlers above; the ω test is on the pairs (Q, P), (Q, R) commuting alike. This keeps the
+# emission structure of these handlers identical to the commutator handlers'. It is not the
+# cheapest way to obtain a *sum* of anticommutators: `_commuting_product` recovers all the
+# bleed terms of L o M in closed form (a rescaling of L and M) and never calls these four.
+# ---------------------------------------------------------------------------------------
+
+def _anticommutator_HH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {H_P, H_Q} = 2 C_{P,Q}
+    P = _index(errorgen_1, 0)
+    Q = _index(errorgen_2, 0)
+    terms = []
+    _C(terms, P, Q, 2*w, identity)
+    return terms
+
+
+def _anticommutator_HS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {H_P, S_Q} = -2 H_P - A_{{P,Q},Q}
+    #            = -2 H_P + (1 + (-1)^ω(Q,P)) 𝒬 H_P
+    P = _index(errorgen_1, 0)
+    terms = []
+    _H(terms, P, -2*w, identity)
+    Q = _index(errorgen_2, 0)
+    if Q[1].commutes(P[1]):
+        terms += _conjugation_H(Q, errorgen_1, 2*w, identity)
+    return terms
+
+
+def _anticommutator_SS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {S_P, S_Q} = 2 S_{PQ} - 2 S_P - 2 S_Q
+    #            = -2 S_P + 2 𝒬 S_P   (ω(Q, I) = 0: never pure bleed)
+    P = _index(errorgen_1, 0)
+    terms = []
+    _S(terms, P, -2*w, identity)
+    terms += _conjugation_S(_index(errorgen_2, 0), errorgen_1, 2*w, identity)
+    return terms
+
+
+def _anticommutator_HC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {H_A, C_{P,Q}} = -(A_{{A,P},Q} + A_{{A,Q},P}) + A_{A,{P,Q}} - ½ H_{{A,{P,Q}}}
+    #   (AP,Q) if [A,P] = 0:  -2A;   (AQ,P) if [A,Q] = 0:  -2A
+    #   if {P,Q} != 0:  +2 A_{A,PQ},  and  -2 H_{APQ} if (A,P), (A,Q) commute alike
+    A = _index(errorgen_1, 0)
+    P = _index(errorgen_2, 0)
+    Q = _index(errorgen_2, 1)
+    com_AP = A[1].commutes(P[1])
+    com_AQ = A[1].commutes(Q[1])
+    terms = []
+    if com_AP:
+        _A(terms, _prod(A, P), Q, -2*w, identity)
+    if com_AQ:
+        _A(terms, _prod(A, Q), P, -2*w, identity)
+    if P[1].commutes(Q[1]):
+        PQ = _prod(P, Q)
+        _A(terms, A, PQ, 2*w, identity)
+        if com_AP == com_AQ:
+            _H(terms, _prod(A, PQ), -2*w, identity)
+    return terms
+
+
+def _anticommutator_HA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {H_A, A_{P,Q}} = (C_{{A,P},Q} - C_{{A,Q},P}) - i A_{A,[P,Q]} + i/2 H_{{A,[P,Q]}}
+    #   (AP,Q) if [A,P] = 0:  +2C;   (AQ,P) if [A,Q] = 0:  -2C
+    #   if [P,Q] != 0:  -2i A_{A,PQ},  and  +2i H_{APQ} if (A,P), (A,Q) commute alike
+    A = _index(errorgen_1, 0)
+    P = _index(errorgen_2, 0)
+    Q = _index(errorgen_2, 1)
+    com_AP = A[1].commutes(P[1])
+    com_AQ = A[1].commutes(Q[1])
+    terms = []
+    if com_AP:
+        _C(terms, _prod(A, P), Q, 2*w, identity)
+    if com_AQ:
+        _C(terms, _prod(A, Q), P, -2*w, identity)
+    if not P[1].commutes(Q[1]):
+        PQ = _prod(P, Q)
+        _A(terms, A, PQ, -2j*w, identity)
+        if com_AP == com_AQ:
+            _H(terms, _prod(A, PQ), 2j*w, identity)
+    return terms
+
+
+def _anticommutator_SC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {S_A, C_{P,Q}} = -2 C_{P,Q} + C_{AP,QA} + C_{AQ,PA} - ½ C_{{A,{P,Q}},A}
+    #                = -2 C_{P,Q} + (1 + (-1)^ω(A,PQ)) 𝒬_A C_{P,Q}
+    P = _index(errorgen_2, 0)
+    Q = _index(errorgen_2, 1)
+    terms = []
+    _C(terms, P, Q, -2*w, identity)
+    A = _index(errorgen_1, 0)
+    if A[1].commutes(P[1]) == A[1].commutes(Q[1]):  # ω(A, PQ) = 0
+        terms += _conjugation_C(A, errorgen_2, 2*w, identity)
+    return terms
+
+
+def _anticommutator_SA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {S_A, A_{P,Q}} = -2 A_{P,Q} + A_{AP,QA} - A_{AQ,PA} + i/2 C_{{A,[P,Q]},A}
+    #                = -2 A_{P,Q} + (1 + (-1)^ω(A,PQ)) 𝒬_A A_{P,Q}
+    P = _index(errorgen_2, 0)
+    Q = _index(errorgen_2, 1)
+    terms = []
+    _A(terms, P, Q, -2*w, identity)
+    A = _index(errorgen_1, 0)
+    if A[1].commutes(P[1]) == A[1].commutes(Q[1]):  # ω(A, PQ) = 0
+        terms += _conjugation_A(A, errorgen_2, 2*w, identity)
+    return terms
+
+
+def _anticommutator_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {C_{A,B}, C_{P,Q}} = (C_{AP,QB} + C_{BQ,PA} + C_{AQ,PB} + C_{BP,QA})
+    #                      - ½ (C_{{A,{P,Q}},B} + C_{{B,{P,Q}},A}) - ½ (C_{{{A,B},P},Q} + C_{{{A,B},Q},P})
+    #                      + ½ C_{{A,B},{P,Q}}
+    #   (PA,QB) by (A,P),(B,Q):  cc: +2C   aa: -2C;   (QA,PB) by (A,Q),(B,P):  cc: +2C   aa: -2C
+    #   if {P,Q} != 0:  (APQ,B): -2C if (A,P),(A,Q) alike;  (BPQ,A): -2C if (B,P),(B,Q) alike
+    #   if {A,B} != 0:  (PAB,Q): -2C if (A,P),(B,P) alike;  (QAB,P): -2C if (A,Q),(B,Q) alike
+    #   if both:        (PQ,AB): +2C
+    A = _index(errorgen_1, 0)
+    B = _index(errorgen_1, 1)
+    P = _index(errorgen_2, 0)
+    Q = _index(errorgen_2, 1)
+    com_AP = A[1].commutes(P[1])
+    com_AQ = A[1].commutes(Q[1])
+    com_BP = B[1].commutes(P[1])
+    com_BQ = B[1].commutes(Q[1])
+    terms = []
+    if com_AP == com_BQ:
+        _C(terms, _prod(P, A), _prod(Q, B), 2*w if com_AP else -2*w, identity)
+    if com_AQ == com_BP:
+        _C(terms, _prod(Q, A), _prod(P, B), 2*w if com_AQ else -2*w, identity)
+    com_PQ = P[1].commutes(Q[1])
+    if com_PQ:  # {P,Q} != 0
+        PQ = _prod(P, Q)
+        if com_AP == com_AQ:
+            _C(terms, _prod(A, PQ), B, -2*w, identity)
+        if com_BP == com_BQ:
+            _C(terms, _prod(B, PQ), A, -2*w, identity)
+    if A[1].commutes(B[1]):  # {A,B} != 0
+        AB = _prod(A, B)
+        if com_AP == com_BP:
+            _C(terms, _prod(P, AB), Q, -2*w, identity)
+        if com_AQ == com_BQ:
+            _C(terms, _prod(Q, AB), P, -2*w, identity)
+        if com_PQ:
+            _C(terms, PQ, AB, 2*w, identity)
+    return terms
+
+
+def _anticommutator_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {C_{A,B}, A_{P,Q}} = (A_{AP,QB} - A_{BQ,PA} - A_{AQ,PB} + A_{BP,QA})
+    #                      + i/2 (C_{{A,[P,Q]},B} + C_{{B,[P,Q]},A}) - ½ (A_{{{A,B},P},Q} - A_{{{A,B},Q},P})
+    #                      - i/2 C_{{A,B},[P,Q]}
+    #   (PA,QB) by (A,P),(B,Q):  cc: +2A   aa: -2A;   (QA,PB) by (A,Q),(B,P):  cc: -2A   aa: +2A
+    #   if [P,Q] != 0:  (APQ,B): +2iC if (A,P),(A,Q) alike;  (BPQ,A): +2iC if (B,P),(B,Q) alike
+    #   if {A,B} != 0:  (PAB,Q): -2A if (A,P),(B,P) alike;   (QAB,P): +2A if (A,Q),(B,Q) alike
+    #   if both:        (PQ,AB): -2iC
+    A = _index(errorgen_1, 0)
+    B = _index(errorgen_1, 1)
+    P = _index(errorgen_2, 0)
+    Q = _index(errorgen_2, 1)
+    com_AP = A[1].commutes(P[1])
+    com_AQ = A[1].commutes(Q[1])
+    com_BP = B[1].commutes(P[1])
+    com_BQ = B[1].commutes(Q[1])
+    terms = []
+    if com_AP == com_BQ:
+        _A(terms, _prod(P, A), _prod(Q, B), 2*w if com_AP else -2*w, identity)
+    if com_AQ == com_BP:
+        _A(terms, _prod(Q, A), _prod(P, B), -2*w if com_AQ else 2*w, identity)
+    com_PQ = P[1].commutes(Q[1])
+    if not com_PQ:  # [P,Q] != 0
+        PQ = _prod(P, Q)
+        if com_AP == com_AQ:
+            _C(terms, _prod(A, PQ), B, 2j*w, identity)
+        if com_BP == com_BQ:
+            _C(terms, _prod(B, PQ), A, 2j*w, identity)
+    if A[1].commutes(B[1]):  # {A,B} != 0
+        AB = _prod(A, B)
+        if com_AP == com_BP:
+            _A(terms, _prod(P, AB), Q, -2*w, identity)
+        if com_AQ == com_BQ:
+            _A(terms, _prod(Q, AB), P, 2*w, identity)
+        if not com_PQ:
+            _C(terms, PQ, AB, -2j*w, identity)
+    return terms
+
+
+def _anticommutator_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {A_{A,B}, A_{P,Q}} = -(C_{AP,QB} + C_{BQ,PA} - C_{AQ,PB} - C_{BP,QA})
+    #                      + i/2 (A_{{A,[P,Q]},B} - A_{{B,[P,Q]},A}) + i/2 (A_{{[A,B],P},Q} - A_{{[A,B],Q},P})
+    #                      - ½ C_{[A,B],[P,Q]}
+    #   (PA,QB) by (A,P),(B,Q):  cc: -2C   aa: +2C;   (QA,PB) by (A,Q),(B,P):  cc: +2C   aa: -2C
+    #   if [P,Q] != 0:  (APQ,B): +2iA if (A,P),(A,Q) alike;  (BPQ,A): -2iA if (B,P),(B,Q) alike
+    #   if [A,B] != 0:  (PAB,Q): +2iA if (A,P),(B,P) alike;  (QAB,P): -2iA if (A,Q),(B,Q) alike
+    #   if both:        (PQ,AB): -2C
+    A = _index(errorgen_1, 0)
+    B = _index(errorgen_1, 1)
+    P = _index(errorgen_2, 0)
+    Q = _index(errorgen_2, 1)
+    com_AP = A[1].commutes(P[1])
+    com_AQ = A[1].commutes(Q[1])
+    com_BP = B[1].commutes(P[1])
+    com_BQ = B[1].commutes(Q[1])
+    terms = []
+    if com_AP == com_BQ:
+        _C(terms, _prod(P, A), _prod(Q, B), -2*w if com_AP else 2*w, identity)
+    if com_AQ == com_BP:
+        _C(terms, _prod(Q, A), _prod(P, B), 2*w if com_AQ else -2*w, identity)
+    com_PQ = P[1].commutes(Q[1])
+    if not com_PQ:  # [P,Q] != 0
+        PQ = _prod(P, Q)
+        if com_AP == com_AQ:
+            _A(terms, _prod(A, PQ), B, 2j*w, identity)
+        if com_BP == com_BQ:
+            _A(terms, _prod(B, PQ), A, -2j*w, identity)
+    if not A[1].commutes(B[1]):  # [A,B] != 0
+        AB = _prod(A, B)
+        if com_AP == com_BP:
+            _A(terms, _prod(P, AB), Q, 2j*w, identity)
+        if com_AQ == com_BQ:
+            _A(terms, _prod(Q, AB), P, -2j*w, identity)
+        if not com_PQ:
+            _C(terms, PQ, AB, -2*w, identity)
+    return terms
+
+
 # Dispatch tables for the error generator commutator and composition, indexed by
 # 4*errorgen_1.type_idx + errorgen_2.type_idx with the type order H=0, S=1, C=2, A=3 of
 # `pygsti.errorgenpropagation.localstimerrorgen._ERRORGEN_TYPE_INDICES`. Each entry is the
@@ -1957,6 +2262,16 @@ _COMPOSITION_HANDLERS: tuple[_PairHandler, ...] = (
     _composition_SH, _composition_SS, _composition_SC, _composition_SA,
     _composition_CH, _composition_CS, _composition_CC, _composition_CA,
     _composition_AH, _composition_AS, _composition_AC, _composition_AA,
+)
+
+# The anticommutator is symmetric, so only the ten unordered type pairs have handlers;
+# `error_generator_anticommutator` orders its arguments by type before indexing, and the
+# lower-triangle entries are never reached.
+_ANTICOMMUTATOR_HANDLERS: tuple[Optional[_PairHandler], ...] = (
+    _anticommutator_HH, _anticommutator_HS, _anticommutator_HC, _anticommutator_HA,
+    None,               _anticommutator_SS, _anticommutator_SC, _anticommutator_SA,
+    None,               None,               _anticommutator_CC, _anticommutator_CA,
+    None,               None,               None,               _anticommutator_AA,
 )
 
 # Pauli conjugation handlers, indexed by the type of the conjugated generator, called as
@@ -2364,6 +2679,55 @@ def error_generator_composition_numerical(errorgen1: _EEL, errorgen2: _EEL,
         else:
             comp = errorgen_matrix_dict[_LSE.cast(errorgen1)]@errorgen_matrix_dict[_LSE.cast(errorgen2)]
     return comp
+
+
+def error_generator_anticommutator_numerical(errorgen1: _EEL, errorgen2: _EEL,
+                                             errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+                                             num_qubits: Optional[int] = None) -> _np.ndarray:
+    """
+    Numerically compute the anticommutator of the two specified elementary error generators.
+
+    Parameters
+    ----------
+    errorgen1 : `LocalElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
+        First error generator.
+
+    errorgen2 : `ElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
+        Second error generator.
+
+    errorgen_matrix_dict : dict, optional (default None)
+        An optional dictionary mapping `ElementaryErrorgenLabel`s to numpy arrays for their dense representation.
+        If not specified this will be constructed from scratch each call, so specifying this can provide a performance
+        benefit.
+
+    num_qubits : int, optional (default None)
+        Number of qubits for the error generator anticommutator being computed. Only required if `errorgen_matrix_dict` is None.
+
+    Returns
+    -------
+    ndarray
+        Numpy array corresponding to the dense representation of the anticommutator of the input error generators in the standard basis.
+    """
+    assert isinstance(errorgen1, (_LEEL, _LSE)) and isinstance(errorgen2, (_LEEL, _LSE))
+    assert type(errorgen1) == type(errorgen2), "The elementary error generator labels have mismatched types."
+
+    if errorgen_matrix_dict is None:
+        # create an error generator basis.
+        errorgen_basis = _CompleteElementaryErrorgenBasis('PP', _QubitSpace(num_qubits), default_label_type='local')
+
+        # use this basis to construct a dictionary from error generator labels to their
+        # matrices.
+        errorgen_lbls = errorgen_basis.labels
+        errorgen_matrix_dict = {lbl: mat for lbl, mat in zip(errorgen_lbls, errorgen_basis.elemgen_matrices)}
+
+    first_label = next(iter(errorgen_matrix_dict))
+
+    if isinstance(first_label, _LEEL):
+        key1, key2 = (errorgen1, errorgen2) if isinstance(errorgen1, _LEEL) else (errorgen1.to_local_eel(), errorgen2.to_local_eel())
+    else:
+        key1, key2 = (errorgen1, errorgen2) if isinstance(errorgen1, _LSE) else (_LSE.cast(errorgen1), _LSE.cast(errorgen2))
+    mat1, mat2 = errorgen_matrix_dict[key1], errorgen_matrix_dict[key2]
+    return mat1@mat2 + mat2@mat1
 
 
 def pauli_conjugation_composition_numerical(pauli: Union[str, stim.PauliString], errorgen: _EEL,
