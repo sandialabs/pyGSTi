@@ -4701,8 +4701,43 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     by bilinearity ½ Σ_ij r_i m_j {E_i, F_j} over the terms of the two dictionaries. The
     anticommutator of two elementary error generators emits fewer terms than either of their
     compositions (see `error_generator_anticommutator`), and when the two dictionaries are
-    the same object the symmetry {E_i, E_j} = {E_j, E_i} halves the pair loop: L o L =
-    Σ_{i<j} r_i r_j {E_i, E_j} + ½ Σ_i r_i² {E_i, E_i}.
+    the same object the symmetry {E_i, E_j} = {E_j, E_i} halves the pair loop.
+
+    The pairs with a stochastic member are not sent to the anticommutator handlers. Writing
+    S_Q = 𝒬 - 1 (𝒬 the conjugation rho -> Q rho Q) and T_X for the total Pauli of X (P for
+    H_P, I for S_P, PR for C_{P,R} and A_{P,R}; see "Anticommutators and Pauli conjugation"
+    in the module docstring),
+
+        ½ {S_Q, X} = [ω(Q, T_X) = 0] 𝒬X  -  X,
+
+    i.e. the conjugation image of the partner when Q commutes with its total Pauli, nothing
+    otherwise, and in either case minus the partner itself (the "bleed" of the -1 in S_Q).
+    Splitting L = L^⊥ + L_S (L_S the S-type terms, R_L = Σ_{i∈S} r_i their rate sum) and
+    likewise M = M^⊥ + M_S, R_M, the product is assembled block by block:
+
+        L o M = ½ Σ_{i∈⊥, j∈⊥} r_i m_j {E_i, F_j}                              (1: anticommutators)
+              + Σ_{i∈⊥, j∈S} [ω(P_j, T_{E_i}) = 0] r_i m_j 𝒫_j E_i   - R_M L^⊥   (2: conjugation or skip)
+              + Σ_{i∈S, j∈⊥} [ω(Q_i, T_{F_j}) = 0] r_i m_j 𝒬_i F_j   - R_L M^⊥   (3: mirror of 2)
+              + Σ_{i∈S, j∈S} r_i m_j S_{R_ij}   - R_M L_S - R_L M_S,   R_ij = Q_i P_j / phase   (4)
+              = [handler, conjugation and S_R terms]  -  R_M L  -  R_L M .
+
+    The bleed of all four blocks thus collapses to a rescaling of the *existing* terms of L
+    and M (no label is constructed for it), which is why this is cheaper than summing the
+    full anticommutators: every S pair would otherwise emit its partner as a fresh label,
+    to be found again only by the aggregation. Block 4 uses the S-S relation directly,
+    {S_Q, S_P} = 2 S_R - 2 S_Q - 2 S_P: 𝒬 S_P = S_R - S_Q would serve too but is asymmetric
+    in the pair, which would break the unordered-pair form below; the symmetric S_R term is
+    what allows the S-S bleed to be absorbed into -R_M L_S - R_L M_S. No identity term ever
+    appears - each ½{S_Q, X} above is trace annihilating on its own - although the
+    intermediate 𝒬 𝒫 = S_R + 1 is unital; that object is never formed. The convention
+    T_{S_P} = I (ω = 0, never skipped) is what makes the S-X formula hold for X = S_P too.
+
+    For M = L (the same object passed twice) block 1 runs over unordered pairs with weights
+    r_i r_j (i < j) and ½ r_i² (i = j), blocks 2 and 3 coincide and are done once with weight
+    2 r_i r_j, block 4 runs over i < j with weight 2 r_i r_j (the diagonal gives S_I = 0) and
+    the bleed is -2 R_L L. For M != L no analogous halving exists: {E_i, F_j} for E_i in L and
+    F_j in M are all distinct pairs, and rewriting {L, M} by polarisation,
+    ½({L+M, L+M} - {L, L} - {M, M}), costs ½(|L|+|M|)² - ½|L|² - ½|M|² = |L||M| pairs again.
 
     Parameters
     ----------
@@ -4719,32 +4754,124 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
         The composition L o M as a dictionary from `LocalStimErrorgenLabel` to (complex)
         rate, aggregated but not truncated.
     """
-    handlers = _ANTICOMMUTATOR_HANDLERS
-    product = {}
+    same = errorgen_dict_2 is errorgen_dict_1
+    perp_1 = [item for item in errorgen_dict_1.items() if item[0].type_idx != 1]
+    stoch_1 = [item for item in errorgen_dict_1.items() if item[0].type_idx == 1]
+    if same:
+        perp_2, stoch_2 = perp_1, stoch_1
+    else:
+        perp_2 = [item for item in errorgen_dict_2.items() if item[0].type_idx != 1]
+        stoch_2 = [item for item in errorgen_dict_2.items() if item[0].type_idx == 1]
+
+    anticommutators = _ANTICOMMUTATOR_HANDLERS
+    conjugations = _CONJUGATION_HANDLERS
+    product: dict[_LSE, complex] = {}
     get = product.get
-    if errorgen_dict_2 is errorgen_dict_1:
-        items = list(errorgen_dict_1.items())
-        for i, (lbl_1, rate_1) in enumerate(items):
-            for lbl_2, rate_2 in items[i:]:
-                # ½ (r_i r_j {E_i, E_j} + r_j r_i {E_j, E_i}) = r_i r_j {E_i, E_j} for i != j; ½ r_i² {E_i, E_i} for i == j
-                weight = rate_1 * rate_2 if lbl_2 is not lbl_1 else 0.5 * rate_1 * rate_1
+
+    # block 1: ½ Σ r_i m_j {E_i, F_j} over the non-stochastic terms (the handlers are indexed
+    # by the type-ordered pair).
+    if same:
+        for i, (lbl_1, rate_1) in enumerate(perp_1):
+            for j in range(i, len(perp_1)):
+                lbl_2, rate_2 = perp_1[j]
+                weight = rate_1 * rate_2 if j != i else 0.5 * rate_1 * rate_1
                 if lbl_1.type_idx <= lbl_2.type_idx:
-                    terms = handlers[4 * lbl_1.type_idx + lbl_2.type_idx](lbl_1, lbl_2, weight, identity)
+                    terms = anticommutators[4 * lbl_1.type_idx + lbl_2.type_idx](lbl_1, lbl_2, weight, identity)
                 else:
-                    terms = handlers[4 * lbl_2.type_idx + lbl_1.type_idx](lbl_2, lbl_1, weight, identity)
+                    terms = anticommutators[4 * lbl_2.type_idx + lbl_1.type_idx](lbl_2, lbl_1, weight, identity)
                 for lbl, rate in terms:
                     product[lbl] = get(lbl, 0) + rate
     else:
-        for lbl_1, rate_1 in errorgen_dict_1.items():
-            for lbl_2, rate_2 in errorgen_dict_2.items():
+        for lbl_1, rate_1 in perp_1:
+            for lbl_2, rate_2 in perp_2:
                 weight = 0.5 * rate_1 * rate_2
                 if lbl_1.type_idx <= lbl_2.type_idx:
-                    terms = handlers[4 * lbl_1.type_idx + lbl_2.type_idx](lbl_1, lbl_2, weight, identity)
+                    terms = anticommutators[4 * lbl_1.type_idx + lbl_2.type_idx](lbl_1, lbl_2, weight, identity)
                 else:
-                    terms = handlers[4 * lbl_2.type_idx + lbl_1.type_idx](lbl_2, lbl_1, weight, identity)
+                    terms = anticommutators[4 * lbl_2.type_idx + lbl_1.type_idx](lbl_2, lbl_1, weight, identity)
                 for lbl, rate in terms:
                     product[lbl] = get(lbl, 0) + rate
+
+    # blocks 2 and 3: the conjugation image r m 𝒬X of each non-stochastic term X by each
+    # stochastic partner S_Q whose Q commutes with the total Pauli of X. For H that is one
+    # commutation test; for C_{P,R} / A_{P,R} the product PR is not formed: Q commutes with
+    # PR iff it commutes with both or neither of P, R.
+    def conjugation_block(perp, stoch, scale):
+        for s_lbl, s_rate in stoch:
+            Q = _index(s_lbl, 0)
+            Q_pauli = Q[1]
+            for x_lbl, x_rate in perp:
+                bels = x_lbl.basis_element_labels
+                if x_lbl.type_idx == 0:
+                    commutes_with_total = Q_pauli.commutes(bels[0])
+                else:
+                    commutes_with_total = Q_pauli.commutes(bels[0]) == Q_pauli.commutes(bels[1])
+                if commutes_with_total:
+                    for lbl, rate in conjugations[x_lbl.type_idx](Q, x_lbl, scale * s_rate * x_rate, identity):
+                        product[lbl] = get(lbl, 0) + rate
+
+    if same:
+        conjugation_block(perp_1, stoch_1, 2.0)
+    else:
+        conjugation_block(perp_1, stoch_2, 1.0)
+        conjugation_block(perp_2, stoch_1, 1.0)
+
+    # block 4: r m S_R per stochastic pair, R the phase-stripped product of the two Paulis
+    # (`_S` drops the phase and the identity).
+    terms = []
+    if same:
+        for i, (lbl_1, rate_1) in enumerate(stoch_1):
+            P = _index(lbl_1, 0)
+            for j in range(i + 1, len(stoch_1)):
+                lbl_2, rate_2 = stoch_1[j]
+                _S(terms, _prod(P, _index(lbl_2, 0)), 2.0 * rate_1 * rate_2, identity)
+    else:
+        for lbl_1, rate_1 in stoch_1:
+            P = _index(lbl_1, 0)
+            for lbl_2, rate_2 in stoch_2:
+                _S(terms, _prod(P, _index(lbl_2, 0)), rate_1 * rate_2, identity)
+    for lbl, rate in terms:
+        product[lbl] = get(lbl, 0) + rate
+
+    # the bleed of all blocks, -R_M L - R_L M, on the existing keys (nothing to do for an
+    # operand without stochastic terms).
+    rate_sum_1 = sum(rate for _, rate in stoch_1)
+    rate_sum_2 = rate_sum_1 if same else sum(rate for _, rate in stoch_2)
+    if same:
+        if rate_sum_1 != 0:
+            _accumulate_scaled(product, errorgen_dict_1, -2.0 * rate_sum_1, identity)
+    else:
+        if rate_sum_1 != 0:
+            _accumulate_scaled(product, errorgen_dict_2, -rate_sum_1, identity)
+        if rate_sum_2 != 0:
+            _accumulate_scaled(product, errorgen_dict_1, -rate_sum_2, identity)
     return product
+
+
+def _accumulate_scaled(target: dict[_LSE, complex], errorgen_dict: dict[_LSE, _Rate], coeff: complex,
+                       identity: str) -> None:
+    """
+    Add coeff * errorgen_dict to `target` in place, using the existing label objects as keys.
+
+    A two-index label whose basis element labels are not in the canonical order (possible for
+    labels taken straight from a model, which orders them by basis index rather than by the
+    string order the emitters use; see "Canonical ordering" in the module docstring) is
+    re-emitted through `_C` / `_A` instead, so that it merges with the terms the handlers
+    produce for the same generator rather than sitting beside them under a second key.
+    (`_C` also folds C_{P,P} into 2 S_P and `_A` drops A_{P,P}.)
+    """
+    get = target.get
+    terms = []
+    for lbl, rate in errorgen_dict.items():
+        if lbl.type_idx >= 2:
+            s0, s1 = lbl._hashable_basis_element_labels
+            if not s0 < s1:
+                (_C if lbl.type_idx == 2 else _A)(terms, _index(lbl, 0), _index(lbl, 1), coeff * rate, identity)
+                continue
+        target[lbl] = get(lbl, 0) + coeff * rate
+    for lbl, rate in terms:
+        target[lbl] = get(lbl, 0) + rate
+
 
 def error_generator_taylor_expansion_numerical(errorgen_dict: dict[_EEL, float],
                                                errorgen_propagator: _epropagator.ErrorGeneratorPropagator,
