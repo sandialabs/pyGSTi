@@ -234,18 +234,15 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             #convert to a tuple representation
             assert sslbls is not None, 'Must specify sslbls when casting from `GlobalElementaryErrorgenLabel`.'
             obj = (obj.errorgen_type, obj.basis_element_labels, obj.sslbls)
-            initial_label=None
         
         if isinstance(obj, _LEEL):
             #convert to a tuple representation
-            initial_label = obj
             obj = (obj.errorgen_type, obj.basis_element_labels)
         
         if isinstance(obj, (tuple, list)):
             #In this case assert that the first element of the tuple is a string corresponding to the
             #error generator type.
             errorgen_type = obj[0]
-            initial_label = None
 
             #two elements for a local label and three for a global one
             #second element should have the basis element labels
@@ -278,7 +275,9 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
             else:
                 raise ValueError('Only str and `stim.PauliString` basis element labels are supported presently.')
             
-        label = cls(errorgen_type, stim_bels, initial_label=initial_label)
+        #`initial_label` is left at its lazy default (the local label reconstructed on first access),
+        #which equals the input for the canonical labels accepted below.
+        label = cls(errorgen_type, stim_bels)
         bel_strs = label._hashable_basis_element_labels
         if len(bel_strs) == 2 and bel_strs[1] < bel_strs[0]:
             raise ValueError(f"The basis element labels of {label} are not in canonical order ('{bel_strs[1]}' sorts "
