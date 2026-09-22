@@ -1041,9 +1041,9 @@ def error_generator_anticommutator(errorgen_1: _LSE, errorgen_2: _LSE, weight: c
     composition that change sign under reversal (those making up the commutator) are
     absent from it.
 
-    The anticommutator is symmetric in its arguments, and this is used directly: there
-    is one handler per *unordered* type pair, and the two arguments are ordered by type
-    (H, S, C, A) before dispatch, with no sign.
+    The anticommutator is symmetric in its arguments, and this is used directly: the ten
+    unordered type pairs carry the formulas, and the handlers of the six reversed pairs
+    delegate to them with the arguments swapped, with no sign.
 
     Parameters
     ----------
@@ -1073,8 +1073,6 @@ def error_generator_anticommutator(errorgen_1: _LSE, errorgen_2: _LSE, weight: c
     """
     if identity is None:
         identity = 'I' * len(errorgen_1._hashable_basis_element_labels[0])
-    if errorgen_1.type_idx > errorgen_2.type_idx:
-        errorgen_1, errorgen_2 = errorgen_2, errorgen_1
     return _ANTICOMMUTATOR_HANDLERS[4 * errorgen_1.type_idx + errorgen_2.type_idx](errorgen_1, errorgen_2, weight, identity)
 
 
@@ -2054,6 +2052,11 @@ def _anticommutator_HS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity:
     return terms
 
 
+def _anticommutator_SH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {S_P, H_Q} = {H_Q, S_P}
+    return _anticommutator_HS(errorgen_2, errorgen_1, w, identity)
+
+
 def _anticommutator_SS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # {S_P, S_Q} = 2 S_{PQ} - 2 S_P - 2 S_Q
     #            = -2 S_P + 2 𝒬 S_P   (ω(Q, I) = 0: never pure bleed)
@@ -2086,6 +2089,11 @@ def _anticommutator_HC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity:
     return terms
 
 
+def _anticommutator_CH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {C_{A,B}, H_P} = {H_P, C_{A,B}}
+    return _anticommutator_HC(errorgen_2, errorgen_1, w, identity)
+
+
 def _anticommutator_HA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # {H_A, A_{P,Q}} = (C_{{A,P},Q} - C_{{A,Q},P}) - i A_{A,[P,Q]} + i/2 H_{{A,[P,Q]}}
     #   (AP,Q) if [A,P] = 0:  +2C;   (AQ,P) if [A,Q] = 0:  -2C
@@ -2108,6 +2116,11 @@ def _anticommutator_HA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity:
     return terms
 
 
+def _anticommutator_AH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {A_{A,B}, H_P} = {H_P, A_{A,B}}
+    return _anticommutator_HA(errorgen_2, errorgen_1, w, identity)
+
+
 def _anticommutator_SC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # {S_A, C_{P,Q}} = -2 C_{P,Q} + C_{AP,QA} + C_{AQ,PA} - ½ C_{{A,{P,Q}},A}
     #                = -2 C_{P,Q} + (1 + (-1)^ω(A,PQ)) 𝒬_A C_{P,Q}
@@ -2121,6 +2134,11 @@ def _anticommutator_SC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity:
     return terms
 
 
+def _anticommutator_CS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {C_{A,B}, S_P} = {S_P, C_{A,B}}
+    return _anticommutator_SC(errorgen_2, errorgen_1, w, identity)
+
+
 def _anticommutator_SA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # {S_A, A_{P,Q}} = -2 A_{P,Q} + A_{AP,QA} - A_{AQ,PA} + i/2 C_{{A,[P,Q]},A}
     #                = -2 A_{P,Q} + (1 + (-1)^ω(A,PQ)) 𝒬_A A_{P,Q}
@@ -2132,6 +2150,11 @@ def _anticommutator_SA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity:
     if A[1].commutes(P[1]) == A[1].commutes(Q[1]):  # ω(A, PQ) = 0
         terms += _conjugation_A(A, errorgen_2, 2*w, identity)
     return terms
+
+
+def _anticommutator_AS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {A_{A,B}, S_P} = {S_P, A_{A,B}}
+    return _anticommutator_SA(errorgen_2, errorgen_1, w, identity)
 
 
 def _anticommutator_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
@@ -2212,6 +2235,11 @@ def _anticommutator_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity:
     return terms
 
 
+def _anticommutator_AC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
+    # {A_{A,B}, C_{P,Q}} = {C_{P,Q}, A_{A,B}}
+    return _anticommutator_CA(errorgen_2, errorgen_1, w, identity)
+
+
 def _anticommutator_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
     # {A_{A,B}, A_{P,Q}} = -(C_{AP,QB} + C_{BQ,PA} - C_{AQ,PB} - C_{BP,QA})
     #                      + i/2 (A_{{A,[P,Q]},B} - A_{{B,[P,Q]},A}) + i/2 (A_{{[A,B],P},Q} - A_{{[A,B],Q},P})
@@ -2270,14 +2298,13 @@ _COMPOSITION_HANDLERS: tuple[_PairHandler, ...] = (
     _composition_AH, _composition_AS, _composition_AC, _composition_AA,
 )
 
-# The anticommutator is symmetric, so only the ten unordered type pairs have handlers;
-# `error_generator_anticommutator` orders its arguments by type before indexing, and the
-# lower-triangle entries are never reached.
-_ANTICOMMUTATOR_HANDLERS: tuple[Optional[_PairHandler], ...] = (
+# The anticommutator is symmetric, so the ten unordered type pairs carry the formulas and
+# the six reversed pairs (SH, CH, AH, CS, AS, AC) delegate to them with the arguments swapped.
+_ANTICOMMUTATOR_HANDLERS: tuple[_PairHandler, ...] = (
     _anticommutator_HH, _anticommutator_HS, _anticommutator_HC, _anticommutator_HA,
-    None,               _anticommutator_SS, _anticommutator_SC, _anticommutator_SA,
-    None,               None,               _anticommutator_CC, _anticommutator_CA,
-    None,               None,               None,               _anticommutator_AA,
+    _anticommutator_SH, _anticommutator_SS, _anticommutator_SC, _anticommutator_SA,
+    _anticommutator_CH, _anticommutator_CS, _anticommutator_CC, _anticommutator_CA,
+    _anticommutator_AH, _anticommutator_AS, _anticommutator_AC, _anticommutator_AA,
 )
 
 # Pauli conjugation handlers, indexed by the type of the conjugated generator, called as
