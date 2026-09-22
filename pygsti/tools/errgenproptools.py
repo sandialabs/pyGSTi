@@ -158,9 +158,7 @@ Anticommutators and Pauli conjugation
     the same label and a coefficient of the same magnitude, so it lands in exactly one of
     the commutator (opposite signs) and the anticommutator (equal signs):
     e1 o e2 = ½([e1, e2] + {e1, e2}) term by term. The anticommutation relations are thus
-    the even-sign complements of the commutation relations (`anticommutation_relations.tex`
-    alongside the paper's Supplemental Note; `composition_relations.tex` for the
-    compositions themselves).
+    the even-sign complements of the commutation relations.
 
     The stochastic generator is conjugation minus identity, S_Q = 𝒬 - 1 with 𝒬[rho] = Q rho Q,
     and 𝒬 applied to any elementary error generator X is again a (trace-annihilating)
@@ -913,7 +911,7 @@ def _prod(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> O
 def _com(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[_SignedPauli]:
     """
     Commutator [pauli_1, pauli_2] of two signed Paulis as a signed Pauli (phase +-2, +-2i);
-    None if either is None or they commute. String handling as in `_prod`.
+    None if either is None or they commute.
     """
     if pauli_1 is None or pauli_2 is None or pauli_1[1].commutes(pauli_2[1]):
         return None
@@ -928,7 +926,7 @@ def _com(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Op
 def _acom(pauli_1: Optional[_SignedPauli], pauli_2: Optional[_SignedPauli]) -> Optional[_SignedPauli]:
     """
     Anticommutator {pauli_1, pauli_2} of two signed Paulis as a signed Pauli (phase +-2, +-2i);
-    None if either is None or they anticommute. String handling as in `_prod`.
+    None if either is None or they anticommute.
     """
     if pauli_1 is None or pauli_2 is None or not pauli_1[1].commutes(pauli_2[1]):
         return None
@@ -1036,8 +1034,8 @@ def error_generator_anticommutator(errorgen_1: _LSE, errorgen_2: _LSE, weight: c
 
     The result is assembled from the analytic anticommutation relations of the elementary
     error generators (the even-sign complements of the commutation relations; see
-    "Anticommutators and Pauli conjugation" in the module docstring and
-    `anticommutation_relations.tex`). Together with `error_generator_commutator` it
+    "Anticommutators and Pauli conjugation" in the module docstring). 
+    Together with `error_generator_commutator` it
     decomposes the composition: e1 o e2 = ½([e1, e2] + {e1, e2}), term by term. The
     anticommutator emits fewer terms than either composition, because the terms of a
     composition that change sign under reversal (those making up the commutator) are
@@ -1089,8 +1087,7 @@ def pauli_conjugation_composition(pauli: stim.PauliString, errorgen: _LSE, weigh
     The conjugation by a Pauli is the stochastic generator plus the identity,
     𝒬 = S_Q + 1, so this is `error_generator_composition(S_Q, errorgen)` with the
     `-errorgen` term removed; see "Anticommutators and Pauli conjugation" in the module
-    docstring for the four relations (one per type of `errorgen`) and
-    `anticommutation_relations.tex` for their derivation. The result is a combination of
+    docstring for the four relations (one per type of `errorgen`). The result is a combination of
     elementary error generators for every type of `errorgen`, including S
     (𝒬 S_P = S_R - S_Q with R the phase-stripped product QP): conjugating a
     trace-annihilating map leaves it trace annihilating.
@@ -1099,7 +1096,7 @@ def pauli_conjugation_composition(pauli: stim.PauliString, errorgen: _LSE, weigh
     ----------
     pauli : stim.PauliString
         The conjugating Pauli Q. Its sign is irrelevant (Q and -Q conjugate identically)
-        and is ignored. Must not be the identity (𝒬 = 1 is not an error generator).
+        and is ignored. Must not be the identity.
 
     errorgen : `LocalStimErrorgenLabel`
         The error generator being conjugated.
@@ -1935,7 +1932,7 @@ def _composition_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
 # triple (1, Q, s) and computing 𝒬[errorgen[.]], 𝒬[rho] = Q rho Q. Since S_Q = 𝒬 - 1, each
 # is the S_Q o X composition table (`_composition_SH/SS/SC/SA`) with its leading -X term
 # removed; the case tables are written in the same slot notation as the composition
-# handlers. Each handler is headed by its relation (`anticommutation_relations.tex` §4).
+# handlers. Each handler is headed by its relation.
 # ---------------------------------------------------------------------------------------
 
 def _conjugation_H(Q: _SignedPauli, errorgen: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
@@ -2015,7 +2012,7 @@ def _conjugation_A(Q: _SignedPauli, errorgen: _LSE, w: complex, identity: str) -
 # Anticommutator handlers, one per *unordered* type pair (the anticommutator is symmetric;
 # `error_generator_anticommutator` orders its arguments by type before dispatch, so each
 # handler sees the lower type index first). Called as handler(errorgen_1, errorgen_2,
-# weight, identity). Each is headed by its relation (`anticommutation_relations.tex` §2) and
+# weight, identity). Each is headed by its relation and
 # its Pauli case table in the slot notation of the composition handlers. The tables are the
 # even-sign complements of the commutator's: a two-index slot such as (PA,QB) contributes
 # C_{PA,QB} + C_{AP,BQ} = (1 + s_AP s_BQ) C_{PA,QB}, i.e. twice one term when the pairs (A,P)
@@ -2579,8 +2576,8 @@ def iterative_error_generator_composition(errorgen_labels: tuple[_LSE, ...], rat
 
 # Helper functions for doing numeric commutators, compositions and BCH.
 
-def error_generator_commutator_numerical(errorgen1: _EEL, errorgen2: _EEL,
-                                         errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+def error_generator_commutator_numerical(errorgen1: Union[_LEEL, _LSE], errorgen2: Union[_LEEL, _LSE],
+                                         errorgen_matrix_dict: Optional[dict[Union[_LEEL, _LSE], _np.ndarray]] = None,
                                          num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Numerically compute the commutator of the two specified elementary error generators.
@@ -2635,8 +2632,8 @@ def error_generator_commutator_numerical(errorgen1: _EEL, errorgen2: _EEL,
                   - errorgen_matrix_dict[_LSE.cast(errorgen2)]@errorgen_matrix_dict[_LSE.cast(errorgen1)]
     return comm
 
-def error_generator_composition_numerical(errorgen1: _EEL, errorgen2: _EEL,
-                                          errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+def error_generator_composition_numerical(errorgen1: Union[_LEEL, _LSE], errorgen2: Union[_LEEL, _LSE],
+                                          errorgen_matrix_dict: Optional[dict[Union[_LEEL, _LSE], _np.ndarray]] = None,
                                           num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Numerically compute the composition of the two specified elementary error generators.
@@ -2646,7 +2643,7 @@ def error_generator_composition_numerical(errorgen1: _EEL, errorgen2: _EEL,
     errorgen1 : `LocalElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
         First error generator.
 
-    errorgen2 : `ElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
+    errorgen2 : `LocalElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
         Second error generator.
 
     errorgen_matrix_dict : dict, optional (default None)
@@ -2690,8 +2687,8 @@ def error_generator_composition_numerical(errorgen1: _EEL, errorgen2: _EEL,
     return comp
 
 
-def error_generator_anticommutator_numerical(errorgen1: _EEL, errorgen2: _EEL,
-                                             errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+def error_generator_anticommutator_numerical(errorgen1: Union[_LEEL, _LSE], errorgen2: Union[_LEEL,_LSE],
+                                             errorgen_matrix_dict: Optional[dict[Union[_LEEL, _LSE], _np.ndarray]] = None,
                                              num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Numerically compute the anticommutator of the two specified elementary error generators.
@@ -2701,7 +2698,7 @@ def error_generator_anticommutator_numerical(errorgen1: _EEL, errorgen2: _EEL,
     errorgen1 : `LocalElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
         First error generator.
 
-    errorgen2 : `ElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
+    errorgen2 : `LocalElementaryErrorgenLabel` or `LocalStimErrorgenLabel`
         Second error generator.
 
     errorgen_matrix_dict : dict, optional (default None)
@@ -2739,8 +2736,8 @@ def error_generator_anticommutator_numerical(errorgen1: _EEL, errorgen2: _EEL,
     return mat1@mat2 + mat2@mat1
 
 
-def pauli_conjugation_composition_numerical(pauli: Union[str, stim.PauliString], errorgen: _EEL,
-                                            errorgen_matrix_dict: Optional[dict[_EEL, _np.ndarray]] = None,
+def pauli_conjugation_composition_numerical(pauli: Union[str, stim.PauliString], errorgen: Union[_LEEL, _LSE],
+                                            errorgen_matrix_dict: Optional[dict[Union[_LEEL, _LSE], _np.ndarray]] = None,
                                             num_qubits: Optional[int] = None) -> _np.ndarray:
     """
     Numerically compute the composition of the Pauli conjugation superoperator rho -> Q rho Q
@@ -4693,7 +4690,7 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
         # unordered-pair halving of `_commuting_product`; forming even powers from two equal
         # factors instead (L^4 = ½{L^2, L^2}) would extend it, but costs ½|L^2|^2 pairs against
         # |L||L^3| and was measured at 0.8-0.9x on inputs with few generators and 2.3x slower on
-        # a 75-generator input (Part IV, Phase 20), so every power is L o L^(k-1).
+        # a 75-generator input, so every power is L o L^(k-1).
         identity = 'I' * len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
         previous_power = errorgen_dict
         for current_order in range(2, order + 1):
@@ -4751,9 +4748,7 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     For M = L (the same object passed twice) block 1 runs over unordered pairs with weights
     r_i r_j (i < j) and ½ r_i² (i = j), blocks 2 and 3 coincide and are done once with weight
     2 r_i r_j, block 4 runs over i < j with weight 2 r_i r_j (the diagonal gives S_I = 0) and
-    the bleed is -2 R_L L. For M != L no analogous halving exists: {E_i, F_j} for E_i in L and
-    F_j in M are all distinct pairs, and rewriting {L, M} by polarisation,
-    ½({L+M, L+M} - {L, L} - {M, M}), costs ½(|L|+|M|)² - ½|L|² - ½|M|² = |L||M| pairs again.
+    the bleed is -2 R_L L. For M != L no analogous halving exists.
 
     Parameters
     ----------

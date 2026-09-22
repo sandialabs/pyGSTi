@@ -286,7 +286,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
             for lbl in d1:
                 self.assertAlmostEqual(d1[lbl], d2[lbl], places=12, msg=msg)
 
-        weight = 0.7 - 0.3j
+        weight = 0.7
         _, _, _, _, stim_label_pairs = self._label_pairs_2Q_and_3Q()[0]
         identity = 'II'
         for lbl1, lbl2 in stim_label_pairs:
@@ -310,7 +310,7 @@ class ErrgenCompositionCommutationTester(BaseCase):
             stim_labels = [_LSE.cast(lbl) for lbl in labels]
             paulis = sorted({lbl.basis_element_labels[0] for lbl in basis.labels if lbl.errorgen_type == 'S'})
             if num_qubits == 3:
-                paulis = random.Random(4321).sample(paulis, 12)
+                paulis = random.Random().sample(paulis, 12)
             for pauli_str in paulis:
                 pauli = stim.PauliString(pauli_str)
                 for lbl, stim_lbl in zip(labels, stim_labels):

@@ -430,19 +430,5 @@ canonicalize_errorgen_layer(noncanonical_layer)
 
 The C rate is unchanged, while the two A entries are the same generator written both ways and are merged into `A(IX, YI)` with rate `-0.02 + 0.005`. If you build your own error generator dictionaries (for example to compare against propagated ones, or to use as a `fixed_errorgen_layer` with rates you computed yourself), pass them through this function rather than constructing `LocalStimErrorgenLabel`s by hand. Here is the model-side situation it exists for: a `Gcphase` on qubits `(1, 0)` with an A error rate stored by the model under the pair `('YX', 'XY')`, which the propagator reports under the canonical key `A(XY, YX)` with the rate negated.
 
-```{code-cell} ipython3
-from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel
-
-reversed_pspec = pygsti.processors.QubitProcessorSpec(2, ['Gcphase', 'Gxpi2'], availability={'Gcphase': [(1, 0)]})
-reversed_model = pygsti.models.modelconstruction.create_crosstalk_free_model(
-    reversed_pspec, lindblad_error_coeffs={'Gcphase': {GlobalElementaryErrorgenLabel('A', ['XY', 'YX'], (0, 1)): 0.01}},
-    lindblad_parameterization='GLND')
-reversed_circuit = pygsti.circuits.Circuit([('Gcphase', 1, 0)], line_labels=(0, 1))
-
-model_coeffs = reversed_model.circuit_layer_operator(reversed_circuit[0]).errorgen_coefficients(label_type='local')
-print({lbl: rate for lbl, rate in model_coeffs.items() if rate != 0})
-print(ErrorGeneratorPropagator(reversed_model).construct_errorgen_layers(reversed_circuit, 2, include_spam=False))
-```
-
 There's a whole bunch of other functionality and utilities available, particularly in the `errgenproptools` module which have not been covered in this tutorial, so please check out the documentation for additional capabilities!
 

@@ -524,7 +524,7 @@ class ErrgenPolyToolsTester(BaseCase):
             )
 
     # ------------------------------------------------------------------
-    # canonical label order (Part IV Phase 21)
+    # canonical label order
     # ------------------------------------------------------------------
     def test_polynomials_on_reversed_target_gate_model(self):
         # A two-qubit gate embedded into reversed target qubits yields model labels whose two basis
