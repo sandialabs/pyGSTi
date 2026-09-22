@@ -620,15 +620,15 @@ class ErrgenCompositionCommutationTester(BaseCase):
             add(cols[k], p)
         expected = {}
         for m in range(n):
-            bracket_1, bracket_2 = {}, {}
+            row_sum, col_sum = {}, {}
             for j in range(m):
-                add(bracket_1, rows[j])
-            add(bracket_1, rows[m], 0.5)
+                add(row_sum, rows[j])
+            add(row_sum, rows[m], 0.5)
             for j in range(m + 1, n):
-                add(bracket_2, cols[j])
-            add(bracket_2, cols[m], 0.5)
-            add(expected, commutator(layers[m], bracket_1), 1 / 6)
-            add(expected, commutator(layers[m], bracket_2), -1 / 6)
+                add(col_sum, cols[j])
+            add(col_sum, cols[m], 0.5)
+            add(expected, commutator(layers[m], row_sum), 1 / 6)
+            add(expected, commutator(layers[m], col_sum), -1 / 6)
         expected = {lbl: rate.real for lbl, rate in expected.items() if abs(rate) > 1e-20}
 
         second = _eprop.magnus_expansion(layers, magnus_order=2, truncation_threshold=0)

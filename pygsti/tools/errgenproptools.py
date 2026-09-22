@@ -1137,7 +1137,7 @@ def pauli_conjugation_composition(pauli: stim.PauliString, errorgen: _LSE, weigh
 # single term. Without this, every such pair costs two label constructions that cancel
 # only after aggregation (at 100 qubits, 99% of the terms these handlers emitted).
 #
-# The same four cross-pair booleans s_AP, s_AQ, s_BP, s_BQ decide every other bracket in
+# The same four cross-pair booleans s_AP, s_AQ, s_BP, s_BQ decide every other commutator in
 # these handlers, because commutation signs are multiplicative: a Pauli anticommutes with a
 # product XY iff it anticommutes with exactly one of X, Y. With X = {A,B} or [A,B] (whichever
 # is nonzero is proportional to AB) and Y = {P,Q} or [P,Q] (proportional to PQ),
@@ -1145,9 +1145,9 @@ def pauli_conjugation_composition(pauli: stim.PauliString, errorgen: _LSE, weigh
 #     [Y, A] != 0 iff s_AP != s_AQ,   [Y, B] != 0 iff s_BP != s_BQ,
 #     [X, Y] != 0 iff an odd number of the four cross pairs anticommute,
 # and a nonzero commutator of two Paulis is twice their product. So after the four
-# `commutes()` tests those brackets are formed with `_prod` (no further commutation test)
+# `commutes()` tests those commutators are formed with `_prod` (no further commutation test)
 # under the matching condition, with the factor of 2 folded into the coefficient; only the
-# own-pair brackets X and Y themselves still go through `_com`/`_acom`.
+# own-pair (anti)commutators X and Y themselves still go through `_com`/`_acom`.
 # ---------------------------------------------------------------------------------------
 
 def _commutator_HH(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
@@ -1277,9 +1277,9 @@ def _commutator_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
         _A(terms, _prod(A, P), _prod(B, Q), -2j*w if cBQ else 2j*w, identity)
     if cAQ != cBP:
         _A(terms, _prod(A, Q), _prod(B, P), -2j*w if cBP else 2j*w, identity)
-    # The remaining brackets are decided by the same four booleans (see the section comment):
+    # The remaining commutators are decided by the same four booleans (see the section comment):
     # [P,X] != 0 iff cAP != cBP, [Q,X] iff cAQ != cBQ, [Y,A] iff cAP != cAQ, [Y,B] iff cBP != cBQ,
-    # [X,Y] iff an odd number of the cross pairs anticommute; each nonzero bracket is twice the
+    # [X,Y] iff an odd number of the cross pairs anticommute; each nonzero commutator is twice the
     # product, and that factor of 2 is folded into the coefficients below.
     if X is not None:
         if cAP != cBP:
@@ -1316,9 +1316,9 @@ def _commutator_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
         _C(terms, _prod(A, P), _prod(B, Q), 2j*w if cBQ else -2j*w, identity)
     if cAQ != cBP:
         _C(terms, _prod(A, Q), _prod(B, P), 2j*w if cAQ else -2j*w, identity)
-    # The remaining brackets are decided by the same four booleans (see the section comment):
+    # The remaining commutators are decided by the same four booleans (see the section comment):
     # [P,X] != 0 iff cAP != cBP, [Q,X] iff cAQ != cBQ, [Y,A] iff cAP != cAQ, [Y,B] iff cBP != cBQ,
-    # [X,Y] iff an odd number of the cross pairs anticommute; each nonzero bracket is twice the
+    # [X,Y] iff an odd number of the cross pairs anticommute; each nonzero commutator is twice the
     # product, and that factor of 2 is folded into the coefficients below.
     if Y is not None:
         if cAP != cAQ:
@@ -1360,9 +1360,9 @@ def _commutator_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
         _A(terms, _prod(A, P), _prod(B, Q), -2j*w if cAP else 2j*w, identity)
     if cAQ != cBP:
         _A(terms, _prod(A, Q), _prod(B, P), -2j*w if cBP else 2j*w, identity)
-    # The remaining brackets are decided by the same four booleans (see the section comment):
+    # The remaining commutators are decided by the same four booleans (see the section comment):
     # [P,X] != 0 iff cAP != cBP, [Q,X] iff cAQ != cBQ, [Y,A] iff cAP != cAQ, [Y,B] iff cBP != cBQ,
-    # [X,Y] iff an odd number of the cross pairs anticommute; each nonzero bracket is twice the
+    # [X,Y] iff an odd number of the cross pairs anticommute; each nonzero commutator is twice the
     # product, and that factor of 2 is folded into the coefficients below.
     if Y is not None:
         if cBP != cBQ:
@@ -1392,8 +1392,8 @@ def _commutator_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str
 #   "(APQ,B) by (A,PQ):  c: -C   a: +iA"
 #       keys on whether A commutes with the product PQ, i.e. on whether the pairs (A,P) and
 #       (A,Q) commute alike.
-# Slots built on the bracket of a generator's own index pair ({A,B} for C_{A,B}, [A,B] for
-# A_{A,B}, likewise for P,Q) exist only when that bracket is nonzero; the H_{ABPQ} term
+# Slots built on the (anti)commutator of a generator's own index pair ({A,B} for C_{A,B},
+# [A,B] for A_{A,B}, likewise for P,Q) exist only when it is nonzero; the H_{ABPQ} term
 # additionally requires an odd number of the four cross pairs to anticommute.
 # ---------------------------------------------------------------------------------------
 
@@ -1669,7 +1669,7 @@ def _composition_AS(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
 
 
 def _composition_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
-    # C_{A,B}[C_{P,Q}]; the {A,B} and {P,Q} slots exist only when those brackets are nonzero.
+    # C_{A,B}[C_{P,Q}]; the {A,B} and {P,Q} slots exist only when those anticommutators are nonzero.
     A = _index(errorgen_1, 0)
     B = _index(errorgen_1, 1)
     P = _index(errorgen_2, 0)
@@ -1723,7 +1723,7 @@ def _composition_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
             _C(terms, QAB, P, -w, identity)
         else:
             _A(terms, QAB, P, -1j*w, identity)
-        if com_PQ:  # both brackets nonzero
+        if com_PQ:  # both anticommutators nonzero
             # (PQ,AB):  +C
             _C(terms, PQ, AB, w, identity)
             # H_{ABPQ}:  +iH, present iff an odd number of (A,P), (A,Q), (B,P), (B,Q) anticommute
@@ -1733,7 +1733,7 @@ def _composition_CC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
 
 
 def _composition_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
-    # C_{A,B}[A_{P,Q}]; the {A,B} and [P,Q] slots exist only when those brackets are nonzero.
+    # C_{A,B}[A_{P,Q}]; the {A,B} and [P,Q] slots exist only when the anticommutator and the commutator are nonzero.
     A = _index(errorgen_1, 0)
     B = _index(errorgen_1, 1)
     P = _index(errorgen_2, 0)
@@ -1787,7 +1787,7 @@ def _composition_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
             _A(terms, QAB, P, w, identity)
         else:
             _C(terms, QAB, P, -1j*w, identity)
-        if not com_PQ:  # both brackets nonzero
+        if not com_PQ:  # anticommutator and commutator both nonzero
             # (PQ,AB):  -iC
             _C(terms, PQ, AB, -1j*w, identity)
             # H_{ABPQ}:  +H, present iff an odd number of (A,P), (A,Q), (B,P), (B,Q) anticommute
@@ -1797,7 +1797,7 @@ def _composition_CA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
 
 
 def _composition_AC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
-    # A_{A,B}[C_{P,Q}]; the [A,B] and {P,Q} slots exist only when those brackets are nonzero.
+    # A_{A,B}[C_{P,Q}]; the [A,B] and {P,Q} slots exist only when the commutator and the anticommutator are nonzero.
     A = _index(errorgen_1, 0)
     B = _index(errorgen_1, 1)
     P = _index(errorgen_2, 0)
@@ -1851,7 +1851,7 @@ def _composition_AC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
             _C(terms, QAB, P, 1j*w, identity)
         else:
             _A(terms, QAB, P, -w, identity)
-        if com_PQ:  # both brackets nonzero
+        if com_PQ:  # commutator and anticommutator both nonzero
             # (PQ,AB):  -iC
             _C(terms, PQ, AB, -1j*w, identity)
             # H_{ABPQ}:  +H, present iff an odd number of (A,P), (A,Q), (B,P), (B,Q) anticommute
@@ -1861,7 +1861,7 @@ def _composition_AC(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
 
 
 def _composition_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: str) -> _ErrorgenTerms:
-    # A_{A,B}[A_{P,Q}]; the [A,B] and [P,Q] slots exist only when those brackets are nonzero.
+    # A_{A,B}[A_{P,Q}]; the [A,B] and [P,Q] slots exist only when those commutators are nonzero.
     A = _index(errorgen_1, 0)
     B = _index(errorgen_1, 1)
     P = _index(errorgen_2, 0)
@@ -1915,7 +1915,7 @@ def _composition_AA(errorgen_1: _LSE, errorgen_2: _LSE, w: complex, identity: st
             _A(terms, QAB, P, -1j*w, identity)
         else:
             _C(terms, QAB, P, -w, identity)
-        if not com_PQ:  # both brackets nonzero
+        if not com_PQ:  # both commutators nonzero
             # (PQ,AB):  -C
             _C(terms, PQ, AB, -w, identity)
             # H_{ABPQ}:  -iH, present iff an odd number of (A,P), (A,Q), (B,P), (B,Q) anticommute
@@ -2015,9 +2015,9 @@ def _conjugation_A(Q: _SignedPauli, errorgen: _LSE, w: complex, identity: str) -
 # even-sign complements of the commutator's: a two-index slot such as (PA,QB) contributes
 # C_{PA,QB} + C_{AP,BQ} = (1 + s_AP s_BQ) C_{PA,QB}, i.e. twice one term when the pairs (A,P)
 # and (B,Q) commute alike and nothing otherwise (the commutator takes the other case), and
-# the bracket slots are present when the bracket Pauli commutes with the product, i.e. when
+# the (anti)commutator slots are present when their Pauli commutes with the product, i.e. when
 # the corresponding pairs commute alike (see the section comment of the commutator handlers
-# for why the four cross-pair booleans decide every bracket). The H_{ABPQ} term of the C/A
+# for why the four cross-pair booleans decide every commutator). The H_{ABPQ} term of the C/A
 # compositions always cancels in the anticommutator and is never formed. Products are formed
 # inside the gate of the slot that uses them (each two-index product serves exactly one slot
 # here), never up front as in the composition handlers.
