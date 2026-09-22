@@ -1,14 +1,9 @@
 import numpy as np
 import itertools
-import stim
 
 from collections import defaultdict
 import pygsti.tools.errgenproptools as eprop
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel
-
-#Note on code integration process: This was written to pass around the TableauSimulator to avoid computing it multiple times. 
-# But pyGSTi's bulk_alpha_pauli operates on a Tableau. 
-# So this should all be rewritten to take in the stim Tableau and use bulk_alpha_pauli as efficiently as possible
 
 def pauli_product(P1, P2):
     P3 = P1*P2
@@ -28,26 +23,9 @@ def format_dem_stim(dem_dict, n_logical):
             dem_string+=line
     return dem_string
 
-def to_full_pauli(partial_pauli, qs, n_qubits):
-    full_p = stim.PauliString('I'*n_qubits)
-    for i,q in enumerate(qs):
-        full_p[q]=partial_pauli[i]
-    return full_p
-    
-
-def get_detector_as_parity(detector_indices, measurements, n_qubits):
-    #for each measurement in the detector, 
-    p_net = stim.PauliString('I'*n_qubits)
-    for idx in detector_indices:
-        #turn each Pauli into an n-qubit Pauli
-        partial_pauli, qs = measurements[idx]
-        p = to_full_pauli(partial_pauli, qs, n_qubits)
-        p_net *= p
-    #take the product of these Paulis
-    return p_net
 
 def compute_contribution(eeg, rate, det_pauli, tableau):
-    contribution = rate*eprop.bulk_alpha_pauli([eeg], tableau, [det_pauli])/2 #TODO improve since this'll be slow
+    contribution = rate*alpha_pauli(eeg, tableau, det_pauli)/2 
     return contribution
 
 def compute_contribution_bulk(eegs, rates, det_pauli, tableau):
@@ -55,7 +33,7 @@ def compute_contribution_bulk(eegs, rates, det_pauli, tableau):
     contributions = [r*ap for r, ap in zip(rates, alpha_paulis)]  
     return contributions
 
-def sort_terms_by_effect(terms, detectors, show_progress=False):
+def sort_terms_by_effect(terms, detectors, sim=None, show_progress=False):
     sorted_terms = defaultdict(list)
     for j,eeg in enumerate(terms):
         dets_fired = []
@@ -85,7 +63,7 @@ def split_generator(term_sorting, eoc_eeg):
         generator_split.append(term_dict)
     return generator_split, base_events
 
-def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_strings, tableau): 
+def add_to_dem(dem, base_events, leading_order_channels, eoc_eeg, dets_as_pauli_strings, sim):
     for event, egens in zip(base_events, leading_order_channels):
         if event != '0'*len(event):
             first_flipped_detector = event.find('1')
