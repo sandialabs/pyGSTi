@@ -17,6 +17,10 @@ import numpy as np
 cimport numpy as np
 cimport cython
 from cpython.unicode cimport PyUnicode_FromStringAndSize, PyUnicode_AsUTF8
+
+cdef extern from "Python.h":
+    object PyUnicode_New(Py_ssize_t size, Py_UCS4 maxchar)
+    void* PyUnicode_DATA(object o)
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 import stim
 from libc.math cimport pow
@@ -142,6 +146,54 @@ cpdef object fast_support_mask(tuple bel_strings):
                     mask |= chunk_mask << start
                 start = stop
     return mask
+
+
+# Single-qubit Pauli products with the phase dropped, indexed by the XOR of the two letters'
+# ASCII codes (the XOR identifies the pair up to order; the product is order-independent once
+# the phase is dropped). Built once at import from the multiplication table written out below.
+# Optimized equivalent of `pygsti.errorgenpropagation.localstimerrorgen._slow_bel_product_str`.
+cdef unsigned char _BEL_PRODUCT_TABLE[256]
+_BEL_PRODUCTS = {('I', 'I'): 'I', ('I', 'X'): 'X', ('I', 'Y'): 'Y', ('I', 'Z'): 'Z',
+                 ('X', 'I'): 'X', ('X', 'X'): 'I', ('X', 'Y'): 'Z', ('X', 'Z'): 'Y',
+                 ('Y', 'I'): 'Y', ('Y', 'X'): 'Z', ('Y', 'Y'): 'I', ('Y', 'Z'): 'X',
+                 ('Z', 'I'): 'Z', ('Z', 'X'): 'Y', ('Z', 'Y'): 'X', ('Z', 'Z'): 'I'}
+for _i in range(256):
+    _BEL_PRODUCT_TABLE[_i] = 73  # 'I'
+for (_a, _b), _c in _BEL_PRODUCTS.items():
+    _BEL_PRODUCT_TABLE[ord(_a) ^ ord(_b)] = ord(_c)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef str fast_bel_product_str(str bel_str_1, str bel_str_2):
+    """
+    The 'I'-padded string of the product of two Paulis given as 'I'-padded strings, with the
+    phase dropped: `fast_bel_product_str('XI', 'YZ')` -> `'ZZ'` (X Y = iZ). One table lookup per
+    character on the ASCII buffers of the two strings, written directly into the buffer of the
+    new (ASCII) string.
+
+    Precondition (not checked): both strings have the same length and consist only of the
+    characters 'I', 'X', 'Y', 'Z'. Other input produces meaningless output.
+
+    Parameters
+    ----------
+    bel_str_1, bel_str_2 : str
+
+    Returns
+    -------
+    str
+    """
+    cdef:
+        const char* p = PyUnicode_AsUTF8(bel_str_1)
+        const char* q = PyUnicode_AsUTF8(bel_str_2)
+        Py_ssize_t n = len(bel_str_1)
+        Py_ssize_t i
+        object result = PyUnicode_New(n, 127)
+        char* out = <char*> PyUnicode_DATA(result)
+
+    for i in range(n):
+        out[i] = _BEL_PRODUCT_TABLE[<unsigned char>(p[i] ^ q[i])]
+    return result
 
 
 @cython.wraparound(False)   # Deactivate negative indexing.

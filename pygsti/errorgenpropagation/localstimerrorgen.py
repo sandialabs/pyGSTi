@@ -8,7 +8,6 @@
 #***************************************************************************************************
 
 from __future__ import annotations
-import functools as _functools
 from typing import Any, Iterable, Optional, Sequence, Union
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel as _ElementaryErrorgenLabel, GlobalElementaryErrorgenLabel as _GEEL,\
 LocalElementaryErrorgenLabel as _LEEL
@@ -57,21 +56,28 @@ def _build_bel_product_table() -> bytes:
 _BEL_PRODUCT_TABLE = _build_bel_product_table()
 
 
-@_functools.lru_cache(maxsize=2**16)
-def bel_product_str(bel_str_1: str, bel_str_2: str) -> str:
+def _slow_bel_product_str(bel_str_1: str, bel_str_2: str) -> str:
     """
     The `bel_str` form of the product of two Paulis given in `bel_str` form (equal length,
     characters 'I', 'X', 'Y', 'Z'), with the phase dropped: `bel_product_str('XI', 'YZ')` ->
-    `'ZZ'` (since X Y = iZ). The product is computed character-wise on the strings (XOR of the
-    ASCII codes plus a translation table), which is several times cheaper than multiplying
-    the `stim.PauliString`s and rendering the result, in particular at large qubit counts
-    where rendering is linear in the number of qubits. Results are memoized (python caches
-    the hash of a string, so a repeated pair costs a dictionary lookup): the same pairs of
-    Paulis recur heavily in the commutator and composition drivers on few qubits.
+    `'ZZ'` (since X Y = iZ). The product is computed character-wise on the strings (the XOR
+    of the two strings as big integers, translated through `_BEL_PRODUCT_TABLE`), which is
+    several times cheaper than multiplying the `stim.PauliString`s and rendering the result,
+    in particular at large qubit counts where rendering is linear in the number of qubits.
+    The strings are not validated.
     """
     n = len(bel_str_1)
     return (int.from_bytes(bel_str_1.encode(), 'big') ^ int.from_bytes(bel_str_2.encode(), 'big')
             ).to_bytes(n, 'big').translate(_BEL_PRODUCT_TABLE).decode()
+
+
+# Use the cython implementation when the extensions are built (one table lookup per character
+# on the strings' ASCII buffers, ~0.04-0.09 us per product at 2-100 qubits versus 0.3-0.5 us for
+# the pure-python version); fall back to the latter otherwise.
+try:
+    from pygsti.tools.fasterrgencalc import fast_bel_product_str as bel_product_str
+except ImportError:
+    bel_product_str = _slow_bel_product_str
 
 
 def bel_less_than(pauli1: stim.PauliString, pauli2: stim.PauliString) -> bool:

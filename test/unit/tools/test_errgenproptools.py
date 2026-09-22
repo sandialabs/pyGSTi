@@ -1168,21 +1168,32 @@ class ErrorGenPropUtilsTester(BaseCase):
         """
         `bel_product_str` (the string-level Pauli product the emitters use in place of a stim
         product plus rendering) must agree with stim on every pair of single-qubit Paulis and
-        on random multi-qubit pairs, including the 'I'-padded strings of 100-qubit labels.
+        on random multi-qubit pairs, including the 'I'-padded strings of 100-qubit labels and
+        strings longer than the cython implementation's stack buffer. Both the pure-python
+        implementation and the cython one (when built) are checked.
         """
-        from pygsti.errorgenpropagation.localstimerrorgen import bel_product_str, bel_str
-        for a, b in product('IXYZ', repeat=2):
-            PQ = stim.PauliString(a) * stim.PauliString(b)
-            self.assertEqual(bel_product_str(a, b), bel_str(PQ / PQ.sign))
+        from pygsti.errorgenpropagation import localstimerrorgen as lse
+        impls = {'default': lse.bel_product_str, 'python': lse._slow_bel_product_str}
+        try:
+            from pygsti.tools.fasterrgencalc import fast_bel_product_str
+            impls['cython'] = fast_bel_product_str
+        except ImportError:
+            pass
+
+        def reference(s1, s2):
+            PQ = stim.PauliString(s1) * stim.PauliString(s2)
+            return lse.bel_str(PQ / PQ.sign)
+
         rng = np.random.default_rng(2024)
-        for num_qubits in (2, 3, 5, 100):
-            for _ in range(200):
-                strs = [''.join(rng.choice(list('IXYZ'), size=num_qubits, p=[0.7, 0.1, 0.1, 0.1])) for _ in range(2)]
-                PQ = stim.PauliString(strs[0]) * stim.PauliString(strs[1])
-                self.assertEqual(bel_product_str(*strs), bel_str(PQ / PQ.sign))
-        # the product with the identity and of a Pauli with itself
-        self.assertEqual(bel_product_str('IXYZ', 'IIII'), 'IXYZ')
-        self.assertEqual(bel_product_str('IXYZ', 'IXYZ'), 'IIII')
+        cases = [(a, b) for a, b in product('IXYZ', repeat=2)]
+        for num_qubits in (2, 3, 5, 100, 257, 300):
+            for _ in range(100):
+                cases.append(tuple(''.join(rng.choice(list('IXYZ'), size=num_qubits, p=[0.7, 0.1, 0.1, 0.1]))
+                                   for _ in range(2)))
+        cases += [('IXYZ', 'IIII'), ('IXYZ', 'IXYZ')]
+        for name, impl in impls.items():
+            for s1, s2 in cases:
+                self.assertEqual(impl(s1, s2), reference(s1, s2), f'{name}: {s1} * {s2}')
 
 #helper functions
 
