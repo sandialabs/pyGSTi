@@ -1077,7 +1077,7 @@ def error_generator_anticommutator(errorgen_1: _LSE, errorgen_2: _LSE, weight: c
 
 
 def pauli_conjugation_composition(pauli: stim.PauliString, errorgen: _LSE, weight: complex = 1.0,
-                                  identity: Optional[str] = None) -> _ErrorgenTerms:
+                                  identity: Optional[str] = None, pauli_str: Optional[str] = None) -> _ErrorgenTerms:
     r"""
     Returns the composition of the Pauli conjugation superoperator 𝒬[\rho] = Q \rho Q with
     an elementary error generator, i.e. 𝒬[errorgen[\cdot]].
@@ -1106,6 +1106,12 @@ def pauli_conjugation_composition(pauli: stim.PauliString, errorgen: _LSE, weigh
         The all-identity Pauli string `'I'*n` for the number of qubits n. Built from
         `errorgen` if not given.
 
+    pauli_str : str, optional (default None)
+        The 'I'-padded string of `pauli` (`bel_str(pauli)`), if already available - e.g. the
+        cached string of an S-type label's Pauli. Rendered from `pauli` if not given; passing
+        it avoids rendering it again when calling this function many times with the same
+        Pauli.
+
     Returns
     -------
     list of tuples. The first element of each tuple is a `LocalStimErrorgenLabel`
@@ -1117,7 +1123,7 @@ def pauli_conjugation_composition(pauli: stim.PauliString, errorgen: _LSE, weigh
     if pauli.sign != 1:
         pauli = pauli.copy()
         pauli.sign = 1
-    Q = (1, pauli, _bel_str(pauli))
+    Q = (1, pauli, pauli_str if pauli_str is not None else _bel_str(pauli))
     return _CONJUGATION_HANDLERS[errorgen.type_idx](Q, errorgen, weight, identity)
 
 
@@ -4801,33 +4807,21 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
         perp_2 = [item for item in errorgen_dict_2.items() if item[0].type_idx != 1]
         stoch_2 = [item for item in errorgen_dict_2.items() if item[0].type_idx == 1]
 
-    anticommutators = _ANTICOMMUTATOR_HANDLERS
-    conjugations = _CONJUGATION_HANDLERS
     product: dict[_LSE, complex] = {}
     get = product.get
 
-    # block 1: ½ Σ r_i m_j {E_i, F_j} over the non-stochastic terms (the handlers are indexed
-    # by the type-ordered pair).
+    # block 1: ½ Σ r_i m_j {E_i, F_j} over the non-stochastic terms.
     if same:
         for i, (lbl_1, rate_1) in enumerate(perp_1):
             for j in range(i, len(perp_1)):
                 lbl_2, rate_2 = perp_1[j]
                 weight = rate_1 * rate_2 if j != i else 0.5 * rate_1 * rate_1
-                if lbl_1.type_idx <= lbl_2.type_idx:
-                    terms = anticommutators[4 * lbl_1.type_idx + lbl_2.type_idx](lbl_1, lbl_2, weight, identity)
-                else:
-                    terms = anticommutators[4 * lbl_2.type_idx + lbl_1.type_idx](lbl_2, lbl_1, weight, identity)
-                for lbl, rate in terms:
+                for lbl, rate in error_generator_anticommutator(lbl_1, lbl_2, weight, identity):
                     product[lbl] = get(lbl, 0) + rate
     else:
         for lbl_1, rate_1 in perp_1:
             for lbl_2, rate_2 in perp_2:
-                weight = 0.5 * rate_1 * rate_2
-                if lbl_1.type_idx <= lbl_2.type_idx:
-                    terms = anticommutators[4 * lbl_1.type_idx + lbl_2.type_idx](lbl_1, lbl_2, weight, identity)
-                else:
-                    terms = anticommutators[4 * lbl_2.type_idx + lbl_1.type_idx](lbl_2, lbl_1, weight, identity)
-                for lbl, rate in terms:
+                for lbl, rate in error_generator_anticommutator(lbl_1, lbl_2, 0.5 * rate_1 * rate_2, identity):
                     product[lbl] = get(lbl, 0) + rate
 
     # blocks 2 and 3: the conjugation image r m 𝒬X of each non-stochastic term X by each
@@ -4836,8 +4830,8 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     # PR iff it commutes with both or neither of P, R.
     def conjugation_block(perp, stoch, scale):
         for s_lbl, s_rate in stoch:
-            Q = _index(s_lbl, 0)
-            Q_pauli = Q[1]
+            Q_pauli = s_lbl.basis_element_labels[0]
+            Q_str = s_lbl._hashable_basis_element_labels[0]
             for x_lbl, x_rate in perp:
                 bels = x_lbl.basis_element_labels
                 if x_lbl.type_idx == 0:
@@ -4845,7 +4839,8 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
                 else:
                     commutes_with_total = Q_pauli.commutes(bels[0]) == Q_pauli.commutes(bels[1])
                 if commutes_with_total:
-                    for lbl, rate in conjugations[x_lbl.type_idx](Q, x_lbl, scale * s_rate * x_rate, identity):
+                    for lbl, rate in pauli_conjugation_composition(Q_pauli, x_lbl, scale * s_rate * x_rate,
+                                                                   identity, pauli_str=Q_str):
                         product[lbl] = get(lbl, 0) + rate
 
     if same:
