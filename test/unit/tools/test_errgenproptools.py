@@ -5,7 +5,7 @@ from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis
 from pygsti.algorithms.randomcircuit import create_random_circuit
 from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
-from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than
+from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_less_than, bel_str
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools.matrixtools import print_mx
 from pygsti.tools.basistools import change_basis
@@ -776,6 +776,18 @@ class ErrgenCompositionCommutationTester(BaseCase):
         SWAP_A_lbl = A_lbl.propagate_error_gen_tableau(swap_tableau, weight=1)
         assert SWAP_A_lbl[0].basis_element_labels == (P,Q), "propagated bels not in canonical ordering."
         assert SWAP_A_lbl[1] == -1, "Incorrect weight following A subscript swap."
+
+        # The propagated label is handed its strings pre-rendered (`pauli_str_reps`); they must
+        # be the strings of its (reordered) Paulis, so that hashing and ordering stay consistent.
+        tableau = stim.Tableau.random(6)
+        for typ, bels in [('H', ['XIIIII']), ('S', ['IYIIZI']), ('C', ['IIZIIY', 'XIIIII']), ('A', ['IXIIII', 'ZIIIYI'])]:
+            lbl = _LSE.cast((typ, bels))
+            new_lbl, _ = lbl.propagate_error_gen_tableau(tableau, weight=1)
+            self.assertEqual(new_lbl._hashable_basis_element_labels, tuple(bel_str(p) for p in new_lbl.basis_element_labels))
+            self.assertEqual(new_lbl, _LSE(typ, new_lbl.basis_element_labels))
+            self.assertEqual(hash(new_lbl), hash(_LSE(typ, new_lbl.basis_element_labels)))
+            if len(bels) == 2:
+                self.assertTrue(bel_less_than(*new_lbl.basis_element_labels))
 
 
     def test_zassenhaus_formula(self):

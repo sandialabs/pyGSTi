@@ -514,27 +514,34 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         label's basis element labels are in canonical (sorted) order.
         """
         new_basis_labels = []
+        new_bel_strs = []
         weightmod = 1.0
         # `slayer(pauli)` returns a new PauliString, so its sign can be cleared in place
         # (cheaper than multiplying by the sign, which allocates another full-width string).
+        # Each propagated Pauli is rendered to its string exactly once here; the strings serve
+        # the canonical-order test below and are handed to the new label (`pauli_str_reps`),
+        # which would otherwise render them again.
         if self.errorgen_type == 'S':
             for pauli in self.basis_element_labels:
                 temp = slayer(pauli)
                 temp.sign = 1
                 new_basis_labels.append(temp)
+                new_bel_strs.append(bel_str(temp))
         else:
             for pauli in self.basis_element_labels:
                 temp = slayer(pauli)
                 weightmod = temp.sign.real*weightmod
                 temp.sign = 1
                 new_basis_labels.append(temp)
+                new_bel_strs.append(bel_str(temp))
 
             # Conjugation by a Clifford need not preserve the relative order of the two
             # basis element labels of a C or A generator (e.g. SWAP maps (IX, XI) to (XI, IX)),
             # so re-canonicalize. C is symmetric, C_{P,Q} = C_{Q,P}, so a swap is free; A is
             # antisymmetric, A_{P,Q} = -A_{Q,P}, so a swap must also flip the sign of the weight.
-            if self.errorgen_type in ('C', 'A') and not bel_less_than(new_basis_labels[0], new_basis_labels[1]):
+            if len(new_bel_strs) == 2 and new_bel_strs[1] < new_bel_strs[0]:
                 new_basis_labels.reverse()
+                new_bel_strs.reverse()
                 if self.errorgen_type == 'A':
                     weightmod = -weightmod
 
@@ -542,7 +549,8 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         # here. It materializes the pre-propagation label if it has not been already, which is
         # required: a `None` passed on would make the new label lazily build its initial label
         # from the *post*-propagation basis element labels.
-        return (LocalStimErrorgenLabel(self.errorgen_type, new_basis_labels, initial_label=self.initial_label, circuit_time=self.circuit_time), 
+        return (LocalStimErrorgenLabel(self.errorgen_type, new_basis_labels, initial_label=self.initial_label,
+                                       circuit_time=self.circuit_time, pauli_str_reps=tuple(new_bel_strs)),
                 weightmod*weight)
     
     def to_global_eel(self, sslbls = None):
