@@ -59,12 +59,28 @@ class EmbeddedErrorgen(_EmbeddedOp):
         #self.sparse = True # Embedded error generators are *always* sparse (pointless to
         #                   # have dense versions of these)
 
-        embedded_matrix_basis = errgen_to_embed.matrix_basis
-        if isinstance(embedded_matrix_basis, str):
-            self.matrix_basis = embedded_matrix_basis
-        else:  # assume a Basis object
-            my_basis_dim = self.state_space.dim
-            self.matrix_basis = _Basis.cast(embedded_matrix_basis.name, my_basis_dim, sparse=True)
+        # `matrix_basis` is constructed lazily (see the property below): casting the embedded
+        # basis up to the full state-space dimension overflows for very large (e.g. 100-qubit)
+        # state spaces, and it is only needed by a few dense-matrix code paths.
+        self._matrix_basis = None
+
+    @property
+    def matrix_basis(self):
+        """
+        The embedded error generator's matrix basis, cast up to this operation's state space.
+
+        Constructed on first access rather than in `__init__` so that embeddings into very
+        large state spaces (whose full-dimension Basis cannot be built) remain usable on
+        code paths that never need it.
+        """
+        if self._matrix_basis is None:
+            embedded_matrix_basis = self.embedded_op.matrix_basis
+            if isinstance(embedded_matrix_basis, str):
+                self._matrix_basis = embedded_matrix_basis
+            else:  # assume a Basis object
+                my_basis_dim = self.state_space.dim
+                self._matrix_basis = _Basis.cast(embedded_matrix_basis.name, my_basis_dim, sparse=True)
+        return self._matrix_basis
 
     def from_vector(self, v, close=False, dirty_value=True):
         """
