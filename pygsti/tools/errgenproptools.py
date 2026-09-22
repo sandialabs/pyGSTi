@@ -4854,21 +4854,23 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
     # (`bel_product_str`) and the label's stim Pauli parsed from the result - cheaper than
     # the stim product plus rendering; accumulated one row at a time (R = I only for P = Q,
     # which cannot occur across distinct keys of one dictionary but can across two).
-    def stochastic_block(stoch_a, stoch_b_from, scale):
-        for i, (lbl_1, rate_1) in enumerate(stoch_a):
-            sP = lbl_1._hashable_basis_element_labels[0]
-            terms = []
-            for lbl_2, rate_2 in stoch_b_from(i):
-                sR = _bel_product_str(sP, lbl_2._hashable_basis_element_labels[0])
-                if sR != identity:
-                    terms.append((_LSE('S', (stim.PauliString(sR),), pauli_str_reps=(sR,)), scale * rate_1 * rate_2))
-            for lbl, rate in terms:
-                product[lbl] = get(lbl, 0) + rate
+    def stochastic_pair_terms(lbl_1, rate_1, partners, scale):
+        sP = lbl_1._hashable_basis_element_labels[0]
+        terms = []
+        for lbl_2, rate_2 in partners:
+            sR = _bel_product_str(sP, lbl_2._hashable_basis_element_labels[0])
+            if sR != identity:
+                terms.append((_LSE('S', (stim.PauliString(sR),), pauli_str_reps=(sR,)), scale * rate_1 * rate_2))
+        for lbl, rate in terms:
+            product[lbl] = get(lbl, 0) + rate
 
     if same:
-        stochastic_block(stoch_1, lambda i: stoch_1[i + 1:], 2.0)
+        # unordered pairs i < j, each with weight 2 r_i r_j
+        for i, (lbl_1, rate_1) in enumerate(stoch_1):
+            stochastic_pair_terms(lbl_1, rate_1, stoch_1[i + 1:], 2.0)
     else:
-        stochastic_block(stoch_1, lambda i: stoch_2, 1.0)
+        for lbl_1, rate_1 in stoch_1:
+            stochastic_pair_terms(lbl_1, rate_1, stoch_2, 1.0)
 
     # the bleed of all blocks, -R_M L - R_L M, on the existing keys (nothing to do for an
     # operand without stochastic terms).
