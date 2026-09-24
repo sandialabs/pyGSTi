@@ -34,7 +34,7 @@ def _eval_pair(pair):
 
 
 def _reduce_dicts(d1, d2):
-    res = dict(d1)
+    res = d1.copy()
     for k, v in d2.items():
         res[k] = res.get(k, 0) + v
     return res
@@ -72,6 +72,7 @@ class MPToolsTester(BaseCase):
         with self.assertRaises(ValueError):
             mpt.determine_num_workers("invalid_option")
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "cgroups only applicable on Linux")
     def test_determine_num_workers_cgroup_v2_clamping(self):
         original_exists = os.path.exists
 
@@ -87,6 +88,7 @@ class MPToolsTester(BaseCase):
             workers = mpt.determine_num_workers("auto")
             self.assertEqual(workers, 4)
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "cgroups only applicable on Linux")
     def test_determine_num_workers_cgroup_v1_clamping(self):
         original_exists = os.path.exists
 
@@ -156,7 +158,7 @@ class MPToolsTester(BaseCase):
             starmap_res = pool.starmap(_add, [(1, 2), (3, 4)])
             self.assertEqual(starmap_res, [3, 7])
 
-    @unittest.skipIf(sys.platform == "win32", "fork not supported on Windows")
+    @unittest.skipUnless(sys.platform.startswith("linux"), "fork start method only supported and safe on Linux")
     def test_shared_worker_pool_fork_start_method(self):
         with mpt.SharedWorkerPool(num_workers=2, start_method="fork") as pool:
             res = pool.map(_square, [2, 3, 4])
@@ -168,7 +170,7 @@ class MPToolsTester(BaseCase):
             self.assertEqual(res, [4, 9, 16])
 
     def test_parallel_2d_grid_map_exact_equivalence(self):
-        row_items = list(range(8))
+        row_items = list(range(8)) 
         col_items = list(range(100))
 
         expected = _matrix_outer_product(row_items, col_items)
