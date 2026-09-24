@@ -1082,6 +1082,41 @@ class ApproxStabilizerMethodTester(BaseCase):
                     print(f'{_compute_alphas_pauli(errorgen_labels, ckt_tableau, pauli)=}')
                     raise ValueError('Bulk and individually computed alpha_pauli values are different.')
 
+    def test_bulk_alpha_parallel(self):
+        tableau = self.circuit_tableau
+        errorgens = list(self.propagated_errorgen_layer.keys())
+        bitstrings = ['0000', '0001', '1010', '1111']
+        seq = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=None)
+        par = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=2)
+        self.assertArraysAlmostEqual(par, seq)
+
+    def test_bulk_alpha_pauli_parallel(self):
+        tableau = self.circuit_tableau
+        errorgens = list(self.propagated_errorgen_layer.keys())
+        paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII'), stim.PauliString('YYYY')]
+        seq = _eprop.bulk_alpha_pauli(errorgens, tableau, paulis, num_workers=None)
+        par = _eprop.bulk_alpha_pauli(errorgens, tableau, paulis, num_workers=2)
+        self.assertArraysAlmostEqual(par, seq)
+
+    def test_should_parallelize_alpha(self):
+        doc = _eprop.should_parallelize_alpha.__doc__
+        self.assertIsNotNone(doc)
+        self.assertIn("Mathematical Derivation and Physical Reasoning", doc)
+        self.assertFalse(_eprop.should_parallelize_alpha(100, 100, 1, num_workers=1))
+        self.assertTrue(_eprop.should_parallelize_alpha(100, 10000, 16, num_workers=4))
+
+    def test_optimize_errorgen_propagation_parallelization(self):
+        res = _eprop.optimize_errorgen_propagation_parallelization(num_qubits=4, num_workers=2, set_as_default=True)
+        self.assertIsInstance(res, dict)
+        self.assertIn('tau_alpha_us', res)
+        self.assertIn('threshold_KM', res)
+
+    def test_approximate_stabilizer_probabilities_parallel(self):
+        seq = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=None)
+        par = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=2)
+        self.assertArraysAlmostEqual(par, seq)
+        self.assertAlmostEqual(np.sum(par), 1.0)
+
     def test_stabilizer_probability_correction(self):
         #The corrections testing here will just be integration testing, we'll
         #check for correctness with the probability functions instead.
