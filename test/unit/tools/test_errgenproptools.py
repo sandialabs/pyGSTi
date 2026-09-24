@@ -555,6 +555,13 @@ class ErrgenCompositionCommutationTester(BaseCase):
         
         self.assertTrue((exact_vs_first_order_norm > exact_vs_second_order_norm) and (exact_vs_second_order_norm > exact_vs_third_order_norm))
 
+    def test_magnus_expansion_parallel(self):
+        seq = _eprop.magnus_expansion(self.propagated_errorgen_layers, magnus_order=2, num_workers=None)
+        par = _eprop.magnus_expansion(self.propagated_errorgen_layers, magnus_order=2, num_workers=2)
+        self.assertEqual(set(seq.keys()), set(par.keys()))
+        for k in seq.keys():
+            self.assertAlmostEqual(seq[k], par[k], places=12)
+
     def test_magnus_expansion_all_sectors(self):
         # The model of setUp has H errors only, so magnus_expansion's commutator terms exercise
         # a single type-pair branch there and the third-order term is ~1e-12. This model has

@@ -406,9 +406,103 @@ def bch_approximation(errgen_layer_1: _ErrorgenDict, errgen_layer_2: _ErrorgenDi
 
     return _truncated(new_errorgen_layer_dict, truncation_threshold)
 
+def estimate_magnus_peak_memory(
+    n_qubits: int,
+    n_layers: int,
+    avg_errorgens_per_layer: int,
+    num_workers: Union[int, str, None] = "auto",
+    magnus_order: int = 2,
+) -> int:
+    """
+    Estimates peak memory footprint in bytes for Magnus expansion commutator accumulation.
+
+    Parameters
+    ----------
+    n_qubits : int
+        Number of qubits in the circuit.
+    n_layers : int
+        Number of error generator layers (L).
+    avg_errorgens_per_layer : int
+        Average number of elementary error generator terms per layer (K).
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to "auto").
+    magnus_order : int, optional (default 2)
+        Order of the Magnus expansion.
+
+    Returns
+    -------
+    int
+        Estimated peak memory footprint in bytes.
+    """
+    w = _determine_num_workers(num_workers)
+    n_pairs = (n_layers * (n_layers - 1)) // 2
+    pairs_per_worker = max(1, n_pairs // max(1, w))
+    estimated_terms_per_pair = min(avg_errorgens_per_layer * 4, 50000)
+    worker_buffer = pairs_per_worker * estimated_terms_per_pair * 350
+    master_base = 50 * 1024 * 1024
+    worker_base = 45 * 1024 * 1024
+    total_bytes = master_base + w * (worker_base + worker_buffer)
+    return int(total_bytes)
+
+
+def should_parallelize_magnus(
+    num_layers: int,
+    avg_terms_per_layer: int,
+    num_workers: Union[int, str, None] = "auto",
+) -> bool:
+    """
+    Determines whether Magnus expansion should be parallelized across layer pairs.
+
+    Parameters
+    ----------
+    num_layers : int
+        Number of error generator layers (L).
+    avg_terms_per_layer : int
+        Average number of elementary error generator terms per layer (K).
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to "auto").
+
+    Returns
+    -------
+    bool
+        True if parallelization is predicted to yield a net speedup; False otherwise.
+    """
+    workers = _determine_num_workers(num_workers)
+    if workers <= 1:
+        return False
+    n_pairs = (num_layers * (num_layers - 1)) // 2
+    return n_pairs >= 2 and avg_terms_per_layer >= 50
+
+
+class _MagnusPairEvaluator:
+    """Worker task evaluating commutators for a single pair of layers (picklable under spawn)."""
+    def __init__(self, identity, threshold):
+        self.identity = identity
+        self.threshold = threshold
+
+    def __call__(self, pair):
+        l1, l2 = pair
+        target = {}
+        _accumulate_layer_pairwise_commutators(
+            target, l1, l2, self.identity, addl_weight=0.5, truncation_threshold=self.threshold
+        )
+        return target
+
+
+def _merge_dictionaries(d1, d2):
+    """Binary reduction merging rate dictionaries by summing overlapping rates."""
+    res = dict(d1)
+    get = res.get
+    for k, v in d2.items():
+        res[k] = get(k, 0) + v
+    return res
+
+
 @_with_cyclic_gc_paused
 def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal[1,2,3] = 1,
-                     truncation_threshold: float = 1e-14) -> _ErrorgenDict:
+                     truncation_threshold: float = 1e-14,
+                     num_workers: Union[int, str, None] = None,
+                     pool: Optional[Any] = None) -> _ErrorgenDict:
     """
     Function for computing the nth-order magnus expansion for a set of error generator layers.
     Please see https://arxiv.org/abs/0810.5488 or https://en.wikipedia.org/wiki/Magnus_expansion
@@ -426,6 +520,13 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
     truncation_threshold : float, optional (default 1e-14)
         Threshold for which any error generators with magnitudes below this value
         are truncated.
+
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        or an integer to enable parallel execution across layer pairs).
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
         
     Returns
     -------
@@ -458,6 +559,15 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
         return first_order_dict
     new_errorgen_layer = [first_order_dict]
 
+    # Strategic single-point memory check for parallel Magnus expansion
+    if num_workers is not None and pool is None and magnus_order >= 2 and len(errorgen_layers) > 1:
+        n_q = len(next(iter(errorgen_layers[0])).basis_element_labels[0]) if errorgen_layers and errorgen_layers[0] else 1
+        avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
+        _warn_if_insufficient_memory(
+            estimate_magnus_peak_memory(n_q, len(errorgen_layers), avg_k, num_workers, magnus_order),
+            task_name="magnus_expansion"
+        )
+
     # precompute an identity string for comparisons in commutator calculations (None if every layer is empty,
     # in which case no commutators are computed).
     identity = None
@@ -468,7 +578,8 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
 
     if magnus_order == 2:
         # second-order magnus term: (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
-        new_errorgen_layer.append(_second_order_magnus_term(errorgen_layers, identity, truncation_threshold))
+        new_errorgen_layer.append(_second_order_magnus_term(errorgen_layers, identity, truncation_threshold,
+                                                            num_workers=num_workers, pool=pool))
     else:
         # the third-order term is built from the same pairwise layer commutators as the second-order one,
         # so both are produced by a single pass over the layer pairs.
@@ -486,7 +597,9 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
     return _truncated(new_errorgen_layer_dict, truncation_threshold)
 
 def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
-                              truncation_threshold: float = 1e-14) -> _ErrorgenDict:
+                              truncation_threshold: float = 1e-14,
+                              num_workers: Union[int, str, None] = None,
+                              pool: Optional[Any] = None) -> _ErrorgenDict:
     r"""
     Helper function for computing the second-order correction term in the
     magnus expansion.
@@ -507,6 +620,13 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
         Threshold for which any error generators with magnitudes below this value
         are truncated.
 
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        or an integer to enable parallel execution across layer pairs).
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
     Returns
     -------
     second_order_comm_dict : dict
@@ -524,15 +644,25 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
             if layer:
                 identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                 break
-    
-    # accumulate the second-order correction, (1/2)[A(t1), A(t2)] over all layer pairs, label by label.
-    second_order_comm_dict = {}
-    for errorgen_layer_1, errorgen_layer_2 in errorgen_pairs:
-        _accumulate_layer_pairwise_commutators(second_order_comm_dict, errorgen_layer_1, errorgen_layer_2, identity,
-                                               addl_weight=0.5, truncation_threshold=truncation_threshold)
-    # truncate any terms which are below the truncation threshold following aggregation.
-    second_order_comm_dict = _truncated(second_order_comm_dict, truncation_threshold)
-    return second_order_comm_dict
+
+    workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+
+    if workers <= 1 or num_workers is None and pool is None or len(errorgen_pairs) < 2:
+        # accumulate the second-order correction, (1/2)[A(t1), A(t2)] over all layer pairs sequentially
+        second_order_comm_dict = {}
+        for errorgen_layer_1, errorgen_layer_2 in errorgen_pairs:
+            _accumulate_layer_pairwise_commutators(second_order_comm_dict, errorgen_layer_1, errorgen_layer_2, identity,
+                                                   addl_weight=0.5, truncation_threshold=truncation_threshold)
+        return _truncated(second_order_comm_dict, truncation_threshold)
+
+    # Parallel pairwise reduction across workers
+    evaluator = _MagnusPairEvaluator(identity, truncation_threshold)
+    second_order_comm_dict = _parallel_pair_reduce(
+        evaluator, errorgen_pairs, _merge_dictionaries, num_workers=workers, pool=pool
+    )
+    if second_order_comm_dict is None:
+        second_order_comm_dict = {}
+    return _truncated(second_order_comm_dict, truncation_threshold)
 
 def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
                                          truncation_threshold: float = 1e-14) -> tuple[_ErrorgenDict, _ErrorgenDict]:
