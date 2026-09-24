@@ -658,6 +658,29 @@ def gm_matrices(matrix_dim):
     return mxs
 
 
+def GM_matrices(matrix_dim):
+    """
+    Get Gell-Mann matrices with the same normalization as the Pauli-product basis ``PP``.
+
+    For matrix dimension d, the first element is the identity and the remaining
+    elements are traceless. All elements are Hermitian and satisfy
+    ``Tr(G_i.conj().T @ G_j) == d * delta_ij``. Their ordering matches :func:`gm_matrices`.
+
+    Parameters
+    ----------
+    matrix_dim : int
+        The Hilbert-space dimension d, so each matrix has shape ``(d, d)``.
+
+    Returns
+    -------
+    list of numpy.ndarray
+        The d**2 basis matrices, or an empty list when d is zero.
+    """
+    matrices = gm_matrices_unnormalized(matrix_dim)
+    scale = _np.sqrt(matrix_dim / 2)
+    return [mx if i == 0 else scale * mx for i, mx in enumerate(matrices)]
+
+
 def gm_labels(matrix_dim):
     """
     Gell-Mann basis labels.
@@ -1316,6 +1339,8 @@ _basis_constructor_dict['col'] = MatrixBasisConstructor('Column-stacked matrix-u
 _basis_constructor_dict['gm_unnormalized'] = MatrixBasisConstructor(
     'Unnormalized Gell-Mann basis', gm_matrices_unnormalized, gm_labels, True, True)
 _basis_constructor_dict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True, True)
+_basis_constructor_dict['GM'] = MatrixBasisConstructor(
+    'Gell-Mann basis with Pauli-product normalization', GM_matrices, gm_labels, True, True)
 _basis_constructor_dict['pp'] = MatrixBasisConstructor('Normalized Pauli-Product basis', pp_matrices, pp_labels, True,
                                                        True)
 _basis_constructor_dict['PP'] = MatrixBasisConstructor('Pauli-Product basis', PP_matrices, pp_labels, True, True)
