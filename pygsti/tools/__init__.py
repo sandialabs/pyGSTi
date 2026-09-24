@@ -34,7 +34,17 @@ from .matrixmod2 import *
 from .matrixtools import *
 from .mpitools import parallel_apply, mpi4py_comm
 from .mpitools import resolve_mpiexec, compute_blas_threads, write_mpi_runner_artifacts, build_slurm_script
-from .mptools import starmap_with_kwargs
+from .mptools import (
+    starmap_with_kwargs,
+    determine_num_workers,
+    compute_2d_worker_grid,
+    SharedWorkerPool,
+    parallel_2d_grid_map,
+    parallel_pair_reduce,
+    get_available_system_memory,
+    warn_if_insufficient_memory,
+    measure_multiprocessing_ipc_latency,
+)
 from .nameddict import NamedDict
 from .optools import *
 from .gatetools import *
