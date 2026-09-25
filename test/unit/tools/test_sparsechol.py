@@ -130,13 +130,17 @@ class OrderingTester(BaseCase):
             perm = sparsechol.fill_reducing_ordering(pattern, _backend='networkx')
             self.assertEqual(_fill(pattern, perm), n - 3)
 
-    def test_installed_but_broken_backend_raises(self):
-        # Only a missing module skips a backend; an incompatible installed one must not be silently bypassed.
+    def test_installed_but_broken_backend_warns_and_falls_back(self):
+        # A missing module is skipped silently; an installed but incompatible one warns, then is skipped.
         from unittest import mock
         spec = importlib.util.find_spec('networkx')  # any non-None spec
         def broken(adj):
             raise ImportError("cannot import name 'analyze'")
+        pattern = _pattern(nx.star_graph(4))
         with mock.patch.object(sparsechol._importlib_util, 'find_spec', return_value=spec), \
-             mock.patch.object(sparsechol, '_ordering_cholmod', broken):
-            with self.assertRaises(ImportError):
-                sparsechol.fill_reducing_ordering(_pattern(nx.path_graph(3)))
+             mock.patch.object(sparsechol, '_ordering_cholmod', broken), \
+             mock.patch.object(sparsechol, '_ordering_qdldl', broken):
+            with self.assertWarns(RuntimeWarning):
+                perm = sparsechol.fill_reducing_ordering(pattern)
+        np.testing.assert_array_equal(np.sort(perm), np.arange(5))
+        self.assertEqual(_fill(pattern, perm), 0)  # the networkx fallback

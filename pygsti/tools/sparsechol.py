@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import heapq as _heapq
 import importlib.util as _importlib_util
+import warnings as _warnings
 
 import networkx as _nx
 import numpy as _np
@@ -106,7 +107,8 @@ def fill_reducing_ordering(pattern, *, _backend=None) -> _np.ndarray:
     A fill-reducing elimination ordering of a symmetric sparsity pattern.
 
     Uses the approximate minimum degree (AMD) ordering from scikit-sparse's CHOLMOD interface if it
-    is installed, otherwise from `qdldl` if it is installed. Otherwise it falls back to a perfect
+    is installed, otherwise from `qdldl` if it is installed; an installed backend that fails (e.g. an
+    incompatible version) issues a `RuntimeWarning` and is skipped. Otherwise it falls back to a perfect
     elimination ordering of the minimal (MCS-M) triangulation computed by networkx, so the fill is
     exactly the triangulation's added edges. The fallback is slower on large patterns, but it
     produces no fill on chordal patterns, where AMD may. Only the pattern is used.
@@ -128,11 +130,15 @@ def fill_reducing_ordering(pattern, *, _backend=None) -> _np.ndarray:
     orderings = {'cholmod': _ordering_cholmod, 'qdldl': _ordering_qdldl, 'networkx': _ordering_networkx}
     if _backend is not None:
         return _check_perm(orderings[_backend](adj), n)
-    for backend, module in _BACKENDS:
-        # Skip only backends that are not installed; an installed but broken one should raise.
-        if _importlib_util.find_spec(module) is not None:
+    for backend, module in _BACKENDS[:-1]:
+        if _importlib_util.find_spec(module) is None:
+            continue  # not installed
+        try:
             return _check_perm(orderings[backend](adj), n)
-    raise RuntimeError("Unreachable: networkx is a required dependency.")
+        except Exception as e:  # installed but incompatible, e.g. a changed API
+            _warnings.warn("The installed '%s' could not compute an ordering (%s: %s); falling back to the next "
+                           "backend." % (module, type(e).__name__, e), RuntimeWarning)
+    return _check_perm(_ordering_networkx(adj), n)
 
 
 def perfect_elimination_ordering(pattern) -> _np.ndarray | None:
