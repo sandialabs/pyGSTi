@@ -1106,17 +1106,38 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertArraysAlmostEqual(par, seq)
 
     def test_should_parallelize_alpha(self):
-        doc = _eprop.should_parallelize_alpha.__doc__
+        doc = _eprop._should_parallelize_alpha.__doc__
         self.assertIsNotNone(doc)
-        self.assertIn("Mathematical Derivation and Physical Reasoning", doc)
-        self.assertFalse(_eprop.should_parallelize_alpha(100, 100, 1, num_workers=1))
-        self.assertTrue(_eprop.should_parallelize_alpha(100, 10000, 16, num_workers=4))
+        self.assertFalse(_eprop._should_parallelize_alpha(100, 100, 1, num_workers=1))
+        self.assertTrue(_eprop._should_parallelize_alpha(100, 10000, 16, num_workers=4))
+
+    def test_configure_errorgen_propagation_parallelization(self):
+        # Override min_km_alpha to high value
+        _eprop.configure_errorgen_propagation_parallelization(min_km_alpha=50000)
+        self.assertFalse(_eprop._should_parallelize_alpha(100, 1000, 4, num_workers=4))
+
+        # Force serial
+        _eprop.configure_errorgen_propagation_parallelization(force_serial=True)
+        self.assertFalse(_eprop._should_parallelize_alpha(100, 100000, 16, num_workers=4))
+
+        # Force parallel
+        _eprop.configure_errorgen_propagation_parallelization(force_serial=False, force_parallel=True)
+        self.assertTrue(_eprop._should_parallelize_alpha(100, 10, 1, num_workers=4))
+
+        # Reset to defaults
+        res = _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+        self.assertEqual(res['status'], 'reset_to_defaults')
 
     def test_optimize_errorgen_propagation_parallelization(self):
+        doc = _eprop.optimize_errorgen_propagation_parallelization.__doc__
+        self.assertIn("Empirical Nature and Disclaimer", doc)
+        self.assertIn("configure_errorgen_propagation_parallelization", doc)
         res = _eprop.optimize_errorgen_propagation_parallelization(num_qubits=4, num_workers=2, set_as_default=True)
         self.assertIsInstance(res, dict)
         self.assertIn('tau_alpha_us', res)
         self.assertIn('threshold_KM', res)
+        # Clean up
+        _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
 
     def test_approximate_stabilizer_probabilities_parallel(self):
         seq = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=None)

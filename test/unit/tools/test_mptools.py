@@ -165,7 +165,7 @@ class MPToolsTester(BaseCase):
             self.assertEqual(res, [4, 9, 16])
 
     def test_shared_worker_pool_spawn_start_method(self):
-        with mpt.SharedWorkerPool(num_workers=2, start_method="spawn") as pool:
+        with mpt.SharedWorkerPool(num_workers=2, start_method="spawn", prewarm_packages=("math",)) as pool:
             res = pool.map(_square, [2, 3, 4])
             self.assertEqual(res, [4, 9, 16])
 

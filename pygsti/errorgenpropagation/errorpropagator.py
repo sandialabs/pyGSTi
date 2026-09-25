@@ -84,40 +84,34 @@ def estimate_propagation_peak_memory(
     return int(total_bytes)
 
 
-def should_parallelize_layer_prop(
+def _should_parallelize_layer_prop(
     n_qubits: int,
     num_layers: int,
     avg_terms_per_layer: int,
     num_workers: Union[int, str, None] = "auto",
 ) -> bool:
     """
-    Determines whether layer propagation should be parallelized across layer blocks.
-
-    Parameters
-    ----------
-    n_qubits : int
-        Number of qubits in the circuit.
-    num_layers : int
-        Number of layers to propagate.
-    avg_terms_per_layer : int
-        Average number of elementary error generator terms per layer.
-    num_workers : int, str, or None, optional
-        Target worker count (defaults to "auto").
-
-    Returns
-    -------
-    bool
-        True if parallelization is predicted to yield a net speedup; False otherwise.
+    Internal helper: determines whether layer propagation should be parallelized across layer blocks.
     """
     workers = _determine_num_workers(num_workers)
     if workers <= 1:
         return False
-    if n_qubits >= 64:
-        return num_layers >= 4
-    elif n_qubits >= 16:
-        return num_layers >= 8
-    else:
-        return num_layers >= 16 and (num_layers * avg_terms_per_layer) >= 2000
+
+    force_ser = _eprop._MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
+    if force_ser is True or (isinstance(force_ser, (list, tuple)) and "layer_prop" in force_ser):
+        return False
+
+    force_par = _eprop._MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
+    if force_par is True or (isinstance(force_par, (list, tuple)) and "layer_prop" in force_par):
+        return True
+
+    min_depth = _eprop._MANUAL_PARALLEL_OVERRIDES.get("min_layer_prop_depth", None)
+    if min_depth is not None:
+        return num_layers >= min_depth
+
+    scale = 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
+    cutoffs = _eprop._DEFAULT_THRESHOLD_TABLE[scale]
+    return num_layers >= cutoffs['min_layer_prop_depth']
 
 
 def _prop_layer_chunk_worker(chunk_items):
@@ -385,17 +379,18 @@ class ErrorGeneratorPropagator:
         errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam)
 
         workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+        n_q = len(circuit.line_labels)
+        avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
 
         # Strategic single-point memory check if top-level entry point
         if pool is None and workers > 1 and len(errorgen_layers) > 1:
-            n_q = len(circuit.line_labels)
-            avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
             _warn_if_insufficient_memory(
                 estimate_propagation_peak_memory(n_q, len(errorgen_layers), avg_k, workers),
                 task_name="propagate_errorgens"
             )
 
-        pass_workers = workers if workers > 1 else None
+        should_par = _should_parallelize_layer_prop(n_q, len(errorgen_layers), avg_k, num_workers=workers) if workers > 1 else False
+        pass_workers = workers if should_par else 1
         propagated_errorgen_layers = self._propagate_errorgen_layers(
             errorgen_layers, propagation_layers, include_spam=include_spam,
             num_workers=pass_workers, pool=pool
@@ -468,7 +463,7 @@ class ErrorGeneratorPropagator:
 
         # Top-level shared worker pool across propagation and Magnus stages
         if workers > 1 and pool is None:
-            with _SharedWorkerPool(num_workers=workers) as shared_pool:
+            with _SharedWorkerPool(num_workers=workers, prewarm_packages=_eprop._EGPROP_PREWARM_PACKAGES) as shared_pool:
                 return self.propagate_errorgens_bch(
                     circuit, bch_order=bch_order, include_spam=include_spam,
                     truncation_threshold=truncation_threshold, mode=mode,
@@ -927,7 +922,7 @@ class ErrorGeneratorPropagator:
         if pool is not None:
             chunk_results = pool.map(_prop_layer_chunk_worker, chunks)
         else:
-            with _SharedWorkerPool(num_workers=workers) as local_pool:
+            with _SharedWorkerPool(num_workers=workers, prewarm_packages=_eprop._EGPROP_PREWARM_PACKAGES) as local_pool:
                 chunk_results = local_pool.map(_prop_layer_chunk_worker, chunks)
 
         flat_results = [item for sub in chunk_results for item in sub]

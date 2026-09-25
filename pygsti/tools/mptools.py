@@ -48,24 +48,18 @@ def _apply_args_and_kwargs(fn, args, kwargs):
 # Worker Process Pre-Warming & Module Level Helpers
 # ===================================================================================================
 
-def _worker_prewarm_init():
+def _prewarm_worker(packages: Tuple[str, ...]):
     """
-    Initializer executed once per worker process at pool startup. Eagerly imports
-    core computational dependencies to eliminate the cold-start import penalty
-    under the 'spawn' start method (macOS, Windows, Python 3.14+).
+    Top-level worker initializer dynamically importing caller-specified packages.
+    Eliminates cold-start import penalties on 'spawn' platforms (macOS, Windows, Python 3.14+)
+    without hardcoding domain-specific dependencies into mptools.
     """
-    try:
-        import numpy  # noqa: F401
-    except ImportError:
-        pass
-    try:
-        import stim  # noqa: F401
-    except ImportError:
-        pass
-    try:
-        import pygsti.tools.fasterrgencalc  # noqa: F401
-    except ImportError:
-        pass
+    import importlib
+    for pkg in packages:
+        try:
+            importlib.import_module(pkg)
+        except ImportError:
+            pass
 
 
 def _noop_ipc_ping(x):
@@ -212,7 +206,7 @@ def measure_multiprocessing_ipc_latency(
 
     try:
         ctx = _mp.get_context(active_method)
-        with ctx.Pool(processes=test_workers, initializer=_worker_prewarm_init) as pool:
+        with ctx.Pool(processes=test_workers) as pool:
             # Warm up
             pool.map(_noop_ipc_ping, range(test_workers))
             t0 = _time.perf_counter()
@@ -295,7 +289,7 @@ def compute_2d_worker_grid(
 
 class SharedWorkerPool:
     """
-    Reusable worker pool context manager with worker pre-warming.
+    Reusable worker pool context manager with caller-configurable worker pre-warming.
 
     Eliminates process spin-up and teardown overhead across sequential algorithm stages.
     When wrapping an existing Pool or SharedWorkerPool instance, transparently reuses
@@ -307,20 +301,28 @@ class SharedWorkerPool:
         Target worker process count (defaults to "auto").
     start_method : str, optional
         Multiprocessing start method ('fork', 'spawn', 'forkserver').
-    prewarm : bool, optional (default True)
-        If True, eagerly imports stim, numpy, and pyGSTi Cython extensions into
-        workers upon pool initialization.
+    prewarm_packages : sequence of str, optional
+        List or tuple of module names to eagerly import in each worker process upon pool
+        initialization. By default (None), no implicit packages are imported.
+    initializer : callable, optional
+        Custom worker initializer callable. Overrides `prewarm_packages` if provided.
+    initargs : tuple, optional
+        Arguments passed to `initializer`.
     """
 
     def __init__(
         self,
         num_workers: Union[int, str, None] = "auto",
         start_method: Optional[str] = None,
-        prewarm: bool = True,
+        prewarm_packages: Optional[Sequence[str]] = None,
+        initializer: Optional[Callable] = None,
+        initargs: tuple = (),
     ):
         self.num_workers = determine_num_workers(num_workers)
         self.start_method = start_method
-        self.prewarm = prewarm
+        self.prewarm_packages = prewarm_packages
+        self.initializer = initializer
+        self.initargs = initargs
         self._pool = None
         self._owns_pool = True
 
@@ -330,8 +332,17 @@ class SharedWorkerPool:
             return self
 
         ctx = _mp.get_context(self.start_method)
-        init_fn = _worker_prewarm_init if self.prewarm else None
-        self._pool = ctx.Pool(processes=self.num_workers, initializer=init_fn)
+        if self.initializer is not None:
+            init_fn = self.initializer
+            init_args = self.initargs
+        elif self.prewarm_packages:
+            init_fn = _prewarm_worker
+            init_args = (tuple(self.prewarm_packages),)
+        else:
+            init_fn = None
+            init_args = ()
+
+        self._pool = ctx.Pool(processes=self.num_workers, initializer=init_fn, initargs=init_args)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -371,6 +382,7 @@ def parallel_2d_grid_map(
     num_workers: Union[int, str, None] = "auto",
     pool: Optional[Any] = None,
     grid: Optional[Tuple[int, int]] = None,
+    prewarm_packages: Optional[Sequence[str]] = None,
 ) -> _np.ndarray:
     """
     Execute worker_fn across a 2D partitioned grid of row_items and col_items,
@@ -391,6 +403,8 @@ def parallel_2d_grid_map(
         Existing worker pool to reuse. If None, an ephemeral pool is instantiated.
     grid : tuple of (int, int), optional
         Explicit (P_rows, P_cols) process grid. Computed automatically if None.
+    prewarm_packages : sequence of str, optional
+        Optional packages to pre-warm in workers if an ephemeral pool is created.
 
     Returns
     -------
@@ -428,7 +442,7 @@ def parallel_2d_grid_map(
     if pool is not None:
         results = pool.map(_grid_task_worker, tasks)
     else:
-        with SharedWorkerPool(num_workers=workers) as local_pool:
+        with SharedWorkerPool(num_workers=workers, prewarm_packages=prewarm_packages) as local_pool:
             results = local_pool.map(_grid_task_worker, tasks)
 
     out = None
@@ -463,6 +477,7 @@ def parallel_pair_reduce(
     reduce_fn: Callable[[Any, Any], Any],
     num_workers: Union[int, str, None] = "auto",
     pool: Optional[Any] = None,
+    prewarm_packages: Optional[Sequence[str]] = None,
 ) -> Any:
     """
     Execute pair_eval_fn over pairs in parallel chunks and aggregate results via reduce_fn.
@@ -479,6 +494,8 @@ def parallel_pair_reduce(
         Target worker count (defaults to "auto").
     pool : Pool or SharedWorkerPool, optional
         Existing worker pool to reuse.
+    prewarm_packages : sequence of str, optional
+        Optional packages to pre-warm in workers if an ephemeral pool is created.
 
     Returns
     -------
@@ -506,7 +523,7 @@ def parallel_pair_reduce(
     if pool is not None:
         chunk_results = pool.map(_chunk_pair_reduce_worker, tasks)
     else:
-        with SharedWorkerPool(num_workers=workers) as local_pool:
+        with SharedWorkerPool(num_workers=workers, prewarm_packages=prewarm_packages) as local_pool:
             chunk_results = local_pool.map(_chunk_pair_reduce_worker, tasks)
 
     final_accum = None

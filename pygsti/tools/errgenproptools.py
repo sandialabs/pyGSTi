@@ -406,6 +406,103 @@ def bch_approximation(errgen_layer_1: _ErrorgenDict, errgen_layer_2: _ErrorgenDi
 
     return _truncated(new_errorgen_layer_dict, truncation_threshold)
 
+# Standard packages to pre-warm in worker processes for error generator propagation
+_EGPROP_PREWARM_PACKAGES = ("numpy", "stim", "pygsti.tools.fasterrgencalc")
+
+# Default multi-scale threshold table (sensible hardcoded absolute cutoffs across qubit scales)
+_DEFAULT_THRESHOLD_TABLE: dict[str, dict[str, int]] = {
+    'small': {   # n <= 16 qubits
+        'min_km_alpha': 1000,
+        'min_magnus_pairs': 4,
+        'min_magnus_terms': 100,
+        'min_layer_prop_depth': 16,
+    },
+    'medium': {  # 16 < n <= 64 qubits
+        'min_km_alpha': 500,
+        'min_magnus_pairs': 2,
+        'min_magnus_terms': 50,
+        'min_layer_prop_depth': 8,
+    },
+    'large': {   # n > 64 qubits
+        'min_km_alpha': 250,
+        'min_magnus_pairs': 2,
+        'min_magnus_terms': 50,
+        'min_layer_prop_depth': 4,
+    },
+}
+
+# Manual overrides configured via configure_errorgen_propagation_parallelization
+_MANUAL_PARALLEL_OVERRIDES: dict[str, Any] = {}
+
+
+def configure_errorgen_propagation_parallelization(
+    min_km_alpha: Optional[int] = None,
+    min_magnus_pairs: Optional[int] = None,
+    min_terms_per_magnus_pair: Optional[int] = None,
+    min_layer_prop_depth: Optional[int] = None,
+    force_parallel: Optional[Union[bool, Sequence[str]]] = None,
+    force_serial: Optional[Union[bool, Sequence[str]]] = None,
+    reset_to_defaults: bool = False,
+) -> dict[str, Any]:
+    """
+    Manually configure or override the parallelization threshold criteria
+    for error generator propagation workflows.
+
+    Parameters
+    ----------
+    min_km_alpha : int, optional
+        Minimum generator-outcome workload product W = K * M required to engage
+        2D grid parallelization in `bulk_alpha` and `bulk_alpha_pauli`. Workloads
+        with K * M below this cutoff execute via the sequential fast-path.
+    min_magnus_pairs : int, optional
+        Minimum number of layer pairs (L * (L - 1) / 2) required to engage chunked
+        parallel pairwise reduction in `_second_order_magnus_term` and `magnus_expansion`.
+    min_terms_per_magnus_pair : int, optional
+        Minimum average error generator terms per layer required to engage parallel
+        Magnus expansion.
+    min_layer_prop_depth : int, optional
+        Minimum circuit layer depth (L) required to engage chunked layer propagation
+        in `ErrorGeneratorPropagator.propagate_errorgens`.
+    force_parallel : bool or sequence of str, optional
+        If True, unconditionally enables multiprocessing across all operations regardless
+        of workload size. If a sequence of strings (e.g. ('alpha', 'magnus', 'layer_prop')),
+        forces parallelization only for the named operations.
+    force_serial : bool or sequence of str, optional
+        If True, unconditionally forces single-threaded sequential execution across all
+        operations, bypassing multiprocessing. If a sequence of strings, forces sequential
+        execution only for the named operations.
+    reset_to_defaults : bool, optional (default False)
+        If True, clears all dynamic profiling calibrations and manual overrides,
+        restoring pyGSTi's default multi-scale threshold table.
+
+    Returns
+    -------
+    dict
+        Dictionary showing the currently active configuration and threshold cutoffs.
+    """
+    global _MANUAL_PARALLEL_OVERRIDES
+    if reset_to_defaults:
+        _MANUAL_PARALLEL_OVERRIDES.clear()
+        if "_ACTIVE_PARALLEL_THRESHOLDS" in globals():
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("dynamic_calibrated", None)
+        return {"status": "reset_to_defaults", "defaults": _DEFAULT_THRESHOLD_TABLE}
+
+    if min_km_alpha is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_km_alpha"] = int(min_km_alpha)
+    if min_magnus_pairs is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_magnus_pairs"] = int(min_magnus_pairs)
+    if min_terms_per_magnus_pair is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_terms_per_magnus_pair"] = int(min_terms_per_magnus_pair)
+    if min_layer_prop_depth is not None:
+        _MANUAL_PARALLEL_OVERRIDES["min_layer_prop_depth"] = int(min_layer_prop_depth)
+    if force_parallel is not None:
+        _MANUAL_PARALLEL_OVERRIDES["force_parallel"] = force_parallel
+    if force_serial is not None:
+        _MANUAL_PARALLEL_OVERRIDES["force_serial"] = force_serial
+
+    return dict(_MANUAL_PARALLEL_OVERRIDES)
+
+
 def estimate_magnus_peak_memory(
     n_qubits: int,
     n_layers: int,
@@ -445,33 +542,40 @@ def estimate_magnus_peak_memory(
     return int(total_bytes)
 
 
-def should_parallelize_magnus(
+def _should_parallelize_magnus(
     num_layers: int,
     avg_terms_per_layer: int,
     num_workers: Union[int, str, None] = "auto",
+    n_qubits: Optional[int] = None,
 ) -> bool:
     """
-    Determines whether Magnus expansion should be parallelized across layer pairs.
-
-    Parameters
-    ----------
-    num_layers : int
-        Number of error generator layers (L).
-    avg_terms_per_layer : int
-        Average number of elementary error generator terms per layer (K).
-    num_workers : int, str, or None, optional
-        Target worker count (defaults to "auto").
-
-    Returns
-    -------
-    bool
-        True if parallelization is predicted to yield a net speedup; False otherwise.
+    Internal helper: determines whether Magnus expansion should be parallelized across layer pairs.
     """
     workers = _determine_num_workers(num_workers)
     if workers <= 1:
         return False
     n_pairs = (num_layers * (num_layers - 1)) // 2
-    return n_pairs >= 2 and avg_terms_per_layer >= 50
+    if n_pairs < 1:
+        return False
+
+    force_ser = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
+    if force_ser is True or (isinstance(force_ser, (list, tuple)) and "magnus" in force_ser):
+        return False
+
+    force_par = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
+    if force_par is True or (isinstance(force_par, (list, tuple)) and "magnus" in force_par):
+        return True
+
+    min_pairs = _MANUAL_PARALLEL_OVERRIDES.get("min_magnus_pairs", None)
+    min_terms = _MANUAL_PARALLEL_OVERRIDES.get("min_terms_per_magnus_pair", None)
+    if min_pairs is not None:
+        terms_ok = avg_terms_per_layer >= min_terms if min_terms is not None else True
+        return n_pairs >= min_pairs and terms_ok
+
+    n = n_qubits if n_qubits is not None else 16
+    scale = 'small' if n <= 16 else ('medium' if n <= 64 else 'large')
+    cutoffs = _DEFAULT_THRESHOLD_TABLE[scale]
+    return n_pairs >= cutoffs['min_magnus_pairs'] and avg_terms_per_layer >= cutoffs['min_magnus_terms']
 
 
 class _MagnusPairEvaluator:
@@ -647,7 +751,10 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
 
     workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
 
-    if workers <= 1 or num_workers is None and pool is None or len(errorgen_pairs) < 2:
+    n_q = len(identity) if identity is not None else 16
+    avg_terms = (len(errorgen_layers[0]) + len(errorgen_layers[1])) // 2 if len(errorgen_layers) >= 2 else 0
+
+    if workers <= 1 or num_workers is None and pool is None or not _should_parallelize_magnus(len(errorgen_layers), avg_terms, num_workers=workers, n_qubits=n_q):
         # accumulate the second-order correction, (1/2)[A(t1), A(t2)] over all layer pairs sequentially
         second_order_comm_dict = {}
         for errorgen_layer_1, errorgen_layer_2 in errorgen_pairs:
@@ -657,9 +764,15 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
 
     # Parallel pairwise reduction across workers
     evaluator = _MagnusPairEvaluator(identity, truncation_threshold)
-    second_order_comm_dict = _parallel_pair_reduce(
-        evaluator, errorgen_pairs, _merge_dictionaries, num_workers=workers, pool=pool
-    )
+    if pool is not None:
+        second_order_comm_dict = _parallel_pair_reduce(
+            evaluator, errorgen_pairs, _merge_dictionaries, num_workers=workers, pool=pool
+        )
+    else:
+        with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
+            second_order_comm_dict = _parallel_pair_reduce(
+                evaluator, errorgen_pairs, _merge_dictionaries, pool=local_pool
+            )
     if second_order_comm_dict is None:
         second_order_comm_dict = {}
     return _truncated(second_order_comm_dict, truncation_threshold)
@@ -5239,7 +5352,7 @@ def estimate_bulk_alpha_peak_memory(
     return int(total_bytes)
 
 
-def should_parallelize_alpha(
+def _should_parallelize_alpha(
     n_qubits: int,
     num_generators: int,
     num_outcomes: int,
@@ -5247,69 +5360,11 @@ def should_parallelize_alpha(
     start_method: Optional[str] = None,
 ) -> bool:
     r"""
-    Determines whether a sensitivity calculation (bulk_alpha or bulk_alpha_pauli)
+    Internal helper: determines whether a sensitivity calculation (bulk_alpha or bulk_alpha_pauli)
     should be executed in parallel or routed to the zero-overhead sequential fast-path.
 
-    Parameters
-    ----------
-    n_qubits : int
-        Number of qubits in the circuit / stabilizer tableau.
-    num_generators : int
-        Number of elementary error generator terms (K).
-    num_outcomes : int
-        Number of bitstrings or Pauli strings requested (M).
-    num_workers : int, str, or None, optional
-        Target worker count (defaults to "auto").
-    start_method : str, optional
-        Multiprocessing start method ('fork', 'spawn', 'forkserver').
-
-    Returns
-    -------
-    bool
-        True if parallelization is predicted to yield a net speedup; False otherwise.
-
-    Note
-    ----
-    **Mathematical Derivation and Physical Reasoning:**
-
-    1. **Affine Execution Cost Model:**
-       The single-threaded execution time of `bulk_alpha` decomposes into an affine form
-       over the generator-outcome workload W = K * M:
-           T_{seq}(K, M) = C_0(n, M) + \tau_\alpha(n) \cdot (K \times M)
-       where C_0(n, M) is the fixed per-call setup cost (stim Tableau inversion, simulator state
-       allocation, and unique Pauli deduplication tables), and \tau_\alpha(n) is the marginal
-       single-threaded evaluation cost per generator-outcome.
-
-    2. **Algorithmic Origin of Linear Scaling with Qubit Count (n):**
-       Inside `fasterrgencalc.pyx` (`fast_bulk_phi`), each unique Pauli evaluation involves:
-         - Pauli string multiplication (`eff_P = initial_pauli_str * P_val`), taking O(n)
-           SIMD bitwise operations in `stim`.
-         - Python/C string hashing and dictionary lookups on n-character representations (O(n)).
-         - Phase update checking (`fast_pauli_phase_update_all_zeros`) scanning n characters.
-       Because these operations scale strictly with Pauli string length n, the marginal cost
-       follows an exact linear relationship:
-           \tau_\alpha(n) = a + b \cdot n \quad [\mu s]
-       Nominal reference parameters measured on our baseline system are a = 2.093 \mu s and
-       b = 0.0453 \mu s/qubit (R^2 = 0.9975, verified to \le 1.2% error out to n = 200 qubits).
-       This linear relationship holds equally for both the Cython engine (`fast_bulk_alpha`)
-       and the pure-Python fallback (`slow_bulk_alpha`), as both delegate inner stabilizer
-       operations to `stim`'s C++ library.
-
-    3. **Start-Method and Hardware-Specific Calibration:**
-       The exact numerical values of a and b depend on the target system's CPU clock frequency,
-       cache sizes, compiler vectorization (AVX-512 vs. NEON), and whether the pure-Python
-       fallback is active. Users can empirically calibrate (a, b) and local IPC dispatch latency
-       (T_{IPC}) on their specific machine via `optimize_errorgen_propagation_parallelization()`.
-
-    4. **Safety Margin Decision Rule:**
-       Multiprocessing incurs round-trip IPC dispatch and reduction latency T_{IPC}.
-       To ensure parallel execution is engaged only when it achieves >80-90% parallel efficiency
-       (rather than merely breaking even), we enforce a safety factor \beta = 10:
-           T_{seq} \ge 10 \cdot T_{IPC}
-           \tau_\alpha(n) \cdot (K \times M) \ge 10 \cdot T_{IPC}
-           (K \times M) \ge \frac{10 \cdot T_{IPC}}{\tau_\alpha(n)}
-       where T_{IPC} is measured dynamically via `mptools.measure_multiprocessing_ipc_latency`
-       (~0.11 ms on Linux fork; ~0.23 ms on macOS/Windows spawn with pre-warmed pool).
+    Checks active manual configuration overrides, dynamic profiling calibration (if run),
+    or the default multi-scale absolute cutoff table.
     """
     workers = _determine_num_workers(num_workers)
     if workers <= 1:
@@ -5319,14 +5374,30 @@ def should_parallelize_alpha(
     if w <= 0:
         return False
 
-    a = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_a", _DEFAULT_ALPHA_A)
-    b = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_b", _DEFAULT_ALPHA_B)
-    beta = _ACTIVE_PARALLEL_THRESHOLDS.get("safety_factor", 10.0)
+    force_ser = _MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
+    if force_ser is True or (isinstance(force_ser, (list, tuple)) and "alpha" in force_ser):
+        return False
 
-    tau_alpha_s = (a + b * n_qubits) * 1e-6
-    t_ipc_s = _measure_ipc_latency(num_workers=workers, start_method=start_method)
+    force_par = _MANUAL_PARALLEL_OVERRIDES.get("force_parallel", False)
+    if force_par is True or (isinstance(force_par, (list, tuple)) and "alpha" in force_par):
+        return True
 
-    threshold_km = (beta * t_ipc_s) / max(1e-9, tau_alpha_s)
+    if "min_km_alpha" in _MANUAL_PARALLEL_OVERRIDES:
+        return w >= _MANUAL_PARALLEL_OVERRIDES["min_km_alpha"]
+
+    # Check if dynamic optimizer calibration was run by the user
+    if _ACTIVE_PARALLEL_THRESHOLDS.get("dynamic_calibrated", False):
+        a = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_a", _DEFAULT_ALPHA_A)
+        b = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_b", _DEFAULT_ALPHA_B)
+        beta = _ACTIVE_PARALLEL_THRESHOLDS.get("safety_factor", 10.0)
+        tau_alpha_s = (a + b * n_qubits) * 1e-6
+        t_ipc_s = _measure_ipc_latency(num_workers=workers, start_method=start_method)
+        threshold_km = (beta * t_ipc_s) / max(1e-9, tau_alpha_s)
+        return w >= threshold_km
+
+    # Default fallback: multi-scale cutoff table
+    scale = 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
+    threshold_km = _DEFAULT_THRESHOLD_TABLE[scale]['min_km_alpha']
     return w >= threshold_km
 
 
@@ -5364,6 +5435,20 @@ def optimize_errorgen_propagation_parallelization(
         Dictionary containing the measured parameters:
         {'num_qubits': int, 'tau_alpha_us': float, 'alpha_a': float, 'alpha_b': float,
          't_ipc_s': float, 'num_workers': int, 'threshold_KM': int, 'calibration_ms': float}
+
+    Note
+    ----
+    **Empirical Nature and Disclaimer:**
+    The analytical scaling model used by this optimizer to estimate single-threaded
+    throughput (\tau_\alpha(n) = a + b * n) is derived from empirical benchmarks on
+    specific test hardware. Actual single-threaded throughput and IPC dispatch overhead
+    may vary substantially across different CPU architectures (e.g. x86 AVX-512 vs.
+    ARM NEON), operating systems, and memory bus topologies.
+
+    For deterministic, manual control over parallelization cutoffs without running
+    runtime profiling, users should use `configure_errorgen_propagation_parallelization()`,
+    which allows setting explicit integer thresholds (e.g. `min_km_alpha`, `min_magnus_pairs`)
+    or forcing parallel/serial modes directly.
     """
     t0_start = _time.perf_counter()
     workers = _determine_num_workers(num_workers)
@@ -5438,6 +5523,7 @@ def optimize_errorgen_propagation_parallelization(
         _ACTIVE_PARALLEL_THRESHOLDS["alpha_a"] = a
         _ACTIVE_PARALLEL_THRESHOLDS["alpha_b"] = b
         _ACTIVE_PARALLEL_THRESHOLDS["t_ipc_s"] = t_ipc_s
+        _ACTIVE_PARALLEL_THRESHOLDS["dynamic_calibrated"] = True
 
     return results
 
@@ -5522,7 +5608,7 @@ def bulk_alpha(
             task_name="bulk_alpha"
         )
 
-    if not should_parallelize_alpha(n_qubits, n_e, n_b, num_workers=workers):
+    if not _should_parallelize_alpha(n_qubits, n_e, n_b, num_workers=workers):
         return _raw_bulk_alpha(gens, tableau, desired_bitstrings)
 
     worker = _BulkAlphaWorker(tableau)
@@ -5577,8 +5663,8 @@ def bulk_alpha_pauli(
             task_name="bulk_alpha_pauli"
         )
 
-    if not should_parallelize_alpha(n_qubits, n_e, n_p, num_workers=workers):
+    if not _should_parallelize_alpha(n_qubits, n_e, n_p, num_workers=workers):
         return _raw_bulk_alpha_pauli(gens, tableau, paulis)
 
     worker = _BulkAlphaPauliWorker(tableau)
-    return _parallel_2d_grid_map(worker, paulis, gens, num_workers=workers, pool=pool) 
+    return _parallel_2d_grid_map(worker, paulis, gens, num_workers=workers, pool=pool)
