@@ -129,3 +129,14 @@ class OrderingTester(BaseCase):
             pattern = _pattern(nx.cycle_graph(n))
             perm = sparsechol.fill_reducing_ordering(pattern, _backend='networkx')
             self.assertEqual(_fill(pattern, perm), n - 3)
+
+    def test_installed_but_broken_backend_raises(self):
+        # Only a missing module skips a backend; an incompatible installed one must not be silently bypassed.
+        from unittest import mock
+        spec = importlib.util.find_spec('networkx')  # any non-None spec
+        def broken(adj):
+            raise ImportError("cannot import name 'analyze'")
+        with mock.patch.object(sparsechol._importlib_util, 'find_spec', return_value=spec), \
+             mock.patch.object(sparsechol, '_ordering_cholmod', broken):
+            with self.assertRaises(ImportError):
+                sparsechol.fill_reducing_ordering(_pattern(nx.path_graph(3)))

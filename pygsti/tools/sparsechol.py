@@ -19,12 +19,14 @@ so the matrix being factored is `A[perm][:, perm]`.
 from __future__ import annotations
 
 import heapq as _heapq
+import importlib.util as _importlib_util
 
 import networkx as _nx
 import numpy as _np
 import scipy.sparse as _sps
 
-_BACKENDS = ('cholmod', 'qdldl', 'networkx')
+# (backend, module whose absence makes the backend unavailable), in order of preference
+_BACKENDS = (('cholmod', 'sksparse'), ('qdldl', 'qdldl'), ('networkx', 'networkx'))
 
 
 def _adjacency(pattern) -> _sps.csr_matrix:
@@ -59,8 +61,11 @@ def _check_perm(perm, n) -> _np.ndarray:
 
 
 def _ordering_cholmod(adj):
-    from sksparse.cholmod import analyze
-    return _np.asarray(analyze(_synthetic_spd(adj), ordering_method='amd').P(), dtype=int)
+    from sksparse import cholmod
+    A = _synthetic_spd(adj)
+    if hasattr(cholmod, 'CholeskyFactor'):  # scikit-sparse >= 0.5; the constructor only does symbolic analysis
+        return _np.asarray(cholmod.CholeskyFactor(A, order='amd').perm, dtype=int)
+    return _np.asarray(cholmod.analyze(A, ordering_method='amd').P(), dtype=int)
 
 
 def _ordering_qdldl(adj):
@@ -123,12 +128,11 @@ def fill_reducing_ordering(pattern, *, _backend=None) -> _np.ndarray:
     orderings = {'cholmod': _ordering_cholmod, 'qdldl': _ordering_qdldl, 'networkx': _ordering_networkx}
     if _backend is not None:
         return _check_perm(orderings[_backend](adj), n)
-    for backend in _BACKENDS:
-        try:
+    for backend, module in _BACKENDS:
+        # Skip only backends that are not installed; an installed but broken one should raise.
+        if _importlib_util.find_spec(module) is not None:
             return _check_perm(orderings[backend](adj), n)
-        except ImportError:
-            continue
-    raise RuntimeError("Unreachable: the networkx fallback has no optional dependencies.")
+    raise RuntimeError("Unreachable: networkx is a required dependency.")
 
 
 def perfect_elimination_ordering(pattern) -> _np.ndarray | None:
