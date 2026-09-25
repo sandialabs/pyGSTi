@@ -20,6 +20,7 @@ import numpy as _np
 import scipy.sparse as _sps
 
 from pygsti.tools.basistools import basis_matrices
+from pygsti.tools import sparsechol as _sparsechol
 import pygsti.baseobjs as _bo
 from pygsti.baseobjs.errorgenlabel import (
     GlobalElementaryErrorgenLabel as _GEEL,
@@ -762,6 +763,198 @@ def _convert_to_global_labels(
         mapper = {i: lbl for i, lbl in enumerate(qubit_labels)}
         result = {lbl.map_state_space_labels(mapper): val for lbl, val in result.items()}
     return result
+
+
+def _as_generator(seed) -> _np.random.Generator:
+    """
+    Convert `seed` to a numpy Generator without touching NumPy's global random state.
+
+    A Generator is returned unchanged, and a BitGenerator is wrapped with its algorithm and state
+    intact. None, integer seed material, and SeedSequences follow `numpy.random.default_rng`. A
+    legacy RandomState shares its underlying bit generator (as `default_rng` does natively from
+    NumPy 2.2 on), though not its legacy normal-distribution stream.
+    """
+    if isinstance(seed, _np.random.RandomState):
+        seed = seed._bit_generator
+    return _np.random.default_rng(seed)
+
+
+def _psd_shrink_factor(B: _np.ndarray, O: _np.ndarray) -> float:
+    """
+    The largest t in [0, 1] for which B + t*O is positive semidefinite, for Hermitian B and O.
+
+    Requires B to be positive semidefinite, and raises ValueError otherwise. If B is positive
+    definite this is closed form: B + t*O = B^(1/2) (I + t*M) B^(1/2) with M = B^(-1/2) O B^(-1/2),
+    so t* = min(1, -1/lambda_min(M)). A relative margin keeps the result strictly feasible in
+    floating point. If B is singular, t = 0 is returned (only B itself is certified).
+    """
+    evals, evecs = _np.linalg.eigh(B)
+    tol = 1e-12 * max(1.0, _np.max(_np.abs(evals)))
+    if evals[0] < -tol:
+        raise ValueError("The fixed part of the coefficient matrix is not positive semidefinite "
+                         "(minimum eigenvalue %g)." % evals[0])
+    if evals[0] <= tol:
+        return 0.0
+    B_inv_sqrt = (evecs / _np.sqrt(evals)) @ evecs.conj().T
+    lam_min = _np.linalg.eigvalsh(B_inv_sqrt @ O @ B_inv_sqrt)[0]
+    return 1.0 if lam_min >= -1.0 else (1.0 - 1e-9) / -lam_min
+
+
+class _KossakowskiStructure(object):
+    """
+    The symbolic (pattern-only) part of sampling a Kossakowski matrix, reusable across draws.
+
+    Attributes: `allowed` (dense boolean n-by-n off-diagonal support), `perm` (the elimination
+    ordering), `rows`/`cols` (the strictly lower nonzeros of the Cholesky factor, in the permuted
+    order and in CSC order), `num_later` (below-diagonal nonzeros per column), `inv` (the inverse
+    permutation), and `deg` (degrees in the filled graph, in the original order).
+    """
+
+    def __init__(self, pattern, _perm=None):
+        adj = _sparsechol._adjacency(pattern)
+        n = adj.shape[0]
+        perm = _perm
+        if perm is None:
+            perm = _sparsechol.fill_reducing_ordering(adj)
+            Lpat = _sparsechol.symbolic_cholesky(adj, perm)
+            if _sps.tril(Lpat, k=-1).nnz > _sps.tril(adj[perm][:, perm], k=-1).nnz:  # fill
+                peo = _sparsechol.perfect_elimination_ordering(adj)
+                if peo is not None:
+                    perm = peo
+        Lpat = _sps.tril(_sparsechol.symbolic_cholesky(adj, perm), k=-1).tocsc()
+        Lpat.sort_indices()
+        self.n = n
+        self.allowed = adj.toarray()
+        self.perm = _np.asarray(perm)
+        self.inv = _np.argsort(self.perm)
+        self.cols = _np.repeat(_np.arange(n), _np.diff(Lpat.indptr))
+        self.rows = Lpat.indices.copy()
+        self.num_later = _np.diff(Lpat.indptr)
+        filled_deg = _np.bincount(self.rows, minlength=n) + self.num_later
+        self.deg = filled_deg[self.inv]
+
+
+def _sample_psd_kossakowski(
+        pattern,
+        rng        : _np.random.Generator,
+        offdiag    : Literal['complex', 'real', 'imag'] = 'complex',
+        scale      : float = 1.0,
+        delta      : float = 1.0
+    ) -> _np.ndarray:
+    """
+    Sample a positive semidefinite Kossakowski matrix K whose off-diagonal support is `pattern`.
+
+    K = P^T L L^dag P, where L is a Bartlett (G-Wishart) Cholesky factor on the filled pattern of a
+    fill-reducing ordering P: off-diagonal entries are standard (complex) normal and the squared
+    diagonal entries are chi-squared with delta + (number of later neighbors) degrees of freedom.
+    A chordal pattern is ordered without fill, so K is exactly supported on `pattern` and its
+    distribution does not depend on the ordering. Otherwise the fill entries are zeroed and the
+    off-diagonal part is shrunk until K is positive semidefinite again. K is then normalized by
+    the congruence 1/sqrt(delta + deg_i), so that E[K_ii] = scale**2 for every direction.
+
+    Parameters
+    ----------
+    pattern : scipy.sparse matrix, numpy.ndarray, or _KossakowskiStructure
+        An n-by-n symmetric matrix whose nonzero off-diagonal entries mark the allowed C/A pairs,
+        or its precomputed structure (to amortize the symbolic work over many draws).
+
+    rng : numpy.random.Generator
+        The source of randomness.
+
+    offdiag : {'complex', 'real', 'imag'}
+        Which parts of the off-diagonal entries may be nonzero: both (C and A), only the real part
+        (C only; L is then real), or only the imaginary part (A only; imposed by shrinking).
+
+    scale : float
+        The standard deviation of the entries of L.
+
+    delta : float
+        The G-Wishart degrees-of-freedom parameter; delta = 1 makes a dense K Wishart with n degrees
+        of freedom.
+
+    Returns
+    -------
+    numpy.ndarray
+        The n-by-n Hermitian positive semidefinite matrix K, in the order of `pattern`.
+    """
+    st = pattern if isinstance(pattern, _KossakowskiStructure) else _KossakowskiStructure(pattern)
+    n, cplx, m = st.n, offdiag != 'real', len(st.rows)
+
+    # Bartlett draw in the permuted order: first all diagonal entries, then the off-diagonal ones.
+    if cplx:
+        diag = _np.sqrt(rng.chisquare(2 * (delta + st.num_later)) / 2)
+        off = (rng.normal(size=m) + 1j * rng.normal(size=m)) / _np.sqrt(2)
+    else:
+        diag = _np.sqrt(rng.chisquare(delta + st.num_later))
+        off = rng.normal(size=m)
+    L = _np.zeros((n, n), dtype=complex if cplx else float)
+    L[_np.arange(n), _np.arange(n)] = diag
+    L[st.rows, st.cols] = off
+    L *= scale
+    K = (L @ L.conj().T)[_np.ix_(st.inv, st.inv)]
+
+    # E[K_ii] = scale**2 (delta + deg_i), with deg_i the degree in the filled (chordal) graph.
+    d = 1 / _np.sqrt(delta + st.deg)
+    K = d[:, None] * K * d[None, :]
+
+    # Impose the support and the requested off-diagonal parts, then restore positivity if needed.
+    # (The diagonal of a complex L L^dag can carry rounding-level imaginary parts; drop them.)
+    D = _np.diag(_np.real(_np.diag(K)))
+    offd = K - _np.diag(_np.diag(K))
+    O = _np.where(st.allowed, offd, 0)
+    if offdiag == 'imag':
+        O = 1j * O.imag
+    if _np.any(O != offd):  # entries outside the filled pattern are exact zeros
+        return D + _psd_shrink_factor(D, O) * O
+    return D + O
+
+
+def _impose_diagonal(K: _np.ndarray, indices, values) -> _np.ndarray:
+    """
+    Rescale K by a diagonal congruence so that K[i, i] = v for each i, v in zip(indices, values).
+
+    The congruence preserves positive semidefiniteness and the sparsity pattern. Rows whose
+    diagonal is zero cannot be rescaled and raise ValueError unless their target is zero.
+    """
+    d = _np.ones(K.shape[0])
+    for i, v in zip(indices, values):
+        current = _np.real(K[i, i])
+        if current <= 0:
+            if v != 0:
+                raise ValueError("Cannot rescale a zero diagonal entry to %g." % v)
+            d[i] = 0.0
+        else:
+            d[i] = _np.sqrt(v / current)
+    return d[:, None] * K * d[None, :]
+
+
+def _impose_offdiagonals(K: _np.ndarray, fixed: dict) -> _np.ndarray:
+    """
+    Set K[i, j] = v (and K[j, i] = conj(v)) for each (i, j): v in `fixed`, keeping K positive
+    semidefinite by shrinking only the free off-diagonal entries.
+
+    Raises ValueError if the diagonal together with the fixed entries is not positive
+    semidefinite. In that case no shrinking of the free entries can help, although a positive
+    semidefinite completion with *different* free entries might still exist; none is searched for.
+    """
+    n = K.shape[0]
+    fixed_mask = _np.zeros((n, n), dtype=bool)
+    F = _np.zeros((n, n), dtype=complex)
+    for (i, j), v in fixed.items():
+        if i == j:
+            raise ValueError("Use _impose_diagonal for diagonal entries.")
+        F[i, j], F[j, i] = v, _np.conj(v)
+        fixed_mask[i, j] = fixed_mask[j, i] = True
+    D = _np.diag(_np.real(_np.diag(K)))
+    B = D + F
+    O_free = _np.where(fixed_mask, 0, K - _np.diag(_np.diag(K)))
+    try:
+        t = _psd_shrink_factor(B, O_free)
+    except ValueError as e:
+        raise ValueError("The fixed off-diagonal (C/A) rates are incompatible with complete positivity given the "
+                         "diagonal (S) rates: %s A completely positive completion using different free rates may "
+                         "still exist, but none was searched for." % e) from None
+    return B + t * O_free
 
 
 def random_CPTP_error_generator_rates(
