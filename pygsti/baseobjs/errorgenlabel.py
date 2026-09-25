@@ -10,9 +10,41 @@ Defines the ElementaryErrorgenLabel class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import re as _re
+
 
 def _to_int_or_strip(x):  # (same as in slowcircuitparser.py)
     return int(x) if x.strip().isdigit() else x.strip()
+
+
+# One subsystem's label in the 'PP'/'GM' families: 'I', 'X', 'Y', 'Z', 'X_{0,1}', 'Z_{2}', etc.  These
+# spellings are prefix-free, so a concatenation of them (as TensorProdBasis builds) splits unambiguously.
+_TOKEN_REGEX = _re.compile(r'I|[XYZ](?:_\{\d+(?:,\d+)?\})?')
+_TOKENS_REGEX = _re.compile(r'(?:I|[XYZ](?:_\{\d+(?:,\d+)?\})?)+')
+
+
+def _bel_tokens(bel):
+    """
+    Split a basis element label into a list with one entry per subsystem.
+
+    Labels are split per character, except for labels composed of multi-character
+    'GM' subsystem labels like 'IX_{0,1}', which are split into ['I', 'X_{0,1}'].
+    """
+    if isinstance(bel, str) and '_' in bel and _TOKENS_REGEX.fullmatch(bel):
+        return _TOKEN_REGEX.findall(bel)
+    return list(bel)
+
+
+def _split_bels(bels_str):
+    """ Split a comma-separated list of basis element labels, ignoring commas inside braces. """
+    bels, depth, start = [], 0, 0
+    for i, c in enumerate(bels_str):
+        if c == '{': depth += 1
+        elif c == '}': depth -= 1
+        elif c == ',' and depth == 0:
+            bels.append(bels_str[start:i].strip()); start = i + 1
+    bels.append(bels_str[start:].strip())
+    return bels
 
 
 class ElementaryErrorgenLabel(object):
@@ -68,13 +100,13 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             local_bels = []
             for global_lbl in obj.basis_element_labels:
                 local_bel = [identity_label] * len(sslbls)
-                for kk, k in enumerate(indices_to_replace):
-                    local_bel[k] = global_lbl[kk]
+                for k, tok in zip(indices_to_replace, _bel_tokens(global_lbl)):
+                    local_bel[k] = tok
                 local_bels.append(''.join(local_bel))
             return cls(obj.errorgen_type, local_bels)
         elif isinstance(obj, str):
             if obj[1:].startswith('(') and obj.endswith(')'):  # e.g. "H(XX)" or "S(XY,YZ)" as from __str__
-                bels = [x.strip() for x in obj[2:-1].split(',')]
+                bels = _split_bels(obj[2:-1])
                 return cls(obj[0], bels)
             else:
                 return cls(obj[0], (obj[1:],))  # e.g. "HXX" => ('H','XX')
@@ -86,8 +118,8 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
                 local_bels = []
                 for global_lbl in obj[1]:
                     local_bel = [identity_label] * len(sslbls)
-                    for kk, k in enumerate(indices_to_replace):
-                        local_bel[k] = global_lbl[kk]
+                    for k, tok in zip(indices_to_replace, _bel_tokens(global_lbl)):
+                        local_bel[k] = tok
                     local_bels.append(''.join(local_bel))
                 return cls(obj[0], local_bels)
             else:
@@ -143,8 +175,9 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         Returns a sorted tuple of the elements of indices of the nontrivial basis
         element label entries for this label.
         """
-        nonidentity_indices = [i for i in range(len(self.basis_element_labels[0]))
-                                   if any([bel[i] != identity_label for bel in self.basis_element_labels])]
+        tokenized_bels = [_bel_tokens(bel) for bel in self.basis_element_labels]
+        nonidentity_indices = [i for i in range(len(tokenized_bels[0]))
+                               if any([toks[i] != identity_label for toks in tokenized_bels])]
 
         return tuple(nonidentity_indices)
 
@@ -203,11 +236,12 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             return obj
         elif isinstance(obj, LocalElementaryErrorgenLabel):
             assert(sslbls is not None), "Cannot convert local -> global elementary errogen label without `sslbls`!"
+            tokenized_bels = [_bel_tokens(bel) for bel in obj.basis_element_labels]
             nonidentity_indices = [i for i in range(len(sslbls))
-                                   if any([bel[i] != identity_label for bel in obj.basis_element_labels])]
+                                   if any([toks[i] != identity_label for toks in tokenized_bels])]
             global_bels = []
-            for local_bel in obj.basis_element_labels:
-                global_bels.append(''.join([local_bel[i] for i in nonidentity_indices]))
+            for toks in tokenized_bels:
+                global_bels.append(''.join([toks[i] for i in nonidentity_indices]))
 
             return cls(obj.errorgen_type, global_bels, [sslbls[i] for i in nonidentity_indices])
 
@@ -216,7 +250,7 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
                 in_parens = obj[2:-1]
                 if ':' in in_parens:  # e.g. "H(XX:Q0,Q1)" or "S(XY,YZ:0,1)" as from __str__
                     bel_str, sslbl_str = in_parens.split(':')
-                    bels = [x.strip() for x in bel_str.split(',')]
+                    bels = _split_bels(bel_str)
                     sslbls = [_to_int_or_strip(x) for x in sslbl_str.split(',')]
                     return cls(obj[0], bels, sslbls)
                 else:  # treat as a local label
@@ -262,7 +296,8 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         
         if sort:
             sorted_indices, sslbls = zip(*sorted(enumerate(sslbls), key=lambda x: x[1]))
-            basis_element_labels = [''.join([bel[i] for i in sorted_indices]) for bel in basis_element_labels]
+            basis_element_labels = [''.join([toks[i] for i in sorted_indices])
+                                    for toks in map(_bel_tokens, basis_element_labels)]
 
         self.errorgen_type = str(errorgen_type)
         self.basis_element_labels = tuple(basis_element_labels)
@@ -335,8 +370,8 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         sslbl_indices = [all_sslbls[lbl] for lbl in self.sslbls]
         for bel in self.basis_element_labels:
             lbl = [identity_label] * len(all_sslbls)
-            for i, char in zip(sslbl_indices, bel):
-                lbl[i] = char
+            for i, tok in zip(sslbl_indices, _bel_tokens(bel)):
+                lbl[i] = tok
             ret.append(''.join(lbl))
         return tuple(ret)
 
@@ -372,5 +407,5 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         GlobalElementaryErrorgenLabel
         """
         sorted_indices, sorted_sslbls = zip(*sorted(enumerate(self.sslbls), key=lambda x: x[1]))
-        sorted_bels = [''.join([bel[i] for i in sorted_indices]) for bel in self.basis_element_labels]
+        sorted_bels = [''.join([toks[i] for i in sorted_indices]) for toks in map(_bel_tokens, self.basis_element_labels)]
         return GlobalElementaryErrorgenLabel(self.errorgen_type, sorted_bels, sorted_sslbls)
