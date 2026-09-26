@@ -7,6 +7,21 @@ from ..util import BaseCase
 
 
 class BasisTester(BaseCase):
+    def test_GM_basis(self):
+        gm = basis.Basis.cast('gm', 9)
+        scaled_gm = basis.Basis.cast('GM', 9)
+        self.assertEqual(scaled_gm.labels, gm.labels)
+        self.assertTrue(scaled_gm.real)
+        self.assertTrue(scaled_gm.first_element_is_identity)
+        self.assertFalse(scaled_gm.is_normalized())
+        np.testing.assert_allclose(scaled_gm.create_transform_matrix(gm), np.sqrt(3) * np.eye(9), atol=1e-13)
+
+        sparse_gm = basis.Basis.cast('GM', 9, sparse=True)
+        np.testing.assert_allclose([mx.toarray() for mx in sparse_gm.elements], scaled_gm.elements)
+        restored = basis.Basis.from_nice_serialization(sparse_gm.to_nice_serialization())
+        self.assertEqual(restored, sparse_gm)
+        np.testing.assert_allclose([mx.toarray() for mx in restored.elements], scaled_gm.elements)
+
     def test_composite_basis(self):
         comp = basis.Basis.cast([('std', 4,), ('std', 1)])
         b4 = basis.Basis.cast('std', 4)
@@ -652,3 +667,95 @@ class BasisTester(BaseCase):
         tp = basis.TensorProdBasis([basis.BuiltinBasis('pp', 4), basis.BuiltinBasis('pp', 4)])
         self.assertEqual(len(tp.elements), 16)
         self.assertEqual(len(tp.labels), 16)
+
+class CanonicalErrorgenBasisTester(BaseCase):
+
+    # (state space labels, subsystem dimensions)
+    CASES = [(('Q0',), (2,)),
+             (('Q0', 'Q1'), (2, 2)),
+             (('T0',), (3,)),
+             (('Q0', 'T1'), (2, 3)),
+             (('T0', 'Q1'), (3, 2)),
+             (('D0',), (5,))]
+
+    @staticmethod
+    def _state_space(sslbls, dims):
+        from pygsti.baseobjs import ExplicitStateSpace
+        return ExplicitStateSpace([sslbls], [dims])
+
+    def test_structure(self):
+        from pygsti.baseobjs import canonical_errorgen_basis
+        from pygsti.baseobjs.errorgenlabel import _bel_tokens
+        for sslbls, dims in self.CASES:
+            b = canonical_errorgen_basis(self._state_space(sslbls, dims))
+            D = int(np.prod(dims))
+            els = [np.asarray(el) for el in b.elements]
+            self.assertEqual(len(els), D**2)
+            self.assertEqual(b.labels[0], 'I' * len(dims))
+            self.assertArraysAlmostEqual(els[0], np.eye(D))
+            gram = np.array([[np.trace(a.conj().T @ c) for c in els] for a in els])
+            self.assertArraysAlmostEqual(gram, D * np.eye(D**2))
+            for lbl, el in zip(b.labels[1:], els[1:]):
+                self.assertArraysAlmostEqual(el, el.conj().T)
+                self.assertAlmostEqual(abs(np.trace(el)), 0)
+                self.assertEqual(len(_bel_tokens(lbl)), len(dims))
+
+    def test_factor_bases(self):
+        from pygsti.baseobjs import canonical_errorgen_basis
+        b = canonical_errorgen_basis(self._state_space(('Q0',), (2,)))
+        self.assertIsInstance(b, basis.BuiltinBasis)
+        self.assertEqual(b.name, 'PP')
+        b = canonical_errorgen_basis(self._state_space(('T0',), (3,)))
+        self.assertIsInstance(b, basis.BuiltinBasis)
+        self.assertEqual(b.name, 'GM')
+        b = canonical_errorgen_basis(self._state_space(('T0', 'Q1'), (3, 2)))
+        self.assertIsInstance(b, basis.TensorProdBasis)
+        self.assertEqual([c.name for c in b.component_bases], ['GM', 'PP'])
+
+        two_qubits = canonical_errorgen_basis(self._state_space(('Q0', 'Q1'), (2, 2)))
+        pp16 = basis.BuiltinBasis('PP', 16)
+        self.assertEqual(list(two_qubits.labels), list(pp16.labels))
+        self.assertArraysAlmostEqual(np.array(two_qubits.elements), np.array(pp16.elements))
+
+    def test_sparse(self):
+        from pygsti.baseobjs import canonical_errorgen_basis
+        b = canonical_errorgen_basis(self._state_space(('Q0', 'T1'), (2, 3)), sparse=True)
+        self.assertTrue(b.sparse)
+        dense = canonical_errorgen_basis(self._state_space(('Q0', 'T1'), (2, 3)))
+        self.assertArraysAlmostEqual(np.array([el.toarray() for el in b.elements]), np.array(dense.elements))
+
+    def test_rejections(self):
+        from pygsti.baseobjs import canonical_errorgen_basis, ExplicitStateSpace, QubitSpace
+        with self.assertRaises(TypeError):
+            canonical_errorgen_basis(3)
+        with self.assertRaises(ValueError):  # direct sum
+            canonical_errorgen_basis(ExplicitStateSpace([('Q0',), ('L0',)], [(2,), (1,)]))
+        with self.assertRaises(ValueError):  # classical factor
+            canonical_errorgen_basis(ExplicitStateSpace([('Q0', 'C1')], [(2, 2)], [('Q', 'C')]))
+        with self.assertRaises(ValueError):  # udim == 1
+            canonical_errorgen_basis(ExplicitStateSpace([('Q0', 'L1')], [(2, 1)]))
+        canonical_errorgen_basis(QubitSpace(3))  # a QubitSpace is accepted
+
+    def test_lindblad_construction(self):
+        # Compare H and S generators built from the helper's basis against the defining formulas,
+        # written in pyGSTi's row-stacked standard basis.
+        from pygsti.baseobjs import canonical_errorgen_basis
+        from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel
+        from pygsti.modelmembers.operations import LindbladErrorgen
+        for sslbls, dims, lbl in [(('T0',), (3,), 'Y_{0,2}'), (('Q0', 'T1'), (2, 3), 'XZ_{2}')]:
+            ss = self._state_space(sslbls, dims)
+            b = canonical_errorgen_basis(ss)
+            D = int(np.prod(dims))
+            F = np.asarray(b.ellookup[lbl])
+            formulas = {'H': lambda r: -1j * (F @ r - r @ F),
+                        'S': lambda r: F @ r @ F.conj().T - 0.5 * (F.conj().T @ F @ r + r @ F.conj().T @ F)}
+            for typ, f in formulas.items():
+                eg = LindbladErrorgen.from_elementary_errorgens({LocalElementaryErrorgenLabel(typ, (lbl,)): 0.1},
+                                                               elementary_errorgen_basis=b, mx_basis=b,
+                                                               state_space=ss, parameterization='GLND')
+                G = bt.change_basis(eg.to_dense(), b, basis.Basis.cast('std', D**2))
+                expected = np.zeros((D**2, D**2), complex)
+                for k in range(D**2):
+                    E = np.zeros(D**2, complex); E[k] = 1
+                    expected[:, k] = 0.1 * f(E.reshape(D, D)).reshape(-1)
+                self.assertArraysAlmostEqual(G, expected)
