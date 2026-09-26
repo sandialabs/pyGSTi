@@ -107,27 +107,15 @@ class DesignReducer(_NicelySerializable):
     Subclasses implement :meth:`_select` to choose circuits. Callers use :meth:`select`
     for diagnostics or :meth:`reduce` for a smaller design. Both validate the selection.
 
-    :class:`~pygsti.baseobjs.nicelyserializable.NicelySerializable` records the defining
-    module and class name and re-imports on load. A subclass needs no registration,
-    but it must be available in an importable module in the loading process. Classes
-    defined interactively do not provide that guarantee. Subclasses with configuration
-    must implement `_to_nice_serialization` and `_from_nice_serialization` to save and
-    restore it; the default loader only calls the constructor with no arguments.
+    A reducer is a fully configured policy: models, seeds and weightings are constructor
+    arguments, so :meth:`select` has one signature for every reducer. That configuration
+    must live on the instance and support :func:`copy.deepcopy`, because each selection
+    records a deep copy of its reducer.
 
-    Reducers that need a model, a random seed or a weighting take it at construction: a
-    reducer is a fully configured policy, so that :meth:`select` has the same signature
-    whatever the reducer needs to do its job.
-
-    Each selection stores a deep copy of the reducer. Instance state must support
-    :func:`copy.deepcopy`, including independent copies of mutable configuration.
-    Subclasses holding resources that cannot be copied may implement `__deepcopy__`
-    to retain the configuration needed to describe their selection. Function closures
-    and mutable global variables are not copied; put durable configuration on the
-    instance instead.
-
-    A subclass may use no model, one model, or several noisy models. The subclass
-    handles model inputs, aggregation of per-model scores, and serialization of its
-    model configuration; the base class does not inspect the number of models.
+    Serialization needs no registration, but the subclass must be importable when
+    loading. A subclass with configuration implements `_to_nice_serialization` and
+    `_from_nice_serialization`, as :class:`BlockDoptReducer` does; the default loader
+    calls the constructor with no arguments.
     """
 
     # -- the selection rule ------------------------------------------------- #
@@ -135,13 +123,9 @@ class DesignReducer(_NicelySerializable):
     def _select(self, design: ExperimentDesign, num_circuits: Optional[int]) -> CircuitSelection:
         """Choose circuits from `design`; return a :class:`CircuitSelection`.
 
-        `num_circuits` arrives already validated and clamped to the number of candidates,
-        or as None meaning "use your own stopping rule".  A reducer with no such rule
-        should raise `ValueError` on None.
-
-        Returning fewer than `num_circuits` circuits is allowed -- a reducer may run out
-        of anything worth adding -- but returning more is an error, as is returning a
-        circuit that is not in the design.
+        `num_circuits` is already clamped to the number of candidates, or None for "use
+        your own stopping rule" (raise `ValueError` if there is none). Returning fewer
+        circuits than the budget is allowed; more, duplicates, or foreign circuits are not.
         """
         raise NotImplementedError("DesignReducer subclasses must implement _select.")
 
@@ -153,14 +137,11 @@ class DesignReducer(_NicelySerializable):
         Parameters
         ----------
         design : ExperimentDesign
-            Anything with `all_circuits_needing_data`.  Passed to `_select` whole, not as
-            a circuit list, so that a reducer can use the design's structure -- germ-power
-            lists, or a simultaneous design's color patches -- to spend its budget.
+            Passed to `_select` whole, so a reducer can use the design's structure.
 
         num_circuits : int, optional
             The budget, clamped to the number of candidates.  None asks the reducer to
-            choose for itself; for a greedy reducer that usually means "rank everything",
-            which is the natural way to *pick* a budget from the score curve.
+            choose for itself.
 
         Returns
         -------
@@ -183,14 +164,8 @@ class DesignReducer(_NicelySerializable):
     def reduce(self, design: ExperimentDesign, num_circuits: Optional[int] = None) -> ExperimentDesign:
         """A copy of `design` keeping only the circuits this reducer selects.
 
-        Supports flat :class:`~pygsti.protocols.ExperimentDesign` objects with no child
-        experiments. Designs with children, such as `CombinedExperimentDesign` and
-        `SimultaneousExperimentDesign`, raise `NotImplementedError`: truncating their
-        root circuit list would leave the children inconsistent. You may still call
-        :meth:`select` on their root circuits. `SimultaneousGSTDesign` is supported;
-        its generation sub-designs are not child experiments.
-
-        Designs fitted to a model also expose this as `design.reduce_with(reducer, n)`.
+        Designs with child experiments raise `NotImplementedError`, because truncating the
+        root would leave the children inconsistent; :meth:`select` still works on them.
 
         Parameters
         ----------
@@ -203,10 +178,9 @@ class DesignReducer(_NicelySerializable):
         Returns
         -------
         ExperimentDesign
-            Whatever `design.truncate_to_circuits` returns, so the class is preserved.
-            On a design that records its provenance -- any
-            :class:`~pygsti.protocols.GateSetTomographyDesign` -- the result's `selection`
-            attribute holds the :class:`CircuitSelection` that produced it.
+            Of the same class as `design`. If that class declares a `selection`
+            member, as :class:`~pygsti.protocols.GateSetTomographyDesign` does, it holds
+            the :class:`CircuitSelection`.
         """
         selection = self.select(design, num_circuits)
         return self._apply_selection(design, selection)
@@ -228,12 +202,6 @@ class DesignReducer(_NicelySerializable):
         return reduced
 
     # -- serialization ------------------------------------------------------ #
-    #
-    # A reducer that holds no configuration needs no serialization code at all: the
-    # default below reconstructs it from the module and class name that
-    # `NicelySerializable._to_nice_serialization` already records.  A reducer with
-    # constructor arguments overrides both halves in the usual way -- see
-    # `BlockDoptReducer` for the pattern.
 
     @classmethod
     def _from_nice_serialization(cls, state: dict[str, Any]) -> DesignReducer:
@@ -241,17 +209,7 @@ class DesignReducer(_NicelySerializable):
 
     @classmethod
     def from_nice_serialization(cls, state: dict[str, Any]) -> DesignReducer:
-        """Rebuild the reducer described by `state`, whatever subclass it is.
-
-        Parameters
-        ----------
-        state : dict
-            From a prior :meth:`to_nice_serialization`.
-
-        Returns
-        -------
-        DesignReducer
-        """
+        """Rebuild the reducer described by `state`, whatever subclass it is."""
         # NicelySerializable's dispatcher reads "the base class supplies
         # _from_nice_serialization" as "the subclass forgot to", and raises
         # NotImplementedError rather than using the default above.  Resolve the concrete
@@ -328,12 +286,10 @@ class CallableReducer(DesignReducer):
     The low-ceremony option, for a one-off reduction in a notebook or a test.  `f` may
     return a :class:`CircuitSelection` or a bare sequence of circuits.
 
-    Serialization records `f` by module and qualified name. Reloading requires that
-    function to be importable by name, which excludes lambdas, closures, and functions
-    defined interactively. Deep-copying the reducer does not copy a function's closure
-    or mutable global state, so these remain shared with the selection's reducer.
-    For a durable record, use an importable :class:`DesignReducer` subclass whose
-    configuration is stored on the instance and covered by its serialization methods.
+    Serialization records `f` by module and qualified name, so reloading fails for
+    lambdas, closures, and functions defined interactively. A function's closure and
+    global state are not deep-copied into the selection's record. For a durable record,
+    subclass :class:`DesignReducer`.
 
     Parameters
     ----------

@@ -383,32 +383,10 @@ def greedy_path_log_volumes(A: _ArrayLike, block_size: int, block_pivots: Sequen
 # --------------------------------------------------------------------------- #
 
 def _jacobian_dict_to_array(jac_dict: Mapping[Circuit, Mapping[Any, _np.ndarray]]) -> tuple[_np.ndarray, int]:
-    """Flatten a `bulk_dprobs` result into a Jacobian array and its block size.
+    """Flatten a `bulk_dprobs` result into a Fortran-ordered Jacobian and its block size.
 
-    Parameters
-    ----------
-    jac_dict : dict
-        The output of `model.sim.bulk_dprobs(circuits)`: circuit -> (outcome ->
-        length-`num_params` derivative vector).
-
-    Returns
-    -------
-    jacobian : numpy.ndarray
-        `(num_circuits * num_outcomes, num_params)`, in Fortran order.  Rows are
-        grouped per circuit in `jac_dict` **key order**, which is not
-        necessarily the order the circuits were passed in: `bulk_dprobs` may
-        deduplicate and reorder.  Map any row-block index back through
-        `list(jac_dict)`, never through the input list.
-
-    block_size : int
-        The common number of outcomes per circuit.
-
-    Raises
-    ------
-    ValueError
-        If `jac_dict` is empty, or if the circuits do not all have the same
-        number of outcomes -- block selection needs one circuit per block, and a
-        ragged outcome count would misalign them.
+    Row blocks follow `jac_dict` key order, which `bulk_dprobs` may have deduplicated and
+    reordered: map block `i` back through `list(jac_dict)[i]`, not the input list.
     """
     if not jac_dict:
         raise ValueError("_jacobian_dict_to_array: got an empty Jacobian dict.")
@@ -426,31 +404,15 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
                            seed: Union[int, _np.random.Generator, None] = None) -> Model:
     """A copy of `model` with seeded Hamiltonian and stochastic error-generator coefficients.
 
-    D-optimal selection needs a Jacobian that is representative of the model at a
-    plausible noisy point.  Evaluating it at a *target* model does not give one,
-    and the reason is easy to miss.
+    D-optimal selection needs the Jacobian at a plausible noisy point, not at a target
+    model. Stochastic coefficients use `param_mode='cholesky'` (`coefficient = theta**2`),
+    so `d(coefficient)/d(theta) = 2*theta` is exactly zero at the target: every
+    stochastic column of the Jacobian vanishes and the selection ignores those parameters.
 
-    In the H+S parameterization, stochastic coefficients use `param_mode='cholesky'`
-    (see `pygsti/modelmembers/operations/lindbladerrorgen.py`): the free
-    parameter is `theta` with `coefficient = theta**2`, which pyGSTi reports under names
-    like `'sqrt(X stochastic coefficient)'`.  So `d(coefficient)/d(theta) = 2*theta`,
-    which is **exactly zero** at the target model.  Every stochastic column of
-    the Jacobian vanishes, and the selector optimizes as if those parameters did
-    not exist.
-
-    Perturbing the raw parameter vector by `1e-4` puts `theta` near `1e-4`
-    but the stochastic coefficient near `1e-8`, so the stochastic and
-    Hamiltonian coefficients would be sampled at different scales.
-    Setting the *coefficient* near `1e-3` puts `theta` near `0.03`, away from
-    the zero-derivative point.
-
-    For each member, Hamiltonian coefficients are sampled independently and
-    all diagonal stochastic (S) coefficients share one positive sample.
-    Correlation (C) and active (A) coefficients are set to zero.  For a full
-    CPTPLND error generator this produces a positive diagonal non-Hamiltonian
-    coefficient matrix while retaining the full parameterization: derivatives
-    with respect to off-diagonal Cholesky parameters remain nonzero.  The
-    common S coefficient also respects tied depolarizing parameterizations.
+    For each member, Hamiltonian coefficients are sampled independently and all
+    stochastic (S) coefficients share one positive sample; C and A coefficients are set to
+    zero. This keeps CPTPLND members physical, respects tied depolarizing parameters, and
+    keeps the original parameterization. Members with no error generator are left alone.
 
     Parameters
     ----------
@@ -458,11 +420,8 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
         Not modified; a copy is returned.
 
     scale : float, optional (default 1e-3)
-        Positive, finite scale for the error-generator coefficients.
-        Hamiltonian coefficients are drawn uniformly from `[0, scale)`;
-        the common stochastic coefficient is drawn from `(0, scale]`.
-        This is a coefficient magnitude, not a free-parameter value or the
-        transformed channel error rate returned by `error_rates`.
+        Positive, finite coefficient magnitude. Hamiltonian coefficients are drawn from
+        `[0, scale)` and the stochastic coefficient from `(0, scale]`.
 
     seed : int or numpy.random.Generator, optional
         Anything `numpy.random.default_rng` accepts.  Pass one, or the selection
@@ -471,14 +430,6 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
     Returns
     -------
     Model
-        A copy of `model` with the sampled coefficients and its original
-        parameterization.
-
-    Notes
-    -----
-    Coefficients are set with `truncate=False`, so a member that cannot
-    represent coefficients of this sign or size raises rather than being silently
-    clipped.  Members with no error generator are left alone.
     """
     if not _np.isfinite(scale) or scale <= 0:
         raise ValueError("scale must be positive and finite.")
@@ -507,40 +458,21 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
 
 def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuits: Optional[int] = None, *,
                           ridge: float = 1.0, dtype: _DTypeLike = _np.float64) -> tuple[list[Circuit], _np.ndarray]:
-    """Order circuits by their contribution to probability-Jacobian sensitivity.
-
-    Greedy D-optimal selection over the per-circuit blocks of `model`'s Jacobian:
-    each step takes the circuit that most increases
-    `0.5 * logdet(ridge * I + J_S^T J_S)`, where `J_S` stacks the Jacobian rows of
-    the circuits chosen so far.
-
-    Outcomes receive equal weight. This objective measures local sensitivity in the
-    supplied model's parameter coordinates; it is not multinomial Fisher information,
-    which weights outcome derivatives by inverse probabilities and shot counts.
-
-    Pass a model that is *at* a plausible noisy point, not a target model -- see
-    :func:`perturb_errorgen_rates`, which explains why and is the usual way to
-    get one.  This function does not perturb anything.
+    """Order circuits greedily by the objective :class:`BlockDoptReducer` documents.
 
     Parameters
     ----------
     model : Model
-        Supplies `sim.bulk_dprobs`.  Its parameterization defines what is being
-        optimized for: the ranking is only as meaningful as the model's
-        parameters are the ones you care about estimating.
+        A model at a noisy point; see :func:`perturb_errorgen_rates`.
 
     circuits : list of Circuit
         Candidates.  Duplicates are dropped, keeping first occurrence.
 
     max_circuits : int, optional
-        How many to rank.  None (the default) ranks all of them, which gives the
-        whole priority order and lets a caller pick a budget afterwards.
+        How many to rank.  None (the default) ranks all of them.
 
     ridge : float, optional (default 1.0)
-        Weight of the identity regularizer on the Jacobian Gram matrix. Implemented by
-        scaling `J^T` by `ridge**-0.5`, which is exact up to an additive constant
-        and so does not change the ordering; the returned scores are for the
-        scaled matrix, i.e. `0.5 * logdet(I + J_S^T J_S / ridge)`.
+        Weight of the identity regularizer; see :func:`block_linear_dopt` for how it is applied.
 
     dtype : numpy dtype, optional (default numpy.float64)
         Working precision.  float32 halves the memory and changes selections at
@@ -549,22 +481,14 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
     Returns
     -------
     ranked : list of Circuit
-        In selection order: `ranked[0]` maximizes the single-circuit objective,
-        and `ranked[:k]` is the greedy choice of `k`.
+        In selection order, so `ranked[:k]` is the greedy choice of `k`.
 
     scores : numpy.ndarray
-        The cumulative objective after each pick, one per ranked circuit.
-        Nondecreasing; where it flattens, adding circuits gives little objective gain.
+        `0.5 * logdet(I + J_S^T J_S / ridge)` after each pick; nondecreasing.
 
     Notes
     -----
-    Cost is one `(num_params + num_outcomes) x num_outcomes` QR per remaining
-    candidate per step, and the workspace holds
-    `(num_candidates, num_outcomes, num_params + num_outcomes)` floats -- about
-    105 MB for 4000 circuits, 16 outcomes and 200 parameters in float64, and not
-    doubled between steps.  Rank a subset, or use float32, if that is too much.
-
-    Those QRs are small enough that the greedy loop is dispatch-bound rather
+    The greedy loop's QRs are small enough that it is dispatch-bound rather
     than flop-bound, so it can run *faster* under a small BLAS thread pool than
     an unrestricted one.  If ranking time matters, measure before assuming more
     threads will help.
@@ -597,15 +521,9 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
 # --------------------------------------------------------------------------- #
 
 def _looks_like_a_target_model(model: Model) -> bool:
-    """Whether every error-generator coefficient of `model` is exactly zero.
+    """Whether `model` has error-generator coefficients and all of them are zero.
 
-    True only when there is at least one coefficient to look at, so a model with no
-    error generators -- nothing to perturb, nothing to warn about -- does not trip it.
-
-    This only ever drives a warning, so it must not be able to fail: a model that cannot
-    be walked (`Model._iter_parameterized_objs` is abstract, and a member's coefficients
-    need not be readable) is reported as not-a-target rather than raising.  A false
-    negative costs a missed warning; an exception here would cost a construction.
+    Only drives a warning, so any failure to inspect the model reads as False.
     """
     try:
         members = list(model._iter_parameterized_objs())
@@ -633,39 +551,24 @@ class BlockDoptReducer(_DesignReducer):
 
     Greedy block D-optimal selection: each step takes the circuit that most increases
     `0.5 * logdet(ridge * I + J_S^T J_S)`, where `J_S` stacks the Jacobian rows of the
-    circuits chosen so far.  It is the reference against which another
-    :class:`~pygsti.tools.edesigntools.DesignReducer` can be judged.
-
-    The objective uses the model's parameter coordinates and equal outcome weights.
-    It does not include the probability and shot weights of multinomial Fisher
-    information. See :func:`rank_circuits_by_dopt` for the precise score convention.
+    circuits chosen so far.  Outcomes are weighted equally and sensitivity is measured in
+    the model's parameter coordinates, so this is not multinomial Fisher information,
+    which would also weight by inverse probabilities and shot counts.
 
     Parameters
     ----------
     model : Model
-        Defines the parameter sensitivities used in selection. This must be a
-        model at a *plausible noisy point*, not a target model -- see
-        :func:`perturb_errorgen_rates`, which is the usual way to get one.  The model's
-        parameterization is what defines the objective: the ranking is only as
-        meaningful as its parameters are the ones you care about estimating.
+        A noisy model; see :func:`perturb_errorgen_rates`.  Its parameterization defines
+        the objective.
 
     ridge : float, optional (default 1.0)
         Weight of the identity regularizer on the Jacobian Gram matrix.
 
     dtype : numpy dtype, optional (default numpy.float64)
-        Working precision.  float32 halves the memory and changes selections at rounding
-        level, which matters only among near-tied candidates.
+        Working precision; see :func:`rank_circuits_by_dopt`.
 
     warn_on_target_model : bool, optional (default True)
-        Whether to check `model` for all-zero error-generator rates and warn.  Turn it
-        off if you are deliberately ranking against an unperturbed model.
-
-    Notes
-    -----
-    Selecting with no budget (`num_circuits=None`) ranks every candidate rather than
-    raising: for a greedy reducer "you decide" has an honest answer, and the returned
-    score curve is the natural way to *choose* a budget.  `selection.circuits[:k]` is
-    then this reducer's own answer for a budget of `k`, with no re-ranking.
+        Warn if every error-generator coefficient of `model` is zero.
     """
 
     def __init__(self, model: Model, *, ridge: float = 1.0, dtype: _DTypeLike = _np.float64,
@@ -678,14 +581,9 @@ class BlockDoptReducer(_DesignReducer):
         self.dtype = _np.dtype(dtype)
         if warn_on_target_model and _looks_like_a_target_model(model):
             _warnings.warn(
-                "BlockDoptReducer was given a model whose error-generator rates are all "
-                "exactly zero, which usually means a target model. In the H+S and CPTPLND "
-                "parameterizations, stochastic rates use param_mode='cholesky', so "
-                "d(rate)/d(theta) = 2*theta is exactly zero there: every stochastic column "
-                "of the Jacobian vanishes and the selection silently optimizes as if those "
-                "parameters did not exist. Use perturb_errorgen_rates(model, seed=...) to "
-                "perturb the rates first, or pass warn_on_target_model=False if this is "
-                "deliberate.")
+                "BlockDoptReducer was given a model whose error-generator coefficients are "
+                "all zero, where stochastic Jacobian columns vanish. Use "
+                "perturb_errorgen_rates(model, seed=...), or pass warn_on_target_model=False.")
 
     def _select(self, design: ExperimentDesign, num_circuits: Optional[int]) -> _CircuitSelection:
         candidates = list(design.all_circuits_needing_data)

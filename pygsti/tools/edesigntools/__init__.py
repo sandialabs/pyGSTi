@@ -15,10 +15,9 @@ tells you about a model.
 
 `DesignReducer` is the interface for cutting a design down to a budget; write
 one to plug your own selection rule into `design.reduce_with(...)`.
-`BlockDoptReducer` is the reference implementation, which ranks candidates by
-how much information each adds about a model's parameters; it and the greedy
-block D-optimal selection kernel it is built on live in the `blockdopt`
-submodule, and everything public there is re-exported here.
+`BlockDoptReducer` is the reference implementation, built on the greedy block
+D-optimal selection kernel; both live in the `blockdopt` submodule, and
+everything public there is re-exported here.
 
 New code should import from here.
 """

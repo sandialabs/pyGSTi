@@ -125,12 +125,8 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         when `all_circuits_needing_data` is given).
     """
 
-    #: The :class:`~pygsti.tools.edesigntools.CircuitSelection` that produced this design,
-    #: if it came from :meth:`reduce_with`; None otherwise.  Records the reducer, its score
-    #: curve and the candidate count, so a reduced design carries the provenance of its
-    #: own reduction.  Declared on the class as well as set in `__init__` so that a design
-    #: rebuilt without `__init__` -- as `from_dir` does -- reads as unreduced even if it was
-    #: written before this member existed.
+    #: The :class:`~pygsti.tools.edesigntools.CircuitSelection` that produced this design via
+    #: :meth:`reduce_with`, or None. Declared on the class so designs loaded from old directories have it.
     selection = None
 
     def __init__(self, processorspec_filename_or_obj, circuit_lists, all_circuits_needing_data=None,
@@ -143,7 +139,8 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
     def reduce_with(self, reducer: _DesignReducer, num_circuits: Optional[int] = None) -> "GateSetTomographyDesign":
         """A copy of this design keeping only the circuits `reducer` selects.
 
-        Named for the parallel with `merge_with`.
+        Equivalent to `reducer.reduce(self, num_circuits)`; see
+        :meth:`~pygsti.tools.edesigntools.DesignReducer.reduce`.
 
         Parameters
         ----------
@@ -153,15 +150,12 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
 
         num_circuits : int, optional
             The budget, clamped to the number of circuits available.  None asks the
-            reducer to choose for itself; a greedy reducer will typically rank everything
-            and leave the budget to be read off the returned score curve.
+            reducer to choose for itself.
 
         Returns
         -------
         GateSetTomographyDesign
-            Of the same class as `self`.  Its `selection` attribute holds the
-            :class:`~pygsti.tools.edesigntools.CircuitSelection` that produced it -- read
-            `selection.scores` to inspect the reducer's objective as the budget grows.
+            Of the same class as `self`, with `selection` set.
 
         Notes
         -----
