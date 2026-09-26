@@ -38,7 +38,8 @@ from itertools import product
 
 from pygsti.tools import errgenproptools as eprop
 from pygsti.tools import errgenpolytools as epoly
-from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+from pygsti.baseobjs import QubitSpace
+from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 ```
 
@@ -57,9 +58,9 @@ For the noisy model we will use a crosstalk-free model with local H+S error gene
 
 ```{code-cell} ipython3
 error_rates_dict_shared = {
-    'Gcphase': random_CPTP_error_generator_rates(2, errorgen_types=('H', 'S'), label_type='local', seed=1234),
-    'Gxpi2': random_CPTP_error_generator_rates(1, errorgen_types=('H', 'S'), label_type='local', seed=1235),
-    'Gypi2': random_CPTP_error_generator_rates(1, errorgen_types=('H', 'S'), label_type='local', seed=1236)
+    'Gcphase': random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H', 'S'), label_type='local', seed=1234),
+    'Gxpi2': random_cptp_errorgen_rates(QubitSpace(1), errorgen_types=('H', 'S'), label_type='local', seed=1235),
+    'Gypi2': random_cptp_errorgen_rates(QubitSpace(1), errorgen_types=('H', 'S'), label_type='local', seed=1236)
 }
 error_model = pygsti.models.create_crosstalk_free_model(pspec, lindblad_error_coeffs=error_rates_dict_shared)
 ```

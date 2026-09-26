@@ -95,7 +95,7 @@ class LindbladToolsTester(BaseCase):
 class RandomErrorgenRatesTester(BaseCase):
 
     def test_default_settings(self):
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, seed=1234, label_type='local')
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), seed=1234, label_type='local')
 
         #make sure that we get the expected number of rates:
         self.assertEqual(len(random_errorgen_rates), 240)
@@ -106,7 +106,7 @@ class RandomErrorgenRatesTester(BaseCase):
 
     def test_sector_restrictions(self):
         #H-only:
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H',), seed=1234)
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H',), seed=1234)
         #make sure that we get the expected number of rates:
         self.assertEqual(len(random_errorgen_rates), 15)
         #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
@@ -114,7 +114,7 @@ class RandomErrorgenRatesTester(BaseCase):
         errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
         #S-only
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('S',), seed=1234)
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('S',), seed=1234)
         #make sure that we get the expected number of rates:
         self.assertEqual(len(random_errorgen_rates), 15)
         #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
@@ -122,7 +122,7 @@ class RandomErrorgenRatesTester(BaseCase):
         errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
         #H+S
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'), seed=1234)
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S'), seed=1234)
         #make sure that we get the expected number of rates:
         self.assertEqual(len(random_errorgen_rates), 30)
         #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
@@ -130,7 +130,7 @@ class RandomErrorgenRatesTester(BaseCase):
         errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
         #H+S+A
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S','A'), seed=1234)
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S','A'), seed=1234)
         #make sure that we get the expected number of rates:
         self.assertEqual(len(random_errorgen_rates), 135)
         #also make sure this is CPTP, do so by constructing an error generator and confirming it doesn't fail
@@ -139,7 +139,7 @@ class RandomErrorgenRatesTester(BaseCase):
 
     def test_error_metric_restrictions(self):
         #test generator_infidelity
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'),
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S'),
                                                                 error_metric= 'generator_infidelity',
                                                                 error_metric_value=0.99, seed=1234)
         #confirm this has the correct generator infidelity.
@@ -153,7 +153,7 @@ class RandomErrorgenRatesTester(BaseCase):
         assert abs(gen_infdl-0.99)<1e-5
 
         #test generator_error
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'),
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S'),
                                                                 error_metric= 'total_generator_error',
                                                                 error_metric_value=0.99, seed=1234)
         #confirm this has the correct generator infidelity.
@@ -167,7 +167,7 @@ class RandomErrorgenRatesTester(BaseCase):
         assert abs(gen_error-0.99)<1e-5
 
         #test relative_HS_contribution:
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'),
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S'),
                                                                 error_metric= 'generator_infidelity',
                                                                 error_metric_value=0.99,
                                                                 relative_HS_contribution=(0.5, 0.5), seed=1234)
@@ -182,7 +182,7 @@ class RandomErrorgenRatesTester(BaseCase):
 
         assert abs(gen_infdl_S - gen_infdl_H)<1e-5
 
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'),
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S'),
                                                                 error_metric= 'total_generator_error',
                                                                 error_metric_value=0.99,
                                                                 relative_HS_contribution=(0.5, 0.5), seed=1234)
@@ -199,7 +199,7 @@ class RandomErrorgenRatesTester(BaseCase):
 
     def test_fixed_errorgen_rates(self):
         fixed_rates_dict = {GlobalElementaryErrorgenLabel('H', ('X',), (0,)): 1}
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'),
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S'),
                                                                 fixed_errorgen_rates=fixed_rates_dict,
                                                                 seed=1234)
 
@@ -207,33 +207,33 @@ class RandomErrorgenRatesTester(BaseCase):
 
     def test_label_type(self):
 
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'),
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S'),
                                                                 label_type='local', seed=1234)
         assert isinstance(next(iter(random_errorgen_rates)), LocalElementaryErrorgenLabel)
 
     def test_sslbl_overlap(self):
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S'),
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S'),
                                                                 sslbl_overlap=(0,),
                                                                 seed=1234)
         for coeff in random_errorgen_rates:
             assert 0 in coeff.sslbls
 
     def test_weight_restrictions(self):
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S','C','A'),
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S','C','A'),
                                                                 label_type='local', seed=1234,
                                                                 max_weights={'H':1, 'S':1, 'C':1, 'A':1})
         assert len(random_errorgen_rates) == 24
         #confirm still CPTP
         errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, errorgen_types=('H','S','C','A'),
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H','S','C','A'),
                                                                 label_type='local', seed=1234,
                                                                 max_weights={'H':2, 'S':2, 'C':1, 'A':1})
         assert len(random_errorgen_rates) == 42
         errorgen = LindbladErrorgen.from_elementary_errorgens(random_errorgen_rates, parameterization='CPTPLND', truncate=False, state_space=QubitSpace(2))
 
     def test_global_labels(self):
-        random_errorgen_rates = lt.random_CPTP_error_generator_rates(num_qubits=2, seed=1234, label_type='global')
+        random_errorgen_rates = lt.random_cptp_errorgen_rates(QubitSpace(2), seed=1234, label_type='global')
 
         #make sure that we get the expected number of rates:
         self.assertEqual(len(random_errorgen_rates), 240)
@@ -246,8 +246,8 @@ class RandomErrorgenRatesTester(BaseCase):
         # This test is meant to confirm that the issue described in
         # https://github.com/sandialabs/pyGSTi/issues/716.
         #
-        random_Honly_errors = lt.random_CPTP_error_generator_rates(
-            1, ('H',),
+        random_Honly_errors = lt.random_cptp_errorgen_rates(
+            QubitSpace(1), errorgen_types=('H',),
             error_metric="generator_infidelity",
             error_metric_value=1e-2,
             label_type="local")
@@ -384,13 +384,13 @@ class KossakowskiSamplingTester(BaseCase):
         K = lt._sample_psd_kossakowski(~np.eye(4, dtype=bool), np.random.default_rng(5))
         s = np.real(np.diag(K))
         v = 0.5 * np.sqrt(s[0] * s[2]) * np.exp(0.3j)
-        K2 = lt._impose_offdiagonals(K, {(0, 2): v})
+        K2 = lt._impose_offdiagonals(K, real={(0, 2): v.real}, imag={(0, 2): v.imag})
         self.assertEqual(K2[0, 2], v)
         self.assertEqual(K2[2, 0], np.conj(v))
         self.assertArraysAlmostEqual(np.diag(K2), np.diag(K))
         self._check_psd(K2)
         with self.assertRaisesRegex(ValueError, 'completion'):
-            lt._impose_offdiagonals(K, {(0, 2): 2 * np.sqrt(s[0] * s[2])})
+            lt._impose_offdiagonals(K, real={(0, 2): 2 * np.sqrt(s[0] * s[2])})
 
     def test_as_generator(self):
         g = np.random.default_rng(5)
@@ -412,3 +412,263 @@ class KossakowskiSamplingTester(BaseCase):
         lt._sample_psd_kossakowski(_weight_pattern((2, 2, 2, 2), 2, 3), lt._as_generator(0))
         after = np.random.get_state()
         self.assertTrue(np.array_equal(state[1], after[1]) and state[2] == after[2])
+
+
+def _space(sslbls, dims):
+    from pygsti.baseobjs import ExplicitStateSpace
+    return ExplicitStateSpace([tuple(sslbls)], [tuple(dims)])
+
+
+def _kossakowski_from_rates(rates, basis):
+    """ K_ii = S_i and K_ij = C_ij - 1j A_ij (i < j), indexed by the non-identity elements of basis. """
+    index = {bel: a for a, bel in enumerate(basis.labels[1:])}
+    n = len(index)
+    K = np.zeros((n, n), dtype=complex)
+    for lbl, v in rates.items():
+        idx = [index[bel] for bel in lbl.basis_element_labels]
+        if lbl.errorgen_type == 'S':
+            K[idx[0], idx[0]] += v
+        elif lbl.errorgen_type in ('C', 'A'):
+            (i, j), sign = sorted(idx), (1 if idx[0] < idx[1] else -1)
+            z = v if lbl.errorgen_type == 'C' else -1j * sign * v
+            K[i, j] += z
+            K[j, i] += np.conj(z)
+    return K
+
+
+class RandomCptpErrorgenRatesTester(BaseCase):
+
+    SPACES = [(('Q0', 'Q1'), (2, 2)), (('T0',), (3,)), (('Q0', 'T1'), (2, 3))]
+
+    def _check_cp(self, rates, state_space, basis=None):
+        from pygsti.baseobjs import canonical_errorgen_basis
+        basis = canonical_errorgen_basis(state_space) if basis is None else basis
+        local = {LocalElementaryErrorgenLabel.cast(k, sslbls=state_space.sole_tensor_product_block_labels): v
+                 for k, v in rates.items()}
+        K = _kossakowski_from_rates(local, basis)
+        self.assertGreaterEqual(np.linalg.eigvalsh(K)[0], -1e-12 * max(1.0, np.max(np.abs(K))))
+        # pyGSTi's own CPTP parameterization rejects a non-CP generator (truncate=False). Constructing
+        # it takes about a minute on four qubits, so it only checks the small spaces.
+        if state_space.dim <= 36:
+            LindbladErrorgen.from_elementary_errorgens(rates, parameterization='CPTPLND', truncate=False,
+                                                       state_space=state_space, elementary_errorgen_basis=basis,
+                                                       mx_basis=basis)
+        return K
+
+    def _support(self, bel):
+        from pygsti.baseobjs.errorgenlabel import _bel_tokens
+        return {i for i, t in enumerate(_bel_tokens(bel)) if t != 'I'}
+
+    def test_counts_labels_and_cp_on_qubits_qutrits_and_mixtures(self):
+        for sslbls, dims in self.SPACES:
+            ss = _space(sslbls, dims)
+            n = int(np.prod(dims)) ** 2 - 1
+            for label_type, cls in (('local', LocalElementaryErrorgenLabel), ('global', GlobalElementaryErrorgenLabel)):
+                rates = lt.random_cptp_errorgen_rates(ss, label_type=label_type, seed=1)
+                counts = {t: sum(k.errorgen_type == t for k in rates) for t in 'HSCA'}
+                self.assertEqual(counts, {'H': n, 'S': n, 'C': n * (n - 1) // 2, 'A': n * (n - 1) // 2})
+                self.assertTrue(all(isinstance(k, cls) for k in rates))
+                self.assertTrue(all(v > 0 for k, v in rates.items() if k.errorgen_type == 'S'))
+                self._check_cp(rates, ss)
+            glob = lt.random_cptp_errorgen_rates(ss, errorgen_types=('H', 'S'), seed=2)
+            self.assertTrue(all(set(k.sslbls) <= set(sslbls) for k in glob))
+
+    def test_cp_under_restrictions_and_sectors(self):
+        cases = [  # (space, errorgen_types, max_weights, sslbl_overlap)
+            (_space(range(4), (2,) * 4), ('S', 'C', 'A'), {'S': 2, 'C': 3, 'A': 3}, None),  # not chordal
+            (_space(range(3), (2, 3, 2)), ('H', 'S', 'C', 'A'), {'S': 2, 'C': 2, 'A': 1}, None),  # C and A differ
+            (_space(('Q0', 'T1'), (2, 3)), ('S', 'A'), None, None),  # A without C
+            (_space(('Q0', 'T1'), (2, 3)), ('S', 'C'), None, None),
+            (_space(('Q0', 'T1', 'Q2'), (2, 3, 2)), ('H', 'S', 'C', 'A'), {'S': 1, 'C': 2, 'A': 2}, ('T1',)),
+        ]
+        for ss, types, mw, overlap in cases:
+            for seed in range(3):
+                rates = lt.random_cptp_errorgen_rates(ss, errorgen_types=types, max_weights=mw, sslbl_overlap=overlap,
+                                                      label_type='local', seed=seed)
+                self.assertEqual({k.errorgen_type for k in rates}, set(types))
+                self._check_cp(rates, ss)
+                for k in rates:
+                    w = len(set().union(*map(self._support, k.basis_element_labels)))
+                    if mw is not None:
+                        self.assertLessEqual(w, mw.get(k.errorgen_type, np.inf))
+                    if overlap is not None:
+                        g = GlobalElementaryErrorgenLabel.cast(k, sslbls=ss.sole_tensor_product_block_labels)
+                        self.assertIn('T1', g.sslbls)
+
+    def test_weight_limits_count_pairs_by_union_support(self):
+        # On two qubits with weight-1 S directions (3 per qubit), C pairs of union weight <= 1 stay on one qubit.
+        ss = QubitSpace(2)
+        rates = lt.random_cptp_errorgen_rates(ss, errorgen_types=('S', 'C'), max_weights={'S': 1, 'C': 1}, seed=0)
+        self.assertEqual(sum(k.errorgen_type == 'C' for k in rates), 2 * 3)
+        rates = lt.random_cptp_errorgen_rates(ss, errorgen_types=('S', 'C'), max_weights={'S': 1, 'C': 2}, seed=0)
+        self.assertEqual(sum(k.errorgen_type == 'C' for k in rates), 15)  # all pairs of the 6 S directions
+
+    def test_error_metrics_on_a_qutrit(self):
+        ss = _space(('T0',), (3,))
+        for metric, hp in (('generator_infidelity', lambda h: h ** 2), ('total_generator_error', abs)):
+            rates = lt.random_cptp_errorgen_rates(ss, error_metric=metric, error_metric_value=0.02, seed=4)
+            H = sum(hp(v) for k, v in rates.items() if k.errorgen_type == 'H')
+            S = sum(v for k, v in rates.items() if k.errorgen_type == 'S')
+            self.assertAlmostEqual(H + S, 0.02, places=12)
+            rates = lt.random_cptp_errorgen_rates(ss, error_metric=metric, error_metric_value=0.02,
+                                                  relative_HS_contribution=(0.25, 0.75), seed=4)
+            H = sum(hp(v) for k, v in rates.items() if k.errorgen_type == 'H')
+            S = sum(v for k, v in rates.items() if k.errorgen_type == 'S')
+            self.assertAlmostEqual(H, 0.005, places=12)
+            self.assertAlmostEqual(S, 0.015, places=12)
+            self._check_cp(rates, ss)
+
+    def test_generator_infidelity_budget_matches_leading_order_infidelity(self):
+        # On the canonical scale, sum(h^2) + sum(s) is the leading-order entanglement infidelity
+        # 1 - Tr(exp(L)) / D^2 on qudits too (the trace of a superoperator is basis-independent).
+        from pygsti.baseobjs import canonical_errorgen_basis
+        ss = _space(('Q0', 'T1'), (2, 3))
+        b = canonical_errorgen_basis(ss)
+        for types in (('H',), ('S',)):
+            rates = lt.random_cptp_errorgen_rates(ss, errorgen_types=types, error_metric='generator_infidelity',
+                                                  error_metric_value=1e-4, seed=5)
+            eg = LindbladErrorgen.from_elementary_errorgens(rates, state_space=ss, elementary_errorgen_basis=b,
+                                                            mx_basis=b)
+            actual = 1 - np.real(np.trace(spl.expm(eg.to_dense()))) / 36
+            self.assertAlmostEqual(actual / 1e-4, 1.0, places=2)
+
+    def test_fixed_rates(self):
+        ss = _space(('Q0', 'T1'), (2, 3))
+        L, G = LocalElementaryErrorgenLabel, GlobalElementaryErrorgenLabel
+        fixed = {G('H', ('X_{0,1}',), ('T1',)): 0.003,
+                 L('S', ('XZ_{1}',)): 0.002,  # outside the weight limit below: included anyway
+                 G('S', ('X',), ('Q0',)): 0.001,
+                 L('S', ('IZ_{1}',)): 0.001,
+                 L('S', ('IY_{0,2}',)): 0.001,
+                 L('A', ('XI', 'IY_{0,2}')): 1e-5,
+                 L('C', ('IZ_{1}', 'XI')): -2e-5}  # reversed order is accepted
+        for label_type in ('local', 'global'):
+            rates = lt.random_cptp_errorgen_rates(ss, max_weights={'H': 1, 'S': 1, 'C': 1, 'A': 1},
+                                                  fixed_errorgen_rates=fixed, label_type=label_type, seed=6)
+            cls = L if label_type == 'local' else G
+            for k, v in fixed.items():
+                self.assertEqual(rates[cls.cast(k, sslbls=('Q0', 'T1'))], v)
+            self._check_cp(rates, ss)
+
+        with_budget = lt.random_cptp_errorgen_rates(ss, errorgen_types=('H', 'S'), fixed_errorgen_rates=fixed_H_S(),
+                                                    error_metric='generator_infidelity', error_metric_value=0.01,
+                                                    label_type='local', seed=7)
+        total = sum(v ** 2 if k.errorgen_type == 'H' else v for k, v in with_budget.items())
+        self.assertAlmostEqual(total, 0.01, places=12)
+        self.assertEqual(with_budget[L('S', ('XZ_{1}',))], 0.002)
+
+    def test_fixed_rates_errors(self):
+        ss = _space(('Q0', 'T1'), (2, 3))
+        L = LocalElementaryErrorgenLabel
+        with self.assertRaisesRegex(ValueError, 'completion'):
+            lt.random_cptp_errorgen_rates(ss, fixed_errorgen_rates={L('S', ('XI',)): 1e-4, L('S', ('IX_{0,1}',)): 1e-4,
+                                                                    L('C', ('XI', 'IX_{0,1}')): 1e-3}, seed=0)
+        with self.assertRaisesRegex(ValueError, 'S rates'):
+            lt.random_cptp_errorgen_rates(ss, errorgen_types=('H',), fixed_errorgen_rates={L('C', ('XI', 'IX_{0,1}')): 1e-5})
+        with self.assertRaisesRegex(ValueError, 'not non-identity labels'):
+            lt.random_cptp_errorgen_rates(ss, fixed_errorgen_rates={L('H', ('XX',)): 1e-3})  # 'XX' is not a qubit-qutrit label
+        with self.assertRaisesRegex(ValueError, 'exceed'):
+            lt.random_cptp_errorgen_rates(ss, fixed_errorgen_rates={L('S', ('XI',)): 0.1},
+                                          error_metric='generator_infidelity', error_metric_value=0.01)
+        with self.assertRaises(TypeError):
+            lt.random_cptp_errorgen_rates(ss, fixed_errorgen_rates={'H_XI': 0.1})
+
+    def test_bases(self):
+        from pygsti.baseobjs import canonical_errorgen_basis
+        from pygsti.baseobjs.basis import BuiltinBasis, TensorProdBasis
+        ss = _space(('Q0', 'T1'), (2, 3))
+        canonical = lt.random_cptp_errorgen_rates(ss, seed=8)
+        self.assertEqual(lt.random_cptp_errorgen_rates(ss, elementary_errorgen_basis=canonical_errorgen_basis(ss),
+                                                       seed=8), canonical)
+        gm = lt.random_cptp_errorgen_rates(ss, elementary_errorgen_basis='GM', seed=8)
+        self.assertEqual(len(gm), len(canonical))
+        self._check_cp(gm, ss, Basis.cast('GM', ss))
+        # An explicit orthonormal basis keeps its normalization and labels.
+        gm_orth = TensorProdBasis([BuiltinBasis('gm', 4), BuiltinBasis('gm', 9)])
+        rates = lt.random_cptp_errorgen_rates(ss, elementary_errorgen_basis=gm_orth, label_type='local', seed=8)
+        self._check_cp(rates, ss, gm_orth)
+        # A basis without per-subsystem structure only supports local labels and no support restrictions.
+        flat = BuiltinBasis('GM', 36)
+        rates = lt.random_cptp_errorgen_rates(ss, elementary_errorgen_basis=flat, label_type='local', seed=8)
+        self.assertEqual(len(rates), 2 * 35 + 35 * 34)
+        with self.assertRaisesRegex(ValueError, 'per subsystem'):
+            lt.random_cptp_errorgen_rates(ss, elementary_errorgen_basis=flat, seed=8)
+        with self.assertRaisesRegex(ValueError, 'not available'):
+            lt.random_cptp_errorgen_rates(ss, elementary_errorgen_basis='PP')
+        with self.assertRaisesRegex(ValueError, 'identity'):
+            lt.random_cptp_errorgen_rates(ss, elementary_errorgen_basis='std', label_type='local')
+        with self.assertRaisesRegex(ValueError, 'dimension'):
+            lt.random_cptp_errorgen_rates(ss, elementary_errorgen_basis=BuiltinBasis('PP', 16))
+        with self.assertRaises(TypeError):
+            lt.random_cptp_errorgen_rates(ss, elementary_errorgen_basis=3)
+
+    def test_argument_validation(self):
+        from pygsti.baseobjs import ExplicitStateSpace
+        ss = QubitSpace(1)
+        bad = [dict(errorgen_types=('H', 'C')), dict(errorgen_types=('H', 'X')), dict(label_type='both'),
+               dict(error_metric='generator_infidelity'), dict(error_metric_value=0.1),
+               dict(error_metric='fidelity', error_metric_value=0.1), dict(relative_HS_contribution=(0.5, 0.5)),
+               dict(error_metric='generator_infidelity', error_metric_value=0.1, relative_HS_contribution=(0.5, 0.6)),
+               dict(SCA_params=(0.1, 0.01)), dict(H_params=(0.1, 0.01), error_metric='generator_infidelity',
+                                                  error_metric_value=0.1),
+               dict(max_weights={'X': 1}), dict(sslbl_overlap=('nope',))]
+        for kwargs in bad:
+            with self.assertRaises(ValueError, msg=str(kwargs)):
+                lt.random_cptp_errorgen_rates(ss, **kwargs)
+        with self.assertRaises(TypeError):
+            lt.random_cptp_errorgen_rates(1)
+        with self.assertRaises(TypeError):
+            lt.random_cptp_errorgen_rates(ss, ('H',))  # keyword-only
+        with self.assertRaises(ValueError):
+            lt.random_cptp_errorgen_rates(ExplicitStateSpace([('Q0',), ('L',)], [(2,), (1,)]))  # direct sum
+
+    def test_rng_contract(self):
+        ss = _space(('T0',), (3,))
+        self.assertEqual(lt.random_cptp_errorgen_rates(ss, seed=9), lt.random_cptp_errorgen_rates(ss, seed=9))
+        self.assertEqual(lt.random_cptp_errorgen_rates(ss, seed=9),
+                         lt.random_cptp_errorgen_rates(ss, seed=np.random.default_rng(9)))
+        gen = np.random.default_rng(10)
+        first = lt.random_cptp_errorgen_rates(ss, seed=gen)
+        self.assertNotEqual(first, lt.random_cptp_errorgen_rates(ss, seed=gen))  # the generator advanced
+        state = np.random.get_state()[1].copy()
+        lt.random_cptp_errorgen_rates(ss, seed=None)
+        self.assertTrue(np.array_equal(state, np.random.get_state()[1]))
+
+    def test_deprecated_wrapper(self):
+        import inspect
+        from unittest import mock
+        from pygsti.tools.exceptions import pyGSTiDeprecationWarning
+        self.assertEqual(list(inspect.signature(lt.random_CPTP_error_generator_rates).parameters),
+                         ['num_qubits', 'errorgen_types', 'max_weights', 'H_params', 'SCA_params', 'error_metric',
+                          'error_metric_value', 'relative_HS_contribution', 'fixed_errorgen_rates', 'sslbl_overlap',
+                          'label_type', 'seed', 'qubit_labels'])
+        with self.assertWarns(pyGSTiDeprecationWarning):
+            old = lt.random_CPTP_error_generator_rates(2, ('H', 'S'), seed=11)
+        self.assertEqual(old, lt.random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H', 'S'),
+                                                            elementary_errorgen_basis='PP', seed=11))
+        with mock.patch.object(lt, 'random_cptp_errorgen_rates', return_value={}) as new, \
+                self.assertWarns(pyGSTiDeprecationWarning):
+            lt.random_CPTP_error_generator_rates(3, ('H',), {'H': 1}, error_metric_value=0.1, sslbl_overlap=[1],
+                                                 label_type='local', seed=5, qubit_labels=['a', 'b', 'c'])
+        (ss,), kwargs = new.call_args
+        self.assertEqual(ss, QubitSpace(3))
+        self.assertEqual(kwargs['elementary_errorgen_basis'], 'PP')
+        self.assertEqual((kwargs['errorgen_types'], kwargs['max_weights'], kwargs['sslbl_overlap'],
+                          kwargs['label_type'], kwargs['seed']), (('H',), {'H': 1}, [1], 'local', 5))
+        self.assertIsNone(kwargs['error_metric_value'])  # dropped without a metric, as it used to be ignored
+        with self.assertWarns(pyGSTiDeprecationWarning):
+            relabeled = lt.random_CPTP_error_generator_rates(2, ('H',), seed=12, qubit_labels=['Q0', 'Q1'])
+        self.assertTrue(all(set(k.sslbls) <= {'Q0', 'Q1'} for k in relabeled))
+
+    def test_legacy_a_sector_regression(self):
+        # random_CPTP_error_generator_rates(1, seed=2) used to return a non-CP coefficient matrix.
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            rates = lt.random_CPTP_error_generator_rates(1, seed=2)
+        self._check_cp(rates, QubitSpace(1))
+
+
+def fixed_H_S():
+    L = LocalElementaryErrorgenLabel
+    return {L('H', ('XI',)): 0.03, L('S', ('XZ_{1}',)): 0.002}

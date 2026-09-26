@@ -80,6 +80,24 @@ def default_basis_for_udims(udims: Sequence[int]):
     return TensorProdBasis([(udim_to_name.get(u, 'gm'), u * u) for u in udims])
 
 
+def _check_errorgen_state_space(state_space: _StateSpace) -> tuple:
+    """
+    Raise unless `state_space` is a single tensor product block of quantum factors, each of
+    dimension at least 2; return its labels.
+    """
+    if not isinstance(state_space, _StateSpace):
+        raise TypeError("`state_space` must be a StateSpace, not %s" % type(state_space).__name__)
+    if state_space.num_tensor_product_blocks != 1:
+        raise ValueError("Direct-sum state spaces are not supported for building error generators.")
+    sslbls = state_space.sole_tensor_product_block_labels
+    for lbl in sslbls:
+        if state_space.label_type(lbl) != 'Q':
+            raise ValueError("State space label %s is not quantum." % str(lbl))
+        if state_space.label_udimension(lbl) < 2:
+            raise ValueError("State space label %s has dimension %d < 2." % (str(lbl), state_space.label_udimension(lbl)))
+    return tuple(sslbls)
+
+
 def canonical_errorgen_basis(state_space: _StateSpace, *, sparse: bool = False) -> Basis:
     """
     The canonical operator basis (a :class:`Basis`, not an `ElementaryErrorgenBasis`) from which
@@ -109,17 +127,7 @@ def canonical_errorgen_basis(state_space: _StateSpace, *, sparse: bool = False) 
     -------
     BuiltinBasis or TensorProdBasis
     """
-    if not isinstance(state_space, _StateSpace):
-        raise TypeError("`state_space` must be a StateSpace, not %s" % type(state_space).__name__)
-    if state_space.num_tensor_product_blocks != 1:
-        raise ValueError("Canonical error generator bases are not defined for direct-sum state spaces.")
-    sslbls = state_space.sole_tensor_product_block_labels
-    for lbl in sslbls:
-        if state_space.label_type(lbl) != 'Q':
-            raise ValueError("State space label %s is not quantum." % str(lbl))
-        if state_space.label_udimension(lbl) < 2:
-            raise ValueError("State space label %s has dimension %d < 2." % (str(lbl), state_space.label_udimension(lbl)))
-
+    sslbls = _check_errorgen_state_space(state_space)
     factor_bases = [BuiltinBasis('PP' if udim == 2 else 'GM', udim**2, sparse=sparse)
                     for udim in map(state_space.label_udimension, sslbls)]
     return factor_bases[0] if len(factor_bases) == 1 else TensorProdBasis(factor_bases)
