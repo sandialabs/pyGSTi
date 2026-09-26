@@ -4,8 +4,8 @@ Greedy block D-optimal selection of experiment-design candidates
 The first half of this module is the selection kernel, `block_linear_dopt`, with
 two independent scorers for its output; it is plain numpy and scipy and can be
 read without any experiment-design context.  The second half applies it to a
-pyGSTi model and design: `rank_circuits_by_dopt`, `reduce_design_by_dopt`, and
-`BlockDoptReducer`, the `DesignReducer` that `design.reduce_with` accepts.
+pyGSTi model and design: `rank_circuits_by_dopt` and `BlockDoptReducer`, the
+`DesignReducer` that `design.reduce_with` accepts.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -38,10 +38,8 @@ __all__ = [
     'block_linear_dopt',
     'greedy_candidate_scores',
     'greedy_path_log_volumes',
-    'jacobian_dict_to_array',
     'perturb_errorgen_rates',
     'rank_circuits_by_dopt',
-    'reduce_design_by_dopt',
 ]
 
 
@@ -384,7 +382,7 @@ def greedy_path_log_volumes(A: _ArrayLike, block_size: int, block_pivots: Sequen
 #  Applying the kernel to a model and an experiment design
 # --------------------------------------------------------------------------- #
 
-def jacobian_dict_to_array(jac_dict: Mapping[Circuit, Mapping[Any, _np.ndarray]]) -> tuple[_np.ndarray, int]:
+def _jacobian_dict_to_array(jac_dict: Mapping[Circuit, Mapping[Any, _np.ndarray]]) -> tuple[_np.ndarray, int]:
     """Flatten a `bulk_dprobs` result into a Jacobian array and its block size.
 
     Parameters
@@ -413,11 +411,11 @@ def jacobian_dict_to_array(jac_dict: Mapping[Circuit, Mapping[Any, _np.ndarray]]
         ragged outcome count would misalign them.
     """
     if not jac_dict:
-        raise ValueError("jacobian_dict_to_array: got an empty Jacobian dict.")
+        raise ValueError("_jacobian_dict_to_array: got an empty Jacobian dict.")
     outcome_counts = {len(per_circuit) for per_circuit in jac_dict.values()}
     if len(outcome_counts) != 1:
         raise ValueError(
-            "jacobian_dict_to_array requires a uniform outcome count per circuit, so that "
+            "_jacobian_dict_to_array requires a uniform outcome count per circuit, so that "
             f"one block is one circuit; got varying counts {sorted(outcome_counts)}."
         )
     rowblocks = [_np.vstack(list(per_circuit.values())) for per_circuit in jac_dict.values()]
@@ -579,7 +577,7 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
     if not unique or max_circuits == 0:
         return [], _np.empty(0, dtype=_np.float64)
     jac_dict = model.sim.bulk_dprobs(unique)
-    jacobian, block_size = jacobian_dict_to_array(jac_dict)
+    jacobian, block_size = _jacobian_dict_to_array(jac_dict)
     # bulk_dprobs may reorder and deduplicate, so block i is jac_keys[i], not unique[i].
     jac_keys = list(jac_dict)
 
@@ -592,63 +590,6 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
     pivots, scores = block_linear_dopt(A, block_size, max_circuits)
     ranked = [jac_keys[int(i)] for i in pivots]
     return ranked, scores
-
-
-def reduce_design_by_dopt(design: ExperimentDesign, model: Model, num_circuits: int, *,
-                          ridge: float = 1.0, dtype: _DTypeLike = _np.float64) -> tuple[ExperimentDesign, _np.ndarray]:
-    """A copy of `design` keeping the circuits selected by the D-optimal objective.
-
-    Ranks `design.all_circuits_needing_data` with :func:`rank_circuits_by_dopt`
-    and truncates.  Stitched simultaneous-GST designs run O(10,000) circuits to
-    fit models with O(100) parameters; this is the postprocessing step that cuts
-    that down.
-
-    Equivalent to `BlockDoptReducer(model, ...).reduce(design, num_circuits)`, with
-    the score curve also returned. Prefer the reducer object for the selection's
-    full diagnostics or when
-    D-optimality is one of several rules you are comparing; see
-    :class:`~pygsti.tools.edesigntools.DesignReducer`.
-
-    Nesting is preserved for free: truncation filters every germ-power list by
-    the same keep-set, so a kept circuit stays in each list it was in and the
-    containment `circuit_lists[L] <= circuit_lists[L+1]` survives.  No explicit
-    re-binning is needed.
-
-    Parameters
-    ----------
-    design : ExperimentDesign
-        A design with `all_circuits_needing_data` and `truncate_to_circuits`, and no
-        child experiments. Designs with experiment-tree children are rejected by
-        :meth:`DesignReducer.reduce`; generation sub-designs in a
-        `SimultaneousGSTDesign` are supported.
-        The result is whatever that method returns, so a `SimultaneousGSTDesign`
-        stays one.  Not modified.
-
-    model : Model
-        As for :func:`rank_circuits_by_dopt`, and with the same warning about
-        target models: see :func:`perturb_errorgen_rates`.
-
-    num_circuits : int
-        The budget.  Clamped to the number of unique circuits available.
-
-    ridge, dtype
-        As for :func:`rank_circuits_by_dopt`.
-
-    Returns
-    -------
-    reduced : ExperimentDesign
-
-    scores : numpy.ndarray
-        The cumulative objective after each kept circuit.  Read it before
-        trusting the budget: this is a *global* budget, so nothing stops it from
-        spending everything on one germ power and leaving another nearly empty if
-        that germ power's circuits contribute less to the objective. A flat score
-        curve indicates small gains in unweighted probability sensitivity.
-    """
-    reducer = BlockDoptReducer(model, ridge=ridge, dtype=dtype, warn_on_target_model=False)
-    selection = reducer.select(design, num_circuits)
-    reduced = reducer._apply_selection(design, selection)
-    return reduced, selection.scores
 
 
 # --------------------------------------------------------------------------- #
@@ -692,8 +633,7 @@ class BlockDoptReducer(_DesignReducer):
 
     Greedy block D-optimal selection: each step takes the circuit that most increases
     `0.5 * logdet(ridge * I + J_S^T J_S)`, where `J_S` stacks the Jacobian rows of the
-    circuits chosen so far.  This is the reducer :func:`reduce_design_by_dopt` and
-    `SimultaneousGSTDesign.reduce_by_dopt` use, and the reference against which another
+    circuits chosen so far.  It is the reference against which another
     :class:`~pygsti.tools.edesigntools.DesignReducer` can be judged.
 
     The objective uses the model's parameter coordinates and equal outcome weights.
@@ -705,8 +645,7 @@ class BlockDoptReducer(_DesignReducer):
     model : Model
         Defines the parameter sensitivities used in selection. This must be a
         model at a *plausible noisy point*, not a target model -- see
-        :meth:`from_target_model`, which is the usual way to get one, and
-        :func:`perturb_errorgen_rates`, which explains why at length.  The model's
+        :func:`perturb_errorgen_rates`, which is the usual way to get one.  The model's
         parameterization is what defines the objective: the ranking is only as
         meaningful as its parameters are the ones you care about estimating.
 
@@ -744,33 +683,9 @@ class BlockDoptReducer(_DesignReducer):
                 "parameterizations, stochastic rates use param_mode='cholesky', so "
                 "d(rate)/d(theta) = 2*theta is exactly zero there: every stochastic column "
                 "of the Jacobian vanishes and the selection silently optimizes as if those "
-                "parameters did not exist. Use BlockDoptReducer.from_target_model(model) to "
+                "parameters did not exist. Use perturb_errorgen_rates(model, seed=...) to "
                 "perturb the rates first, or pass warn_on_target_model=False if this is "
                 "deliberate.")
-
-    @classmethod
-    def from_target_model(cls, target_model: Model, *, scale: float = 1e-3,
-                          seed: Union[int, _np.random.Generator, None] = None,
-                          **kwargs: Any) -> BlockDoptReducer:
-        """A reducer for a perturbed copy of `target_model`; the usual way to build one.
-
-        Parameters
-        ----------
-        target_model : Model
-            Not modified.
-
-        scale, seed
-            Passed to :func:`perturb_errorgen_rates`.  Pass a `seed`, or the selection is
-            not reproducible.
-
-        **kwargs
-            `ridge` and `dtype`, as for the constructor.
-
-        Returns
-        -------
-        BlockDoptReducer
-        """
-        return cls(perturb_errorgen_rates(target_model, scale, seed), **kwargs)
 
     def _select(self, design: ExperimentDesign, num_circuits: Optional[int]) -> _CircuitSelection:
         candidates = list(design.all_circuits_needing_data)

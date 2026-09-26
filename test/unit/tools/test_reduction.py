@@ -269,42 +269,31 @@ class ReduceTester(BaseCase):
         from pygsti.modelpacks import smq1Q_XYI
         gst_design = smq1Q_XYI.create_gst_experiment_design(max_max_length=1)
         keep = sorted(gst_design.all_circuits_needing_data, key=len)[:5]
-        reduced = DesignReducer.cast(lambda d, n: keep).reduce(gst_design, 5)
+        reducer = CallableReducer(lambda d, n: keep)
+        reduced = reducer.reduce(gst_design, 5)
         # Same record whether the caller went through the design method or the reducer.
         self.assertEqual(len(reduced.selection.circuits), 5)
         self.assertEqual(list(reduced.selection.circuits),
-                         list(gst_design.reduce_with(lambda d, n: keep, 5).selection.circuits))
+                         list(gst_design.reduce_with(reducer, 5).selection.circuits))
 
 
-class CastTester(BaseCase):
+class CallableReducerTester(BaseCase):
     def setUp(self):
         super().setUp()
         self.design = _design(10)
 
-    def test_a_reducer_casts_to_itself(self):
-        reducer = _FirstK()
-        self.assertIs(DesignReducer.cast(reducer), reducer)
-
-    def test_a_callable_returning_circuits_is_wrapped(self):
-        reducer = DesignReducer.cast(
-            lambda design, n: list(design.all_circuits_needing_data)[:n])
-        self.assertIsInstance(reducer, CallableReducer)
+    def test_a_function_returning_circuits_is_wrapped(self):
+        reducer = CallableReducer(lambda design, n: list(design.all_circuits_needing_data)[:n])
         self.assertEqual(len(reducer.select(self.design, 3)), 3)
 
-    def test_a_callable_returning_a_selection_is_passed_through(self):
-        reducer = DesignReducer.cast(
-            lambda design, n: CircuitSelection(_circuits(n), score_name='mine'))
+    def test_a_function_returning_a_selection_is_passed_through(self):
+        reducer = CallableReducer(lambda design, n: CircuitSelection(_circuits(n), score_name='mine'))
         self.assertEqual(reducer.select(self.design, 3).score_name, 'mine')
 
     def test_a_callable_reducer_is_validated_like_any_other(self):
-        reducer = DesignReducer.cast(lambda design, n: _circuits(2) + _circuits(1))
+        reducer = CallableReducer(lambda design, n: _circuits(2) + _circuits(1))
         with self.assertRaises(ValueError):
             reducer.select(self.design, 5)
-
-    def test_casting_a_non_callable_says_what_is_accepted(self):
-        with self.assertRaises(TypeError) as ctx:
-            DesignReducer.cast('dopt')
-        self.assertIn('callable', str(ctx.exception))
 
 
 class SerializationTester(BaseCase):

@@ -12,6 +12,7 @@ from pygsti.protocols.estimate import Estimate
 from pygsti.protocols.protocol import ProtocolData, Protocol
 from pygsti.protocols.gst import GSTGaugeOptSuite
 from pygsti.tools import two_delta_logl
+from pygsti.tools.edesigntools import CallableReducer
 from ..util import BaseCase
 import pytest
 import numpy as _np
@@ -201,31 +202,35 @@ class ReduceWithTester(BaseCase):
         """`StandardGSTDesign` inherits the method; truncation must not downcast it."""
         self.assertIsInstance(self.design, gst.StandardGSTDesign)
         keep = self._shallowest(12)
-        reduced = self.design.reduce_with(lambda design, n: keep, 12)
+        reduced = self.design.reduce_with(CallableReducer(lambda design, n: keep), 12)
         self.assertIsInstance(reduced, gst.StandardGSTDesign)
         self.assertEqual(set(reduced.all_circuits_needing_data), set(keep))
 
     def test_the_reduced_design_records_the_selection(self):
-        reduced = self.design.reduce_with(lambda design, n: self._shallowest(9), 9)
+        reduced = self.design.reduce_with(CallableReducer(lambda design, n: self._shallowest(9)), 9)
         self.assertEqual(len(reduced.selection.circuits), 9)
         self.assertEqual(reduced.selection.metadata['num_candidates'], len(self.circuits))
         self.assertIsNone(self.design.selection)
 
     def test_the_original_design_is_untouched(self):
         before = set(self.design.all_circuits_needing_data)
-        self.design.reduce_with(lambda design, n: self._shallowest(5), 5)
+        self.design.reduce_with(CallableReducer(lambda design, n: self._shallowest(5)), 5)
         self.assertEqual(set(self.design.all_circuits_needing_data), before)
 
     def test_a_bad_reducer_cannot_reach_truncation(self):
         foreign = smq2Q_XYICNOT.create_gst_experiment_design(max_max_length=1)
         stranger = list(foreign.all_circuits_needing_data)[:3]
         with self.assertRaises(ValueError):
-            self.design.reduce_with(lambda design, n: stranger, 3)
+            self.design.reduce_with(CallableReducer(lambda design, n: stranger), 3)
+
+    def test_a_bare_function_is_rejected_with_the_fix(self):
+        with self.assertRaisesRegex(TypeError, 'CallableReducer'):
+            self.design.reduce_with(lambda design, n: self._shallowest(3), 3)
 
     def test_the_dopt_reducer_works_here_too(self):
         """The reference reducer is not special-cased; it goes through the same door."""
-        from pygsti.tools.edesigntools import BlockDoptReducer
-        reducer = BlockDoptReducer.from_target_model(smq1Q_XYI.target_model('H+S'), seed=0)
+        from pygsti.tools.edesigntools import BlockDoptReducer, perturb_errorgen_rates
+        reducer = BlockDoptReducer(perturb_errorgen_rates(smq1Q_XYI.target_model('H+S'), seed=0))
         reduced = self.design.reduce_with(reducer, 10)
         self.assertIsInstance(reduced, gst.StandardGSTDesign)
         self.assertEqual(len(reduced.all_circuits_needing_data), 10)
@@ -233,7 +238,7 @@ class ReduceWithTester(BaseCase):
 
     def test_relabelling_keeps_the_selection(self):
         """`map_qubit_labels` builds its result by hand, so `selection` must be carried."""
-        reduced = self.design.reduce_with(lambda design, n: self._shallowest(6), 6)
+        reduced = self.design.reduce_with(CallableReducer(lambda design, n: self._shallowest(6)), 6)
         mapped = reduced.map_qubit_labels({0: 'Q7'})
         self.assertIs(mapped.selection, reduced.selection)
 
@@ -241,7 +246,7 @@ class ReduceWithTester(BaseCase):
         """The base-class `map_qubit_labels` is a separate code path from the standard one."""
         plain = gst.GateSetTomographyDesign(self.design.processor_spec, self.design.circuit_lists,
                                             qubit_labels=self.design.qubit_labels, nested=True)
-        reduced = plain.reduce_with(lambda design, n: self._shallowest(6), 6)
+        reduced = plain.reduce_with(CallableReducer(lambda design, n: self._shallowest(6)), 6)
         mapped = reduced.map_qubit_labels({0: 'Q7'})
         self.assertIs(mapped.selection, reduced.selection)
         self.assertEqual(len(mapped.all_circuits_needing_data), 6)
@@ -250,7 +255,7 @@ class ReduceWithTester(BaseCase):
         """`StandardGSTDesign.map_qubit_labels` regenerates from germs and fiducials,
         which still describe the *unreduced* design; #914 made it keep the real lists,
         and `reduce_with` has to benefit from that the same way truncation does."""
-        reduced = self.design.reduce_with(lambda design, n: self._shallowest(6), 6)
+        reduced = self.design.reduce_with(CallableReducer(lambda design, n: self._shallowest(6)), 6)
         mapped = reduced.map_qubit_labels({0: 'Q7'})
         self.assertEqual(len(mapped.all_circuits_needing_data), 6)
         self.assertEqual(
@@ -260,9 +265,9 @@ class ReduceWithTester(BaseCase):
 
     def test_a_reduced_design_round_trips_with_its_reducer(self):
         """The provenance claim: what reduced a design survives write/from_dir."""
-        from pygsti.tools.edesigntools import BlockDoptReducer
-        reducer = BlockDoptReducer.from_target_model(smq1Q_XYI.target_model('H+S'),
-                                                     seed=0, ridge=2.0)
+        from pygsti.tools.edesigntools import BlockDoptReducer, perturb_errorgen_rates
+        reducer = BlockDoptReducer(perturb_errorgen_rates(smq1Q_XYI.target_model('H+S'), seed=0),
+                                   ridge=2.0)
         reduced = self.design.reduce_with(reducer, 8)
         with tempfile.TemporaryDirectory() as tmp:
             root = os.path.join(tmp, 'reduced')
@@ -284,8 +289,8 @@ class ReduceWithTester(BaseCase):
         """`from_dir` rebuilds a design without `__init__`, from what meta.json lists.
 
         A directory written by an older pyGSTi lists no `selection`, so the member has to
-        default on the class, and its auxfile type has to be backfilled or writing a
-        reduction of the loaded design would try to store the selection as JSON.
+        default on the class, and reduction has to register its auxfile type or writing
+        the reduced design would try to store the selection as JSON.
         """
         import json
         with tempfile.TemporaryDirectory() as tmp:
@@ -302,8 +307,8 @@ class ReduceWithTester(BaseCase):
             self.assertIsNone(loaded.selection)
             self.assertIsNone(loaded.map_qubit_labels({0: 'Q7'}).selection)
 
-            from pygsti.tools.edesigntools import BlockDoptReducer
-            reducer = BlockDoptReducer.from_target_model(smq1Q_XYI.target_model('H+S'), seed=0)
+            from pygsti.tools.edesigntools import BlockDoptReducer, perturb_errorgen_rates
+            reducer = BlockDoptReducer(perturb_errorgen_rates(smq1Q_XYI.target_model('H+S'), seed=0))
             reduced = loaded.reduce_with(reducer, 4)
             reduced.write(os.path.join(tmp, 'reduced'))
             reloaded = gst.StandardGSTDesign.from_dir(os.path.join(tmp, 'reduced'))

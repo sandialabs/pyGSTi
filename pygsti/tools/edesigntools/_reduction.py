@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 
 __all__ = ['CircuitSelection', 'DesignReducer', 'CallableReducer']
 
-#: What :meth:`DesignReducer.cast` accepts in place of a reducer: called as
-#: ``f(design, num_circuits)``, returning a :class:`CircuitSelection` or the circuits to keep.
+#: What :class:`CallableReducer` wraps: called as ``f(design, num_circuits)``,
+#: returning a :class:`CircuitSelection` or the circuits to keep.
 ReducerFunction = Callable[['ExperimentDesign', Optional[int]],
                            Union['CircuitSelection', Sequence['Circuit']]]
 
@@ -224,6 +224,7 @@ class DesignReducer(_NicelySerializable):
         # it would leave a live object for `write` to choke on.
         if hasattr(reduced, 'selection'):
             reduced.selection = selection
+            reduced.auxfile_types.setdefault('selection', 'serialized-object')
         return reduced
 
     # -- serialization ------------------------------------------------------ #
@@ -261,28 +262,6 @@ class DesignReducer(_NicelySerializable):
             if target is not DesignReducer:
                 return target.from_nice_serialization(state)
         return super().from_nice_serialization(state)
-
-    @classmethod
-    def cast(cls, obj: Union[DesignReducer, ReducerFunction]) -> DesignReducer:
-        """`obj` as a :class:`DesignReducer`: itself, or a callable wrapped in one.
-
-        Parameters
-        ----------
-        obj : DesignReducer or callable
-            A callable is invoked as `obj(design, num_circuits)`; see
-            :class:`CallableReducer` for what it may return and for the serialization
-            caveat that comes with it.
-
-        Returns
-        -------
-        DesignReducer
-        """
-        if isinstance(obj, DesignReducer):
-            return obj
-        if callable(obj):
-            return CallableReducer(obj)
-        raise TypeError("A design reducer must be a DesignReducer or a callable "
-                        f"(design, num_circuits) -> circuits; got {type(obj).__name__}.")
 
     # -- validation --------------------------------------------------------- #
 

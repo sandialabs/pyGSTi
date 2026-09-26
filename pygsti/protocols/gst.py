@@ -21,7 +21,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
-from typing import Any, Callable, Optional, Union
+from typing import Optional, Union, Any
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -140,49 +140,16 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         self.selection = None
         self.auxfile_types['selection'] = 'serialized-object'
 
-    @classmethod
-    def from_dir(cls, dirname: str, parent: Optional[_proto.ExperimentDesign] = None,
-                 name: Optional[str] = None, quick_load: bool = False) -> "GateSetTomographyDesign":
-        """
-        Initialize a new GateSetTomographyDesign from `dirname`.
-
-        As :meth:`ExperimentDesign.from_dir`, and additionally registers the `selection`
-        member on a design written before it existed, so that reducing such a design and
-        writing the result does not try to store a live object as JSON.
-
-        Parameters
-        ----------
-        dirname : str
-            The *root* directory name (under which there is a 'edesign' subdirectory).
-
-        parent : ExperimentDesign, optional
-            The parent design object, if there is one.
-
-        name : str, optional
-            The sub-name of the design object being loaded.
-
-        quick_load : bool, optional
-            Setting this to True skips the loading of the potentially long circuit lists.
-
-        Returns
-        -------
-        GateSetTomographyDesign
-        """
-        ret = super().from_dir(dirname, parent=parent, name=name, quick_load=quick_load)
-        ret.auxfile_types.setdefault('selection', 'serialized-object')
-        return ret
-
-    def reduce_with(self, reducer: Union[_DesignReducer, Callable[..., Any]],
-                    num_circuits: Optional[int] = None) -> "GateSetTomographyDesign":
+    def reduce_with(self, reducer: _DesignReducer, num_circuits: Optional[int] = None) -> "GateSetTomographyDesign":
         """A copy of this design keeping only the circuits `reducer` selects.
 
         Named for the parallel with `merge_with`.
 
         Parameters
         ----------
-        reducer : DesignReducer or callable
-            The selection rule.  A callable is invoked as `reducer(design, num_circuits)`
-            and should return the circuits to keep.
+        reducer : DesignReducer
+            The selection rule.  Wrap a function in
+            :class:`~pygsti.tools.edesigntools.CallableReducer`.
 
         num_circuits : int, optional
             The budget, clamped to the number of circuits available.  None asks the
@@ -205,7 +172,10 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         correct; those members are a record of how the original was generated, not an
         index of what survived.
         """
-        return _DesignReducer.cast(reducer).reduce(self, num_circuits)
+        if not isinstance(reducer, _DesignReducer):
+            raise TypeError(f"reducer must be a DesignReducer, not {type(reducer).__name__}. "
+                            "Wrap a function in CallableReducer.")
+        return reducer.reduce(self, num_circuits)
 
     def map_qubit_labels(self, mapper):
         """

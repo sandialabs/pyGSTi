@@ -35,6 +35,7 @@ from pygsti.protocols._stitchers import (
 )
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign
+from pygsti.tools.edesigntools import BlockDoptReducer, CallableReducer
 from pygsti.tools.graphs.coloring import check_valid_edge_coloring
 from ..util import BaseCase, with_temp_path
 
@@ -1709,7 +1710,7 @@ class AssignDesignsDefaultRandgenTester(BaseCase):
 
 
 class ReduceByDoptTester(_SGSTFixture, BaseCase):
-    """``SimultaneousGSTDesign.reduce_by_dopt``: the reason truncation was wanted.
+    """Reducing a ``SimultaneousGSTDesign`` by D-optimality: the reason truncation was wanted.
 
     The kernel and the ranking are tested in test/unit/tools/test_blockdopt.py. What
     matters here is that reducing a *stitched* design gives back a well-formed
@@ -1728,9 +1729,10 @@ class ReduceByDoptTester(_SGSTFixture, BaseCase):
         # Not the target model: at the target, every cholesky-mode stochastic column of
         # the Jacobian is exactly zero. See perturb_errorgen_rates.
         cls.model = pygsti.tools.perturb_errorgen_rates(model, 1e-3, seed=0)
+        cls.dopt = BlockDoptReducer(cls.model)
 
     def test_reducing_gives_back_a_well_formed_simultaneous_design(self):
-        reduced = self.small.reduce_by_dopt(self.model, 8)
+        reduced = self.small.reduce_with(self.dopt, 8)
         self.assertIsInstance(reduced, SimultaneousGSTDesign)
         self.assertEqual(len(reduced.all_circuits_needing_data), 8)
         self.assertTrue(reduced.nested)
@@ -1740,23 +1742,15 @@ class ReduceByDoptTester(_SGSTFixture, BaseCase):
         self.assertTrue(set(reduced.all_circuits_needing_data)
                         <= set(self.small.all_circuits_needing_data))
 
-    def test_the_method_agrees_with_the_tools_function(self):
-        by_function, scores = pygsti.tools.reduce_design_by_dopt(self.small, self.model, 6)
-        by_method = self.small.reduce_by_dopt(self.model, 6)
-        self.assertEqual(set(by_method.all_circuits_needing_data),
-                         set(by_function.all_circuits_needing_data))
-        self.assertArraysAlmostEqual(by_method.selection.scores, scores)
-
     def test_the_score_curve_comes_back_on_the_design(self):
-        reduced = self.small.reduce_by_dopt(self.model, 6)
+        reduced = self.small.reduce_with(self.dopt, 6)
         self.assertIsInstance(reduced, SimultaneousGSTDesign)
         scores = reduced.selection.scores
         self.assertEqual(len(scores), 6)
         self.assertTrue(np.all(np.diff(scores) >= -1e-9))
 
     def test_the_reduced_design_records_what_reduced_it(self):
-        from pygsti.tools.edesigntools import BlockDoptReducer
-        reduced = self.small.reduce_by_dopt(self.model, 6, ridge=2.0)
+        reduced = self.small.reduce_with(BlockDoptReducer(self.model, ridge=2.0), 6)
         self.assertIsInstance(reduced.selection.reducer, BlockDoptReducer)
         self.assertEqual(reduced.selection.reducer.ridge, 2.0)
         self.assertEqual(reduced.selection.metadata['num_candidates'],
@@ -1768,35 +1762,27 @@ class ReduceByDoptTester(_SGSTFixture, BaseCase):
     def test_reduce_with_takes_any_reducer(self):
         """The point of the interface: a rule we did not write, on a stitched design."""
         shallowest = sorted(self.small.all_circuits_needing_data, key=len)[:7]
-        reduced = self.small.reduce_with(lambda design, n: shallowest, 7)
+        reduced = self.small.reduce_with(CallableReducer(lambda design, n: shallowest), 7)
         self.assertIsInstance(reduced, SimultaneousGSTDesign)
         self.assertEqual(set(reduced.all_circuits_needing_data), set(shallowest))
         _validate_stitched_circuits(
             reduced.circuit_lists, reduced.vertices, reduced.color_patches)
 
-    def test_reduce_by_dopt_is_reduce_with_a_dopt_reducer(self):
-        from pygsti.tools.edesigntools import BlockDoptReducer
-        self.assertEqual(
-            set(self.small.reduce_by_dopt(self.model, 6).all_circuits_needing_data),
-            set(self.small.reduce_with(BlockDoptReducer(self.model),
-                                       6).all_circuits_needing_data))
-
     def test_a_target_model_warns_here_too(self):
         target = pygsti.models.create_crosstalk_free_model(
             self.pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
         with self.assertWarns(UserWarning):
-            self.small.reduce_by_dopt(target, 4)
+            self.small.reduce_with(BlockDoptReducer(target), 4)
 
     def test_relabelling_a_reduced_design_keeps_the_record(self):
         """map_qubit_labels bypasses __init__, so `selection` has to be carried by hand."""
-        reduced = self.small.reduce_by_dopt(self.model, 6)
+        reduced = self.small.reduce_with(self.dopt, 6)
         mapper = {q: 'Q%s' % q for q in reduced.qubit_labels}
         self.assertIs(reduced.map_qubit_labels(mapper).selection, reduced.selection)
 
     @with_temp_path
     def test_a_reduced_design_round_trips_with_its_record(self, root):
-        from pygsti.tools.edesigntools import BlockDoptReducer
-        reduced = self.small.reduce_by_dopt(self.model, 6, ridge=2.0)
+        reduced = self.small.reduce_with(BlockDoptReducer(self.model, ridge=2.0), 6)
         root = pathlib.Path(root) / 'reduced'
         reduced.write(root)
         loaded = SimultaneousGSTDesign.from_dir(root)
@@ -1823,10 +1809,10 @@ class ReduceByDoptTester(_SGSTFixture, BaseCase):
         """
         candidates = list(self.small.all_circuits_needing_data)
         jac_dict = self.model.sim.bulk_dprobs(candidates)
-        jac, block_size = pygsti.tools.jacobian_dict_to_array(jac_dict)
+        jac, block_size = pygsti.tools.edesigntools.blockdopt._jacobian_dict_to_array(jac_dict)
         keys = list(jac_dict)
 
-        chosen = set(self.small.reduce_by_dopt(self.model, 8).all_circuits_needing_data)
+        chosen = set(self.small.reduce_with(self.dopt, 8).all_circuits_needing_data)
         greedy = pygsti.tools.greedy_path_log_volumes(
             jac.T, block_size, [i for i, c in enumerate(keys) if c in chosen])[-1]
         first_n = pygsti.tools.greedy_path_log_volumes(

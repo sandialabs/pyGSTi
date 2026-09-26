@@ -22,9 +22,8 @@ cases that compare against that package's compiled C++ kernel.
 From `JacobianFlatteningTester` down, the tests cover what sits between a pyGSTi
 model and the kernel: flattening a `bulk_dprobs` result into the kernel's
 matrix, perturbing a target model so that its Jacobian is representative, the
-function-shaped entry points `rank_circuits_by_dopt` and
-`reduce_design_by_dopt`, and `BlockDoptReducer`, the `DesignReducer` that wraps
-them.  The `DesignReducer` contract itself is tested in test_reduction.py.
+ranking function `rank_circuits_by_dopt`, and `BlockDoptReducer`, the
+`DesignReducer` that wraps it.  The `DesignReducer` contract itself is tested in test_reduction.py.
 """
 import itertools
 import unittest.mock
@@ -537,7 +536,7 @@ class BruteForceEnumerationTester(BaseCase):
 
 
 class JacobianFlatteningTester(BaseCase):
-    """`jacobian_dict_to_array` turns a bulk_dprobs result into the kernel's `A`."""
+    """`_jacobian_dict_to_array` turns a bulk_dprobs result into the kernel's `A`."""
 
     @staticmethod
     def _jac_dict(num_circuits, num_outcomes, num_params, start=0.0):
@@ -552,7 +551,7 @@ class JacobianFlatteningTester(BaseCase):
         return out
 
     def test_shape_and_block_size(self):
-        jac, block_size = bd.jacobian_dict_to_array(self._jac_dict(5, 4, 7))
+        jac, block_size = bd._jacobian_dict_to_array(self._jac_dict(5, 4, 7))
         self.assertEqual(jac.shape, (20, 7))
         self.assertEqual(block_size, 4)
 
@@ -560,19 +559,19 @@ class JacobianFlatteningTester(BaseCase):
         # The block order follows the dict's keys, not any input circuit list:
         # bulk_dprobs may deduplicate and reorder, so this is the mapping a
         # caller has to use to get back from a block index to a circuit.
-        jac, block_size = bd.jacobian_dict_to_array(self._jac_dict(3, 2, 1))
+        jac, block_size = bd._jacobian_dict_to_array(self._jac_dict(3, 2, 1))
         self.assertArraysEqual(jac.ravel(), np.arange(6.0))
 
     def test_ragged_outcome_counts_raise(self):
         ragged = self._jac_dict(2, 3, 4)
         del ragged['c1']['o2']
         with self.assertRaises(ValueError) as ctx:
-            bd.jacobian_dict_to_array(ragged)
+            bd._jacobian_dict_to_array(ragged)
         self.assertIn('uniform outcome count', str(ctx.exception))
 
     def test_empty_dict_raises(self):
         with self.assertRaises(ValueError):
-            bd.jacobian_dict_to_array({})
+            bd._jacobian_dict_to_array({})
 
 
 class _ModelFixture:
@@ -594,7 +593,7 @@ class _ModelFixture:
                                       for lbl in cls.target.parameter_labels])
 
     def column_norms(self, model):
-        jac, _ = bd.jacobian_dict_to_array(model.sim.bulk_dprobs(self.circuits))
+        jac, _ = bd._jacobian_dict_to_array(model.sim.bulk_dprobs(self.circuits))
         return np.linalg.norm(jac, axis=0)
 
 
@@ -666,9 +665,7 @@ class PerturbErrorgenRatesTester(_ModelFixture, BaseCase):
         samples = []
         for seed in (0, 1):
             with self.subTest(seed=seed):
-                model = bd.BlockDoptReducer.from_target_model(target, seed=seed).model
-                repeated = bd.perturb_errorgen_rates(target, seed=seed)
-                self.assertArraysEqual(model.to_vector(), repeated.to_vector())
+                model = bd.perturb_errorgen_rates(target, seed=seed)
                 self.assertEqual(model.num_params, target.num_params)
                 self.assertArraysEqual(model.parameter_labels, target.parameter_labels)
                 for label, op in model.operations.items():
@@ -762,7 +759,7 @@ class RankCircuitsTester(_ModelFixture, BaseCase):
         """Cross-checked against the independent Cholesky scorer, on the same matrix."""
         ranked, scores = bd.rank_circuits_by_dopt(self.model, self.circuits, 8)
         jac_dict = self.model.sim.bulk_dprobs(list(dict.fromkeys(self.circuits)))
-        jac, block_size = bd.jacobian_dict_to_array(jac_dict)
+        jac, block_size = bd._jacobian_dict_to_array(jac_dict)
         keys = list(jac_dict)
         pivots = [keys.index(c) for c in ranked]
         expected = bd.greedy_path_log_volumes(jac.T, block_size, pivots)
@@ -789,61 +786,11 @@ class RankCircuitsTester(_ModelFixture, BaseCase):
         self.assertGreaterEqual(len(f64 & f32), 10)
 
 
-class ReduceDesignTester(_ModelFixture, BaseCase):
-    """`reduce_design_by_dopt` is duck-typed; this covers it on a plain design.
-
-    The SimultaneousGSTDesign path is covered in
-    test/unit/protocols/test_simultaneous_gst.py, where the fixture already exists.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.model = bd.perturb_errorgen_rates(cls.target, 1e-3, seed=0)
-
-    def _design(self):
-        from pygsti.protocols import CircuitListsDesign
-        half = len(self.circuits) // 2
-        return CircuitListsDesign([self.circuits[:half], self.circuits], nested=True)
-
-    def test_keeps_the_budget_and_the_class(self):
-        from pygsti.protocols import CircuitListsDesign
-        design = self._design()
-        reduced, _ = bd.reduce_design_by_dopt(design, self.model, 9)
-        self.assertIsInstance(reduced, CircuitListsDesign)
-        self.assertEqual(len(reduced.all_circuits_needing_data), 9)
-        self.assertTrue(set(reduced.all_circuits_needing_data)
-                        <= set(design.all_circuits_needing_data))
-
-    def test_the_kept_circuits_are_the_ranking_prefix(self):
-        design = self._design()
-        reduced, _ = bd.reduce_design_by_dopt(design, self.model, 9)
-        ranked, _ = bd.rank_circuits_by_dopt(self.model, design.all_circuits_needing_data, 9)
-        self.assertEqual(set(reduced.all_circuits_needing_data), set(ranked))
-
-    def test_the_original_design_is_not_modified(self):
-        design = self._design()
-        before = [list(cl) for cl in design.circuit_lists]
-        bd.reduce_design_by_dopt(design, self.model, 5)
-        self.assertEqual([list(cl) for cl in design.circuit_lists], before)
-
-    def test_returns_the_score_curve_alongside_the_design(self):
-        reduced, scores = bd.reduce_design_by_dopt(self._design(), self.model, 7)
-        self.assertEqual(len(scores), 7)
-        self.assertTrue(np.all(np.diff(scores) >= -1e-9))
-
-    def test_a_budget_over_the_candidate_count_keeps_everything(self):
-        design = self._design()
-        reduced, _ = bd.reduce_design_by_dopt(design, self.model, 10 ** 6)
-        self.assertEqual(set(reduced.all_circuits_needing_data),
-                         set(design.all_circuits_needing_data))
-
-
 class BlockDoptReducerTester(_ModelFixture, BaseCase):
     """The DesignReducer wrapper around the ranking.
 
     The selection algorithm is tested above; what matters here is that the object form
-    agrees with the function form, carries the right diagnostics, and round-trips.
+    agrees with `rank_circuits_by_dopt`, carries the right diagnostics, and round-trips.
     """
 
     @classmethod
@@ -856,7 +803,7 @@ class BlockDoptReducerTester(_ModelFixture, BaseCase):
         half = len(self.circuits) // 2
         return CircuitListsDesign([self.circuits[:half], self.circuits], nested=True)
 
-    # -- agreement with the function form ----------------------------------- #
+    # -- agreement with the ranking ----------------------------------- #
 
     def test_it_selects_exactly_what_rank_circuits_by_dopt_ranks(self):
         """Pinned to the kernel, in order, so the wrapper cannot drift from it."""
@@ -866,34 +813,18 @@ class BlockDoptReducerTester(_ModelFixture, BaseCase):
         self.assertEqual(list(selection.circuits), list(ranked))
         self.assertArraysEqual(selection.scores, scores)
 
-    def test_reduce_design_by_dopt_still_agrees_with_it(self):
-        design = self._design()
-        by_function, scores = bd.reduce_design_by_dopt(design, self.model, 9)
-        by_object = bd.BlockDoptReducer(self.model).reduce(design, 9)
-        self.assertEqual(set(by_function.all_circuits_needing_data),
-                         set(by_object.all_circuits_needing_data))
-        self.assertEqual(len(scores), 9)
-
-    def test_function_reduction_records_and_replaces_gst_provenance(self):
+    def test_reducing_a_reduced_gst_design_replaces_its_provenance(self):
         from pygsti.modelpacks import smq1Q_XYI
         design = smq1Q_XYI.create_gst_experiment_design(max_max_length=1)
         design = design.truncate_to_circuits(self.circuits[:12])
-        by_function, scores = bd.reduce_design_by_dopt(design, self.model, 4)
-        by_object = bd.BlockDoptReducer(self.model).reduce(design, 4)
-        self.assertIsNotNone(by_function.selection)
-        self.assertEqual(by_function.selection.circuits, by_object.selection.circuits)
-        self.assertArraysEqual(by_function.selection.scores, scores)
+        reducer = bd.BlockDoptReducer(self.model)
+        once = reducer.reduce(design, 4)
+        self.assertEqual(len(once.selection.circuits), 4)
 
-        reduced, scores = bd.reduce_design_by_dopt(by_function, self.model, 2)
-        self.assertEqual(set(reduced.selection.circuits), set(reduced.all_circuits_needing_data))
-        self.assertEqual(len(reduced.selection.circuits), 2)
-        self.assertArraysEqual(reduced.selection.scores, scores)
-
-    def test_function_reduction_rejects_experiment_tree_children(self):
-        from pygsti.protocols import CombinedExperimentDesign
-        design = CombinedExperimentDesign({'child': self._design()})
-        with self.assertRaisesRegex(NotImplementedError, 'child'):
-            bd.reduce_design_by_dopt(design, self.model, 2)
+        twice = reducer.reduce(once, 2)
+        self.assertEqual(set(twice.selection.circuits), set(twice.all_circuits_needing_data))
+        self.assertEqual(len(twice.selection.circuits), 2)
+        self.assertEqual(len(twice.selection.scores), 2)
 
     def test_an_empty_reduced_design_can_be_reduced_again(self):
         reducer = bd.BlockDoptReducer(self.model)
@@ -965,7 +896,7 @@ class BlockDoptReducerTester(_ModelFixture, BaseCase):
     def test_a_target_model_warns_and_says_how_to_fix_it(self):
         with self.assertWarns(UserWarning) as ctx:
             bd.BlockDoptReducer(self.target)
-        self.assertIn('from_target_model', str(ctx.warning))
+        self.assertIn('perturb_errorgen_rates', str(ctx.warning))
 
     def test_a_perturbed_model_does_not_warn(self):
         with warnings.catch_warnings():
@@ -982,26 +913,6 @@ class BlockDoptReducerTester(_ModelFixture, BaseCase):
         from pygsti.modelpacks import smq1Q_XYI
         full = smq1Q_XYI.target_model('full TP')
         self.assertFalse(bd._looks_like_a_target_model(full))
-
-    def test_from_target_model_perturbs_and_does_not_warn(self):
-        with warnings.catch_warnings():
-            warnings.simplefilter('error')
-            reducer = bd.BlockDoptReducer.from_target_model(self.target, seed=0)
-        # Same bar as test_perturbing_rates_makes_the_stochastic_columns_usable: rates
-        # are drawn uniformly from [0, scale), so individual columns can still be small.
-        norms = self.column_norms(reducer.model)
-        self.assertGreater(np.median(norms[self.is_stochastic]), 0.1)
-
-    def test_from_target_model_leaves_the_target_alone(self):
-        before = self.target.to_vector().copy()
-        bd.BlockDoptReducer.from_target_model(self.target, seed=0)
-        self.assertArraysAlmostEqual(self.target.to_vector(), before)
-
-    def test_from_target_model_is_reproducible_given_a_seed(self):
-        design = self._design()
-        first = bd.BlockDoptReducer.from_target_model(self.target, seed=7).select(design, 6)
-        second = bd.BlockDoptReducer.from_target_model(self.target, seed=7).select(design, 6)
-        self.assertEqual(list(first.circuits), list(second.circuits))
 
     # -- serialization -------------------------------------------------------- #
 
