@@ -1042,7 +1042,9 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
 
 @_with_cyclic_gc_paused
 def zassenhaus_formula(errorgen_groups: list[_ErrorgenDict], zassenhaus_order: Literal[1,2] = 1,
-                      truncation_threshold: float = 1e-14) -> list[_ErrorgenDict]:
+                      truncation_threshold: float = 1e-14,
+                      num_workers: Union[int, str, None] = None,
+                      pool: Optional[Any] = None) -> list[_ErrorgenDict]:
     r"""
     Function for computing the nth-order Zassenhaus formula for a set of error generators.
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
@@ -1092,7 +1094,8 @@ def zassenhaus_formula(errorgen_groups: list[_ErrorgenDict], zassenhaus_order: L
                 if layer:
                     identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                     break
-        second_order_comm_dict = _second_order_magnus_term(errorgen_groups, identity, truncation_threshold)
+        second_order_comm_dict = _second_order_magnus_term(errorgen_groups, identity, truncation_threshold,
+                                                           num_workers=num_workers, pool=pool)
         zassenhaus_formula_dicts.append(second_order_comm_dict)
 
     if zassenhaus_order>=3:
