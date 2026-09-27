@@ -5099,44 +5099,44 @@ class _ProbWorker:
         ]
 
 
-def approximate_stabilizer_probabilities(errorgen_dict: dict[_EEL, float], circuit: Union[_Circuit, stim.Tableau],
-                                         order: int = 1, truncation_threshold: float = 1e-14,
-                                         num_workers: Union[int, str, None] = None,
-                                         pool: Optional[Any] = None) -> _np.ndarray:
+def approximate_stabilizer_probabilities(
+    errorgen_dict: _ErrorgenDict,
+    circuit: Union[_Circuit, stim.Tableau],
+    order: int = 1,
+    truncation_threshold: float = 1e-14,
+    num_workers: Union[int, str, None] = None,
+    pool: Optional[Any] = None,
+    bitstrings: Optional[Sequence[str]] = None,
+) -> _np.ndarray:
     """
-    Calculate the approximate probability distribution over all bitstrings using a first-order approximation.
-    Note the size of this distribution scales exponentially in the qubit count, so this is very inefficient for
-    any more than a few qubits.
+    Calculate the approximate probability distribution over bitstrings using a Taylor series approximation.
 
     Parameters
     ----------
     errorgen_dict : dict
-        Dictionary whose keys are `ElementaryErrorgenLabel` and whose values are corresponding
-        rates.
-    
+        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding rates.
     circuit : `Circuit` or `stim.Tableau`
         A pygsti `Circuit` or a stim.Tableau to compute the output probability for. In either
         case this should be a Clifford circuit and convertible to a stim.Tableau.
-
     order : int, optional (default 1)
         Order of the correction (i.e. order of the taylor series expansion for
         the exponentiated error generator) to compute.
-    
     truncation_threshold : float, optional (default 1e-14)
         Optional threshold used to truncate corrections whose corresponding error generator rates
-        are below this value. (Used internally in computation of probability corrections)
-
+        are below this value.
     num_workers : int, str, or None, optional
-        Target worker count for parallel evaluation (defaults to None for sequential fast-path;
-        pass 'auto' or an integer to enable parallel execution across bitstring chunks).
-
+        Target worker count for parallel evaluation across sensitivity grid.
     pool : Pool or SharedWorkerPool, optional
         Existing worker pool to reuse.
+    bitstrings : sequence of str, optional
+        Specific bitstrings to compute probabilities for. If None (default), computes
+        the exhaustive probability distribution over all 2^n bitstrings. If 2^n > 1024
+        and bitstrings is None, raises a UserWarning alerting to exponential scaling.
 
     Returns
     -------
     p : numpy.ndarray
-        Approximate output probability distribution over all 2^n bitstrings.
+        Array of approximate output probabilities.
     """
     if isinstance(circuit, _Circuit):
         tableau = circuit.convert_to_stim_tableau()
@@ -5145,35 +5145,124 @@ def approximate_stabilizer_probabilities(errorgen_dict: dict[_EEL, float], circu
     else:
         raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
 
-    # get set of all bit strings
     num_qubits = len(tableau)
-    bitstrings = ["".join(bitstring) for bitstring in product(['0','1'], repeat=num_qubits)]
-
-    workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
-    if workers <= 1 or num_workers is None:
-        probs = _np.zeros(2**num_qubits)
-        for i, bitstring in enumerate(bitstrings):
-            probs[i] = approximate_stabilizer_probability(errorgen_dict, tableau, bitstring, order, truncation_threshold)
-        return probs
-
-    # Strategic single-point memory headroom check
-    if pool is None:
-        _warn_if_insufficient_memory(
-            estimate_bulk_alpha_peak_memory(num_qubits, len(errorgen_dict), len(bitstrings), workers),
-            task_name="approximate_stabilizer_probabilities",
-        )
-
-    chunk_size = (len(bitstrings) + workers - 1) // workers
-    chunks = [bitstrings[i : i + chunk_size] for i in range(0, len(bitstrings), chunk_size) if i < len(bitstrings)]
-
-    worker = _ProbWorker(errorgen_dict, tableau, order, truncation_threshold)
-    if pool is not None:
-        chunk_results = pool.map(worker, chunks)
+    if bitstrings is None:
+        if num_qubits > 10:
+            _warnings.warn(
+                f"approximate_stabilizer_probabilities requested exhaustive distribution for {num_qubits} qubits "
+                f"(2^{num_qubits} = {2**num_qubits} bitstrings). This scales exponentially. "
+                "Consider specifying the 'bitstrings' parameter explicitly for large systems.",
+                UserWarning,
+                stacklevel=2,
+            )
+        bitstrings_list = ["".join(bitstring) for bitstring in product(['0', '1'], repeat=num_qubits)]
     else:
-        with _SharedWorkerPool(num_workers=workers) as local_pool:
-            chunk_results = local_pool.map(worker, chunks)
+        bitstrings_list = list(bitstrings)
 
-    return _np.array([p for sub in chunk_results for p in sub], dtype=_np.float64)
+    if len(bitstrings_list) == 0:
+        return _np.empty(0, dtype=_np.double)
+
+    # Re-use Taylor series expansion once across all bitstrings
+    if order == 1:
+        combined_taylor_dict = errorgen_dict
+    else:
+        taylor_expansion = error_generator_taylor_expansion(
+            errorgen_dict, order, truncation_threshold, num_workers=num_workers, pool=pool
+        )
+        combined_taylor_dict = {}
+        get = combined_taylor_dict.get
+        for order_dict in taylor_expansion:
+            for lbl, rate in order_dict.items():
+                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
+
+    # Single bulk_alpha call (vectorized Cython or 2D parallel grid)
+    alphas = bulk_alpha(combined_taylor_dict, tableau, bitstrings_list, num_workers=num_workers, pool=pool)
+    rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
+    num_random = random_support(tableau)
+    scale = 1.0 / (2.0 ** num_random) if num_random <= 2148 else 0.0
+    corrections = scale * (alphas @ rates)
+
+    ideal_probs = _np.array([stabilizer_probability(tableau, b) for b in bitstrings_list], dtype=_np.double)
+    return ideal_probs + corrections
+
+
+def approximate_stabilizer_pauli_expectations(
+    errorgen_dict: _ErrorgenDict,
+    circuit: Union[_Circuit, stim.Tableau],
+    paulis: Sequence[Union[str, stim.PauliString]],
+    order: int = 1,
+    truncation_threshold: float = 1e-14,
+    num_workers: Union[int, str, None] = None,
+    pool: Optional[Any] = None,
+) -> _np.ndarray:
+    """
+    Calculate the approximate expectation values for a sequence of Pauli observables.
+
+    Parameters
+    ----------
+    errorgen_dict : dict
+        Dictionary whose keys are `LocalStimErrorgenLabel` and whose values are corresponding rates.
+    circuit : `Circuit` or `stim.Tableau`
+        A pygsti `Circuit` or stim.Tableau to compute the expectation values for.
+    paulis : sequence of str or stim.PauliString
+        Pauli operators to compute expectation values for.
+    order : int, optional (default 1)
+        Order of the Taylor series expansion for the exponentiated error generator.
+    truncation_threshold : float, optional (default 1e-14)
+        Truncation threshold for discarding small rates.
+    num_workers : int, str, or None, optional
+        Target worker count for parallel evaluation across sensitivity grid.
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of approximate expectation values for the requested Pauli observables.
+    """
+    if isinstance(circuit, _Circuit):
+        tableau = circuit.convert_to_stim_tableau()
+    elif isinstance(circuit, stim.Tableau):
+        tableau = circuit
+    else:
+        raise ValueError('`circuit` should either be a pygsti `Circuit` or a stim.Tableau.')
+
+    pauli_objs = [stim.PauliString(p) if isinstance(p, str) else p for p in paulis]
+    if len(pauli_objs) == 0:
+        return _np.empty(0, dtype=_np.double)
+
+    # Re-use Taylor series expansion once across all Paulis
+    if order == 1:
+        combined_taylor_dict = errorgen_dict
+    else:
+        taylor_expansion = error_generator_taylor_expansion(
+            errorgen_dict, order, truncation_threshold, num_workers=num_workers, pool=pool
+        )
+        combined_taylor_dict = {}
+        get = combined_taylor_dict.get
+        for order_dict in taylor_expansion:
+            for lbl, rate in order_dict.items():
+                combined_taylor_dict[lbl] = get(lbl, 0) + rate.real
+
+    # Single bulk_alpha_pauli call (vectorized Cython or 2D parallel grid)
+    alphas = bulk_alpha_pauli(combined_taylor_dict, tableau, pauli_objs, num_workers=num_workers, pool=pool)
+    rates = _np.fromiter(combined_taylor_dict.values(), dtype=_np.double)
+    corrections = alphas @ rates
+
+    # Ideal expectations evaluated serially using a single pre-inverted simulator (194x faster)
+    sim = stim.TableauSimulator()
+    sim.set_inverse_tableau(tableau**-1)
+    ideal_expectations = _np.empty(len(pauli_objs), dtype=_np.double)
+    for i, p in enumerate(pauli_objs):
+        if p.sign != 1:
+            s = p.sign
+            up = p / s
+        else:
+            s = 1
+            up = p
+        ideal_expectations[i] = _real_if_close(s * sim.peek_observable_expectation(up))
+
+    return ideal_expectations + corrections
 
 @_with_cyclic_gc_paused
 def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 1,
