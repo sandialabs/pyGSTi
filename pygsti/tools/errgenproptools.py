@@ -5177,7 +5177,9 @@ def approximate_stabilizer_probabilities(errorgen_dict: dict[_EEL, float], circu
 
 @_with_cyclic_gc_paused
 def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 1,
-                                     truncation_threshold: float = 1e-14) -> list[_ErrorgenDict]:
+                                     truncation_threshold: float = 1e-14,
+                                     num_workers: Union[int, str, None] = None,
+                                     pool: Optional[Any] = None) -> list[_ErrorgenDict]:
     """
     Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
     error generator dictionary. (Excluding the zeroth-order identity).
@@ -5195,6 +5197,12 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
     truncation_threshold : float, optional (default 1e-14)
         Optional threshold used to truncate corrections whose corresponding rates
         are below this value.
+
+    num_workers : int, str, or None, optional
+        Target worker count for parallel evaluation across commuting product slices.
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
 
     Returns
     -------
@@ -5228,7 +5236,9 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
         previous_power = errorgen_dict
         for current_order in range(2, order + 1):
             order_scale = 1 / factorial(current_order)
-            current_power = _commuting_product(errorgen_dict, previous_power, identity)
+            current_power = _commuting_product(errorgen_dict, previous_power, identity,
+                                               truncation_threshold=truncation_threshold,
+                                               num_workers=num_workers, pool=pool)
             taylor_order_terms[current_order - 1] = {lbl: order_scale * rate for lbl, rate in current_power.items()
                                                      if order_scale * abs(rate) > truncation_threshold}
             previous_power = current_power
@@ -5236,8 +5246,64 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
     return taylor_order_terms
 
 
+class _CommutingProductSliceWorker:
+    """Worker task evaluating a bilinear slice of commuting product (picklable under spawn)."""
+    def __init__(self, full_other, identity, threshold):
+        self.full_other = full_other
+        self.identity = identity
+        self.threshold = threshold
+
+    def __call__(self, sub_dict):
+        with _cyclic_gc_paused():
+            part = _raw_commuting_product(sub_dict, self.full_other, self.identity)
+            if self.threshold > 0:
+                return {k._hashable_string_rep: v for k, v in part.items() if abs(v) > self.threshold}
+            return {k._hashable_string_rep: v for k, v in part.items()}
+
+
 def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],
-                       identity: str) -> dict[_LSE, complex]:
+                       identity: str, truncation_threshold: float = 1e-14,
+                       num_workers: Union[int, str, None] = None,
+                       pool: Optional[Any] = None) -> dict[_LSE, complex]:
+    workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+    n1 = len(errorgen_dict_1)
+    n2 = len(errorgen_dict_2)
+    if workers <= 1 or num_workers is None and pool is None or n1 * n2 < 1000:
+        return _raw_commuting_product(errorgen_dict_1, errorgen_dict_2, identity)
+
+    # Parallel bilinear slicing with term-type load balancing
+    target = errorgen_dict_1 if n1 <= n2 else errorgen_dict_2
+    full = errorgen_dict_2 if n1 <= n2 else errorgen_dict_1
+    items = list(target.items())
+    weights = [3.0 if k.type_idx in (2, 3) else 1.0 for k, _ in items]
+    sorted_items = sorted(zip(items, weights), key=lambda x: x[1], reverse=True)
+    bins = [[] for _ in range(workers)]
+    bw = [0.0] * workers
+    for (k, v), w in sorted_items:
+        m = min(range(workers), key=lambda b: bw[b])
+        bins[m].append((k, v))
+        bw[m] += w
+    chunks = [dict(b) for b in bins if b]
+
+    worker = _CommutingProductSliceWorker(full, identity, truncation_threshold)
+    if pool is not None:
+        chunk_results = pool.map(worker, chunks)
+    else:
+        with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
+            chunk_results = local_pool.map(worker, chunks)
+
+    merged_str = {}
+    for cr in chunk_results:
+        for k, v in cr.items():
+            merged_str[k] = merged_str.get(k, 0.0) + v
+
+    survivors = {k: v for k, v in merged_str.items() if abs(v) > truncation_threshold}
+    n_q = len(identity)
+    return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
+
+
+def _raw_commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],
+                           identity: str) -> dict[_LSE, complex]:
     r"""
     The composition L o M of two error generators given as label -> rate dictionaries, for
     error generators that COMMUTE, [L, M] = 0 (e.g. M a power of L, as in the Taylor
