@@ -615,6 +615,40 @@ class _MagnusPairEvaluator:
             return {k._hashable_string_rep: v for k, v in target.items()}
 
 
+class _MagnusPhase1Worker:
+    """Worker task evaluating pairwise layer commutators for Phase 1 of joint 2nd/3rd order Magnus expansion."""
+    def __init__(self, identity, threshold):
+        self.identity = identity
+        self.threshold = threshold
+
+    def __call__(self, chunk):
+        with _cyclic_gc_paused():
+            res = []
+            for i, k, l1, l2 in chunk:
+                target = {}
+                _accumulate_layer_pairwise_commutators(
+                    target, l1, l2, self.identity, truncation_threshold=self.threshold
+                )
+                res.append((i, k, {lbl._hashable_string_rep: rate for lbl, rate in target.items()}))
+            return res
+
+
+class _MagnusPhase2Worker:
+    """Worker task evaluating outer commutators for Phase 2 of joint 2nd/3rd order Magnus expansion."""
+    def __init__(self, identity, threshold):
+        self.identity = identity
+        self.threshold = threshold
+
+    def __call__(self, chunk):
+        with _cyclic_gc_paused():
+            target = {}
+            for layer, acc, weight in chunk:
+                _accumulate_layer_pairwise_commutators(
+                    target, layer, acc, self.identity, addl_weight=weight, truncation_threshold=self.threshold
+                )
+            return {lbl._hashable_string_rep: rate for lbl, rate in target.items()}
+
+
 def _merge_dictionaries(d1, d2):
     """Binary reduction merging rate dictionaries by summing overlapping rates."""
     res = dict(d1)
@@ -709,7 +743,8 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
     else:
         # the third-order term is built from the same pairwise layer commutators as the second-order one,
         # so both are produced by a single pass over the layer pairs.
-        new_errorgen_layer.extend(_second_and_third_order_magnus_terms(errorgen_layers, identity, truncation_threshold))
+        new_errorgen_layer.extend(_second_and_third_order_magnus_terms(errorgen_layers, identity, truncation_threshold,
+                                                                      num_workers=num_workers, pool=pool))
 
     # Finally accumulate all of the dictionaries in new_errorgen_layer into a single one, summing overlapping terms.
     # The per-order dictionaries are each truncated, but their sums can still fall below the threshold (or cancel
@@ -805,7 +840,9 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
     return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
 
 def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
-                                         truncation_threshold: float = 1e-14) -> tuple[_ErrorgenDict, _ErrorgenDict]:
+                                         truncation_threshold: float = 1e-14,
+                                         num_workers: Union[int, str, None] = None,
+                                         pool: Optional[Any] = None) -> tuple[_ErrorgenDict, _ErrorgenDict]:
     r"""
     Helper function for computing the second- and third-order correction terms in the
     magnus expansion together, from a single pass over the pairwise layer commutators.
@@ -831,77 +868,177 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         Threshold for which any error generators with magnitudes below this value
         are truncated.
 
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        or an integer to enable parallel execution across layer pairs and outer commutators).
+
+    pool : Pool or SharedWorkerPool, optional
+        Existing worker pool to reuse.
+
     Returns
     -------
     second_order_comm_dict, third_order_comm_dict : dict
         Dictionaries with the same general structure as those in `errorgen_layers`, holding the
         second- and third-order terms of the magnus expansion respectively.
     """
-    # Write P_ik = [A(i), A(k)] for i > k for the pairwise layer commutators and group them by
-    # their larger or their smaller index:
-    #
-    #   row_i = \sum_{k<i} P_ik          col_k = \sum_{i>k} P_ik
-    #
-    # The commutators with coinciding indices vanish, so Omega_2 = (1/2) \sum_i row_i. In Omega_3,
-    # using linearity, the first term is a sum over t1 of A(t1) commuted with a PREFIX of the rows
-    # and (after reordering the sums so that t3 is outermost) the second is a sum over t3 of A(t3)
-    # commuted with a SUFFIX of the columns, the coinciding-index row/column entering at half weight:
-    #
-    #   Omega_3 = (1/6) \sum_i [ A(i),  \sum_{j<i} row_j + (1/2) row_i ]
-    #           - (1/6) \sum_k [ A(k),  \sum_{j>k} col_j + (1/2) col_k ]
-    #
-    # Every P_ik lies in exactly one row and one column, so a single forward pass over i computes
-    # each P_ik once and files it into both. row_i is consumed on the spot (second-order term,
-    # running prefix sum and the outer commutator with A(i)); col_k is complete only when the
-    # pass ends (its last contribution comes from i = n-1), so the columns are held until then
-    # and consumed by a descending pass over k. The running sums are truncated at the threshold
-    # before each outer commutator; the held columns are small (the disjoint-support skip in
-    # `_accumulate_layer_pairwise_commutators` removes the pairs that would otherwise dominate
-    # them) and are truncated when consumed.
+    if identity is None and errorgen_layers:
+        for layer in errorgen_layers:
+            if layer:
+                identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
+                break
+
+    workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+    n_q = len(identity) if identity is not None else 16
+    avg_terms = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
     num_layers = len(errorgen_layers)
-    second_order_comm_dict = {}
-    third_order_comm_dict = {}
-    held_columns = [{} for _ in range(num_layers)]
 
-    # forward pass: rows, consumed immediately.
-    running_row_sum = {}  # \sum_{j<i} row_j at weight 1/6, plus (1/12) row_i during the outer commutator.
-    for i in range(num_layers):
-        row = {}
-        for k in range(i):
-            pairwise_comm = {}
-            _accumulate_layer_pairwise_commutators(pairwise_comm, errorgen_layers[i], errorgen_layers[k], identity,
+    if workers <= 1 or num_workers is None and pool is None or not _should_parallelize_magnus(num_layers, avg_terms, num_workers=workers, n_qubits=n_q):
+        # Sequential execution path (100% untouched)
+        second_order_comm_dict = {}
+        third_order_comm_dict = {}
+        held_columns = [{} for _ in range(num_layers)]
+
+        # forward pass: rows, consumed immediately.
+        running_row_sum = {}  # \sum_{j<i} row_j at weight 1/6, plus (1/12) row_i during the outer commutator.
+        for i in range(num_layers):
+            row = {}
+            for k in range(i):
+                pairwise_comm = {}
+                _accumulate_layer_pairwise_commutators(pairwise_comm, errorgen_layers[i], errorgen_layers[k], identity,
+                                                       truncation_threshold=truncation_threshold)
+                column = held_columns[k]
+                for lbl, rate in pairwise_comm.items():
+                    row[lbl] = row.get(lbl, 0) + rate
+                    column[lbl] = column.get(lbl, 0) + rate
+            for lbl, rate in row.items():
+                second_order_comm_dict[lbl] = second_order_comm_dict.get(lbl, 0) + 0.5*rate
+                running_row_sum[lbl] = running_row_sum.get(lbl, 0) + (1/12)*rate
+            _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[i],
+                                                   _truncated(running_row_sum, truncation_threshold), identity,
                                                    truncation_threshold=truncation_threshold)
-            column = held_columns[k]
-            for lbl, rate in pairwise_comm.items():
-                row[lbl] = row.get(lbl, 0) + rate
-                column[lbl] = column.get(lbl, 0) + rate
-        for lbl, rate in row.items():
-            second_order_comm_dict[lbl] = second_order_comm_dict.get(lbl, 0) + 0.5*rate
-            running_row_sum[lbl] = running_row_sum.get(lbl, 0) + (1/12)*rate
-        _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[i],
-                                               _truncated(running_row_sum, truncation_threshold), identity,
-                                               truncation_threshold=truncation_threshold)
-        # bring row_i up to the full weight of 1/6 for the later iterations.
-        for lbl, rate in row.items():
-            running_row_sum[lbl] += (1/12)*rate
-        running_row_sum = _truncated(running_row_sum, truncation_threshold)
+            # bring row_i up to the full weight of 1/6 for the later iterations.
+            for lbl, rate in row.items():
+                running_row_sum[lbl] += (1/12)*rate
+            running_row_sum = _truncated(running_row_sum, truncation_threshold)
 
-    # descending pass: columns (col_{n-1} is empty).
-    running_column_sum = {}  # -\sum_{j>k} col_j at weight 1/6, plus -(1/12) col_k during the outer commutator.
-    for k in range(num_layers-2, -1, -1):
-        column = _truncated(held_columns[k], truncation_threshold)
-        held_columns[k] = None
-        for lbl, rate in column.items():
-            running_column_sum[lbl] = running_column_sum.get(lbl, 0) - (1/12)*rate
-        _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[k],
-                                               _truncated(running_column_sum, truncation_threshold), identity,
-                                               truncation_threshold=truncation_threshold)
-        for lbl, rate in column.items():
-            running_column_sum[lbl] -= (1/12)*rate
-        running_column_sum = _truncated(running_column_sum, truncation_threshold)
+        # descending pass: columns (col_{n-1} is empty).
+        running_column_sum = {}  # -\sum_{j>k} col_j at weight 1/6, plus -(1/12) col_k during the outer commutator.
+        for k in range(num_layers-2, -1, -1):
+            column = _truncated(held_columns[k], truncation_threshold)
+            held_columns[k] = None
+            for lbl, rate in column.items():
+                running_column_sum[lbl] = running_column_sum.get(lbl, 0) - (1/12)*rate
+            _accumulate_layer_pairwise_commutators(third_order_comm_dict, errorgen_layers[k],
+                                                   _truncated(running_column_sum, truncation_threshold), identity,
+                                                   truncation_threshold=truncation_threshold)
+            for lbl, rate in column.items():
+                running_column_sum[lbl] -= (1/12)*rate
+            running_column_sum = _truncated(running_column_sum, truncation_threshold)
 
-    return (_truncated(second_order_comm_dict, truncation_threshold),
-            _truncated(third_order_comm_dict, truncation_threshold))
+        return (_truncated(second_order_comm_dict, truncation_threshold),
+                _truncated(third_order_comm_dict, truncation_threshold))
+
+    # Two-Phase Parallel Evaluation with LPT Bin-Packing
+    # Phase 1: Pairwise layer commutators
+    pair_items = []
+    pair_weights = []
+    for i in range(num_layers):
+        for k in range(i):
+            pair_items.append((i, k, errorgen_layers[i], errorgen_layers[k]))
+            pair_weights.append(len(errorgen_layers[i]) * len(errorgen_layers[k]))
+
+    sorted_pairs = sorted(zip(pair_items, pair_weights), key=lambda x: x[1], reverse=True)
+    bins_p1 = [[] for _ in range(workers)]
+    bw_p1 = [0.0] * workers
+    for p, w in sorted_pairs:
+        m = min(range(workers), key=lambda b: bw_p1[b])
+        bins_p1[m].append(p)
+        bw_p1[m] += w
+    chunks_p1 = [b for b in bins_p1 if b]
+
+    p1_worker = _MagnusPhase1Worker(identity, truncation_threshold)
+    if pool is not None:
+        p1_results = pool.map(p1_worker, chunks_p1)
+    else:
+        with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
+            p1_results = local_pool.map(p1_worker, chunks_p1)
+
+    rows = [{} for _ in range(num_layers)]
+    held_columns = [{} for _ in range(num_layers)]
+    for chunk_out in p1_results:
+        for i, k, pw_dict in chunk_out:
+            r_i = rows[i]
+            c_k = held_columns[k]
+            for s_lbl, rate in pw_dict.items():
+                r_i[s_lbl] = r_i.get(s_lbl, 0.0) + rate
+                c_k[s_lbl] = c_k.get(s_lbl, 0.0) + rate
+
+    second_order_comm_str_dict = {}
+    for r in rows:
+        for s_lbl, rate in r.items():
+            second_order_comm_str_dict[s_lbl] = second_order_comm_str_dict.get(s_lbl, 0.0) + 0.5 * rate
+
+    # Intermediate prefix row sums and suffix column sums (< 10 ms on master)
+    R = []
+    running_row = {}
+    for i in range(num_layers):
+        curr = dict(running_row)
+        for s_lbl, rate in rows[i].items():
+            curr[s_lbl] = curr.get(s_lbl, 0.0) + (1/12) * rate
+        curr_trunc = {k: v for k, v in curr.items() if abs(v) > truncation_threshold}
+        R.append({_lse_from_string_rep(k, n_q): v for k, v in curr_trunc.items()})
+        for s_lbl, rate in rows[i].items():
+            running_row[s_lbl] = running_row.get(s_lbl, 0.0) + (1/6) * rate
+        running_row = {k: v for k, v in running_row.items() if abs(v) > truncation_threshold}
+
+    C = []
+    running_col = {}
+    for k in range(num_layers - 2, -1, -1):
+        col = held_columns[k]
+        curr = dict(running_col)
+        for s_lbl, rate in col.items():
+            curr[s_lbl] = curr.get(s_lbl, 0.0) - (1/12) * rate
+        curr_trunc = {k: v for k, v in curr.items() if abs(v) > truncation_threshold}
+        C.append((k, {_lse_from_string_rep(s, n_q): v for s, v in curr_trunc.items()}))
+        for s_lbl, rate in col.items():
+            running_col[s_lbl] = running_col.get(s_lbl, 0.0) - (1/6) * rate
+        running_col = {s: v for s, v in running_col.items() if abs(v) > truncation_threshold}
+
+    # Phase 2: Outer commutator tasks with LPT bin-packing
+    outer_tasks = []
+    outer_weights = []
+    for i in range(1, num_layers):
+        outer_tasks.append((errorgen_layers[i], R[i], 1.0))
+        outer_weights.append(len(errorgen_layers[i]) * len(R[i]))
+    for k, c_k in C:
+        outer_tasks.append((errorgen_layers[k], c_k, 1.0))
+        outer_weights.append(len(errorgen_layers[k]) * len(c_k))
+
+    sorted_outer = sorted(zip(outer_tasks, outer_weights), key=lambda x: x[1], reverse=True)
+    bins_outer = [[] for _ in range(workers)]
+    bw_outer = [0.0] * workers
+    for t, w in sorted_outer:
+        m = min(range(workers), key=lambda b: bw_outer[b])
+        bins_outer[m].append(t)
+        bw_outer[m] += w
+    chunks_p2 = [b for b in bins_outer if b]
+
+    p2_worker = _MagnusPhase2Worker(identity, truncation_threshold)
+    if pool is not None:
+        p2_results = pool.map(p2_worker, chunks_p2)
+    else:
+        with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
+            p2_results = local_pool.map(p2_worker, chunks_p2)
+
+    third_order_str_dict = {}
+    for d in p2_results:
+        for s_lbl, rate in d.items():
+            third_order_str_dict[s_lbl] = third_order_str_dict.get(s_lbl, 0.0) + rate
+
+    om2_survivors = {k: v for k, v in second_order_comm_str_dict.items() if abs(v) > truncation_threshold}
+    om3_survivors = {k: v for k, v in third_order_str_dict.items() if abs(v) > truncation_threshold}
+    return ({_lse_from_string_rep(k, n_q): v for k, v in om2_survivors.items()},
+            {_lse_from_string_rep(k, n_q): v for k, v in om3_survivors.items()})
 
 @_with_cyclic_gc_paused
 def zassenhaus_formula(errorgen_groups: list[_ErrorgenDict], zassenhaus_order: Literal[1,2] = 1,
