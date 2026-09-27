@@ -436,10 +436,27 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         #return hash((self.errorgen_type, self._hashable_basis_element_labels))
         return hash(self._hashable_string_rep)
 
-    def __setstate__(self, state: dict[str, Any]) -> None:
+    def __reduce__(self) -> tuple[Any, ...]:
         """
-        Restore from a pickled/copied state, migrating states written by older versions
-        of this class:
+        Custom pickle reduction returning a compact tuple of attributes directly
+        reconstructed via __new__, eliminating redundant __dict__ serialization.
+        """
+        state = (
+            self.errorgen_type,
+            self.type_idx,
+            self.basis_element_labels,
+            self.label,
+            self.circuit_time,
+            self._hashable_basis_element_labels,
+            self._hashable_string_rep,
+            self._initial_label,
+        )
+        return (LocalStimErrorgenLabel.__new__, (LocalStimErrorgenLabel,), state)
+
+    def __setstate__(self, state: Union[tuple[Any, ...], dict[str, Any]]) -> None:
+        """
+        Restore from a pickled/copied state, supporting both compact tuple states
+        and legacy dictionary states written by older versions:
 
         - `type_idx` did not exist: derive it from `errorgen_type`.
         - `initial_label` was a plain attribute (it is now the read-only property backed
@@ -447,6 +464,13 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         - the cached `_hashable_basis_element_labels` did not exist: rebuild it; the hash/equality
           string `_hashable_string_rep` is always rebuilt since its format has changed.
         """
+        if isinstance(state, tuple):
+            (self.errorgen_type, self.type_idx, self.basis_element_labels,
+             self.label, self.circuit_time, self._hashable_basis_element_labels,
+             self._hashable_string_rep, self._initial_label) = state
+            self._support_mask = None
+            return
+
         if 'initial_label' in state:
             state['_initial_label'] = state.pop('initial_label')
         if 'type_idx' not in state:

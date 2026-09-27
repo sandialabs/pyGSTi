@@ -5541,7 +5541,8 @@ class _BulkAlphaWorker:
             self.tableau = tableau
 
     def __call__(self, sub_bitstrings, sub_errorgens):
-        return _raw_bulk_alpha(sub_errorgens, self.tableau, list(sub_bitstrings))
+        with _cyclic_gc_paused():
+            return _raw_bulk_alpha(sub_errorgens, self.tableau, list(sub_bitstrings))
 
 
 class _BulkAlphaPauliWorker:
@@ -5553,7 +5554,8 @@ class _BulkAlphaPauliWorker:
             self.tableau = tableau
 
     def __call__(self, sub_paulis, sub_errorgens):
-        return _raw_bulk_alpha_pauli(sub_errorgens, self.tableau, list(sub_paulis))
+        with _cyclic_gc_paused():
+            return _raw_bulk_alpha_pauli(sub_errorgens, self.tableau, list(sub_paulis))
 
 
 def bulk_alpha(

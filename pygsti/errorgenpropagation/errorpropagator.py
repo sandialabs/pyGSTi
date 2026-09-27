@@ -116,14 +116,15 @@ def _should_parallelize_layer_prop(
 
 def _prop_layer_chunk_worker(chunk_items):
     """Module-level task runner for chunked layer propagation (picklable under spawn)."""
-    chunk_results = []
-    for idx, err_l, prop_l in chunk_items:
-        new_d = {}
-        for lbl, rate in err_l.items():
-            res = lbl.propagate_error_gen_tableau(prop_l, rate)
-            new_d[res[0]] = res[1]
-        chunk_results.append((idx, new_d))
-    return chunk_results
+    with _eprop._cyclic_gc_paused():
+        chunk_results = []
+        for idx, err_l, prop_l in chunk_items:
+            new_d = {}
+            for lbl, rate in err_l.items():
+                res = lbl.propagate_error_gen_tableau(prop_l, rate)
+                new_d[res[0]] = res[1]
+            chunk_results.append((idx, new_d))
+        return chunk_results
 
 
 class ErrorGeneratorPropagator:
