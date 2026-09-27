@@ -578,6 +578,27 @@ def _should_parallelize_magnus(
     return n_pairs >= cutoffs['min_magnus_pairs'] and avg_terms_per_layer >= cutoffs['min_magnus_terms']
 
 
+def _lse_from_string_rep(rep: str, n: int) -> _LSE:
+    """Losslessly reconstruct a LocalStimErrorgenLabel from its cached string representation."""
+    typ = rep[0]
+    if typ in ('H', 'S'):
+        s = rep[1:]
+        return _LSE(typ, (stim.PauliString(s),), pauli_str_reps=(s,))
+    else:
+        s1 = rep[1 : 1 + n]
+        s2 = rep[1 + n :]
+        return _LSE(typ, (stim.PauliString(s1), stim.PauliString(s2)), pauli_str_reps=(s1, s2))
+
+
+def _merge_string_dictionaries(d1: dict[str, float], d2: dict[str, float]) -> dict[str, float]:
+    """Binary reduction merging string rate dictionaries by summing overlapping rates."""
+    res = dict(d1)
+    get = res.get
+    for k, v in d2.items():
+        res[k] = get(k, 0.0) + v
+    return res
+
+
 class _MagnusPairEvaluator:
     """Worker task evaluating commutators for a single pair of layers (picklable under spawn)."""
     def __init__(self, identity, threshold):
@@ -585,12 +606,13 @@ class _MagnusPairEvaluator:
         self.threshold = threshold
 
     def __call__(self, pair):
-        l1, l2 = pair
-        target = {}
-        _accumulate_layer_pairwise_commutators(
-            target, l1, l2, self.identity, addl_weight=0.5, truncation_threshold=self.threshold
-        )
-        return target
+        with _cyclic_gc_paused():
+            l1, l2 = pair
+            target = {}
+            _accumulate_layer_pairwise_commutators(
+                target, l1, l2, self.identity, addl_weight=0.5, truncation_threshold=self.threshold
+            )
+            return {k._hashable_string_rep: v for k, v in target.items()}
 
 
 def _merge_dictionaries(d1, d2):
@@ -738,9 +760,11 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
         rates combined according to the second order of the magnus expansion.
     """
     errorgen_pairs = []
+    pair_weights = []
     for i in range(len(errorgen_layers)):
         for j in range(i):
             errorgen_pairs.append((errorgen_layers[i], errorgen_layers[j]))
+            pair_weights.append(len(errorgen_layers[i]) * len(errorgen_layers[j]))
     
     # precompute an identity string for comparisons in commutator calculations if one is not provided.
     if identity is None and errorgen_layers:
@@ -762,20 +786,23 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
                                                    addl_weight=0.5, truncation_threshold=truncation_threshold)
         return _truncated(second_order_comm_dict, truncation_threshold)
 
-    # Parallel pairwise reduction across workers
+    # Parallel pairwise reduction across workers with LPT bin-packing and string-key deferred materialization
     evaluator = _MagnusPairEvaluator(identity, truncation_threshold)
     if pool is not None:
-        second_order_comm_dict = _parallel_pair_reduce(
-            evaluator, errorgen_pairs, _merge_dictionaries, num_workers=workers, pool=pool
+        second_order_str_dict = _parallel_pair_reduce(
+            evaluator, errorgen_pairs, _merge_string_dictionaries, num_workers=workers, pool=pool,
+            pair_weights=pair_weights
         )
     else:
         with _SharedWorkerPool(num_workers=workers, prewarm_packages=_EGPROP_PREWARM_PACKAGES) as local_pool:
-            second_order_comm_dict = _parallel_pair_reduce(
-                evaluator, errorgen_pairs, _merge_dictionaries, pool=local_pool
+            second_order_str_dict = _parallel_pair_reduce(
+                evaluator, errorgen_pairs, _merge_string_dictionaries, pool=local_pool,
+                pair_weights=pair_weights
             )
-    if second_order_comm_dict is None:
-        second_order_comm_dict = {}
-    return _truncated(second_order_comm_dict, truncation_threshold)
+    if second_order_str_dict is None:
+        return {}
+    survivors = {k: v for k, v in second_order_str_dict.items() if abs(v) > truncation_threshold}
+    return {_lse_from_string_rep(k, n_q): v for k, v in survivors.items()}
 
 def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
                                          truncation_threshold: float = 1e-14) -> tuple[_ErrorgenDict, _ErrorgenDict]:

@@ -478,9 +478,12 @@ def parallel_pair_reduce(
     num_workers: Union[int, str, None] = "auto",
     pool: Optional[Any] = None,
     prewarm_packages: Optional[Sequence[str]] = None,
+    pair_weights: Optional[Sequence[float]] = None,
 ) -> Any:
     """
     Execute pair_eval_fn over pairs in parallel chunks and aggregate results via reduce_fn.
+    When pair_weights is provided, uses greedy Longest Processing Time (LPT) bin-packing
+    to balance workloads across workers.
 
     Parameters
     ----------
@@ -496,6 +499,8 @@ def parallel_pair_reduce(
         Existing worker pool to reuse.
     prewarm_packages : sequence of str, optional
         Optional packages to pre-warm in workers if an ephemeral pool is created.
+    pair_weights : sequence of float, optional
+        Estimated relative computational costs per pair for greedy LPT load balancing.
 
     Returns
     -------
@@ -515,8 +520,21 @@ def parallel_pair_reduce(
             accum = res if accum is None else reduce_fn(accum, res)
         return accum
 
-    chunk_size = (n_pairs + workers - 1) // workers
-    chunks = [pair_items[i : i + chunk_size] for i in range(0, n_pairs, chunk_size) if i < n_pairs]
+    if pair_weights is not None and len(pair_weights) == n_pairs:
+        # Greedy Longest Processing Time (LPT) bin-packing
+        sorted_pairs_with_weights = sorted(
+            zip(pair_items, pair_weights), key=lambda x: x[1], reverse=True
+        )
+        bins = [[] for _ in range(workers)]
+        bin_weights = [0.0] * workers
+        for pair, weight in sorted_pairs_with_weights:
+            min_bin = min(range(workers), key=lambda b: bin_weights[b])
+            bins[min_bin].append(pair)
+            bin_weights[min_bin] += weight
+        chunks = [b for b in bins if b]
+    else:
+        chunk_size = (n_pairs + workers - 1) // workers
+        chunks = [pair_items[i : i + chunk_size] for i in range(0, n_pairs, chunk_size) if i < n_pairs]
 
     tasks = [(chunk, pair_eval_fn, reduce_fn) for chunk in chunks]
 
