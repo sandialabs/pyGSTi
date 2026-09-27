@@ -12,6 +12,7 @@ from pygsti.tools.basistools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen, random_CPTP_error_generator_rates
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 import warnings
+import pickle
 from ..util import BaseCase
 from itertools import product, chain
 from math import factorial
@@ -562,6 +563,30 @@ class ErrgenCompositionCommutationTester(BaseCase):
         for k in seq.keys():
             self.assertAlmostEqual(seq[k], par[k], places=12)
 
+    def test_magnus_expansion_parallel_order3(self):
+        pspec = QubitProcessorSpec(4, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(0, 1), (1, 2), (2, 3), (3, 0)]})
+        rates = {'Gxpi2': _all_sector_rate_subset(1, 1, seed=100), 'Gypi2': _all_sector_rate_subset(1, 1, seed=101),
+                 'Gcphase': _all_sector_rate_subset(2, 1, seed=200)}
+        model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=rates, lindblad_parameterization='GLND')
+        circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4, ], rand_state=12345)
+        propagator = ErrorGeneratorPropagator(model.copy())
+        layers = propagator.propagate_errorgens(circuit)
+
+        seq = _eprop.magnus_expansion(layers, magnus_order=3, num_workers=None)
+        par = _eprop.magnus_expansion(layers, magnus_order=3, num_workers=2)
+        self.assertEqual(set(seq.keys()), set(par.keys()))
+        for k in seq.keys():
+            self.assertAlmostEqual(seq[k], par[k], places=12)
+
+    def test_zassenhaus_formula_parallel(self):
+        seq = _eprop.zassenhaus_formula(self.propagated_errorgen_layers, zassenhaus_order=2, num_workers=None)
+        par = _eprop.zassenhaus_formula(self.propagated_errorgen_layers, zassenhaus_order=2, num_workers=2)
+        self.assertEqual(len(seq), len(par))
+        for s_dict, p_dict in zip(seq, par):
+            self.assertEqual(set(s_dict.keys()), set(p_dict.keys()))
+            for k in s_dict.keys():
+                self.assertAlmostEqual(s_dict[k], p_dict[k], places=12)
+
     def test_magnus_expansion_all_sectors(self):
         # The model of setUp has H errors only, so magnus_expansion's commutator terms exercise
         # a single type-pair branch there and the third-order term is ~1e-12. This model has
@@ -821,10 +846,13 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.target_model = create_crosstalk_free_model(processor_spec = pspec)
         self.circuit = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
         self.circuit_alt = create_random_circuit(pspec, 4, sampler='edgegrab', samplerargs=[0.4,], rand_state=12345)
-        max_strengths = {1: {'S': 0.0005, 'H': 0.0001},
-                         2: {'S': 0.0005, 'H': 0.0001}}
-        error_rates_dict = sample_error_rates_dict(pspec, max_strengths, seed=12345)
-        self.error_model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=error_rates_dict)
+        # Updated test fixture populating all four Lindblad sectors ('H', 'S', 'C', 'A') with a sparse structure
+        rates = {
+            'Gxpi2': _all_sector_rate_subset(1, 1, seed=100),
+            'Gypi2': _all_sector_rate_subset(1, 1, seed=101),
+            'Gcphase': _all_sector_rate_subset(2, 1, seed=200),
+        }
+        self.error_model = create_crosstalk_free_model(pspec, lindblad_error_coeffs=rates, lindblad_parameterization='GLND')
         self.error_propagator = ErrorGeneratorPropagator(self.error_model.copy())
         self.propagated_errorgen_layer = self.error_propagator.propagate_errorgens_bch(self.circuit, bch_order=1)
         self.circuit_tableau = self.circuit.convert_to_stim_tableau()
@@ -1144,6 +1172,72 @@ class ApproxStabilizerMethodTester(BaseCase):
         par = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=2)
         self.assertArraysAlmostEqual(par, seq)
         self.assertAlmostEqual(np.sum(par), 1.0)
+
+    def test_bulk_alpha_single_outcome_column_splitting(self):
+        tableau = self.circuit_tableau
+        errorgens = list(self.propagated_errorgen_layer.keys())
+        bitstrings = ['0000']  # M = 1 forces 1D column (generator) splitting
+        seq = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=None)
+        par = _eprop.bulk_alpha(errorgens, tableau, bitstrings, num_workers=2)
+        self.assertEqual(par.shape, (1, len(errorgens)))
+        self.assertArraysAlmostEqual(par, seq)
+
+    def test_approximate_stabilizer_probabilities_bitstrings(self):
+        # Full distribution
+        probs_full = _eprop.approximate_stabilizer_probabilities(
+            self.propagated_errorgen_layer, self.circuit, order=2, num_workers=2
+        )
+        self.assertEqual(len(probs_full), 16)
+
+        # Specific bitstrings subset
+        subset = ['0000', '0101', '1111']
+        probs_sub = _eprop.approximate_stabilizer_probabilities(
+            self.propagated_errorgen_layer, self.circuit, order=2, bitstrings=subset, num_workers=2
+        )
+        self.assertEqual(len(probs_sub), 3)
+        self.assertAlmostEqual(probs_sub[0], probs_full[0], places=12)
+        self.assertAlmostEqual(probs_sub[1], probs_full[5], places=12)
+        self.assertAlmostEqual(probs_sub[2], probs_full[15], places=12)
+
+    def test_approximate_stabilizer_pauli_expectations_bulk(self):
+        paulis = [stim.PauliString('XXXX'), stim.PauliString('ZIII'), stim.PauliString('YYYY'), 'XIII']
+        bulk_exp = _eprop.approximate_stabilizer_pauli_expectations(
+            self.propagated_errorgen_layer, self.circuit, paulis, order=2, num_workers=2
+        )
+        self.assertEqual(len(bulk_exp), len(paulis))
+        for i, p in enumerate(paulis):
+            single_exp = _eprop.approximate_stabilizer_pauli_expectation(
+                self.propagated_errorgen_layer, self.circuit, p, order=2
+            )
+            self.assertAlmostEqual(bulk_exp[i], single_exp, places=12)
+
+    def test_error_generator_taylor_expansion_parallel(self):
+        prod_seq = _eprop._commuting_product(self.propagated_errorgen_layer, self.propagated_errorgen_layer, 'IIII', num_workers=1)
+        prod_par = _eprop._commuting_product(self.propagated_errorgen_layer, self.propagated_errorgen_layer, 'IIII', num_workers=2)
+        for k in set(prod_seq.keys()) | set(prod_par.keys()):
+            self.assertAlmostEqual(prod_seq.get(k, 0), prod_par.get(k, 0), places=12)
+
+        t_seq = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, num_workers=1)
+        t_par = _eprop.error_generator_taylor_expansion(self.propagated_errorgen_layer, order=2, num_workers=2)
+        self.assertEqual(len(t_seq), len(t_par))
+        for s_dict, p_dict in zip(t_seq, t_par):
+            self.assertEqual(set(s_dict.keys()), set(p_dict.keys()))
+            for k in s_dict:
+                self.assertAlmostEqual(s_dict[k], p_dict[k], places=12)
+
+    def test_local_stim_errorgen_label_pickle_fidelity(self):
+        h = _LSE('H', (stim.PauliString('XIIX'),), pauli_str_reps=('XIIX',))
+        s = _LSE('S', (stim.PauliString('YIIY'),), pauli_str_reps=('YIIY',))
+        c = _LSE('C', (stim.PauliString('XIII'), stim.PauliString('IIZI')), pauli_str_reps=('XIII', 'IIZI'))
+        a = _LSE('A', (stim.PauliString('YIII'), stim.PauliString('IIZI')), pauli_str_reps=('YIII', 'IIZI'))
+        for lbl in (h, s, c, a):
+            data = pickle.dumps(lbl, protocol=pickle.HIGHEST_PROTOCOL)
+            rec = pickle.loads(data)
+            self.assertEqual(rec, lbl)
+            self.assertEqual(hash(rec), hash(lbl))
+            self.assertEqual(rec.errorgen_type, lbl.errorgen_type)
+            self.assertEqual(rec.basis_element_labels, lbl.basis_element_labels)
+            self.assertEqual(rec._hashable_basis_element_labels, lbl._hashable_basis_element_labels)
 
     def test_stabilizer_probability_correction(self):
         #The corrections testing here will just be integration testing, we'll

@@ -440,18 +440,24 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
         """
         Custom pickle reduction returning a compact tuple of attributes directly
         reconstructed via __new__, eliminating redundant __dict__ serialization.
+        Falls back to dictionary state if legacy or mutated attributes are detected.
         """
-        state = (
-            self.errorgen_type,
-            self.type_idx,
-            self.basis_element_labels,
-            self.label,
-            self.circuit_time,
-            self._hashable_basis_element_labels,
-            self._hashable_string_rep,
-            self._initial_label,
-        )
-        return (LocalStimErrorgenLabel.__new__, (LocalStimErrorgenLabel,), state)
+        d = self.__dict__
+        if '_hashable_basis_element_labels' in d:
+            expected_rep = self.errorgen_type + ''.join(self._hashable_basis_element_labels)
+            if 'type_idx' in d and d.get('_hashable_string_rep') == expected_rep and 'initial_label' not in d:
+                state = (
+                    self.errorgen_type,
+                    self.type_idx,
+                    self.basis_element_labels,
+                    self.label,
+                    self.circuit_time,
+                    self._hashable_basis_element_labels,
+                    expected_rep,
+                    d.get('_initial_label', None),
+                )
+                return (LocalStimErrorgenLabel.__new__, (LocalStimErrorgenLabel,), state)
+        return (LocalStimErrorgenLabel.__new__, (LocalStimErrorgenLabel,), self.__dict__)
 
     def __setstate__(self, state: Union[tuple[Any, ...], dict[str, Any]]) -> None:
         """

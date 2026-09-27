@@ -40,6 +40,10 @@ def _reduce_dicts(d1, d2):
     return res
 
 
+def _get_pid(_=None):
+    return os.getpid()
+
+
 class MPToolsTester(BaseCase):
     def test_starmap_with_kwargs(self):
         # Sequential (1 processor)
@@ -209,6 +213,28 @@ class MPToolsTester(BaseCase):
                 _eval_pair, pairs, _reduce_dicts, pool=shared_pool
             )
             self.assertEqual(reused_accum, seq_accum)
+
+    def test_parallel_pair_reduce_lpt_load_balancing(self):
+        pairs = [(i, j) for i in range(10) for j in range(i)]  # 45 pairs
+        # Skewed pair weights
+        weights = [float(i * 10 + j) for i, j in pairs]
+
+        seq_accum = None
+        for p in pairs:
+            res = _eval_pair(p)
+            seq_accum = res if seq_accum is None else _reduce_dicts(seq_accum, res)
+
+        par_accum = mpt.parallel_pair_reduce(
+            _eval_pair, pairs, _reduce_dicts, num_workers=4, pair_weights=weights
+        )
+        self.assertEqual(par_accum, seq_accum)
+
+    def test_shared_worker_pool_process_id_reuse(self):
+        with mpt.SharedWorkerPool(num_workers=4) as pool:
+            pids_1 = set(pool.map(_get_pid, list(range(16))))
+            pids_2 = set(pool.map(_get_pid, list(range(16))))
+            self.assertEqual(pids_1, pids_2)
+            self.assertEqual(len(pids_1), 4)
 
     def test_get_available_system_memory(self):
         avail = mpt.get_available_system_memory()
