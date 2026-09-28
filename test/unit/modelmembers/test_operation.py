@@ -566,6 +566,35 @@ class LindbladErrorgenTester(BaseCase):
         errgen_copy.transform_inplace(T)
         self.assertTrue(np.allclose(errgen_copy.to_dense(), eg.to_dense()))
 
+    def test_from_elementary_errorgens_C_and_A_basis_element_order(self):
+        # C_{P,Q} = C_{Q,P} and A_{P,Q} = -A_{Q,P}: labels given in the non-canonical (unsorted) order must be
+        # mapped onto the canonical ones instead of being silently dropped
+        basis = Basis.cast('pp', 16)
+        ZI, IZ, XX, YY = basis['ZI'], basis['IZ'], basis['XX'], basis['YY']
+
+        def dense(elementary_errorgens, parameterization='GLND'):
+            eg = op.LindbladErrorgen.from_elementary_errorgens(elementary_errorgens, parameterization, 'pp', mx_basis='pp',
+                                                              truncate=False, evotype='default', state_space=2 * [2])
+            return eg.to_dense()
+
+        exp_C = bt.change_basis(0.01 * lt.create_elementary_errorgen('C', IZ, ZI), 'std', 'pp')
+        self.assertTrue(np.allclose(dense({('C', 'IZ', 'ZI'): 0.01}), exp_C))
+        self.assertTrue(np.allclose(dense({('C', 'ZI', 'IZ'): 0.01}), exp_C))
+        exp_A = bt.change_basis(0.01 * lt.create_elementary_errorgen('A', IZ, ZI), 'std', 'pp')
+        self.assertTrue(np.allclose(dense({('A', 'IZ', 'ZI'): 0.01}), exp_A))
+        self.assertTrue(np.allclose(dense({('A', 'ZI', 'IZ'): 0.01}), -exp_A))
+        self.assertTrue(np.allclose(dense({('A', 'ZI', 'IZ'): 0.01}),
+                                    bt.change_basis(0.01 * lt.create_elementary_errorgen('A', ZI, IZ), 'std', 'pp')))
+        # both orders in the same dictionary are combined
+        self.assertTrue(np.allclose(dense({('A', 'IZ', 'ZI'): 0.03, ('A', 'ZI', 'IZ'): 0.01}), 2 * exp_A))
+        # with a CP-compatible amount of stochastic error the CPTP parameterization accepts either order too
+        cp = {('S', 'XX'): 0.02, ('S', 'YY'): 0.02, ('A', 'YY', 'XX'): 0.01, ('C', 'YY', 'XX'): 0.01}
+        exp_cp = bt.change_basis(0.02 * lt.create_elementary_errorgen('S', XX) + 0.02 * lt.create_elementary_errorgen('S', YY)
+                                 + 0.01 * lt.create_elementary_errorgen('A', YY, XX)
+                                 + 0.01 * lt.create_elementary_errorgen('C', YY, XX), 'std', 'pp')
+        self.assertTrue(np.allclose(dense(cp, 'CPTPLND'), exp_cp))
+        self.assertTrue(np.allclose(dense(cp, 'GLND'), exp_cp))
+
 
 class LindbladErrorgenBase(OpBase):
     def test_has_nonzero_hessian(self):

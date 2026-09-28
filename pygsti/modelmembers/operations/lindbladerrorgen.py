@@ -472,7 +472,21 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
                                         for k, v in elementary_errorgens.items()}
             else:
                 assert isinstance(first_key, _LocalElementaryErrorgenLabel), 'Unsupported error generator label type as key.'
-        
+
+        # Canonicalize the basis-element order of 'C' and 'A' labels.  The coefficient blocks only know the
+        # elementary error generators C_{P,Q} and A_{P,Q} with P < Q (in sorted basis-element order); since
+        # C_{Q,P} = C_{P,Q} and A_{Q,P} = -A_{P,Q}, a label given in the other order is mapped onto its
+        # canonical counterpart (with a sign flip for 'A') rather than being silently ignored.
+        canonical_eegs = {}
+        for lbl, v in elementary_errorgens.items():
+            if lbl.errorgen_type in ('C', 'A') and len(lbl.basis_element_labels) == 2 \
+               and lbl.basis_element_labels[0] > lbl.basis_element_labels[1]:
+                lbl = _LocalElementaryErrorgenLabel(lbl.errorgen_type, lbl.basis_element_labels[::-1])
+                if lbl.errorgen_type == 'A':
+                    v = -v
+            canonical_eegs[lbl] = canonical_eegs.get(lbl, 0) + v
+        elementary_errorgens = canonical_eegs
+
         parameterization = LindbladParameterization.minimal_from_elementary_errorgens(elementary_errorgens) \
             if parameterization == "auto" else LindbladParameterization.cast(parameterization)
 
@@ -495,7 +509,11 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
                 else:
                     bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
                     blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
-                blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
+                unused = blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
+                if unused:
+                    _warnings.warn("The following elementary error generators could not be represented by the '%s' "
+                                   "coefficient block and were ignored: %s"
+                                   % (blk_type, ", ".join(map(str, unused.keys()))))
                 blocks.append(blk)
         return cls(blocks, basis, mx_basis, evotype, state_space)
 
