@@ -258,6 +258,78 @@ print(f'Relative Error Approx to Exact (Second-order taylor, Second-order BCH): 
 
 In this case even with the first-order taylor approximation together with the second-order BCH approximation the relative error to the exact expecation value is roughly half a percent, dropping to below a tenth of a percent when we go up to the second order taylor approximation. As before, by going out to higher-order in either approximation one can achieve even higher levels of accuracy.
 
+## Multiprocessing and Parallelization Options
+As circuit depth, qubit count, or noise model density grows—particularly when evaluating higher-order BCH/Magnus expansions or computing sensitivities across many observables—the computational workload of error generator propagation increases significantly. pyGSTi includes multicore multiprocessing parallelization across the core propagation and sensitivity routines to accelerate these workflows.
+
+### The `num_workers` and `pool` Arguments
+The primary propagation and sensitivity functions accept two optional arguments to manage parallel execution:
+
+- `num_workers`: Can be specified as an integer (e.g. `num_workers=4`), `"auto"` (which automatically infers available physical CPU cores while honoring container cgroup quotas on Linux, Windows, and macOS), or `None` (the default, which follows the sequential execution path with zero multiprocessing overhead).
+- `pool`: An optional existing worker pool to reuse across sequential workflow stages, eliminating the overhead of repeatedly spawning and terminating processes.
+
+Functions supporting parallel execution include:
+- `ErrorGeneratorPropagator.propagate_errorgens` and `propagate_errorgens_bch` (parallelizing circuit layer propagation across workers)
+- `errgenproptools.magnus_expansion` and `zassenhaus_formula` (parallelizing pairwise layer commutators and outer accumulated commutators using load-balanced bin-packing)
+- `errgenproptools.error_generator_taylor_expansion` and `_commuting_product` (parallelizing operator compositions via bilinear term slicing)
+- `errgenproptools.approximate_stabilizer_probabilities` and `approximate_stabilizer_pauli_expectations` (parallelizing 2D sensitivity grids and reusing intermediate Taylor expansions)
+- `errgenproptools.bulk_alpha` and `bulk_alpha_pauli` (2D process grid partitioning across outcomes and error generators)
+
+### Pipeline Pool Reuse with `SharedWorkerPool`
+In multi-stage workflows (such as propagating layers, computing a second- or third-order Magnus expansion, and subsequently calculating outcome probabilities), spinning up a new multiprocessing pool for each function call introduces unnecessary operating system process creation and module import overhead.
+
+To avoid this, you can instantiate a `SharedWorkerPool` once as a context manager and pass it to each stage:
+
+```{code-cell} ipython3
+from pygsti.tools.mptools import SharedWorkerPool
+
+# Reusing a single pre-warmed worker pool across sequential pipeline stages:
+with SharedWorkerPool(num_workers="auto") as pool:
+    # 1. Parallel circuit layer propagation
+    propagated_layers = errorgen_propagator.propagate_errorgens(c, pool=pool)
+
+    # 2. Parallel second-order Magnus expansion with load balancing
+    effective_generator = eprop.magnus_expansion(propagated_layers, magnus_order=2, pool=pool)
+
+    # 3. Parallel probability calculation for specific bitstrings of interest
+    subset_probs = eprop.approximate_stabilizer_probabilities(
+        effective_generator, c, order=2, bitstrings=["0000", "0101"], pool=pool
+    )
+    print("Subset probabilities:", subset_probs)
+
+    # 4. Parallel bulk Pauli expectation value calculations
+    paulis = [stim.PauliString("ZIII"), stim.PauliString("XYZI")]
+    expectations = eprop.approximate_stabilizer_pauli_expectations(
+        effective_generator, c, paulis=paulis, order=2, pool=pool
+    )
+    print("Pauli expectations:", expectations)
+```
+
+Worker processes in `SharedWorkerPool` are pre-warmed with necessary modules (`stim`, `numpy`, and pyGSTi Cython extensions) upon pool creation, ensuring tasks dispatch immediately with minimal latency.
+
+### Bulk Evaluations and Observable Batching
+When evaluating outcome probabilities or Pauli expectation values across multiple targets, passing observables in bulk allows pyGSTi to compute the error generator Taylor series expansion once and vectorize the sensitivity calculation across all requested targets:
+
+- `approximate_stabilizer_probabilities(..., bitstrings=...)`: Rather than calling `approximate_stabilizer_probability` in a loop, pass an optional list or sequence of bitstrings to evaluate. (If `bitstrings` is omitted, the exhaustive distribution over all $2^n$ bitstrings is evaluated by default, with a warning issued if $n > 10$ due to exponential scaling).
+- `approximate_stabilizer_pauli_expectations(..., paulis=...)`: Accepts a sequence of Pauli observables (as strings or `stim.PauliString` objects) and evaluates all expectation values in a single bulk vectorized matrix-vector call.
+
+### Automated Threshold Cutoffs & Manual Configuration
+Multiprocessing incurs inter-process communication (IPC) overhead. If a circuit has only a few error generators or shallow depth, dispatching across processes can be slower than running sequentially.
+
+By default, pyGSTi uses an internal multi-scale cutoff table (`_DEFAULT_THRESHOLD_TABLE`) based on system size (e.g. minimum number of layer pairs or generator-outcome product $K \times M$) to determine whether parallelization should be engaged.
+
+If you wish to customize these threshold criteria or force parallel/serial modes for benchmarking, you can use `configure_errorgen_propagation_parallelization`:
+
+```{code-cell} ipython3
+# Check or customize parallelization thresholds
+eprop.configure_errorgen_propagation_parallelization(min_km_alpha=500, min_magnus_pairs=2)
+
+# Unconditionally force parallel execution regardless of workload size:
+# eprop.configure_errorgen_propagation_parallelization(force_parallel=True)
+
+# Restore default pyGSTi heuristics:
+eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+```
+
 ## Using a Fixed Per-Layer Error Generator
 Up to this point we have constructed an `ErrorGeneratorPropagator` from a full pyGSTi noise model. In many situations, however, it is useful to work with a simpler setup in which the *same* error generator layer is assumed to occur after every circuit layer, independent of the gate actually appearing there.
 
