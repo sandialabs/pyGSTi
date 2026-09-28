@@ -135,6 +135,21 @@ class ParameterIndexingTester(BaseCase):
         circuits = [Circuit([Label('Gxpi2', 0), Label('Gypi2', 1), Label('Iz', (0, 1))], line_labels=(0, 1))]
         self.assertEqual(lgst.unmodeled_gate_keys(circuits, params), {('Gypi2', 1), ('Iz', 0)})
 
+    def test_estimated_rates_dict_uses_union_support_for_C_and_A(self):
+        # the two Paulis of a C/A term are written on the union of their supports (required by the model constructors)
+        ansatz = {('Gcphase', 0, 1): {('C', 'ZI', 'IZ'): 0.001, ('A', 'X:0', 'Y:1'): 0.002, ('A', 'ZX', 'ZY'): 0.003},
+                  ('Gxpi2', 0): {('C', 'X', 'Y'): 0.004},
+                  ('Iz', 1): {('A', 'XI', 'YI'): 0.005, ('C', 'IX', 'XZ'): 0.006}}
+        params, rates = lgst.build_model_parameter_indexing(ansatz, 2)
+        rd = lgst.estimated_rates_dict(params, rates)
+        self.assertEqual(rd[('Gcphase', 0, 1)], {('C', 'ZI:0,1', 'IZ:0,1'): 0.001, ('A', 'XI:0,1', 'IY:0,1'): 0.002,
+                                                 ('A', 'ZX:0,1', 'ZY:0,1'): 0.003})
+        self.assertEqual(rd[('Gxpi2', 0)], {('C', 'X:0', 'Y:0'): 0.004})
+        self.assertEqual(rd[('Iz', 1)], {('A', 'X:1', 'Y:1'): 0.005, ('C', 'IX:1,v', 'XZ:1,v'): 0.006})
+        params2, rates2 = lgst.build_model_parameter_indexing(rd, 2)
+        self.assertEqual([p.errorgen for p in params2], [p.errorgen for p in params])
+        self.assertEqual(rates2, rates)
+
 
 class DesignMatrixTester(BaseCase):
     """Gates-only linearized GST (with crosstalk and SPAM errors), checked against exact simulation."""
@@ -344,6 +359,71 @@ class MCMDesignMatrixTester(BaseCase):
         D = np.vstack([d.design_matrix for d in designs])
         self.assertGreater(np.abs(shifts).max(), 0.005)
         self.assertLess(np.abs(shifts - D @ true_rates).max(), 0.15 * np.abs(shifts).max())
+
+    def test_full_hsca_error_model(self):
+        """Pauli-correlation ('C') and active ('A') errors on gates and on the MCM, with a physical (CPTP) true model."""
+        def relaxation(P, Q, gamma):  # amplitude damping (decay probability gamma) in elementary-errorgen form
+            return {('S', P): gamma / 4, ('S', Q): gamma / 4, ('A', P, Q): -gamma / 4}
+
+        true_model = {k: dict(v) for k, v in self.ansatz.items()}
+        for q in (0, 1):
+            for gate, axis in [('Gxpi2', 'X'), ('Gypi2', 'Y')]:
+                d = true_model[(gate, q)]
+                for k, v in relaxation('X', 'Y', 0.004).items():
+                    d[k] = d.get(k, 0.0) + v
+                d[('C', 'X', 'Y')] = 0.0004 if axis == 'X' else 0.0  # tilted dephasing axis (C^2 <= S_X S_Y)
+        d = true_model[('Gcphase', 0, 1)]
+        d.update({('S', 'ZI'): 0.001, ('S', 'IZ'): 0.001, ('C', 'ZI', 'IZ'): 0.0008})  # correlated dephasing
+        # MCM: FOMGI H+S representatives plus relaxation before/after the record is formed and an asymmetric readout
+        gadget = dict(mg.fomgi_ansatz(rates=self.fomgi_truth))
+        for (P, Q, gamma) in [('XX', 'YX', 0.004), ('XI', 'YI', 0.004), ('IX', 'IY', 0.003)]:
+            for k, v in relaxation(P, Q, gamma).items():
+                gadget[k] = gadget.get(k, 0.0) + v
+        true_model[('Iz', 0)] = gadget
+
+        # the ansatz used for the fit: same gate terms, all 28 FOMGI quantities for the MCM
+        ansatz = {k: dict(v) for k, v in true_model.items()}
+        ansatz[('Iz', 0)] = mg.fomgi_ansatz(sectors='all')
+        params, _ = lgst.build_model_parameter_indexing(ansatz, 2)
+        types = np.array(params.errorgen_types())
+        self.assertEqual(len(params.indices_for_key(('Iz', 0))), 28)
+        self.assertTrue((types == 'C').sum() >= 13 and (types == 'A').sum() >= 6)
+
+        # truth expressed in the coordinates of the ansatz (MCM part via the FOMGI projection of the gadget model)
+        fomgi_true = mg.fomgi_quantities(gadget, sectors='all')
+        self.assertAlmostEqual(fomgi_true['a_prep'], -0.001)
+        self.assertAlmostEqual(fomgi_true['a_read'], -0.00075)
+        self.assertAlmostEqual(fomgi_true['a_meas'], -0.001)
+        self.assertAlmostEqual(fomgi_true['s_prep'], self.fomgi_truth['s_prep'] + 0.002)  # S_YI ~ S_XI in the crunch map
+        truth = {k: dict(v) for k, v in true_model.items()}
+        truth[('Iz', 0)] = mg.fomgi_ansatz(sectors='all', rates=fomgi_true)
+        params_t, true_rates = lgst.build_model_parameter_indexing(truth, 2)
+        self.assertEqual(list(params_t), list(params))
+        true_rates = np.array(true_rates)
+
+        circuits = _random_circuits(self.rng, 200, 5, mcm_qubit=0, mcm_every=2)
+        designs = lgst.create_design_matrix_list(circuits, params, return_info=True)
+        self.assertEqual(lgst.unidentifiable_directions(designs, params), [])
+
+        # rate_to_model realizes C/A terms exactly (mixed-support pairs, either Pauli order, non-CP estimates)
+        noisy = lgst.rate_to_model(self.pspec, true_model)
+        swapped = {k: dict(v) for k, v in true_model.items()}
+        swapped[('Gcphase', 0, 1)] = {(k[0], k[2], k[1]) if k[0] == 'C' else k: v for k, v in d.items()}
+        noisy_swapped = lgst.rate_to_model(self.pspec, swapped)
+        obs = [dict(noisy.probabilities(c)) for c in circuits]
+        for c, p in zip(circuits[:10], obs[:10]):
+            self.assertGreaterEqual(min(p.values()), -1e-12)
+            for outcome, prob in noisy_swapped.probabilities(c).items():
+                self.assertAlmostEqual(prob, p[outcome], places=10)
+        rates, _ = lgst.estimate_error_rates(designs, [obs, None], None, params)
+        for typ in 'HSCA':
+            self.assertLess(np.abs(rates - true_rates)[types == typ].max(), 6e-4, msg="sector %s" % typ)
+        self.assertTrue(np.all(rates[types == 'S'] >= 0))  # stochastic rates stay non-negative in the joint solve
+        fomgi = lgst.mcm_fomgi_estimates(params, rates)[('Iz', 0)]
+        self.assertEqual(len(fomgi), 28)
+        for name in ('a_prep', 'a_read', 'a_meas', 's_prep', 's_read', 'rt_meas_x', 'wt0'):
+            self.assertAlmostEqual(fomgi[name], fomgi_true[name], delta=6e-4)
+        lgst.rate_to_model(self.pspec, ansatz, rate_ests=rates)  # estimated (not necessarily CP) rates are accepted
 
     def test_user_supplied_paulis_are_padded(self):
         circ = self.circuits[0]  # contains an MCM

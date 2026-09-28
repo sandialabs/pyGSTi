@@ -21,8 +21,9 @@ In this tutorial we walk through a complete linearized-GST analysis of a simulat
 2. sample shallow random circuits containing MCMs,
 3. build the *design matrix* that linearly relates error rates to observable shifts,
 4. simulate data (both without and with shot noise),
-5. estimate the error rates and compare them to the truth, and
-6. interpret the MCM's estimated error rates.
+5. estimate the error rates and compare them to the truth,
+6. interpret the MCM's estimated error rates, and finally
+7. extend the error model to *all four* sectors of elementary error generators (H, S, C and A), which is needed to describe non-unital noise such as relaxation.
 
 ```{code-cell} ipython3
 import warnings
@@ -51,7 +52,7 @@ A noisy circuit layer $\ell$ is modelled as the ideal layer $\mathcal{U}_\ell$ f
 
 $$\mathcal{L}_\ell = \sum_{g\in\ell} \mathcal{L}_g, \qquad \mathcal{L}_g = \sum_{P} h^{(g)}_P\, H_P + \sum_{P} s^{(g)}_P\, S_P,$$
 
-where $H_P[\rho] = -i[P, \rho]$ generates a coherent rotation about the Pauli axis $P$ (a rate $h$ corresponds to a rotation angle of $2h$) and $S_P[\rho] = P\rho P - \rho$ generates a stochastic Pauli error (a rate $s$ corresponds to $P$ being applied with probability $\approx s$).  A gate may cause errors on *any* qubits, not just its targets, which is how crosstalk is modelled.  The sets of Paulis $P$ that appear for each gate form the *ansatz*; their rates $\vec{\epsilon} = (h^{(g)}_P, s^{(g)}_P)$ are the unknowns.
+where $H_P[\rho] = -i[P, \rho]$ generates a coherent rotation about the Pauli axis $P$ (a rate $h$ corresponds to a rotation angle of $2h$) and $S_P[\rho] = P\rho P - \rho$ generates a stochastic Pauli error (a rate $s$ corresponds to $P$ being applied with probability $\approx s$).  A gate may cause errors on *any* qubits, not just its targets, which is how crosstalk is modelled.  The sets of Paulis $P$ that appear for each gate form the *ansatz*; their rates $\vec{\epsilon} = (h^{(g)}_P, s^{(g)}_P)$ are the unknowns.  ($H$ and $S$ generators span all *Pauli-diagonal* Lindbladians; the remaining two sectors, the Pauli-correlation generators $C_{P,Q}$ and the active generators $A_{P,Q}$, are needed for correlated and non-unital noise and are the subject of Section 9.)
 
 Conjugation by a Clifford maps elementary error generators to elementary error generators (up to a sign), so every gate's error generator can be pushed to the end of the circuit.  To first order in the rates, the change of the expectation value of a Pauli observable $Q$ at the end of a circuit $C$ is linear in $\vec\epsilon$,
 
@@ -434,10 +435,139 @@ estimates = lgst.estimated_rates_dict(params, rates_data)
 {key: {eg: round(rate, 4) for eg, rate in estimates[key].items()} for key in [('Gxpi2', 0), ('Iz', mcm_qubit)]}
 ```
 
-## 9. Practical notes
+## 9. Beyond H+S: Pauli-correlation and active errors
+
+The $H$ and $S$ generators only span the *Pauli-diagonal* Lindbladians.  A general (trace-preserving) Lindbladian has two more sectors of elementary error generators, indexed by *pairs* of Paulis $P \neq Q$:
+
+$$C_{P,Q}[\rho] = P\rho Q + Q\rho P - \tfrac12\{\{P,Q\},\rho\}, \qquad A_{P,Q}[\rho] = i\left(P\rho Q - Q\rho P + \tfrac12\{[P,Q],\rho\}\right).$$
+
+* The **Pauli-correlation** generators $C_{P,Q}$ describe *correlated* stochastic noise: a stochastic error along a tilted axis $\cos\theta\,X + \sin\theta\,Y$, for instance, is $\cos^2\!\theta\, S_X + \sin^2\!\theta\, S_Y + \sin\theta\cos\theta\, C_{X,Y}$ -- to leading order in the tilt the $C$ term is its only signature.  Likewise common-mode dephasing of two qubits is $S_{ZI} + S_{IZ} + C_{ZI,IZ}$.
+* The **active** generators $A_{P,Q}$ describe *non-unital* noise, i.e. processes that change the purity of the maximally mixed state, most prominently relaxation ($T_1$ decay): amplitude damping toward $|0\rangle$ with decay probability $\gamma$ is $\tfrac{\gamma}{4}\left(S_X + S_Y - A_{X,Y}\right)$ (in pyGSTi's sign convention).
+
+Both are first-order visible in Pauli expectation values, so linearized GST handles them with the same machinery -- specify `('C', pauli1, pauli2)` or `('A', pauli1, pauli2)` in the ansatz (the two Paulis may have different supports, e.g. `('C', 'Z:0', 'Z:1')`).  Two things change:
+
+1. The neat H/S decoupling of Section 1 no longer holds ($C$ and $A$ terms shift observables with ideal value $\pm1$ *and* $0$), so `estimate_error_rates` solves a single *bounded* least-squares problem for all rates at once, with the stochastic rates constrained to be non-negative.
+2. Physicality is no longer just $s \geq 0$: a Lindbladian is completely positive iff its non-Hamiltonian coefficient matrix is positive semidefinite, which for each pair requires $c_{P,Q}^2 + a_{P,Q}^2 \leq s_P\, s_Q$.  The *estimates* are not constrained by this (only by $s \geq 0$), so `rate_to_model` realizes the estimated generator as given (`lindblad_parameterization='GLND'`) rather than insisting on a CPTP one.
+
+For the MCM gadget, adding the $C$ and $A$ sectors raises the number of FOMGI quantities from 13 to 28 (`fomgi_ansatz(sectors='all')`): three active quantities `a_meas`, `a_prep`, `a_read` ($A_{XX,YX}$, $A_{XI,YI}$, $A_{IX,IY}$ -- with their $S$ partners these are relaxation of the qubit before / after the record is formed, and an *asymmetric* readout error), eight $\rho$-dependent axis rotations `rt_*` and four non-unitary weakness quantities `wt0..wt3` ($C$-type).
+
+### A physical H+S+C+A error model
+
+We extend the error model of Section 2 by realistic non-unital and correlated processes: every single-qubit gate suffers some relaxation (and the $X_{\pi/2}$ gates dephase along a slightly tilted axis), the two qubits of a CZ experience common-mode dephasing, and the measured qubit relaxes *during* the (long) mid-circuit measurement -- partly before the record is formed (`a_meas`), partly after (`a_prep`) -- while the record itself suffers an asymmetric readout error (`a_read`).  Each of these processes is completely positive by construction.
+
+```{code-cell} ipython3
+def relaxation(P, Q, gamma):
+    """Amplitude damping (decay probability gamma) as elementary error generators on the Pauli pair (P, Q)."""
+    return {('S', P): gamma / 4, ('S', Q): gamma / 4, ('A', P, Q): -gamma / 4}
+
+def tilted_dephasing(P, Q, rate, theta):
+    """Stochastic error along the axis cos(theta) P + sin(theta) Q."""
+    c, s = np.cos(theta), np.sin(theta)
+    return {('S', P): float(rate * c * c), ('S', Q): float(rate * s * s), ('C', P, Q): float(rate * s * c)}
+
+def add_terms(errors, terms):
+    for key, rate in terms.items():
+        errors[key] = float(errors.get(key, 0.0) + rate)
+
+true_model_hsca = {key: dict(errors) for key, errors in error_model.items()}
+for q in pspec.qubit_labels:
+    add_terms(true_model_hsca[('Gxpi2', q)], relaxation('X', 'Y', gamma=0.004))
+    add_terms(true_model_hsca[('Gxpi2', q)], tilted_dephasing('X', 'Y', rate=0.002, theta=0.3))
+    add_terms(true_model_hsca[('Gypi2', q)], relaxation('X', 'Y', gamma=0.004))
+for (q1, q2) in edges:   # common-mode (fully correlated) dephasing of both qubits during the CZ
+    add_terms(true_model_hsca[('Gcphase', q1, q2)], {('S', 'ZI'): 0.001, ('S', 'IZ'): 0.001, ('C', 'ZI', 'IZ'): 0.001})
+
+true_gadget = dict(error_model[('Iz', mcm_qubit)])      # the 13 H+S FOMGI representatives of Section 2 ...
+add_terms(true_gadget, relaxation('XX', 'YX', gamma=0.004))   # ... plus relaxation before the record is formed,
+add_terms(true_gadget, relaxation('XI', 'YI', gamma=0.004))   # relaxation after the record is formed,
+add_terms(true_gadget, relaxation('IX', 'IY', gamma=0.002))   # and an asymmetric readout error
+true_model_hsca[('Iz', mcm_qubit)] = true_gadget
+
+true_model_hsca[('Gxpi2', 0)]
+```
+
+The gate and SPAM parts of this model *are* the ansatz we fit.  For the MCM, however, the true gadget model contains generators such as $S_{YI}$ that are not FOMGI representatives, so we fit the gauge-free 28-quantity FOMGI ansatz instead and compare against the FOMGI *quantities* of the true gadget model (`fomgi_quantities`, cf. Section 7):
+
+```{code-cell} ipython3
+ansatz_hsca = {key: dict(errors) for key, errors in true_model_hsca.items()}
+ansatz_hsca[('Iz', mcm_qubit)] = mg.fomgi_ansatz(sectors='all')
+params_hsca, _ = lgst.build_model_parameter_indexing(ansatz_hsca, qubit_labels=pspec.qubit_labels)
+types_hsca = np.array(params_hsca.errorgen_types())
+
+fomgi_true_hsca = mg.fomgi_quantities(true_gadget, sectors='all')
+truth_in_ansatz = {key: dict(errors) for key, errors in true_model_hsca.items()}
+truth_in_ansatz[('Iz', mcm_qubit)] = mg.fomgi_ansatz(sectors='all', rates=fomgi_true_hsca)
+_, true_rates_hsca = lgst.build_model_parameter_indexing(truth_in_ansatz, qubit_labels=pspec.qubit_labels)
+true_rates_hsca = np.array(true_rates_hsca)
+
+print(len(params_hsca), "parameters:", {typ: int((types_hsca == typ).sum()) for typ in 'HSCA'})
+print("nonzero FOMGI quantities of the true MCM:", {k: round(v, 4) for k, v in fomgi_true_hsca.items() if abs(v) > 1e-9})
+```
+
+Note how the relaxation terms show up in the FOMGI quantities: $S_{YI}$ is gauge-equivalent to $S_{XI}$ (a $Y$ flip of the collapsed qubit is a bit flip up to an invisible phase), so relaxation after the measurement adds $2\times\gamma/4$ to `s_prep` and $-\gamma/4$ to `a_prep`.
+
+The rest of the analysis is identical to before -- design matrices, an identifiability check, simulation, estimation.  We reuse the circuits of Section 3 (with a $H+S+C+A$ ansatz more circuits are needed for the same statistical precision, since more parameters share the same data).
+
+```{code-cell} ipython3
+designs_hsca = lgst.create_design_matrix_list(circuits, params_hsca, return_info=True)
+D_hsca = np.vstack([d.design_matrix for d in designs_hsca])
+print("stacked design matrix:", D_hsca.shape, " rank:", np.linalg.matrix_rank(D_hsca))
+print("unidentifiable parameter combinations:", lgst.unidentifiable_directions(designs_hsca, params_hsca))
+
+noisy_model_hsca = lgst.rate_to_model(pspec, true_model_hsca)
+exact_probs_hsca = [noisy_model_hsca.probabilities(c) for c in circuits]
+dataset_hsca = pygsti.data.simulate_data(noisy_model_hsca, circuits, num_samples=num_shots, seed=2027)
+frequencies_hsca = lgst.probability_dicts_from_dataset(dataset_hsca, circuits)
+
+rates_exact_hsca, _ = lgst.estimate_error_rates(designs_hsca, [exact_probs_hsca, None], None, params_hsca)
+rates_data_hsca, error_bars_hsca = lgst.estimate_error_rates(designs_hsca, [frequencies_hsca, None], None, params_hsca,
+                                                             error_bars='bootstrap', error_bar_params=[20, num_shots], seed=1)
+
+for typ, name in [('H', 'Hamiltonian'), ('S', 'stochastic'), ('C', 'correlation'), ('A', 'active')]:
+    mask = types_hsca == typ
+    print("%-12s mean |true| = %.2e   no shot noise: mean |est - true| = %.2e   %d shots: mean |est - true| = %.2e, mean error bar = %.2e"
+          % (name, np.abs(true_rates_hsca[mask]).mean(), np.abs(rates_exact_hsca - true_rates_hsca)[mask].mean(),
+             num_shots, np.abs(rates_data_hsca - true_rates_hsca)[mask].mean(), error_bars_hsca[mask].mean()))
+```
+
+```{code-cell} ipython3
+fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), sharex=True, sharey=True)
+sectors = [('H', 'tab:blue', 'Hamiltonian'), ('S', 'tab:orange', 'stochastic'), ('C', 'tab:green', 'correlation'), ('A', 'tab:red', 'active')]
+for ax, (rates, errs, title) in zip(axes, [(rates_exact_hsca, None, 'no shot noise'),
+                                            (rates_data_hsca, error_bars_hsca, '%d shots per circuit' % num_shots)]):
+    for typ, color, label in sectors:
+        mask = types_hsca == typ
+        ax.errorbar(true_rates_hsca[mask], rates[mask], yerr=None if errs is None else errs[mask],
+                    fmt='o', ms=4, color=color, label=label, alpha=0.8)
+    lim = 1.15 * np.abs(true_rates_hsca).max()
+    ax.plot([-lim, lim], [-lim, lim], 'k-', lw=0.8)
+    ax.set_xlabel('true rate'); ax.set_title(title); ax.grid(alpha=0.3)
+axes[0].set_ylabel('estimated rate'); axes[0].legend()
+plt.tight_layout(); plt.show()
+```
+
+All four sectors are recovered from the exact data.  With $10^4$ shots per circuit the relaxation (active) rates of $\sim 10^{-3}$ are clearly resolved, whereas the small correlation rates of the gates (a few $10^{-4}$, from the $0.3$ rad tilt of the dephasing axis) are below the statistical resolution -- as always with linearized GST, precision is bought with shots and circuits, not with circuit depth.  The MCM's 28 FOMGI quantities, with the new active and correlation quantities highlighted:
+
+```{code-cell} ipython3
+mcm_columns_hsca = params_hsca.indices_for_key(('Iz', mcm_qubit))
+fomgi_exact_hsca = lgst.mcm_fomgi_estimates(params_hsca, rates_exact_hsca)[('Iz', mcm_qubit)]
+fomgi_data_hsca = lgst.mcm_fomgi_estimates(params_hsca, rates_data_hsca)[('Iz', mcm_qubit)]
+
+table_hsca = pd.DataFrame({'sector': [mg.FOMGI_SECTORS[k] for k in fomgi_exact_hsca],
+                           'true': [fomgi_true_hsca[k] for k in fomgi_exact_hsca],
+                           'estimate (no shot noise)': list(fomgi_exact_hsca.values()),
+                           'estimate (%d shots)' % num_shots: list(fomgi_data_hsca.values()),
+                           'error bar': error_bars_hsca[mcm_columns_hsca]}, index=list(fomgi_exact_hsca.keys()))
+highlight = lambda row: ['background-color: #fff3cd' if row['sector'] in ('C', 'A') else '' for _ in row]
+table_hsca.style.format(precision=4).apply(highlight, axis=1)
+```
+
+The relaxation of the measured qubit is picked up as the negative active quantities `a_meas` and `a_prep` (together with the corresponding increase of `s_meas` and `s_prep`), and the asymmetric readout error as `a_read`.  The $\rho$-dependent rotations `rt_*` are consistent with zero; the weakness quantities `w*` and `wt*` -- signatures of incomplete collapse -- have the largest error bars, because they only affect observables through coherences of the measured qubit that survive the measurement and are subsequently rotated into $Z$.
+
+## 10. Practical notes
 
 * **Validity of the linear approximation.** The systematic error grows with the total error per circuit (depth $\times$ typical rate).  Keep circuits shallow enough that the linear approximation holds; comparing the fits of two circuit depths is a simple diagnostic.  Linearized GST is also only as good as its ansatz -- errors not included in the model bias the estimates of the ones that are, although in practice the bias is modest when most of the error budget is modelled.
 * **Identifiability.** Always check the rank of the stacked design matrix (`unidentifiable_directions`).  A genuine gauge freedom of the ansatz requires restricting the estimation to identifiable combinations; a rank deficiency caused by insufficiently varied circuits is fixed by adding circuits.
 * **Observables.** `max_pauli_weight` (default 2) and `pauli_measurements` control which $Z$-type observables are used.  Higher-weight observables add information at no experimental cost but are noisier.
 * **Mid-circuit measurements.** Only computational-basis (`Iz`) measurements are supported; a multi-qubit label such as `Label('Iz', (0, 1))` is treated as parallel single-qubit MCMs whose error models are given under `('Iz', 0)` and `('Iz', 1)`.  Outcome labels must use bitstrings for the MCM records.  When *simulating* models with MCMs, `rate_to_model` selects the matrix forward simulator, because pyGSTi's map simulator does not currently support instruments in implicit models.
-* **Beyond H+S.** Pauli-correlation (`'C'`) and active (`'A'`) error generators are accepted in the ansatz and in the MCM gadget (`fomgi_ansatz(sectors='all')` gives all 28 FOMGI quantities); the H/S decoupling then no longer holds and a joint bounded least-squares problem is solved instead.
+* **Beyond H+S.** Pauli-correlation (`'C'`) and active (`'A'`) error generators are accepted in the ansatz and in the MCM gadget (`fomgi_ansatz(sectors='all')` gives all 28 FOMGI quantities), see Section 9.  The H/S decoupling then no longer holds and a joint bounded least-squares problem is solved instead, which is slower (in particular for the bootstrap) and needs more circuits for the same identifiability and precision.  The pair order of a `C`/`A` label does not matter for `C` ($C_{Q,P} = C_{P,Q}$) but flips the sign of `A` ($A_{Q,P} = -A_{P,Q}$).

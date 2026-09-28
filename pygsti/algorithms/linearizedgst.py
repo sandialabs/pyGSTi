@@ -21,6 +21,12 @@ error generator on Z-type Pauli observables of the ideal stabilizer output state
 Pauli expectation values to the error rates, ``Δ<Q> = D ε``.  Hamiltonian rates are estimated by
 pseudo-inversion and stochastic rates by non-negative least squares.
 
+Pauli-correlation (``C_{P,Q}``) and active (``A_{P,Q}``) error generators -- needed for correlated and
+non-unital noise such as relaxation -- are specified as ``('C', pauli1, pauli2)`` / ``('A', pauli1, pauli2)``
+(the two Paulis may have different supports).  When they are present the H/S decoupling no longer holds and a
+single bounded least-squares problem (stochastic rates >= 0) is solved for all rates; :func:`rate_to_model`
+then realizes the (not necessarily completely positive) generator as given.  Note that ``A_{Q,P} = -A_{P,Q}``.
+
 Mid-circuit measurements
 ------------------------
 Circuits may contain computational-basis mid-circuit measurements (instrument labels such as
@@ -1207,7 +1213,9 @@ def estimated_rates_dict(model_parameter_indexing, error_rates):
     Arrange estimated rates into a nested ``{key: {(type, pauli[, pauli]): rate}}`` dictionary.
 
     The inner keys use the explicit-support syntax (``'X:0'``, ``'ZY:0,v'``) so the result can be fed back into
-    :func:`build_model_parameter_indexing` or :func:`rate_to_model`.
+    :func:`build_model_parameter_indexing` or :func:`rate_to_model`.  The two Paulis of a ``'C'`` or ``'A'``
+    term are written on the union of their supports (e.g. ``('C', 'ZI:0,1', 'IZ:0,1')``), as required by pyGSTi's
+    model constructors.
 
     Returns
     -------
@@ -1218,13 +1226,10 @@ def estimated_rates_dict(model_parameter_indexing, error_rates):
     vtoken = model_parameter_indexing.virtual_qubit_token
     ret = _collections.OrderedDict()
     for p, rate in zip(model_parameter_indexing, error_rates):
-        bels = []
-        for ps in p.errorgen.basis_element_labels:
-            s = str(ps)[1:].replace('_', 'I')
-            support = [i for i, ch in enumerate(s) if ch != 'I']
-            pauli = ''.join(s[i] for i in support)
-            tokens = [str(labels[i]) if i < n else str(vtoken) for i in support]
-            bels.append(pauli + ':' + ','.join(tokens))
+        strings = [str(ps)[1:].replace('_', 'I') for ps in p.errorgen.basis_element_labels]
+        support = sorted(set(i for s in strings for i, ch in enumerate(s) if ch != 'I'))
+        tokens = [str(labels[i]) if i < n else str(vtoken) for i in support]
+        bels = [''.join(s[i] for i in support) + ':' + ','.join(tokens) for s in strings]
         ret.setdefault(p.key, _collections.OrderedDict())[(p.errorgen_type,) + tuple(bels)] = float(rate)
     return ret
 
@@ -1350,7 +1355,10 @@ def rate_to_model(pspec, lindblad_coeff, rate_ests=None, mcm_gate_names=DEFAULT_
         circuits using labels like ``Label('Iz', (q1, q2))`` can be simulated.  Linearized GST itself treats such
         labels as parallel single-qubit MCMs, whose error models must be given under the single-qubit keys.
     **model_kwargs
-        Additional arguments for the model constructor.
+        Additional arguments for the model constructor.  If the ansatz contains ``'C'`` or ``'A'`` parameters,
+        ``lindblad_parameterization`` defaults to ``'GLND'`` so that the error generator is realized exactly as
+        given (pyGSTi's default would insist on a completely positive generator, which estimated rates need not
+        be); pass ``lindblad_parameterization='CPTPLND'`` to enforce complete positivity instead.
 
     Returns
     -------
@@ -1401,6 +1409,11 @@ def rate_to_model(pspec, lindblad_coeff, rate_ests=None, mcm_gate_names=DEFAULT_
     has_mcms = len(mcm_coeffs) > 0
     if simulator == 'auto':
         simulator = 'matrix' if has_mcms else 'map'
+    if any(p.errorgen_type in ('C', 'A') for p in params):
+        # pyGSTi's 'auto' parameterization switches to CPTPLND when C/A terms are present, which insists on a
+        # completely positive generator (C^2 + A^2 <= S_P S_Q for every pair).  Ansatz rates -- and in particular
+        # *estimated* rates -- need not satisfy this, so realize the generator as given instead.
+        model_kwargs.setdefault('lindblad_parameterization', 'GLND')
     if model_type == 'cloud':
         model_kwargs.setdefault('errcomp_type', 'errorgens')
         mdl = _mc.create_cloud_crosstalk_model(pspec, lindblad_error_coeffs=gate_coeffs, simulator=simulator,
