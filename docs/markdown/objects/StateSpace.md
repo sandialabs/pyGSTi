@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -83,5 +83,3 @@ print("The 'Q0' labels exists in the tensor product block w/index=",lbls7.label_
 ```
 
 **That's it!** You know all there is to know about the `StateSpace` object.  Remember you can pass a `StateSpace` object to `pygsti.models.create_explicit_model_from_expressions` to create a model which operates on the given state space.
-
-

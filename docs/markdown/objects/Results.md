@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.5
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -137,5 +137,3 @@ In summary, when thinking about `ProtocolResults`, `ModelEstimateResults`, and `
 - each **`ProtocolResults`** object represents the **results for a single set of data (experiment design)**.
 - each contained **`Estimate`** object represents a **single *gauge-unfixed* estimate** based on the data.  An `Estimate` may also contain **one or more *gauge-optimized* versions** of the gauge-invariant estimate.  
 - an `Estimate` can construct confidence intervals only after a **`ConfidenceRegionFactory`** object is created and initialized using a multi-step process.  Because it may be computationally expensive, these steps are *not* performed automatically when reports are generated.
-
-
