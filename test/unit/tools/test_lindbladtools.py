@@ -672,3 +672,54 @@ class RandomCptpErrorgenRatesTester(BaseCase):
 def fixed_H_S():
     L = LocalElementaryErrorgenLabel
     return {L('H', ('XI',)): 0.03, L('S', ('XZ_{1}',)): 0.002}
+
+class BasisFactorValidationTester(BaseCase):
+    def test_builtin_factors_skip_numerical_validation(self):
+        from unittest import mock
+        for name in ('pp', 'PP', 'gm', 'GM', 'gm_unnormalized'):
+            for sparse in (False, True):
+                basis = Basis.cast(name, 4, sparse=sparse)
+                with self.subTest(name=name, sparse=sparse), mock.patch.object(
+                        lt._np, 'allclose', side_effect=AssertionError('numerical validation invoked')):
+                    lt._check_basis_factor(basis)
+
+    def test_custom_GM_basis_is_numerically_validated(self):
+        from pygsti.baseobjs import ExplicitBasis
+        elements = Basis.cast('GM', 4).elements.copy()
+        elements[1, 0, 1] += .2j
+        invalid = ExplicitBasis(elements, labels=['I', 'X', 'Y', 'Z'], name='GM')
+        with self.assertRaisesRegex(ValueError, 'Hermitian'):
+            lt._check_basis_factor(invalid)
+        elements = Basis.cast('GM', 4).elements.copy()
+        elements[2] += .1 * elements[1]
+        invalid = ExplicitBasis(elements, labels=['I', 'X', 'Y', 'Z'], name='GM')
+        with self.assertRaisesRegex(ValueError, 'orthogonal'):
+            lt._check_basis_factor(invalid)
+
+    def test_mixed_tensor_product_checks_custom_factor(self):
+        from pygsti.baseobjs import ExplicitBasis, TensorProdBasis
+        builtin = Basis.cast('GM', 4)
+        custom = ExplicitBasis(builtin.elements, labels=builtin.labels, name='GM')
+        space = QubitSpace(2)
+        mixed = TensorProdBasis([Basis.cast('PP', 4), custom])
+        self.assertIs(lt._resolve_errorgen_basis(space, mixed), mixed)
+        elements = builtin.elements.copy()
+        elements[1] += np.eye(2)
+        invalid = ExplicitBasis(elements, labels=builtin.labels, name='GM')
+        with self.assertRaisesRegex(ValueError, 'traceless'):
+            lt._resolve_errorgen_basis(space, TensorProdBasis([Basis.cast('PP', 4), invalid]))
+
+    def test_lazy_invalid_builtin_dimensions_still_fail(self):
+        from pygsti.baseobjs import BuiltinBasis
+        with self.assertRaises((ValueError, AssertionError)):
+            lt._check_basis_factor(BuiltinBasis('PP', 9))
+        with self.assertRaisesRegex(ValueError, 'dimension'):
+            lt._resolve_errorgen_basis(QubitSpace(1), BuiltinBasis('GM', 9))
+
+    def test_nested_builtin_tensor_product_skips_numerical_validation(self):
+        from unittest import mock
+        from pygsti.baseobjs import TensorProdBasis
+        pair = TensorProdBasis([Basis.cast('PP', 4), Basis.cast('GM', 4)])
+        basis = TensorProdBasis([pair, Basis.cast('PP', 4)])
+        with mock.patch.object(lt._np, 'allclose', side_effect=AssertionError('numerical validation invoked')):
+            self.assertIs(lt._resolve_errorgen_basis(QubitSpace(3), basis), basis)

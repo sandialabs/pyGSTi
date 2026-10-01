@@ -26,8 +26,7 @@ from pygsti.tools.legacytools import warn_deprecated as _warn_deprecated
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
     TensorProdBasis as _TensorProdBasis,
-    canonical_errorgen_basis as _canonical_errorgen_basis,
-    _check_errorgen_state_space
+    BuiltinBasis as _BuiltinBasis
 )
 from pygsti.baseobjs.errorgenlabel import (
     GlobalElementaryErrorgenLabel as _GEEL,
@@ -781,9 +780,16 @@ def _check_basis_factor(basis) -> None:
     Raise ValueError unless `basis` has an identity first element and Hermitian, traceless,
     mutually trace-orthogonal other elements.
     """
-    els = [el.toarray() if _sps.issparse(el) else _np.asarray(el) for el in basis.elements]
-    if len(els) == 0:
+    if isinstance(basis, _TensorProdBasis):
+        for factor in basis.component_bases:
+            _check_basis_factor(factor)
+        return
+    elements = basis.elements  # Force lazy construction so invalid builtin dimensions still fail.
+    if len(elements) == 0:
         raise ValueError("Basis %s has no elements." % basis.name)
+    if isinstance(basis, _BuiltinBasis) and basis.name in ('pp', 'PP', 'gm', 'GM', 'gm_unnormalized'):
+        return  # Their registered constructors establish the required properties.
+    els = [el.toarray() if _sps.issparse(el) else _np.asarray(el) for el in elements]
     d = els[0].shape[0]
     E = _np.array([el.reshape(-1) for el in els])
     scale = _np.max(_np.abs(E))
@@ -802,8 +808,11 @@ def _check_basis_factor(basis) -> None:
 
 def _resolve_errorgen_basis(state_space: _StateSpace, elementary_errorgen_basis) -> _Basis:
     """ The validated operator basis whose non-identity elements are the Lindblad directions. """
+    # A module-level import would cycle through errorgenbasis -> optools -> lindbladtools.
+    from pygsti.baseobjs.errorgenbasis import canonical_errorgen_basis, _check_errorgen_state_space
+
     if elementary_errorgen_basis is None:
-        return _canonical_errorgen_basis(state_space)
+        return canonical_errorgen_basis(state_space)
     _check_errorgen_state_space(state_space)
     if isinstance(elementary_errorgen_basis, str):
         try:

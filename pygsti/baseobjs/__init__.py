@@ -13,7 +13,7 @@ A sub-package holding utility objects
 from .smartcache import SmartCache
 from .verbosityprinter import VerbosityPrinter
 from .profiler import Profiler
-from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis, BasisLike, canonical_errorgen_basis
+from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis, BasisLike
 from .label import Label, CircuitLabel
 from .nicelyserializable import NicelySerializable
 from .mongoserializable import MongoSerializable
@@ -21,6 +21,7 @@ from .outcomelabeldict import OutcomeLabelDict
 from .statespace import StateSpace, QubitSpace, ExplicitStateSpace
 from .resourceallocation import ResourceAllocation
 from .qubitgraph import QubitGraph
-from .errorgenbasis import ElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis, CompleteElementaryErrorgenBasis
+from .errorgenbasis import (ElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis,
+                           CompleteElementaryErrorgenBasis, canonical_errorgen_basis)
 from .errorgenspace import ErrorgenSpace
 from .unitarygatefunction import UnitaryGateFunction
