@@ -23,7 +23,7 @@ import numpy as _np
 import numpy.typing as _npt
 import scipy.sparse as _sps
 
-from . import sparsechol as _sparsechol
+from .graphs import sparsechol as _sparsechol
 
 __all__ = []
 

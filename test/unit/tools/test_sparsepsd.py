@@ -1,7 +1,8 @@
 import importlib
 import importlib.util
 import numpy as np
-from pygsti.tools import sparsepsd as sp, sparsechol
+from pygsti.tools import sparsepsd as sp
+from pygsti.tools.graphs import sparsechol
 from ..util import BaseCase
 
 
@@ -95,7 +96,7 @@ class PsdSamplingTester(BaseCase):
         # A chordal pattern is ordered without fill, so K = L L^dag exactly and the shrink never runs;
         # a non-chordal pattern (and A-only sampling) needs it.
         from unittest import mock
-        from pygsti.tools import sparsechol
+        from pygsti.tools.graphs import sparsechol
         for pattern, chordal in self.PATTERNS:
             self.assertEqual(sparsechol.perfect_elimination_ordering(pattern) is not None, chordal)
             with mock.patch.object(sp, '_psd_step_size', side_effect=AssertionError('shrink called')) as shrink:

@@ -15,7 +15,7 @@ from .chi2fns import *
 from .edesigntools import *
 from .exceptions import *
 from . import graphs
-from . import sparsechol, sparsepsd
+from . import sparsepsd
 from .hypothesis import *
 # Import the most important/useful routines of each module into
 # the package namespace

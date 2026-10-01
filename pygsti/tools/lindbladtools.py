@@ -21,7 +21,8 @@ import numpy as _np
 import scipy.sparse as _sps
 
 from pygsti.tools.basistools import basis_matrices
-from pygsti.tools import sparsechol as _sparsechol, sparsepsd as _sparsepsd
+from pygsti.tools import sparsepsd as _sparsepsd
+from pygsti.tools.graphs import sparsechol as _sparsechol
 from pygsti.tools.legacytools import warn_deprecated as _warn_deprecated
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
@@ -869,7 +870,7 @@ def random_cptp_errorgen_rates(
     Pass ``canonical_errorgen_basis(state_space)`` to use this sampler's default tensor-product basis.
 
     K is sampled through a Cholesky factor L on the filled pattern of the allowed C/A pairs
-    after a fill-reducing ordering (see :mod:`pygsti.tools.sparsechol`), with a Bartlett-type draw.
+    after a fill-reducing ordering (see :mod:`pygsti.tools.graphs.sparsechol`), with a Bartlett-type draw.
     For the unrestricted pattern, K is a scaled Wishart matrix before fixed rates or budgets
     are imposed. A chordal pattern admits an ordering without fill, so the factor draw respects
     its support. Otherwise fill entries are zeroed. Disallowed real or imaginary components

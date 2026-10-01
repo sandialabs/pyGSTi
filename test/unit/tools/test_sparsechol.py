@@ -4,7 +4,7 @@ import networkx as nx
 import numpy as np
 import scipy.sparse as sps
 
-from pygsti.tools import sparsechol
+from pygsti.tools.graphs import sparsechol
 from ..util import BaseCase
 
 
