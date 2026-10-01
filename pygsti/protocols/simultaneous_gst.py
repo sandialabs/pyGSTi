@@ -445,12 +445,16 @@ class SimultaneousGSTDesign(GateSetTomographyDesign):
         mapped.stitch_seed = self.stitch_seed
         mapped.circuit_lists = mapped_circuit_lists
 
-        # Sets processor_spec, qubit_labels, all_circuits_needing_data, auxfile_types, etc.
+        # Sets processor_spec, qubit_labels, all_circuits_needing_data, etc. It also
+        # rebuilds auxfile_types from scratch and sets `selection` to None.
         GateSetTomographyDesign.__init__(
             mapped, mapped_processor_spec, mapped_circuit_lists,
             qubit_labels=mapped.vertices, nested=self.nested
         )
-        mapped._register_auxfile_types()  # ...which resets auxfile_types, so re-declare ours
+        # Re-declare this class's auxfile types, and restore the reduction record:
+        # relabelling renames qubits, it does not re-select circuits.
+        mapped._register_auxfile_types()
+        mapped.selection = self.selection
         return mapped
 
     def as_circuit_lists_design(self) -> GateSetTomographyDesign:
