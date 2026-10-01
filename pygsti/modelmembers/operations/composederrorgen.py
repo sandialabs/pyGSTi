@@ -75,11 +75,10 @@ class ComposedErrorgen(_LinearOperator):
         #assert(all([self.sparse == eg.sparse for eg in errgens_to_compose])), \
         #    "All error generators must have the same sparsity (%s expected)!" % self.sparse
 
-        self.matrix_basis = errgens_to_compose[0].matrix_basis \
-            if len(errgens_to_compose) > 0 else None
-        assert(all([self.matrix_basis.is_equivalent(eg.matrix_basis, sparseness_must_match=False)
-                    for eg in errgens_to_compose])), \
-            "All error generators must have the same matrix basis (%s expected)!" % str(self.matrix_basis)
+        # `matrix_basis` is constructed lazily (see the property below): building a Basis for
+        # the full composed state space overflows for very large (e.g. 100-qubit) error
+        # generators, and it is only needed by a few dense-matrix code paths.
+        self._matrix_basis = None
 
         #Create representation object
         factor_reps = [op._rep for op in self.factors]
@@ -87,6 +86,23 @@ class ComposedErrorgen(_LinearOperator):
 
         _LinearOperator.__init__(self, rep, evotype)
         self.init_gpindices()  # initialize our gpindices based on sub-members
+
+    @property
+    def matrix_basis(self):
+        """
+        The matrix basis shared by all factor error generators (None if there are no factors).
+
+        Constructed on first access rather than in `__init__` so that very large composed
+        error generators (whose full-dimension Basis cannot be built) remain usable on code
+        paths that never need it.
+        """
+        if self._matrix_basis is None and len(self.factors) > 0:
+            matrix_basis = self.factors[0].matrix_basis
+            assert(all([matrix_basis.is_equivalent(eg.matrix_basis, sparseness_must_match=False)
+                        for eg in self.factors])), \
+                "All error generators must have the same matrix basis (%s expected)!" % str(matrix_basis)
+            self._matrix_basis = matrix_basis
+        return self._matrix_basis
 
     #Note: no to_memoized_dict needed, as ModelMember version does all we need.
 

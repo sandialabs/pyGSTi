@@ -145,7 +145,7 @@ print(propagated_errorgen_layer_first_order)
 ```
 
 This method supports a number of additional arguments beyond those already for `propagate_errorgens`:
-- `bch_order`: An integer from 1 to 5 specifying the order of the BCH approximation to apply (5 is the current maximum). Note that the computational cost of higher order BCH can scale rapidly,    so keep this in mind when balancing the need for accuracy and speed of computation.
+- `bch_order`: An integer from 1 to 3 specifying the order of the BCH approximation to apply (3 is the current maximum for the default Magnus expansion implementation, `mode='magnus'`; the older `mode='pairwise'`, which applied the pairwise BCH formula repeatedly and supported orders up to 5, is deprecated and will be removed). Note that the computational cost of higher order BCH can scale rapidly, so keep this in mind when balancing the need for accuracy and speed of computation.
 - `truncation_threshold`: This argument allows you to specify a minimum threshold (in terms of error generator rate) below which rates are truncated to zero. This can improve performance      by allowing one to skip the computation of terms corresponding to very small corrections.
 Some interesting emergent behavior starts to occur when we begin to look at higher-order BCH corrections.
 
@@ -334,6 +334,8 @@ We'll specifically cover:
 - `approximate_stabilizer_probabilities`
 - `error_generator_commutator`
 - `error_generator_composition`
+- `error_generator_anticommutator` and `pauli_conjugation_composition`
+- `canonicalize_errorgen_layer` (and the basis element label order the propagation code relies on)
 
 ### `eoc_error_channel` : 
 This method provides a simple single function call for generating a dense representation of the end-of-circuit error channel (i.e. the exponentiated end-of-circuit error generator). This can be useful in few-qubit testing, but obviously doesn't not scale beyond a few qubits. This end-of-circuit error channel can be produced either exactly or without the BCH approximation. In the former case this is acheived by exponentiating and multiplying together all of the propagated error generator layers.
@@ -397,6 +399,36 @@ print(eprop.error_generator_composition(errorgen_1, errorgen_1))
 Both of these methods return their output as a list of two-element tuples. This list is a specification for the linear combination of elementary error generator coefficients corresponding to the commutator or composition of the two input elementary error generators. (First tuple element is an elementary error generator in the linear combination, and the second element is the coefficient of that elementary error generator in the linear combination).
 
 In the examples above we can see that the commutator of the specified H and S error generators gives rise to a pauli-correlation (C) error generator. This could potentially give rise to emergent C error generators when applying second-or-higher order BCH approximations for the effective end-of-circuit error generator, for example. Likewise the composition of these to error generators is a linear combination of a C error generator and an H error generator. And finally we see that squaring an H error generator (composing it with itself) gives rise to a pauli-stochastic (S) error generator.
+
+### `error_generator_anticommutator` and `pauli_conjugation_composition`
+Two companions of the functions above, with the same output format. `error_generator_anticommutator` returns the anticommutator `{e1, e2} = e1[e2[.]] + e2[e1[.]]`, so that a composition is the mean of the commutator and the anticommutator, term by term; the anticommutator emits fewer terms than the composition (the sign-changing terms making up the commutator are absent) and is what `error_generator_taylor_expansion` uses to form powers of an error generator, since `L∘L = ½{L, L}`. `pauli_conjugation_composition` returns the action of the Pauli conjugation superoperator `ρ -> Q ρ Q` (which is the stochastic generator plus the identity, `S_Q + 1`) on an elementary error generator, which is again a combination of elementary error generators.
+
+```{code-cell} ipython3
+print(eprop.error_generator_anticommutator(errorgen_1, errorgen_2))
+```
+
+```{code-cell} ipython3
+print(eprop.pauli_conjugation_composition(stim.PauliString('Z'), errorgen_1))
+```
+
+Here `H_X` anticommutes with `Z`, so `{H_X, S_Z} = -2 H_X` with no further terms, and conjugating `H_X` by `Z` gives `-i C_{ZX, Z} = -i C_{iY, Z} = C_{Y,Z}`.
+
+### `canonicalize_errorgen_layer` and the order of basis element labels
+Pauli-correlation (C) and active (A) error generators are indexed by an *unordered* pair of Paulis: `C_{P,Q} = C_{Q,P}` and `A_{P,Q} = -A_{Q,P}`. Every label class nevertheless stores the pair as an ordered tuple, and the propagation code needs a single convention so that one error generator is always one dictionary key. The convention used throughout this module is that the two padded Pauli strings of a `LocalStimErrorgenLabel` are sorted as python strings (`'I' < 'X' < 'Y' < 'Z'`, character by character), e.g. `C(IX, YI)` and never `C(YI, IX)`. `LocalStimErrorgenLabel.cast` raises a `ValueError` if handed a pair in the other order.
+
+pyGSTi's model objects do not currently enforce this convention. In particular, a two-qubit gate acting on a permuted set of target qubits (e.g. `Gcphase` on qubits `(1, 0)`) hands out local labels whose pair is sorted on the *gate's* qubits, which need not be sorted once written into the full width. `ErrorGeneratorPropagator` therefore reorders the labels it takes from a model (negating the rate of a reordered A generator), and the same is done to any `fixed_errorgen_layer` and to the error generator dictionaries accepted by the `approximate_stabilizer_*` functions, using `canonicalize_errorgen_layer`. That function accepts dictionaries keyed by `LocalStimErrorgenLabel`, `LocalElementaryErrorgenLabel` or (with the `sslbls` argument) `GlobalElementaryErrorgenLabel` and returns one keyed by canonical `LocalStimErrorgenLabel`s, folding the A sign into the rate and summing rates of labels that coincide after reordering. It is available directly from `pygsti.errorgenpropagation`:
+
+```{code-cell} ipython3
+from pygsti.errorgenpropagation import canonicalize_errorgen_layer
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel
+
+noncanonical_layer = {LocalElementaryErrorgenLabel('C', ['YI', 'IX']): 0.01,
+                      LocalElementaryErrorgenLabel('A', ['YI', 'IX']): 0.02,
+                      LocalElementaryErrorgenLabel('A', ['IX', 'YI']): 0.005}
+canonicalize_errorgen_layer(noncanonical_layer)
+```
+
+The C rate is unchanged, while the two A entries are the same generator written both ways and are merged into `A(IX, YI)` with rate `-0.02 + 0.005`. If you build your own error generator dictionaries (for example to compare against propagated ones, or to use as a `fixed_errorgen_layer` with rates you computed yourself), pass them through this function rather than constructing `LocalStimErrorgenLabel`s by hand. Here is the model-side situation it exists for: a `Gcphase` on qubits `(1, 0)` with an A error rate stored by the model under the pair `('YX', 'XY')`, which the propagator reports under the canonical key `A(XY, YX)` with the rate negated.
 
 There's a whole bunch of other functionality and utilities available, particularly in the `errgenproptools` module which have not been covered in this tutorial, so please check out the documentation for additional capabilities!
 
