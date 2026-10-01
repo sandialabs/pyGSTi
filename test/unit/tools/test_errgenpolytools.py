@@ -13,7 +13,8 @@ from pygsti.models.modelconstruction import create_crosstalk_free_model
 from pygsti.processors import QubitProcessorSpec
 from pygsti.tools import errgenproptools as _eprop
 from pygsti.tools import errgenpolytools as _epoly
-from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+from pygsti.baseobjs import QubitSpace
+from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 
 from ..util import BaseCase
 from .test_errgenproptools import sample_error_rates_dict
@@ -36,9 +37,9 @@ class ErrgenPolyToolsTester(BaseCase):
         self.errorgen_propagator = ErrorGeneratorPropagator(self.error_model.copy())
 
         error_rates_dict_shared = {
-            'Gcphase': random_CPTP_error_generator_rates(2, errorgen_types=('H', 'S'), label_type='local', seed=1234),
-            'Gxpi2': random_CPTP_error_generator_rates(1, errorgen_types=('H', 'S'), label_type='local', seed=1235),
-            'Gypi2': random_CPTP_error_generator_rates(1, errorgen_types=('H', 'S'), label_type='local', seed=1236)
+            'Gcphase': random_cptp_errorgen_rates(QubitSpace(2), errorgen_types=('H', 'S'), label_type='local', seed=1234),
+            'Gxpi2': random_cptp_errorgen_rates(QubitSpace(1), errorgen_types=('H', 'S'), label_type='local', seed=1235),
+            'Gypi2': random_cptp_errorgen_rates(QubitSpace(1), errorgen_types=('H', 'S'), label_type='local', seed=1236)
         }
         self.error_model_shared = create_crosstalk_free_model(self.pspec, lindblad_error_coeffs=error_rates_dict_shared)
         self.errorgen_propagator_shared = ErrorGeneratorPropagator(self.error_model_shared.copy())

@@ -1186,8 +1186,10 @@ class BuiltinBasis(LazyBasis):
 
     Parameters
     ----------
-    name : {"pp", "gm", "std", "qt", "id", "cl", "sv"}
-        Name of the basis to be created.
+    name : {"pp", "PP", "gm", "GM", "gm_unnormalized", "std", "qt", "id", "cl", "sv"}
+        Name of the basis to be created. ``pp`` and ``gm`` have unit Frobenius
+        norm; ``PP`` and ``GM`` have squared Frobenius norm equal to the
+        Hilbert-space dimension, with the identity as their first element.
 
     dim_or_statespace : int or StateSpace
         The dimension of the basis to be created or the state space for which a

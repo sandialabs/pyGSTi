@@ -11,7 +11,8 @@ Utility functions relevant to Lindblad forms and projections
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Literal, Optional, Union
+from collections.abc import Collection, Hashable, Mapping, Sequence
+from typing import Literal, Optional, Union, overload
 
 Literal_HSCA = Literal['H', 'S', 'C', 'A']
 Literal_HO = Literal['H', 'O']
@@ -20,10 +21,19 @@ import numpy as _np
 import scipy.sparse as _sps
 
 from pygsti.tools.basistools import basis_matrices
-import pygsti.baseobjs as _bo
+from pygsti.tools import sparsepsd as _sparsepsd
+from pygsti.tools.graphs import sparsechol as _sparsechol
+from pygsti.tools.legacytools import warn_deprecated as _warn_deprecated
+from pygsti.baseobjs.basis import (
+    Basis as _Basis,
+    TensorProdBasis as _TensorProdBasis,
+    BuiltinBasis as _BuiltinBasis
+)
 from pygsti.baseobjs.errorgenlabel import (
     GlobalElementaryErrorgenLabel as _GEEL,
-    LocalElementaryErrorgenLabel as _LEEL
+    LocalElementaryErrorgenLabel as _LEEL,
+    _TOKEN_REGEX,
+    _bel_tokens
 )
 
 
@@ -553,215 +563,491 @@ def create_lindbladian_term_errorgen(typ: Literal_HO, Lm: _np.ndarray, Ln: Optio
     return lind_errgen
 
 
-def _filtered_leeldict_to_array(
-        d: dict[_LEEL, float],
-        t: Literal_HSCA,
-    ) -> _np.ndarray:
-    """Return the values of d whose key's errorgen type matches t."""
-    return _np.array([val for key, val in d.items() if key.errorgen_type == t])
+def _as_generator(seed) -> _np.random.Generator:
+    """
+    Convert `seed` to a numpy Generator without touching NumPy's global random state.
+
+    A Generator is returned unchanged, and a BitGenerator is wrapped with its algorithm and state
+    intact. None, integer seed material, and SeedSequences follow `numpy.random.default_rng`. A
+    legacy RandomState shares its underlying bit generator (as `default_rng` does natively from
+    NumPy 2.2 on), though not its legacy normal-distribution stream.
+    """
+    if isinstance(seed, _np.random.RandomState):
+        seed = seed._bit_generator
+    return _np.random.default_rng(seed)
 
 
-def _validate_random_CPTP_params(
-        errorgen_types       : tuple[Literal_HSCA, ...],
-        H_params             : tuple[float, float],
-        SCA_params           : tuple[float, float],
-        error_metric         : Literal['generator_infidelity', 'total_generator_error'] | None,
-        error_metric_value   : float | None,
-        rel_HS_contrib       : tuple[float, float] | None,
-        fixed_errorgen_rates : dict[_LEEL, float],
-        max_weights          : dict[str, int] | None
-    ) -> tuple[float, float]:
-    """Validate inputs for random_CPTP_error_generator_rates. Returns (fixed_H_contrib, fixed_S_contrib)."""
-
-    if 'C' in errorgen_types or 'A' in errorgen_types:
-        msg = 'Must include S terms when C or A present. Cannot have a CP error generator otherwise.'
-        assert 'S' in errorgen_types, msg
-
-    if max_weights is not None:
-        msg = 'The maximum weight of the %s terms should be <= the maximum weight of S.'
-        assert max_weights.get('C', 0) <= max_weights.get('S', 0), msg % 'C'
-        assert max_weights.get('A', 0) <= max_weights.get('S', 0), msg % 'A'
-
-    if len(fixed_errorgen_rates) == 0 or error_metric is None:
-        return 0.0, 0.0
-    
-    msg = 'Specifying non-zero HSCA means together with a target error metric is not supported.'
-    assert H_params[0] == 0. and SCA_params[0] == 0., msg
-
-    msg = 'error_metric_value must be specified when error_metric is not None.'
-    assert error_metric_value is not None, msg
-    
-    msg = 'All keys of fixed_errorgen_rates must be LocalElementaryErrorgenLabel.'
-    assert all([isinstance(key, _LEEL) for key in fixed_errorgen_rates.keys()]), msg
-    
-    fixed_S_rates = _filtered_leeldict_to_array(fixed_errorgen_rates, 'S')
-    fixed_S_contrib = _np.sum(fixed_S_rates)
-
-    fixed_H_rates = _filtered_leeldict_to_array(fixed_errorgen_rates, 'H')
-    if error_metric == 'generator_infidelity':
-        fixed_H_rates = fixed_H_rates ** 2
-    if error_metric == 'total_generator_error':
-        fixed_H_rates = _np.abs(fixed_H_rates)
-    fixed_H_contrib = _np.sum(fixed_H_rates)
-
-    fixed_error_metric_value = fixed_S_contrib + fixed_H_contrib
-    msg  = f'Incompatible values of error_metric_value and fixed_errorgen_rates. The value of '
-    msg += f'{error_metric}={error_metric_value} is less than the value of {fixed_error_metric_value} '
-    msg += f'corresponding to the given fixed_errorgen_rates_dict.'
-    assert fixed_error_metric_value <= error_metric_value, msg
-    
-    if rel_HS_contrib is not None:
-
-        msg = f'Fixed %s contribution to {error_metric} of %f exceeds overall %s contribution target value of %f.'
-        abs_H_contrib = rel_HS_contrib[0]*error_metric_value
-        abs_S_contrib = rel_HS_contrib[1]*error_metric_value
-        assert fixed_H_contrib <= abs_H_contrib, msg % ('H', fixed_H_contrib, 'H', abs_H_contrib )
-        assert fixed_S_contrib <= abs_S_contrib, msg % ('S', fixed_S_contrib, 'S', abs_S_contrib )
-
-        msg = 'Invalid rel_HS_contrib, %s is not in errorgen_types.'
-        assert 'H' in errorgen_types, msg % 'H'
-        assert 'S' in errorgen_types, msg % 'S'
-        assert abs(1-sum(rel_HS_contrib)) <= 1e-7, 'The rel_HS_contrib should sum to 1.'
-
-    return fixed_H_contrib, fixed_S_contrib
+def _check_basis_factor(basis) -> None:
+    """
+    Raise ValueError unless `basis` has an identity first element and Hermitian, traceless,
+    mutually trace-orthogonal other elements.
+    """
+    if isinstance(basis, _TensorProdBasis):
+        for factor in basis.component_bases:
+            _check_basis_factor(factor)
+        return
+    elements = basis.elements  # Force lazy construction so invalid builtin dimensions still fail.
+    if len(elements) == 0:
+        raise ValueError("Basis %s has no elements." % basis.name)
+    if isinstance(basis, _BuiltinBasis) and basis.name in ('pp', 'PP', 'gm', 'GM', 'gm_unnormalized'):
+        return  # Their registered constructors establish the required properties.
+    els = [el.toarray() if _sps.issparse(el) else _np.asarray(el) for el in elements]
+    d = els[0].shape[0]
+    E = _np.array([el.reshape(-1) for el in els])
+    scale = _np.max(_np.abs(E))
+    tol = 1e-10 * max(scale * scale * d, 1.0)
+    if not _np.allclose(els[0], els[0][0, 0] * _np.eye(d), atol=1e-10 * scale) or abs(els[0][0, 0]) == 0:
+        raise ValueError("The first element of basis %s must be proportional to the identity." % basis.name)
+    for lbl, el in zip(basis.labels[1:], els[1:]):
+        if not _np.allclose(el, el.conj().T, atol=1e-10 * scale):
+            raise ValueError("Element %s of basis %s is not Hermitian." % (lbl, basis.name))
+        if abs(_np.trace(el)) > tol:
+            raise ValueError("Element %s of basis %s is not traceless." % (lbl, basis.name))
+    G = E.conj() @ E.T
+    if _np.max(_np.abs(G - _np.diag(_np.diag(G)))) > tol:
+        raise ValueError("The elements of basis %s are not trace-orthogonal." % basis.name)
 
 
-def _filter_ca_labels_for_cp(
-        labels:   list[_LEEL],
-        s_labels: list[_LEEL]
-    ) -> list[_LEEL]:
-    """Return only those labels whose both basis element labels have matching S labels in s_labels."""
-    filtered = []
-    for lbl in labels:
-        comp1, comp2 = lbl.basis_element_labels
-        lbl1 = _LEEL('S', (comp1,))
-        lbl2 = _LEEL('S', (comp2,))
-        if lbl1 in s_labels and lbl2 in s_labels:
-            filtered.append(lbl)
-    return filtered
+def _resolve_errorgen_basis(state_space: _StateSpace, elementary_errorgen_basis: _Basis | str | None) -> _Basis:
+    """ The validated operator basis whose non-identity elements are the Lindblad directions. """
+    # A module-level import would cycle through errorgenbasis -> optools -> lindbladtools.
+    from pygsti.baseobjs.errorgenbasis import canonical_errorgen_basis, _check_errorgen_state_space
 
-
-def _check_ca_cp_constraint(
-        ca_rates_dict: dict[_LEEL, float],
-        s_rates_dict : dict[_LEEL, float],
-        errgen_type: str
-    ) -> None:
-    """Raise ValueError if any rate in ca_rates_dict violates |rate| <= sqrt(S1 * S2)."""
-    for lbl, rate in ca_rates_dict.items():
-        comp1, comp2 = lbl.basis_element_labels
-        lbl1 = _LEEL('S', (comp1,))
-        lbl2 = _LEEL('S', (comp2,))
-        rate1 = s_rates_dict[lbl1]
-        rate2 = s_rates_dict[lbl2]
-        if not (abs(rate) <= _np.sqrt(rate1 * rate2)):
-            print(f'{lbl}: {rate}')
-            raise ValueError(f'Invalid {errgen_type} rate')
-    return
-
-
-def _generate_random_rates(
-        errgen_labels_H: list[_LEEL],
-        errgen_labels_S: list[_LEEL],
-        errgen_labels_C: list[_LEEL],
-        errgen_labels_A: list[_LEEL],
-        H_params    : tuple[float, float],
-        SCA_params  : tuple[float, float],
-        rng         : _np.random.Generator
-    ) -> dict[Literal_HSCA, dict[_LEEL, float]]:
-    """Generate random H/S/C/A rates; S/C/A come from PSD matrices to satisfy CP constraints."""
-    num_H_rates = len(errgen_labels_H)
-    num_S_rates = len(errgen_labels_S)
-    rates = {}
-    rates['H'] = {lbl: val for lbl, val in zip(errgen_labels_H,
-                  rng.normal(loc=H_params[0], scale=H_params[1], size=num_H_rates))}
-    random_SC_gen_mat = rng.normal(loc=SCA_params[0], scale=SCA_params[1], size=(num_S_rates, num_S_rates))
-    random_SA_gen_mat = rng.normal(loc=SCA_params[0], scale=SCA_params[1], size=(num_S_rates, num_S_rates))
-    random_SC_mat = random_SC_gen_mat @ random_SC_gen_mat.T
-    random_SA_mat = random_SA_gen_mat @ random_SA_gen_mat.T
-    random_S_rates = _np.real(_np.diag(random_SC_mat) + _np.diag(random_SA_mat))
-    rates['S'] = {lbl: val for lbl, val in zip(errgen_labels_S, random_S_rates)}
-    rates['C'] = {lbl: val for lbl, val in zip(errgen_labels_C,
-                  random_SC_mat[_np.triu_indices_from(random_SC_mat, k=1)])}
-    rates['A'] = {lbl: val for lbl, val in zip(errgen_labels_A,
-                  random_SA_mat[_np.triu_indices_from(random_SA_mat, k=1)])}
-    return rates
-
-
-def _rescale_to_error_metric(
-        random_rates_dicts: dict[Literal_HSCA, dict[_LEEL, float]],
-        error_metric: Literal['generator_infidelity', 'total_generator_error'],
-        error_metric_value: float,
-        relative_HS_contribution: tuple[float, float] | None,
-        fixed_H_contrib: float,
-        fixed_S_contrib: float,
-        errorgen_types: tuple[str, ...],
-        H_free_keys: list[_LEEL],
-        S_free_keys: list[_LEEL],
-        C_free_keys: list[_LEEL],
-        A_free_keys: list[_LEEL]
-    ) -> None:
-    """Scale free H/S/C/A rates so the overall error metric equals error_metric_value (mutates random_rates_dicts)."""
-
-    current_S_sum_free = 0.0 
-    current_H_sum_free = 0.0
-
-    if 'S' in errorgen_types:
-        rrd = random_rates_dicts['S']
-        current_S_sum_free = _np.sum( [ rrd[key] for key in S_free_keys ] )
-
-    if 'H' in errorgen_types:
-        rrd = random_rates_dicts['H']
-        if error_metric == 'generator_infidelity':
-            current_H_sum_free = _np.sum( [ rrd[key] ** 2 for key in H_free_keys ] )
-        if error_metric == 'total_generator_error':
-            current_H_sum_free = _np.sum( [ abs(rrd[key]) for key in H_free_keys ] )
-
-    total_H_sum = current_H_sum_free + fixed_H_contrib
-    total_S_sum = current_S_sum_free + fixed_S_contrib
-
-    if relative_HS_contribution is not None:
-        req_H_sum = relative_HS_contribution[0] * error_metric_value
-        req_S_sum = relative_HS_contribution[1] * error_metric_value
+    if elementary_errorgen_basis is None:
+        return canonical_errorgen_basis(state_space)
+    _check_errorgen_state_space(state_space)
+    if isinstance(elementary_errorgen_basis, str):
+        try:
+            basis = _Basis.cast(elementary_errorgen_basis, state_space)
+            for factor in (basis.component_bases if isinstance(basis, _TensorProdBasis) else [basis]):
+                factor.elements  # elements are built lazily, and may fail only now
+        except (ValueError, AssertionError) as e:
+            raise ValueError("The basis %r is not available on %s: %s"
+                             % (elementary_errorgen_basis, state_space, e)) from None
+    elif isinstance(elementary_errorgen_basis, _Basis):
+        basis = elementary_errorgen_basis
     else:
-        current_H_contribution = total_H_sum / (total_H_sum + total_S_sum)
-        req_H_sum = current_H_contribution * error_metric_value
-        req_S_sum = (1 - current_H_contribution) * error_metric_value
-
-    needed_H_free = req_H_sum - fixed_H_contrib
-    needed_S_free = req_S_sum - fixed_S_contrib
-
-    if 'H' in errorgen_types:
-        if error_metric == 'generator_infidelity':
-            H_scale_factor = _np.sqrt(needed_H_free / current_H_sum_free)
-        if error_metric == 'total_generator_error':
-            H_scale_factor = needed_H_free / current_H_sum_free
-        for key in H_free_keys:
-            random_rates_dicts['H'][key] *= H_scale_factor
-
-    if 'S' in errorgen_types:
-        S_scale_factor = needed_S_free / current_S_sum_free
-        for key in S_free_keys:
-            random_rates_dicts['S'][key] *= S_scale_factor
-        for key in C_free_keys:
-            random_rates_dicts['C'][key] *= S_scale_factor
-        for key in A_free_keys:
-            random_rates_dicts['A'][key] *= S_scale_factor
-
-    return
+        raise TypeError("`elementary_errorgen_basis` must be None, a basis name, or a Basis, not %s."
+                        % type(elementary_errorgen_basis).__name__)
+    if basis.dim != state_space.dim:
+        raise ValueError("Basis %s has dimension %d, but the state space %s has dimension %d."
+                         % (basis.name, basis.dim, state_space, state_space.dim))
+    # A tensor product of valid factors is valid, and much cheaper to check.
+    for factor in (basis.component_bases if isinstance(basis, _TensorProdBasis) else [basis]):
+        _check_basis_factor(factor)
+    return basis
 
 
-def _convert_to_global_labels(
-        errorgen_rates_dict: dict[_LEEL, float],
-        state_space: _StateSpace,
-        qubit_labels: list | None
-    ) -> dict[_GEEL, float]:
-    """Cast local error generator labels to global labels and apply any qubit label remapping."""
-    result = {_GEEL.cast(lbl, sslbls=state_space.state_space_labels): val
-              for lbl, val in errorgen_rates_dict.items()}
-    if qubit_labels is not None:
-        mapper = {i: lbl for i, lbl in enumerate(qubit_labels)}
-        result = {lbl.map_state_space_labels(mapper): val for lbl, val in result.items()}
-    return result
+def _direction_supports(basis: _Basis, state_space: _StateSpace) -> _np.ndarray | None:
+    """
+    Mark each non-identity basis element's subsystem support, or return None if unknown.
+
+    Rows follow ``basis.labels[1:]`` and columns follow the state-space subsystem order.
+    Labels must contain one PP/GM token per subsystem. A tensor-product basis must also
+    have one factor per subsystem, with matching dimensions.
+
+    Examples
+    --------
+    For two qubits, IX and XI each act on one subsystem, while XX acts on both:
+
+    >>> from pygsti.baseobjs import Basis, QubitSpace
+    >>> space = QubitSpace(2)
+    >>> basis = Basis.cast('PP', space)
+    >>> supports = _direction_supports(basis, space)
+    >>> [supports[list(basis.labels).index(lbl) - 1].tolist() for lbl in ('IX', 'XI', 'XX')]
+    [[False, True], [True, False], [True, True]]
+
+    Arbitrary labels do not identify subsystem support, even if the matrices are Pauli matrices:
+
+    >>> from pygsti.baseobjs import ExplicitBasis
+    >>> basis = ExplicitBasis(Basis.cast('PP', 4).elements, labels=('identity', 'a', 'b', 'c'))
+    >>> _direction_supports(basis, QubitSpace(1)) is None
+    True
+    """
+    sslbls = state_space.sole_tensor_product_block_labels
+    if isinstance(basis, _TensorProdBasis):
+        if [c.dim for c in basis.component_bases] != [state_space.label_dimension(l) for l in sslbls]:
+            return None
+    tokens = [_bel_tokens(lbl) for lbl in basis.labels[1:]]
+    if not all(len(t) == len(sslbls) and all(_TOKEN_REGEX.fullmatch(x) for x in t) for t in tokens):
+        return None
+    return _np.array([[x != 'I' for x in t] for t in tokens], dtype=bool).reshape(len(tokens), len(sslbls))
+
+
+def _fixed_rates_by_index(fixed_errorgen_rates, sslbls, index) -> dict:
+    """
+    Sort fixed rates by type. Returns {'H': {a: (lbl, v)}, 'S': ..., 'C': {(a, b): (lbl, v)},
+    'A': ...}, with a, b indices of non-identity basis elements and lbl the local label.
+    """
+    fixed = {'H': {}, 'S': {}, 'C': {}, 'A': {}}
+    for key, v in (fixed_errorgen_rates or {}).items():
+        if isinstance(key, _GEEL):
+            lbl = _LEEL.cast(key, sslbls=sslbls)
+        elif isinstance(key, _LEEL):
+            lbl = key
+        else:
+            raise TypeError("Keys of `fixed_errorgen_rates` must be elementary error generator labels, not %s."
+                            % type(key).__name__)
+        missing = [bel for bel in lbl.basis_element_labels if bel not in index]
+        if missing:
+            raise ValueError("Fixed rate %s refers to %s, which are not non-identity labels of the error generator "
+                             "basis." % (key, missing))
+        idx = tuple(index[bel] for bel in lbl.basis_element_labels)
+        if lbl.errorgen_type in ('C', 'A') and idx[0] == idx[1]:
+            raise ValueError("Fixed rate %s pairs a basis element with itself." % str(key))
+        k = idx[0] if lbl.errorgen_type in ('H', 'S') else tuple(sorted(idx))
+        if k in fixed[lbl.errorgen_type]:
+            raise ValueError("The %s rate for %s is fixed more than once." % (lbl.errorgen_type, str(key)))
+        fixed[lbl.errorgen_type][k] = (lbl, float(v))
+    return fixed
+
+
+SeedLike = Union[None, int, Sequence[int], _np.random.SeedSequence, _np.random.BitGenerator,
+                 _np.random.Generator, _np.random.RandomState]
+
+
+@overload
+def random_cptp_errorgen_rates(
+        state_space: _StateSpace, *,
+        errorgen_types: tuple[Literal_HSCA, ...] = ...,
+        elementary_errorgen_basis: _Basis | str | None = ...,
+        max_weights: Mapping[Literal_HSCA, int] | None = ...,
+        sslbl_overlap: Collection[Hashable] | None = ...,
+        H_params: tuple[float, float] = ...,
+        SCA_params: tuple[float, float] = ...,
+        error_metric: Literal['generator_infidelity', 'total_generator_error'] | None = ...,
+        error_metric_value: float | None = ...,
+        relative_HS_contribution: tuple[float, float] | None = ...,
+        fixed_errorgen_rates: Mapping[_LEEL | _GEEL, float] | None = ...,
+        label_type: Literal['global'] = ...,
+        seed: SeedLike = ...,
+    ) -> dict[_GEEL, float]: ...
+
+
+@overload
+def random_cptp_errorgen_rates(
+        state_space: _StateSpace, *,
+        errorgen_types: tuple[Literal_HSCA, ...] = ...,
+        elementary_errorgen_basis: _Basis | str | None = ...,
+        max_weights: Mapping[Literal_HSCA, int] | None = ...,
+        sslbl_overlap: Collection[Hashable] | None = ...,
+        H_params: tuple[float, float] = ...,
+        SCA_params: tuple[float, float] = ...,
+        error_metric: Literal['generator_infidelity', 'total_generator_error'] | None = ...,
+        error_metric_value: float | None = ...,
+        relative_HS_contribution: tuple[float, float] | None = ...,
+        fixed_errorgen_rates: Mapping[_LEEL | _GEEL, float] | None = ...,
+        label_type: Literal['local'],
+        seed: SeedLike = ...,
+    ) -> dict[_LEEL, float]: ...
+
+
+def random_cptp_errorgen_rates(
+        state_space: _StateSpace, *,
+        errorgen_types: tuple[Literal_HSCA, ...] = ('H', 'S', 'C', 'A'),
+        elementary_errorgen_basis: _Basis | str | None = None,
+        max_weights: Mapping[Literal_HSCA, int] | None = None,
+        sslbl_overlap: Collection[Hashable] | None = None,
+        H_params: tuple[float, float] = (0., .01),
+        SCA_params: tuple[float, float] = (0., .01),
+        error_metric: Literal['generator_infidelity', 'total_generator_error'] | None = None,
+        error_metric_value: float | None = None,
+        relative_HS_contribution: tuple[float, float] | None = None,
+        fixed_errorgen_rates: Mapping[_LEEL | _GEEL, float] | None = None,
+        label_type: Literal['global', 'local'] = 'global',
+        seed: SeedLike = None,
+    ) -> dict[_GEEL, float] | dict[_LEEL, float]:
+    """
+    Sample error-generator rates whose generator exponentiates to a CPTP map on `state_space`.
+
+    `elementary_errorgen_basis` supplies the operator directions used to construct elementary
+    H, S, C and A generators. `errorgen_types`, `max_weights` and `sslbl_overlap` select which
+    elementary generators are sampled. The selected S directions index the Kossakowski matrix
+    K; selected C and A pairs allow its real and imaginary off-diagonal components, respectively.
+    Fixed rates can extend this support as described in Notes.
+
+    In the selected operator-basis order, K_ii = S_i and K_ij = C_ij - 1j * A_ij for i < j.
+    The returned rates define a positive-semidefinite K, ensuring that the generator's
+    exponential is completely positive and trace preserving, or the call raises an error.
+
+    Parameters
+    ----------
+    state_space : StateSpace
+        The state space the error generator acts on: a single tensor product block of quantum
+        subsystems, each of dimension at least 2 (qubits, qudits, or a mixture). Its labels are
+        the labels of the returned global error generator labels. Direct sums are not supported.
+
+    errorgen_types : tuple of {'H', 'S', 'C', 'A'}, optional
+        The sectors to sample. Including 'C' or 'A' requires 'S'.
+
+    elementary_errorgen_basis : Basis or str, optional
+        The full, identity-first operator basis whose non-identity elements define the H, S, C
+        and A directions. Use None for the canonical PP/GM tensor-product basis, a string for a
+        builtin basis family, or a Basis of dimension ``state_space.dim``. Non-identity elements
+        must be Hermitian, traceless and mutually trace-orthogonal. Normalization, labels, and
+        subsystem structure are described in Notes.
+
+    max_weights : mapping, optional
+        The maximum weight of each sector, keyed by 'H', 'S', 'C' and 'A'; a missing sector has no
+        limit. The weight of an element is the number of subsystems on which it is not the
+        identity, whatever their dimensions. The weight of a C or A pair is that of the union of
+        the two elements' supports, and a pair is only allowed when both of its S directions are.
+
+    sslbl_overlap : collection of state space labels, optional
+        Require each sampled H or S direction to act on at least one of these subsystems.
+        Each direction of a sampled C or A pair must itself be an allowed S direction, so both
+        directions must meet this condition.
+
+    H_params : tuple of float, optional
+        The mean and standard deviation of the normal distribution of the H rates.
+
+    SCA_params : tuple of float, optional
+        The mean and standard deviation of the proposal distribution of the entries of L. The
+        mean must be 0. The standard deviation sigma sets the scale of K: every expected S rate
+        is sigma**2, so without an error budget the total S rate grows with the number of
+        directions, which is D**2 - 1 without restrictions.
+
+    error_metric : {'generator_infidelity', 'total_generator_error'}, optional
+        A budget for the sampled rates, together with `error_metric_value`; give both or
+        neither. 'generator_infidelity' is sum(h**2) + sum(s) and 'total_generator_error' is
+        sum(|h|) + sum(s), over all returned H rates h and S rates s. These are coefficient
+        budgets in the scale of the selected basis, not channel infidelities. For the canonical
+        normalization, sum(h**2) = Tr(H**2) / D for the Hamiltonian H and sum(s) = Tr(K), so the
+        generator infidelity keeps its leading-order meaning on qudits. The budget is met by
+        rescaling the free (not fixed) rates: H rates by a common factor, and K by a diagonal
+        congruence, which keeps it positive semidefinite. Without `relative_HS_contribution`, the
+        free H and S contributions are scaled by the same factor. Nonzero `H_params` means are
+        not supported together with a budget.
+
+    error_metric_value : float, optional
+        The target value of `error_metric`.
+
+    relative_HS_contribution : tuple of float, optional
+        The fractions of `error_metric_value` carried by the H and S sectors, summing to 1.
+        Requires `error_metric` and both 'H' and 'S' in `errorgen_types`.
+
+    fixed_errorgen_rates : mapping, optional
+        Prescribed rates keyed by local or global elementary error generator labels from the
+        selected basis. These override sampled rates and can extend the allowed sectors and
+        support. The diagonal requirements and PSD feasibility checks are described in Notes.
+
+    label_type : {'global', 'local'}, optional
+        Whether the keys of the result are `GlobalElementaryErrorgenLabel` objects (on the
+        labels of `state_space`) or `LocalElementaryErrorgenLabel` objects (whose basis element
+        labels are the basis's own labels, as `LindbladErrorgen.from_elementary_errorgens`
+        expects).
+
+    seed : int, numpy.random.Generator, or other seed, optional
+        Anything `numpy.random.default_rng` accepts: None (fresh entropy), integer seed material,
+        a SeedSequence, a BitGenerator (kept, with its state), or a Generator (used directly and
+        advanced). A legacy RandomState shares its bit generator. NumPy's global random state is
+        never used.
+
+    Returns
+    -------
+    dict
+        Rates keyed by elementary error generator labels: the H rates, then the S rates, then the
+        C and A rates on every allowed pair, in basis order.
+
+    Notes
+    -----
+    The default operator basis is :func:`pygsti.baseobjs.canonical_errorgen_basis`: PP on qubits
+    and GM on other subsystems, normalized so that Tr(F_a^dag F_b) = D delta_ab in Hilbert-space
+    dimension D. A string selects a family on each subsystem through ``Basis.cast(name, state_space)``.
+    GM works on all supported subsystem dimensions. PP gives the Pauli-product basis on qubits;
+    it also permits higher power-of-two dimensions, but its labels then do not identify the
+    given subsystem supports. Lowercase gm and pp are orthonormal instead of D-normalized,
+    changing the scale of the rates and error metrics.
+
+    Weight limits, ``sslbl_overlap`` and global labels require subsystem supports. These are
+    inferred from PP/GM labels with one token per subsystem: I, X, Y, Z, X_{j,k}, Y_{j,k}, or Z_{j}.
+    A tensor-product basis must have one factor of matching dimension per subsystem. For a
+    basis without this structure, use ``label_type='local'`` and no support restrictions.
+
+    When constructing a ``LindbladErrorgen`` from these rates, pass the same operator basis.
+    In particular, ``LindbladErrorgen.from_elementary_errorgens(..., elementary_errorgen_basis='GM')``
+    on a qubit-qutrit space uses a single 6-dimensional Gell-Mann basis with different labels.
+    Pass ``canonical_errorgen_basis(state_space)`` to use this sampler's default tensor-product basis.
+
+    K is sampled through a Cholesky factor L on the filled pattern of the allowed C/A pairs
+    after a fill-reducing ordering (see :mod:`pygsti.tools.graphs.sparsechol`), with a Bartlett-type draw.
+    For the unrestricted pattern, K is a scaled Wishart matrix before fixed rates or budgets
+    are imposed. A chordal pattern admits an ordering without fill, so the factor draw respects
+    its support. Otherwise fill entries are zeroed. Disallowed real or imaginary components
+    are also zeroed, and the remaining off-diagonal entries are scaled toward zero if needed
+    to restore positive semidefiniteness while retaining the sampled diagonal.
+
+    Fixed H and S rates are included even when sector, weight or overlap restrictions would
+    exclude them. A fixed C or A rate also adds both of its operator directions to K. If S is
+    enabled, their diagonal rates are sampled even when support restrictions would exclude
+    those directions; otherwise both S rates must be fixed explicitly. This does not enable
+    other C or A pairs involving these added directions.
+
+    A diagonal congruence imposes the fixed S values and any budget scaling of the free S
+    values. Free H rates are scaled separately. The prescribed H and S rates remain unchanged.
+
+    When fixed C or A components are present, they are assigned after the diagonals are set.
+    Let B contain those diagonals and fixed components, with all other off-diagonal components zero. B must be PSD
+    to numerical tolerance; an indefinite B raises ValueError even when the free components
+    could complete it to a PSD matrix. This routine does not search for such a completion.
+
+    The remaining free off-diagonal components form O, and the final matrix is B + t*O.
+    For numerically positive-definite B, t is the largest feasible value in [0, 1], with a
+    small safety margin when t < 1. For numerically singular B, t is zero conservatively,
+    discarding the free off-diagonal components while retaining all prescribed values.
+    """
+    errorgen_types = tuple(errorgen_types)
+    if not set(errorgen_types) <= set('HSCA'):
+        raise ValueError("`errorgen_types` may only contain 'H', 'S', 'C' and 'A', not %s." % str(errorgen_types))
+    if label_type not in ('global', 'local'):
+        raise ValueError("Unsupported label type %r." % label_type)
+    if ('C' in errorgen_types or 'A' in errorgen_types) and 'S' not in errorgen_types:
+        raise ValueError("'C' and 'A' rates require 'S' rates for a positive-semidefinite Kossakowski matrix.")
+    if (error_metric is None) != (error_metric_value is None):
+        raise ValueError("Give both `error_metric` and `error_metric_value`, or neither.")
+    if error_metric not in (None, 'generator_infidelity', 'total_generator_error'):
+        raise ValueError("Unsupported error metric %r." % error_metric)
+    if relative_HS_contribution is not None:
+        if error_metric is None:
+            raise ValueError("`relative_HS_contribution` requires `error_metric`.")
+        if 'H' not in errorgen_types or 'S' not in errorgen_types:
+            raise ValueError("`relative_HS_contribution` requires both 'H' and 'S' in `errorgen_types`.")
+        if len(relative_HS_contribution) != 2 or min(relative_HS_contribution) < 0 \
+                or abs(1 - sum(relative_HS_contribution)) > 1e-7:
+            raise ValueError("`relative_HS_contribution` must be two nonnegative fractions summing to 1.")
+    if SCA_params[0] != 0:
+        raise ValueError("Nonzero means in `SCA_params` are not supported.")
+    if error_metric is not None and H_params[0] != 0:
+        raise ValueError("A nonzero mean in `H_params` is not supported together with an error metric.")
+    max_weights = dict(max_weights or {})
+    if not set(max_weights) <= set('HSCA'):
+        raise ValueError("The keys of `max_weights` must be among 'H', 'S', 'C' and 'A'.")
+
+    basis = _resolve_errorgen_basis(state_space, elementary_errorgen_basis)
+    sslbls = state_space.sole_tensor_product_block_labels
+    bels = list(basis.labels[1:])
+    index = {bel: a for a, bel in enumerate(bels)}
+    supports = _direction_supports(basis, state_space)
+    if supports is None and (max_weights or sslbl_overlap is not None or label_type == 'global'):
+        raise ValueError("Weight limits, `sslbl_overlap` and global labels need a basis with one 'PP'- or "
+                         "'GM'-style factor per subsystem, which basis %s is not. Use label_type='local'." % basis.name)
+
+    # Which directions (and, for C/A, pairs) each sector allows.
+    num_dirs = len(bels)
+    if supports is None:
+        supports = _np.zeros((num_dirs, len(sslbls)), dtype=bool)  # unused: no restrictions apply
+    weights = supports.sum(axis=1)
+    if sslbl_overlap is None:
+        overlaps = _np.ones(num_dirs, dtype=bool)
+    else:
+        unknown = [l for l in sslbl_overlap if l not in sslbls]
+        if unknown:
+            raise ValueError("`sslbl_overlap` contains %s, which are not labels of %s." % (unknown, state_space))
+        overlaps = supports[:, [sslbls.index(l) for l in sslbl_overlap]].any(axis=1)
+
+    def allowed_dirs(typ):
+        if typ not in errorgen_types:
+            return _np.zeros(num_dirs, dtype=bool)
+        return overlaps & (weights <= max_weights.get(typ, _np.inf))
+
+    fixed = _fixed_rates_by_index(fixed_errorgen_rates, sslbls, index)
+    H_dirs = sorted(set(_np.flatnonzero(allowed_dirs('H'))) | set(fixed['H']))
+    S_allowed = allowed_dirs('S')
+    K_dirs = sorted(set(_np.flatnonzero(S_allowed)) | set(fixed['S'])
+                    | {a for pairs in (fixed['C'], fixed['A']) for pair in pairs for a in pair})
+    if 'S' not in errorgen_types and any(a not in fixed['S'] for a in K_dirs):
+        raise ValueError("Fixed C or A rates need S rates on both of their directions: include 'S' in "
+                         "`errorgen_types`, or fix those S rates.")
+    K_dirs = _np.array(K_dirs, dtype=int)
+    pos = {a: p for p, a in enumerate(K_dirs)}
+    n = len(K_dirs)
+
+    # Allowed C/A pairs among the allowed S directions, by the union of their supports.
+    Ksupp = supports[K_dirs]
+    union_weight = weights[K_dirs][:, None] + weights[K_dirs][None, :] - Ksupp.astype(int) @ Ksupp.T.astype(int)
+    pair_overlap = overlaps[K_dirs][:, None] | overlaps[K_dirs][None, :]
+    both_S = S_allowed[K_dirs][:, None] & S_allowed[K_dirs][None, :]
+    offdiag_mask = both_S & pair_overlap & ~_np.eye(n, dtype=bool)
+    real_mask = offdiag_mask & (union_weight <= max_weights.get('C', _np.inf)) & ('C' in errorgen_types)
+    imag_mask = offdiag_mask & (union_weight <= max_weights.get('A', _np.inf)) & ('A' in errorgen_types)
+    for mask, typ in ((real_mask, 'C'), (imag_mask, 'A')):
+        for (a, b) in fixed[typ]:
+            mask[pos[a], pos[b]] = mask[pos[b], pos[a]] = True
+
+    # Sample H, then the Kossakowski matrix K: its diagonal contains S rates, and
+    # K[i, j] = C[i, j] - 1j*A[i, j] for i < j. A PSD K gives a Lindblad generator
+    # whose exponential is completely positive and trace preserving.
+    rng = _as_generator(seed)
+    h = dict(zip(H_dirs, rng.normal(loc=H_params[0], scale=H_params[1], size=len(H_dirs))))
+    has_C = 'C' in errorgen_types or bool(fixed['C'])
+    has_A = 'A' in errorgen_types or bool(fixed['A'])
+    offdiag = 'complex' if has_C and has_A else ('imag' if has_A else 'real')
+    if n > 0:
+        st = _sparsechol.CholeskyStructure(real_mask | imag_mask)
+        K = _sparsepsd._sample_psd(st, rng, offdiag, scale=SCA_params[1],
+                                 real_pattern=real_mask, imag_pattern=imag_mask)
+    else:
+        K = _np.zeros((0, 0))
+
+    # Fix H and S rates and meet the budget.
+    for a, (_, v) in fixed['H'].items():
+        h[a] = v
+    H_free = [a for a in H_dirs if a not in fixed['H']]
+    S_free = _np.array([p for p, a in enumerate(K_dirs) if a not in fixed['S']], dtype=int)
+    H_scale, S_scale = 1.0, 1.0
+    if error_metric is not None:
+        def _free_scale(needed: float, free: float, what: str) -> float:
+            """ The factor by which a free contribution `free` must scale to become `needed`. """
+            tol = 1e-12 * max(abs(needed), 1.0)
+            if needed < -tol:
+                raise ValueError("The fixed rates alone exceed the %s target by %g." % (what, -needed))
+            if needed <= tol:
+                return 0.0
+            if free <= 0:
+                raise ValueError("No free rates can carry the remaining %s target of %g." % (what, needed))
+            return needed / free
+
+        power = 2 if error_metric == 'generator_infidelity' else 1
+        fixed_H = sum(abs(v) ** power for _, v in fixed['H'].values())
+        fixed_S = sum(v for _, v in fixed['S'].values())
+        free_H = sum(abs(h[a]) ** power for a in H_free)
+        free_S = float(_np.sum(_np.real(_np.diag(K))[S_free]))
+        if relative_HS_contribution is not None:
+            H_scale = _free_scale(relative_HS_contribution[0] * error_metric_value - fixed_H, free_H, 'H')
+            S_scale = _free_scale(relative_HS_contribution[1] * error_metric_value - fixed_S, free_S, 'S')
+        else:
+            H_scale = S_scale = _free_scale(error_metric_value - fixed_H - fixed_S, free_H + free_S, error_metric)
+        H_scale = H_scale ** (1 / power)
+    for a in H_free:
+        h[a] *= H_scale
+    fixed_S_pos = [pos[a] for a in fixed['S']]
+    K = _sparsepsd._impose_diagonal(K, list(S_free) + fixed_S_pos,
+                         list(S_scale * _np.real(_np.diag(K))[S_free]) + [v for _, v in fixed['S'].values()])
+
+    # Fix C and A rates; K_ij = C_ij - 1j * A_ij for i < j.
+    if fixed['C'] or fixed['A']:
+        K = _sparsepsd._impose_offdiagonals(K, real={(pos[a], pos[b]): v for (a, b), (_, v) in fixed['C'].items()},
+                                 imag={(pos[a], pos[b]): -v if index[l.basis_element_labels[0]] == a else v
+                                       for (a, b), (l, v) in fixed['A'].items()})
+
+    # Assemble the result: fixed rates under the caller's labels (and orientation), others in basis order.
+    rates = {}
+    for a in H_dirs:
+        rates[fixed['H'][a][0] if a in fixed['H'] else _LEEL('H', (bels[a],))] = float(h[a])
+    for p, a in enumerate(K_dirs):
+        rates[fixed['S'][a][0] if a in fixed['S'] else _LEEL('S', (bels[a],))] = float(_np.real(K[p, p]))
+    for typ, mask, part in (('C', real_mask, _np.real), ('A', imag_mask, lambda z: -_np.imag(z))):
+        for p, q in zip(*_np.nonzero(_np.triu(mask, k=1))):
+            a, b = K_dirs[p], K_dirs[q]
+            if (a, b) in fixed[typ]:
+                lbl, v = fixed[typ][(a, b)]
+                rates[lbl] = v
+            else:
+                rates[_LEEL(typ, (bels[a], bels[b]))] = float(part(K[p, q]))
+
+    if label_type == 'global':
+        rates = {_GEEL.cast(lbl, sslbls=sslbls): v for lbl, v in rates.items()}
+    return rates
 
 
 def random_CPTP_error_generator_rates(
@@ -773,14 +1059,20 @@ def random_CPTP_error_generator_rates(
         error_metric      : Literal['generator_infidelity', 'total_generator_error'] | None = None,
         error_metric_value        : float | None = None,
         relative_HS_contribution  : tuple[float, float] | None = None,
-        fixed_errorgen_rates      : dict[_LEEL, float] | None = None,
+        fixed_errorgen_rates      : dict[_LEEL | _GEEL, float] | None = None,
         sslbl_overlap             : list | None = None,
         label_type                : Literal['global', 'local'] = 'global',
-        seed           : int | None = None,
+        seed           : SeedLike = None,
         qubit_labels   : list | None = None
     ) -> dict:
     """
     Function for generating a random set of CPTP error generator rates.
+
+    Deprecated: use :func:`random_cptp_errorgen_rates`, which takes a `StateSpace` (e.g.
+    `QubitSpace(num_qubits)`) in place of `num_qubits` and `qubit_labels`, and supports qudits.
+    This function now calls it with the 'PP' basis. Its sampler is new: the returned rates
+    define a generator whose exponential is CPTP, and outputs for a given seed differ from
+    earlier versions of pyGSTi.
 
     Parameters
     ----------
@@ -847,16 +1139,16 @@ def random_CPTP_error_generator_rates(
         final returned error generator rate dictionary. The inclusion of these
         rates is performed independently of any of the kwargs which otherwise
         control the weight and allowed types of the error generators in this
-        model. If specifying fixed C and A rates it is possible for the final
-        error generator to be non-CP.
+        model. If the fixed C and A rates are incompatible with complete
+        positivity, a ValueError is raised.
 
     label_type : str, optional (default 'global')
         String which can be either 'global' or 'local', indicating whether to
         return a dictionary with keys which are `GlobalElementaryErrorgenLabel`
         or `LocalElementaryErrorgenLabel` objects respectively.
 
-    seed : int, optional (default None)
-        An optional integer used in seeding the RNG.
+    seed : int or numpy.random.Generator, optional (default None)
+        An optional seed, or anything else `random_cptp_errorgen_rates` accepts.
 
     qubit_labels : list or int or str, optional (default None)
         An optional list of qubit labels upon which the error generator should act.
@@ -866,79 +1158,16 @@ def random_CPTP_error_generator_rates(
     -------
     Dictionary of error generator coefficient labels and rates
     """
-    if fixed_errorgen_rates is None:
-        fixed_errorgen_rates = {}
-
-    if label_type not in ['global', 'local']:
-        raise ValueError('Unsupported label type {label_type}.')
-
-    fixed_H_contrib, fixed_S_contrib = _validate_random_CPTP_params(
-        errorgen_types, H_params, SCA_params, error_metric, error_metric_value,
-        relative_HS_contribution, fixed_errorgen_rates, max_weights
-    )
-    rng = _np.random.default_rng(seed)
-
-    state_space    = _QubitSpace.cast(num_qubits)
-    errorgen_basis = _bo.CompleteElementaryErrorgenBasis('PP', state_space, errorgen_types, max_weights, sslbl_overlap, 'local')
-    
-    errgen_labels_H = _sort_errorgen_labels(errorgen_basis.sublabels('H'))
-    errgen_labels_S = _sort_errorgen_labels(errorgen_basis.sublabels('S'))
-    errgen_labels_C = _sort_errorgen_labels(errorgen_basis.sublabels('C'))
-    errgen_labels_A = _sort_errorgen_labels(errorgen_basis.sublabels('A'))
-    errgen_labels_C = _filter_ca_labels_for_cp(errgen_labels_C, errgen_labels_S)
-    errgen_labels_A = _filter_ca_labels_for_cp(errgen_labels_A, errgen_labels_S)
-
-    random_rates_dicts : dict[Literal_HSCA, dict[_LEEL, float]] = _generate_random_rates(
-        errgen_labels_H, errgen_labels_S, errgen_labels_C, errgen_labels_A, H_params, SCA_params, rng
-    )
-    _check_ca_cp_constraint(random_rates_dicts['C'], random_rates_dicts['S'], 'C')
-    _check_ca_cp_constraint(random_rates_dicts['A'], random_rates_dicts['S'], 'A')
-    for egtyp, rate_dict in random_rates_dicts.items():
-        for leel, rate in fixed_errorgen_rates.items():
-            if leel.errorgen_type == egtyp:
-                rate_dict[leel] = rate
-
-    H_free_keys = [key for key in errgen_labels_H if key not in fixed_errorgen_rates]
-    S_free_keys = [key for key in errgen_labels_S if key not in fixed_errorgen_rates]
-    C_free_keys = [key for key in errgen_labels_C if key not in fixed_errorgen_rates]
-    A_free_keys = [key for key in errgen_labels_A if key not in fixed_errorgen_rates]
-    
-    if error_metric is not None and error_metric_value is not None: 
-        # ^ The `and` in that check is redundant, but keep it for type checking.
-        _rescale_to_error_metric(
-            random_rates_dicts, error_metric, error_metric_value,
-            relative_HS_contribution, fixed_H_contrib, fixed_S_contrib,
-            errorgen_types, H_free_keys, S_free_keys, C_free_keys, A_free_keys
-        )
-
-    errorgen_rates_dict = {}
-    for errgen_type in errorgen_types:
-        errorgen_rates_dict.update(random_rates_dicts[errgen_type])
-
-    if label_type == 'global':
-        errorgen_rates_dict = _convert_to_global_labels(errorgen_rates_dict, state_space, qubit_labels)
-
-    return errorgen_rates_dict
-
-
-def _sort_errorgen_labels(errgen_labels):
-    """
-    This function sorts error generator coefficients in canonical way.
-    Helper function for random error generator rate construction. 
-    """
-    if not errgen_labels:
-        return []
-    
-    assert isinstance(errgen_labels[0], _LEEL), 'Can only sort local labels at the moment'
-
-    errorgen_types = [lbl.errorgen_type for lbl in errgen_labels]
-    assert len(set(errorgen_types))==1, 'only one error generator type at a time is supported presently'
-
-    errorgen_type = errorgen_types[0]
-    if errorgen_type in ('H', 'S'):
-        sorted_errgen_labels = sorted(errgen_labels, key= lambda lbl:lbl.basis_element_labels[0])
-    else:
-        sorted_errgen_labels = sorted(errgen_labels, key= lambda lbl:(lbl.basis_element_labels[0], lbl.basis_element_labels[1]))
-
-    return sorted_errgen_labels
-
+    _warn_deprecated('random_CPTP_error_generator_rates', 'random_cptp_errorgen_rates')
+    if error_metric is None:  # these used to be ignored without a metric
+        error_metric_value = relative_HS_contribution = None
+    rates = random_cptp_errorgen_rates(
+        _QubitSpace(num_qubits), errorgen_types=errorgen_types, elementary_errorgen_basis='PP',
+        max_weights=max_weights, sslbl_overlap=sslbl_overlap, H_params=H_params, SCA_params=SCA_params,
+        error_metric=error_metric, error_metric_value=error_metric_value,
+        relative_HS_contribution=relative_HS_contribution, fixed_errorgen_rates=fixed_errorgen_rates,
+        label_type=label_type, seed=seed)
+    if label_type == 'global' and qubit_labels is not None:
+        mapper = {i: lbl for i, lbl in enumerate(qubit_labels)}
+        rates = {lbl.map_state_space_labels(mapper): v for lbl, v in rates.items()}
+    return rates
