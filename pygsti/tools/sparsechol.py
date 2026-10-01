@@ -21,7 +21,7 @@ from __future__ import annotations
 import heapq as _heapq
 import importlib.util as _importlib_util
 import warnings as _warnings
-from typing import Literal as _Literal
+from typing import Literal
 
 import networkx as _nx
 import numpy as _np
@@ -112,7 +112,7 @@ def _ordering_networkx(adj: _sps.csr_array) -> _npt.NDArray[_np.integer]:
 
 def fill_reducing_ordering(
         pattern: _SparsityPattern,
-        *, _backend: _Literal['cholmod', 'qdldl', 'networkx'] | None = None
+        *, _backend: Literal['cholmod', 'qdldl', 'networkx'] | None = None
     ) -> _npt.NDArray[_np.integer]:
     """
     A fill-reducing elimination ordering of a symmetric sparsity pattern.
