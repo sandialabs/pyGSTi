@@ -16,20 +16,26 @@ or completion solver for the whole constrained PSD cone.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Literal
 
 import numpy as _np
+import numpy.typing as _npt
+import scipy.sparse as _sps
 
 from . import sparsechol as _sparsechol
 
 __all__ = []
 
 
-def _subpattern(pattern, structure):
+def _subpattern(
+        pattern: _npt.ArrayLike | _sps.sparray | _sps.spmatrix,
+        structure: _sparsechol.CholeskyStructure
+    ) -> _npt.NDArray[_np.bool_]:
     """Normalize an off-diagonal component mask to a dense Boolean array.
 
     Nonzero entries define undirected edges, and diagonal entries are ignored. The mask must
-    have the structure's shape and allow no edges outside its requested pattern. Real and
+    have the same shape as ``structure.pattern`` and allow no edges outside it. Real and
     imaginary components may use different subsets of those edges.
     """
     if _np.ndim(pattern) != 2:
@@ -43,23 +49,43 @@ def _subpattern(pattern, structure):
     return sub
 
 
-def _psd_shrink_factor(B: _np.ndarray, O: _np.ndarray) -> float:
+def _psd_step_size(B: _np.ndarray, O: _np.ndarray) -> float:
     """
-    Choose a scale in [0, 1] for which the Hermitian matrix ``B + t*O`` remains PSD.
+    Approximately maximize t in [0, 1] with B + t*O PSD, for numerically positive-definite B.
 
-    The sampler uses B for the diagonal and any fixed entries, and O for free off-diagonal
-    entries. Scaling O preserves fixed entries and zeros. This helper implements that repair
-    policy; it requires a PSD anchor B and raises ValueError if B is numerically indefinite.
+    Let ``tol = 1e-12 * max(1, max(abs(eigvalsh(B))))``. When ``lambda_min(B) > tol``,
+    return the maximal feasible step, reduced by a relative margin of 1e-9 when it is less
+    than one. When ``-tol <= lambda_min(B) <= tol``, treat B as singular and return zero
+    conservatively; this step need not be maximal. More negative eigenvalues raise ValueError.
 
-    For positive-definite B, write ``M = B^(-1/2) O B^(-1/2)``. The feasible upper bound is one
-    when ``lambda_min(M) >= -1``, and ``-1/lambda_min(M)`` otherwise. A relative margin keeps
-    the latter result inside the feasible interval. For numerically singular B, return zero
-    conservatively, even when positive steps might be feasible. This is not a completion test.
+    Parameters
+    ----------
+    B : numpy.ndarray
+        Nonempty Hermitian PSD matrix defining the starting point.
+    O : numpy.ndarray
+        Hermitian direction matrix with the same shape as B.
+
+    Returns
+    -------
+    float
+        Step size in [0, 1], with positive semidefiniteness understood up to the tolerance above.
+
+    Raises
+    ------
+    ValueError
+        If B has an eigenvalue below the negative of that tolerance.
+
+    Notes
+    -----
+    For positive-definite B, congruence by B^(-1/2) gives the equivalent constraint
+    ``I + t*M >= 0``, where ``M = B^(-1/2) O B^(-1/2)``. If ``mu = lambda_min(M)``,
+    the maximal step is one for ``mu >= -1`` and ``-1/mu`` otherwise. The margin on
+    steps smaller than one moves the result inside the PSD cone to allow for roundoff.
     """
     evals, evecs = _np.linalg.eigh(B)
     tol = 1e-12 * max(1.0, _np.max(_np.abs(evals)))
     if evals[0] < -tol:
-        raise ValueError("The fixed part of the matrix is not positive semidefinite "
+        raise ValueError("The starting matrix B is not positive semidefinite "
                          "(minimum eigenvalue %g)." % evals[0])
     if evals[0] <= tol:
         return 0.0
@@ -69,12 +95,13 @@ def _psd_shrink_factor(B: _np.ndarray, O: _np.ndarray) -> float:
 
 
 def _sample_psd(
-        pattern,
+        pattern    : _npt.ArrayLike | _sps.sparray | _sps.spmatrix | _sparsechol.CholeskyStructure,
         rng        : _np.random.Generator,
         offdiag    : Literal['complex', 'real', 'imag'] = 'complex',
         scale      : float = 1.0,
         delta      : float = 1.0,
-        *, real_pattern=None, imag_pattern=None
+        *, real_pattern: _npt.ArrayLike | _sps.sparray | _sps.spmatrix | None = None,
+        imag_pattern: _npt.ArrayLike | _sps.sparray | _sps.spmatrix | None = None
     ) -> _np.ndarray:
     """
     Draw a Hermitian PSD matrix with prescribed off-diagonal component support.
@@ -90,7 +117,7 @@ def _sample_psd(
 
     Parameters
     ----------
-    pattern : scipy.sparse matrix, numpy.ndarray, or CholeskyStructure
+    pattern : array_like, scipy.sparse array or matrix, or CholeskyStructure
         A square off-diagonal support pattern, or cached symbolic analysis of that pattern.
         Nonzero entries define undirected edges; diagonal values are ignored.
     rng : numpy.random.Generator
@@ -105,7 +132,7 @@ def _sample_psd(
         ``delta + column_counts`` degrees of freedom; complex squared diagonals have twice
         that many degrees of freedom and are divided by two. Factor off-diagonals are
         independent standard real or complex normal draws before scaling.
-    real_pattern, imag_pattern : scipy.sparse matrix or numpy.ndarray, optional
+    real_pattern, imag_pattern : array_like or scipy.sparse array or matrix, optional
         Further restrictions on the corresponding components, with the same shape as
         ``pattern`` and support contained in it. Defaults to the full requested pattern.
         These restrictions intersect the components selected by ``offdiag``.
@@ -147,11 +174,17 @@ def _sample_psd(
     if cplx:
         O = O + 1j * _np.where(imag_allowed, offd.imag, 0)
     if _np.any(O != offd):  # entries outside the filled pattern are exact zeros
-        return D + _psd_shrink_factor(D, O) * O
+        # Masking can make D + O indefinite. Keep the diagonal and take a near-maximal
+        # PSD step toward the masked off-diagonals (zero if D is numerically singular).
+        return D + _psd_step_size(D, O) * O
     return D + O
 
 
-def _impose_diagonal(K: _np.ndarray, indices, values) -> _np.ndarray:
+def _impose_diagonal(
+        K: _np.ndarray,
+        indices: Sequence[int] | _npt.NDArray[_np.integer],
+        values: Sequence[float] | _npt.NDArray[_np.floating]
+    ) -> _np.ndarray:
     """
     Rescale K by a diagonal congruence so that K[i, i] = v for each i, v in zip(indices, values)
     (exactly: the diagonal is then overwritten, a rounding-level change).
@@ -173,11 +206,16 @@ def _impose_diagonal(K: _np.ndarray, indices, values) -> _np.ndarray:
     return K
 
 
-def _impose_offdiagonals(K: _np.ndarray, real: dict | None = None, imag: dict | None = None) -> _np.ndarray:
+def _impose_offdiagonals(
+        K: _np.ndarray,
+        real: Mapping[tuple[int, int], float] | None = None,
+        imag: Mapping[tuple[int, int], float] | None = None
+    ) -> _np.ndarray:
     """
-    Set Re K[i, j] = v for each (i, j): v in `real` and Im K[i, j] = v for each (i, j): v in `imag`
-    (and K[j, i] to the conjugate), keeping K positive semidefinite by shrinking only the free
-    off-diagonal parts. A part of an entry that is not fixed is free.
+    Set Re K[i, j] = v for each (i, j): v in `real` and Im K[i, j] = v for each (i, j): v in `imag`.
+
+    Set K[j, i] to the conjugate of the resulting K[i, j]. Keep K positive semidefinite by
+    shrinking only the free off-diagonal components; any component not prescribed is free.
 
     Raises ValueError if the diagonal together with the fixed entries is not positive
     semidefinite. This conservative policy requires a PSD zero-filled anchor; rejection does
@@ -197,8 +235,10 @@ def _impose_offdiagonals(K: _np.ndarray, real: dict | None = None, imag: dict | 
     D = _np.diag(_np.real(_np.diag(K)))
     B = D + F
     O_free = re + 1j * im
+    # B holds the diagonal and fixed entries; O_free vanishes at every fixed component.
+    # Taking a PSD step from B toward O_free therefore preserves all prescribed values.
     try:
-        t = _psd_shrink_factor(B, O_free)
+        t = _psd_step_size(B, O_free)
     except ValueError as e:
         raise ValueError("The diagonal and fixed off-diagonal entries do not form a positive-semidefinite anchor: "
                          "%s A PSD completion using free entries may still exist, but none was searched for." % e) from None

@@ -41,7 +41,7 @@ class SparsePsdExtractionTester(BaseCase):
         sp = importlib.import_module('pygsti.tools.sparsepsd')
         b, o = np.diag([1., 0.]), np.diag([1., 0.])
         self.assertGreaterEqual(np.linalg.eigvalsh(b + o).min(), 0)
-        self.assertEqual(sp._psd_shrink_factor(b, o), 0)
+        self.assertEqual(sp._psd_step_size(b, o), 0)
 
 
 def _weight_pattern(dims, max_S_weight, max_CA_weight):
@@ -98,7 +98,7 @@ class PsdSamplingTester(BaseCase):
         from pygsti.tools import sparsechol
         for pattern, chordal in self.PATTERNS:
             self.assertEqual(sparsechol.perfect_elimination_ordering(pattern) is not None, chordal)
-            with mock.patch.object(sp, '_psd_shrink_factor', side_effect=AssertionError('shrink called')) as shrink:
+            with mock.patch.object(sp, '_psd_step_size', side_effect=AssertionError('shrink called')) as shrink:
                 for offdiag in ('complex', 'real'):
                     try:
                         sp._sample_psd(pattern, np.random.default_rng(0), offdiag)
@@ -133,7 +133,7 @@ class PsdSamplingTester(BaseCase):
         np.testing.assert_allclose(moments[0][0], moments[1][0], atol=0.03)
         np.testing.assert_allclose(moments[0][1], moments[1][1], atol=0.05)
 
-    def test_psd_shrink_factor_matches_bisection(self):
+    def test_psd_step_size_matches_bisection(self):
         rng = np.random.default_rng(3)
         for _ in range(20):
             n = 6
@@ -141,7 +141,7 @@ class PsdSamplingTester(BaseCase):
             B = G @ G.conj().T + 0.1 * np.eye(n)
             H = rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n))
             O = 3 * (H + H.conj().T)
-            t = sp._psd_shrink_factor(B, O)
+            t = sp._psd_step_size(B, O)
             self.assertGreaterEqual(np.linalg.eigvalsh(B + t * O)[0], 0)
             lo, hi = 0.0, 1.0
             if np.linalg.eigvalsh(B + O)[0] >= 0:
@@ -151,8 +151,20 @@ class PsdSamplingTester(BaseCase):
                 lo, hi = (mid, hi) if np.linalg.eigvalsh(B + mid * O)[0] >= 0 else (lo, mid)
             self.assertAlmostEqual(t, lo, places=6)
         with self.assertRaises(ValueError):
-            sp._psd_shrink_factor(np.diag([1.0, -1.0]), np.zeros((2, 2)))
-        self.assertEqual(sp._psd_shrink_factor(np.diag([1.0, 0.0]), np.ones((2, 2))), 0.0)
+            sp._psd_step_size(np.diag([1.0, -1.0]), np.zeros((2, 2)))
+        self.assertEqual(sp._psd_step_size(np.diag([1.0, 0.0]), np.ones((2, 2))), 0.0)
+
+    def test_psd_step_size_boundary_cases(self):
+        # diag(2, 8) + t*[[0, 8], [8, 0]] is PSD exactly when |t| <= 1/2.
+        b = np.diag([2., 8.])
+        direction = np.array([[0., 8.], [8., 0.]])
+        t = sp._psd_step_size(b, direction)
+        self.assertAlmostEqual(t, 0.5, places=8)
+        self.assertLess(t, 0.5)
+        self.assertGreaterEqual(np.linalg.eigvalsh(b + t * direction).min(), 0)
+        self.assertLess(np.linalg.eigvalsh(b + (t + 1e-6) * direction).min(), 0)
+        self.assertEqual(sp._psd_step_size(b, direction / 2), 1.0)
+        self.assertEqual(sp._psd_step_size(b, np.zeros((2, 2))), 1.0)
 
     def test_impose_diagonal(self):
         pattern = _weight_pattern((2, 2), 2, 1)

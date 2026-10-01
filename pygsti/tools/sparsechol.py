@@ -21,9 +21,11 @@ from __future__ import annotations
 import heapq as _heapq
 import importlib.util as _importlib_util
 import warnings as _warnings
+from typing import Literal as _Literal
 
 import networkx as _nx
 import numpy as _np
+import numpy.typing as _npt
 import scipy.sparse as _sps
 
 __all__ = ['CholeskyStructure', 'fill_reducing_ordering', 'perfect_elimination_ordering',
@@ -31,12 +33,13 @@ __all__ = ['CholeskyStructure', 'fill_reducing_ordering', 'perfect_elimination_o
 
 # (backend, module whose absence makes the backend unavailable), in order of preference
 _BACKENDS = (('cholmod', 'sksparse'), ('qdldl', 'qdldl'), ('networkx', 'networkx'))
+_SparsityPattern = _npt.ArrayLike | _sps.sparray | _sps.spmatrix
 
 
-def _adjacency(pattern) -> _sps.csr_matrix:
-    """ The symmetrized off-diagonal pattern of `pattern`, as a boolean CSR matrix. """
-    A = _sps.csr_matrix(pattern)
-    if A.shape[0] != A.shape[1]:
+def _adjacency(pattern: _SparsityPattern) -> _sps.csr_array:
+    """ The symmetrized off-diagonal pattern of `pattern`, as a Boolean CSR array. """
+    A = _sps.csr_array(pattern)
+    if A.ndim != 2 or A.shape[0] != A.shape[1]:
         raise ValueError("A sparsity pattern must be square, not %s." % str(A.shape))
     A = (A != 0).astype(_np.int8)
     A = A + A.T
@@ -44,27 +47,29 @@ def _adjacency(pattern) -> _sps.csr_matrix:
     return (A != 0).tocsr()
 
 
-def _graph(adj) -> _nx.Graph:
+def _graph(adj: _sps.csr_array) -> _nx.Graph:
     G = _nx.Graph()
     G.add_nodes_from(range(adj.shape[0]))
     G.add_edges_from(zip(*_sps.triu(adj, k=1).nonzero()))
     return G
 
 
-def _synthetic_spd(adj) -> _sps.csc_matrix:
+def _synthetic_spd(adj: _sps.csr_array) -> _sps.csc_array:
     """ A strictly diagonally dominant (hence positive definite) matrix with pattern `adj`. """
     n = adj.shape[0]
-    return (adj.astype(float) + _sps.identity(n) * (n + 1)).tocsc()
+    indices = _np.arange(n)
+    diagonal = _sps.csc_array((_np.full(n, n + 1.0), (indices, indices)), shape=(n, n))
+    return (adj.astype(float) + diagonal).tocsc()
 
 
-def _check_perm(perm, n) -> _np.ndarray:
+def _check_perm(perm: _npt.ArrayLike, n: int) -> _npt.NDArray[_np.integer]:
     perm = _np.asarray(perm, dtype=int)
     if perm.shape != (n,) or not _np.array_equal(_np.sort(perm), _np.arange(n)):
         raise ValueError("`perm` must be a permutation of range(%d)." % n)
     return perm
 
 
-def _ordering_cholmod(adj):
+def _ordering_cholmod(adj: _sps.csr_array) -> _npt.NDArray[_np.integer]:
     from sksparse import cholmod
     A = _synthetic_spd(adj)
     if hasattr(cholmod, 'CholeskyFactor'):  # scikit-sparse >= 0.5; the constructor only does symbolic analysis
@@ -72,12 +77,12 @@ def _ordering_cholmod(adj):
     return _np.asarray(cholmod.analyze(A, ordering_method='amd').P(), dtype=int)
 
 
-def _ordering_qdldl(adj):
+def _ordering_qdldl(adj: _sps.csr_array) -> _npt.NDArray[_np.integer]:
     import qdldl
     return _np.asarray(qdldl.Solver(_synthetic_spd(adj)).factors()[2], dtype=int)
 
 
-def _mcs_ordering(G) -> _np.ndarray:
+def _mcs_ordering(G: _nx.Graph) -> _npt.NDArray[_np.integer]:
     """
     The reverse of a maximum cardinality search visit order, which is a perfect elimination
     ordering whenever G is chordal (Tarjan & Yannakakis, 1984).
@@ -98,14 +103,17 @@ def _mcs_ordering(G) -> _np.ndarray:
     return _np.array(order[::-1], dtype=int)
 
 
-def _ordering_networkx(adj):
+def _ordering_networkx(adj: _sps.csr_array) -> _npt.NDArray[_np.integer]:
     # Eliminate along a perfect elimination ordering of networkx's minimal (MCS-M) triangulation,
     # so the fill is exactly the triangulation's added edges, and zero on chordal patterns.
     H, _ = _nx.complete_to_chordal_graph(_graph(adj))
     return _mcs_ordering(H)
 
 
-def fill_reducing_ordering(pattern, *, _backend=None) -> _np.ndarray:
+def fill_reducing_ordering(
+        pattern: _SparsityPattern,
+        *, _backend: _Literal['cholmod', 'qdldl', 'networkx'] | None = None
+    ) -> _npt.NDArray[_np.integer]:
     """
     A fill-reducing elimination ordering of a symmetric sparsity pattern.
 
@@ -118,7 +126,7 @@ def fill_reducing_ordering(pattern, *, _backend=None) -> _np.ndarray:
 
     Parameters
     ----------
-    pattern : scipy.sparse matrix or numpy.ndarray
+    pattern : scipy.sparse array or matrix, or numpy.ndarray
         A square matrix whose nonzero off-diagonal entries define the (symmetrized) pattern.
 
     Returns
@@ -144,7 +152,7 @@ def fill_reducing_ordering(pattern, *, _backend=None) -> _np.ndarray:
     return _check_perm(_ordering_networkx(adj), n)
 
 
-def perfect_elimination_ordering(pattern) -> _np.ndarray | None:
+def perfect_elimination_ordering(pattern: _SparsityPattern) -> _npt.NDArray[_np.integer] | None:
     """
     An elimination ordering with no fill, or None if `pattern` is not chordal.
 
@@ -154,7 +162,7 @@ def perfect_elimination_ordering(pattern) -> _np.ndarray | None:
 
     Parameters
     ----------
-    pattern : scipy.sparse matrix or numpy.ndarray
+    pattern : scipy.sparse array or matrix, or numpy.ndarray
         A square matrix whose nonzero off-diagonal entries define the (symmetrized) pattern.
 
     Returns
@@ -170,13 +178,13 @@ def perfect_elimination_ordering(pattern) -> _np.ndarray | None:
     return _mcs_ordering(G)
 
 
-def elimination_tree(pattern, perm) -> _np.ndarray:
+def elimination_tree(pattern: _SparsityPattern, perm: _npt.ArrayLike) -> _npt.NDArray[_np.integer]:
     """
     The elimination tree of the Cholesky factor of the permuted pattern `A[perm][:, perm]`.
 
     Parameters
     ----------
-    pattern : scipy.sparse matrix or numpy.ndarray
+    pattern : scipy.sparse array or matrix, or numpy.ndarray
         A square matrix whose nonzero off-diagonal entries define the (symmetrized) pattern.
 
     perm : array_like
@@ -205,13 +213,13 @@ def elimination_tree(pattern, perm) -> _np.ndarray:
     return parent
 
 
-def symbolic_cholesky(pattern, perm) -> _sps.csc_matrix:
+def symbolic_cholesky(pattern: _SparsityPattern, perm: _npt.ArrayLike) -> _sps.csc_array:
     """
     The sparsity pattern of the Cholesky factor of the permuted pattern `A[perm][:, perm]`.
 
     Parameters
     ----------
-    pattern : scipy.sparse matrix or numpy.ndarray
+    pattern : scipy.sparse array or matrix, or numpy.ndarray
         A square matrix whose nonzero off-diagonal entries define the (symmetrized) pattern.
 
     perm : array_like
@@ -219,7 +227,7 @@ def symbolic_cholesky(pattern, perm) -> _sps.csc_matrix:
 
     Returns
     -------
-    scipy.sparse.csc_matrix
+    scipy.sparse.csc_array
         A boolean lower-triangular matrix, diagonal included, whose nonzeros are those of the
         Cholesky factor `L` (fill included). Indices refer to the permuted matrix.
     """
@@ -242,7 +250,7 @@ def symbolic_cholesky(pattern, perm) -> _sps.csc_matrix:
                 k = parent[k]
     rows.extend(range(n))
     cols.extend(range(n))
-    return _sps.csc_matrix((_np.ones(len(rows), dtype=bool), (rows, cols)), shape=(n, n))
+    return _sps.csc_array((_np.ones(len(rows), dtype=bool), (rows, cols)), shape=(n, n))
 
 
 class CholeskyStructure(object):
@@ -251,7 +259,7 @@ class CholeskyStructure(object):
 
     Parameters
     ----------
-    pattern : scipy.sparse matrix or numpy.ndarray
+    pattern : scipy.sparse array or matrix, or numpy.ndarray
         A square matrix whose nonzero off-diagonal entries define the pattern. Numerical values
         and diagonal entries are ignored, and an edge present in either triangle is included in
         both triangles. The input is copied.
@@ -268,10 +276,10 @@ class CholeskyStructure(object):
     n : int
         The number of vertices (matrix dimension).
 
-    pattern : scipy.sparse.csr_matrix
+    pattern : scipy.sparse.csr_array
         Symmetric Boolean off-diagonal pattern in the original vertex order.
 
-    factor_pattern : scipy.sparse.csc_matrix
+    factor_pattern : scipy.sparse.csc_array
         Boolean lower-triangular Cholesky factor pattern, including its diagonal and any fill.
         Its indices refer to the permuted matrix.
 
@@ -298,12 +306,22 @@ class CholeskyStructure(object):
     the requested ``pattern``. The factor pattern describes structural nonzeros: special
     numerical values can cancel entries in a particular factorization.
 
-    The NumPy arrays, including the data, index, and pointer arrays of the two sparse matrices,
+    The NumPy arrays, including the data, index, and pointer arrays of the two sparse arrays,
     are copied and made read-only so that ordinary array mutation cannot invalidate the cached
     relationships. Empty (zero-by-zero) patterns are supported.
     """
 
-    def __init__(self, pattern, *, ordering=None):
+    n: int
+    pattern: _sps.csr_array
+    factor_pattern: _sps.csc_array
+    perm: _npt.NDArray[_np.integer]
+    inv: _npt.NDArray[_np.integer]
+    rows: _npt.NDArray[_np.integer]
+    cols: _npt.NDArray[_np.integer]
+    column_counts: _npt.NDArray[_np.integer]
+    filled_degrees: _npt.NDArray[_np.integer]
+
+    def __init__(self, pattern: _SparsityPattern, *, ordering: _npt.ArrayLike | None = None) -> None:
         if _np.ndim(pattern) != 2:
             raise ValueError("A sparsity pattern must be a square matrix.")
         adj = _adjacency(pattern).copy()

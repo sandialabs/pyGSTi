@@ -54,7 +54,8 @@ class SymbolicCholeskyTester(BaseCase):
     def test_values_and_diagonal_are_ignored(self):
         G = nx.cycle_graph(6)
         pattern = _pattern(G).astype(float)
-        weighted = pattern.multiply(np.arange(36).reshape(6, 6) + 1.0) + sps.identity(6) * 7
+        weighted = pattern.multiply(np.arange(36).reshape(6, 6) + 1.0) + sps.dia_array((np.full((1, 6), 7), [0]),
+                                                                                shape=(6, 6))
         perm = np.arange(6)
         self.assertEqual((sparsechol.symbolic_cholesky(pattern, perm)
                           != sparsechol.symbolic_cholesky(weighted, perm)).nnz, 0)
@@ -64,7 +65,7 @@ class SymbolicCholeskyTester(BaseCase):
 
     def test_trivial_patterns(self):
         for n in (0, 1, 4):
-            empty = sps.csr_matrix((n, n))
+            empty = sps.csr_array((n, n))
             perm = sparsechol.fill_reducing_ordering(empty)
             np.testing.assert_array_equal(np.sort(perm), np.arange(n))
             self.assertEqual(sparsechol.symbolic_cholesky(empty, perm).nnz, n)
@@ -72,9 +73,20 @@ class SymbolicCholeskyTester(BaseCase):
 
     def test_bad_inputs(self):
         with self.assertRaises(ValueError):
-            sparsechol.symbolic_cholesky(sps.csr_matrix((3, 4)), [0, 1, 2])
+            sparsechol.symbolic_cholesky(sps.csr_array((3, 4)), [0, 1, 2])
         with self.assertRaises(ValueError):
-            sparsechol.elimination_tree(sps.csr_matrix((3, 3)), [0, 0, 1])
+            sparsechol.elimination_tree(sps.csr_array((3, 3)), [0, 0, 1])
+
+    def test_sparse_array_formats_preserve_symbolic_fill(self):
+        # A center-first ordering fills the missing edge of this three-vertex path.
+        values = np.array([[9, 2, 0], [0, 7, 3], [0, 0, 11]])
+        for array_type in (sps.csr_array, sps.csc_array, sps.coo_array):
+            with self.subTest(format=array_type.__name__):
+                pattern = array_type(values)
+                factor = sparsechol.symbolic_cholesky(pattern, [1, 0, 2])
+                self.assertIsInstance(factor, sps.csc_array)
+                np.testing.assert_array_equal(factor.toarray(), np.tril(np.ones((3, 3), dtype=bool)))
+                np.testing.assert_array_equal(sparsechol.elimination_tree(pattern, [1, 0, 2]), [1, 2, -1])
 
 
 class CholeskyStructureTester(BaseCase):
@@ -94,8 +106,8 @@ class CholeskyStructureTester(BaseCase):
             expected_degrees[perm] = np.count_nonzero(filled_graph, axis=0)
 
             self.assertEqual(structure.n, len(perm))
-            self.assertTrue(sps.isspmatrix_csr(structure.pattern))
-            self.assertTrue(sps.isspmatrix_csc(structure.factor_pattern))
+            self.assertIsInstance(structure.pattern, sps.csr_array)
+            self.assertIsInstance(structure.factor_pattern, sps.csc_array)
             self.assertEqual(structure.pattern.dtype, np.dtype(bool))
             self.assertEqual(structure.factor_pattern.dtype, np.dtype(bool))
             np.testing.assert_array_equal(structure.pattern.toarray(), pattern.toarray())
@@ -150,7 +162,7 @@ class CholeskyStructureTester(BaseCase):
                                       [[True, False, False], [True, True, False], [False, True, True]])
 
     def test_structural_arrays_are_copied_and_read_only(self):
-        pattern = sps.csr_matrix([[False, True, False], [True, False, True], [False, True, False]])
+        pattern = sps.csr_array([[False, True, False], [True, False, True], [False, True, False]])
         perm = np.array([1, 2, 0])
         expected_pattern = pattern.toarray()
         structure = sparsechol.CholeskyStructure(pattern, ordering=perm)
@@ -170,7 +182,7 @@ class CholeskyStructureTester(BaseCase):
 
     def test_empty_structure(self):
         for ordering in (None, []):
-            structure = sparsechol.CholeskyStructure(sps.csr_matrix((0, 0)), ordering=ordering)
+            structure = sparsechol.CholeskyStructure(sps.csr_array((0, 0)), ordering=ordering)
             self.assertEqual(structure.n, 0)
             for matrix in (structure.pattern, structure.factor_pattern):
                 self.assertEqual(matrix.shape, (0, 0))
@@ -181,7 +193,7 @@ class CholeskyStructureTester(BaseCase):
                 self.assertFalse(array.flags.writeable)
 
     def test_rejects_nonmatrix_and_nonsquare_patterns(self):
-        patterns = [np.ones((3, 4)), sps.csr_matrix((3, 4)), np.ones(1), np.ones((1, 1, 1)), 1.0]
+        patterns = [np.ones((3, 4)), sps.csr_array((3, 4)), np.ones(1), np.ones((1, 1, 1)), 1.0]
         for pattern in patterns:
             with self.subTest(shape=np.shape(pattern)):
                 with self.assertRaises(ValueError):
