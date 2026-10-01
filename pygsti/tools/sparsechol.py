@@ -26,6 +26,9 @@ import networkx as _nx
 import numpy as _np
 import scipy.sparse as _sps
 
+__all__ = ['CholeskyStructure', 'fill_reducing_ordering', 'perfect_elimination_ordering',
+           'elimination_tree', 'symbolic_cholesky']
+
 # (backend, module whose absence makes the backend unavailable), in order of preference
 _BACKENDS = (('cholmod', 'sksparse'), ('qdldl', 'qdldl'), ('networkx', 'networkx'))
 
@@ -145,8 +148,9 @@ def perfect_elimination_ordering(pattern) -> _np.ndarray | None:
     """
     An elimination ordering with no fill, or None if `pattern` is not chordal.
 
-    A symmetric pattern has a Cholesky factorization without fill if and only if its graph is
-    chordal; the ordering is then a perfect elimination ordering.
+    A symmetric pattern admits an ordering with no Cholesky fill if and only if its graph is
+    chordal. Such an ordering is a perfect elimination ordering; other orderings of a chordal
+    graph can still produce fill.
 
     Parameters
     ----------
@@ -239,3 +243,102 @@ def symbolic_cholesky(pattern, perm) -> _sps.csc_matrix:
     rows.extend(range(n))
     cols.extend(range(n))
     return _sps.csc_matrix((_np.ones(len(rows), dtype=bool), (rows, cols)), shape=(n, n))
+
+
+class CholeskyStructure(object):
+    """
+    Reusable symbolic structure for Cholesky factorization of a symmetric sparsity pattern.
+
+    Parameters
+    ----------
+    pattern : scipy.sparse matrix or numpy.ndarray
+        A square matrix whose nonzero off-diagonal entries define the pattern. Numerical values
+        and diagonal entries are ignored, and an edge present in either triangle is included in
+        both triangles. The input is copied.
+
+    ordering : array_like, optional
+        A permutation of ``range(n)`` specifying the elimination order: ``perm[k]`` is the
+        original index eliminated at step ``k``, so the factorization is of
+        ``A[perm][:, perm]``. A supplied ordering is used even when it introduces avoidable fill.
+        If omitted, use :func:`fill_reducing_ordering`, replacing its result with a perfect
+        elimination ordering when the graph is chordal and the first ordering introduces fill.
+
+    Attributes
+    ----------
+    n : int
+        The number of vertices (matrix dimension).
+
+    pattern : scipy.sparse.csr_matrix
+        Symmetric Boolean off-diagonal pattern in the original vertex order.
+
+    factor_pattern : scipy.sparse.csc_matrix
+        Boolean lower-triangular Cholesky factor pattern, including its diagonal and any fill.
+        Its indices refer to the permuted matrix.
+
+    perm, inv : numpy.ndarray
+        The elimination ordering and its inverse, with ``perm[inv] == arange(n)``.
+
+    rows, cols : numpy.ndarray
+        Strict-lower factor coordinates in the permuted matrix, in CSC order: columns increase
+        first, and rows increase within each column. Their order also fixes the order in which
+        a consumer can assign one value per factor entry.
+
+    column_counts : numpy.ndarray
+        Number of strict-lower factor entries in each column, in elimination order.
+
+    filled_degrees : numpy.ndarray
+        Vertex degrees in the undirected filled graph, in the original vertex order. The
+        diagonal does not contribute to these degrees.
+
+    Notes
+    -----
+    A graph is chordal exactly when it admits a perfect elimination ordering, for which there
+    is no fill. Chordality alone does not make every ordering fill-free. For a nonchordal graph,
+    every ordering adds fill; the factor pattern records those added entries without changing
+    the requested ``pattern``. The factor pattern describes structural nonzeros: special
+    numerical values can cancel entries in a particular factorization.
+
+    The NumPy arrays, including the data, index, and pointer arrays of the two sparse matrices,
+    are copied and made read-only so that ordinary array mutation cannot invalidate the cached
+    relationships. Empty (zero-by-zero) patterns are supported.
+    """
+
+    def __init__(self, pattern, *, ordering=None):
+        if _np.ndim(pattern) != 2:
+            raise ValueError("A sparsity pattern must be a square matrix.")
+        adj = _adjacency(pattern).copy()
+        n = adj.shape[0]
+        if ordering is None:
+            perm = fill_reducing_ordering(adj)
+            factor_pattern = symbolic_cholesky(adj, perm)
+            if _sps.tril(factor_pattern, k=-1).nnz > _sps.tril(adj[perm][:, perm], k=-1).nnz:
+                peo = perfect_elimination_ordering(adj)
+                if peo is not None:
+                    perm = peo
+                    factor_pattern = symbolic_cholesky(adj, perm)
+        else:
+            perm = _np.asarray(ordering)
+            if (perm.shape != (n,) or perm.dtype.kind not in 'iuf'
+                    or not _np.array_equal(_np.sort(perm), _np.arange(n))):
+                raise ValueError("`ordering` must be a permutation of range(%d)." % n)
+            perm = _np.array(perm, dtype=int, copy=True)
+            factor_pattern = symbolic_cholesky(adj, perm)
+
+        factor_pattern = factor_pattern.copy()
+        factor_pattern.sort_indices()
+        lower = _sps.tril(factor_pattern, k=-1).tocsc()
+        lower.sort_indices()
+        self.n = n
+        self.pattern = adj
+        self.factor_pattern = factor_pattern
+        self.perm = _np.array(perm, dtype=int, copy=True)
+        self.inv = _np.argsort(self.perm)
+        self.column_counts = _np.diff(lower.indptr)
+        self.cols = _np.repeat(_np.arange(n), self.column_counts)
+        self.rows = lower.indices.copy()
+        filled_degrees = _np.bincount(self.rows, minlength=n) + self.column_counts
+        self.filled_degrees = filled_degrees[self.inv]
+        for array in (self.perm, self.inv, self.rows, self.cols, self.column_counts, self.filled_degrees,
+                      self.pattern.data, self.pattern.indices, self.pattern.indptr,
+                      self.factor_pattern.data, self.factor_pattern.indices, self.factor_pattern.indptr):
+            array.flags.writeable = False

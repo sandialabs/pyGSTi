@@ -77,6 +77,125 @@ class SymbolicCholeskyTester(BaseCase):
             sparsechol.elimination_tree(sps.csr_matrix((3, 3)), [0, 0, 1])
 
 
+class CholeskyStructureTester(BaseCase):
+
+    def test_structure_matches_numeric_factor_in_supplied_order(self):
+        rng = np.random.default_rng(42)
+        graphs = [nx.cycle_graph(5), nx.star_graph(4), nx.path_graph(6), nx.empty_graph(4)]
+        for graph in graphs:
+            pattern = _pattern(graph)
+            perm = rng.permutation(graph.number_of_nodes())
+            structure = sparsechol.CholeskyStructure(pattern, ordering=perm)
+            numeric = np.abs(_numeric_factor(pattern, perm, rng)) > 1e-12
+            lower = np.tril(numeric, k=-1)
+            expected_cols, expected_rows = np.nonzero(lower.T)
+            filled_graph = lower | lower.T
+            expected_degrees = np.empty(len(perm), dtype=int)
+            expected_degrees[perm] = np.count_nonzero(filled_graph, axis=0)
+
+            self.assertEqual(structure.n, len(perm))
+            self.assertTrue(sps.isspmatrix_csr(structure.pattern))
+            self.assertTrue(sps.isspmatrix_csc(structure.factor_pattern))
+            self.assertEqual(structure.pattern.dtype, np.dtype(bool))
+            self.assertEqual(structure.factor_pattern.dtype, np.dtype(bool))
+            np.testing.assert_array_equal(structure.pattern.toarray(), pattern.toarray())
+            np.testing.assert_array_equal(structure.factor_pattern.toarray(), numeric)
+            np.testing.assert_array_equal(structure.perm, perm)
+            np.testing.assert_array_equal(structure.perm[structure.inv], np.arange(len(perm)))
+            np.testing.assert_array_equal(structure.rows, expected_rows)
+            np.testing.assert_array_equal(structure.cols, expected_cols)
+            np.testing.assert_array_equal(structure.column_counts, np.count_nonzero(lower, axis=0))
+            np.testing.assert_array_equal(structure.filled_degrees, expected_degrees)
+
+    def test_explicit_ordering_retains_fill_on_chordal_graph(self):
+        # Eliminating a star's center first connects all its leaves, despite chordality.
+        pattern = _pattern(nx.star_graph(3))
+        structure = sparsechol.CholeskyStructure(pattern, ordering=[0, 2, 3, 1])
+        np.testing.assert_array_equal(structure.perm, [0, 2, 3, 1])
+        np.testing.assert_array_equal(structure.factor_pattern.toarray(), np.tril(np.ones((4, 4), bool)))
+        np.testing.assert_array_equal(structure.rows, [1, 2, 3, 2, 3, 3])
+        np.testing.assert_array_equal(structure.cols, [0, 0, 0, 1, 1, 2])
+        np.testing.assert_array_equal(structure.column_counts, [3, 2, 1, 0])
+        np.testing.assert_array_equal(structure.filled_degrees, [3, 3, 3, 3])
+
+    def test_default_ordering_removes_avoidable_chordal_fill(self):
+        from unittest import mock
+        pattern = _pattern(nx.star_graph(4))
+        # An optional ordering backend can return this valid, but poor, ordering.
+        with mock.patch.object(sparsechol, 'fill_reducing_ordering', return_value=np.arange(5)):
+            structure = sparsechol.CholeskyStructure(pattern)
+        numeric = np.abs(_numeric_factor(pattern, structure.perm, np.random.default_rng(1))) > 1e-12
+        self.assertEqual(np.count_nonzero(np.tril(numeric, k=-1)), 4)
+        np.testing.assert_array_equal(structure.factor_pattern.toarray(), numeric)
+        np.testing.assert_array_equal(structure.filled_degrees, [4, 1, 1, 1, 1])
+
+    def test_nonchordal_default_keeps_backend_order_and_required_fill(self):
+        from unittest import mock
+        pattern = _pattern(nx.cycle_graph(4))
+        perm = np.array([2, 0, 3, 1])
+        with mock.patch.object(sparsechol, 'fill_reducing_ordering', return_value=perm):
+            structure = sparsechol.CholeskyStructure(pattern)
+        np.testing.assert_array_equal(structure.perm, perm)
+        np.testing.assert_array_equal(structure.rows, [2, 3, 2, 3, 3])
+        np.testing.assert_array_equal(structure.cols, [0, 0, 1, 1, 2])
+        np.testing.assert_array_equal(structure.column_counts, [2, 2, 1, 0])
+        np.testing.assert_array_equal(structure.filled_degrees, [2, 3, 2, 3])
+
+    def test_pattern_normalization_ignores_values_and_diagonal(self):
+        pattern = np.array([[9.0, 2.0, 0.0], [0.0, -7.0, -3.0], [0.0, 0.0, 5.0]])
+        structure = sparsechol.CholeskyStructure(pattern, ordering=[0, 1, 2])
+        np.testing.assert_array_equal(structure.pattern.toarray(),
+                                      [[False, True, False], [True, False, True], [False, True, False]])
+        np.testing.assert_array_equal(structure.factor_pattern.toarray(),
+                                      [[True, False, False], [True, True, False], [False, True, True]])
+
+    def test_structural_arrays_are_copied_and_read_only(self):
+        pattern = sps.csr_matrix([[False, True, False], [True, False, True], [False, True, False]])
+        perm = np.array([1, 2, 0])
+        expected_pattern = pattern.toarray()
+        structure = sparsechol.CholeskyStructure(pattern, ordering=perm)
+        pattern.data[:] = False
+        perm[:] = [0, 1, 2]
+        np.testing.assert_array_equal(structure.pattern.toarray(), expected_pattern)
+        np.testing.assert_array_equal(structure.perm, [1, 2, 0])
+
+        arrays = [structure.perm, structure.inv, structure.rows, structure.cols,
+                  structure.column_counts, structure.filled_degrees]
+        for matrix in (structure.pattern, structure.factor_pattern):
+            arrays.extend([matrix.data, matrix.indices, matrix.indptr])
+        for array in arrays:
+            self.assertFalse(array.flags.writeable)
+            with self.assertRaises(ValueError):
+                array.flat[0] = 0
+
+    def test_empty_structure(self):
+        for ordering in (None, []):
+            structure = sparsechol.CholeskyStructure(sps.csr_matrix((0, 0)), ordering=ordering)
+            self.assertEqual(structure.n, 0)
+            for matrix in (structure.pattern, structure.factor_pattern):
+                self.assertEqual(matrix.shape, (0, 0))
+                self.assertEqual(matrix.nnz, 0)
+            for array in (structure.perm, structure.inv, structure.rows, structure.cols,
+                          structure.column_counts, structure.filled_degrees):
+                self.assertEqual(array.shape, (0,))
+                self.assertFalse(array.flags.writeable)
+
+    def test_rejects_nonmatrix_and_nonsquare_patterns(self):
+        patterns = [np.ones((3, 4)), sps.csr_matrix((3, 4)), np.ones(1), np.ones((1, 1, 1)), 1.0]
+        for pattern in patterns:
+            with self.subTest(shape=np.shape(pattern)):
+                with self.assertRaises(ValueError):
+                    sparsechol.CholeskyStructure(pattern)
+
+    def test_rejects_invalid_orderings(self):
+        orderings = [[0, 0, 1], [0, 1], [0, 1, 3], [-1, 0, 1], [[0, 1, 2]],
+                     [0.5, 1, 2], ['0', '1', '2'], [False, True, True]]
+        for ordering in orderings:
+            with self.subTest(ordering=ordering):
+                with self.assertRaises(ValueError):
+                    sparsechol.CholeskyStructure(np.zeros((3, 3)), ordering=ordering)
+
+
 class OrderingTester(BaseCase):
 
     BACKEND_MODULES = {'cholmod': 'sksparse', 'qdldl': 'qdldl', 'networkx': 'networkx'}

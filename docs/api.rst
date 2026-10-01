@@ -389,6 +389,7 @@ General-purpose numerical and quantum-information utilities.
    pygsti.tools.locking
    pygsti.tools.matrixmod2
    pygsti.tools.matrixtools
+   pygsti.tools.sparsechol
    pygsti.tools.mcfetools
    pygsti.tools.metaprogramming
    pygsti.tools.mpitools
