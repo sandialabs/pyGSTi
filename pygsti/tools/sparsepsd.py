@@ -28,27 +28,6 @@ from . import sparsechol as _sparsechol
 __all__ = []
 
 
-def _subpattern(
-        pattern: _npt.ArrayLike | _sps.sparray | _sps.spmatrix,
-        structure: _sparsechol.CholeskyStructure
-    ) -> _npt.NDArray[_np.bool_]:
-    """Normalize an off-diagonal component mask to a dense Boolean array.
-
-    Nonzero entries define undirected edges, and diagonal entries are ignored. The mask must
-    have the same shape as ``structure.pattern`` and allow no edges outside it. Real and
-    imaginary components may use different subsets of those edges.
-    """
-    if _np.ndim(pattern) != 2:
-        raise ValueError("A component pattern must be a square matrix.")
-    sub = _sparsechol._adjacency(pattern)
-    if sub.shape != structure.pattern.shape:
-        raise ValueError("Component patterns must have the same shape as the overall pattern.")
-    sub = sub.toarray()
-    if _np.any(sub & ~structure.pattern.toarray()):
-        raise ValueError("Component patterns must be contained in the overall pattern.")
-    return sub
-
-
 def _psd_step_size(B: _np.ndarray, O: _np.ndarray) -> float:
     """
     Approximately maximize t in [0, 1] with B + t*O PSD, for numerically positive-definite B.
@@ -145,8 +124,26 @@ def _sample_psd(
     """
     st = pattern if isinstance(pattern, _sparsechol.CholeskyStructure) else _sparsechol.CholeskyStructure(pattern)
     allowed = st.pattern.toarray()
-    real_allowed = allowed if real_pattern is None else _subpattern(real_pattern, st)
-    imag_allowed = allowed if imag_pattern is None else _subpattern(imag_pattern, st)
+
+    def _subpattern(pattern: _npt.ArrayLike | _sps.sparray | _sps.spmatrix) -> _npt.NDArray[_np.bool_]:
+        """Normalize an off-diagonal component mask to a dense Boolean array.
+
+        Nonzero entries define undirected edges, and diagonal entries are ignored. The mask must
+        have the same shape as ``st.pattern`` and allow no edges outside it. Real and
+        imaginary components may use different subsets of those edges.
+        """
+        if _np.ndim(pattern) != 2:
+            raise ValueError("A component pattern must be a square matrix.")
+        sub = _sparsechol._adjacency(pattern)
+        if sub.shape != st.pattern.shape:
+            raise ValueError("Component patterns must have the same shape as the overall pattern.")
+        sub = sub.toarray()
+        if _np.any(sub & ~allowed):
+            raise ValueError("Component patterns must be contained in the overall pattern.")
+        return sub
+
+    real_allowed = allowed if real_pattern is None else _subpattern(real_pattern)
+    imag_allowed = allowed if imag_pattern is None else _subpattern(imag_pattern)
     n, cplx, m = st.n, offdiag != 'real', len(st.rows)
 
     # Bartlett draw in the permuted order: first all diagonal entries, then the off-diagonal ones.

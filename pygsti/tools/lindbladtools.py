@@ -607,7 +607,7 @@ def _check_basis_factor(basis) -> None:
         raise ValueError("The elements of basis %s are not trace-orthogonal." % basis.name)
 
 
-def _resolve_errorgen_basis(state_space: _StateSpace, elementary_errorgen_basis) -> _Basis:
+def _resolve_errorgen_basis(state_space: _StateSpace, elementary_errorgen_basis: _Basis | str | None) -> _Basis:
     """ The validated operator basis whose non-identity elements are the Lindblad directions. """
     # A module-level import would cycle through errorgenbasis -> optools -> lindbladtools.
     from pygsti.baseobjs.errorgenbasis import canonical_errorgen_basis, _check_errorgen_state_space
@@ -639,10 +639,29 @@ def _resolve_errorgen_basis(state_space: _StateSpace, elementary_errorgen_basis)
 
 def _direction_supports(basis: _Basis, state_space: _StateSpace) -> _np.ndarray | None:
     """
-    A boolean (number of directions)-by-(number of subsystems) matrix marking the subsystems on
-    which each non-identity element of `basis` acts, or None if `basis` has no per-subsystem
-    structure: its labels must split into one 'PP'/'GM' token per subsystem, and a tensor product
-    basis must have one factor per subsystem, of matching dimension.
+    Mark each non-identity basis element's subsystem support, or return None if unknown.
+
+    Rows follow ``basis.labels[1:]`` and columns follow the state-space subsystem order.
+    Labels must contain one PP/GM token per subsystem. A tensor-product basis must also
+    have one factor per subsystem, with matching dimensions.
+
+    Examples
+    --------
+    For two qubits, IX and XI each act on one subsystem, while XX acts on both:
+
+    >>> from pygsti.baseobjs import Basis, QubitSpace
+    >>> space = QubitSpace(2)
+    >>> basis = Basis.cast('PP', space)
+    >>> supports = _direction_supports(basis, space)
+    >>> [supports[list(basis.labels).index(lbl) - 1].tolist() for lbl in ('IX', 'XI', 'XX')]
+    [[False, True], [True, False], [True, True]]
+
+    Arbitrary labels do not identify subsystem support, even if the matrices are Pauli matrices:
+
+    >>> from pygsti.baseobjs import ExplicitBasis
+    >>> basis = ExplicitBasis(Basis.cast('PP', 4).elements, labels=('identity', 'a', 'b', 'c'))
+    >>> _direction_supports(basis, QubitSpace(1)) is None
+    True
     """
     sslbls = state_space.sole_tensor_product_block_labels
     if isinstance(basis, _TensorProdBasis):
@@ -656,8 +675,8 @@ def _direction_supports(basis: _Basis, state_space: _StateSpace) -> _np.ndarray 
 
 def _fixed_rates_by_index(fixed_errorgen_rates, sslbls, index) -> dict:
     """
-    Sort fixed rates by type. Returns {'H': {a: (label, v)}, 'S': ..., 'C': {(a, b): (label, v)},
-    'A': ...}, with a, b indices of non-identity basis elements and label the local label.
+    Sort fixed rates by type. Returns {'H': {a: (lbl, v)}, 'S': ..., 'C': {(a, b): (lbl, v)},
+    'A': ...}, with a, b indices of non-identity basis elements and lbl the local label.
     """
     fixed = {'H': {}, 'S': {}, 'C': {}, 'A': {}}
     for key, v in (fixed_errorgen_rates or {}).items():
@@ -680,18 +699,6 @@ def _fixed_rates_by_index(fixed_errorgen_rates, sslbls, index) -> dict:
             raise ValueError("The %s rate for %s is fixed more than once." % (lbl.errorgen_type, str(key)))
         fixed[lbl.errorgen_type][k] = (lbl, float(v))
     return fixed
-
-
-def _free_scale(needed: float, free: float, what: str) -> float:
-    """ The factor by which a free contribution `free` must scale to become `needed`. """
-    tol = 1e-12 * max(abs(needed), 1.0)
-    if needed < -tol:
-        raise ValueError("The fixed rates alone exceed the %s target by %g." % (what, -needed))
-    if needed <= tol:
-        return 0.0
-    if free <= 0:
-        raise ValueError("No free rates can carry the remaining %s target of %g." % (what, needed))
-    return needed / free
 
 
 SeedLike = Union[None, int, Sequence[int], _np.random.SeedSequence, _np.random.BitGenerator,
@@ -750,22 +757,17 @@ def random_cptp_errorgen_rates(
         seed: SeedLike = None,
     ) -> dict[_GEEL, float] | dict[_LEEL, float]:
     """
-    Sample random rates of a completely positive (CP) error generator on `state_space`.
+    Sample error-generator rates whose generator exponentiates to a CPTP map on `state_space`.
 
-    The error generator is written in elementary error generators (H, S, C, A) built from the
-    non-identity elements F_1, F_2, ... of an operator basis. The S, C and A rates form the
-    Hermitian coefficient (Kossakowski) matrix K, with K_ii = S_i and K_ij = C_ij - 1j * A_ij for
-    i < j. Positive semidefiniteness of K ensures that exponentiating the generator gives a
-    completely positive, trace-preserving map. The returned rates define such a K, or the call
-    raises.
+    `elementary_errorgen_basis` supplies the operator directions used to construct elementary
+    H, S, C and A generators. `errorgen_types`, `max_weights` and `sslbl_overlap` select which
+    elementary generators are sampled. The selected S directions index the Kossakowski matrix
+    K; selected C and A pairs allow its real and imaginary off-diagonal components, respectively.
+    Fixed rates can extend this support as described in Notes.
 
-    K is sampled through a Cholesky factor L on the filled pattern of the allowed C/A pairs
-    (after a fill-reducing ordering; see :mod:`pygsti.tools.sparsechol`), with a Bartlett-type draw.
-    For the unrestricted pattern, K is a scaled Wishart matrix before any fixed rates or budgets
-    are imposed. A chordal pattern admits an ordering without fill, so the factor draw respects
-    its support. Fill entries and disallowed real or imaginary components are otherwise zeroed,
-    and free off-diagonal entries are conservatively scaled toward a PSD anchor to restore
-    positivity when needed.
+    In the selected operator-basis order, K_ii = S_i and K_ij = C_ij - 1j * A_ij for i < j.
+    The returned rates define a positive-semidefinite K, ensuring that the generator's
+    exponential is completely positive and trace preserving, or the call raises an error.
 
     Parameters
     ----------
@@ -779,27 +781,10 @@ def random_cptp_errorgen_rates(
 
     elementary_errorgen_basis : Basis or str, optional
         The full, identity-first operator basis whose non-identity elements define the H, S, C
-        and A directions. Its non-identity elements must be Hermitian, traceless and mutually
-        trace-orthogonal; their normalization and labels are kept.
-
-        - None (the default) means :func:`pygsti.baseobjs.canonical_errorgen_basis`: 'PP' on
-          qubits and 'GM' on other subsystems, normalized so that Tr(F_a^dag F_b) = D delta_ab
-          in Hilbert-space dimension D.
-        - A string names a family applied to each subsystem, via `Basis.cast(name, state_space)`:
-          'GM' works on any state space, and 'PP' only when every subsystem is a qubit. The
-          lowercase 'gm' and 'pp' bases are orthonormal rather than D-normalized, which changes
-          the scale of every rate and of both error metrics.
-        - A Basis object must have dimension `state_space.dim`.
-
-        Weight limits, `sslbl_overlap` and global labels need to know which subsystems each
-        element acts on, so they require one factor per subsystem (or a single subsystem) and
-        'PP'/'GM'-style labels (one of 'I', 'X', 'Y', 'Z', 'X_{j,k}', 'Y_{j,k}', 'Z_{j}' per
-        subsystem). Otherwise use `label_type='local'` and no support restrictions.
-
-        Note that `LindbladErrorgen.from_elementary_errorgens(..., elementary_errorgen_basis='GM')`
-        on a qubit-qutrit space uses a single 6-dimensional Gell-Mann basis whose labels differ
-        from these; pass it this function's basis (e.g. `canonical_errorgen_basis(state_space)`)
-        instead.
+        and A directions. Use None for the canonical PP/GM tensor-product basis, a string for a
+        builtin basis family, or a Basis of dimension ``state_space.dim``. Non-identity elements
+        must be Hermitian, traceless and mutually trace-orthogonal. Normalization, labels, and
+        subsystem structure are described in Notes.
 
     max_weights : mapping, optional
         The maximum weight of each sector, keyed by 'H', 'S', 'C' and 'A'; a missing sector has no
@@ -808,8 +793,9 @@ def random_cptp_errorgen_rates(
         the two elements' supports, and a pair is only allowed when both of its S directions are.
 
     sslbl_overlap : collection of state space labels, optional
-        Keep only elements (for C and A, pairs) whose support includes at least one of these
-        labels.
+        Require each sampled H or S direction to act on at least one of these subsystems.
+        Each direction of a sampled C or A pair must itself be an allowed S direction, so both
+        directions must meet this condition.
 
     H_params : tuple of float, optional
         The mean and standard deviation of the normal distribution of the H rates.
@@ -840,14 +826,9 @@ def random_cptp_errorgen_rates(
         Requires `error_metric` and both 'H' and 'S' in `errorgen_types`.
 
     fixed_errorgen_rates : mapping, optional
-        Rates that override sampled ones, keyed by local or global elementary error generator
-        labels whose basis element labels belong to the selected basis. They are included even
-        where the sector and support restrictions would exclude them. Fixed S rates are imposed
-        by a diagonal congruence. For fixed C and A rates, only the free off-diagonal rates are
-        shrunk; if the S rates and the fixed C and A rates alone are not positive semidefinite,
-        a ValueError is raised (a CP completion with other free rates might still exist, but is
-        not searched for). A fixed C or A rate needs S rates on both of its directions: sampled if
-        'S' is in `errorgen_types`, and fixed otherwise.
+        Prescribed rates keyed by local or global elementary error generator labels from the
+        selected basis. These override sampled rates and can extend the allowed sectors and
+        support. The diagonal requirements and PSD feasibility checks are described in Notes.
 
     label_type : {'global', 'local'}, optional
         Whether the keys of the result are `GlobalElementaryErrorgenLabel` objects (on the
@@ -866,6 +847,53 @@ def random_cptp_errorgen_rates(
     dict
         Rates keyed by elementary error generator labels: the H rates, then the S rates, then the
         C and A rates on every allowed pair, in basis order.
+
+    Notes
+    -----
+    The default operator basis is :func:`pygsti.baseobjs.canonical_errorgen_basis`: PP on qubits
+    and GM on other subsystems, normalized so that Tr(F_a^dag F_b) = D delta_ab in Hilbert-space
+    dimension D. A string selects a family on each subsystem through ``Basis.cast(name, state_space)``.
+    GM works on all supported subsystem dimensions. PP gives the Pauli-product basis on qubits;
+    it also permits higher power-of-two dimensions, but its labels then do not identify the
+    given subsystem supports. Lowercase gm and pp are orthonormal instead of D-normalized,
+    changing the scale of the rates and error metrics.
+
+    Weight limits, ``sslbl_overlap`` and global labels require subsystem supports. These are
+    inferred from PP/GM labels with one token per subsystem: I, X, Y, Z, X_{j,k}, Y_{j,k}, or Z_{j}.
+    A tensor-product basis must have one factor of matching dimension per subsystem. For a
+    basis without this structure, use ``label_type='local'`` and no support restrictions.
+
+    When constructing a ``LindbladErrorgen`` from these rates, pass the same operator basis.
+    In particular, ``LindbladErrorgen.from_elementary_errorgens(..., elementary_errorgen_basis='GM')``
+    on a qubit-qutrit space uses a single 6-dimensional Gell-Mann basis with different labels.
+    Pass ``canonical_errorgen_basis(state_space)`` to use this sampler's default tensor-product basis.
+
+    K is sampled through a Cholesky factor L on the filled pattern of the allowed C/A pairs
+    after a fill-reducing ordering (see :mod:`pygsti.tools.sparsechol`), with a Bartlett-type draw.
+    For the unrestricted pattern, K is a scaled Wishart matrix before fixed rates or budgets
+    are imposed. A chordal pattern admits an ordering without fill, so the factor draw respects
+    its support. Otherwise fill entries are zeroed. Disallowed real or imaginary components
+    are also zeroed, and the remaining off-diagonal entries are scaled toward zero if needed
+    to restore positive semidefiniteness while retaining the sampled diagonal.
+
+    Fixed H and S rates are included even when sector, weight or overlap restrictions would
+    exclude them. A fixed C or A rate also adds both of its operator directions to K. If S is
+    enabled, their diagonal rates are sampled even when support restrictions would exclude
+    those directions; otherwise both S rates must be fixed explicitly. This does not enable
+    other C or A pairs involving these added directions.
+
+    A diagonal congruence imposes the fixed S values and any budget scaling of the free S
+    values. Free H rates are scaled separately. The prescribed H and S rates remain unchanged.
+
+    When fixed C or A components are present, they are assigned after the diagonals are set.
+    Let B contain those diagonals and fixed components, with all other off-diagonal components zero. B must be PSD
+    to numerical tolerance; an indefinite B raises ValueError even when the free components
+    could complete it to a PSD matrix. This routine does not search for such a completion.
+
+    The remaining free off-diagonal components form O, and the final matrix is B + t*O.
+    For numerically positive-definite B, t is the largest feasible value in [0, 1], with a
+    small safety margin when t < 1. For numerically singular B, t is zero conservatively,
+    discarding the free off-diagonal components while retaining all prescribed values.
     """
     errorgen_types = tuple(errorgen_types)
     if not set(errorgen_types) <= set('HSCA'):
@@ -873,7 +901,7 @@ def random_cptp_errorgen_rates(
     if label_type not in ('global', 'local'):
         raise ValueError("Unsupported label type %r." % label_type)
     if ('C' in errorgen_types or 'A' in errorgen_types) and 'S' not in errorgen_types:
-        raise ValueError("'C' and 'A' rates require 'S' rates: a CP error generator cannot have them otherwise.")
+        raise ValueError("'C' and 'A' rates require 'S' rates for a positive-semidefinite Kossakowski matrix.")
     if (error_metric is None) != (error_metric_value is None):
         raise ValueError("Give both `error_metric` and `error_metric_value`, or neither.")
     if error_metric not in (None, 'generator_infidelity', 'total_generator_error'):
@@ -967,6 +995,17 @@ def random_cptp_errorgen_rates(
     S_free = _np.array([p for p, a in enumerate(K_dirs) if a not in fixed['S']], dtype=int)
     H_scale, S_scale = 1.0, 1.0
     if error_metric is not None:
+        def _free_scale(needed: float, free: float, what: str) -> float:
+            """ The factor by which a free contribution `free` must scale to become `needed`. """
+            tol = 1e-12 * max(abs(needed), 1.0)
+            if needed < -tol:
+                raise ValueError("The fixed rates alone exceed the %s target by %g." % (what, -needed))
+            if needed <= tol:
+                return 0.0
+            if free <= 0:
+                raise ValueError("No free rates can carry the remaining %s target of %g." % (what, needed))
+            return needed / free
+
         power = 2 if error_metric == 'generator_infidelity' else 1
         fixed_H = sum(abs(v) ** power for _, v in fixed['H'].values())
         fixed_S = sum(v for _, v in fixed['S'].values())
@@ -1030,8 +1069,9 @@ def random_CPTP_error_generator_rates(
 
     Deprecated: use :func:`random_cptp_errorgen_rates`, which takes a `StateSpace` (e.g.
     `QubitSpace(num_qubits)`) in place of `num_qubits` and `qubit_labels`, and supports qudits.
-    This function now calls it with the 'PP' basis. Its sampler is new: the returned rates are
-    always CP, and outputs for a given seed differ from earlier versions of pyGSTi.
+    This function now calls it with the 'PP' basis. Its sampler is new: the returned rates
+    define a generator whose exponential is CPTP, and outputs for a given seed differ from
+    earlier versions of pyGSTi.
 
     Parameters
     ----------
