@@ -4,6 +4,8 @@ import scipy.sparse.linalg as _spsl
 import collections as _collections
 import copy as _copy
 import warnings as _warnings
+from pygsti.tools.legacytools import deprecate as _deprecate
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
@@ -151,6 +153,10 @@ class _BlockParameterization:
     def _coefficient_polynomial(self, blk, index: int | tuple[int, int], pio: int, mpv: int) -> _Polynomial:
         """Return the _Polynomial for one block_data entry.
 
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+
         Evaluating the returned polynomial at the block's parameter vector
         (placed at offset ``pio``) must equal the corresponding value produced
         by ``params_to_block_data`` (i.e. ``blk.block_data[index]``).
@@ -210,6 +216,13 @@ class _StaticParam(_BlockParameterization):
         return sd[0]
 
     def _coefficient_polynomial(self, blk, index: int | tuple[int, int], pio: int, mpv: int) -> _Polynomial:
+        """
+        Return the constant polynomial for a static coefficient block entry.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         val = blk.block_data[index]
         return _Polynomial({(): val}, mpv)
 
@@ -241,6 +254,13 @@ class _RealVectorElements(_BlockParameterization):
         return t_param
 
     def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
+        """
+        Return the linear polynomial for a vector-element parameter.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         return _Polynomial({(pio + index,): 1.0}, mpv)
 
 
@@ -317,6 +337,13 @@ class _DiagCholesky(_BlockParameterization):
         return t_param**2
 
     def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
+        """
+        Return the quadratic polynomial for a squared vector-element parameter.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         var = pio + index
         return _Polynomial({(var, var): 1.0}, mpv)
 
@@ -360,6 +387,13 @@ class _Depol(_BlockParameterization):
         return (t_param[0]**2) * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
 
     def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
+        """
+        Return the quadratic polynomial for the depolarizing error parameter.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         var = pio
         return _Polynomial({(var, var): 1.0}, mpv)
 
@@ -401,6 +435,13 @@ class _RelDepol(_BlockParameterization):
         return t_param[0] * _torch.ones(n, dtype=t_param.dtype, device=t_param.device)
 
     def _coefficient_polynomial(self, blk, index: int, pio: int, mpv: int) -> _Polynomial:
+        """
+        Return the linear polynomial for the relative depolarizing error parameter.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         return _Polynomial({(pio,): 1.0}, mpv)
 
 
@@ -489,6 +530,13 @@ class _OtherElements(_BlockParameterization):
         return _torch.complex(Re, Imag)
 
     def _coefficient_polynomial(self, blk, index: tuple[int, int], pio: int, mpv: int) -> _Polynomial:
+        """
+        Return the polynomial for an unconstrained Hermitian block entry.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         # Parameter matrix P = reshape(v, (n, n)) encodes Hermitian block_data:
         #   diag:  block_data[i, i] = P[i, i] (real)
         #   lower: block_data[i, j] = P[i, j] + 1j * P[j, i]  (i > j)
@@ -649,6 +697,13 @@ class _OtherCholesky(_BlockParameterization):
         return C @ C.conj().T
 
     def _coefficient_polynomial(self, blk, index: tuple[int, int], pio: int, mpv: int) -> _Polynomial:
+        """
+        Return the polynomial for a Cholesky-parameterized Hermitian block entry.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         # block_data = C @ C^dag where lower-triangular Cholesky factor C has:
         #   Re(C[a, b]) = P[a, b]  for b <= a
         #   Im(C[a, b]) = P[b, a]  for b < a  (and 0 for b == a)
@@ -869,7 +924,35 @@ class LindbladCoefficientBlock(_NicelySerializable):
         self._superops_cache[cache_key] = (superops, superop_1norms)
         return 
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def create_lindblad_term_objects(self, parameter_index_offset, max_polynomial_vars, evotype, state_space):
+        """
+        Create the rank-1 term objects (with polynomial coefficients) for this block's error generators.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+
+        Parameters
+        ----------
+        parameter_index_offset : int
+            The index of this block's first parameter within the parent's parameter vector
+            (used as the variable-index offset of the coefficient polynomials).
+
+        max_polynomial_vars : int
+            The maximum number of variables the created polynomials can have.
+
+        evotype : Evotype
+            The evolution type of the created terms.
+
+        state_space : StateSpace
+            The state space of the created terms.
+
+        Returns
+        -------
+        Lterms : list
+            A list of :class:`RankOnePolynomialOpTerm` objects.
+        """
         return self._create_lindblad_term_objects_impl(evotype, state_space, max_polynomial_vars,
                                                        parameter_index_offset)
 
@@ -1266,6 +1349,13 @@ class _HamCoeffBlock(LindbladCoefficientBlock):
         return superops
 
     def _create_lindblad_term_objects_impl(self, evotype, state_space, mpv, pio):
+        """
+        Create rank-1 Lindblad term objects for this Hamiltonian coefficient block.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         Lterms = []
         for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
             # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
@@ -1323,6 +1413,13 @@ class _OtherDiagonalCoeffBlock(LindbladCoefficientBlock):
         return superops
 
     def _create_lindblad_term_objects_impl(self, evotype, state_space, mpv, pio):
+        """
+        Create rank-1 Lindblad term objects for this diagonal coefficient block.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         Lterms = []
         for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
             # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
@@ -1390,6 +1487,13 @@ class _OtherCoeffBlock(LindbladCoefficientBlock):
         return superops
 
     def _create_lindblad_term_objects_impl(self, evotype, state_space, mpv, pio):
+        """
+        Create rank-1 Lindblad term objects for this non-diagonal coefficient block.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         Lterms = []
         for i, bel_labeli in enumerate(self._bel_labels):
             for j, bel_labelj in enumerate(self._bel_labels):
@@ -1556,6 +1660,13 @@ class _OtherUnconstrainedCoeffBlock(LindbladCoefficientBlock):
     # --- term-object construction (for term-based svterm/cterm evotypes) ---
 
     def _create_lindblad_term_objects_impl(self, evotype, state_space, mpv, pio):
+        """
+        Create rank-1 Lindblad term objects for this elementary error generator block.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         Lterms = []
 
         def O_terms(Um, Un, poly):

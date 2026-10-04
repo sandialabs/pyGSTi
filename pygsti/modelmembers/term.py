@@ -1,5 +1,10 @@
 """
 Defines classes which represent terms in gate expansions
+
+.. deprecated:: 0.11
+    This module exists solely to support the deprecated `TermForwardSimulator` (the rank-1
+    "terms" of Taylor-expanded operations used for path-integral simulation) and will be
+    removed in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -15,15 +20,7 @@ from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.evotypes.basereps import StateRep as _StateRep, EffectRep as _EffectRep, OpRep as _OpRep
 from pygsti.modelmembers import modelmember as _mm
-
-#: Deprecation message shared by TermForwardSimulator and the term-based machinery that exists
-#: solely to support it (see https://github.com/sandialabs/pyGSTi/issues/916).  Used with
-#: :func:`pygsti.tools.legacytools.deprecate` / :func:`~pygsti.tools.legacytools.warn_deprecated`,
-#: which replace ``{name}`` with the deprecated object's name.
-TERM_SIM_DEPRECATION_MESSAGE = (
-    "{name} is deprecated as of pyGSTi 0.11 and will be removed in pyGSTi 0.12, together with "
-    "TermForwardSimulator and the term-based (path-integral) simulation machinery that supports it. "
-    "See https://github.com/sandialabs/pyGSTi/issues/916.")
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE  # noqa: F401 (re-export)
 
 
 def compose_terms_with_mag(terms, magnitude):

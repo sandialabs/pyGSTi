@@ -33,7 +33,7 @@ from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
 from pygsti.tools.legacytools import warn_deprecated as _warn_deprecated
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
-from pygsti.modelmembers.term import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 
 
 def _ignore_term_deprecation_warnings(fn):

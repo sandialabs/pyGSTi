@@ -16,6 +16,16 @@ import types as _types
 import warnings as _warnings
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 
+#: Deprecation message shared by `TermForwardSimulator` and the term-based machinery that exists
+#: solely to support it (see https://github.com/sandialabs/pyGSTi/issues/916).  For use with
+#: :func:`deprecate` / :func:`warn_deprecated`, which replace ``{name}`` with the deprecated
+#: object's name.  (Defined here, rather than near the term code, to avoid import cycles.)
+#: Remove together with the term-based machinery in pyGSTi 0.12.
+TERM_SIM_DEPRECATION_MESSAGE = (
+    "{name} is deprecated as of pyGSTi 0.11 and will be removed in pyGSTi 0.12, together with "
+    "TermForwardSimulator and the term-based (path-integral) simulation machinery that supports it. "
+    "See https://github.com/sandialabs/pyGSTi/issues/916.")
+
 
 def warn_deprecated(name, replacement=None, message=None, stacklevel=2):
     """
@@ -53,7 +63,7 @@ def warn_deprecated(name, replacement=None, message=None, stacklevel=2):
     _warnings.warn(message, _pyGSTiDeprecationWarning, stacklevel=stacklevel)
 
 
-def deprecate(replacement=None, message=None):
+def deprecate(replacement=None, message=None, suppress_nested=False):
     """
     Decorator for deprecating a function.
 
@@ -81,6 +91,13 @@ def deprecate(replacement=None, message=None):
         ``__qualname__`` (e.g. ``"ComposedOp.taylor_order_terms"``), with
         any ``<locals>`` prefix removed.
 
+    suppress_nested : bool, optional
+        If True, `pyGSTiDeprecationWarning`s raised *while executing* the
+        deprecated function are silenced, so that a call issues exactly one
+        warning (attributed to the caller) even when the deprecated function
+        itself calls other deprecated functions.  Useful for families of
+        deprecated methods that call one another.
+
     Returns
     -------
     function
@@ -97,7 +114,11 @@ def deprecate(replacement=None, message=None):
             # stacklevel=3 attributes the warning to the caller of the deprecated function
             # (1 = warn_deprecated, 2 = _inner, 3 = caller).
             warn_deprecated(name, replacement, message=message, stacklevel=3)
-            return fn(*args, **kwargs)
+            if not suppress_nested:
+                return fn(*args, **kwargs)
+            with _warnings.catch_warnings():
+                _warnings.simplefilter("ignore", _pyGSTiDeprecationWarning)
+                return fn(*args, **kwargs)
         return _inner
     return decorator
 

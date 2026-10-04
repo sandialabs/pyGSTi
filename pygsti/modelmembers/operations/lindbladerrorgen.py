@@ -25,6 +25,8 @@ import numpy as _np
 import scipy.linalg as _spl
 import scipy.sparse as _sps
 
+from pygsti.tools.legacytools import deprecate as _deprecate
+from pygsti.tools.legacytools import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
 from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials_complex as _bulk_eval_compact_polynomials_complex, \
     abs_sum_bulk_eval_compact_polynomials_complex as _abs_sum_bulk_eval_compact_polynomials_complex
@@ -625,7 +627,13 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         assert(self._onenorm_upbound is not None)  # _update_rep should set this
 
     def _init_terms(self, coefficient_blocks, max_polynomial_vars):
+        """
+        Initialize and return Lindblad term objects and compact polynomial coefficients.
 
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+        """
         Lterms = []; off = 0
         for blk in self.coefficient_blocks:
             Lterms.extend(blk.create_lindblad_term_objects(off, max_polynomial_vars, self._evotype, self.state_space))
@@ -846,9 +854,14 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         else:  # dense rep
             return _sps.csr_matrix(self.to_dense(on_space))
 
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
         Get the `order`-th order Taylor-expansion terms of this operation.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that its action on a
@@ -895,9 +908,14 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         return self._rep.Lterms  # terms with local-index polynomial coefficients
 
     @property
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def total_term_magnitude(self):
         """
         Get the total (sum) of the magnitudes of all this operator's terms.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         The magnitude of a term is the absolute value of its coefficient, so
         this function returns the number you'd get from summing up the
@@ -914,9 +932,14 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         return _abs_sum_bulk_eval_compact_polynomials_complex(vtape, ctape, self.to_vector(), len(self._rep.Lterms))
 
     @property
+    @_deprecate(message=_TERM_SIM_DEPRECATION_MESSAGE, suppress_nested=True)
     def total_term_magnitude_deriv(self):
         """
         The derivative of the sum of *all* this operator's terms.
+
+        .. deprecated:: 0.11
+            Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+            in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
 
         Computes the derivative of the total (sum) of the magnitudes of all this
         operator's terms with respect to the operators (local) parameters.

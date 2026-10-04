@@ -99,3 +99,34 @@ class LegacyTestCase(BaseCase):
             warnings.simplefilter("error")
             warnings.simplefilter("ignore", pyGSTiDeprecationWarning)
             self.assertEqual(oldFn(), 1)
+
+    def test_suppress_nested(self):
+
+        @legacytools.deprecate(message="inner")
+        def inner():
+            return 1
+
+        @legacytools.deprecate(message="outer", suppress_nested=True)
+        def outer():
+            return inner() + 1
+
+        @legacytools.deprecate(message="outer2")
+        def outer2():
+            return inner() + 1
+
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            self.assertEqual(outer(), 2)
+        self.assertEqual([str(r.message) for r in rec], ["outer"])
+        self.assertEqual(rec[0].filename, __file__)
+
+        with warnings.catch_warnings(record=True) as rec:  # default: nested warnings are not suppressed
+            warnings.simplefilter("always")
+            self.assertEqual(outer2(), 2)
+        self.assertEqual([str(r.message) for r in rec], ["outer2", "inner"])
+
+    def test_term_sim_deprecation_message(self):
+        msg = legacytools.TERM_SIM_DEPRECATION_MESSAGE.replace("{name}", "Foo.bar")
+        self.assertTrue(msg.startswith("Foo.bar is deprecated as of pyGSTi 0.11"))
+        self.assertIn("0.12", msg)
+        self.assertIn("TermForwardSimulator", msg)  # test ignore-filters match on this

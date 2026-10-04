@@ -28,6 +28,11 @@ from pygsti.modelmembers.operations.lindbladcoefficients import (
     LindbladCoefficientBlock as LCB, _OtherUnconstrainedCoeffBlock, InvalidParamModeError)
 from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen
 
+# The term-object (TermForwardSimulator) machinery is deprecated (see #916); its tests are kept until the
+# deprecation expires (pyGSTi 0.12).  See agent-docs/known-debt.md.  Only the term-sim deprecation is ignored.
+ignore_termsim_deprecation = pytest.mark.filterwarnings(
+    "ignore:.*TermForwardSimulator.*:pygsti.tools.exceptions.pyGSTiDeprecationWarning")
+
 
 BASES = [('pp', 4), ('gm', 9), ('pp', 16)]
 _BASIS_IDS = ["%s%d" % b for b in BASES]
@@ -286,6 +291,7 @@ def test_from_error_generator_glndu_roundtrip():
     assert np.allclose(eg2.to_dense(), errgen, atol=1e-8)
 
 
+@ignore_termsim_deprecation
 def test_term_objects_reconstruct_dense_errorgen_1q():
     """The term-simulator objects (statevec evotype) sum to the same error generator as the dense
     (densitymx) path.  Guards _create_lindblad_term_objects_impl."""
