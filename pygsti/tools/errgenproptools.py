@@ -5081,23 +5081,6 @@ def approximate_stabilizer_pauli_expectation_numerical(errorgen_dict: dict[_EEL,
     correction = stabilizer_pauli_expectation_correction_numerical(errorgen_dict, errorgen_propagator, circuit, pauli, order)
     return ideal_expectation + correction
 
-class _ProbWorker:
-    """Worker task for parallel approximate_stabilizer_probabilities."""
-    def __init__(self, errorgen_dict, tableau, order, thresh):
-        self.errorgen_dict = errorgen_dict
-        if isinstance(tableau, stim.TableauSimulator):
-            self.tableau = tableau.current_inverse_tableau() ** -1
-        else:
-            self.tableau = tableau
-        self.order = order
-        self.thresh = thresh
-
-    def __call__(self, chunk_bits):
-        return [
-            approximate_stabilizer_probability(self.errorgen_dict, self.tableau, b, self.order, self.thresh)
-            for b in chunk_bits
-        ]
-
 
 def approximate_stabilizer_probabilities(
     errorgen_dict: _ErrorgenDict,
