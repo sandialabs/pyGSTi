@@ -16,6 +16,15 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.evotypes.basereps import StateRep as _StateRep, EffectRep as _EffectRep, OpRep as _OpRep
 from pygsti.modelmembers import modelmember as _mm
 
+#: Deprecation message shared by TermForwardSimulator and the term-based machinery that exists
+#: solely to support it (see https://github.com/sandialabs/pyGSTi/issues/916).  Used with
+#: :func:`pygsti.tools.legacytools.deprecate` / :func:`~pygsti.tools.legacytools.warn_deprecated`,
+#: which replace ``{name}`` with the deprecated object's name.
+TERM_SIM_DEPRECATION_MESSAGE = (
+    "{name} is deprecated as of pyGSTi 0.11 and will be removed in pyGSTi 0.12, together with "
+    "TermForwardSimulator and the term-based (path-integral) simulation machinery that supports it. "
+    "See https://github.com/sandialabs/pyGSTi/issues/916.")
+
 
 def compose_terms_with_mag(terms, magnitude):
     """

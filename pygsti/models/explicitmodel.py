@@ -470,8 +470,7 @@ class ExplicitOpModel(_mdl.OpModel):
         ----------
         parameterization_type : string
             The gate, state, and POVM parameterization type.  Allowed
-            values are (where '*' means " terms" and " clifford terms"
-            evolution-type suffixes are allowed):
+            values are:
 
             - "full" : each gate / state / POVM effect element is an independent parameter
             - "TP" : Trace-Preserving gates and state preps

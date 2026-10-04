@@ -1,5 +1,9 @@
 """
 Defines the TermForwardSimulator calculator class
+
+.. deprecated:: 0.11
+    `TermForwardSimulator` is deprecated and will be removed in pyGSTi 0.12.
+    See https://github.com/sandialabs/pyGSTi/issues/916.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2025 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -10,6 +14,7 @@ Defines the TermForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import functools as _functools
 import importlib as _importlib
 import warnings as _warnings
 
@@ -26,6 +31,26 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
+from pygsti.tools.legacytools import warn_deprecated as _warn_deprecated
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
+from pygsti.modelmembers.term import TERM_SIM_DEPRECATION_MESSAGE as _TERM_SIM_DEPRECATION_MESSAGE
+
+
+def _ignore_term_deprecation_warnings(fn):
+    """
+    Silence `pyGSTiDeprecationWarning`s while running `fn`.
+
+    `TermForwardSimulator` is itself deprecated (a warning is issued when one is constructed), and
+    it internally calls other deprecated term-machinery methods (e.g. `taylor_order_terms`,
+    `highmagnitude_terms`, `total_term_magnitude`).  Those internal calls should not issue further
+    warnings, so the simulator's computational entry points are wrapped with this decorator.
+    """
+    @_functools.wraps(fn)
+    def _inner(*args, **kwargs):
+        with _warnings.catch_warnings():
+            _warnings.simplefilter("ignore", _pyGSTiDeprecationWarning)
+            return fn(*args, **kwargs)
+    return _inner
 
 
 # from . import replib
@@ -40,6 +65,17 @@ from pygsti.tools.matrixtools import _fas
 class TermForwardSimulator(_DistributableForwardSimulator):
     """
     A forward-simulation calculator that uses term-path-integration to compute probabilities.
+
+    .. deprecated:: 0.11
+        `TermForwardSimulator` is deprecated and will be removed in pyGSTi 0.12, along with the
+        term-based (path-integral) machinery that exists solely to support it (e.g. the
+        `taylor_order_terms` family of :class:`ModelMember` methods, :mod:`pygsti.modelmembers.term`,
+        :mod:`pygsti.layouts.termlayout`, and the term representations in the `statevec` and
+        `stabilizer` evotypes).  Use :class:`MapForwardSimulator` or :class:`MatrixForwardSimulator`
+        instead; for first-order simulation of near-Clifford circuits see also the error generator
+        propagation tools in :mod:`pygsti.errorgenpropagation`.  Constructing (or deserializing) a
+        `TermForwardSimulator` issues a `pyGSTiDeprecationWarning`.
+        See https://github.com/sandialabs/pyGSTi/issues/916.
 
     Parameters
     ----------
@@ -167,6 +203,8 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         #    allow unitary-evolution calcs to be term-based, which essentially
         #    eliminates the "pRight" portion of all the propagation calcs, and
         #    would require pLeft*pRight => |pLeft|^2
+        # (deserialization goes through __init__ too, so it also warns)
+        _warn_deprecated("TermForwardSimulator", message=_TERM_SIM_DEPRECATION_MESSAGE, stacklevel=3)
         super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
 
         assert(mode in ("taylor-order", "pruned", "direct")), "Invalid term-fwdsim mode: %s" % mode
@@ -243,6 +281,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         # and this is done by the parent model which will cause _set_evotype to be called.
         return state
 
+    @_ignore_term_deprecation_warnings  # don't re-warn when copying an existing simulator
     def copy(self, keep_model_attached=True):
         """
         Return a shallow copy of this TermForwardSimulator.
@@ -259,6 +298,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             out.model = None  # type: ignore
         return out
 
+    @_ignore_term_deprecation_warnings
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
                       derivative_dimension=None, verbosity=0, layout_creation_circuit_cache=None):
         """
@@ -341,6 +381,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         return layout
 
+    @_ignore_term_deprecation_warnings
     def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
 
         if not resource_alloc.is_host_leader:
@@ -364,6 +405,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 polys[0], polys[1], self.model.to_vector(), (nEls,))  # shape (nElements,) -- could make this a *fill*
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0])], probs)
 
+    @_ignore_term_deprecation_warnings
     def _bulk_fill_dprobs_atom(self, array_to_fill, dest_param_slice, layout_atom, param_slice, resource_alloc):
         if not resource_alloc.is_host_leader:
             return  # see above
@@ -387,6 +429,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0]), dest_param_slice], dprobs)
 
+    @_ignore_term_deprecation_warnings
     def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                param_slice1, param_slice2, resource_alloc):
         if not resource_alloc.is_host_leader:
@@ -413,6 +456,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         _fas(array_to_fill, [slice(0, array_to_fill.shape[0]), dest_param_slice1, dest_param_slice2], hprobs)
 
     ## ----- Find a "minimal" path set (i.e. find thresholds for each circuit -----
+    @_ignore_term_deprecation_warnings
     def _compute_pruned_pathmag_threshold(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
                                           repcache, circuitsetup_cache,
                                           resource_alloc, threshold_guess=None):
@@ -483,6 +527,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         return npaths, threshold, target_sopm, achieved_sopm
 
+    @_ignore_term_deprecation_warnings
     def _find_minimal_paths_set_atom(self, layout_atom, resource_alloc, exit_after_this_many_failures=0):
         """
         Find the minimal (smallest) path set that achieves the desired accuracy conditions.
@@ -558,6 +603,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         return _AtomicTermPathSet(thresholds, repcache, circuitsetup_cache, tot_npaths, max_npaths, num_failed)
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    @_ignore_term_deprecation_warnings
     def find_minimal_paths_set(self, layout, exit_after_this_many_failures=0):
         """
         Find a good, i.e. minimal, path set for the current model-parameter space point.
@@ -589,6 +635,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         return TermPathSet(local_atom_pathsets, layout.resource_alloc().comm)
 
     ## ----- Get maximum possible sum-of-path-magnitudes and that which was actually achieved -----
+    @_ignore_term_deprecation_warnings
     def _circuit_achieved_and_max_sopm(self, rholabel, elabels, circuit, repcache, threshold):
         """
         Computes the achieved and maximum sum-of-path-magnitudes for `circuit`.
@@ -622,6 +669,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         return self.calclib.circuit_achieved_and_max_sopm(
             self, rholabel, elabels, circuit, repcache, threshold, self.min_term_mag)
 
+    @_ignore_term_deprecation_warnings
     def _achieved_and_max_sopm_atom(self, layout_atom):
         """
         Compute the achieved and maximum possible sum-of-path-magnitudes for a single layout atom.
@@ -658,6 +706,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         assert(len(achieved_sopm) == len(max_sopm) == layout_atom.num_elements)
         return _np.array(achieved_sopm, 'd'), _np.array(max_sopm, 'd')
 
+    @_ignore_term_deprecation_warnings
     def _bulk_fill_achieved_and_max_sopm(self, achieved_sopm, max_sopm, layout):
         """
         Compute element arrays of achieved and maximum-possible sum-of-path-magnitudes.
@@ -697,6 +746,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             _fas(achieved_sopm, [elInds], achieved)
 
     ## ----- A couple more bulk_* convenience functions that wrap _bulk_achieved_and_max_sopm -----
+    @_ignore_term_deprecation_warnings
     def bulk_test_if_paths_are_sufficient(self, layout, probs, verbosity=0):
         """
         Determine whether `layout`'s current path set (perhaps heuristically) achieves the desired accuracy.
@@ -772,6 +822,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         layout.free_local_array(achieved_sopm)
         return ret
 
+    @_ignore_term_deprecation_warnings
     def bulk_sopm_gaps(self, layout):
         """
         Compute an element array sum-of-path-magnitude gaps (the difference between maximum and achieved).
@@ -804,6 +855,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         return _np.clip(gaps, 0, None)
 
     ## ----- Jacobian of gaps (don't need jacobian of achieved and max SOPM separately) -----
+    @_ignore_term_deprecation_warnings
     def _achieved_and_max_sopm_jacobian_atom(self, layout_atom):
         """
         Compute the jacobian of the achieved and maximum possible sum-of-path-magnitudes for a single layout atom.
@@ -879,6 +931,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         return d_achieved_mags, d_max_sopms
 
+    @_ignore_term_deprecation_warnings
     def _sopm_gaps_jacobian_atom(self, layout_atom):
         """
         Compute the jacobian of the (maximum-possible - achieved) sum-of-path-magnitudes for a single layout atom.
@@ -897,6 +950,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         dgaps = d_max_sopms - d_achieved_mags
         return dgaps
 
+    @_ignore_term_deprecation_warnings
     def bulk_sopm_gaps_jacobian(self, layout):
         """
         Compute the jacobian of the the output of :meth:`bulk_sopm_gaps`.
@@ -939,6 +993,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         return termgap_penalty_jac
 
     ## ----- Select, or "lock in" a path set, which includes preparing to compute approx. probs using these paths -----
+    @_ignore_term_deprecation_warnings
     def _prs_as_pruned_polynomial_reps(self,
                                        threshold,
                                        rholabel,
@@ -1024,6 +1079,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         return poly_reps
 
+    @_ignore_term_deprecation_warnings
     def _select_paths_set_atom(self, layout_atom, pathset, resource_alloc):
         """
         Selects (makes "current") a path set *and* computes polynomials the new set for a single layout atom.
@@ -1087,6 +1143,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         layout_atom.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
         return
 
+    @_ignore_term_deprecation_warnings
     def _prs_as_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int,
                             resource_alloc, fastmode=True):
         """
@@ -1128,6 +1185,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                                                     resource_alloc.comm, resource_alloc.mem_limit, fastmode)
         return [_Polynomial.from_rep(rep) for rep in poly_reps]
 
+    @_ignore_term_deprecation_warnings
     def _prs_as_compact_polynomials(self, rholabel, elabels, circuit, polynomial_vindices_per_int, resource_alloc):
         """
         Compute compact-form polynomials of the outcome probabilities for `circuit`.
@@ -1174,6 +1232,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 self.cache[ck] = poly
         return prps
 
+    @_ignore_term_deprecation_warnings
     def _cache_p_polynomials(self, layout_atom, resource_alloc, polynomial_vindices_per_int):
         """
         Compute and cache the compact-form polynomials that evaluate the probabilities of a single layout atom.
@@ -1217,6 +1276,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         layout_atom.merged_compact_polys = (vtape, ctape)  # Note: ctape should always be complex here
 
     # should assert(nFailures == 0) at end - this is to prep="lock in" probs & they should be good
+    @_ignore_term_deprecation_warnings
     def select_paths_set(self, layout, path_set):
         """
         Selects (makes "current") a path set *and* computes polynomials the new set.
@@ -1246,6 +1306,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                 self._cache_p_polynomials(layout_atom, atom_resource_alloc, polynomial_vindices_per_int)
 
     ## ----- Other functions -----
+    @_ignore_term_deprecation_warnings
     def _prepare_layout(self, layout, polynomial_vindices_per_int):
         """
         Performs preparatory work for computing circuit outcome probabilities.

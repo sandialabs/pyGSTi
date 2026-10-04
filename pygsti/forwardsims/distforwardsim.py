@@ -353,7 +353,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
         Parameters
         ----------
-        layout : TermCOPALayout
+        layout : DistributableCOPALayout
             The layout specifying the quantities (circuit outcome probabilities) to be
             computed, and related information.
 
