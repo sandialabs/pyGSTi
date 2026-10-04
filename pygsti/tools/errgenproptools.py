@@ -453,7 +453,7 @@ def configure_errorgen_propagation_parallelization(
     min_km_alpha : int, optional
         Minimum generator-outcome workload product W = K * M required to engage
         2D grid parallelization in `bulk_alpha` and `bulk_alpha_pauli`. Workloads
-        with K * M below this cutoff execute via the sequential fast-path.
+        with K * M below this cutoff execute via the sequential execution.
     min_magnus_pairs : int, optional
         Minimum number of layer pairs (L * (L - 1) / 2) required to engage chunked
         parallel pairwise reduction in `_second_order_magnus_term` and `magnus_expansion`.
@@ -682,7 +682,7 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
         are truncated.
 
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution across layer pairs).
 
     pool : Pool or SharedWorkerPool, optional
@@ -782,7 +782,7 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
         are truncated.
 
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution across layer pairs).
 
     pool : Pool or SharedWorkerPool, optional
@@ -869,7 +869,7 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
         are truncated.
 
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution across layer pairs and outer commutators).
 
     pool : Pool or SharedWorkerPool, optional
@@ -5683,7 +5683,7 @@ def _should_parallelize_alpha(
 ) -> bool:
     r"""
     Internal helper: determines whether a sensitivity calculation (bulk_alpha or bulk_alpha_pauli)
-    should be executed in parallel or routed to the zero-overhead sequential fast-path.
+    should be executed in parallel or routed to the zero-overhead sequential execution.
 
     Checks active manual configuration overrides, dynamic profiling calibration (if run),
     or the default multi-scale absolute cutoff table.
@@ -5891,7 +5891,7 @@ def bulk_alpha(
     First-order error generator sensitivity function for probability.
 
     Calculates the sensitivity of stabilizer measurement probabilities across bitstrings
-    to specified elementary error generators. Supports both serial fast-path execution
+    to specified elementary error generators. Supports both serial execution
     and parallel 2D grid partitioning across bitstrings and generators.
 
     Parameters
@@ -5903,7 +5903,7 @@ def bulk_alpha(
     desired_bitstrings : list of str
         Bitstrings to calculate sensitivities for.
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution).
     pool : Pool or SharedWorkerPool, optional
         Existing worker pool to reuse across sequential workflow stages.
@@ -5958,7 +5958,7 @@ def bulk_alpha_pauli(
     paulis : list of stim.PauliString
         Pauli observables to compute expectation sensitivities for.
     num_workers : int, str, or None, optional
-        Target worker count (defaults to None for sequential fast-path; pass 'auto'
+        Target worker count (defaults to None for sequential execution; pass 'auto'
         or an integer to enable parallel execution).
     pool : Pool or SharedWorkerPool, optional
         Existing worker pool to reuse across sequential workflow stages.
