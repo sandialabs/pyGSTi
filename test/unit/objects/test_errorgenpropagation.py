@@ -307,6 +307,7 @@ class LocalStimErrorgenLabelTester(BaseCase):
                 self.assertEqual(_lse_mod._slow_support_mask(lbl._hashable_basis_element_labels), expected)
                 self.assertEqual(_lse_mod.support_mask_from_strings(lbl._hashable_basis_element_labels), expected)
 
+
 class CanonicalLabelOrderTester(BaseCase):
     """The two basis element labels of every C/A `LocalStimErrorgenLabel` are in canonical
     (string-sorted) order. A model embedding a two-qubit gate into reversed target qubits

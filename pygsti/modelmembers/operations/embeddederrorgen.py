@@ -10,12 +10,17 @@ The EmbeddedErrorgen class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+
 from pygsti.baseobjs.basis import Basis as _Basis
 import warnings as _warnings
 
 from pygsti.modelmembers.operations.embeddedop import EmbeddedOp as _EmbeddedOp
-from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LinbladErrorGen
+from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LinbladErrorgen
 
+from pygsti import SpaceT
+
+from typing import Union, Literal
 
 # Idea:
 # Op = exp(Errgen); Errgen is an error just on 2nd qubit (and say we have 3 qubits)
@@ -32,7 +37,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
     """
     An error generator containing a single lower (or equal) dimensional operation within it.
 
-    An EmbeddedErrorGen acts as the null map (zero) on all of its domain except the
+    An EmbeddedErrorgen acts as the null map (zero) on all of its domain except the
     subspace of its contained error generator, where it acts as the contained item does.
 
     Parameters
@@ -40,7 +45,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
     state_space : StateSpace
         Specifies the density matrix space upon which this operation acts.
 
-    target_labels : list of strs
+    target_labels : list of ints or strs
         The labels contained in `state_space` which demarcate the
         portions of the state space acted on by `errgen_to_embed` (the
         "contained" error generator).
@@ -51,7 +56,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         of the EmbeddedErrorgen.
     """
 
-    def __init__(self, state_space, target_labels, errgen_to_embed: _LinbladErrorGen):
+    def __init__(self, state_space: SpaceT, target_labels: list[Union[int, str]], errgen_to_embed: _LinbladErrorgen):
         _EmbeddedOp.__init__(self, state_space, target_labels, errgen_to_embed)
 
         # set "API" error-generator members (to interface properly w/other objects)
@@ -65,7 +70,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         self._matrix_basis = None
 
     @property
-    def matrix_basis(self):
+    def matrix_basis(self) -> _Basis:
         """
         The embedded error generator's matrix basis, cast up to this operation's state space.
 
@@ -112,7 +117,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
     #TODO: I don't think the return_basis flag actually works atm. Maybe remove?
     #TODO: Refactor naming to match EmbeddedOp. Only reason we can't just directly use the
     #method from the parent class is naming convention mismatches for methods on children.
-    def coefficients(self, return_basis=False, logscale_nonham=False, label_type='global', identity_label='I'):
+    def coefficients(self, return_basis: bool=False, logscale_nonham: bool=False, label_type: Literal['global', 'local']='global', identity_label: str='I'):
         """
         Constructs a dictionary of the Lindblad-error-generator coefficients of this operation.
 
@@ -386,8 +391,8 @@ class EmbeddedErrorgen(_EmbeddedOp):
         numpy array
             Array of derivatives, shape == (dimension^2, num_params)
         """
-        _warnings.warn("Using finite differencing to compute EmbeddedErrorGen derivative!")
-        #raise NotImplementedError("deriv_wrt_params is not implemented for EmbeddedErrorGen objects")
+        _warnings.warn("Using finite differencing to compute EmbeddedErrorgen derivative!")
+        #raise NotImplementedError("deriv_wrt_params is not implemented for EmbeddedErrorgen objects")
         return super(EmbeddedErrorgen, self).deriv_wrt_params(wrt_filter)
 
     def hessian_wrt_params(self, wrt_filter1=None, wrt_filter2=None):
@@ -413,8 +418,8 @@ class EmbeddedErrorgen(_EmbeddedOp):
         numpy array
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
-        _warnings.warn("Using finite differencing to compute EmbeddedErrorGen hessian!")
-        #raise NotImplementedError("hessian_wrt_params is not implemented for EmbeddedErrorGen objects")
+        _warnings.warn("Using finite differencing to compute EmbeddedErrorgen hessian!")
+        #raise NotImplementedError("hessian_wrt_params is not implemented for EmbeddedErrorgen objects")
         return super(EmbeddedErrorgen, self).hessian_wrt_params(wrt_filter1, wrt_filter2)
 
     def onenorm_upperbound(self):

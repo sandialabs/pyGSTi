@@ -141,7 +141,7 @@ class ComposedPOVM(_POVM, _Torchable):
         return cls(errormap, base_povm, mx_basis)
 
     @property
-    def matrix_basis(self):
+    def matrix_basis(self) -> _Basis:
         """
         The matrix basis of this POVM's state space.
 
