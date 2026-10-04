@@ -162,6 +162,17 @@ class OpRepEmbedded(OpRep):
 
 
 class OpRepExpErrorgen(OpRep):
+    """
+    Representation of an operation that is the exponential of an error generator.
+
+    Note: in this evotype this representation cannot act on states (`acton` raises); it exists so
+    that Lindblad error-generator-based operations can be constructed with this evotype.  Such
+    operations can be simulated only via the term-based machinery of the deprecated
+    `TermForwardSimulator` (see #916), but they may still be constructed for other uses
+    (e.g. models built for error generator propagation), so this class is *not* deprecated.
+    The term-related attributes (e.g. `Lterms`, `Lterm_coeffs`) are used only by the
+    deprecated term machinery.
+    """
 
     def __init__(self, errorgen_rep):
         state_space = errorgen_rep.state_space
@@ -199,6 +210,17 @@ class OpRepRepeated(OpRep):
 
 
 class OpRepLindbladErrorgen(OpRep):
+    """
+    Representation of a Lindblad error generator (defined by Lindblad coefficient blocks).
+
+    Note: in this evotype this representation cannot act on states (`acton` raises); it exists so
+    that Lindblad error-generator-based operations can be constructed with this evotype.  Such
+    operations can be simulated only via the term-based machinery of the deprecated
+    `TermForwardSimulator` (see #916), but they may still be constructed for other uses
+    (e.g. models built for error generator propagation), so this class is *not* deprecated.
+    The term-related attributes (e.g. `Lterms`, `Lterm_coeffs`) are used only by the
+    deprecated term machinery.
+    """
     def __init__(self, lindblad_coefficient_blocks, state_space):
         super(OpRepLindbladErrorgen, self).__init__(state_space)
         self.Lterms = None
