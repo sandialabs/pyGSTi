@@ -904,14 +904,14 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             for glbl in opstr:
                 partial_ops.append(self.model.circuit_layer_operator(glbl, 'op'))
             Eops = [self.model.circuit_layer_operator(elbl, 'povm') for elbl in elabels]
-            partial_op_maxmag_values = [op.total_term_magnitude() for op in partial_ops]
-            Eop_maxmag_values = [Eop.total_term_magnitude() for Eop in Eops]
+            partial_op_maxmag_values = [op.total_term_magnitude for op in partial_ops]
+            Eop_maxmag_values = [Eop.total_term_magnitude for Eop in Eops]
             maxmag_partial_product = _np.prod(partial_op_maxmag_values)
             maxmag_products = [maxmag_partial_product * Eop_val for Eop_val in Eop_maxmag_values]
 
             deriv = _np.zeros((len(elabels), Np), 'd')
             for i in range(len(partial_ops)):  # replace i-th element of product with deriv
-                dop_local = partial_ops[i].total_term_magnitude_deriv()
+                dop_local = partial_ops[i].total_term_magnitude_deriv
                 dop_global = _np.zeros(Np, 'd')
                 dop_global[partial_ops[i].gpindices] = dop_local
                 dop_global /= partial_op_maxmag_values[i]
@@ -920,7 +920,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                     deriv[j, :] += dop_global * maxmag_products[j]
 
             for j in range(len(elabels)):  # replace final element with appropriate derivative
-                dop_local = Eops[j].total_term_magnitude_deriv()
+                dop_local = Eops[j].total_term_magnitude_deriv
                 dop_global = _np.zeros(Np, 'd')
                 dop_global[Eops[j].gpindices] = dop_local
                 dop_global /= Eop_maxmag_values[j]
@@ -946,7 +946,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         numpy.ndarray
             The jacobian of the sum-of-path-magnitudes gap.
         """
-        d_achieved_mags, d_max_sopms = self._achieved_and_max_sopm_jacobian(layout_atom)
+        d_achieved_mags, d_max_sopms = self._achieved_and_max_sopm_jacobian_atom(layout_atom)
         dgaps = d_max_sopms - d_achieved_mags
         return dgaps
 
