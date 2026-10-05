@@ -29,6 +29,7 @@ from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _Co
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE, bel_str as _bel_str, bel_product_str as _bel_product_str, canonicalize_errorgen_layer as _canonicalize_errorgen_layer
 import pygsti.errorgenpropagation.errorpropagator as _epropagator
 from pygsti.circuits import Circuit as _Circuit
+from pygsti.models.model import Model as _Model
 from pygsti.tools.optools import create_elementary_errorgen_nqudit, state_to_dmvec
 from pygsti.tools.mptools import (
     determine_num_workers as _determine_num_workers,
@@ -487,6 +488,9 @@ def configure_errorgen_propagation_parallelization(
         _MANUAL_PARALLEL_OVERRIDES.clear()
         if "_ACTIVE_PARALLEL_THRESHOLDS" in globals():
             _ACTIVE_PARALLEL_THRESHOLDS.pop("dynamic_calibrated", None)
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_a", None)
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_b", None)
+            _ACTIVE_PARALLEL_THRESHOLDS.pop("t_ipc_s", None)
         return {"status": "reset_to_defaults", "defaults": _DEFAULT_THRESHOLD_TABLE}
 
     if min_km_alpha is not None:
@@ -5640,12 +5644,8 @@ except ImportError:
 # Parallelization Thresholds, Memory Estimation, and Dynamic Target-System Calibration
 # ===================================================================================================
 
-# Built-in reference fallback parameters calibrated on baseline system (R^2 = 0.9975)
-_DEFAULT_ALPHA_A: float = 2.093   # \mu s constant bookkeeping offset
-_DEFAULT_ALPHA_B: float = 0.0453  # \mu s / qubit linear slope
+# Active dynamic calibration parameters (populated only when optimize_errorgen_propagation_parallelization is run)
 _ACTIVE_PARALLEL_THRESHOLDS: dict[str, Any] = {
-    "alpha_a": _DEFAULT_ALPHA_A,
-    "alpha_b": _DEFAULT_ALPHA_B,
     "safety_factor": 10.0,
 }
 
@@ -5721,13 +5721,17 @@ def _should_parallelize_alpha(
 
     # Check if dynamic optimizer calibration was run by the user
     if _ACTIVE_PARALLEL_THRESHOLDS.get("dynamic_calibrated", False):
-        a = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_a", _DEFAULT_ALPHA_A)
-        b = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_b", _DEFAULT_ALPHA_B)
-        beta = _ACTIVE_PARALLEL_THRESHOLDS.get("safety_factor", 10.0)
-        tau_alpha_s = (a + b * n_qubits) * 1e-6
-        t_ipc_s = _measure_ipc_latency(num_workers=workers, start_method=start_method)
-        threshold_km = (beta * t_ipc_s) / max(1e-9, tau_alpha_s)
-        return w >= threshold_km
+        a = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_a")
+        b = _ACTIVE_PARALLEL_THRESHOLDS.get("alpha_b")
+        if a is not None and b is not None:
+            beta = _ACTIVE_PARALLEL_THRESHOLDS.get("safety_factor", 10.0)
+            tau_alpha_s = (a + b * n_qubits) * 1e-6
+            t_ipc_s = _ACTIVE_PARALLEL_THRESHOLDS.get("t_ipc_s")
+            if t_ipc_s is None:
+                t_ipc_s = _measure_ipc_latency(num_workers=workers, start_method=start_method)
+            threshold_km = (beta * t_ipc_s) / max(1e-9, tau_alpha_s)
+            return w >= threshold_km
+        # If any locally-run parameter is missing, immediately fallback to the simpler table
 
     # Default fallback: multi-scale cutoff table
     scale = 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
@@ -5788,14 +5792,22 @@ def optimize_errorgen_propagation_parallelization(
     workers = _determine_num_workers(num_workers)
     t_ipc_s = _measure_ipc_latency(num_workers=workers, start_method=start_method)
 
-    if model is not None and hasattr(model, "state_space") and hasattr(model.state_space, "qubit_labels"):
-        n = len(model.state_space.qubit_labels)
-    elif circuit is not None and hasattr(circuit, "num_lines"):
+    if model is not None:
+        if not isinstance(model, _Model):
+            raise TypeError(f"Expected model to be a pygsti Model instance, got {type(model)}.")
+        n = model.state_space.num_qubits
+    elif circuit is not None:
+        if not isinstance(circuit, _Circuit):
+            raise TypeError(f"Expected circuit to be a pygsti Circuit instance, got {type(circuit)}.")
         n = circuit.num_lines
     elif num_qubits is not None:
+        if not isinstance(num_qubits, (int, _np.integer)):
+            raise TypeError(f"Expected num_qubits to be an integer, got {type(num_qubits)}.")
         n = int(num_qubits)
+        if n < 1:
+            raise ValueError(f"num_qubits must be an integer >= 1, got {n}.")
     else:
-        n = 16
+        raise ValueError("Must provide at least one of 'num_qubits', 'circuit', or 'model'.")
 
     circ_lines = []
     for i in range(0, max(1, n - 1), 2):
@@ -5803,19 +5815,36 @@ def optimize_errorgen_propagation_parallelization(
     circ_str = "\n".join(circ_lines) if circ_lines else "H 0"
     tableau = stim.Tableau.from_circuit(stim.Circuit(circ_str))
 
-    gens = []
-    for i in range(n):
-        p_x = stim.PauliString("X" + "_" * (n - 1))
-        p_z = stim.PauliString("Z" + "_" * (n - 1))
-        gens.append(_LSE("H", [p_x]))
-        gens.append(_LSE("S", [p_z]))
-        if i < n - 1:
-            gens.append(_LSE("C", [p_x, p_z]))
-            gens.append(_LSE("A", [p_z, p_x]))
-    if not gens:
-        gens = [_LSE("H", [stim.PauliString("X")])]
+    # Generate a reproducible random test set of elementary error generators across H, S, C, A
+    rng = _np.random.default_rng(1234)
+    pauli_letters = ["X", "Y", "Z"]
+    types = ["H", "S", "C", "A"]
+    num_test_gens = 400
+    all_gens = []
 
-    all_gens = (gens * (600 // len(gens) + 1))[:600]
+    for _ in range(num_test_gens):
+        eg_type = str(rng.choice(types))
+        weight = int(rng.choice([1, 2])) if n > 1 else 1
+        targets = [int(x) for x in rng.choice(n, size=weight, replace=False)]
+
+        p1 = ["_"] * n
+        for t in targets:
+            p1[t] = str(rng.choice(pauli_letters))
+        p1_stim = stim.PauliString("".join(p1))
+
+        if eg_type in ("H", "S"):
+            all_gens.append(_LSE(eg_type, [p1_stim]))
+        else:
+            p2 = ["_"] * n
+            for t in targets:
+                p2[t] = str(rng.choice(pauli_letters))
+            p2_stim = stim.PauliString("".join(p2))
+            if p1_stim == p2_stim:
+                alt = "Y" if p1[targets[0]] != "Y" else "Z"
+                p2[targets[0]] = alt
+                p2_stim = stim.PauliString("".join(p2))
+            all_gens.append(_LSE(eg_type, [p1_stim, p2_stim]))
+
     M = 4
     bitstrings = ["0" * n] * M
 
@@ -5836,8 +5865,8 @@ def optimize_errorgen_propagation_parallelization(
     delta_w = (len(g2) - len(g1)) * M
     tau_us = max(0.1, ((t2 - t1) / max(1, delta_w)) * 1e6)
 
-    a = _DEFAULT_ALPHA_A
-    b = max(0.005, (tau_us - a) / max(1, n))
+    a = tau_us
+    b = 0.0
     threshold_km = int(_math.ceil((10.0 * t_ipc_s) / (tau_us * 1e-6)))
 
     calibration_duration_ms = (_time.perf_counter() - t0_start) * 1000

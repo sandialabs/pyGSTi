@@ -1139,6 +1139,20 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertFalse(_eprop._should_parallelize_alpha(100, 100, 1, num_workers=1))
         self.assertTrue(_eprop._should_parallelize_alpha(100, 10000, 16, num_workers=4))
 
+    def test_should_parallelize_alpha_dynamic_fallback_on_missing_param(self):
+        # Set dynamic_calibrated=True but omit alpha_a / alpha_b
+        _eprop._ACTIVE_PARALLEL_THRESHOLDS["dynamic_calibrated"] = True
+        _eprop._ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_a", None)
+        _eprop._ACTIVE_PARALLEL_THRESHOLDS.pop("alpha_b", None)
+
+        # For n_qubits=4, scale='small' threshold is 1200
+        small_thresh = _eprop._DEFAULT_THRESHOLD_TABLE['small']['min_km_alpha']
+        self.assertFalse(_eprop._should_parallelize_alpha(4, small_thresh - 100, 1, num_workers=2))
+        self.assertTrue(_eprop._should_parallelize_alpha(4, small_thresh + 100, 1, num_workers=2))
+
+        # Reset to defaults
+        _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
+
     def test_configure_errorgen_propagation_parallelization(self):
         # Override min_km_alpha to high value
         _eprop.configure_errorgen_propagation_parallelization(min_km_alpha=50000)
@@ -1160,6 +1174,27 @@ class ApproxStabilizerMethodTester(BaseCase):
         doc = _eprop.optimize_errorgen_propagation_parallelization.__doc__
         self.assertIn("Empirical Nature and Disclaimer", doc)
         self.assertIn("configure_errorgen_propagation_parallelization", doc)
+
+        # Missing all three inputs raises ValueError
+        with self.assertRaises(ValueError):
+            _eprop.optimize_errorgen_propagation_parallelization()
+
+        with self.assertRaises(ValueError):
+            _eprop.optimize_errorgen_propagation_parallelization(num_qubits=0)
+
+        # Invalid argument types raise TypeError
+        with self.assertRaises(TypeError):
+            _eprop.optimize_errorgen_propagation_parallelization(model="not_a_model")
+        with self.assertRaises(TypeError):
+            _eprop.optimize_errorgen_propagation_parallelization(circuit="not_a_circuit")
+        with self.assertRaises(TypeError):
+            _eprop.optimize_errorgen_propagation_parallelization(num_qubits="not_an_int")
+
+        # Call with explicit circuit
+        res_circ = _eprop.optimize_errorgen_propagation_parallelization(circuit=self.circuit, num_workers=2, set_as_default=False)
+        self.assertIsInstance(res_circ, dict)
+        self.assertEqual(res_circ['num_qubits'], self.circuit.num_lines)
+
         res = _eprop.optimize_errorgen_propagation_parallelization(num_qubits=4, num_workers=2, set_as_default=True)
         self.assertIsInstance(res, dict)
         self.assertIn('tau_alpha_us', res)
