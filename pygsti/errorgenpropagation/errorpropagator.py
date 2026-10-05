@@ -78,11 +78,15 @@ def estimate_propagation_peak_memory(
         Estimated peak memory footprint in bytes.
     """
     w = _determine_num_workers(num_workers)
+    if w < 1:
+        raise ValueError(f"Worker count must be at least 1, got {w}.")
     master_base = 50 * 1024 * 1024
-    worker_base = 45 * 1024 * 1024
+    worker_base = 45 * 1024 * 1024 if w > 1 else 0
+    bytes_per_term = _eprop.measure_lse_entry_size(n_qubits)
     layers_per_worker = max(1, n_layers // max(1, w))
-    worker_buffer = layers_per_worker * avg_errorgens_per_layer * 350
-    total_bytes = master_base + w * (worker_base + worker_buffer)
+    worker_buffer = (layers_per_worker * avg_errorgens_per_layer * bytes_per_term) if w > 1 else 0
+    master_layers_bytes = n_layers * avg_errorgens_per_layer * bytes_per_term
+    total_bytes = master_base + master_layers_bytes + (w * worker_base) + (w * worker_buffer)
     return int(total_bytes)
 
 
@@ -389,8 +393,8 @@ class ErrorGeneratorPropagator:
         n_q = len(circuit.line_labels)
         avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
 
-        # Strategic single-point memory check if top-level entry point
-        if pool is None and workers > 1 and len(errorgen_layers) > 1:
+        # Strategic single-point memory check for layer propagation (evaluates sequential, pool, and worker configurations)
+        if len(errorgen_layers) > 1:
             _warn_if_insufficient_memory(
                 estimate_propagation_peak_memory(n_q, len(errorgen_layers), avg_k, workers),
                 task_name="propagate_errorgens"

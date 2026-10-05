@@ -46,6 +46,7 @@ from functools import wraps as _wraps
 from itertools import chain, product
 import math as _math
 from math import factorial
+import sys as _sys
 import time as _time
 from typing import Literal, Optional, Union, Callable, Iterable, Iterator, Sequence, TypeVar, Any, cast as _cast
 
@@ -509,6 +510,35 @@ def configure_errorgen_propagation_parallelization(
     return dict(_MANUAL_PARALLEL_OVERRIDES)
 
 
+def measure_lse_entry_size(n_qubits: int) -> int:
+    """
+    Measure the exact byte size of a worst-case LocalStimErrorgenLabel dict entry with a real rate.
+
+    Parameters
+    ----------
+    n_qubits : int
+        Number of qubits in the circuit.
+
+    Returns
+    -------
+    int
+        Memory in bytes consumed by a single dictionary entry holding a LocalStimErrorgenLabel and real rate.
+    """
+    n = max(1, int(n_qubits))
+    p1 = stim.PauliString("X" * n)
+    p2 = stim.PauliString("Z" * n)
+    lbl = _LSE("C", [p1, p2])
+    rate = 1.0  # Real-valued rate as requested
+    return (
+        _sys.getsizeof(lbl)
+        + _sys.getsizeof(lbl._hashable_basis_element_labels)
+        + sum(_sys.getsizeof(s) for s in lbl._hashable_basis_element_labels)
+        + _sys.getsizeof(lbl._hashable_string_rep)
+        + _sys.getsizeof(rate)
+        + 32  # Hash table bucket overhead in Python dict
+    )
+
+
 def estimate_magnus_peak_memory(
     n_qubits: int,
     n_layers: int,
@@ -530,7 +560,7 @@ def estimate_magnus_peak_memory(
     num_workers : int, str, or None, optional
         Target worker count (defaults to "auto").
     magnus_order : int, optional (default 2)
-        Order of the Magnus expansion.
+        Order of the Magnus expansion (1, 2, or 3).
 
     Returns
     -------
@@ -538,13 +568,104 @@ def estimate_magnus_peak_memory(
         Estimated peak memory footprint in bytes.
     """
     w = _determine_num_workers(num_workers)
+    if w < 1:
+        raise ValueError(f"Worker count must be at least 1, got {w}.")
+    if magnus_order not in (1, 2, 3):
+        raise ValueError(f"magnus_order must be 1, 2, or 3, got {magnus_order}.")
+
+    master_base = 50 * 1024 * 1024
+    worker_base = 45 * 1024 * 1024 if w > 1 else 0
+    bytes_per_term = measure_lse_entry_size(n_qubits)
+    max_distinct_terms = 4**n_qubits - 1 if n_qubits <= 30 else 10**18
+
+    K = avg_errorgens_per_layer
+    # In the worst case, each pair of elementary error generators in a layer pair emits at most 7 terms
+    max_terms_per_pair = min(7 * (K ** 2), max_distinct_terms) if K > 0 else 0
+
+    if magnus_order == 1 or n_layers <= 1:
+        input_bytes = n_layers * K * bytes_per_term
+        return int(master_base + input_bytes)
+
     n_pairs = (n_layers * (n_layers - 1)) // 2
     pairs_per_worker = max(1, n_pairs // max(1, w))
-    estimated_terms_per_pair = min(avg_errorgens_per_layer * 4, 50000)
-    worker_buffer = pairs_per_worker * estimated_terms_per_pair * 350
+    p1_worker_buffer = min(pairs_per_worker * max_terms_per_pair, max_distinct_terms) * bytes_per_term
+
+    if magnus_order == 2:
+        total_bytes = master_base + (w * worker_base) + (p1_worker_buffer if w == 1 else w * p1_worker_buffer)
+        return int(total_bytes)
+
+    # magnus_order == 3: Two-phase parallel evaluation with held columns and outer commutators
+    col_terms = min((n_layers - 1) * max_terms_per_pair, max_distinct_terms)
+    held_columns_bytes = n_layers * col_terms * bytes_per_term
+
+    outer_per_worker = max(1, n_layers // max(1, w))
+    outer_terms_per_task = min(7 * K * max(1, col_terms), max_distinct_terms)
+    p2_worker_buffer = min(outer_per_worker * outer_terms_per_task, max_distinct_terms) * bytes_per_term
+
+    worker_buffer = max(p1_worker_buffer, p2_worker_buffer)
+    total_bytes = master_base + held_columns_bytes + (w * worker_base) + (worker_buffer if w == 1 else w * worker_buffer)
+    return int(total_bytes)
+
+
+def estimate_taylor_peak_memory(
+    n_qubits: int,
+    num_errorgens: int,
+    order: int = 1,
+    num_workers: Union[int, str, None] = "auto",
+) -> int:
+    """
+    Estimates peak memory footprint in bytes for error generator Taylor expansion.
+
+    Parameters
+    ----------
+    n_qubits : int
+        Number of qubits in the circuit / error generator.
+    num_errorgens : int
+        Number of elementary error generator terms in the generator (K).
+    order : int, optional (default 1)
+        Order of the Taylor expansion (>= 1).
+    num_workers : int, str, or None, optional
+        Target worker count (defaults to "auto").
+
+    Returns
+    -------
+    int
+        Estimated peak memory footprint in bytes.
+    """
+    w = _determine_num_workers(num_workers)
+    if w < 1:
+        raise ValueError(f"Worker count must be at least 1, got {w}.")
+    if order < 1:
+        raise ValueError(f"order must be an integer >= 1, got {order}.")
+
     master_base = 50 * 1024 * 1024
-    worker_base = 45 * 1024 * 1024
-    total_bytes = master_base + w * (worker_base + worker_buffer)
+    worker_base = 45 * 1024 * 1024 if w > 1 else 0
+    entry_bytes = measure_lse_entry_size(n_qubits)
+    max_distinct_terms = 4**n_qubits - 1 if n_qubits <= 30 else 10**18
+
+    K = num_errorgens
+    if order == 1 or K == 0:
+        return int(master_base + K * entry_bytes)
+
+    current_k_terms = K
+    total_retained_terms = K
+    max_worker_buffer_bytes = 0
+
+    for k in range(2, order + 1):
+        prev_terms = current_k_terms
+        current_k_terms = min(K * prev_terms * 7, max_distinct_terms)
+        total_retained_terms += current_k_terms
+
+        if w > 1:
+            slice_terms = max(1, K // w)
+            worker_task_terms = min(slice_terms * prev_terms * 7, max_distinct_terms)
+            worker_mem = (prev_terms + worker_task_terms) * entry_bytes
+            max_worker_buffer_bytes = max(max_worker_buffer_bytes, worker_mem)
+        else:
+            max_worker_buffer_bytes = max(max_worker_buffer_bytes, current_k_terms * entry_bytes)
+
+    retained_bytes = total_retained_terms * entry_bytes
+    total_bytes = master_base + retained_bytes + (w * worker_base) + (max_worker_buffer_bytes if w == 1 else w * max_worker_buffer_bytes)
     return int(total_bytes)
 
 
@@ -727,22 +848,23 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
         return first_order_dict
     new_errorgen_layer = [first_order_dict]
 
-    # Strategic single-point memory check for parallel Magnus expansion
-    if num_workers is not None and pool is None and magnus_order >= 2 and len(errorgen_layers) > 1:
-        n_q = len(next(iter(errorgen_layers[0])).basis_element_labels[0]) if errorgen_layers and errorgen_layers[0] else 1
-        avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
-        _warn_if_insufficient_memory(
-            estimate_magnus_peak_memory(n_q, len(errorgen_layers), avg_k, num_workers, magnus_order),
-            task_name="magnus_expansion"
-        )
-
     # precompute an identity string for comparisons in commutator calculations (None if every layer is empty,
-    # in which case no commutators are computed).
+    # in which case no commutators are computed). Scans forward to find the first non-empty layer to determine n_q.
     identity = None
     for layer in errorgen_layers:
         if layer:
             identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
             break
+
+    # Strategic single-point memory check for Magnus expansion (evaluates sequential, pool, and worker configurations)
+    if len(errorgen_layers) > 1 and magnus_order >= 2:
+        n_q = len(identity) if identity is not None else 1
+        avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
+        workers = _resolve_pool_workers(pool) if pool is not None else (_determine_num_workers(num_workers) if num_workers is not None else 1)
+        _warn_if_insufficient_memory(
+            estimate_magnus_peak_memory(n_q, len(errorgen_layers), avg_k, num_workers=workers, magnus_order=magnus_order),
+            task_name="magnus_expansion"
+        )
 
     if magnus_order == 2:
         # second-order magnus term: (1/2)\sum_{t1=1}^n \sum_{t2=1}^{t1-1} [A(t1), A(t2)]
@@ -5321,6 +5443,12 @@ def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 
             taylor_order_terms[0][lbl] = rate
 
     if order > 1 and errorgen_dict:
+        n_q = len(next(iter(errorgen_dict))._hashable_basis_element_labels[0])
+        workers = _resolve_pool_workers(pool) if pool is not None else (_determine_num_workers(num_workers) if num_workers is not None else 1)
+        _warn_if_insufficient_memory(
+            estimate_taylor_peak_memory(n_q, len(errorgen_dict), order=order, num_workers=workers),
+            task_name="error_generator_taylor_expansion"
+        )
         # The k-th order term is (1/k!) L^k with L = sum_i rate_i * L_i. Composition is bilinear, so
         # the k-th power is built from the aggregated (k-1)-th power, L^k = L o L^(k-1): every
         # generator of `errorgen_dict` is composed with every term of the previous power once,
@@ -5676,11 +5804,14 @@ def estimate_bulk_alpha_peak_memory(
         Estimated peak memory footprint in bytes.
     """
     w = _determine_num_workers(num_workers)
+    if w < 1:
+        raise ValueError(f"Worker count must be at least 1, got {w}.")
     output_matrix_bytes = n_outcomes * n_errorgens * 8
-    worker_base_rss = 45 * 1024 * 1024  # ~45 MB per worker
+    master_base = 50 * 1024 * 1024
+    worker_base_rss = 45 * 1024 * 1024 if w > 1 else 0
     tableau_bytes = (n_qubits ** 2 // 8 + 64) * 8
     sub_matrix_bytes = (n_outcomes * n_errorgens * 8) // max(1, w)
-    total_bytes = output_matrix_bytes + w * (worker_base_rss + sub_matrix_bytes + tableau_bytes)
+    total_bytes = master_base + output_matrix_bytes + (w * worker_base_rss) + (sub_matrix_bytes if w == 1 else w * sub_matrix_bytes) + w * tableau_bytes
     return int(total_bytes)
 
 
@@ -5964,16 +6095,14 @@ def bulk_alpha(
     if workers < 1:
         raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
+    n_qubits = len(desired_bitstrings[0])
+    _warn_if_insufficient_memory(
+        estimate_bulk_alpha_peak_memory(n_qubits, n_e, n_b, workers),
+        task_name="bulk_alpha"
+    )
+
     if workers == 1 or num_workers is None and pool is None:
         return _raw_bulk_alpha(gens, tableau, desired_bitstrings)
-
-    n_qubits = len(desired_bitstrings[0])
-
-    if pool is None:
-        _warn_if_insufficient_memory(
-            estimate_bulk_alpha_peak_memory(n_qubits, n_e, n_b, workers),
-            task_name="bulk_alpha"
-        )
 
     if not _should_parallelize_alpha(n_qubits, n_e, n_b, num_workers=workers):
         return _raw_bulk_alpha(gens, tableau, desired_bitstrings)
@@ -6021,16 +6150,14 @@ def bulk_alpha_pauli(
     if workers < 1:
         raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
+    n_qubits = len(paulis[0])
+    _warn_if_insufficient_memory(
+        estimate_bulk_alpha_peak_memory(n_qubits, n_e, n_p, workers),
+        task_name="bulk_alpha_pauli"
+    )
+
     if workers == 1 or num_workers is None and pool is None:
         return _raw_bulk_alpha_pauli(gens, tableau, paulis)
-
-    n_qubits = len(paulis[0])
-
-    if pool is None:
-        _warn_if_insufficient_memory(
-            estimate_bulk_alpha_peak_memory(n_qubits, n_e, n_p, workers),
-            task_name="bulk_alpha_pauli"
-        )
 
     if not _should_parallelize_alpha(n_qubits, n_e, n_p, num_workers=workers):
         return _raw_bulk_alpha_pauli(gens, tableau, paulis)

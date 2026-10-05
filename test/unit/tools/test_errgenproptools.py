@@ -1202,6 +1202,53 @@ class ApproxStabilizerMethodTester(BaseCase):
         # Clean up
         _eprop.configure_errorgen_propagation_parallelization(reset_to_defaults=True)
 
+    def test_estimate_magnus_peak_memory(self):
+        # Order 1 < Order 2 < Order 3 for multi-layer circuits
+        mem_o1 = _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=2, magnus_order=1)
+        mem_o2 = _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=2, magnus_order=2)
+        mem_o3 = _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=2, magnus_order=3)
+        self.assertGreater(mem_o2, mem_o1)
+        self.assertGreater(mem_o3, mem_o2)
+
+        # Sequential mode (workers=1) has lower memory footprint than parallel (workers=2)
+        mem_seq = _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=1, magnus_order=2)
+        self.assertLess(mem_seq, mem_o2)
+
+        # Invalid worker count raises ValueError
+        with self.assertRaises(ValueError):
+            _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=0)
+
+        # Invalid magnus_order raises ValueError
+        with self.assertRaises(ValueError):
+            _eprop.estimate_magnus_peak_memory(4, 10, 20, num_workers=2, magnus_order=4)
+
+    def test_measure_lse_entry_size(self):
+        s1 = _eprop.measure_lse_entry_size(1)
+        s4 = _eprop.measure_lse_entry_size(4)
+        s16 = _eprop.measure_lse_entry_size(16)
+        s64 = _eprop.measure_lse_entry_size(64)
+        self.assertGreater(s4, s1)
+        self.assertGreater(s16, s4)
+        self.assertGreater(s64, s16)
+
+    def test_estimate_taylor_peak_memory(self):
+        mem_o1 = _eprop.estimate_taylor_peak_memory(4, 20, order=1, num_workers=2)
+        mem_o2 = _eprop.estimate_taylor_peak_memory(4, 20, order=2, num_workers=2)
+        mem_o3 = _eprop.estimate_taylor_peak_memory(4, 20, order=3, num_workers=2)
+        self.assertGreater(mem_o2, mem_o1)
+        self.assertGreater(mem_o3, mem_o2)
+
+        with self.assertRaises(ValueError):
+            _eprop.estimate_taylor_peak_memory(4, 20, order=0)
+        with self.assertRaises(ValueError):
+            _eprop.estimate_taylor_peak_memory(4, 20, order=1, num_workers=0)
+
+    def test_magnus_expansion_empty_first_layer(self):
+        # Empty first layer should correctly infer n_q from subsequent layer
+        res = _eprop.magnus_expansion([{}, self.propagated_errorgen_layer], magnus_order=2)
+        self.assertIsInstance(res, dict)
+        self.assertGreater(len(res), 0)
+
     def test_approximate_stabilizer_probabilities_parallel(self):
         seq = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=None)
         par = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=2)
