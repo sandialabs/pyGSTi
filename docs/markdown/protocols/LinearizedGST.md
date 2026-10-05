@@ -89,7 +89,7 @@ We use a 3-qubit processor with $X_{\pi/2}$ and $Y_{\pi/2}$ gates on each qubit,
 ```{code-cell} ipython3
 num_qubits = 3
 edges = [(0, 1), (1, 2)]
-pspec = QubitProcessorSpec(num_qubits, ['Gxpi2', 'Gypi2', 'Gcphase'], availability={'Gcphase': edges})
+pspec = QubitProcessorSpec(num_qubits, ['Gxpi2', 'Gypi2', 'Gcphase',"Gzpi2"], availability={'Gcphase': edges})
 mcm_qubit = 1
 ```
 
@@ -120,6 +120,8 @@ for q in pspec.qubit_labels:
     error_model[('Gxpi2', q)] = {('H', 'X'): coherent(), ('S', 'X'): stochastic(),
                                  **{('H', 'Z:%d' % q2): coherent() for q2 in neighbours(q)}}
     error_model[('Gypi2', q)] = {('H', 'Y'): coherent(), ('S', 'Y'): stochastic(),
+                                 **{('H', 'Z:%d' % q2): coherent() for q2 in neighbours(q)}}
+    error_model[('Gzpi2', q)] = {('H', 'Z'): coherent(), ('S', 'Z'): stochastic(),
                                  **{('H', 'Z:%d' % q2): coherent() for q2 in neighbours(q)}}
 for (q1, q2) in edges:
     error_model[('Gcphase', q1, q2)] = {('H', 'ZZ'): coherent(), ('S', 'ZZ'): stochastic(),
@@ -168,7 +170,7 @@ def sample_circuit(rng, depth, num_mcms):
             if all(q in active for q in edge):
                 components.append(Label('Gcphase', edge))
                 active = [q for q in active if q not in edge]
-        components += [Label(str(rng.choice(['Gxpi2', 'Gypi2'])), q) for q in active]
+        components += [Label(str(rng.choice(['Gxpi2', 'Gzpi2','Gypi2'])), q) for q in active]
         if components:
             layers.append(components[0] if len(components) == 1 else Label(components))
     for _ in range(num_mcms):
@@ -190,7 +192,7 @@ print(example)
 ```{code-cell} ipython3
 # maps this tutorial's gate names to their stim equivalents; 'Iz' is a non-destructive Z measurement
 STIM_GATE_NAMES = {'Gxpi2': 'SQRT_X', 'Gypi2': 'SQRT_Y', 'Gxmpi2': 'SQRT_X_DAG', 'Gympi2': 'SQRT_Y_DAG',
-                    'Gcphase': 'CZ', 'Gcnot': 'CX', 'Iz': 'M'}
+                    'Gcphase': 'CZ', 'Gcnot': 'CX', 'Iz': 'M', "Gzpi2": "SQRT_Z"}
 
 def to_stim_circuit(circuit):
     sc = stim.Circuit()
@@ -223,6 +225,30 @@ lgst.unmodeled_gate_keys(circuits, params)
 
 `create_design_matrix_list` computes one design matrix per circuit.  With `return_info=True` each entry is a `CircuitDesign` that also records the observables (one per row) and their ideal, error-free expectation values.  By default the observables are all $Z$-type Paulis of weight $\leq 2$ on the *expanded* system, i.e. on the data qubits and the virtual qubits holding the MCM records.
 
+The example circuit below therefore yields a $10 \times 57$ design matrix, i.e. (observables $\times$ model parameters).  Both numbers follow from what we set up above.
+
+**Rows: 10 observables.**  The example circuit has 3 data qubits and one MCM, so the expanded system has 4 qubits (the MCM record lives on the virtual qubit 3).  The $Z$-type Paulis of weight $\leq 2$ on 4 qubits are
+
+* weight 1: $\binom{4}{1} = 4$ -- `Z___`, `_Z__`, `__Z_`, `___Z`
+* weight 2: $\binom{4}{2} = 6$ -- `ZZ__`, `Z_Z_`, `Z__Z`, `_ZZ_`, `_Z_Z`, `__ZZ`
+
+A circuit without MCMs has only $3 + 3 = 6$ rows, and one with two MCMs has $5 + 10 = 15$ rows.  (This is why the stacked design matrix in the identifiability check further down has $89 \cdot 6 + 111 \cdot 10 + 100 \cdot 15 = 3144$ rows.)
+
+**Columns: 57 model parameters.**  The columns are fixed by `params`, one per error-generator rate in `error_model`, in the order of the ansatz keys:
+
+| ansatz key(s) | parameters per key | count |
+|---|---|---|
+| `Gxpi2`, `Gypi2`, `Gzpi2` on qubit 0 | H + S + crosstalk `H Z:1` = 3 | 9 |
+| `Gxpi2`, `Gypi2`, `Gzpi2` on qubit 1 | H + S + crosstalk `H Z:0`, `H Z:2` = 4 | 12 |
+| `Gxpi2`, `Gypi2`, `Gzpi2` on qubit 2 | H + S + crosstalk `H Z:1` = 3 | 9 |
+| `Gcphase` on (0, 1) and (1, 2) | `H ZZ`, `S ZZ`, `H ZI`, `H IZ` = 4 | 8 |
+| `Iz` on qubit 1 | 13 FOMGI representatives | 13 |
+| `prep` | `S X:q` for $q = 0, 1, 2$ | 3 |
+| `povm` | `S X:q` for $q = 0, 1, 2$ | 3 |
+| **total** | | **57** |
+
+The 30 single-qubit-gate columns and 8 CZ columns come first, so the MCM block occupies columns 38-50, as printed below.
+
 ```{code-cell} ipython3
 designs = lgst.create_design_matrix_list(circuits, params, return_info=True)
 
@@ -232,7 +258,7 @@ print("observables:", [str(p) for p in d.paulis])
 print("ideal expectation values:", d.ideal_expectations)
 ```
 
-For this circuit the fourth qubit is the virtual qubit, so `+___Z` is the MCM outcome $\langle Z_v\rangle$ and `+_Z_Z` is its correlation with the final measurement of qubit 1.  The full design matrix of this circuit has one row per observable and one column per model parameter, i.e. it is $10 \times 47$.  Its columns come in blocks, one per ansatz key; let us look at the $10 \times 13$ block belonging to the MCM parameters, labelling the columns by their FOMGI names:
+For this circuit the fourth qubit is the virtual qubit, so `+___Z` is the MCM outcome $\langle Z_v\rangle$ and `+_Z_Z` is its correlation with the final measurement of qubit 1.  The full design matrix of this circuit has one row per observable and one column per model parameter, i.e. it is $10 \times 57$.  Its columns come in blocks, one per ansatz key; let us look at the $10 \times 13$ block belonging to the MCM parameters, labelling the columns by their FOMGI names:
 
 ```{code-cell} ipython3
 mcm_columns = params.indices_for_key(('Iz', mcm_qubit))
@@ -254,6 +280,60 @@ print("stacked design matrix:", D.shape, " rank:", np.linalg.matrix_rank(D))
 print("unidentifiable parameter combinations:", lgst.unidentifiable_directions(designs, params))
 ```
 
+### How many circuits are needed?
+
+Full column rank only says that every parameter *can* be estimated; it says nothing about how precisely.  Because the estimate is a least-squares solution, its covariance is ``D⁺ Σ D⁺ᵀ`` with ``Σ`` the shot-noise covariance of the observed expectation values, and `predicted_error_bars` evaluates this *before any data is taken*: an expectation value measured with $N$ shots has variance $(1 - \langle Z\rangle^2)/N$, which is $1/N$ for the observables with ideal value $0$ that determine the Hamiltonian rates (observables from the same circuit are correlated, which is taken into account), and of the order of the error rates themselves for the observables with ideal value $\pm1$ -- for those the worst case $1/N$ is used, so the predicted stochastic error bars are conservative upper bounds.  We will compare these predictions with the bootstrap in Section 6.
+
+```{code-cell} ipython3
+num_shots = 10000
+types = np.array(params.errorgen_types())   # 'H' or 'S' for every parameter
+predicted = lgst.predicted_error_bars(designs, shots=num_shots)
+print("predicted error bars with %d circuits x %d shots:  Hamiltonian mean %.1e (max %.1e),  stochastic mean %.1e (max %.1e)"
+      % (len(designs), num_shots, predicted[types == 'H'].mean(), predicted[types == 'H'].max(),
+         predicted[types == 'S'].mean(), predicted[types == 'S'].max()))
+```
+
+Not all circuits are equally informative: a circuit with two MCMs contributes 15 observables, one without MCMs only 6, and random circuits often probe the same parameter combinations.  `select_circuits` picks, from a pool of candidate circuits, a subset whose design matrix is nearly as informative as that of the whole pool.  It greedily optimizes a classical experiment-design criterion of $(D^\mathsf{T} D)^{-1}$ -- by default the *A-criterion*, the sum of the predicted variances of all parameters (`criterion='D'`, `'E'` and `'G'` are also available, and `method='backward'` eliminates circuits from the full pool instead of adding them).  The greedy order is nested, so the first $k$ selected circuits are themselves a good $k$-circuit design.
+
+Below we compare the predicted error bars of a few designs.  The last two rows keep the *total* number of shots fixed ($3\times10^6$) and spend them on the selected circuits only.
+
+```{code-cell} ipython3
+selected = lgst.select_circuits(designs, num_circuits=150)
+
+total_shots = num_shots * len(designs)
+rows = []
+for name, idx, shots in [('all 300 circuits', range(len(designs)), num_shots),
+                         ('first 60 circuits (random)', range(60), num_shots),
+                         ('60 selected circuits', selected[:60], num_shots),
+                         ('100 selected circuits', selected[:100], num_shots),
+                         ('150 selected circuits', selected, num_shots),
+                         ('60 selected, same total shots', selected[:60], total_shots // 60),
+                         ('100 selected, same total shots', selected[:100], total_shots // 100)]:
+    subset = [designs[i] for i in idx]
+    eb = lgst.predicted_error_bars(subset, shots=shots)
+    D_subset = np.vstack([d.design_matrix for d in subset])
+    rows.append({'design': name, 'circuits': len(subset), 'shots / circuit': shots, 'rows of D': D_subset.shape[0],
+                 'rank': np.linalg.matrix_rank(D_subset),
+                 'MCMs 0/1/2': '/'.join(str(sum(d.num_mcms == m for d in subset)) for m in range(3)),
+                 'H error bar (mean)': eb[types == 'H'].mean(), 'H error bar (max)': eb[types == 'H'].max(),
+                 'S error bar (mean)': eb[types == 'S'].mean()})
+pd.DataFrame(rows).set_index('design').style.format(precision=1, formatter={c: '{:.1e}' for c in rows[0] if 'error bar' in c})
+```
+
+Three things stand out.  First, 60 random circuits are not even full rank (`unidentifiable_directions` shows that they cannot separate the $H_{ZZ}$ error of the CZ gate on qubits 0, 1 from its local $H_{ZI} + H_{IZ}$ errors), whereas 60 *selected* circuits are -- the selection strongly favours the 2-MCM circuits, which carry the most observables.  Second, information simply adds up: 150 selected circuits reproduce the precision of all 300 to within about 10%, 100 to within 30%, but no subset can do as well as the full set at the same shots per circuit.  Third, and most useful in practice, precision is bought with *total* shots, not with distinct circuits: running 60 selected circuits with 50,000 shots each beats the 300 random circuits with 10,000 shots each by a factor of about 1.3 on average and about 2 on the worst parameter.  The practical recipe is therefore to sample a large pool of candidate circuits (design matrices are cheap), select from it, and spend the shot budget on the selection -- `select_circuits(designs, max_error_bar=..., shots=...)` adds circuits until a target precision is predicted.  (Keep a reasonable number of distinct circuits nevertheless: diversity is what protects against errors outside the ansatz, see Section 10.)
+
+To see how the selection performs in practice, the rest of the H+S analysis (Sections 5-8) uses only the 150 selected circuits, still with 10,000 shots each -- so we expect error bars about 10% larger than the 300-circuit values predicted above.  We keep the full pool as `all_circuits` / `all_designs`; Section 9 will select from it again.
+
+```{code-cell} ipython3
+all_circuits, all_designs = circuits, designs      # the full pool of 300 candidates
+circuits = [all_circuits[i] for i in selected]
+designs = [all_designs[i] for i in selected]
+
+predicted = lgst.predicted_error_bars(designs, shots=num_shots)
+print("using %d circuits with %d observables in total; predicted error bars: Hamiltonian mean %.1e (max %.1e), stochastic mean %.1e (upper bound)"
+      % (len(circuits), sum(d.shape[0] for d in designs), predicted[types == 'H'].mean(), predicted[types == 'H'].max(), predicted[types == 'S'].mean()))
+```
+
 ## 5. Simulating data
 
 `rate_to_model` turns an ansatz (with rates) into a pyGSTi model: the gates and SPAM go into a `CloudNoiseModel`, and every MCM key becomes a noisy `Instrument` built from the gadget.  We use it to create the true noisy model, and an error-free reference model.
@@ -268,7 +348,6 @@ The outcome labels of a circuit containing MCMs are tuples `(mcm outcome, ..., f
 ```{code-cell} ipython3
 exact_probs = [noisy_model.probabilities(c) for c in circuits]
 
-num_shots = 10000
 dataset = pygsti.data.simulate_data(noisy_model, circuits, num_samples=num_shots, seed=2026)
 frequencies = lgst.probability_dicts_from_dataset(dataset, circuits)
 
@@ -303,6 +382,8 @@ for typ, name in [('H', 'Hamiltonian'), ('S', 'stochastic')]:
     mask = types == typ
     print("%-12s mean |estimate - true| = %.2e,  mean error bar = %.2e"
           % (name, np.abs(rates_data - true_rates)[mask].mean(), error_bars[mask].mean()))
+print("predicted (Section 4): Hamiltonian %.2e, stochastic %.2e (upper bound)"
+      % (predicted[types == 'H'].mean(), predicted[types == 'S'].mean()))
 ```
 
 ```{code-cell} ipython3
@@ -320,9 +401,9 @@ axes[0].set_ylabel('estimated rate'); axes[0].legend()
 plt.tight_layout(); plt.show()
 ```
 
-The statistical uncertainty scales as $1/\sqrt{N}$ with the number of shots and roughly as $1/\sqrt{K}$ with the number of circuits, and linearized GST cannot amplify errors with deep circuits the way standard GST does -- so it typically needs more shots per circuit than GST to reach the same precision.
+The statistical uncertainty scales as $1/\sqrt{N}$ with the number of shots and roughly as $1/\sqrt{K}$ with the number of circuits, and linearized GST cannot amplify errors with deep circuits the way standard GST does -- so it typically needs more shots per circuit than GST to reach the same precision.  The bootstrap error bars of the Hamiltonian rates agree with the shot-noise prediction of Section 4, and those of the stochastic rates are, as expected, well below their conservative upper bound.
 
-Here is the complete list of the 47 estimated rates -- the gate errors (including the coherent $Z$ crosstalk terms), the SPAM bit flips and the 13 MCM parameters -- next to the true values.  The estimates are in the same order as `params`; `estimated_rates_dict` provides human-readable labels with explicit qubit supports (`v` denotes the virtual qubit).  Note that the stochastic estimates are never negative (they come from a non-negative least-squares solve), whereas the Hamiltonian estimates are unconstrained.
+Here is the complete list of the 57 estimated rates -- the gate errors (including the coherent $Z$ crosstalk terms), the SPAM bit flips and the 13 MCM parameters -- next to the true values.  The estimates are in the same order as `params`; `estimated_rates_dict` provides human-readable labels with explicit qubit supports (`v` denotes the virtual qubit).  Note that the stochastic estimates are never negative (they come from a non-negative least-squares solve), whereas the Hamiltonian estimates are unconstrained.
 
 ```{code-cell} ipython3
 def parameter_labels(params):
@@ -506,18 +587,58 @@ print("nonzero FOMGI quantities of the true MCM:", {k: round(v, 4) for k, v in f
 
 Note how the relaxation terms show up in the FOMGI quantities: $S_{YI}$ is gauge-equivalent to $S_{XI}$ (a $Y$ flip of the collapsed qubit is a bit flip up to an invisible phase), so relaxation after the measurement adds $2\times\gamma/4$ to `s_prep` and $-\gamma/4$ to `a_prep`.
 
-The rest of the analysis is identical to before -- design matrices, an identifiability check, simulation, estimation.  We reuse the circuits of Section 3 (with a $H+S+C+A$ ansatz more circuits are needed for the same statistical precision, since more parameters share the same data).
+The rest of the analysis is identical to before -- design matrices, an identifiability check, simulation, estimation.  Which circuits should we use?  The natural guess is the 150 circuits selected in Section 4, but they were selected for the H+S ansatz; design matrices are cheap, so we compute them for the whole pool of 300 candidates with the new ansatz and check.
 
 ```{code-cell} ipython3
-designs_hsca = lgst.create_design_matrix_list(circuits, params_hsca, return_info=True)
-D_hsca = np.vstack([d.design_matrix for d in designs_hsca])
-print("stacked design matrix:", D_hsca.shape, " rank:", np.linalg.matrix_rank(D_hsca))
-print("unidentifiable parameter combinations:", lgst.unidentifiable_directions(designs_hsca, params_hsca))
+all_designs_hsca = lgst.create_design_matrix_list(all_circuits, params_hsca, return_info=True)
+D_hsca = np.vstack([d.design_matrix for d in all_designs_hsca])
+print("stacked design matrix of all %d circuits:" % len(all_circuits), D_hsca.shape, " rank:", np.linalg.matrix_rank(D_hsca))
+
+print("unidentifiable combinations with the 150 circuits selected for the H+S ansatz:")
+for direction in lgst.unidentifiable_directions([all_designs_hsca[i] for i in selected], params_hsca):
+    print("  ", {str(p): round(c, 2) for p, c in direction.items()})
+
+num_sensitive = np.array([sum(np.abs(d.design_matrix[:, j]).any() for d in all_designs_hsca) for j in range(len(params_hsca))])
+print("parameters probed by the fewest circuits of the pool:")
+for j in np.argsort(num_sensitive)[:4]:
+    print("   %-55s %3d of %d circuits" % (params_hsca[j], num_sensitive[j], len(all_circuits)))
+```
+
+The full pool is fine, but the circuits selected for H+S are *not*: with them, the two common-mode dephasing parameters $C_{ZI,IZ}$ of the CZ gates are completely invisible.  The reason is that these generators are first-order visible in only a single circuit each of the 300 random ones ($C_{ZI,IZ}$ turns $XX$ into $YY$ and $XY$ into $-YX$ and annihilates everything else, so it is only visible through a weight-2 observable that, propagated back to the CZ gate, becomes an $X$/$Y$-type Pauli on *both* of its qubits -- a rare coincidence in random circuits with idling qubits and observables of weight $\leq 2$), and the H+S selection -- which knew nothing about $C$ parameters -- happened to drop both.  This is also a warning about the original pool: a parameter that hangs on one circuit is identifiable only on paper.  In a real experiment one would add circuits designed to probe it; here we simply let the selection take the ansatz into account.
+
+Selecting 150 circuits for the H+S+C+A ansatz from the same pool:
+
+```{code-cell} ipython3
+selected_hsca = lgst.select_circuits(all_designs_hsca, num_circuits=150)
+print("circuits in common with the H+S selection: %d of 150   (first 30 picks: %d, first 60: %d)"
+      % (len(set(selected) & set(selected_hsca)), len(set(selected[:30]) & set(selected_hsca[:30])),
+         len(set(selected[:60]) & set(selected_hsca[:60]))))
+
+rows = []
+for name, idx in [('all 300 circuits', range(len(all_circuits))), ('first 150 circuits (random)', range(150)),
+                  ('150 selected for H+S', selected), ('150 selected for H+S+C+A', selected_hsca),
+                  ('60 selected for H+S+C+A', selected_hsca[:60])]:
+    subset = [all_designs_hsca[i] for i in idx]
+    eb = lgst.predicted_error_bars(subset, shots=num_shots)
+    rows.append({'design': name, 'circuits': len(subset),
+                 'rank': np.linalg.matrix_rank(np.vstack([d.design_matrix for d in subset])),
+                 **{'%s error bar (mean)' % typ: eb[types_hsca == typ].mean() for typ in 'HSCA'}})
+pd.DataFrame(rows).set_index('design').style.format(formatter={c: '{:.1e}' for c in rows[0] if 'error bar' in c})
+```
+
+So, are the 150 circuits the same?  Mostly: 126 of them are shared, far more than the 75 that two random halves of the pool would have in common, because most of the information -- many observables, varied structure, two MCMs -- is useful for any ansatz.  But the *order* in which the greedy search picks them differs considerably (only a handful of the first 30 picks coincide), and the 24 circuits that differ are exactly what makes the H+S+C+A design full rank; with 60 selected circuits the design is already full rank, and 150 reproduce the precision of all 300 to within 10-30% (the active sector loses the most).  The selection depends on the ansatz, so it has to be redone when the ansatz changes.
+
+We now simulate and estimate with the 150 circuits selected for the H+S+C+A ansatz.  (The predicted error bars assume the unconstrained least-squares solution; the bounded solve that is used when $C$/$A$ parameters are present can only reduce the stochastic errors.)
+
+```{code-cell} ipython3
+circuits_hsca = [all_circuits[i] for i in selected_hsca]
+designs_hsca = [all_designs_hsca[i] for i in selected_hsca]
+predicted_hsca = lgst.predicted_error_bars(designs_hsca, shots=num_shots)
 
 noisy_model_hsca = lgst.rate_to_model(pspec, true_model_hsca)
-exact_probs_hsca = [noisy_model_hsca.probabilities(c) for c in circuits]
-dataset_hsca = pygsti.data.simulate_data(noisy_model_hsca, circuits, num_samples=num_shots, seed=2027)
-frequencies_hsca = lgst.probability_dicts_from_dataset(dataset_hsca, circuits)
+exact_probs_hsca = [noisy_model_hsca.probabilities(c) for c in circuits_hsca]
+dataset_hsca = pygsti.data.simulate_data(noisy_model_hsca, circuits_hsca, num_samples=num_shots, seed=2027)
+frequencies_hsca = lgst.probability_dicts_from_dataset(dataset_hsca, circuits_hsca)
 
 rates_exact_hsca, _ = lgst.estimate_error_rates(designs_hsca, [exact_probs_hsca, None], None, params_hsca)
 rates_data_hsca, error_bars_hsca = lgst.estimate_error_rates(designs_hsca, [frequencies_hsca, None], None, params_hsca,
@@ -525,9 +646,9 @@ rates_data_hsca, error_bars_hsca = lgst.estimate_error_rates(designs_hsca, [freq
 
 for typ, name in [('H', 'Hamiltonian'), ('S', 'stochastic'), ('C', 'correlation'), ('A', 'active')]:
     mask = types_hsca == typ
-    print("%-12s mean |true| = %.2e   no shot noise: mean |est - true| = %.2e   %d shots: mean |est - true| = %.2e, mean error bar = %.2e"
+    print("%-12s mean |true| = %.2e   no shot noise: mean |est - true| = %.2e   %d shots: mean |est - true| = %.2e, mean error bar = %.2e (predicted %.2e)"
           % (name, np.abs(true_rates_hsca[mask]).mean(), np.abs(rates_exact_hsca - true_rates_hsca)[mask].mean(),
-             num_shots, np.abs(rates_data_hsca - true_rates_hsca)[mask].mean(), error_bars_hsca[mask].mean()))
+             num_shots, np.abs(rates_data_hsca - true_rates_hsca)[mask].mean(), error_bars_hsca[mask].mean(), predicted_hsca[mask].mean()))
 ```
 
 ```{code-cell} ipython3
@@ -546,7 +667,7 @@ axes[0].set_ylabel('estimated rate'); axes[0].legend()
 plt.tight_layout(); plt.show()
 ```
 
-All four sectors are recovered from the exact data.  With $10^4$ shots per circuit the relaxation (active) rates of $\sim 10^{-3}$ are clearly resolved, whereas the small correlation rates of the gates (a few $10^{-4}$, from the $0.3$ rad tilt of the dephasing axis) are below the statistical resolution -- as always with linearized GST, precision is bought with shots and circuits, not with circuit depth.  The MCM's 28 FOMGI quantities, with the new active and correlation quantities highlighted:
+All four sectors are recovered from the exact data.  With $10^4$ shots on each of the 150 selected circuits the relaxation (active) rates of $\sim 10^{-3}$ are clearly resolved, whereas the small correlation rates of the gates (a few $10^{-4}$, from the $0.3$ rad tilt of the dephasing axis) are below the statistical resolution -- as always with linearized GST, precision is bought with shots and circuits, not with circuit depth.  The MCM's 28 FOMGI quantities, with the new active and correlation quantities highlighted:
 
 ```{code-cell} ipython3
 mcm_columns_hsca = params_hsca.indices_for_key(('Iz', mcm_qubit))
@@ -568,6 +689,7 @@ The relaxation of the measured qubit is picked up as the negative active quantit
 
 * **Validity of the linear approximation.** The systematic error grows with the total error per circuit (depth $\times$ typical rate).  Keep circuits shallow enough that the linear approximation holds; comparing the fits of two circuit depths is a simple diagnostic.  Linearized GST is also only as good as its ansatz -- errors not included in the model bias the estimates of the ones that are, although in practice the bias is modest when most of the error budget is modelled.
 * **Identifiability.** Always check the rank of the stacked design matrix (`unidentifiable_directions`).  A genuine gauge freedom of the ansatz requires restricting the estimation to identifiable combinations; a rank deficiency caused by insufficiently varied circuits is fixed by adding circuits.
+* **Choosing circuits.** Random shallow circuits are a good candidate pool, but not all of them are equally informative.  `predicted_error_bars` gives the shot-noise error bars of a design before any data is taken, and `select_circuits` picks a subset of a pool that is nearly as informative as the whole (Section 4); at a fixed total shot budget a smaller selected set is *more* precise than the full pool.  The selection depends on the ansatz -- redo it when the ansatz changes (Section 9) -- and keep enough distinct circuits to retain diversity.
 * **Observables.** `max_pauli_weight` (default 2) and `pauli_measurements` control which $Z$-type observables are used.  Higher-weight observables add information at no experimental cost but are noisier.
 * **Mid-circuit measurements.** Only computational-basis (`Iz`) measurements are supported; a multi-qubit label such as `Label('Iz', (0, 1))` is treated as parallel single-qubit MCMs whose error models are given under `('Iz', 0)` and `('Iz', 1)`.  Outcome labels must use bitstrings for the MCM records.  When *simulating* models with MCMs, `rate_to_model` selects the matrix forward simulator, because pyGSTi's map simulator does not currently support instruments in implicit models.
 * **Beyond H+S.** Pauli-correlation (`'C'`) and active (`'A'`) error generators are accepted in the ansatz and in the MCM gadget (`fomgi_ansatz(sectors='all')` gives all 28 FOMGI quantities), see Section 9.  The H/S decoupling then no longer holds and a joint bounded least-squares problem is solved instead, which is slower (in particular for the bootstrap) and needs more circuits for the same identifiability and precision.  The pair order of a `C`/`A` label does not matter for `C` ($C_{Q,P} = C_{P,Q}$) but flips the sign of `A` ($A_{Q,P} = -A_{P,Q}$).

@@ -67,6 +67,7 @@ from pygsti.errorgenpropagation import mcmgadget as _mcm
 from pygsti.errorgenpropagation.mcmgadget import DEFAULT_MCM_GATE_NAMES, VIRTUAL_QUBIT_TOKEN
 from pygsti.tools import errgenproptools as _egpt
 from pygsti.tools import internalgates as _itgs
+from pygsti.tools import sdptools as _sdptools
 
 try:
     import stim as _stim
@@ -83,8 +84,13 @@ __all__ = ['ModelParameter', 'ModelParameterList', 'build_model_parameter_indexi
            'calculate_sensitivity_vector_probs', 'ideal_pauli_expectations', 'CircuitDesign',
            'create_circuit_design_matrix', 'create_design_matrix_list', 'create_design_matrix',
            'create_design_matrix_list_parallel_pathos', 'compute_pauli_expectations', 'probability_dicts_from_dataset',
-           'unidentifiable_directions', 'observed_expectation_shifts', 'solve_linearized_gst', 'estimate_error_rates',
-           'estimated_rates_dict',
+           'unidentifiable_directions', 'predicted_error_bars', 'select_circuits', 'neyman_shot_allocation',
+           'optimal_shot_allocation', 'CircuitMoments', 'create_design_moments', 'nominal_observable_covariance',
+           'nominal_rates_by_type', 'DesignInformation', 'circuit_information', 'probability_information',
+           'predicted_covariance', 'predicted_error_bars_nominal', 'prediction_weight', 'design_criterion',
+           'AllocationResult', 'optimal_allocation', 'round_shots', 'resample_frequencies',
+           'estimate_error_rates_gls', 'observed_expectation_shifts',
+           'solve_linearized_gst', 'estimate_error_rates', 'estimated_rates_dict',
            'mcm_fomgi_estimates', 'make_bit_string_vector', 'int_to_bin', 'int_to_pauli', 'rate_to_model']
 
 
@@ -1002,20 +1008,1476 @@ def unidentifiable_directions(design_matrices, model_parameter_indexing, tol=1e-
         (scaled so the largest absolute coefficient is 1; entries below ``1e-8`` are dropped).  An empty list
         means the design matrix has full column rank.
     """
-    from scipy.linalg import null_space as _null_space
     if isinstance(design_matrices, _np.ndarray) and design_matrices.ndim == 2:
         design_matrix = design_matrices
     else:
         design_matrix = _np.vstack(_as_design_arrays(design_matrices)[0])
-    if design_matrix.shape[1] != len(model_parameter_indexing):
+    P = len(model_parameter_indexing)
+    if design_matrix.shape[1] != P:
         raise ValueError("Design matrix has %d columns but %d parameters were given"
-                         % (design_matrix.shape[1], len(model_parameter_indexing)))
+                         % (design_matrix.shape[1], P))
+    # economy SVD (a full one would allocate a rows x rows matrix; stacked designs can have 10^5 rows); padding
+    # with zero rows guarantees that Vt spans all of parameter space when there are fewer rows than parameters
+    if design_matrix.shape[0] < P:
+        design_matrix = _np.vstack([design_matrix, _np.zeros((P - design_matrix.shape[0], P))])
+    _, s, Vt = _np.linalg.svd(design_matrix, full_matrices=False)
+    null_vectors = Vt[s <= tol * max(s[0], 1e-300)]
     directions = []
-    for vec in _null_space(design_matrix, rcond=tol).T:
+    for vec in null_vectors:
         vec = vec / vec[_np.argmax(_np.abs(vec))]
         directions.append(_collections.OrderedDict((model_parameter_indexing[j], float(x))
                                                    for j, x in enumerate(vec) if abs(x) > 1e-8))
     return directions
+
+
+# ---------------------------------------------------------------------------------------------------
+# Experiment design: choosing circuits
+# ---------------------------------------------------------------------------------------------------
+
+def _ideal_observable_covariance(design):
+    """
+    Leading-order covariance (per shot) of the observed Pauli expectation values of one circuit.
+
+    For observables with ideal value 0 the covariance is that of the ideal stabilizer state,
+    ``<P_a P_b> - <P_a><P_b>`` (observables from the same shots are correlated, e.g. ``Z_0`` and ``Z_1`` are
+    perfectly correlated when ``Z_0 Z_1`` is a stabilizer).  Observables with ideal value ±1 have a variance of
+    the order of the error rates; the worst case ``1`` is used for them instead (uncorrelated).
+    """
+    ideal = design.ideal_expectations
+    cov = _np.eye(len(ideal))
+    zero = _np.nonzero(_np.abs(ideal) < 0.5)[0]
+    if len(zero) > 1:
+        tableau = generate_ideal_state(design.circuit)
+        for ia, a in enumerate(zero):
+            for b in zero[ia + 1:]:
+                c = _egpt.stabilizer_pauli_expectation(tableau, design.paulis[a] * design.paulis[b])
+                cov[a, b] = cov[b, a] = c
+    return cov
+
+
+def predicted_error_bars(design_matrices, shots=1, tol=1e-10):
+    """
+    Predicted standard errors of the error-rate estimates for a set of circuits, before any data is taken.
+
+    The least-squares estimate ``ε = D⁺ Δ<Q>`` has covariance ``D⁺ Σ D⁺ᵀ``, where ``Σ`` is the covariance of
+    the observed Pauli expectation values, which is ``(1/shots)`` times the covariance of the observables in the
+    output state.  For :class:`CircuitDesign` inputs this covariance is evaluated in the ideal stabilizer
+    state -- this is exact to leading order for observables with ideal value 0 (and hence for the Hamiltonian
+    rates), and for observables with ideal value ±1, whose true variance is of the order of the error rates and
+    hence much smaller, the worst case ``1/shots`` is used (so the error bars of the stochastic rates are
+    conservative upper bounds).  For bare design-matrix arrays all observables are taken to be independent
+    with variance ``1/shots``.  Only shot noise is considered; the systematic error of the linearization is not.
+
+    Parameters
+    ----------
+    design_matrices : list of CircuitDesign or numpy.ndarray, or a single 2D numpy.ndarray
+    shots : int, float, or array-like, optional
+        Number of shots per circuit -- either one number used for every circuit, or a sequence with one entry
+        per circuit (so that an unequal, e.g. optimized, shot allocation can be evaluated; see
+        :func:`neyman_shot_allocation` and :func:`optimal_shot_allocation`).
+    tol : float, optional
+        Relative singular-value cutoff of ``D`` below which a direction is considered unidentifiable.
+
+    Returns
+    -------
+    numpy.ndarray
+        One predicted standard error per model parameter; ``inf`` for parameters with a component along an
+        unidentifiable direction (i.e. when the stacked design matrix is rank deficient).
+    """
+    if isinstance(design_matrices, _np.ndarray) and design_matrices.ndim == 2:
+        arrays, infos = [design_matrices], [None]
+    else:
+        arrays, infos = _as_design_arrays(design_matrices)
+    covariances = [_ideal_observable_covariance(info) if _has_circuit_info(info) else None for info in infos]
+    shots_per_circuit = _np.broadcast_to(_np.asarray(shots, dtype=float), (len(arrays),))
+    if _np.any(shots_per_circuit <= 0):
+        raise ValueError("shots must be positive for every circuit")
+    return _np.sqrt(_predicted_variances(arrays, covariances, tol, shots=shots_per_circuit))
+
+
+def _has_circuit_info(info):
+    return info is not None and info.paulis is not None and info.circuit is not None
+
+
+def _predicted_variances(arrays, covariances, tol=1e-10, shots=None):
+    """
+    Per-parameter variance of the least-squares estimate; `covariances[i]` may be None (identity).
+
+    `shots`, if given, is a per-circuit array of shot counts (default: unit shots for every circuit, i.e. the
+    caller is expected to divide by a single scalar shot count itself, as :func:`select_circuits` does).
+    """
+    design_matrix = _np.vstack(arrays)
+    U, s, Vt = _np.linalg.svd(design_matrix, full_matrices=False)
+    identifiable = s > tol * max(s[0], 1e-300)
+    pinv = (Vt[identifiable].T / s[identifiable]) @ U[:, identifiable].T      # rows: parameters, cols: observables
+    variance = _np.zeros(design_matrix.shape[1])
+    start = 0
+    for c, (arr, cov) in enumerate(zip(arrays, covariances)):
+        block = pinv[:, start:start + arr.shape[0]]
+        start += arr.shape[0]
+        contribution = (block ** 2).sum(axis=1) if cov is None else _np.einsum('ia,ab,ib->i', block, cov, block)
+        variance += contribution if shots is None else contribution / shots[c]
+    # a parameter is unidentifiable if it has a component outside the row space of the design matrix
+    variance[1.0 - (Vt[identifiable] ** 2).sum(axis=0) > tol] = _np.inf
+    return variance
+
+
+_SELECTION_CRITERIA = ('A', 'D', 'E', 'G')
+
+
+def _selection_scores(criterion, M_inv, arrays, sign):
+    """
+    New value of the selection criterion (larger is better) when each of the circuits with design matrices
+    `arrays` (all of the same shape) is added (sign=+1) to / removed (sign=-1) from the information matrix.
+
+    With ``W = D M⁻¹`` and ``B = D M⁻¹ Dᵀ`` the Woodbury identity gives ``(M ± DᵀD)⁻¹ = M⁻¹ ∓ Wᵀ (I ± B)⁻¹ W``;
+    all candidates are scored in one batched computation.  A removal that makes M singular scores ``-inf``.
+    """
+    W = arrays @ M_inv                                   # (n, k, P)
+    K = _np.eye(arrays.shape[1]) + sign * (W @ arrays.transpose(0, 2, 1))
+    if criterion == 'D':   # log det(M ± DᵀD) = log det M + log det K
+        signs, logdets = _np.linalg.slogdet(K)
+        return _np.where(signs > 0, logdets, -_np.inf)
+    if sign > 0:           # K = I + B is positive definite
+        valid = _np.ones(len(K), dtype=bool)
+    else:
+        evals = _np.linalg.eigvalsh(K)
+        valid = evals[:, 0] > 1e-12 * _np.maximum(evals[:, -1], 1e-300)
+    K_inv = _np.zeros_like(K)
+    K_inv[valid] = _np.linalg.inv(K[valid])
+    if criterion == 'A':   # trace(Wᵀ K⁻¹ W) = sum(K⁻¹ ∘ W Wᵀ)
+        out = -(_np.trace(M_inv) - sign * (K_inv * (W @ W.transpose(0, 2, 1))).sum(axis=(1, 2)))
+    else:                  # 'G': diag(Wᵀ K⁻¹ W)
+        out = -_np.max(_np.diag(M_inv)[None, :] - sign * (W * (K_inv @ W)).sum(axis=1), axis=1)
+    out[~valid] = -_np.inf
+    return out
+
+
+def select_circuits(design_matrices, num_circuits=None, max_error_bar=None, shots=1, criterion='A',
+                    method='forward', ridge=1e-6, include=None):
+    """
+    Choose a subset of circuits whose design matrix is (nearly) as informative as that of all of them.
+
+    The error-rate estimates are least-squares solutions, so their covariance is proportional to
+    ``(DᵀD)⁻¹`` with ``D`` the stacked design matrix of the chosen circuits (see :func:`predicted_error_bars`).
+    This function greedily optimizes a scalar figure of merit of that covariance (a classical
+    optimal-experiment-design criterion), either by adding circuits one at a time (`method='forward'`) or
+    by removing them one at a time (`method='backward'`).  Candidates can be any set of circuits -- typically a
+    large pool of random circuits, from which a much smaller set with the same (or, at equal total shot budget,
+    better) precision is selected.
+
+    Full column rank of ``D`` is only a prerequisite: it says that the estimate is finite, not that it is
+    precise.  Of the criteria below, ``'A'`` (the default) most directly targets the precision of the
+    estimates; ``'E'`` only improves the single least-constrained parameter combination and is the slowest.
+
+    Parameters
+    ----------
+    design_matrices : list of CircuitDesign or numpy.ndarray
+        The candidate circuits' design matrices (one per circuit).
+    num_circuits : int, optional
+        Number of circuits to select.  Required unless `max_error_bar` is given.
+    max_error_bar : float, optional
+        Stop as soon as every predicted error bar (:func:`predicted_error_bars` with `shots` shots) is below
+        this value (`'forward'`), or stop removing circuits before it would be exceeded (`'backward'`).
+        If `num_circuits` is also given it acts as a cap on the number of circuits (forward; a warning is
+        issued if the target is not reached within the cap) or as a floor (backward).  A `ValueError` is
+        raised if the target cannot be reached with all candidates.
+    shots : int or float, optional
+        Shots per circuit used for `max_error_bar`.
+    criterion : {'A', 'D', 'E', 'G'}, optional
+        ``'A'``: minimize the sum of the predicted variances, ``trace((DᵀD)⁻¹)``;
+        ``'D'``: maximize ``log det(DᵀD)`` (the volume of the confidence ellipsoid);
+        ``'E'``: maximize the smallest singular value of ``D``;
+        ``'G'``: minimize the largest predicted variance.
+    method : {'forward', 'backward'}, optional
+        Greedy addition starting from no circuits, or greedy elimination starting from all candidates.
+    ridge : float, optional
+        Small multiple of the identity added to ``DᵀD`` so that the criteria are finite before the design
+        has full column rank (then the criteria first drive the rank up).
+    include : iterable of int, optional
+        Indices of candidates that are always part of the design: `'forward'` starts from them (they count
+        towards `num_circuits`), `'backward'` never removes them.
+
+    Returns
+    -------
+    list of int
+        Indices into `design_matrices` of the selected circuits -- in order of selection for `'forward'`
+        (`include` first, then every prefix is itself a greedy design) and in the original order for
+        `'backward'`.
+    """
+    if criterion not in _SELECTION_CRITERIA:
+        raise ValueError("Unknown criterion '%s'; expected one of %s" % (criterion, _SELECTION_CRITERIA))
+    if method not in ('forward', 'backward'):
+        raise ValueError("Unknown method '%s'; expected 'forward' or 'backward'" % method)
+    if num_circuits is None and max_error_bar is None:
+        raise ValueError("Either num_circuits or max_error_bar must be given")
+    arrays, infos = _as_design_arrays(design_matrices)
+    n = len(arrays)
+    if n == 0:
+        return []
+    P = arrays[0].shape[1]
+    if num_circuits is None:
+        num_circuits = n if method == 'forward' else 0
+    if not 0 <= num_circuits <= n:
+        raise ValueError("num_circuits must be between 0 and the number of candidates (%d)" % n)
+    include = list(dict.fromkeys(int(i) for i in include)) if include is not None else []
+    if any(not 0 <= i < n for i in include):
+        raise ValueError("include contains an index outside 0..%d" % (n - 1))
+    if len(include) > num_circuits:
+        raise ValueError("num_circuits (%d) is smaller than the number of included circuits (%d)"
+                         % (num_circuits, len(include)))
+    gram = [a.T @ a for a in arrays]
+    if max_error_bar is not None:
+        covariances = [_ideal_observable_covariance(info) if _has_circuit_info(info) else None for info in infos]
+
+    def meets_target(subset):
+        if max_error_bar is None or len(subset) == 0:
+            return False
+        variances = _predicted_variances([arrays[i] for i in subset], [covariances[i] for i in subset])
+        return _np.sqrt(variances.max() / shots) <= max_error_bar
+
+    by_shape = _collections.defaultdict(list)          # candidates are scored in batches of equal shape
+    for i in range(n):
+        by_shape[arrays[i].shape].append(i)
+    groups = [(_np.array(idx), _np.stack([arrays[i] for i in idx])) for idx in by_shape.values()]
+
+    def scores(M, candidates, sign):
+        if criterion == 'E':
+            return [_np.linalg.eigvalsh(M + sign * gram[i])[0] for i in candidates]
+        M_inv = _np.linalg.inv(M)
+        all_scores = _np.empty(n)
+        for idx, stacked in groups:
+            all_scores[idx] = _selection_scores(criterion, M_inv, stacked, sign)
+        return all_scores[candidates]
+
+    M = ridge * _np.eye(P)
+    if method == 'forward':
+        chosen, remaining = list(include), [i for i in range(n) if i not in include]
+        M = M + sum((gram[i] for i in include), _np.zeros((P, P)))
+        while len(chosen) < num_circuits and remaining and not meets_target(chosen):
+            j = remaining[int(_np.argmax(scores(M, remaining, +1)))]
+            chosen.append(j)
+            remaining.remove(j)
+            M = M + gram[j]
+        if max_error_bar is not None and not meets_target(chosen):
+            if len(chosen) == n:
+                raise ValueError("The target error bar %g cannot be reached even with all %d candidates x %g shots"
+                                 % (max_error_bar, n, shots))
+            _warnings.warn("The target error bar %g is not reached with num_circuits=%d circuits x %g shots"
+                           % (max_error_bar, num_circuits, shots))
+        return chosen
+
+    chosen = list(range(n))
+    M = M + sum(gram)
+    if max_error_bar is not None and not meets_target(chosen):
+        raise ValueError("The target error bar %g cannot be reached even with all %d candidates x %g shots"
+                         % (max_error_bar, n, shots))
+    removable = [i for i in chosen if i not in include]
+    while len(chosen) > num_circuits and removable:
+        j = removable[int(_np.argmax(scores(M, removable, -1)))]
+        if max_error_bar is not None and not meets_target([i for i in chosen if i != j]):
+            break
+        chosen.remove(j)
+        removable.remove(j)
+        M = M - gram[j]
+    return chosen
+
+
+# ---------------------------------------------------------------------------------------------------
+# Experiment design: allocating a fixed shot budget across (possibly all of) the candidates
+# ---------------------------------------------------------------------------------------------------
+#
+# `select_circuits` answers "which circuits?" by picking a subset and implicitly giving every member of the
+# subset the same number of shots.  The functions below answer "how many shots does each candidate get?",
+# allowing the allocation to vary continuously over the whole candidate pool at a fixed *total* shot budget --
+# the classical "approximate design" relaxation of optimal experimental design (Kiefer & Wolfowitz, 1960;
+# Fedorov, *Theory of Optimal Experiments*, 1972; Pukelsheim, *Optimal Design of Experiments*, 1993).  A
+# circuit the optimizer does not want is simply given (near-)zero shots, so there is no separate combinatorial
+# selection step: `optimal_shot_allocation` can be handed the entire candidate pool (structured probes,
+# random circuits, or both) and it performs selection and allocation jointly.
+#
+# Two estimators are in play, and they call for two different allocation methods.
+#
+# `estimate_error_rates`/`solve_linearized_gst` fit by plain pseudo-inversion (H) and NNLS (S, or bounded
+# least squares for S+C+A) of the *stacked, unweighted* design matrix -- every circuit's rows count equally
+# regardless of how many shots measured them. Once shot counts are unequal this is no longer even sensible
+# (a circuit measured with 10 shots is treated as being known exactly as well as one measured with 10^6), so
+# `neyman_shot_allocation` instead predicts and optimizes a *per-circuit inverse-shot-count-weighted* least
+# squares fit (``Σ_c N_c‖y_c - D_c θ‖²``), which reduces to the current estimator when all `N_c` happen to be
+# equal and is otherwise the obvious and safe fix. It works for a *fixed* circuit list, in closed form, and
+# *does* exploit the cross-observable correlations within a circuit (`_ideal_observable_covariance`) because
+# propagating a fixed pseudo-inverse through a covariance (as `predicted_error_bars` already does) never
+# requires inverting that covariance.
+#
+# `optimal_shot_allocation` goes further and also chooses *which* circuits to use, which requires a per-shot
+# Fisher information that is additive over circuits -- true of a properly weighted-least-squares estimator,
+# not of plain pseudo-inversion (whose effective weighting on a given row depends on the whole, variable,
+# circuit list). We deliberately do *not* fold the cross-observable correlations into that information
+# matrix: `_ideal_observable_covariance` is exactly singular along directions where two observables are
+# perfectly correlated under the *ideal*, zeroth-order circuit (e.g. the MCM record and a later measurement
+# of the same, undisturbed qubit), and naively inverting it (e.g. with a Moore-Penrose pseudo-inverse) would
+# silently discard that direction's contribution to the Fisher information entirely -- the opposite of a
+# conservative approximation, since in reality the circuit's *true* (non-ideal) covariance is nonsingular
+# there, with a variance that depends on the very error rates being estimated. `select_circuits` already
+# makes the same simplifying choice for its own (equal-shot) greedy criterion (`gram = [a.T @ a for a in
+# arrays]`); `optimal_shot_allocation` is best understood as its continuous, unequal-shot generalization,
+# using the same per-shot information. Exploiting the within-circuit correlations in a convex, non-circular
+# way (e.g. by bounding the singular directions' true variance rather than discarding them) is a natural but
+# unresolved extension, left to future work.
+
+def _fisher_information(arrays):
+    """
+    Per-shot Fisher information ``F_c = D_cᵀ D_c`` of every circuit, i.e. the information of a weighted
+    least-squares fit that treats each circuit's observables as independent and unit-variance (so that
+    circuits are weighted only by how many shots they are given, not by their internal observable
+    correlations; see the module-level note above). Used by :func:`optimal_shot_allocation`.
+    """
+    return [arr.T @ arr for arr in arrays]
+
+
+def neyman_shot_allocation(design_matrices, budget, weight=None, tol=1e-10):
+    """
+    Closed-form optimal shot allocation, at a fixed total budget, for a *fixed* list of circuits -- optimal
+    for the plain least-squares / NNLS estimator that :func:`estimate_error_rates` actually uses (contrast
+    :func:`optimal_shot_allocation`, which assumes a weighted-least-squares estimator but can also choose
+    *which* circuits to use).
+
+    With `N_c` shots given to circuit `c`, the (unweighted) least-squares estimate has covariance
+    ``Cov = Σ_c M_c / N_c`` with ``M_c`` the (shot-independent) per-circuit contribution computed by
+    :func:`predicted_error_bars` (``M_c = D⁺_c Σ_c D⁺_cᵀ`` in block notation).  Minimizing
+    ``trace(weight @ Cov)`` subject to ``Σ_c N_c = budget``, ``N_c ≥ 0`` is a classical allocation problem
+    (Neyman allocation in stratified sampling; Elfving, *Ann. Math. Statist.* 23, 255 (1952); Studden,
+    *Ann. Math. Statist.* 42, 1613 (1971), for this trace/quadratic-loss generalization to several
+    parameters at once). By the Cauchy-Schwarz equality condition its exact solution is
+    ``N_c ∝ sqrt(trace(weight @ M_c))`` -- circuits are weighted by the square root of how much variance
+    they remove, not the variance itself, so the allocation is less aggressive than "give everything to the
+    single most informative circuit."  No numerical optimizer is needed.
+
+    Parameters
+    ----------
+    design_matrices : list of CircuitDesign or numpy.ndarray
+        The circuits to allocate shots to (already selected, e.g. by :func:`select_circuits`; this function
+        does not add or remove circuits, only splits the budget between them).
+    budget : int or float
+        Total number of shots to distribute.
+    weight : numpy.ndarray, optional
+        A positive semi-definite ``(P, P)`` matrix (``P`` the number of parameters); defaults to the
+        identity (ordinary A-optimality, i.e. the expected total squared error of the rate vector). Use a
+        diagonal matrix to equalize sectors measured in different units, or a projector to target only a
+        gauge-invariant subspace (e.g. the FOMGI quantities of an MCM).
+
+    Returns
+    -------
+    shots : numpy.ndarray
+        Real-valued optimal shot count per circuit, summing to `budget` (round before use).
+    objective : float
+        The resulting ``trace(weight @ Cov)``, i.e. ``(Σ_c sqrt(trace(weight @ M_c)))² / budget``.
+    """
+    if budget <= 0:
+        raise ValueError("budget must be positive")
+    arrays, infos = _as_design_arrays(design_matrices)
+    covariances = [_ideal_observable_covariance(info) if _has_circuit_info(info) else None for info in infos]
+    design_matrix = _np.vstack(arrays)
+    P = design_matrix.shape[1]
+    U, s, Vt = _np.linalg.svd(design_matrix, full_matrices=False)
+    identifiable = s > tol * max(s[0], 1e-300)
+    if not _np.all(identifiable):
+        raise ValueError("The stacked design matrix is rank deficient (%d of %d directions unidentifiable); "
+                         "add circuits (see `unidentifiable_directions`) before allocating shots."
+                         % (int((~identifiable).sum()), P))
+    pinv = (Vt.T / s) @ U.T
+    W = _np.eye(P) if weight is None else _np.asarray(weight)
+    k = _np.zeros(len(arrays))
+    start = 0
+    for c, (arr, cov) in enumerate(zip(arrays, covariances)):
+        block = pinv[:, start:start + arr.shape[0]]
+        start += arr.shape[0]
+        Mc = block @ (_np.eye(arr.shape[0]) if cov is None else cov) @ block.T
+        k[c] = max(float(_np.trace(W @ Mc)), 0.0)
+    sqrt_k = _np.sqrt(k)
+    total = sqrt_k.sum()
+    if total <= 0:
+        return _np.full(len(arrays), budget / len(arrays)), 0.0
+    return budget * sqrt_k / total, float(total ** 2 / budget)
+
+
+_DESIGN_CRITERIA = ('A', 'D', 'E')
+
+
+def _solve_continuous_allocation(arrays, budget, criterion, weight, ridge, solver_kwargs):
+    cp = _sdptools._get_cvxpy()
+    F = _fisher_information(arrays)
+    n, P = len(arrays), arrays[0].shape[1]
+
+    w = cp.Variable(n, nonneg=True, name='w')
+    # `budget * w` is the (continuous) number of shots given to each circuit, so `budget * sum(w_c F_c)` is
+    # the total information at this budget -- scaling it in here means `M` directly represents the
+    # information of one unit of budget, so the problem is well-conditioned (O(1) entries) independent of
+    # `budget`, which can be in the millions; the criteria are rescaled to the actual budget afterwards,
+    # where that rescaling is a one-line closed form rather than something the solver has to discover.
+    M = ridge * _np.eye(P) + sum((w[c] * F[c] for c in range(n)), start=_np.zeros((P, P)))
+    constraints = [cp.sum(w) == 1]
+    if criterion == 'D':
+        objective = cp.Maximize(cp.log_det(M))
+    elif criterion == 'E':
+        t = cp.Variable(name='t')
+        constraints.append(M - t * _np.eye(P) >> 0)
+        objective = cp.Maximize(t)
+    else:
+        W = _np.eye(P) if weight is None else _np.asarray(weight)
+        Y = cp.Variable((P, P), symmetric=True, name='Y')
+        constraints.append(cp.bmat([[M, _np.eye(P)], [_np.eye(P), Y]]) >> 0)
+        objective = cp.Minimize(cp.trace(W @ Y))
+
+    value, varvals = _sdptools.solve_sdp(cp.Problem(objective, constraints), **(solver_kwargs or {}))
+    if 'w' not in varvals or varvals['w'] is None:
+        raise RuntimeError("optimal_shot_allocation: all SDP solvers failed to find a solution; "
+                           "see the warnings issued above for solver-specific errors.")
+    w_val = _np.clip(varvals['w'], 0, None)
+    w_val = w_val / w_val.sum()
+    # rescale the unit-budget criterion value to the actual budget: information scales linearly with the
+    # number of shots, so trace(inverse) scales as 1/budget, log det as +P log(budget), and the smallest
+    # eigenvalue as budget (the optimal `w` itself is budget-independent, which is why solving at unit
+    # budget and rescaling afterwards is exact, not an approximation).
+    if criterion == 'A':
+        rescaled_value = float(value) / budget
+    elif criterion == 'D':
+        rescaled_value = float(value) + P * _np.log(budget)
+    else:
+        rescaled_value = float(value) * budget
+    return budget * w_val, rescaled_value
+
+
+def optimal_shot_allocation(design_matrices, budget, criterion='A', weight=None, ridge=1e-6, min_shots=0,
+                            solver_kwargs=None):
+    """
+    Jointly choose which circuits to run and how many shots to give each of them, at a fixed total shot
+    budget, by solving the continuous ("approximate design") relaxation of the classical
+    optimal-experimental-design problem over the *entire* candidate pool.
+
+    Unlike :func:`select_circuits` -- which greedily picks a *subset* of circuits that then (implicitly) get
+    *equal* numbers of shots -- this function lets the number of shots vary continuously over the whole pool.
+    Candidates that are not worth running are simply driven to (near-)zero weight by the optimizer, so
+    "which circuits" and "how many shots" are solved as one convex program rather than two separate
+    heuristics applied in sequence.  The relaxation is standard: Kiefer and Wolfowitz's equivalence theorem
+    guarantees that for large budgets, rounding the continuous optimum to integers costs essentially nothing
+    (the shortfall from the unrounded optimum is ``O(n_circuits)`` shots, negligible against a budget in the
+    thousands or millions).
+
+    This predicts the performance of a least-squares fit *weighted by shot count*
+    (``Σ_c N_cǁy_c - D_c θǁ²``), which is the minimal, obviously-necessary fix to plain OLS/NNLS once shot
+    counts are unequal (a circuit run with 10 shots cannot be trusted as much as one run with 10⁶): its
+    Fisher information is additive over circuits (``Σ_c N_c D_cᵀD_c``), which is what makes selection and
+    allocation jointly convex. :func:`solve_linearized_gst` does not currently implement this weighting (it
+    pools every circuit's rows with equal weight regardless of its shot count); for the allocation that is
+    optimal for the *exact* estimator used today, with a *fixed* circuit list, see
+    :func:`neyman_shot_allocation` (which also, unlike this function, exploits the correlations between
+    observables measured in the same circuit; see the module-level note above for why that is not done
+    here). Until `solve_linearized_gst` is updated to weight by shot count, treat this function's output as
+    a design heuristic -- it still favors circuits that are genuinely more informative per shot -- whose
+    numerical prediction is exactly realized by that estimator, not quite by the current one.
+
+    The formulation is agnostic to the error-generator sectors present: it only uses each circuit's design
+    matrix, computed identically whether the ansatz is H+S or the fully general H+S+C+A, with or without
+    mid-circuit measurements or SPAM parameters.
+
+    Parameters
+    ----------
+    design_matrices : list of CircuitDesign or numpy.ndarray
+        The candidate pool -- e.g. a structured probe family, a batch of random circuits, or both
+        concatenated (a "hybrid pool", as in the second tutorial's Section 5).
+    budget : int or float
+        Total number of shots to distribute across the candidates.
+    criterion : {'A', 'D', 'E'}, optional
+        ``'A'``: minimize ``trace(weight @ Cov)``, the (weighted) expected squared error of the full rate
+        vector -- with `weight=None` this is exactly the ACES figure of merit's informational content,
+        ``trace(Cov)``.
+        ``'D'``: maximize ``log det(information)``, i.e. minimize the volume of the confidence ellipsoid.
+        Invariant under any invertible linear reparametrization of the rates (e.g. switching the MCM's
+        parameters to FOMGI coordinates does not change the optimal design), unlike `'A'` and `'E'`.
+        ``'E'``: maximize the smallest eigenvalue of the information matrix, i.e. minimize the *worst-case*
+        parameter combination's variance (a minimax guarantee, matching the "max" error bars the tutorials
+        otherwise track by trial and error).
+    weight : numpy.ndarray, optional
+        A positive semi-definite ``(P, P)`` matrix used only by `criterion='A'` (see
+        :func:`neyman_shot_allocation` for the same option); defaults to the identity.
+    ridge : float, optional
+        Small multiple of the identity added to the information matrix for numerical conditioning before the
+        pool's design has full rank, as in `select_circuits`.
+    min_shots : int or float, optional
+        After solving, candidates allocated fewer than `min_shots` are dropped and the (smaller) problem is
+        re-solved on the remainder, so that every circuit that is used receives at least `min_shots` --
+        useful when per-circuit overhead makes very small shot counts impractical.
+    solver_kwargs : dict, optional
+        Extra keyword arguments forwarded to `pygsti.tools.sdptools.solve_sdp` (hence to `cvxpy`'s
+        `Problem.solve`), e.g. `dict(verbose=True)`.
+
+    Returns
+    -------
+    shots : numpy.ndarray
+        Shot count for each candidate circuit, in the order of `design_matrices` (zero for circuits not
+        used; real-valued -- round before use).
+    objective : float
+        The optimized criterion value (for `'A'`, `trace(weight @ Cov)`; for `'D'`, `log det(information)`;
+        for `'E'`, the smallest eigenvalue of `information`).
+    """
+    if not _sdptools.CVXPY_ENABLED:
+        raise ImportError("optimal_shot_allocation requires cvxpy; `pip install cvxpy`.")
+    if criterion not in _DESIGN_CRITERIA:
+        raise ValueError("Unknown criterion '%s'; expected one of %s" % (criterion, _DESIGN_CRITERIA))
+    if weight is not None and criterion != 'A':
+        _warnings.warn("`weight` is only used by criterion='A'; ignoring it for criterion='%s'" % criterion)
+    if budget <= 0:
+        raise ValueError("budget must be positive")
+    arrays, _ = _as_design_arrays(design_matrices)
+    n = len(arrays)
+    shots, objective = _solve_continuous_allocation(arrays, budget, criterion, weight, ridge, solver_kwargs)
+    if min_shots > 0:
+        active = shots >= min_shots
+        if not _np.any(active):
+            raise ValueError("No candidate can be allocated at least %g shots from a budget of %g"
+                             % (min_shots, budget))
+        if not _np.all(active):
+            kept = [i for i in range(n) if active[i]]
+            sub_shots, objective = optimal_shot_allocation(
+                [design_matrices[i] for i in kept], budget, criterion, weight, ridge, min_shots, solver_kwargs)
+            shots = _np.zeros(n)
+            shots[kept] = sub_shots
+    return shots, objective
+
+
+# ---------------------------------------------------------------------------------------------------
+# Experiment design under a nominal error model
+# ---------------------------------------------------------------------------------------------------
+#
+# The functions above score a circuit by ``D_cᵀ D_c`` -- every observable independent with unit variance -- and
+# the module-level note before `_fisher_information` explains what that leaves on the table: the data of a
+# circuit are a multinomial sample, and the Z-type observables estimated from it have a covariance that (i)
+# correlates observables measured in the same shots and (ii) is *much* smaller than 1 for observables whose
+# ideal value is ±1, where the variance is of the order of the error rates themselves.  Both effects are
+# first-order computable from the same design machinery: with ``m = <Q>`` the vector of nominal expectation
+# values and ``M_ab = <Q_a Q_b>`` the nominal expectation values of the *product* observables (which are
+# again Z-type Paulis, so their ideal values and design rows are available), the per-shot covariance is
+# ``Σ_c = M - m mᵀ``.  Evaluating it at a *nominal* error model (a guess of the rates, or a previous estimate)
+# makes it non-singular, resolves the circularity noted above, and turns the shot-noise statistics of every
+# candidate circuit into a per-shot Fisher information ``F_c = D_cᵀ Σ_c⁻¹ D_c`` -- the information of the
+# generalized-least-squares (GLS) estimator, which attains it.  The resulting design problem,
+#
+#     minimize   Φ_W(N) = trace( W · (Σ_c N_c F_c)⁻¹ )     subject to   Σ_c N_c = budget,  N_c ≥ 0,
+#
+# is the classical (locally) A-optimal approximate design problem (Kiefer & Wolfowitz 1960; Fedorov 1972;
+# Pukelsheim 1993; for quantum tomography Kosut, Walmsley & Rabitz, quant-ph/0411093), with ``W`` a
+# positive-semidefinite weight that says what the rates are for (identity: every rate counts equally; a
+# diagonal matrix of inverse precision targets; or the "prediction" weight of :func:`prediction_weight`, the
+# expected squared error of the predicted observable shifts of application circuits).  Φ_I is exactly the
+# squared ACES figure of merit of Hockings, Doherty & Harper (PRX Quantum 6, 010334 (2025)), who likewise
+# evaluate a nominal-noise GLS covariance to allocate shots over a candidate set of circuits.  The problem is
+# convex; :func:`optimal_allocation` solves it with a multiplicative algorithm that needs no external solver
+# and returns an optimality certificate from the Kiefer-Wolfowitz equivalence theorem (or with `cvxpy`), and
+# :func:`estimate_error_rates_gls` is the estimator whose covariance the design predicts.
+
+class CircuitMoments(_collections.namedtuple('CircuitMoments', ['design', 'product_paulis', 'pair_index',
+                                                                'product_design_matrix',
+                                                                'product_ideal_expectations'])):
+    """
+    First *and second* moments of the observables of one circuit, to first order in the error rates.
+
+    Attributes
+    ----------
+    design : CircuitDesign
+        The circuit's design matrix, observables and ideal expectation values (first moments).
+    product_paulis : list of stim.PauliString
+        The distinct pairwise products ``Q_a Q_b`` (``a < b``) of the observables -- Z-type Paulis of up to
+        twice the observable weight.
+    pair_index : numpy.ndarray
+        ``(k, k)`` integer array mapping an observable pair to its row in `product_design_matrix`
+        (``-1`` on the diagonal, where ``Q_a Q_a = I``).
+    product_design_matrix : numpy.ndarray
+        Design rows (first-order sensitivities) of the product observables.
+    product_ideal_expectations : numpy.ndarray
+        Ideal expectation values of the product observables.
+    """
+    __slots__ = ()
+
+    @property
+    def circuit(self):
+        return self.design.circuit
+
+    @property
+    def shape(self):
+        return self.design.shape
+
+    @property
+    def num_observables(self):
+        return self.design.shape[0]
+
+    def expectations(self, rates):
+        """Nominal expectation values of the observables, ``<Q> = <Q>_ideal + D ε``, clipped to [-1, 1]."""
+        return _np.clip(self.design.ideal_expectations + self.design.design_matrix @ _np.asarray(rates, float),
+                        -1.0, 1.0)
+
+    def second_moments(self, rates):
+        """Nominal matrix ``M_ab = <Q_a Q_b>`` (``M_aa = 1``)."""
+        k = self.num_observables
+        M = _np.eye(k)
+        if len(self.product_paulis) > 0:
+            prod = _np.clip(self.product_ideal_expectations + self.product_design_matrix @ _np.asarray(rates, float),
+                            -1.0, 1.0)
+            iu = _np.triu_indices(k, 1)
+            M[iu] = prod[self.pair_index[iu]]
+            M = M + M.T - _np.eye(k)
+        return M
+
+    def covariance(self, rates, min_variance=1e-3):
+        """
+        Per-shot covariance ``Σ = M - m mᵀ`` of the observable estimates under the nominal `rates`.
+
+        The matrix is made positive definite by raising every eigenvalue below `min_variance` to
+        `min_variance` -- the exact first-order covariance is singular along directions in which no error
+        generator of the ansatz has an effect (e.g. an observable whose nominal value is ±1 when all rates that
+        could flip it are zero), and the floor states the smallest variance (i.e. the smallest flip
+        probability, ``min_variance/2``) the design is allowed to count on.
+        """
+        m = self.expectations(rates)
+        Sigma = self.second_moments(rates) - _np.outer(m, m)
+        Sigma = 0.5 * (Sigma + Sigma.T)
+        evals, U = _np.linalg.eigh(Sigma)
+        evals = _np.maximum(evals, min_variance)
+        return (U * evals) @ U.T
+
+    def whitened_design(self, rates, min_variance=1e-3):
+        """``B = Σ^{-1/2} D`` such that the per-shot Fisher information is ``Bᵀ B``."""
+        m = self.expectations(rates)
+        Sigma = self.second_moments(rates) - _np.outer(m, m)
+        Sigma = 0.5 * (Sigma + Sigma.T)
+        evals, U = _np.linalg.eigh(Sigma)
+        evals = _np.maximum(evals, min_variance)
+        return (U.T @ self.design.design_matrix) / _np.sqrt(evals)[:, None]
+
+
+def _product_observables(paulis):
+    """Distinct pairwise products of a list of Z-type Paulis and the (k, k) index map into them."""
+    k = len(paulis)
+    pair_index = -_np.ones((k, k), dtype=int)
+    products, where = [], {}
+    for a in range(k):
+        for b in range(a + 1, k):
+            prod = paulis[a] * paulis[b]
+            if prod.sign != 1:
+                prod = prod / prod.sign  # cannot happen for Z-type Paulis, but keep the sign out of the key
+            key = str(prod)
+            if key not in where:
+                where[key] = len(products)
+                products.append(prod)
+            pair_index[a, b] = pair_index[b, a] = where[key]
+    return products, pair_index
+
+
+def create_design_moments(designs_or_circuits, model_parameter_indexing, **design_kwargs):
+    """
+    First- and second-moment design information of circuits (needed for shot-noise statistics beyond the
+    worst case): one :class:`CircuitMoments` per circuit.
+
+    Parameters
+    ----------
+    designs_or_circuits : list of CircuitDesign or list of Circuit
+        :class:`CircuitDesign` objects (from ``create_design_matrix_list(..., return_info=True)``; their
+        observables and design matrices are reused) or circuits, whose design matrices are computed first.
+    model_parameter_indexing : ModelParameterList
+    **design_kwargs
+        Passed to :func:`create_circuit_design_matrix` (``pauli_measurements``, ``max_pauli_weight``, ...).
+
+    Returns
+    -------
+    list of CircuitMoments
+    """
+    out = []
+    for item in designs_or_circuits:
+        if isinstance(item, CircuitDesign):
+            design = item
+            if design.paulis is None or design.circuit is None:
+                raise ValueError("create_design_moments needs CircuitDesign objects with observables and circuits "
+                                 "(use create_design_matrix_list(..., return_info=True)).")
+        else:
+            design = create_circuit_design_matrix(item, model_parameter_indexing, return_info=True, **design_kwargs)
+        prop_kwargs = {k: design_kwargs[k] for k in ('qubit_labels', 'mcm_gate_names', 'cnot_name',
+                                                      'gate_name_conversions') if k in design_kwargs}
+        prop = propagate_parameter_errorgens(design.circuit, model_parameter_indexing, **prop_kwargs)
+        paulis = list(design.paulis)
+        products, pair_index = _product_observables(paulis)
+        total = prop.num_qubits + prop.num_mcms
+        if len(products) > 0:
+            sens = calculate_sensitivity_matrix_paulis(prop.tableau, prop.eoc_errorgens, total, products)
+            product_design = sens @ prop.parameter_matrix
+            product_ideal = ideal_pauli_expectations(prop.tableau, products)
+        else:
+            product_design = _np.zeros((0, prop.parameter_matrix.shape[1]))
+            product_ideal = _np.zeros(0)
+        out.append(CircuitMoments(design, products, pair_index, product_design, product_ideal))
+    return out
+
+
+def nominal_observable_covariance(moments, nominal_rates=None, min_variance=1e-3):
+    """
+    Per-shot covariance of the observable estimates of one circuit under a nominal error model.
+
+    See :meth:`CircuitMoments.covariance`.  With ``nominal_rates=None`` the ideal (error-free) statistics are
+    used, floored at `min_variance`.
+    """
+    rates = _np.zeros(moments.shape[1]) if nominal_rates is None else _np.asarray(nominal_rates, float)
+    return moments.covariance(rates, min_variance)
+
+
+def nominal_rates_by_type(model_parameter_indexing, rates_by_type):
+    """
+    A nominal rate vector that assigns one value per error-generator sector, e.g. ``{'H': 0.0, 'S': 1e-3}``.
+
+    Sectors not listed get rate 0.  Useful as the "what we expect of the device" input of a design when
+    nothing better than typical error magnitudes is known.
+    """
+    types = model_parameter_indexing.errorgen_types()
+    return _np.array([float(rates_by_type.get(t, 0.0)) for t in types])
+
+
+class DesignInformation(object):
+    """
+    Per-shot Fisher information of a pool of candidate circuits, stored in whitened form.
+
+    For circuit ``c`` the information is ``F_c = B_cᵀ B_c`` with ``B_c`` of shape ``(k_c, P)``; storing the
+    blocks rather than the ``P x P`` matrices keeps the memory linear in the number of observables and makes
+    the information of any shot allocation ``Σ_c N_c F_c`` a single weighted Gram matrix.
+
+    Attributes
+    ----------
+    blocks : list of numpy.ndarray
+    cost : numpy.ndarray
+        Cost of one shot of each circuit (default 1); budgets in :func:`optimal_allocation` are in these units.
+    """
+
+    def __init__(self, blocks, cost=None, labels=None):
+        self.blocks = [_np.asarray(b, dtype=float) for b in blocks]
+        if len(self.blocks) == 0:
+            raise ValueError("DesignInformation needs at least one circuit")
+        self.num_params = self.blocks[0].shape[1]
+        if any(b.shape[1] != self.num_params for b in self.blocks):
+            raise ValueError("All information blocks must have the same number of columns (parameters)")
+        self.cost = _np.ones(len(self.blocks)) if cost is None else _np.asarray(cost, dtype=float)
+        if self.cost.shape != (len(self.blocks),) or _np.any(self.cost <= 0):
+            raise ValueError("cost must be a positive number for every circuit")
+        self.labels = labels
+        self._stacked = _np.vstack(self.blocks)
+        self._owner = _np.repeat(_np.arange(len(self.blocks)), [b.shape[0] for b in self.blocks])
+
+    def __len__(self):
+        return len(self.blocks)
+
+    @property
+    def num_circuits(self):
+        return len(self.blocks)
+
+    def subset(self, indices):
+        """The information of a subset of the candidates (same order as `indices`)."""
+        indices = list(indices)
+        return DesignInformation([self.blocks[i] for i in indices], self.cost[indices],
+                                 None if self.labels is None else [self.labels[i] for i in indices])
+
+    def matrices(self):
+        """The explicit per-shot information matrices ``F_c`` (one ``P x P`` array per circuit)."""
+        return [b.T @ b for b in self.blocks]
+
+    def information(self, shots):
+        """The information matrix ``Σ_c shots_c F_c`` of an allocation (`shots` scalar or per circuit)."""
+        shots = _np.broadcast_to(_np.asarray(shots, dtype=float), (len(self.blocks),))
+        if _np.any(shots < 0):
+            raise ValueError("shots must be non-negative")
+        weighted = self._stacked * shots[self._owner][:, None]
+        return self._stacked.T @ weighted
+
+    def _scores(self, A):
+        """``trace(A F_c)`` for every circuit, for a symmetric matrix ``A``."""
+        G = self._stacked @ A
+        row = _np.einsum('rj,rj->r', G, self._stacked)
+        return _np.bincount(self._owner, weights=row, minlength=len(self.blocks))
+
+
+def circuit_information(moments, nominal_rates=None, min_variance=1e-3, cost=None):
+    """
+    The per-shot Fisher information of every candidate circuit about the error rates, under a nominal model.
+
+    For a circuit with observables ``Q`` (design matrix ``D_c``) measured with ``N_c`` shots, the observed
+    expectation values have covariance ``Σ_c / N_c`` with ``Σ_c`` the nominal per-shot covariance of
+    :func:`nominal_observable_covariance`, so the information they carry about the rates is
+    ``N_c D_cᵀ Σ_c⁻¹ D_c``.  This is the information of the generalized-least-squares estimator
+    (:func:`estimate_error_rates_gls`), whose covariance is its inverse.
+
+    Parameters
+    ----------
+    moments : list of CircuitMoments
+        From :func:`create_design_moments`.
+    nominal_rates : array-like, optional
+        Nominal error rates (one per model parameter).  The statistics of observables with ideal value ±1
+        depend on them to first order (their variance is of the order of the rates that can flip them), the
+        statistics of observables with ideal value 0 only weakly.  ``None`` means zero rates, i.e. the ideal
+        statistics floored at `min_variance`.
+    min_variance : float, optional
+        Floor on the eigenvalues of every circuit's per-shot covariance; see :meth:`CircuitMoments.covariance`.
+    cost : array-like, optional
+        Cost of one shot of each circuit (e.g. its duration), used by :func:`optimal_allocation` when the budget
+        is not simply a number of shots.
+
+    Returns
+    -------
+    DesignInformation
+    """
+    P = moments[0].shape[1]
+    rates = _np.zeros(P) if nominal_rates is None else _np.asarray(nominal_rates, dtype=float)
+    if rates.shape != (P,):
+        raise ValueError("nominal_rates must have one entry per model parameter (%d)" % P)
+    blocks = [m.whitened_design(rates, min_variance) for m in moments]
+    return DesignInformation(blocks, cost)
+
+
+def probability_information(probability_designs, nominal_rates=None, min_probability=5e-4, cost=None):
+    """
+    The per-shot Fisher information of the *full* outcome distribution of every circuit (all bitstring
+    probabilities rather than a set of Z-type observables).
+
+    This is the Cramér-Rao bound for any estimator that uses all of a circuit's data; comparing it with
+    :func:`circuit_information` for the default weight-≤2 observables shows what the truncation to few
+    observables costs.  It needs ``2**(num_qubits + num_mcms)`` probabilities per circuit, so it is only
+    practical for small systems.
+
+    Parameters
+    ----------
+    probability_designs : list of CircuitDesign
+        From ``create_design_matrix_list(..., usePaulis=False, return_info=True)``.
+    nominal_rates : array-like, optional
+    min_probability : float, optional
+        Floor on the nominal outcome probabilities (ideally-impossible outcomes have a nominal probability of
+        the order of the error rates; the floor bounds the information the design may count on from them).
+    cost : array-like, optional
+
+    Returns
+    -------
+    DesignInformation
+    """
+    blocks = []
+    for d in probability_designs:
+        if d.paulis is not None:
+            raise ValueError("probability_information needs designs created with usePaulis=False")
+        J = d.design_matrix
+        rates = _np.zeros(J.shape[1]) if nominal_rates is None else _np.asarray(nominal_rates, dtype=float)
+        p = _np.maximum(d.ideal_expectations + J @ rates, min_probability)
+        blocks.append(J / _np.sqrt(p)[:, None])
+    return DesignInformation(blocks, cost)
+
+
+def predicted_covariance(information, shots, nominal_rates=None, estimator='gls', min_variance=1e-3, tol=1e-10):
+    """
+    Covariance of the error-rate estimate for an allocation of shots, under a nominal error model.
+
+    Parameters
+    ----------
+    information : DesignInformation or list of CircuitMoments
+        A :class:`DesignInformation` (then `estimator` must be ``'gls'`` and the nominal model is the one it was
+        built with) or the circuits' :class:`CircuitMoments`, from which the nominal statistics are evaluated.
+    shots : float or array-like
+        Shots per circuit (scalar or one entry per circuit; zero entries are allowed).
+    nominal_rates : array-like, optional
+        Only used with :class:`CircuitMoments` input.
+    estimator : {'gls', 'ols'}, optional
+        ``'gls'``: the generalized-least-squares estimator (:func:`estimate_error_rates_gls`), whose covariance
+        is the inverse information ``(Σ_c N_c F_c)⁻¹``.  ``'ols'``: the plain pseudo-inverse estimator of
+        :func:`estimate_error_rates`, which weights every observable of every circuit equally regardless of
+        its shot count and variance; its covariance ``D⁺ Σ D⁺ᵀ`` is evaluated with the same nominal statistics,
+        so the two can be compared like for like.
+    min_variance : float, optional
+    tol : float, optional
+        Relative singular-value cutoff below which a direction is considered unidentifiable (its variance is
+        reported as ``inf``).
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(P, P)`` covariance matrix.
+    """
+    if isinstance(information, DesignInformation):
+        if estimator != 'gls':
+            raise ValueError("estimator='ols' needs CircuitMoments input (the OLS weighting depends on D itself)")
+        n = len(information)
+        shots = _np.broadcast_to(_np.asarray(shots, dtype=float), (n,))
+        used = shots > 0
+        if not _np.any(used):
+            raise ValueError("at least one circuit must receive shots")
+        A = _np.vstack([information.blocks[c] * _np.sqrt(shots[c]) for c in range(n) if used[c]])
+        return _pinv_covariance(A, tol)
+    moments = list(information)
+    P = moments[0].shape[1]
+    rates = _np.zeros(P) if nominal_rates is None else _np.asarray(nominal_rates, dtype=float)
+    n = len(moments)
+    shots = _np.broadcast_to(_np.asarray(shots, dtype=float), (n,))
+    used = [c for c in range(n) if shots[c] > 0]
+    if len(used) == 0:
+        raise ValueError("at least one circuit must receive shots")
+    if estimator == 'gls':
+        A = _np.vstack([moments[c].whitened_design(rates, min_variance) * _np.sqrt(shots[c]) for c in used])
+        return _pinv_covariance(A, tol)
+    if estimator != 'ols':
+        raise ValueError("estimator must be 'gls' or 'ols'")
+    D = _np.vstack([moments[c].design.design_matrix for c in used])
+    U, s, Vt = _np.linalg.svd(D, full_matrices=False)
+    identifiable = s > tol * max(s[0], 1e-300)
+    pinv = (Vt[identifiable].T / s[identifiable]) @ U[:, identifiable].T
+    cov = _np.zeros((P, P))
+    start = 0
+    for c in used:
+        k = moments[c].num_observables
+        block = pinv[:, start:start + k]
+        start += k
+        cov += block @ moments[c].covariance(rates, min_variance) @ block.T / shots[c]
+    bad = 1.0 - (Vt[identifiable] ** 2).sum(axis=0) > tol
+    cov[bad, :] = cov[:, bad] = _np.inf
+    return cov
+
+
+def _pinv_covariance(A, tol):
+    """``(AᵀA)⁻¹`` via the SVD of ``A``, with ``inf`` on the unidentifiable rows/columns."""
+    U, s, Vt = _np.linalg.svd(A, full_matrices=False)
+    identifiable = s > tol * max(s[0], 1e-300)
+    V = Vt[identifiable].T
+    cov = (V / s[identifiable] ** 2) @ V.T
+    bad = 1.0 - (Vt[identifiable] ** 2).sum(axis=0) > tol
+    cov[bad, :] = cov[:, bad] = _np.inf
+    return cov
+
+
+def predicted_error_bars_nominal(information, shots, nominal_rates=None, estimator='gls', min_variance=1e-3):
+    """Square roots of the diagonal of :func:`predicted_covariance` -- one predicted standard error per rate."""
+    return _np.sqrt(_np.diag(predicted_covariance(information, shots, nominal_rates, estimator, min_variance)))
+
+
+def prediction_weight(application_designs, ridge=1e-3):
+    """
+    The weight matrix that makes the A-criterion the mean squared error of *predictions*.
+
+    For application circuits with design matrices ``D_a``, the first-order prediction error of the fitted
+    model for observable ``r`` of circuit ``a`` is ``D_a[r] · (ε̂ - ε)``, so the mean (over all observables of
+    all application circuits) squared prediction error is ``(ε̂ - ε)ᵀ W (ε̂ - ε)`` with
+    ``W = mean_r D[r]ᵀ D[r]`` -- and its expectation is ``trace(W Cov)``.  This weight is invariant under
+    reparametrization of the rates and automatically counts a parameter as often as the application exercises
+    it.
+
+    Parameters
+    ----------
+    application_designs : list of CircuitDesign or numpy.ndarray
+    ridge : float, optional
+        Multiple of the mean diagonal entry of ``W`` added to its diagonal: the weight given to every rate
+        individually, so that parameters the application never exercises are still (weakly) wanted.  Without
+        it the criterion ignores such parameters entirely and a design optimized for it need not identify them
+        at all; the default costs of the order of a percent of the application objective and keeps every rate
+        reasonably determined.
+
+    Returns
+    -------
+    numpy.ndarray
+    """
+    arrays, _ = _as_design_arrays(application_designs)
+    D = _np.vstack(arrays)
+    W = D.T @ D / D.shape[0]
+    return W + ridge * _np.mean(_np.diag(W)) * _np.eye(W.shape[0])
+
+
+def _as_weight(weight, P):
+    if weight is None:
+        return _np.eye(P)
+    W = _np.asarray(weight, dtype=float)
+    if W.ndim == 1:
+        if W.shape != (P,):
+            raise ValueError("a 1-D weight must have one entry per parameter")
+        return _np.diag(W)
+    if W.shape != (P, P):
+        raise ValueError("weight must be a (P, P) matrix or a length-P vector")
+    return 0.5 * (W + W.T)
+
+
+def design_criterion(information, shots, criterion='A', weight=None, tol=1e-10):
+    """
+    Value of an optimal-design criterion for an allocation of shots.
+
+    ``'A'``: ``trace(weight @ Cov)`` -- the expected (weighted) squared error of the rate vector (its square root
+    divided by the number of parameters is the expected RMS error, i.e. the ACES figure of merit);
+    ``'D'``: ``log det(information)``; ``'E'``: the smallest eigenvalue of the information matrix.
+
+    Parameters
+    ----------
+    information : DesignInformation
+    shots : float or array-like
+    criterion : {'A', 'D', 'E'}, optional
+    weight : numpy.ndarray, optional
+        Weight for ``'A'`` (``(P, P)`` matrix or length-``P`` diagonal).
+
+    Returns
+    -------
+    float
+    """
+    P = information.num_params
+    if criterion == 'A':
+        cov = predicted_covariance(information, shots, tol=tol)
+        return float(_np.trace(_as_weight(weight, P) @ cov))
+    M = information.information(shots)
+    if criterion == 'D':
+        sign, logdet = _np.linalg.slogdet(M)
+        return float(logdet) if sign > 0 else -_np.inf
+    if criterion == 'E':
+        return float(_np.linalg.eigvalsh(M)[0])
+    raise ValueError("Unknown criterion '%s'; expected 'A', 'D' or 'E'" % criterion)
+
+
+AllocationResult = _collections.namedtuple('AllocationResult', ['objective', 'gap', 'iterations', 'method',
+                                                                'support_size'])
+AllocationResult.__doc__ = """
+Summary of :func:`optimal_allocation`.
+
+objective : float
+    The criterion value at the returned allocation (``trace(weight @ Cov)`` for ``'A'``, ``log det`` of the
+    information for ``'D'``, its smallest eigenvalue for ``'E'``).
+gap : float
+    Relative optimality certificate from the Kiefer-Wolfowitz equivalence theorem (multiplicative method):
+    the objective is within ``gap`` (relative) of the optimum over the candidate pool.  ``nan`` for the
+    `cvxpy` method, which converges to the optimum by itself.
+iterations : int
+method : str
+support_size : int
+    Number of circuits with a nonzero number of shots.
+"""
+
+
+def _multiplicative_allocation(information, criterion, W, tol, max_iter, ridge, w0=None):
+    """
+    Multiplicative weight algorithm for A- and D-optimal approximate designs (Titterington 1976; Silvey,
+    Titterington & Torsney 1978; monotonic convergence: Yu, Ann. Statist. 38, 1593 (2010)).
+
+    At each step the weight of every candidate is multiplied by (its directional derivative / the average
+    directional derivative) ** λ, with λ = 1/2 for 'A' and λ = 1 for 'D' -- the exponents for which the
+    objective is guaranteed to decrease monotonically (λ = 1 for 'A' can cycle between designs of equal
+    objective, e.g. on a two-circuit problem).  A backtracking safeguard halves the step whenever the objective
+    would increase anyway.  The stopping rule is the equivalence-theorem gap: for a convex criterion ``φ(w)``
+    on the simplex, ``φ(w) - φ* <= max_c g_c - Σ_c w_c g_c`` with ``g_c = -∂φ/∂w_c``.
+
+    For speed on large pools, candidates whose weight has decayed below ``1e-10`` are removed from the working
+    set (a multiplicative update cannot revive them in any reasonable number of iterations anyway); the final
+    gap is always evaluated over the *whole* pool, and any removed candidate that the equivalence theorem says
+    is still wanted is put back and the iteration continued, so the certificate refers to the full pool.
+    """
+    from scipy import linalg as _sla
+    n, P = len(information), information.num_params
+    Bt_all = information._stacked / _np.sqrt(information.cost[information._owner])[:, None]  # information per unit cost
+    owner_all = information._owner
+    w = _np.full(n, 1.0 / n) if w0 is None else _np.asarray(w0, float) / _np.sum(w0)
+    lam = 0.5 if criterion == 'A' else 1.0
+    I = _np.eye(P)
+    prune_every, prune_below = 25, 1e-10
+
+    def working_set(active):
+        rows = active[owner_all]
+        return Bt_all[rows], owner_all[rows]
+
+    def evaluate(w, Bt, owner):
+        M = Bt.T @ (Bt * w[owner][:, None]) + ridge * I
+        try:
+            L = _sla.cholesky(M, lower=True, check_finite=False)
+        except _np.linalg.LinAlgError:
+            return None, _np.inf, None
+        Minv = _sla.cho_solve((L, True), I, check_finite=False)
+        if criterion == 'A':
+            A = Minv @ W @ Minv
+            phi = float(_np.sum(W * Minv))              # trace(W Minv) for symmetric W
+        else:
+            A = Minv
+            phi = -2.0 * float(_np.sum(_np.log(_np.diag(L))))
+        return A, phi, Minv
+
+    def derivatives(A, Bt, owner):
+        G = Bt @ A
+        row = _np.einsum('rj,rj->r', G, Bt)
+        return _np.maximum(_np.bincount(owner, weights=row, minlength=n), 0.0)   # trace(A F_c) >= 0 up to rounding
+
+    active = w > 0
+    Bt, owner = working_set(active)
+    evals0 = _np.linalg.eigvalsh(Bt.T @ (Bt * w[owner][:, None]) + ridge * I)
+    A, phi, _ = evaluate(w, Bt, owner)
+    if A is None or evals0[0] <= 1e-12 * max(evals0[-1], 1e-300):
+        raise ValueError("The candidate pool's total information is singular (some parameter combination is "
+                         "unidentifiable); add circuits (see `unidentifiable_directions`) or use a ridge.")
+    g = derivatives(A, Bt, owner)
+    norm = phi if criterion == 'A' else float(P)
+    gap = (g.max() - norm) / norm
+    it = stalled = 0
+    certified = False
+    while it < max_iter:
+        if gap <= tol:
+            # converged on the working set: certify over the whole pool, reviving candidates that are wanted
+            g_all = derivatives(A, Bt_all, owner_all)
+            gap = (g_all.max() - norm) / norm
+            revive = (~active) & (g_all > norm * (1 + tol))
+            if gap <= tol or not revive.any():
+                certified = True
+                break
+            w[revive] = w[active].mean()
+            w /= w.sum()
+            active |= revive
+            Bt, owner = working_set(active)
+            A, phi, _ = evaluate(w, Bt, owner)
+            g = derivatives(A, Bt, owner)
+            norm = phi if criterion == 'A' else float(P)
+            gap = (g.max() - norm) / norm
+            continue
+        it += 1
+        step = lam
+        for _ in range(8):   # backtracking safeguard (the theory says it is never needed for these λ)
+            w_new = w * (g / norm) ** step
+            w_new /= w_new.sum()
+            A_new, phi_new, _ = evaluate(w_new, Bt, owner)
+            if A_new is not None and phi_new <= phi:
+                break
+            step *= 0.5
+        else:
+            break
+        stalled = stalled + 1 if phi - phi_new <= 1e-15 * abs(phi) else 0
+        w, A, phi = w_new, A_new, phi_new
+        if it % prune_every == 0 and (w[active] < prune_below).any():
+            w[active & (w < prune_below)] = 0.0
+            w /= w.sum()
+            active = w > 0
+            Bt, owner = working_set(active)
+            A, phi, _ = evaluate(w, Bt, owner)
+        g = derivatives(A, Bt, owner)
+        norm = phi if criterion == 'A' else float(P)
+        gap = (g.max() - norm) / norm
+        if stalled >= 20:    # the objective no longer moves at machine precision
+            break
+    if not certified:        # stopped early: still report the gap over the whole pool
+        g_all = derivatives(A, Bt_all, owner_all)
+        gap = (g_all.max() - norm) / norm
+    return w, phi, max(gap, 0.0), it
+
+
+def _cvxpy_allocation(information, criterion, W, ridge, max_fraction, solver_kwargs):
+    cp = _sdptools._get_cvxpy()
+    n, P = len(information), information.num_params
+    Bt = information._stacked / _np.sqrt(information.cost[information._owner])[:, None]
+    owner = information._owner
+    w = cp.Variable(n, nonneg=True, name='w')
+    M = Bt.T @ cp.multiply(cp.reshape(w[owner], (Bt.shape[0], 1), order='C'), Bt) + ridge * _np.eye(P)
+    constraints = [cp.sum(w) == 1]
+    if max_fraction is not None:
+        constraints.append(w <= max_fraction)
+    if criterion == 'D':
+        objective = cp.Maximize(cp.log_det(M))
+    elif criterion == 'E':
+        t = cp.Variable(name='t')
+        constraints.append(M - t * _np.eye(P) >> 0)
+        objective = cp.Maximize(t)
+    else:
+        Y = cp.Variable((P, P), symmetric=True, name='Y')
+        constraints.append(cp.bmat([[M, _np.eye(P)], [_np.eye(P), Y]]) >> 0)
+        objective = cp.Minimize(cp.trace(W @ Y))
+    value, varvals = _sdptools.solve_sdp(cp.Problem(objective, constraints), **(solver_kwargs or {}))
+    if 'w' not in varvals or varvals['w'] is None:
+        raise RuntimeError("optimal_allocation: the SDP solver did not return a solution")
+    w_val = _np.clip(varvals['w'], 0, None)
+    return w_val / w_val.sum(), float(value)
+
+
+def optimal_allocation(information, budget, criterion='A', weight=None, min_shots=0, max_shots=None,
+                       method='auto', tol=1e-3, max_iter=20000, ridge=0.0, drop_below=None, solver_kwargs=None):
+    """
+    Jointly choose which candidate circuits to run and how many shots to give each, at a fixed budget, by
+    solving the convex ("approximate design") problem for the per-shot information of the candidates.
+
+    With ``F_c`` the per-shot information of candidate ``c`` (:func:`circuit_information`) and ``κ_c`` the
+    cost of one of its shots, the allocation ``N`` minimizes
+
+    * ``'A'``: ``trace(W (Σ_c N_c F_c)⁻¹)`` -- the expected weighted squared error of the rate estimate, i.e. the
+      sum of the predicted variances (``W = I``, the squared ACES figure of merit), their weighted sum, or the
+      mean squared prediction error for application circuits (:func:`prediction_weight`);
+    * ``'D'``: ``-log det(Σ_c N_c F_c)`` -- the volume of the confidence ellipsoid (reparametrization invariant);
+    * ``'E'``: ``-λ_min(Σ_c N_c F_c)`` -- the variance of the worst-determined parameter combination,
+
+    subject to ``Σ_c κ_c N_c = budget`` and ``N_c ≥ 0``.  Candidates the optimum does not need get zero shots,
+    so selection and allocation are one problem.  The continuous optimum is returned; :func:`round_shots`
+    rounds it to integers (by the equivalence theorem the loss is negligible at realistic budgets).
+
+    Parameters
+    ----------
+    information : DesignInformation
+        From :func:`circuit_information` (or :func:`probability_information`).
+    budget : float
+        Total budget, in units of the information's per-shot `cost` (plain shots by default).
+    criterion : {'A', 'D', 'E'}, optional
+    weight : numpy.ndarray, optional
+        ``(P, P)`` positive-semidefinite matrix or length-``P`` diagonal, used by ``'A'`` only.
+    min_shots : float, optional
+        Candidates allocated fewer shots than this are dropped and the problem is re-solved on the remainder
+        (repeatedly), so that every circuit that is used gets at least `min_shots` -- for per-circuit overheads.
+    max_shots : float, optional
+        Upper bound on the shots of any single circuit (a diversity safeguard; `cvxpy` method only).
+    method : {'auto', 'multiplicative', 'cvxpy'}, optional
+        ``'multiplicative'`` (no dependencies; ``'A'`` and ``'D'``; returns an optimality certificate) or
+        ``'cvxpy'`` (semidefinite programming; all criteria and `max_shots`).  ``'auto'`` uses the
+        multiplicative algorithm when it applies and `cvxpy` otherwise.
+    tol : float, optional
+        Relative equivalence-theorem gap at which the multiplicative algorithm stops.
+    max_iter : int, optional
+    ridge : float, optional
+        Added to the information matrix (per unit budget) for conditioning; normally 0.
+    drop_below : float, optional
+        Fraction of the budget below which a candidate's allocation is set to exactly zero (and the problem
+        re-solved without it); defaults to one shot's worth, ``1/budget``.
+    solver_kwargs : dict, optional
+        Forwarded to `pygsti.tools.sdptools.solve_sdp` (`cvxpy` method).
+
+    Returns
+    -------
+    shots : numpy.ndarray
+        Real-valued shots per candidate (zero for unused candidates); ``Σ_c cost_c shots_c = budget``.
+    result : AllocationResult
+    """
+    if criterion not in _DESIGN_CRITERIA:
+        raise ValueError("Unknown criterion '%s'; expected one of %s" % (criterion, _DESIGN_CRITERIA))
+    if budget <= 0:
+        raise ValueError("budget must be positive")
+    if not isinstance(information, DesignInformation):
+        raise TypeError("information must be a DesignInformation (see circuit_information)")
+    if method == 'auto':
+        method = 'multiplicative' if (criterion in ('A', 'D') and max_shots is None) else 'cvxpy'
+    if method not in ('multiplicative', 'cvxpy'):
+        raise ValueError("method must be 'auto', 'multiplicative' or 'cvxpy'")
+    n, P = len(information), information.num_params
+    W = _as_weight(weight, P) if criterion == 'A' else None
+    if weight is not None and criterion != 'A':
+        _warnings.warn("`weight` is only used by criterion='A'; ignoring it for criterion='%s'" % criterion)
+    if W is not None:
+        # A singular weight (e.g. a projector onto a few parameters) lets the optimum starve every other
+        # direction, which makes the information matrix arbitrarily ill-conditioned.  Optimizing with a tiny
+        # ridge on the weight keeps the problem well posed at a negligible change of the optimum; the returned
+        # objective is evaluated with the weight as given.
+        evals_W = _np.linalg.eigvalsh(W)
+        if evals_W[0] <= 1e-9 * max(evals_W[-1], 1e-300):
+            W = W + 1e-6 * max(_np.mean(_np.diag(W)), 1e-300) * _np.eye(P)
+
+    total_iterations = 0
+
+    def solve(info, w0=None):
+        nonlocal total_iterations
+        if method == 'multiplicative':
+            if criterion == 'E':
+                raise ValueError("criterion='E' needs method='cvxpy'")
+            w, phi, gap, its = _multiplicative_allocation(info, criterion, W, tol, max_iter, ridge, w0)
+            total_iterations += its
+            if gap > tol:
+                _warnings.warn("optimal_allocation did not reach the tolerance %g (gap %.2e) in %d iterations"
+                               % (tol, gap, its))
+            return w, gap
+        if not _sdptools.CVXPY_ENABLED:
+            raise ImportError("method='cvxpy' requires cvxpy; `pip install cvxpy`.")
+        max_fraction = None
+        if max_shots is not None:
+            max_fraction = max_shots * info.cost / budget
+            if _np.sum(max_fraction) < 1:
+                raise ValueError("max_shots is too small to spend the budget on the available candidates")
+        w, _ = _cvxpy_allocation(info, criterion, W, ridge, max_fraction, solver_kwargs)
+        return w, _np.nan
+
+    if drop_below is None:
+        drop_below = 1.0 / budget          # less than one shot
+    active = _np.arange(n)
+    info = information
+    w, gap = solve(info)
+    while True:
+        shots_active = budget * w / info.cost
+        drop = shots_active * info.cost < drop_below * budget
+        if min_shots > 0:
+            # prune gradually -- at most half of the sub-floor candidates per round, smallest first -- so that
+            # the re-solve can raise the others above the floor instead of losing what they measured
+            under = _np.nonzero((shots_active < min_shots) & ~drop)[0]
+            if len(under) > 0:
+                under = under[_np.argsort(shots_active[under])]
+                drop[under[:max(1, (len(under) + 1) // 2)]] = True
+        if not drop.any() or drop.all():
+            break
+        w_kept = None
+        while True:
+            try:
+                w_kept, gap_kept = solve(information.subset(active[~drop]), w0=w[~drop])
+                break
+            except ValueError:
+                # the dropped candidates were the only ones informing some direction: drop fewer
+                dropped = _np.nonzero(drop)[0]
+                if len(dropped) <= 1:
+                    break
+                drop[:] = False
+                drop[dropped[_np.argmin(shots_active[dropped])]] = True
+        if w_kept is None:
+            if min_shots > 0:
+                _warnings.warn("optimal_allocation: min_shots=%g cannot be met without losing identifiability; "
+                               "some used circuits receive fewer shots" % min_shots)
+            break
+        active, info, w, gap = active[~drop], information.subset(active[~drop]), w_kept, gap_kept
+    shots = _np.zeros(n)
+    shots[active] = budget * w / info.cost
+    objective = design_criterion(information, shots, criterion, weight)
+    return shots, AllocationResult(objective, float(gap), int(total_iterations), method, int((shots > 0).sum()))
+
+
+def round_shots(shots, budget=None):
+    """
+    Round a real-valued shot allocation to integers that sum to `budget` (default: the rounded total), by the
+    largest-remainder method: floors first, then the remaining shots go to the largest fractional parts.
+    Candidates with zero shots stay at zero.
+    """
+    shots = _np.asarray(shots, dtype=float)
+    if budget is None:
+        budget = int(round(shots.sum()))
+    budget = int(budget)
+    base = _np.floor(shots).astype(int)
+    remainder = budget - int(base.sum())
+    if remainder < 0:
+        raise ValueError("budget is smaller than the sum of the floors of the allocation")
+    frac = shots - base
+    frac[shots <= 0] = -1.0
+    order = _np.argsort(-frac, kind='stable')
+    out = base.copy()
+    for i in order[:remainder]:
+        if shots[i] > 0:
+            out[i] += 1
+    return out
+
+
+def resample_frequencies(probability_dicts, shots, seed=None):
+    """
+    Multinomially sample outcome frequencies: one dictionary per circuit, with `shots` (scalar or per-circuit)
+    shots drawn from each circuit's outcome distribution.  Circuits with zero shots get an empty dictionary.
+    """
+    rng = seed if isinstance(seed, _np.random.Generator) else _np.random.default_rng(seed)
+    shots = _np.broadcast_to(_np.asarray(shots), (len(probability_dicts),))
+    return [_resample_probability_distribution(d, int(round(s)), rng) if s > 0 else {}
+            for d, s in zip(probability_dicts, shots)]
+
+
+def estimate_error_rates_gls(moments, probability_dict_list, model_parameter_indexing, shots, nominal_rates=None,
+                             iterations=2, min_variance=1e-3, stochastic_solver='nnls', error_bars='asymptotic',
+                             bootstrap_trials=50, seed=None):
+    """
+    Estimate the error rates by generalized least squares -- the estimator whose precision
+    :func:`predicted_covariance` / :func:`optimal_allocation` predict and optimize.
+
+    Every circuit's vector of observed expectation-value shifts ``y_c = <Q>_obs - <Q>_ideal`` is weighted by
+    the inverse of its covariance ``Σ_c / N_c`` (shot count *and* the within-circuit covariance structure,
+    including the small variances of observables with ideal value ±1), and the weighted least-squares problem
+    ``min Σ_c N_c (y_c - D_c ε)ᵀ Σ_c⁻¹ (y_c - D_c ε)`` is solved with the stochastic rates constrained to be
+    non-negative.  Since ``Σ_c`` depends on the rates, the fit is iterated (feasible GLS): the covariance is
+    first evaluated at `nominal_rates` (or zero rates), then at the current estimate, `iterations` times.
+
+    Parameters
+    ----------
+    moments : list of CircuitMoments
+        The circuits' moment designs (:func:`create_design_moments`), one per data dictionary.
+    probability_dict_list : list
+        ``[observed_dicts, ideal_dicts]`` as for :func:`estimate_error_rates` (``ideal_dicts`` may be None).
+    model_parameter_indexing : ModelParameterList
+    shots : float or array-like
+        Shots per circuit (scalar or one entry per circuit).  Circuits with zero shots are ignored.
+    nominal_rates : array-like, optional
+        Starting point for the covariance (default: zero rates, i.e. ideal statistics floored at `min_variance`).
+    iterations : int, optional
+        Number of re-weighting iterations after the first solve.
+    min_variance : float, optional
+    stochastic_solver : {'nnls', 'inversion'}, optional
+        Whether the stochastic rates are constrained to be non-negative.
+    error_bars : {'asymptotic', 'bootstrap', None}, optional
+        ``'asymptotic'``: square roots of the diagonal of the GLS covariance ``(Σ_c N_c D_cᵀ Σ_c⁻¹ D_c)⁻¹`` at the
+        final estimate (the Cramér-Rao bound; it ignores the non-negativity constraints, which can only reduce
+        the error of stochastic rates near zero).  ``'bootstrap'``: non-parametric bootstrap, re-sampling every
+        circuit's outcome distribution with its own shot count and re-solving with the final weights.
+    bootstrap_trials : int, optional
+    seed : int or numpy.random.Generator, optional
+
+    Returns
+    -------
+    error_rates : numpy.ndarray
+    error_uncertainty : numpy.ndarray or None
+    """
+    if stochastic_solver not in ('nnls', 'inversion'):
+        raise ValueError("Unknown stochastic_solver '%s'" % stochastic_solver)
+    moments = list(moments)
+    designs = [m.design for m in moments]
+    n = len(moments)
+    shots = _np.broadcast_to(_np.asarray(shots, dtype=float), (n,)).copy()
+    observed_dicts = probability_dict_list[0]
+    if len(observed_dicts) != n:
+        raise ValueError("Expected %d observed probability dictionaries, got %d" % (n, len(observed_dicts)))
+    used = [c for c in range(n) if shots[c] > 0 and len(observed_dicts[c]) > 0]
+    if len(used) == 0:
+        raise ValueError("No circuit has both shots and data")
+    sub = [moments[c] for c in used]
+    ideal_dicts = None if probability_dict_list[1] is None else [probability_dict_list[1][c] for c in used]
+    y, per_circuit_paulis = observed_expectation_shifts([designs[c] for c in used],
+                                                        [[observed_dicts[c] for c in used], ideal_dicts])
+    P = len(model_parameter_indexing)
+    if sub[0].shape[1] != P:
+        raise ValueError("Design matrices have %d columns but %d parameters were given" % (sub[0].shape[1], P))
+    types = _np.array(model_parameter_indexing.errorgen_types())
+    lb = _np.full(P, -_np.inf)
+    if stochastic_solver == 'nnls':
+        lb[types == 'S'] = 0.0
+    sizes = [m.num_observables for m in sub]
+    splits = _np.cumsum(sizes)[:-1]
+    sqrt_shots = _np.sqrt(shots[used])
+
+    def whiten(rates):
+        rows_A, rows_b = [], []
+        for m, yc, s in zip(sub, _np.split(y, splits), sqrt_shots):
+            Sigma = m.covariance(rates, min_variance)
+            evals, U = _np.linalg.eigh(Sigma)
+            scale = s / _np.sqrt(_np.maximum(evals, min_variance))
+            rows_A.append((U.T @ m.design.design_matrix) * scale[:, None])
+            rows_b.append((U.T @ yc) * scale)
+        return _np.vstack(rows_A), _np.concatenate(rows_b)
+
+    def solve(A, b):
+        if _np.all(_np.isinf(lb)):
+            return _np.linalg.pinv(A) @ b
+        return _optimize.lsq_linear(A, b, bounds=(lb, _np.inf)).x
+
+    rates = _np.zeros(P) if nominal_rates is None else _np.asarray(nominal_rates, dtype=float)
+    for _ in range(max(int(iterations), 0) + 1):
+        A, b = whiten(rates)
+        rates = solve(A, b)
+
+    if error_bars is None or error_bars is False:
+        return rates, None
+    if error_bars == 'asymptotic':
+        return rates, _np.sqrt(_np.diag(_pinv_covariance(A, 1e-10)))
+    if error_bars != 'bootstrap':
+        raise ValueError("Unknown error_bars option '%s'" % str(error_bars))
+    rng = seed if isinstance(seed, _np.random.Generator) else _np.random.default_rng(seed)
+    # the whitening of the final iteration is kept fixed; only the data are resampled
+    ideal_part = y - _np.concatenate([_bulk_Ztype_pauli_exp(p, observed_dicts[c])
+                                      for p, c in zip(per_circuit_paulis, used)])
+    whiten_ops = []
+    for m, s in zip(sub, sqrt_shots):
+        Sigma = m.covariance(rates, min_variance)
+        evals, U = _np.linalg.eigh(Sigma)
+        whiten_ops.append(U.T * (s / _np.sqrt(_np.maximum(evals, min_variance)))[:, None])
+    estimates = _np.zeros((int(bootstrap_trials), P))
+    for t in range(int(bootstrap_trials)):
+        resampled = [_resample_probability_distribution(observed_dicts[c], int(round(shots[c])), rng) for c in used]
+        obs = _np.concatenate([_bulk_Ztype_pauli_exp(p, d) for p, d in zip(per_circuit_paulis, resampled)])
+        yb = obs + ideal_part
+        b = _np.concatenate([op @ yc for op, yc in zip(whiten_ops, _np.split(yb, splits))])
+        estimates[t] = solve(A, b)
+    return rates, _np.std(estimates, axis=0)
 
 
 def observed_expectation_shifts(design_matrices, probability_dict_list, measurement_list=None):
