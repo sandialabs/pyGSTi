@@ -40,7 +40,9 @@ from pygsti.tools.mptools import (
     determine_num_workers as _determine_num_workers,
     SharedWorkerPool as _SharedWorkerPool,
     warn_if_insufficient_memory as _warn_if_insufficient_memory,
+    resolve_pool_workers as _resolve_pool_workers,
 )
+import multiprocessing.pool as _mppool
 from itertools import islice
 
 from typing import Union, Optional, Literal, Any, TYPE_CHECKING
@@ -188,7 +190,7 @@ class ErrorGeneratorPropagator:
                           bch_kwargs: dict=None, mx_basis: Union[_Basis, str]='pp', 
                           circuit_conversion_kwargs: dict=None,
                           num_workers: Union[int, str, None] = None,
-                          pool: Optional[Any] = None) -> _np.ndarray:
+                          pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> _np.ndarray:
         """
         Propagate all of the error generators for each circuit layer to the end of the circuit
         and return the result of exponentiating these error generators, and if necessary taking
@@ -328,7 +330,7 @@ class ErrorGeneratorPropagator:
     def propagate_errorgens(self, circuit: _Circuit, include_spam: bool=True, 
                             circuit_conversion_kwargs: dict=None,
                             num_workers: Union[int, str, None] = None,
-                            pool: Optional[Any] = None):
+                            pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None):
         """
         Propagate all of the error generators for each circuit layer to the end without
         any recombinations or averaging.
@@ -379,7 +381,7 @@ class ErrorGeneratorPropagator:
         assert circuit.line_labels is not None and circuit.line_labels != ('*',)
         errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam)
 
-        workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+        workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
         n_q = len(circuit.line_labels)
         avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
 
@@ -403,7 +405,7 @@ class ErrorGeneratorPropagator:
     def propagate_errorgens_bch(self, circuit: _Circuit, bch_order: int=1, include_spam: bool=True, truncation_threshold: float=1e-14, 
                                 mode: Literal['magnus', 'pairwise']='magnus', circuit_conversion_kwargs: dict=None,
                                 num_workers: Union[int, str, None] = None,
-                                pool: Optional[Any] = None):
+                                pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None):
         """
         Propagate all of the error generators for each circuit to the end,
         performing approximation/recombination using the BCH approximation.
@@ -460,7 +462,7 @@ class ErrorGeneratorPropagator:
         elif mode != 'magnus':
             raise ValueError(f"Unrecognized mode '{mode}'; expected 'magnus' or 'pairwise'.")
 
-        workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+        workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
 
         # Top-level shared worker pool across propagation and Magnus stages
         if workers > 1 and pool is None:
@@ -848,7 +850,7 @@ class ErrorGeneratorPropagator:
     
     def _propagate_errorgen_layers(self, errorgen_layers, propagation_layers, include_spam=True,
                                    num_workers: Union[int, str, None] = None,
-                                   pool: Optional[Any] = None):
+                                   pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None):
         """
         Propagates the error generator layers through each of the corresponding propagation layers
         (i.e. the clifford operations for the remainder of the circuit). This results in a list of 
@@ -898,7 +900,7 @@ class ErrorGeneratorPropagator:
         if stopping_idx <= 0:
             return list(errorgen_layers)
 
-        workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+        workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
 
         if workers <= 1 or num_workers is None and pool is None or stopping_idx < 2:
             fully_propagated_layers = []    

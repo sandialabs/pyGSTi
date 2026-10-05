@@ -44,6 +44,7 @@ from .mptools import (
     get_available_system_memory,
     warn_if_insufficient_memory,
     measure_multiprocessing_ipc_latency,
+    resolve_pool_workers,
 )
 from .nameddict import NamedDict
 from .optools import *

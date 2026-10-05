@@ -13,6 +13,7 @@ Functions for working with Python multiprocessing (more than just map)
 import itertools as _itertools
 import math as _math
 import multiprocessing as _mp
+import multiprocessing.pool as _mppool
 import os as _os
 import sys as _sys
 import time as _time
@@ -364,6 +365,30 @@ class SharedWorkerPool:
         return self._pool.starmap(func, iterable, chunksize=chunksize)
 
 
+def resolve_pool_workers(pool: Any) -> int:
+    """
+    Extract worker count from a SharedWorkerPool or multiprocessing.pool.Pool object.
+
+    Parameters
+    ----------
+    pool : SharedWorkerPool or multiprocessing.pool.Pool
+        Active worker pool to extract worker count from.
+
+    Returns
+    -------
+    int
+        Worker count (>= 1).
+    """
+    if isinstance(pool, SharedWorkerPool):
+        return pool.num_workers
+    elif isinstance(pool, _mppool.Pool):
+        return getattr(pool, "_processes", 1)
+    else:
+        raise TypeError(
+            f"Expected pool to be a SharedWorkerPool or multiprocessing.pool.Pool instance, got {type(pool)}."
+        )
+
+
 # ===================================================================================================
 # Parallel 2D Grid Mapping
 # ===================================================================================================
@@ -380,7 +405,7 @@ def parallel_2d_grid_map(
     row_items: Sequence,
     col_items: Sequence,
     num_workers: Union[int, str, None] = "auto",
-    pool: Optional[Any] = None,
+    pool: Optional[Union[SharedWorkerPool, _mppool.Pool]] = None,
     grid: Optional[Tuple[int, int]] = None,
     prewarm_packages: Optional[Sequence[str]] = None,
 ) -> _np.ndarray:
@@ -417,7 +442,7 @@ def parallel_2d_grid_map(
     if n_rows == 0 or n_cols == 0:
         return _np.empty((n_rows, n_cols), dtype=_np.float64)
 
-    workers = determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+    workers = determine_num_workers(num_workers) if pool is None else resolve_pool_workers(pool)
 
     if workers <= 1:
         return worker_fn(row_items, col_items)
@@ -476,7 +501,7 @@ def parallel_pair_reduce(
     pair_items: Sequence[Tuple[Any, Any]],
     reduce_fn: Callable[[Any, Any], Any],
     num_workers: Union[int, str, None] = "auto",
-    pool: Optional[Any] = None,
+    pool: Optional[Union[SharedWorkerPool, _mppool.Pool]] = None,
     prewarm_packages: Optional[Sequence[str]] = None,
     pair_weights: Optional[Sequence[float]] = None,
 ) -> Any:
@@ -511,7 +536,7 @@ def parallel_pair_reduce(
     if n_pairs == 0:
         return None
 
-    workers = determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+    workers = determine_num_workers(num_workers) if pool is None else resolve_pool_workers(pool)
 
     if workers <= 1 or n_pairs <= 1:
         accum = None

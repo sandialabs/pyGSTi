@@ -257,3 +257,32 @@ class MPToolsTester(BaseCase):
             self.assertEqual(len(recorded), 1)
             self.assertTrue(issubclass(recorded[-1].category, ResourceWarning))
             self.assertIn("Estimated peak memory footprint", str(recorded[-1].message))
+
+    def test_multiprocessing_pool_compatibility(self):
+        row_items = list(range(10))
+        col_items = list(range(12))
+        expected_mat = _matrix_outer_product(row_items, col_items)
+        pairs = [(i, i + 1) for i in range(12)]
+        seq_accum = None
+        for p in pairs:
+            res = _eval_pair(p)
+            seq_accum = res if seq_accum is None else _reduce_dicts(seq_accum, res)
+
+        with mp.Pool(processes=2) as mp_pool:
+            res_mat = mpt.parallel_2d_grid_map(
+                _matrix_outer_product, row_items, col_items, pool=mp_pool
+            )
+            np.testing.assert_allclose(res_mat, expected_mat)
+
+            res_pair = mpt.parallel_pair_reduce(
+                _eval_pair, pairs, _reduce_dicts, pool=mp_pool
+            )
+            self.assertEqual(res_pair, seq_accum)
+
+    def test_resolve_pool_workers(self):
+        with mpt.SharedWorkerPool(num_workers=2) as shared_pool:
+            self.assertEqual(mpt.resolve_pool_workers(shared_pool), 2)
+        with mp.Pool(processes=2) as mp_pool:
+            self.assertEqual(mpt.resolve_pool_workers(mp_pool), 2)
+        with self.assertRaises(TypeError):
+            mpt.resolve_pool_workers("not_a_pool")

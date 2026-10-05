@@ -38,13 +38,15 @@ from pygsti.tools.mptools import (
     parallel_2d_grid_map as _parallel_2d_grid_map,
     parallel_pair_reduce as _parallel_pair_reduce,
     warn_if_insufficient_memory as _warn_if_insufficient_memory,
+    resolve_pool_workers as _resolve_pool_workers,
 )
+import multiprocessing.pool as _mppool
 from functools import wraps as _wraps
 from itertools import chain, product
 import math as _math
 from math import factorial
 import time as _time
-from typing import Literal, Optional, Union, Callable, Iterable, Iterator, TypeVar, Any, cast as _cast
+from typing import Literal, Optional, Union, Callable, Iterable, Iterator, Sequence, TypeVar, Any, cast as _cast
 
 def errgen_coeff_label_to_stim_pauli_strs(err_gen_coeff_label: Union[_GEEL, _LEEL],
                                           num_qubits: int) -> tuple[stim.PauliString, ...]:
@@ -662,7 +664,7 @@ def _merge_dictionaries(d1, d2):
 def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal[1,2,3] = 1,
                      truncation_threshold: float = 1e-14,
                      num_workers: Union[int, str, None] = None,
-                     pool: Optional[Any] = None) -> _ErrorgenDict:
+                     pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> _ErrorgenDict:
     """
     Function for computing the nth-order magnus expansion for a set of error generator layers.
     Please see https://arxiv.org/abs/0810.5488 or https://en.wikipedia.org/wiki/Magnus_expansion
@@ -760,7 +762,7 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
 def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
                               truncation_threshold: float = 1e-14,
                               num_workers: Union[int, str, None] = None,
-                              pool: Optional[Any] = None) -> _ErrorgenDict:
+                              pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> _ErrorgenDict:
     r"""
     Helper function for computing the second-order correction term in the
     magnus expansion.
@@ -808,7 +810,7 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
                 identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                 break
 
-    workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
 
     n_q = len(identity) if identity is not None else 16
     avg_terms = (len(errorgen_layers[0]) + len(errorgen_layers[1])) // 2 if len(errorgen_layers) >= 2 else 0
@@ -842,7 +844,7 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
 def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], identity: Optional[str],
                                          truncation_threshold: float = 1e-14,
                                          num_workers: Union[int, str, None] = None,
-                                         pool: Optional[Any] = None) -> tuple[_ErrorgenDict, _ErrorgenDict]:
+                                         pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> tuple[_ErrorgenDict, _ErrorgenDict]:
     r"""
     Helper function for computing the second- and third-order correction terms in the
     magnus expansion together, from a single pass over the pairwise layer commutators.
@@ -887,7 +889,7 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
                 identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                 break
 
-    workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
     n_q = len(identity) if identity is not None else 16
     avg_terms = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
     num_layers = len(errorgen_layers)
@@ -1044,7 +1046,7 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
 def zassenhaus_formula(errorgen_groups: list[_ErrorgenDict], zassenhaus_order: Literal[1,2] = 1,
                       truncation_threshold: float = 1e-14,
                       num_workers: Union[int, str, None] = None,
-                      pool: Optional[Any] = None) -> list[_ErrorgenDict]:
+                      pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> list[_ErrorgenDict]:
     r"""
     Function for computing the nth-order Zassenhaus formula for a set of error generators.
     Please see https://en.wikipedia.org/wiki/Baker%E2%80%93Campbell%E2%80%93Hausdorff_formula#Zassenhaus_formula
@@ -4681,7 +4683,7 @@ def _bitstring_to_int(bitstring: Union[str, tuple]) -> int:
 def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: stim.Tableau, desired_bitstring: str,
                                       order: int = 1, truncation_threshold: float = 1e-14,
                                       num_workers: Union[int, str, None] = None,
-                                      pool: Optional[Any] = None) -> float:
+                                      pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> float:
     """
     Compute the kth-order correction to the probability of the specified bit string.
     
@@ -4750,7 +4752,7 @@ def stabilizer_probability_correction(errorgen_dict: _ErrorgenDict, tableau: sti
 def stabilizer_pauli_expectation_correction(errorgen_dict: _ErrorgenDict, tableau: stim.Tableau, pauli: stim.PauliString,
                                             order: int = 1, truncation_threshold: float = 1e-14,
                                             num_workers: Union[int, str, None] = None,
-                                            pool: Optional[Any] = None) -> float:
+                                            pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> float:
     """
     Compute the kth-order correction to the expectation value of the specified pauli.
     
@@ -4914,7 +4916,7 @@ def approximate_stabilizer_probability(errorgen_dict: dict[_EEL, float], circuit
                                        desired_bitstring: str, order: int = 1,
                                        truncation_threshold: float = 1e-14,
                                        num_workers: Union[int, str, None] = None,
-                                       pool: Optional[Any] = None) -> float:
+                                       pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> float:
     """
     Calculate the approximate probability of a desired bit string using an nth-order taylor series approximation.
     
@@ -4973,7 +4975,7 @@ def approximate_stabilizer_pauli_expectation(errorgen_dict: dict[_EEL, float], c
                                              pauli: Union[str, stim.PauliString], order: int = 1,
                                              truncation_threshold: float = 1e-14,
                                              num_workers: Union[int, str, None] = None,
-                                             pool: Optional[Any] = None) -> float:
+                                             pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> float:
     """
     Calculate the approximate probability of a desired bit string using a first-order approximation.
     
@@ -5105,7 +5107,7 @@ def approximate_stabilizer_probabilities(
     order: int = 1,
     truncation_threshold: float = 1e-14,
     num_workers: Union[int, str, None] = None,
-    pool: Optional[Any] = None,
+    pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None,
     bitstrings: Optional[Sequence[str]] = None,
 ) -> _np.ndarray:
     """
@@ -5193,7 +5195,7 @@ def approximate_stabilizer_pauli_expectations(
     order: int = 1,
     truncation_threshold: float = 1e-14,
     num_workers: Union[int, str, None] = None,
-    pool: Optional[Any] = None,
+    pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None,
 ) -> _np.ndarray:
     """
     Calculate the approximate expectation values for a sequence of Pauli observables.
@@ -5268,7 +5270,7 @@ def approximate_stabilizer_pauli_expectations(
 def error_generator_taylor_expansion(errorgen_dict: _ErrorgenDict, order: int = 1,
                                      truncation_threshold: float = 1e-14,
                                      num_workers: Union[int, str, None] = None,
-                                     pool: Optional[Any] = None) -> list[_ErrorgenDict]:
+                                     pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> list[_ErrorgenDict]:
     """
     Compute the nth-order taylor expansion for the exponentiation of the error generator described by the input
     error generator dictionary. (Excluding the zeroth-order identity).
@@ -5353,8 +5355,8 @@ class _CommutingProductSliceWorker:
 def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict[_LSE, _Rate],
                        identity: str, truncation_threshold: float = 1e-14,
                        num_workers: Union[int, str, None] = None,
-                       pool: Optional[Any] = None) -> dict[_LSE, complex]:
-    workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+                       pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> dict[_LSE, complex]:
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
     n1 = len(errorgen_dict_1)
     n2 = len(errorgen_dict_2)
     if workers <= 1 or num_workers is None and pool is None or n1 * n2 < 1000:
@@ -5885,7 +5887,7 @@ def bulk_alpha(
     tableau: Union[stim.Tableau, stim.TableauSimulator],
     desired_bitstrings: list[str],
     num_workers: Union[int, str, None] = None,
-    pool: Optional[Any] = None,
+    pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None,
 ) -> _np.ndarray:
     """
     First-order error generator sensitivity function for probability.
@@ -5919,7 +5921,7 @@ def bulk_alpha(
     if n_e == 0 or n_b == 0:
         return _np.empty((n_b, n_e), dtype=_np.double)
 
-    workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
 
     if workers <= 1 or num_workers is None and pool is None:
         return _raw_bulk_alpha(gens, tableau, desired_bitstrings)
@@ -5944,7 +5946,7 @@ def bulk_alpha_pauli(
     tableau: Union[stim.Tableau, stim.TableauSimulator],
     paulis: list[stim.PauliString],
     num_workers: Union[int, str, None] = None,
-    pool: Optional[Any] = None,
+    pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None,
 ) -> _np.ndarray:
     """
     First-order error generator sensitivity function for Pauli expectation values.
@@ -5974,7 +5976,7 @@ def bulk_alpha_pauli(
     if n_e == 0 or n_p == 0:
         return _np.empty((n_p, n_e), dtype=_np.double)
 
-    workers = _determine_num_workers(num_workers) if pool is None else getattr(pool, "num_workers", 1)
+    workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
 
     if workers <= 1 or num_workers is None and pool is None:
         return _raw_bulk_alpha_pauli(gens, tableau, paulis)
