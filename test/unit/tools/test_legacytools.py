@@ -100,6 +100,19 @@ class LegacyTestCase(BaseCase):
             warnings.simplefilter("ignore", pyGSTiDeprecationWarning)
             self.assertEqual(oldFn(), 1)
 
+    def test_bare_decorator(self):
+        # `@deprecate` without parentheses deprecates the function (rather than silently replacing it)
+
+        @legacytools.deprecate
+        def oldFn(x):
+            """Doc."""
+            return x
+
+        self.assertEqual(oldFn.__name__, "oldFn")
+        with self.assertWarns(pyGSTiDeprecationWarning) as cm:
+            self.assertEqual(oldFn(5), 5)
+        self.assertIn("The function oldFn is deprecated", str(cm.warning))
+
     def test_suppress_nested(self):
 
         @legacytools.deprecate(message="inner")

@@ -98,10 +98,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             The evolution type of the error generator being constructed.
             When specifying 'default' the evotype is automatically inferred/chosen.
             `"densitymx"` means usual Lioville density-matrix-vector propagation
-            via matrix-vector products.  `"svterm"` denotes state-vector term-
-            based evolution (action of operation is obtained by evaluating the rank-1
-            terms up to some order).  `"cterm"` is similar but uses Clifford operation
-            action on stabilizer states.
+            via matrix-vector products.
 
         state_space : `StateSpace` or castable to `StateSpace`
             The state space upon which this error generator acts.
@@ -184,10 +181,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             The evolution type of the error generator being constructed.
             When specifying 'default' the evotype is automatically inferred/chosen.
             `"densitymx"` means usual Lioville density-matrix-vector propagation
-            via matrix-vector products.  `"svterm"` denotes state-vector term-
-            based evolution (action of operation is obtained by evaluating the rank-1
-            terms up to some order).  `"cterm"` is similar but uses Clifford operation
-            action on stabilizer states.
+            via matrix-vector products.
 
         state_space : `StateSpace` or castable to `StateSpace`
             The state space upon which this error generator acts.
@@ -268,10 +262,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             The evolution type of the error generator being constructed.
             When specifying 'default' the evotype is automatically inferred/chosen.
             `"densitymx"` means usual Lioville density-matrix-vector propagation
-            via matrix-vector products.  `"svterm"` denotes state-vector term-
-            based evolution (action of operation is obtained by evaluating the rank-1
-            terms up to some order).  `"cterm"` is similar but uses Clifford operation
-            action on stabilizer states.
+            via matrix-vector products.
 
         state_space : StateSpace, optional (default None)
             StateSpace object to use in construction of this LindbladErrorgen.
@@ -335,10 +326,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             The evolution type of the error generator being constructed.
             When specifying 'default' the evotype is automatically inferred/chosen.
             `"densitymx"` means usual Lioville density-matrix-vector propagation
-            via matrix-vector products.  `"svterm"` denotes state-vector term-
-            based evolution (action of operation is obtained by evaluating the rank-1
-            terms up to some order).  `"cterm"` is similar but uses Clifford operation
-            action on stabilizer states.
+            via matrix-vector products.
 
         state_space : StateSpace, optional (default None)
             StateSpace object to use in construction of this LindbladErrorgen.
@@ -445,10 +433,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
             The evolution type of the error generator being constructed.
             When specifying 'default' the evotype is automatically inferred/chosen.
             `"densitymx"` means usual Lioville density-matrix-vector propagation
-            via matrix-vector products.  `"svterm"` denotes state-vector term-
-            based evolution (action of operation is obtained by evaluating the rank-1
-            terms up to some order).  `"cterm"` is similar but uses Clifford operation
-            action on stabilizer states.
+            via matrix-vector products.
 
         state_space : `StateSpace` or castable to `StateSpace`
             The state space upon which this error generator acts.
@@ -519,7 +504,7 @@ class LindbladErrorgen(_LinearOperator, _Torchable):
         mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object, optional
             The basis for this error generator's linear mapping. Default is 'pp'.
 
-        evotype : {"default", "densitymx", "svterm", "cterm"}, optional
+        evotype : {"default", "densitymx", "statevec", "stabilizer"}, optional
             The evolution type of the error generator being constructed. Default is "default".
 
         state_space : StateSpace, optional

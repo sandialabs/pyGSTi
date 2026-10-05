@@ -102,6 +102,11 @@ def deprecate(replacement=None, message=None, suppress_nested=False):
     -------
     function
     """
+    if callable(replacement) and message is None and not suppress_nested:
+        # Used as a bare decorator (`@deprecate` instead of `@deprecate()`), so `replacement` is
+        # actually the function being deprecated.
+        return deprecate()(replacement)
+
     def decorator(fn):
         if message is not None:
             # e.g. "ComposedOp.taylor_order_terms"; drop any "f.<locals>." prefix

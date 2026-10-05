@@ -33,7 +33,7 @@ class EmbeddedPureState(_State):
     A state vector that is a rank-1 density matrix.
 
     This is essentially a pure state that evolves according to one of the
-    density matrix evolution types ("denstiymx", "svterm", and "cterm").  It is
+    density matrix evolution type ("densitymx").  It is
     parameterized by a contained pure-state State which evolves according to a
     state vector evolution type ("statevec" or "stabilizer").
 
@@ -51,8 +51,7 @@ class EmbeddedPureState(_State):
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
         Note that the evotype of `pure_state_vec` must be compatible with this value.
         For example, if `pure_state_vec` has an evotype of `"statevec"` then allowed
-        values are `"densitymx"` and `"svterm"`,  or  if `"stabilizer"` then the only
-        allowed value is `"cterm"`.
+        value is `"densitymx"`.
 
     dm_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for this state vector - that is, for the *density matrix*

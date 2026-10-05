@@ -99,7 +99,12 @@ class StochasticNoiseOp(_LinearOperator, _KrausOperatorInterface):
     def _get_rate_poly_dicts(self):
         """ Return a list of dicts, one per rate, expressing the
             rate as a polynomial of the local parameters (tuple
-            keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
+            keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2)
+
+            .. deprecated:: 0.11
+                Exists solely to support the deprecated `TermForwardSimulator`; will be removed
+                in pyGSTi 0.12.  See https://github.com/sandialabs/pyGSTi/issues/916.
+            """
         return [{(i, i): 1.0} for i in range(self.basis.size - 1)]  # rates are just parameters squared
 
     def to_dense(self, on_space: SpaceT='minimal'):

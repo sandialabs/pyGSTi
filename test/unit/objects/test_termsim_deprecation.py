@@ -17,6 +17,12 @@ from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoeffici
 from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..util import BaseCase
 
+try:  # use the compiled statevec evotype when available (it is absent in no-Cython installs)
+    import pygsti.evotypes.statevec  # noqa: F401
+    STATEVEC = 'statevec'
+except ImportError:
+    STATEVEC = 'statevec_slow'
+
 
 def _deprecation_messages(fn):
     """ Run `fn` and return the messages of all pyGSTiDeprecationWarnings it issues. """
@@ -42,7 +48,7 @@ class TermSimDeprecationTester(BaseCase):
 
     def test_simulation_warns_only_at_construction(self):
         def run():
-            mdl = std.target_model("H+S", evotype='statevec')
+            mdl = std.target_model("H+S", evotype=STATEVEC)
             mdl.sim = TermForwardSimulator(mode='taylor-order', max_order=1)
             c = Circuit([('Gxpi2', 0), ('Gypi2', 0)], line_labels=(0,))
             mdl.probabilities(c)
@@ -55,7 +61,7 @@ class TermSimDeprecationTester(BaseCase):
     def test_modelmember_term_methods_warn_once(self):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", pyGSTiDeprecationWarning)
-            op = std.target_model("H+S", evotype='statevec').operations[('Gxpi2', 0)]
+            op = std.target_model("H+S", evotype=STATEVEC).operations[('Gxpi2', 0)]
 
         # nested calls into deprecated methods of sub-members are not reported separately
         msgs = _deprecation_messages(lambda: op.taylor_order_terms(1))
@@ -72,6 +78,6 @@ class TermSimDeprecationTester(BaseCase):
 
     def test_create_lindblad_term_objects_warns(self):
         blk = LindbladCoefficientBlock('ham', Basis.cast('pp', 4), param_mode='elements')
-        evotype = pygsti.evotypes.Evotype.cast('statevec')
+        evotype = pygsti.evotypes.Evotype.cast(STATEVEC)
         with pytest.warns(pyGSTiDeprecationWarning, match="create_lindblad_term_objects is deprecated"):
             blk.create_lindblad_term_objects(0, 100, evotype, QubitSpace(1))

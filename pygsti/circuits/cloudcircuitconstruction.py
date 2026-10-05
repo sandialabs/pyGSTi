@@ -1649,7 +1649,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
         errors and 2-qubit gates can have up to weight-3 errors.
 
     paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
-        The "root" (no trailing " terms", etc.) parameterization used for the
+        The "root" parameterization used for the
         cloud noise model (which specifies what needs to be amplified).
 
     verbosity : int, optional
