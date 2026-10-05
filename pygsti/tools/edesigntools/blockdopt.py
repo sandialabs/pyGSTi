@@ -551,10 +551,12 @@ class BlockDoptReducer(_DesignReducer):
     """Select circuits by regularized, unweighted probability-Jacobian sensitivity.
 
     Greedy block D-optimal selection: each step takes the circuit that most increases
-    `0.5 * logdet(ridge * I + J_S^T J_S)`, where `J_S` stacks the Jacobian rows of the
-    circuits chosen so far.  Outcomes are weighted equally and sensitivity is measured in
-    the model's parameter coordinates, so this is not multinomial Fisher information,
-    which would also weight by inverse probabilities and shot counts.
+    `0.5 * logdet(I + J_S^T J_S / ridge)`, where `J_S` stacks the Jacobian rows of the
+    circuits chosen so far.  This differs from `0.5 * logdet(ridge * I + J_S^T J_S)` only
+    by a constant, so the selection is the same; the scores report the former.  Outcomes
+    are weighted equally and sensitivity is measured in the model's parameter
+    coordinates, so this is not multinomial Fisher information, which would also weight
+    by inverse probabilities and shot counts.
 
     It has no stopping rule, so `select` and `reduce` raise `ValueError` without a
     `num_circuits`; :func:`rank_circuits_by_dopt` gives the full score curve to choose
