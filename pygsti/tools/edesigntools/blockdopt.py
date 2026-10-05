@@ -555,6 +555,10 @@ class BlockDoptReducer(_DesignReducer):
     the model's parameter coordinates, so this is not multinomial Fisher information,
     which would also weight by inverse probabilities and shot counts.
 
+    It has no stopping rule, so `select` and `reduce` raise `ValueError` without a
+    `num_circuits`; :func:`rank_circuits_by_dopt` gives the full score curve to choose
+    one from.
+
     Parameters
     ----------
     model : Model
@@ -586,11 +590,15 @@ class BlockDoptReducer(_DesignReducer):
                 "perturb_errorgen_rates(model, seed=...), or pass warn_on_target_model=False.")
 
     def _select(self, design: ExperimentDesign, num_circuits: Optional[int]) -> _CircuitSelection:
+        if num_circuits is None:
+            raise ValueError(
+                "BlockDoptReducer has no stopping rule of its own, so it needs a circuit "
+                "budget. To choose one, rank every circuit with "
+                "rank_circuits_by_dopt(model, design.all_circuits_needing_data) and read "
+                "a budget off the returned score curve.")
         candidates = list(design.all_circuits_needing_data)
         ranked, scores = rank_circuits_by_dopt(
-            self.model, candidates,
-            len(candidates) if num_circuits is None else num_circuits,
-            ridge=self.ridge, dtype=self.dtype)
+            self.model, candidates, num_circuits, ridge=self.ridge, dtype=self.dtype)
         return _CircuitSelection(
             ranked, scores=scores,
             score_name='0.5*logdet(I + J_S^T J_S / ridge)',

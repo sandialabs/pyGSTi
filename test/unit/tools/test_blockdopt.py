@@ -829,7 +829,7 @@ class BlockDoptReducerTester(_ModelFixture, BaseCase):
     def test_an_empty_reduced_design_can_be_reduced_again(self):
         reducer = bd.BlockDoptReducer(self.model)
         empty = reducer.reduce(self._design(), 0)
-        for budget in (None, 0, 3):
+        for budget in (0, 3):
             with self.subTest(budget=budget):
                 selection = reducer.select(empty, budget)
                 self.assertEqual(selection.circuits, ())
@@ -882,13 +882,19 @@ class BlockDoptReducerTester(_ModelFixture, BaseCase):
         self.assertEqual(selection.metadata['num_candidates'],
                          len(design.all_circuits_needing_data))
 
-    def test_no_budget_ranks_everything_so_the_curve_can_pick_one(self):
+    def test_no_budget_raises_and_points_at_rank_circuits_by_dopt(self):
         design = self._design()
-        selection = bd.BlockDoptReducer(self.model).select(design)
-        n = len(design.all_circuits_needing_data)
-        self.assertEqual(len(selection.circuits), n)
-        # ...and the prefix is the answer for a smaller budget, with no re-ranking.
-        self.assertEqual(list(selection.circuits[:6]),
+        reducer = bd.BlockDoptReducer(self.model)
+        with self.assertRaisesRegex(ValueError, 'rank_circuits_by_dopt'):
+            reducer.select(design)
+        with self.assertRaisesRegex(ValueError, 'rank_circuits_by_dopt'):
+            reducer.reduce(design)
+
+    def test_full_ranking_prefix_is_the_answer_for_a_smaller_budget(self):
+        design = self._design()
+        ranked, _ = bd.rank_circuits_by_dopt(self.model, design.all_circuits_needing_data)
+        self.assertEqual(len(ranked), len(design.all_circuits_needing_data))
+        self.assertEqual(ranked[:6],
                          list(bd.BlockDoptReducer(self.model).select(design, 6).circuits))
 
     # -- the target-model guard ---------------------------------------------- #
