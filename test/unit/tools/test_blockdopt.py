@@ -647,6 +647,16 @@ class PerturbErrorgenRatesTester(_ModelFixture, BaseCase):
         self.assertArraysEqual(a.to_vector(), b.to_vector())
         self.assertFalse(np.allclose(a.to_vector(), c.to_vector()))
 
+    def test_hamiltonian_coefficients_take_both_signs(self):
+        from pygsti.modelpacks import smq1Q_XYI
+
+        model = bd.perturb_errorgen_rates(smq1Q_XYI.target_model('CPTPLND'), seed=0)
+        hamiltonian = np.array([value for op in model.operations.values()
+                                for key, value in op.errorgen_coefficients().items()
+                                if key.errorgen_type == 'H'])
+        self.assertGreater(len(hamiltonian), 0)
+        self.assertTrue((hamiltonian > 0).any() and (hamiltonian < 0).any())
+
     def test_the_scale_is_a_rate_not_a_parameter_value(self):
         # rate = theta**2 in cholesky mode, so scaling rates by 100 scales the
         # stochastic *parameters* by 10. Pins that `scale` means what it says.

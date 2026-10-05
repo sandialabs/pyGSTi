@@ -409,8 +409,8 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
     so `d(coefficient)/d(theta) = 2*theta` is exactly zero at the target: every
     stochastic column of the Jacobian vanishes and the selection ignores those parameters.
 
-    For each member, Hamiltonian coefficients are sampled independently and all
-    stochastic (S) coefficients share one positive sample; C and A coefficients are set to
+    For each member, Hamiltonian coefficients are sampled independently, with either
+    sign, and all stochastic (S) coefficients share one positive sample; C and A coefficients are set to
     zero. This keeps CPTPLND members physical, respects tied depolarizing parameters, and
     keeps the original parameterization. Members with no error generator are left alone.
 
@@ -421,7 +421,8 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
 
     scale : float, optional (default 1e-3)
         Positive, finite coefficient magnitude. Hamiltonian coefficients are drawn from
-        `[0, scale)` and the stochastic coefficient from `(0, scale]`.
+        a normal distribution with mean 0 and standard deviation `scale`, and the
+        stochastic coefficient uniformly from `(0, scale]`.
 
     seed : int or numpy.random.Generator, optional
         Anything `numpy.random.default_rng` accepts.  Pass one, or the selection
@@ -447,7 +448,7 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
         sampled = {}
         for lbl in coefficients:
             if lbl.errorgen_type == 'H':
-                sampled[lbl] = scale * rng.random()
+                sampled[lbl] = scale * rng.standard_normal()
             elif lbl.errorgen_type == 'S':
                 sampled[lbl] = stochastic
             else:  # C and A are off-diagonal non-Hamiltonian coefficients.
