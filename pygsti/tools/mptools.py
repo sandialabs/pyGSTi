@@ -102,7 +102,7 @@ def determine_num_workers(
     if isinstance(num_workers, (int, _np.integer)):
         n = int(num_workers)
         if n < 1:
-            return 1
+            raise ValueError(f"num_workers must be an integer >= 1, got {num_workers}.")
         if max_limit is not None and max_limit > 0:
             return min(n, int(max_limit))
         return n
@@ -200,7 +200,9 @@ def measure_multiprocessing_ipc_latency(
         return _IPC_LATENCY_CACHE[cache_key]
 
     test_workers = min(resolved_workers, 4)
-    if test_workers <= 1:
+    if test_workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {test_workers}.")
+    if test_workers == 1:
         # Sequential: negligible latency
         _IPC_LATENCY_CACHE[cache_key] = 1e-6
         return 1e-6
@@ -251,7 +253,9 @@ def compute_2d_worker_grid(
     tuple of (int, int)
         (P_rows, P_cols) process grid factors.
     """
-    if num_workers <= 1 or (n_rows <= 1 and n_cols <= 1):
+    if num_workers < 1:
+        raise ValueError(f"num_workers must be at least 1, got {num_workers}.")
+    if num_workers == 1 or (n_rows <= 1 and n_cols <= 1):
         return (1, 1)
     if n_rows <= 1:
         return (1, min(n_cols, num_workers))
@@ -328,7 +332,9 @@ class SharedWorkerPool:
         self._owns_pool = True
 
     def __enter__(self):
-        if self.num_workers <= 1:
+        if self.num_workers < 1:
+            raise ValueError(f"Worker count must be at least 1, got {self.num_workers}.")
+        if self.num_workers == 1:
             self._pool = None
             return self
 
@@ -444,7 +450,9 @@ def parallel_2d_grid_map(
 
     workers = determine_num_workers(num_workers) if pool is None else resolve_pool_workers(pool)
 
-    if workers <= 1:
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1:
         return worker_fn(row_items, col_items)
 
     pr, pc = grid if grid is not None else compute_2d_worker_grid(n_rows, n_cols, workers)
@@ -538,7 +546,9 @@ def parallel_pair_reduce(
 
     workers = determine_num_workers(num_workers) if pool is None else resolve_pool_workers(pool)
 
-    if workers <= 1 or n_pairs <= 1:
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1 or n_pairs <= 1:
         accum = None
         for p in pair_items:
             res = pair_eval_fn(p)

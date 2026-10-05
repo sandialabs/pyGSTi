@@ -58,11 +58,13 @@ class MPToolsTester(BaseCase):
 
     def test_determine_num_workers_none_and_integers(self):
         self.assertEqual(mpt.determine_num_workers(None), 1)
-        self.assertEqual(mpt.determine_num_workers(0), 1)
-        self.assertEqual(mpt.determine_num_workers(-5), 1)
         self.assertEqual(mpt.determine_num_workers(4), 4)
         self.assertEqual(mpt.determine_num_workers(16, max_limit=8), 8)
         self.assertEqual(mpt.determine_num_workers(4, max_limit=8), 4)
+        with self.assertRaises(ValueError):
+            mpt.determine_num_workers(0)
+        with self.assertRaises(ValueError):
+            mpt.determine_num_workers(-5)
 
     def test_determine_num_workers_auto(self):
         workers = mpt.determine_num_workers("auto")
@@ -286,3 +288,23 @@ class MPToolsTester(BaseCase):
             self.assertEqual(mpt.resolve_pool_workers(mp_pool), 2)
         with self.assertRaises(TypeError):
             mpt.resolve_pool_workers("not_a_pool")
+
+    def test_workers_less_than_one_raises_error(self):
+        row_items = list(range(4))
+        col_items = list(range(4))
+        with self.assertRaises(ValueError):
+            mpt.parallel_2d_grid_map(_matrix_outer_product, row_items, col_items, num_workers=0)
+        with self.assertRaises(ValueError):
+            mpt.parallel_2d_grid_map(_matrix_outer_product, row_items, col_items, num_workers=-2)
+        with self.assertRaises(ValueError):
+            mpt.parallel_pair_reduce(_eval_pair, [(1, 2)], _reduce_dicts, num_workers=0)
+        with self.assertRaises(ValueError):
+            mpt.compute_2d_worker_grid(4, 4, num_workers=0)
+
+        # Invalid pool type raises TypeError
+        class BadPool:
+            num_workers = 0
+        with self.assertRaises(TypeError):
+            mpt.parallel_2d_grid_map(_matrix_outer_product, row_items, col_items, pool=BadPool())
+        with self.assertRaises(TypeError):
+            mpt.parallel_pair_reduce(_eval_pair, [(1, 2)], _reduce_dicts, pool=BadPool())

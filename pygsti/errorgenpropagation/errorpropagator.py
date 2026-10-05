@@ -96,7 +96,9 @@ def _should_parallelize_layer_prop(
     Internal helper: determines whether layer propagation should be parallelized across layer blocks.
     """
     workers = _determine_num_workers(num_workers)
-    if workers <= 1:
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1:
         return False
 
     force_ser = _eprop._MANUAL_PARALLEL_OVERRIDES.get("force_serial", False)
@@ -382,6 +384,8 @@ class ErrorGeneratorPropagator:
         errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam)
 
         workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+        if workers < 1:
+            raise ValueError(f"Worker count must be at least 1, got {workers}.")
         n_q = len(circuit.line_labels)
         avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
 
@@ -463,6 +467,8 @@ class ErrorGeneratorPropagator:
             raise ValueError(f"Unrecognized mode '{mode}'; expected 'magnus' or 'pairwise'.")
 
         workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+        if workers < 1:
+            raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
         # Top-level shared worker pool across propagation and Magnus stages
         if workers > 1 and pool is None:
@@ -901,8 +907,10 @@ class ErrorGeneratorPropagator:
             return list(errorgen_layers)
 
         workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+        if workers < 1:
+            raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
-        if workers <= 1 or num_workers is None and pool is None or stopping_idx < 2:
+        if workers == 1 or num_workers is None and pool is None or stopping_idx < 2:
             fully_propagated_layers = []    
             for i in range(stopping_idx):
                 err_layer = errorgen_layers[i]

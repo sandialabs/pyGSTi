@@ -554,7 +554,9 @@ def _should_parallelize_magnus(
     Internal helper: determines whether Magnus expansion should be parallelized across layer pairs.
     """
     workers = _determine_num_workers(num_workers)
-    if workers <= 1:
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1:
         return False
     n_pairs = (num_layers * (num_layers - 1)) // 2
     if n_pairs < 1:
@@ -811,11 +813,13 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
                 break
 
     workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
     n_q = len(identity) if identity is not None else 16
     avg_terms = (len(errorgen_layers[0]) + len(errorgen_layers[1])) // 2 if len(errorgen_layers) >= 2 else 0
 
-    if workers <= 1 or num_workers is None and pool is None or not _should_parallelize_magnus(len(errorgen_layers), avg_terms, num_workers=workers, n_qubits=n_q):
+    if workers == 1 or num_workers is None and pool is None or not _should_parallelize_magnus(len(errorgen_layers), avg_terms, num_workers=workers, n_qubits=n_q):
         # accumulate the second-order correction, (1/2)[A(t1), A(t2)] over all layer pairs sequentially
         second_order_comm_dict = {}
         for errorgen_layer_1, errorgen_layer_2 in errorgen_pairs:
@@ -890,11 +894,13 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
                 break
 
     workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
     n_q = len(identity) if identity is not None else 16
     avg_terms = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
     num_layers = len(errorgen_layers)
 
-    if workers <= 1 or num_workers is None and pool is None or not _should_parallelize_magnus(num_layers, avg_terms, num_workers=workers, n_qubits=n_q):
+    if workers == 1 or num_workers is None and pool is None or not _should_parallelize_magnus(num_layers, avg_terms, num_workers=workers, n_qubits=n_q):
         # Sequential execution path (100% untouched)
         second_order_comm_dict = {}
         third_order_comm_dict = {}
@@ -5357,9 +5363,11 @@ def _commuting_product(errorgen_dict_1: dict[_LSE, _Rate], errorgen_dict_2: dict
                        num_workers: Union[int, str, None] = None,
                        pool: Optional[Union[_SharedWorkerPool, _mppool.Pool]] = None) -> dict[_LSE, complex]:
     workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
     n1 = len(errorgen_dict_1)
     n2 = len(errorgen_dict_2)
-    if workers <= 1 or num_workers is None and pool is None or n1 * n2 < 1000:
+    if workers == 1 or num_workers is None and pool is None or n1 * n2 < 1000:
         return _raw_commuting_product(errorgen_dict_1, errorgen_dict_2, identity)
 
     # Parallel bilinear slicing with term-type load balancing
@@ -5691,7 +5699,9 @@ def _should_parallelize_alpha(
     or the default multi-scale absolute cutoff table.
     """
     workers = _determine_num_workers(num_workers)
-    if workers <= 1:
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
+    if workers == 1:
         return False
 
     w = num_generators * num_outcomes
@@ -5922,8 +5932,10 @@ def bulk_alpha(
         return _np.empty((n_b, n_e), dtype=_np.double)
 
     workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
-    if workers <= 1 or num_workers is None and pool is None:
+    if workers == 1 or num_workers is None and pool is None:
         return _raw_bulk_alpha(gens, tableau, desired_bitstrings)
 
     n_qubits = len(desired_bitstrings[0])
@@ -5977,8 +5989,10 @@ def bulk_alpha_pauli(
         return _np.empty((n_p, n_e), dtype=_np.double)
 
     workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
+    if workers < 1:
+        raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
-    if workers <= 1 or num_workers is None and pool is None:
+    if workers == 1 or num_workers is None and pool is None:
         return _raw_bulk_alpha_pauli(gens, tableau, paulis)
 
     n_qubits = len(paulis[0])
