@@ -1797,9 +1797,31 @@ class ReduceByDoptTester(_SGSTFixture, BaseCase):
                          self.design.circuit_stitcher.share_same_shape_schedules)
         self.assertEqual(loaded.stitch_seed, self.design.stitch_seed)
         restitched = loaded.restitch()
-        self.assertIsNone(restitched.selection)
+        self.assertEqual(list(restitched.selection.circuits), list(reduced.selection.circuits))
         self.assertEqual([list(cl) for cl in restitched.circuit_lists],
-                         [list(cl) for cl in self.design.circuit_lists])
+                         [list(cl) for cl in reduced.circuit_lists])
+
+    def test_restitching_a_reduced_design_keeps_the_reduction(self):
+        reduced = self.small.reduce_with(self.dopt, 6)
+        restitched = reduced.restitch()
+        self.assertIsInstance(restitched, SimultaneousGSTDesign)
+        self.assertIs(restitched.selection, reduced.selection)
+        self.assertEqual(list(restitched.all_circuits_needing_data),
+                         list(reduced.all_circuits_needing_data))
+        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+                         [list(cl) for cl in reduced.circuit_lists])
+
+    def test_restitching_a_reduced_design_raises_if_the_stitcher_does_not_reproduce(self):
+        # Keep only circuits that seed 7 does not stitch, then claim seed 7 built them.
+        other = _copy.deepcopy(self.small)
+        other.stitch_seed = 7
+        elsewhere = set(other.restitch().all_circuits_needing_data)
+        unique = [c for c in self.small.all_circuits_needing_data if c not in elsewhere]
+        self.assertTrue(unique)
+        reduced = self.small.reduce_with(CallableReducer(lambda design, n: unique[:n]), 3)
+        reduced.stitch_seed = 7
+        with self.assertRaisesRegex(ValueError, 'did not reproduce'):
+            reduced.restitch()
 
     def test_the_reduction_beats_taking_the_first_n_circuits(self):
         """Otherwise there is no point to any of this.
