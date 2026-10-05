@@ -558,7 +558,16 @@ Letting the shot counts vary improves on the already-good equal-shot hybrid desi
 
 Two refinements are worth knowing about:
 
-* `criterion='D'` or `'E'` substitute a different scalar measure of the information matrix for `'A'`'s sum of variances: `'D'` maximizes its log-determinant (the volume of the confidence ellipsoid — invariant to reparametrizing the rates, e.g. switching the MCM to FOMGI coordinates, which `'A'` is not), and `'E'` maximizes its smallest eigenvalue (a minimax guard against the single worst-constrained combination of parameters). A `weight` matrix restricts `'A'` to a subset of parameters, e.g. the MCM's FOMGI columns alone, when that is what the experiment is actually for.
+* `criterion='D'` or `'E'` substitute a different scalar measure of the information matrix $\mathcal I = \sum_c N_c D_c^{\mathsf T}D_c$ for `'A'`'s sum of variances.  All three are convex in the shot counts, so each is solved to a global optimum, but they ask for different experiments:
+
+| Criterion | Objective | What it means for the experiment | Invariant under reparametrizing the rates? | Use it when |
+|---|---|---|---|---|
+| `'A'` | $\min\ \mathrm{tr}\,\mathcal I^{-1}$ | sum of the predicted variances, i.e. the mean squared error of a rate | no: rescaling a parameter rescales its share of the sum | all rates matter equally and share units (true for elementary error-generator rates) -- the default |
+| `'A'` + `weight` | $\min\ \mathrm{tr}\,W\mathcal I^{-1}$ | the same, restricted or re-weighted: $W$ a projector onto the MCM's FOMGI columns designs for the MCM alone | yes, if $W$ transforms with the parameters | the experiment is *for* a subset of parameters or for predicting specific circuits (tutorial III) |
+| `'D'` | $\max\ \log\det\mathcal I$ | volume of the confidence ellipsoid | yes, under any linear reparametrization (e.g. raw MCM rates vs. FOMGI coordinates) | parameters have mixed units or arbitrary coordinates, or no single parameter should dominate |
+| `'E'` | $\max\ \lambda_{\min}(\mathcal I)$ | variance of the worst-determined *combination* of parameters (minimax) | under rotations only | guarding against a nearly unidentifiable direction, e.g. when a pool's rank is marginal |
+
+A and D usually agree on *which* circuits are informative but not on *how many shots* each gets: D values a halving of any variance equally, A values halving the largest ones most.  (`select_circuits` additionally offers `'G'`, the largest single predicted variance, for greedy selection; tutorial III compares all of them on one problem.)
 * The prediction above is for a shot-count-weighted least-squares fit (circuits with more shots are trusted proportionally more), which is what makes the allocation problem convex in the first place. `estimate_error_rates` does not yet implement that weighting — it pools every circuit's observed expectation values with equal weight regardless of how many shots measured them, which is only sensible when the shots *are* equal. For a shot allocation that is exactly optimal for *today's* estimator on a fixed circuit list (no re-selection), `neyman_shot_allocation` gives the closed-form answer directly, with no solver required:
 
 ```{code-cell} ipython3

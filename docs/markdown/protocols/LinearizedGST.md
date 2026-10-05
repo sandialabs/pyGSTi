@@ -293,7 +293,16 @@ print("predicted error bars with %d circuits x %d shots:  Hamiltonian mean %.1e 
          predicted[types == 'S'].mean(), predicted[types == 'S'].max()))
 ```
 
-Not all circuits are equally informative: a circuit with two MCMs contributes 15 observables, one without MCMs only 6, and random circuits often probe the same parameter combinations.  `select_circuits` picks, from a pool of candidate circuits, a subset whose design matrix is nearly as informative as that of the whole pool.  It greedily optimizes a classical experiment-design criterion of $(D^\mathsf{T} D)^{-1}$ -- by default the *A-criterion*, the sum of the predicted variances of all parameters (`criterion='D'`, `'E'` and `'G'` are also available, and `method='backward'` eliminates circuits from the full pool instead of adding them).  The greedy order is nested, so the first $k$ selected circuits are themselves a good $k$-circuit design.
+Not all circuits are equally informative: a circuit with two MCMs contributes 15 observables, one without MCMs only 6, and random circuits often probe the same parameter combinations.  `select_circuits` picks, from a pool of candidate circuits, a subset whose design matrix is nearly as informative as that of the whole pool.  It greedily optimizes a classical experiment-design criterion of the predicted covariance $C = (D^\mathsf{T} D)^{-1}$ -- by default the *A-criterion*, the sum of the predicted variances of all parameters.  The covariance is a $P \times P$ matrix (an ellipsoid of uncertainty), and the "alphabetic" criteria of optimal design (Kiefer 1959) are different ways of collapsing it to one number:
+
+| `criterion` | Objective | What it means for the experiment | Invariant under rescaling a parameter? | Use it when |
+|---|---|---|---|---|
+| `'A'` (average) | $\min\ \mathrm{tr}\,C$ | sum of the predicted variances; $\sqrt{\mathrm{tr}\,C/P}$ is the RMS error bar of a rate | no | all rates matter equally and share units -- true for elementary error-generator rates, hence the default |
+| `'D'` (determinant) | $\max\ \log\det D^\mathsf{T}D$ | volume of the confidence ellipsoid | yes, under any linear reparametrization | parameters have mixed units or arbitrary coordinates, or no single parameter should dominate the choice |
+| `'E'` (eigenvalue) | $\max\ \sigma_{\min}(D)$ | variance of the worst-determined *combination* of parameters | under rotations only | a pool whose rank is marginal: it first fixes the direction closest to being unidentifiable |
+| `'G'` (global) | $\min\ \max_i C_{ii}$ | the single worst predicted variance | no | every rate must individually meet a precision target (minimax per parameter) |
+
+`method='backward'` eliminates circuits from the full pool instead of adding them.  The greedy order is nested, so the first $k$ selected circuits are themselves a good $k$-circuit design.  (Tutorial II turns the criteria into a convex shot-allocation problem, and tutorial III compares them on one problem and explains when the choice matters.)
 
 Below we compare the predicted error bars of a few designs.  The last two rows keep the *total* number of shots fixed ($3\times10^6$) and spend them on the selected circuits only.
 
