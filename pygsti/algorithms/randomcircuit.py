@@ -11,9 +11,11 @@ Random circuit sampling functions.
 #***************************************************************************************************
 
 import copy as _copy
+import fractions as _fractions
 import itertools as _itertools
 
 import numpy as _np
+import networkx as _nx
 
 from pygsti.algorithms import compilers as _cmpl
 from pygsti.circuits import circuit as _cir
@@ -799,6 +801,54 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
     return circuit
 
 
+def _sample_maximum_matching(graph, edges, rand_state):
+    """
+    Samples a random maximum matching of a connectivity graph.
+
+    Every edge of `graph` gets a distinct random integer weight, so that every maximum
+    matching can be returned, though not with equal probability.
+
+    Parameters
+    ----------
+    graph : networkx.Graph
+        The undirected connectivity graph.
+
+    edges : list
+        The available directed edges, as 2-tuples of qubit labels. Every edge of `graph`
+        must appear here in at least one orientation.
+
+    rand_state : numpy.random.RandomState
+        The random number generator to draw from.
+
+    Returns
+    -------
+    list
+        Entries of `edges` forming a maximum matching of `graph`, in the order in which
+        their qubit pairs first appear in `edges`. When both orientations of a matched
+        pair are available, one is chosen uniformly at random.
+    """
+    weighted = _nx.Graph()
+    weighted.add_nodes_from(graph.nodes())
+    weights = rand_state.permutation(graph.number_of_edges()) + 1
+    for (u, v), w in zip(graph.edges(), weights):
+        weighted.add_edge(u, v, weight=int(w))
+    # Networkx's set of matched pairs has a hash-seed-dependent order and arbitrary
+    # orientations, so only membership is used and the order is taken from `edges`.
+    matched = {frozenset(pair) for pair in _nx.max_weight_matching(weighted, maxcardinality=True)}
+
+    pairs = []
+    for e in edges:
+        pair = frozenset(e)
+        if pair in matched and pair not in pairs:
+            pairs.append(pair)
+
+    matching = []
+    for pair in pairs:
+        candidates = [e for e in edges if frozenset(e) == pair]
+        matching.append(candidates[rand_state.randint(0, len(candidates))])
+    return matching
+
+
 def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qubit_labels=None, rand_state=None):
     """
     Samples a random circuit with a specified width, depth and two-qubit gate density.
@@ -810,12 +860,18 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
     integer, the number of two-qubit gates is rounded up or down at random, with the
     probabilities chosen so that its expectation is exactly `xi * width * depth / 2`.
 
-    The locations of the two-qubit gates are sampled by first choosing, independently in
-    each layer, a maximal set of disjoint edges of the connectivity graph (by repeatedly
-    picking a uniformly random remaining edge and deleting every edge that shares a qubit
-    with it), and then selecting a uniformly random subset of the resulting
-    (layer, edge) pairs of the required size. Every qubit not acted on by a two-qubit gate
-    in a layer is given a uniformly random available one-qubit gate.
+    The locations of the two-qubit gates are sampled as follows. First, independently in
+    each layer, a maximal set of disjoint edges of the connectivity graph is chosen
+    greedily (by repeatedly picking a uniformly random remaining edge and deleting every
+    edge that shares a qubit with it). The number of two-qubit gates is then drawn. If the
+    greedy layers offer fewer (layer, edge) locations than that, the layers whose set of
+    edges is smaller than a maximum matching are taken in random order, and each is
+    replaced by a random maximum matching of the connectivity graph, until there are
+    enough. A uniformly random subset of the locations of the required size is then
+    chosen. Every qubit not acted on by a two-qubit gate in a layer is given a uniformly
+    random available one-qubit gate. Because layers are replaced only when needed, every
+    edge of the connectivity graph can carry a two-qubit gate at moderate densities; at
+    the highest densities the layers are restricted to maximum matchings.
 
     Parameters
     ----------
@@ -843,7 +899,19 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
     -------
     Circuit
         A random circuit of the specified width and depth, containing a number of
-        two-qubit gates whose expectation is `xi * width * depth / 2`.
+        two-qubit gates whose expectation is `xi * width * depth / 2` when
+        `xi <= 2 * nu / width` (see Raises for `nu`).
+
+    Raises
+    ------
+    ValueError
+        If the drawn number of two-qubit gates exceeds `depth * nu`, where `nu` is the
+        size of a maximum matching of the connectivity graph on the circuit's qubits. This
+        never happens when `xi <= 2 * nu / width`, and always happens when
+        `xi * width * depth / 2 >= nu * depth + 1`. Between those it depends on the random
+        rounding, and successful calls there have an expected number of two-qubit gates
+        below `xi * width * depth / 2`. On a contiguous stretch of a line, `nu` is
+        `width // 2`.
     """
     if rand_state is None:
         rand_state = _np.random.RandomState()
@@ -860,9 +928,11 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
     all_edges = [e for e in pspec.compute_2Q_connectivity().edges() if all([q in qubits for q in e])]
     ops_on_qubits = pspec.compute_ops_on_qubits()
 
-    # In each layer, greedily pick a maximal set of disjoint edges. The union over layers
-    # is the set of locations at which a two-qubit gate could be placed.
-    possible_twoQgate_locations = []
+    # In each layer, greedily pick a maximal set of disjoint edges. If these layers hold
+    # fewer edges than the number of two-qubit gates drawn below, layers smaller than a
+    # maximum matching are replaced, in random order, by random maximum matchings until
+    # there are enough. The (layer, edge) pairs are where two-qubit gates can be placed.
+    layer_edges = []
     for i in range(depth):
         edgelist = list(all_edges)
         selectededges = []
@@ -872,7 +942,7 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
             # Delete all edges containing these qubits.
             edgelist = [e for e in edgelist if not any([q in e for q in edge])]
 
-        possible_twoQgate_locations += [(i, e) for e in selectededges]
+        layer_edges.append(selectededges)
 
     target_num_2q_gates = xi * width * depth / 2
 
@@ -883,6 +953,27 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
     prob_ceiling = target_num_2q_gates - floor_target_num_2q_gates
     num_2q_gates = rand_state.choice([ceiling_target_num_2q_gates, floor_target_num_2q_gates],
                                      p=[prob_ceiling, 1 - prob_ceiling])
+
+    if sum(len(edges) for edges in layer_edges) < num_2q_gates:
+        graph = _nx.Graph()
+        graph.add_nodes_from(qubits)
+        graph.add_edges_from(all_edges)
+        matching_number = len(_nx.max_weight_matching(graph, maxcardinality=True))
+        max_num_2q_gates = matching_number * depth
+        if num_2q_gates > max_num_2q_gates:
+            raise ValueError(
+                f"Infeasible two-qubit gate density xi={xi}: this draw needs {num_2q_gates} two-qubit gates "
+                f"(the expected number is {target_num_2q_gates:g}), but at most {max_num_2q_gates} fit in a "
+                f"width-{width}, depth-{depth} circuit on these qubits, because a maximum matching of their "
+                f"connectivity graph has {matching_number} edges. "
+                f"xi of at most {_fractions.Fraction(2 * matching_number, width)} always fits.")
+
+        for i in rand_state.permutation([i for i in range(depth) if len(layer_edges[i]) < matching_number]):
+            layer_edges[i] = _sample_maximum_matching(graph, all_edges, rand_state)
+            if sum(len(edges) for edges in layer_edges) >= num_2q_gates:
+                break
+
+    possible_twoQgate_locations = [(i, e) for i in range(depth) for e in layer_edges[i]]
 
     selected_2q_gate_locations_indices = rand_state.choice([i for i in range(len(possible_twoQgate_locations))],
                                                            size=num_2q_gates, replace=False)
