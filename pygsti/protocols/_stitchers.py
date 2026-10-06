@@ -229,9 +229,9 @@ class CallableStitcher(CircuitStitcher):
 
     Saving an unsupported recipe warns and records the reason without changing this
     live adapter. An ordinary design load still restores saved circuits, but its
-    adapter raises on ``stitch()`` or ``restitch()``. A supported recipe whose function
-    is missing at load time warns and has the same limitation. Saving an unavailable
-    adapter again preserves that reason. Other import and serialization errors propagate.
+    adapter raises on ``stitch()``. A supported recipe whose function is missing at load
+    time warns and has the same limitation. Saving an unavailable adapter again preserves
+    that reason. Other import and serialization errors propagate.
 
     Use an importable :class:`CircuitStitcher` subclass with explicit serialization
     methods for configuration that needs custom encoding. Neither approach saves Python
@@ -297,7 +297,7 @@ class CallableStitcher(CircuitStitcher):
         func, reason = _resolve_stitcher_function(state['func'])
         if reason is not None:
             _warnings.warn(f"CallableStitcher recipe could not be restored: {reason} "
-                           "Saved circuit data can still be loaded, but restitching is unavailable.", stacklevel=2)
+                           "Saved circuit data can still be loaded, but the loaded adapter cannot stitch.", stacklevel=2)
             return cls._unavailable(reason)
         return cls(func, **state['kwargs'])
 
