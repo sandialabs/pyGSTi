@@ -35,6 +35,7 @@ from pygsti.protocols._stitchers import (
 )
 from pygsti.protocols.gst import GateSetTomographyDesign
 from pygsti.protocols.protocol import CombinedExperimentDesign
+from pygsti.tools.edesigntools import BlockDoptReducer, CallableReducer
 from pygsti.tools.graphs.coloring import check_valid_edge_coloring
 from ..util import BaseCase, with_temp_path
 
@@ -1706,3 +1707,136 @@ class AssignDesignsDefaultRandgenTester(BaseCase):
         # Confirms the default is a real generator being consumed
         explicit_other = _stitch(3, 5, seed=12345)
         self.assertNotEqual(omitted, explicit_other)
+
+
+class ReduceByDoptTester(_SGSTFixture, BaseCase):
+    """Reducing a ``SimultaneousGSTDesign`` by D-optimality: the reason truncation was wanted.
+
+    The kernel and the ranking are tested in test/unit/tools/test_blockdopt.py. What
+    matters here is that reducing a *stitched* design gives back a well-formed
+    SimultaneousGSTDesign, since that is exactly what the class used to refuse.
+
+    The design is cut down before ranking: greedy selection costs one QR per remaining
+    candidate per pick, so ranking the full design against this model takes minutes.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.small = cls.design.truncate_to_circuits(list(cls.design.circuit_lists[0])[:30])
+        model = pygsti.models.create_crosstalk_free_model(
+            cls.pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
+        # Not the target model: at the target, every cholesky-mode stochastic column of
+        # the Jacobian is exactly zero. See perturb_errorgen_rates.
+        cls.model = pygsti.tools.perturb_errorgen_rates(model, 1e-3, seed=0)
+        cls.dopt = BlockDoptReducer(cls.model)
+
+    def test_reducing_gives_back_a_well_formed_simultaneous_design(self):
+        reduced = self.small.reduce_with(self.dopt, 8)
+        self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        self.assertEqual(len(reduced.all_circuits_needing_data), 8)
+        self.assertTrue(reduced.nested)
+        _validate_stitched_circuits(
+            reduced.circuit_lists, reduced.vertices, reduced.color_patches)
+        self.assertEqual(reduced.color_patches, self.small.color_patches)
+        self.assertTrue(set(reduced.all_circuits_needing_data)
+                        <= set(self.small.all_circuits_needing_data))
+
+    def test_the_score_curve_comes_back_on_the_design(self):
+        reduced = self.small.reduce_with(self.dopt, 6)
+        self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        scores = reduced.selection.scores
+        self.assertEqual(len(scores), 6)
+        self.assertTrue(np.all(np.diff(scores) >= -1e-9))
+
+    def test_the_reduced_design_records_what_reduced_it(self):
+        reduced = self.small.reduce_with(BlockDoptReducer(self.model, ridge=2.0), 6)
+        self.assertIsInstance(reduced.selection.reducer, BlockDoptReducer)
+        self.assertEqual(reduced.selection.reducer.ridge, 2.0)
+        self.assertEqual(reduced.selection.metadata['num_candidates'],
+                         len(self.small.all_circuits_needing_data))
+
+    def test_an_unreduced_design_records_no_selection(self):
+        self.assertIsNone(self.small.selection)
+
+    def test_reduce_with_takes_any_reducer(self):
+        """The point of the interface: a rule we did not write, on a stitched design."""
+        shallowest = sorted(self.small.all_circuits_needing_data, key=len)[:7]
+        reduced = self.small.reduce_with(CallableReducer(lambda design, n: shallowest), 7)
+        self.assertIsInstance(reduced, SimultaneousGSTDesign)
+        self.assertEqual(set(reduced.all_circuits_needing_data), set(shallowest))
+        _validate_stitched_circuits(
+            reduced.circuit_lists, reduced.vertices, reduced.color_patches)
+
+    def test_a_target_model_warns_here_too(self):
+        target = pygsti.models.create_crosstalk_free_model(
+            self.pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
+        with self.assertWarns(UserWarning):
+            self.small.reduce_with(BlockDoptReducer(target), 4)
+
+    def test_relabelling_a_reduced_design_keeps_the_record(self):
+        """map_qubit_labels bypasses __init__, so `selection` has to be carried by hand."""
+        reduced = self.small.reduce_with(self.dopt, 6)
+        mapper = {q: 'Q%s' % q for q in reduced.qubit_labels}
+        self.assertIs(reduced.map_qubit_labels(mapper).selection, reduced.selection)
+
+    @with_temp_path
+    def test_a_reduced_design_round_trips_with_its_record(self, root):
+        reduced = self.small.reduce_with(BlockDoptReducer(self.model, ridge=2.0), 6)
+        root = pathlib.Path(root) / 'reduced'
+        reduced.write(root)
+        loaded = SimultaneousGSTDesign.from_dir(root)
+        self.assertIsInstance(loaded.selection.reducer, BlockDoptReducer)
+        self.assertEqual(loaded.selection.reducer.ridge, 2.0)
+        self.assertEqual(list(loaded.selection.circuits), list(reduced.selection.circuits))
+        self.assertArraysAlmostEqual(loaded.selection.scores, reduced.selection.scores)
+        self.assertEqual(set(loaded.all_circuits_needing_data),
+                         set(reduced.all_circuits_needing_data))
+        self.assertIsInstance(loaded.circuit_stitcher, RandomizedPatchStitcher)
+        self.assertEqual(loaded.circuit_stitcher.share_same_shape_schedules,
+                         self.design.circuit_stitcher.share_same_shape_schedules)
+        self.assertEqual(loaded.stitch_seed, self.design.stitch_seed)
+        restitched = loaded.restitch()
+        self.assertEqual(list(restitched.selection.circuits), list(reduced.selection.circuits))
+        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+                         [list(cl) for cl in reduced.circuit_lists])
+
+    def test_restitching_a_reduced_design_keeps_the_reduction(self):
+        reduced = self.small.reduce_with(self.dopt, 6)
+        restitched = reduced.restitch()
+        self.assertIsInstance(restitched, SimultaneousGSTDesign)
+        self.assertIs(restitched.selection, reduced.selection)
+        self.assertEqual(list(restitched.all_circuits_needing_data),
+                         list(reduced.all_circuits_needing_data))
+        self.assertEqual([list(cl) for cl in restitched.circuit_lists],
+                         [list(cl) for cl in reduced.circuit_lists])
+
+    def test_restitching_a_reduced_design_raises_if_the_stitcher_does_not_reproduce(self):
+        # Keep only circuits that seed 7 does not stitch, then claim seed 7 built them.
+        other = _copy.deepcopy(self.small)
+        other.stitch_seed = 7
+        elsewhere = set(other.restitch().all_circuits_needing_data)
+        unique = [c for c in self.small.all_circuits_needing_data if c not in elsewhere]
+        self.assertTrue(unique)
+        reduced = self.small.reduce_with(CallableReducer(lambda design, n: unique[:n]), 3)
+        reduced.stitch_seed = 7
+        with self.assertRaisesRegex(ValueError, 'did not reproduce'):
+            reduced.restitch()
+
+    def test_the_reduction_beats_taking_the_first_n_circuits(self):
+        """Otherwise there is no point to any of this.
+
+        Judged by log-volume under the independent scorer, not by the selector's own
+        numbers.
+        """
+        candidates = list(self.small.all_circuits_needing_data)
+        jac_dict = self.model.sim.bulk_dprobs(candidates)
+        jac, block_size = pygsti.tools.edesigntools.blockdopt._jacobian_dict_to_array(jac_dict)
+        keys = list(jac_dict)
+
+        chosen = set(self.small.reduce_with(self.dopt, 8).all_circuits_needing_data)
+        greedy = pygsti.tools.greedy_path_log_volumes(
+            jac.T, block_size, [i for i, c in enumerate(keys) if c in chosen])[-1]
+        first_n = pygsti.tools.greedy_path_log_volumes(
+            jac.T, block_size, range(8))[-1]
+        self.assertGreater(greedy, first_n)
