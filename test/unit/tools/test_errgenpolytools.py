@@ -135,8 +135,14 @@ class ErrgenPolyToolsTester(BaseCase):
         return indexed
 
     def _assert_poly_dict_matches_numeric_dict(self, poly_dict, numeric_dict, paramvec, places=12):
+        # A label may be present in one dictionary and absent from the other when its rate is exactly
+        # zero (e.g. terms that cancel identically in the numeric composition are never emitted by
+        # the anticommutator-based Taylor expansion, but the symbolic expansion keeps them as zero
+        # polynomials); a missing entry counts as zero.
         for key, poly in poly_dict.items():
-            self.assertAlmostEqual(poly.evaluate(paramvec), numeric_dict[key], places=places)
+            self.assertAlmostEqual(poly.evaluate(paramvec), numeric_dict.get(key, 0.0), places=places)
+        for key in set(numeric_dict) - set(poly_dict):
+            self.assertAlmostEqual(0.0, numeric_dict[key], places=places)
 
     # ------------------------------------------------------------------
     # helper / mapping tests
@@ -516,3 +522,34 @@ class ErrgenPolyToolsTester(BaseCase):
             _epoly.magnus_symbolic_polynomial(
                 self.errorgen_phases_by_layer, self.errgen_to_var_map, magnus_order=3
             )
+
+    # ------------------------------------------------------------------
+    # canonical label order
+    # ------------------------------------------------------------------
+    def test_polynomials_on_reversed_target_gate_model(self):
+        # A two-qubit gate embedded into reversed target qubits yields model labels whose two basis
+        # element labels are out of canonical order; construct_errorgen_layers reorders them and negates
+        # the rates of reordered A labels. The polynomial pipeline reads those layers twice (as the
+        # transform-map keys and as the parameter vector), so a sign applied twice, or not at all, or
+        # a key mismatch between the two would show up here as a disagreement with the numeric BCH
+        # result - including for the (never propagated) last gate layer.
+        from pygsti.circuits import Circuit
+        pspec = QubitProcessorSpec(2, ['Gcphase', 'Gxpi2', 'Gypi2'], availability={'Gcphase': [(1, 0)]})
+        rates = random_CPTP_error_generator_rates(2, errorgen_types=('H', 'S', 'C', 'A'), seed=7)
+        model = create_crosstalk_free_model(pspec, lindblad_error_coeffs={'Gcphase': rates}, lindblad_parameterization='GLND')
+        circuit = Circuit([('Gcphase', 1, 0), ('Gxpi2', 0), ('Gcphase', 1, 0)], line_labels=(0, 1))
+        propagator = ErrorGeneratorPropagator(model)
+        local_coeffs = model.circuit_layer_operator(circuit[0]).errorgen_coefficients(label_type='local')
+        self.assertTrue(any(rate != 0 and lbl.errorgen_type == 'A' and lbl.basis_element_labels[1] < lbl.basis_element_labels[0]
+                            for lbl, rate in local_coeffs.items()))
+
+        phases = propagator.errorgen_transform_map(circuit)
+        phases_by_layer = propagator.errorgen_transform_maps(circuit)
+        errgen_to_var_map, var_to_errgen_map = _epoly.error_generator_to_polynomial_variable_maps(phases, return_reverse=True)
+        paramvec = _epoly.construct_polynomial_parameter_vector_from_propagator(propagator, var_to_errgen_map, circuit)
+        for order in (1, 2):
+            polys = _epoly.magnus_symbolic_polynomial(phases_by_layer, errgen_to_var_map, magnus_order=order)
+            numeric = propagator.propagate_errorgens_bch(circuit, bch_order=order)
+            self._assert_poly_dict_matches_numeric_dict(polys, numeric, paramvec, places=12)
+            self.assertTrue(all(len(lbl._hashable_basis_element_labels) == 1 or lbl._hashable_basis_element_labels[0] < lbl._hashable_basis_element_labels[1]
+                                for lbl in polys))

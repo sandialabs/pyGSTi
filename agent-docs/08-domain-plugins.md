@@ -39,6 +39,8 @@ This signals that the maintainers haven't decided which subdirectories are "offi
 - [`errorpropagator.py`](../pygsti/errorgenpropagation/errorpropagator.py) — the `ErrorGeneratorPropagator` class and `eoc_error_channel()` API.
 - [`localstimerrorgen.py`](../pygsti/errorgenpropagation/localstimerrorgen.py) — Stim-backed error-label representation and conversions.
 
+The two Paulis of a `C`/`A` `LocalStimErrorgenLabel` must be in string-sorted order; model objects do not guarantee that order, so rate dictionaries are canonicalised where they enter this module. See [known-debt.md #18](known-debt.md#18-ca-basis-element-label-pair-order-model-objects-vs-errorgenpropagation).
+
 Requires `stim` (try-imported with graceful degradation).
 
 This subpackage is too small to spend much time on architecturally. If you need to use it, read the two files; if you need to extend it, the class hierarchy is shallow and the code is recent enough to be readable.

@@ -31,6 +31,8 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.protocols.protocol import FreeformDesign as _FreeformDesign
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools._qiskit_interop import check_qiskit_version as _check_qiskit_version
+# Re-exported for backwards compatibility: this used to be defined here.
+from pygsti.tools.graphs import random_connected_subgraph
 
 
 MAX_STARTING_LAYER_ATTEMPTS = 1000
@@ -729,66 +731,6 @@ def _greedy_growth_subcirc(circ: _Circuit,
 
     # Return circuit + dropped gates/physical depth for external selection
     return _Circuit(subcirc_layers, line_labels=qubit_subset), total_dropped_gates, physical_depth, (start, end)
-
-
-def random_connected_subgraph(G: _nx.Graph,
-                              width: int,
-                              rand_state: Optional[_np.random.RandomState] = None
-                              ) -> Union[Set[int], Set[str]]:
-    """
-    Generates a random set of nodes that form a 
-    connected subgraph of a specified width from a given graph.
-
-    Parameters
-    -------------
-    G : networkx.Graph
-        The graph from which to generate the connected subgraph.
-    width : int
-        The target width of the subgraph to be generated.
-    rand_state : Optional[_np.random.RandomState]
-        A random state for reproducibility. Default is None.
-
-    Returns
-    --------
-    set[int or str]
-        A set of nodes representing the generated connected subgraph.
-    """
-
-    if rand_state is None:
-        rand_state = _np.random.RandomState()
-
-    # pick a random starting node
-    starting_node = rand_state.choice(G.nodes)
-
-    used_nodes = set([starting_node])
-
-    plausible_growth_nodes = set([starting_node])
-
-    for i in range(width - 1):
-        valid_node_found = False
-        while valid_node_found == False and len(plausible_growth_nodes):
-            growth_node = rand_state.choice(list(plausible_growth_nodes))
-            neighbors = set(G.neighbors(growth_node))
-            new_neighbors = neighbors.difference(used_nodes)
-
-            if len(new_neighbors):
-                new_node = rand_state.choice(list(new_neighbors))
-                used_nodes.add(new_node)
-                plausible_growth_nodes.add(new_node)
-                valid_node_found = True
-
-            else:
-                plausible_growth_nodes.remove(growth_node)
-        
-        if valid_node_found == False: # we exited because all possible nodes where the graph could be extended have been exhausted
-            raise RuntimeError(f'Could not generate a subgraph with {width} nodes')
-            # failure should only occur if the initial node is on a connected component of the graph with less nodes than 'width'.
-
-        
-    assert len(used_nodes) == width, f'set of selected nodes has length {used_nodes} but should have length {width}'
-    assert _nx.is_connected(G.subgraph(used_nodes)), f'subgraph on nodes {used_nodes} should be connected but is not'
-
-    return used_nodes
 
 
 

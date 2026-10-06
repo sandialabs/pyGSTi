@@ -1925,7 +1925,8 @@ class OpModel(Model):
         unique_layers = unique_layers.union(*unique_layers_by_circuit)
 
         #Now pre-compute the gpindices for all of these unique layers
-        unique_layers_gpindices_dict = {layer:_slct.indices(self.circuit_layer_operator(layer).gpindices) for layer in unique_layers}
+        unique_layers_gpindices_dict = {layer: self.circuit_layer_operator(layer).gpindices_as_array().tolist()
+                                        for layer in unique_layers}
         
         #loop through the circuit layers and get the circuit layer operators.
         #from each of the circuit layer operators we'll get their gpindices. 
