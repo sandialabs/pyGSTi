@@ -17,7 +17,7 @@ from pygsti.protocols import protocol as _proto
 from pygsti.protocols import vb as _vb
 from pygsti import tools as _tools
 from pygsti.algorithms import dfe as _dfe
-from pygsti.protocols import rb as _rb
+from pygsti.tools import mcfetools as _mcfe
 from pygsti.baseobjs.label import Label as _Label
 
 
@@ -28,9 +28,12 @@ class DFEDesign(_vb.BenchmarkingDesign):
     For each circuit, `num_samples` DFE circuits are sampled with
     :func:`~pygsti.algorithms.dfe.sample_dfe_circuit`.
 
-    This currently only works if `circuits` are all on the same qubits
-    b/c it is built on BenchmarkingDesign. Code will likely silently
-    break if this isn't true
+    The design's `qubit_labels` are the first circuit's `line_labels`. The :class:`DFE`
+    protocol handles circuits on different qubits, but other machinery inherited from
+    BenchmarkingDesign may assume that every circuit shares those labels.
+
+    Whether any circuit was sampled with a mask is recorded in the boolean attribute
+    `has_fixed_identity_locations`.
 
     Parameters
     ----------
@@ -51,7 +54,8 @@ class DFEDesign(_vb.BenchmarkingDesign):
         A string describing the experiment design.
 
     add_default_protocol : bool, optional
-        Currently ignored: the design always attaches a default `RB` protocol.
+        If True, a :class:`DFE` protocol named `'DFE'` is attached as the default protocol.
+        Combining this with `fixed_identity_locations` raises ValueError.
 
     seed : int, optional
         A seed for the random number generator, for reproducible sampling.
@@ -64,7 +68,8 @@ class DFEDesign(_vb.BenchmarkingDesign):
         entry per circuit, each None or a list of bools over that circuit's `line_labels`
         (see :func:`~pygsti.algorithms.dfe.sample_dfe_circuit`). Pinned sampling has fixed
         support and generally gives a biased process fidelity, for every circuit with a
-        mask, including an `'idle'` circuit with no idle qubit.
+        mask, including an `'idle'` circuit with no idle qubit. The :class:`DFE` protocol
+        refuses designs with any mask.
 
     create_same_measurement_reference : bool, optional
         Not implemented. Passing True raises NotImplementedError.
@@ -75,6 +80,11 @@ class DFEDesign(_vb.BenchmarkingDesign):
 
         circuits = list(circuits)
         identity_masks = self._resolve_identity_masks(circuits, fixed_identity_locations)
+        pinned = any(mask is not None for mask in identity_masks)
+        if pinned and add_default_protocol:
+            raise ValueError("The DFE protocol refuses designs with fixed_identity_locations, because their "
+                             "fixed-support Paulis bias its process-fidelity estimate. Use "
+                             "add_default_protocol=False to build this design for other analyses.")
 
         circuit_lists = []
         measurements = []
@@ -100,7 +110,7 @@ class DFEDesign(_vb.BenchmarkingDesign):
             signs.append(signs_for_c)
 
         self._init_foundation(circuit_lists, measurements, signs, num_samples, descriptor,
-                              add_default_protocol)
+                              add_default_protocol, pinned)
 
     @staticmethod
     def _resolve_identity_masks(circuits, fixed_identity_locations):
@@ -129,7 +139,7 @@ class DFEDesign(_vb.BenchmarkingDesign):
         return list(fixed_identity_locations)
 
     def _init_foundation(self, circuit_lists, measurements, signs, num_samples, descriptor,
-                         add_default_protocol):
+                         add_default_protocol, has_fixed_identity_locations):
         # Pair these attributes with circuit data so that we serialize/truncate properly
         self.paired_with_circuit_attrs = ["measurements", "signs"]
 
@@ -140,7 +150,129 @@ class DFEDesign(_vb.BenchmarkingDesign):
         self.signs = signs
         self.circuits_per_depth = num_samples
         self.descriptor = descriptor
+        self.has_fixed_identity_locations = bool(has_fixed_identity_locations)
 
-        # This is a hack to do the data processing automatically
-        defaultfit = 'A-fixed'
-        self.add_default_protocol(_rb.RB(name='RB', defaultfit=defaultfit))
+        if add_default_protocol:
+            self.add_default_protocol(DFE(name='DFE'))
+
+
+class DFE(_vb.SummaryStatistics):
+    """
+    Direct fidelity estimation of the process fidelity of each target circuit in a DFEDesign.
+
+    For a Clifford target on n qubits (its own `line_labels`) under stochastic Pauli errors, the energy of a dressed
+    circuit is an unbiased estimate of the Pauli fidelity of its sampled Pauli. The default
+    sampling is uniform over all 4^n - 1 non-identity Paulis, so the mean energy `p` over a
+    target's dressed circuits gives the process fidelity `1 - (4^n - 1)(1 - p)/4^n`, computed by
+    :func:`~pygsti.tools.mcfetools.polarization_to_fidelity`. For n >= 20 that function returns
+    `p` itself.
+
+    Non-Pauli noise can bias the estimate: qubits where the sampled Pauli is the identity start
+    in |0> rather than in a random state, so non-unital errors such as amplitude damping shift
+    the estimate by an amount that depends on the target circuit. Under T1 decay toward |0> the
+    fidelity is overstated.
+
+    The standard error is `(1 - 4^-n)` times the sample standard deviation of the energies,
+    divided by the square root of the number of dressed circuits K. It folds shot noise and
+    Pauli sampling into one empirical spread. It is zero when every energy is equal, as on
+    noiseless data, and NaN when K is 1. With few samples, or when the Pauli fidelities take few
+    distinct values, it can underestimate the true error.
+
+    The estimate covers the whole dressed circuit: errors in the preparation and
+    measurement-basis layers that dressing adds, and in state preparation and readout, are
+    included.
+
+    Designs that aren't :class:`DFEDesign` objects are refused with TypeError, since other
+    benchmarking designs (e.g. `BinaryRBDesign`) carry similar attributes but would give
+    meaningless numbers. Designs built with `fixed_identity_locations` are refused with
+    ValueError, because their sampled Paulis have fixed support and the process-fidelity
+    estimate would be biased.
+
+    Parameters
+    ----------
+    name : str, optional
+        The name of this protocol, also used to (by default) name the
+        results produced by this protocol. If None, the class name will
+        be used.
+    """
+
+    def __init__(self, name=None):
+        super().__init__(name)
+
+    def run(self, data, memlimit=None, comm=None):
+        """
+        Run this protocol on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data, whose experiment design must be a :class:`DFEDesign`.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes. Unused.
+
+        comm : mpi4py.MPI.Comm, optional
+            An MPI communicator. Unused.
+
+        Returns
+        -------
+        DFEResults
+        """
+        design = data.edesign
+        if not isinstance(design, DFEDesign):
+            raise TypeError("The DFE protocol needs a DFEDesign, not a %s." % type(design).__name__)
+        if getattr(design, 'has_fixed_identity_locations', False):
+            raise ValueError("This design pins identity locations (fixed_identity_locations), so its sampled "
+                             "Paulis have fixed support and the process-fidelity estimate would be biased. "
+                             "Rebuild it with fixed_identity_locations=None.")
+
+        summary = self._compute_summary_statistics(data, energy=True)
+
+        fidelities = []
+        standard_errors = []
+        for i, d in enumerate(design.depths):
+            e = _np.asarray(summary['energies'][d], dtype=float)
+            K = len(e)
+            if K == 0:
+                fidelities.append(float('nan'))
+                standard_errors.append(float('nan'))
+                continue
+            # Each target's Paulis are drawn over its own line_labels, which can be narrower than
+            # design.qubit_labels; a measurement has one entry per qubit of its target.
+            n = len(design.measurements[i][0])
+            fidelities.append(float(_mcfe.polarization_to_fidelity(e.mean(), n)))
+            if K >= 2:
+                standard_errors.append(float((1 - 4.0**-n) * e.std(ddof=1) / _np.sqrt(K)))
+            else:
+                standard_errors.append(float('nan'))
+
+        return DFEResults(data, self, fidelities, standard_errors)
+
+
+class DFEResults(_proto.ProtocolResults):
+    """
+    The process-fidelity estimates produced by running a :class:`DFE` protocol.
+
+    Entry `i` of `fidelities` and of `standard_errors` belongs to target circuit
+    `data.edesign.depths[i]`, which is that circuit's index in the `circuits` given to
+    :class:`DFEDesign`. These indices stay correct after the design is truncated.
+
+    Parameters
+    ----------
+    data : ProtocolData
+        The experimental data these results are generated from.
+
+    protocol_instance : Protocol
+        The protocol that generated these results.
+
+    fidelities : list of float
+        The estimated process fidelity of each target circuit.
+
+    standard_errors : list of float
+        The standard error of each estimate (NaN when it can't be computed).
+    """
+
+    def __init__(self, data, protocol_instance, fidelities, standard_errors):
+        super().__init__(data, protocol_instance)
+        self.fidelities = [float(f) for f in fidelities]
+        self.standard_errors = [float(s) for s in standard_errors]
