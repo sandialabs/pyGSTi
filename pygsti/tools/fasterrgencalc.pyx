@@ -17,6 +17,10 @@ import numpy as np
 cimport numpy as np
 cimport cython
 from cpython.unicode cimport PyUnicode_FromStringAndSize, PyUnicode_AsUTF8
+
+cdef extern from "Python.h":
+    object PyUnicode_New(Py_ssize_t size, Py_UCS4 maxchar)
+    void* PyUnicode_DATA(object o)
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 import stim
 from libc.math cimport pow
@@ -90,6 +94,107 @@ cdef inline bint pauli_flip_ascii(unsigned char op):
     Any unrecognized operator is treated as no flip.
     """
     return (op == 88 or op == 89)  # 'X' (88) or 'Y' (89)
+
+
+cpdef object fast_support_mask(tuple bel_strings):
+    """
+    Support bitmask of an error generator label from its 'I'-padded basis element label
+    strings (as cached by `LocalStimErrorgenLabel._hashable_basis_element_labels`): bit q of
+    the returned python int is set iff some string is not 'I' at position q.
+    Optimized equivalent of `pygsti.errorgenpropagation.localstimerrorgen._slow_support_mask`.
+
+    Strings of up to 64 characters are handled in a single C integer; longer strings are
+    processed in 64-character chunks that are shifted into an arbitrary-precision python int.
+
+    Parameters
+    ----------
+    bel_strings : tuple of str
+        One or two Pauli strings of equal length made of the characters 'I', 'X', 'Y', 'Z'.
+
+    Returns
+    -------
+    int
+    """
+    cdef:
+        unsigned long long chunk
+        Py_ssize_t n, start, stop, i
+        const char* p
+        object mask = 0
+        object chunk_mask
+        str s
+
+    for s in bel_strings:
+        p = PyUnicode_AsUTF8(s)
+        n = len(s)
+        if n <= 64:
+            chunk = 0
+            for i in range(n):
+                if p[i] != 73:  # 'I' (73)
+                    chunk |= (<unsigned long long>1) << i
+            if chunk:
+                mask |= chunk
+        else:
+            start = 0
+            while start < n:
+                stop = start + 64 if start + 64 < n else n
+                chunk = 0
+                for i in range(start, stop):
+                    if p[i] != 73:
+                        chunk |= (<unsigned long long>1) << (i - start)
+                if chunk:
+                    chunk_mask = chunk
+                    mask |= chunk_mask << start
+                start = stop
+    return mask
+
+
+# Single-qubit Pauli products with the phase dropped, indexed by the XOR of the two letters'
+# ASCII codes (the XOR identifies the pair up to order; the product is order-independent once
+# the phase is dropped). Built once at import from the multiplication table written out below.
+# Optimized equivalent of `pygsti.errorgenpropagation.localstimerrorgen._slow_bel_product_str`.
+cdef unsigned char _BEL_PRODUCT_TABLE[256]
+_BEL_PRODUCTS = {('I', 'I'): 'I', ('I', 'X'): 'X', ('I', 'Y'): 'Y', ('I', 'Z'): 'Z',
+                 ('X', 'I'): 'X', ('X', 'X'): 'I', ('X', 'Y'): 'Z', ('X', 'Z'): 'Y',
+                 ('Y', 'I'): 'Y', ('Y', 'X'): 'Z', ('Y', 'Y'): 'I', ('Y', 'Z'): 'X',
+                 ('Z', 'I'): 'Z', ('Z', 'X'): 'Y', ('Z', 'Y'): 'X', ('Z', 'Z'): 'I'}
+for _i in range(256):
+    _BEL_PRODUCT_TABLE[_i] = 73  # 'I'
+for (_a, _b), _c in _BEL_PRODUCTS.items():
+    _BEL_PRODUCT_TABLE[ord(_a) ^ ord(_b)] = ord(_c)
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+cpdef str fast_bel_product_str(str bel_str_1, str bel_str_2):
+    """
+    The 'I'-padded string of the product of two Paulis given as 'I'-padded strings, with the
+    phase dropped: `fast_bel_product_str('XI', 'YZ')` -> `'ZZ'` (X Y = iZ). One table lookup per
+    character on the ASCII buffers of the two strings, written directly into the buffer of the
+    new (ASCII) string.
+
+    Precondition (not checked): both strings have the same length and consist only of the
+    characters 'I', 'X', 'Y', 'Z'. Other input produces meaningless output.
+
+    Parameters
+    ----------
+    bel_str_1, bel_str_2 : str
+
+    Returns
+    -------
+    str
+    """
+    cdef:
+        const char* p = PyUnicode_AsUTF8(bel_str_1)
+        const char* q = PyUnicode_AsUTF8(bel_str_2)
+        Py_ssize_t n = len(bel_str_1)
+        Py_ssize_t i
+        object result = PyUnicode_New(n, 127)
+        char* out = <char*> PyUnicode_DATA(result)
+
+    for i in range(n):
+        out[i] = _BEL_PRODUCT_TABLE[<unsigned char>(p[i] ^ q[i])]
+    return result
+
 
 @cython.wraparound(False)   # Deactivate negative indexing.
 cpdef tuple fast_pauli_phase_update_all_zeros(str pauli_str, bint dual=False):
@@ -953,11 +1058,16 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha(object errorgens_iter,
         return np.array([], dtype=np.double)        
         
     #
-    # 1) Build the simulator & remember how to restore it if needed.
+    # 1) Build the simulator
     #
     cdef object sim
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(tableau**-1)
+    if isinstance(tableau, stim.TableauSimulator):
+        # call chain that touches sim is fast_bulk_alpha -> fast_bulk_phi -> fast_bulk_amplitude_of_state
+        # fast_bulk_amplitude_of_state resets simulator state after use, so safe not to do so here.
+        sim = tableau
+    else:
+        sim = stim.TableauSimulator()
+        sim.set_inverse_tableau(tableau**-1)
 
     #
     # 2) Pre‐allocate identity pauli for reuse.
@@ -1118,7 +1228,7 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha_pauli(object errorgens_iter, ob
     errorgens : iterable of LocalStimElementaryErrorgenLabel
         Error generator labels for which to calculate sensitivity.
     
-    tableau : stim.Tableau
+    tableau : stim.Tableau or stim.TableauSimulator
         Stim Tableau corresponding to the stabilizer state.
         
     paulis : list of stim.PauliString
@@ -1146,8 +1256,12 @@ cpdef np.ndarray[double, ndim=2] fast_bulk_alpha_pauli(object errorgens_iter, ob
         object res  # temporary for the result of com()
     
     # Build the simulator and set its inverse tableau.
-    sim = stim.TableauSimulator()
-    sim.set_inverse_tableau(tableau**-1)
+    if isinstance(tableau, stim.TableauSimulator):
+        #only things that touch sim are peek_observable_expectation which preserves state.
+        sim = tableau
+    else:
+        sim = stim.TableauSimulator()
+        sim.set_inverse_tableau(tableau**-1)
         
     n_paulis    = len(paulis)
     n_errorgens = len(errorgens)
