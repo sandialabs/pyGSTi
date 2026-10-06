@@ -27,7 +27,8 @@ def sample_dfe_circuit(pspec, circuit, clifford_compilations, create_same_measur
     fidelity can be estimated from computational-basis measurements. The returned
     measurement and sign specify the observable to estimate: the expected outcome of the
     circuit is the parity of the bits at the qubits marked 'Z' in `measurement`, equal to
-    `sign` in the absence of error.
+    `sign` in the absence of error. Qubits where the sampled Pauli (prep layer) or its
+    image under `circuit` (final layer) is the identity are left idle by these layers.
 
     Parameters
     ----------
@@ -52,7 +53,14 @@ def sample_dfe_circuit(pspec, circuit, clifford_compilations, create_same_measur
         If given, must have one entry per qubit of `circuit`. Qubits whose entry is True
         are always assigned the identity Pauli, and the remaining qubits are assigned a
         uniformly random non-identity Pauli. If None, a uniformly random non-identity
-        Pauli is sampled over all the qubits.
+        Pauli is sampled over all the qubits. Raises ValueError if its length is not the
+        number of qubits of `circuit`, or if every entry is True (an all-identity Pauli
+        carries no fidelity information).
+
+        Caveat: pinned sampling puts a uniformly random X, Y or Z on every unpinned qubit
+        and never I. The sampled Paulis therefore have fixed support, unlike the uniform
+        draw over all non-identity Paulis that a process-fidelity estimate assumes, and
+        averages over them generally give a biased process fidelity.
 
     Returns
     -------
@@ -70,6 +78,14 @@ def sample_dfe_circuit(pspec, circuit, clifford_compilations, create_same_measur
 
     qubit_labels = circuit.line_labels
     n = len(qubit_labels)
+
+    if fixed_identity_locations is not None:
+        if len(fixed_identity_locations) != n:
+            raise ValueError("fixed_identity_locations has length %d, but the circuit has %d qubits."
+                             % (len(fixed_identity_locations), n))
+        if all(fixed_identity_locations):
+            raise ValueError("fixed_identity_locations is True for every qubit, but an all-identity Pauli "
+                             "carries no fidelity information.")
 
     # Each of the three samplers below is seeded from this generator, rather than all of them
     # being given `seed`, so that they do not draw correlated randomness.
@@ -114,9 +130,12 @@ def sample_dfe_circuit(pspec, circuit, clifford_compilations, create_same_measur
     pauli = [i[0] for i in _symp.find_pauli_layer(pauli_vector, [j for j in range(n)])]
     measurement = ['I' if i == 'I' else 'Z' for i in pauli]
 
-    # Turn the stabilizer into an all Z and I stabilizer.
+    # Turn the stabilizer into an all Z and I stabilizer. As for the preparation layer,
+    # randomize_for_identity=False leaves the qubits where the image Pauli is the identity idle,
+    # so that the width and two-qubit gate density do not depend on the sampled Pauli.
     s_stab, p_stab, stab_circuit = _rc._stabilizer_to_all_zs(pauli, qubit_labels, clifford_compilations,
-                                                             seed=rand_state.randint(0, 2**31))
+                                                             seed=rand_state.randint(0, 2**31),
+                                                             randomize_for_identity=False)
 
     full_circuit.append_circuit_inplace(stab_circuit)
 

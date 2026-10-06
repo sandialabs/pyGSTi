@@ -2126,11 +2126,17 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
     return circlist, outlist, aux
     
 ###begin BiRB tools###
-def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation, seed=None):
+def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation, seed=None, randomize_for_identity=True):
     #inputs: 
     #   - stabilizer: An n-qubit Pauli, represented as a string of X, Y, Z, and Is.
     #   - qubit_labels: list/tuple of qubit labels
     #   - absolute_compilation: Absolute Clifford compilation rules for desired gate set
+    #   - seed: Seed for the random 1Q Cliffords drawn on identity qubits.
+    #   - randomize_for_identity: For an identity Pauli the basis change is unconstrained. By
+    #     default a random single-qubit Clifford is used. Passing False leaves those qubits
+    #     idle instead (as for a Z), which is what direct fidelity estimation on a fixed circuit
+    #     shape needs: the width and two-qubit gate density of the circuit must not depend on
+    #     which Paulis were drawn.
     #returns: A layer of single-qubit gates that transforms the input stabilizer 
     #   into a Pauli with only Zs and Is.
     #   - s, layer, p_layer: Symplectic representation of the layer
@@ -2155,7 +2161,7 @@ def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation, seed=N
         elif stabilizer[i] == 'X':
             stab_layer.append((s_h, p_h))
             c.append(_lbl.Label('C12','{}'.format(qubit_labels[i])))
-        elif stabilizer[i] == 'I':
+        elif stabilizer[i] == 'I' and randomize_for_identity:
             rand_clifford = str(rng.choice(_np.arange(24)))
             s_rand, p_rand = symp_reps['C'+rand_clifford]
             stab_layer.append((s_rand, p_rand))
