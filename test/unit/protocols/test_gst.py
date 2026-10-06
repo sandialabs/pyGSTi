@@ -12,7 +12,7 @@ from pygsti.protocols.estimate import Estimate
 from pygsti.protocols.protocol import ProtocolData, Protocol
 from pygsti.protocols.gst import GSTGaugeOptSuite
 from pygsti.tools import two_delta_logl
-from pygsti.tools.edesigntools import CallableReducer
+from pygsti.tools.edesigntools import CallableReducer, CircuitSelection
 from ..util import BaseCase
 import pytest
 import numpy as _np
@@ -277,6 +277,7 @@ class ReduceWithTester(BaseCase):
         self.assertEqual(loaded.selection.reducer.ridge, 2.0)
         self.assertEqual(list(loaded.selection.circuits), list(reduced.selection.circuits))
         self.assertArraysAlmostEqual(loaded.selection.scores, reduced.selection.scores)
+        self.assertEqual(loaded.selection.qubit_labels, (0,))
 
     def test_an_unreduced_design_round_trips_with_no_selection(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -299,8 +300,8 @@ class ReduceWithTester(BaseCase):
             meta_path = os.path.join(root, 'edesign', 'meta.json')
             with open(meta_path) as f:
                 meta = json.load(f)
-            del meta['auxfile_types']['selection']
-            meta.pop('selection', None)
+            del meta['auxfile_types']['_selection']
+            meta.pop('_selection', None)
             with open(meta_path, 'w') as f:
                 json.dump(meta, f)
             loaded = gst.StandardGSTDesign.from_dir(root)
@@ -313,6 +314,86 @@ class ReduceWithTester(BaseCase):
             reduced.write(os.path.join(tmp, 'reduced'))
             reloaded = gst.StandardGSTDesign.from_dir(os.path.join(tmp, 'reduced'))
         self.assertEqual(list(reloaded.selection.circuits), list(reduced.selection.circuits))
+
+
+class SelectionLabelsTester(BaseCase):
+    """A design holds its selection in the labels it was made in (B1 on #921).
+
+    `map_qubit_labels` leaves the selection alone; the `selection` setter pairs
+    `selection.qubit_labels` with the design's `qubit_labels` by position and checks
+    that every circuit in the design corresponds to a selected one.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.design = smq2Q_XYICNOT.create_gst_experiment_design(max_max_length=1)
+        cls.keep = sorted(cls.design.all_circuits_needing_data, key=len)[:8]
+        cls.reduced = cls.design.reduce_with(CallableReducer(lambda design, n: cls.keep), 8)
+
+    def _assert_described(self, design):
+        label_map = dict(zip(design.selection.qubit_labels, design.qubit_labels))
+        images = {c.map_state_space_labels(label_map) for c in design.selection.circuits}
+        self.assertTrue(set(design.all_circuits_needing_data) <= images)
+
+    def test_the_selection_records_the_labels_it_was_made_in(self):
+        self.assertEqual(self.reduced.selection.qubit_labels, (0, 1))
+
+    def test_a_swap_keeps_the_selection_and_its_labels(self):
+        swapped = self.reduced.map_qubit_labels({0: 1, 1: 0})
+        self.assertIs(swapped.selection, self.reduced.selection)
+        self.assertEqual(swapped.selection.qubit_labels, (0, 1))
+        self._assert_described(swapped)
+
+    def test_two_relabellings_compose_through_the_design_labels(self):
+        twice = self.reduced.map_qubit_labels({0: 1, 1: 0}).map_qubit_labels({0: 'Q7', 1: 'Q8'})
+        self.assertEqual(twice.qubit_labels, ('Q8', 'Q7'))
+        self._assert_described(twice)
+
+    def test_truncating_a_relabelled_design_keeps_a_valid_selection(self):
+        swapped = self.reduced.map_qubit_labels({0: 1, 1: 0})
+        truncated = swapped.truncate_to_circuits(list(swapped.all_circuits_needing_data)[:3])
+        self._assert_described(truncated)
+
+    def test_a_selection_from_another_design_is_rejected(self):
+        others = sorted(self.design.all_circuits_needing_data, key=len)[8:16]
+        other = self.design.reduce_with(CallableReducer(lambda design, n: others), 8)
+        with self.assertRaisesRegex(ValueError, 'describes it'):
+            self.reduced.map_qubit_labels({0: 1, 1: 0}).selection = other.selection
+
+    def test_a_selection_without_qubit_labels_is_rejected_with_the_fix(self):
+        target = self.reduced.map_qubit_labels({0: 1, 1: 0})
+        with self.assertRaisesRegex(ValueError, 'qubit_labels='):
+            target.selection = CircuitSelection(self.keep)
+
+    def test_a_hand_built_selection_with_qubit_labels_is_accepted(self):
+        target = self.reduced.map_qubit_labels({0: 1, 1: 0})
+        target.selection = CircuitSelection(self.keep, qubit_labels=(0, 1))
+        self._assert_described(target)
+
+    def test_mismatched_or_repeated_labels_are_rejected(self):
+        target = self.reduced.map_qubit_labels({0: 1, 1: 0})
+        for labels in [(0,), (0, 0)]:
+            with self.subTest(labels=labels):
+                with self.assertRaises(ValueError):
+                    target.selection = CircuitSelection(self.keep, qubit_labels=labels)
+
+    def test_the_docstring_recipe_reruns_the_reducer_in_the_new_labels(self):
+        """Mapping the full design back, reducing, and mapping forward gives the same
+        selection as relabelling the original reduction. Running the stored reducer on
+        the relabelled design directly would not: its model names the old qubits."""
+        from pygsti.tools.edesigntools import BlockDoptReducer, perturb_errorgen_rates
+        full = self.design.truncate_to_circuits(sorted(self.design.all_circuits_needing_data, key=len)[:40])
+        model = perturb_errorgen_rates(smq2Q_XYICNOT.target_model('H+S'), seed=3)
+        reduced = full.reduce_with(BlockDoptReducer(model), 6)
+        swap = {0: 1, 1: 0}
+        design, full_now = reduced.map_qubit_labels(swap), full.map_qubit_labels(swap)
+
+        label_map = dict(zip(design.selection.qubit_labels, design.qubit_labels))
+        inverse = {new: old for old, new in label_map.items()}
+        rerun = design.selection.reducer.reduce(full_now.map_qubit_labels(inverse), 6)
+        rerun = rerun.map_qubit_labels(label_map)
+        self.assertEqual(set(rerun.all_circuits_needing_data), set(design.all_circuits_needing_data))
 
 
 class GSTInitialModelTester(BaseCase):

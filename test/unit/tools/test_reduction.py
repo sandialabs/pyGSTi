@@ -61,9 +61,9 @@ class _ConfiguredFirstK(_FirstK):
         self.configuration = configuration
 
     def _select(self, design, num_circuits):
-        selection = super()._select(design, num_circuits)
-        selection.scores *= self.configuration['scores']['scale'][0]
-        return selection
+        base = super()._select(design, num_circuits)
+        return CircuitSelection(base.circuits, scores=base.scores * self.configuration['scores']['scale'][0],
+                                score_name=base.score_name)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -97,6 +97,43 @@ class SelectionTester(BaseCase):
         selection.metadata['note'] = 'changed'
         self.assertEqual(shared['note'], 'original')
 
+    def test_circuits_and_scores_are_read_only(self):
+        """A design checked them when it took the selection, and cannot check again."""
+        given = np.array([1.0, 2.0])
+        selection = CircuitSelection(_circuits(2), scores=given)
+        with self.assertRaises(AttributeError):
+            selection.circuits = _circuits(1)
+        with self.assertRaises(AttributeError):
+            selection.scores = None
+        with self.assertRaises(ValueError):
+            selection.scores[0] = 5.0
+        given[0] = 5.0  # the caller's array is copied, not frozen or aliased
+        self.assertEqual(selection.scores[0], 1.0)
+
+    def test_qubit_labels_are_optional_and_kept_as_a_tuple(self):
+        self.assertIsNone(CircuitSelection(_circuits(2)).qubit_labels)
+        self.assertEqual(CircuitSelection(_circuits(2), qubit_labels=[0]).qubit_labels, (0,))
+
+    def test_a_duplicate_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'more than once'):
+            CircuitSelection(_circuits(3) + _circuits(1))
+
+    def test_misaligned_scores_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'scores'):
+            CircuitSelection(_circuits(3), scores=[1.0, 2.0])
+
+    def test_matrix_scores_are_rejected_even_when_the_first_dimension_matches(self):
+        with self.assertRaises(ValueError) as ctx:
+            CircuitSelection(_circuits(1), scores=[[1.0, 2.0]])
+        self.assertIn('one-dimensional', str(ctx.exception))
+        self.assertIn('(1, 2)', str(ctx.exception))
+
+    def test_scalar_scores_are_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            CircuitSelection(_circuits(1), scores=1.0)
+        self.assertIn('one-dimensional', str(ctx.exception))
+        self.assertIn('scores', str(ctx.exception))
+
 
 class SelectContractTester(BaseCase):
     """What `select` guarantees on top of whatever `_select` did."""
@@ -111,6 +148,7 @@ class SelectContractTester(BaseCase):
         self.assertIsInstance(selection.reducer, _FirstK)
         self.assertIsNot(selection.reducer, reducer)
         self.assertEqual(selection.metadata['num_candidates'], 10)
+        self.assertEqual(selection.qubit_labels, self.design.qubit_labels)
 
     def test_the_selection_preserves_nested_reducer_configuration_after_mutation(self):
         configuration = {'scores': {'scale': [2.0]}}
@@ -174,11 +212,6 @@ class ValidationTester(BaseCase):
         selection = _ReturnsWhatever(CircuitSelection(_circuits(2))).select(self.design, 5)
         self.assertEqual(len(selection), 2)
 
-    def test_returning_a_duplicate_is_rejected(self):
-        repeated = _circuits(3) + _circuits(1)
-        message = self._assert_raises_naming_the_subclass(CircuitSelection(repeated))
-        self.assertIn('more than once', message)
-
     def test_returning_a_circuit_from_outside_the_design_is_rejected(self):
         foreign = Circuit([('Gypi2', 0)] * 17, line_labels=(0,))
         payload = CircuitSelection(_circuits(2) + [foreign])
@@ -195,23 +228,6 @@ class ValidationTester(BaseCase):
         payload = CircuitSelection([Circuit([('Gypi2', 0)] * 17, line_labels=(0,))])
         message = self._assert_raises_naming_the_subclass(payload)
         self.assertIn('jac_dict', message)
-
-    def test_misaligned_scores_are_rejected(self):
-        payload = CircuitSelection(_circuits(3), scores=[1.0, 2.0])
-        message = self._assert_raises_naming_the_subclass(payload)
-        self.assertIn('scores', message)
-
-    def test_matrix_scores_are_rejected_even_when_the_first_dimension_matches(self):
-        payload = CircuitSelection(_circuits(1), scores=[[1.0, 2.0]])
-        message = self._assert_raises_naming_the_subclass(payload)
-        self.assertIn('one-dimensional', message)
-        self.assertIn('(1, 2)', message)
-
-    def test_scalar_scores_are_rejected_with_a_contract_error(self):
-        payload = CircuitSelection(_circuits(1), scores=1.0)
-        message = self._assert_raises_naming_the_subclass(payload)
-        self.assertIn('one-dimensional', message)
-        self.assertIn('scores', message)
 
     def test_returning_nothing_when_asked_for_something_is_rejected(self):
         message = self._assert_raises_naming_the_subclass(CircuitSelection([]))
@@ -313,6 +329,12 @@ class SerializationTester(BaseCase):
         self.assertEqual(restored.score_name, 'position')
         self.assertEqual(restored.metadata['num_candidates'], 6)
         self.assertIsInstance(restored.reducer, _FirstK)
+        self.assertEqual(restored.qubit_labels, selection.qubit_labels)
+
+    def test_a_selection_saved_without_qubit_labels_loads_without_them(self):
+        state = CircuitSelection(_circuits(3)).to_nice_serialization()
+        del state['qubit_labels']
+        self.assertIsNone(CircuitSelection.from_nice_serialization(state).qubit_labels)
 
     def test_a_selection_with_no_scores_round_trips(self):
         selection = CircuitSelection(_circuits(3))

@@ -59,6 +59,13 @@ class CircuitSelection(_NicelySerializable):
         Free-form, reducer-specific.  :meth:`DesignReducer.select` adds
         `'num_candidates'` if the reducer did not.
 
+    qubit_labels : tuple, optional
+        The qubit labels of the design the circuits come from.  :meth:`DesignReducer.select`
+        sets this, so a reducer need not; pass it only for a selection built by hand and
+        attached to a design directly.  A design holds a selection in the labels it was made
+        in, and relates them to its own by position; see
+        :attr:`~pygsti.protocols.GateSetTomographyDesign.selection`.
+
     Attributes
     ----------
     reducer : DesignReducer or None
@@ -69,13 +76,51 @@ class CircuitSelection(_NicelySerializable):
     """
 
     def __init__(self, circuits: Iterable[Circuit], scores: Optional[Sequence[float]] = None,
-                 score_name: Optional[str] = None, metadata: Optional[Mapping[str, Any]] = None) -> None:
+                 score_name: Optional[str] = None, metadata: Optional[Mapping[str, Any]] = None,
+                 qubit_labels: Optional[Sequence[Any]] = None) -> None:
         super().__init__()
-        self.circuits: tuple[Circuit, ...] = tuple(circuits)
-        self.scores: Optional[_np.ndarray] = None if scores is None else _np.asarray(scores, dtype=_np.float64)
+        circuits = tuple(circuits)
+        seen = set()
+        duplicates = set()
+        for circuit in circuits:
+            (duplicates if circuit in seen else seen).add(circuit)
+        if duplicates:
+            raise ValueError(
+                f"CircuitSelection got {len(duplicates)} circuit(s) more than once, e.g. "
+                f"{_examples(duplicates)}. Selecting a circuit twice does not buy anything "
+                "twice, and silently under-fills the budget.")
+        if scores is not None:
+            scores = _np.array(scores, dtype=_np.float64)
+            if scores.ndim != 1:
+                raise ValueError(f"CircuitSelection got scores with shape {scores.shape}; scores "
+                                 "must be one-dimensional with one scalar per circuit.")
+            if len(scores) != len(circuits):
+                raise ValueError(f"CircuitSelection got {len(scores)} scores for {len(circuits)} "
+                                 "circuits; they must correspond one-to-one.")
+            scores.setflags(write=False)
+        # Read-only: a design that holds this selection checked these against its own
+        # circuits when it took it, and has no way to check again.
+        self._circuits: tuple[Circuit, ...] = circuits
+        self._scores: Optional[_np.ndarray] = scores
+        self._qubit_labels: Optional[tuple[Any, ...]] = None if qubit_labels is None else tuple(qubit_labels)
         self.score_name: Optional[str] = score_name
         self.metadata: dict[str, Any] = dict(metadata) if metadata else {}
         self.reducer: Optional[DesignReducer] = None
+
+    @property
+    def circuits(self) -> tuple[Circuit, ...]:
+        """The circuits kept, best-first where the reducer has a notion of "best"."""
+        return self._circuits
+
+    @property
+    def scores(self) -> Optional[_np.ndarray]:
+        """One score per circuit, or None; a read-only array."""
+        return self._scores
+
+    @property
+    def qubit_labels(self) -> Optional[tuple[Any, ...]]:
+        """The qubit labels of the design the circuits were selected from."""
+        return self._qubit_labels
 
     def __len__(self) -> int:
         return len(self.circuits)
@@ -88,6 +133,7 @@ class CircuitSelection(_NicelySerializable):
             'score_name': self.score_name,
             'metadata': self.metadata,
             'reducer': None if self.reducer is None else self.reducer.to_nice_serialization(),
+            'qubit_labels': None if self.qubit_labels is None else list(self.qubit_labels),
         })
         return state
 
@@ -95,7 +141,7 @@ class CircuitSelection(_NicelySerializable):
     def _from_nice_serialization(cls, state: dict[str, Any]) -> CircuitSelection:
         from pygsti.io.readers import convert_strings_to_circuits as _to_circuits
         ret = cls(_to_circuits(state['circuits']), state['scores'],
-                  state['score_name'], state['metadata'])
+                  state['score_name'], state['metadata'], state.get('qubit_labels'))
         if state.get('reducer') is not None:
             ret.reducer = DesignReducer.from_nice_serialization(state['reducer'])
         return ret
@@ -157,6 +203,8 @@ class DesignReducer(_NicelySerializable):
 
         selection = self._select(design, num_circuits)
         self._validate(selection, candidates, num_circuits)
+        labels = design.qubit_labels
+        selection._qubit_labels = None if isinstance(labels, str) else tuple(labels)
         selection.reducer = _copy.deepcopy(self)
         selection.metadata.setdefault('num_candidates', len(candidates))
         return selection
@@ -193,12 +241,11 @@ class DesignReducer(_NicelySerializable):
                 "root-only truncation would leave their circuit requirements inconsistent. "
                 "Use select to inspect the root circuit selection without applying it.")
         reduced = design.truncate_to_circuits(selection.circuits)
-        # Only where the class declared the member: it is written out as a
-        # 'serialized-object' auxfile, and setting it on a design that has not registered
-        # it would leave a live object for `write` to choke on.
+        # Only where the class declares the member, whose setter checks the selection and
+        # registers its auxfile. Setting a plain attribute on any other design would
+        # leave a live object for `write` to choke on.
         if hasattr(reduced, 'selection'):
             reduced.selection = selection
-            reduced.auxfile_types.setdefault('selection', 'serialized-object')
         return reduced
 
     # -- serialization ------------------------------------------------------ #
@@ -238,17 +285,8 @@ class DesignReducer(_NicelySerializable):
             raise ValueError(f"{me}._select returned {len(chosen)} circuits for a budget "
                              f"of {num_circuits}.")
 
-        seen = set()
-        duplicates = set()
-        for circuit in chosen:
-            (duplicates if circuit in seen else seen).add(circuit)
-        if duplicates:
-            raise ValueError(
-                f"{me}._select returned {len(duplicates)} circuit(s) more than once, e.g. "
-                f"{_examples(duplicates)}. Selecting a circuit twice does not buy anything "
-                "twice, and silently under-fills the budget.")
-
-        foreign = seen - set(candidates)
+        # Duplicates and the shape of `scores` are checked by CircuitSelection itself.
+        foreign = set(chosen) - set(candidates)
         if foreign:
             raise ValueError(
                 f"{me}._select returned {len(foreign)} circuit(s) that are not in the "
@@ -257,14 +295,6 @@ class DesignReducer(_NicelySerializable):
                 "`list(jac_dict)`, not through the circuit list you passed in: "
                 "`bulk_dprobs` deduplicates and reorders its input, so row block i "
                 "belongs to `list(jac_dict)[i]`.")
-
-        if selection.scores is not None:
-            if selection.scores.ndim != 1:
-                raise ValueError(f"{me}._select returned scores with shape {selection.scores.shape}; "
-                                 "scores must be one-dimensional with one scalar per circuit.")
-            if len(selection.scores) != len(chosen):
-                raise ValueError(f"{me}._select returned {len(selection.scores)} scores for "
-                                 f"{len(chosen)} circuits; they must correspond one-to-one.")
 
         if len(chosen) == 0 and num_circuits != 0 and candidates:
             raise ValueError(
