@@ -975,3 +975,19 @@ class BlockDoptReducerTester(_ModelFixture, BaseCase):
                 with warnings.catch_warnings():
                     warnings.simplefilter('error')
                     bd.BlockDoptReducer(model)
+
+
+class AboutDoptRidgeAndScaleTester(BaseCase):
+    def test_prints_its_docstring_and_is_exported(self):
+        import contextlib
+        import inspect
+        import io
+
+        from pygsti.tools import edesigntools
+        self.assertIs(edesigntools.about_dopt_ridge_and_scale, bd.about_dopt_ridge_and_scale)
+        self.assertIn("about_dopt_ridge_and_scale", edesigntools.__all__)
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            result = bd.about_dopt_ridge_and_scale()
+        self.assertIsNone(result)
+        self.assertEqual(buffer.getvalue().strip(), inspect.getdoc(bd.about_dopt_ridge_and_scale).strip())

@@ -18,6 +18,7 @@ pyGSTi model and design: `rank_circuits_by_dopt` and `BlockDoptReducer`, the
 
 from __future__ import annotations
 
+import inspect as _inspect
 import warnings as _warnings
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Union
 
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     'BlockDoptReducer',
+    'about_dopt_ridge_and_scale',
     'block_linear_dopt',
     'greedy_candidate_scores',
     'greedy_path_log_volumes',
@@ -422,7 +424,9 @@ def perturb_errorgen_rates(model: Model, scale: float = 1e-3,
     scale : float, optional (default 1e-3)
         Positive, finite coefficient magnitude. Hamiltonian coefficients are drawn from
         a normal distribution with mean 0 and standard deviation `scale`, and the
-        stochastic coefficient uniformly from `(0, scale]`.
+        stochastic coefficient uniformly from `(0, scale]`.  See :func:`about_dopt_ridge_and_scale`
+        for how `scale` and the reducer's `ridge` together affect sensitivities in
+        different directions of parameter space.
 
     seed : int or numpy.random.Generator, optional
         Anything `numpy.random.default_rng` accepts.  Pass one, or the selection
@@ -474,6 +478,8 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
 
     ridge : float, optional (default 1.0)
         Weight of the identity regularizer; see :func:`block_linear_dopt` for how it is applied.
+        See :func:`about_dopt_ridge_and_scale` for how it affects sensitivities in
+        different directions of parameter space.
 
     dtype : numpy dtype, optional (default numpy.float64)
         Working precision.  float32 halves the memory and changes selections at
@@ -515,6 +521,88 @@ def rank_circuits_by_dopt(model: Model, circuits: Sequence[Circuit], max_circuit
     pivots, scores = block_linear_dopt(A, block_size, max_circuits)
     ranked = [jac_keys[int(i)] for i in pivots]
     return ranked, scores
+
+
+def about_dopt_ridge_and_scale() -> None:
+    """How `ridge` and `scale` shape greedy D-optimal circuit selection.
+
+    This function only prints this text; it exists so that
+    `help(about_dopt_ridge_and_scale)` finds it.  The discussion concerns the `ridge`
+    argument of :class:`BlockDoptReducer` and :func:`rank_circuits_by_dopt`, and the
+    `scale` argument of :func:`perturb_errorgen_rates`.
+
+    **Notation.**  `J_S` stacks the probability-Jacobian rows of the selected circuits,
+    with one column per model parameter, evaluated at the model the reducer was given.
+    Write `lambda_1, ..., lambda_n` for the eigenvalues of `J_S^T J_S` and `rho` for
+    `ridge`.  For a unit vector `v` in parameter space, `v^T J_S^T J_S v` is the sum,
+    over the selected outcomes, of the squared first-order change in probability along
+    `v`.  A large value means the selection constrains that direction well.
+
+    **The objective is a threshold.**  Greedy selection maximizes ::
+
+        f(S) = 0.5 * logdet(I + J_S^T J_S / rho) = 0.5 * sum_k log(1 + lambda_k / rho),
+
+    whose rate of return on an eigenvalue is ::
+
+        df / d(lambda_k) = 1 / (2 * (rho + lambda_k)).
+
+    This rate stays near its maximum, `1 / (2 * rho)`, while `lambda_k` is below `rho`,
+    and falls like `1 / (2 * lambda_k)` once `lambda_k` is well above it.  So `rho` sets
+    the exchange rate between weakly and strongly constrained directions.
+
+    Below the threshold, every unit of sensitivity earns about the same, and a very weak
+    direction gets no more priority than a mildly weak one.  If every eigenvalue is far
+    below `rho`, then `f(S)` is approximately `trace(J_S^T J_S) / (2 * rho)`.  That is
+    additive over circuits, so greedy selection takes circuits in order of their own
+    Jacobian Frobenius norms and ignores which directions they cover.
+
+    Above the threshold, returns diminish: a circuit that adds sensitivity to a direction
+    that is already well constrained gains little.  If every eigenvalue is far above
+    `rho`, then `f(S)` is approximately `0.5 * logdet(J_S^T J_S) - 0.5 * n * log(rho)`.
+    This is unregularized D-optimality, where `rho` shifts the score and leaves the picks
+    unchanged.
+
+    Unregularized D-optimality has rate of return `1 / (2 * lambda_k)`, which grows
+    without bound as `lambda_k` goes to zero, so it punishes any nearly insensitive
+    direction heavily.  (It is also undefined while `J_S^T J_S` is singular, as it is for
+    the first few picks.)  The ridge caps that rate at `1 / (2 * rho)`.  Replacing `rho`
+    by `alpha * rho` gives the same picks as keeping `rho` and multiplying the Jacobian
+    by `alpha**-0.5`; only the size of the sensitivities relative to the ridge matters.
+    With the default `ridge=1.0`, a direction reaches the threshold once its summed
+    squared probability changes reach 1.
+
+    **Where `scale` enters.**  Stochastic coefficients use the Cholesky parameterization
+    `c = theta**2`, so by the chain rule ::
+
+        dp / d(theta) = (dp / dc) * (dc / d(theta)) = 2 * sqrt(c) * (dp / dc).
+
+    This vanishes at `c = 0`, which is why the Jacobian at a target model has no
+    stochastic columns.  :func:`perturb_errorgen_rates` moves the model to a point where
+    each gate's stochastic coefficients share one value `c` in `(0, scale]` and its
+    Hamiltonian coefficients have size about `scale`.  This changes where the Jacobian is
+    evaluated; it does not rescale a fixed Jacobian.  For small `scale`, `dp / dc` is
+    usually nonzero at the target and changes little, so most stochastic columns grow
+    like `sqrt(c)` and their contribution to `J_S^T J_S` grows like `c`.  Most
+    Hamiltonian columns are also nonzero at the target, so to leading order their size
+    does not depend on `scale`.  The exceptions are sensitivities that vanish at the
+    target, typically for SPAM parameters.  A Z rotation or Z dephasing of a prepared
+    `|0>` changes no probability to first order, so its Hamiltonian column grows like
+    `scale` and its stochastic column like `c**1.5`.
+
+    Hence `ridge` sets the threshold for every direction, while `scale` moves the
+    stochastic directions and those exceptions relative to it.  Shrinking `scale` pushes
+    the stochastic directions below the threshold, where they are counted by total
+    sensitivity rather than balanced against one another.  Growing it pushes them above,
+    into the D-optimal regime.  Each gate's `c` is a separate uniform draw, so a gate with a small
+    draw sits lower relative to the threshold than one with a large draw; this is one
+    way the seed affects the selection.
+
+    Whether a stochastic or a Hamiltonian direction wins a given greedy step is a
+    tradeoff.  When `c` is small, a circuit's stochastic gain is small in absolute terms,
+    but it is paid at a rate near `1 / (2 * rho)`, whereas a Hamiltonian gain in a
+    direction already above the threshold is paid at about `1 / (2 * lambda_k)`.
+    """
+    print(_inspect.getdoc(about_dopt_ridge_and_scale))
 
 
 # --------------------------------------------------------------------------- #
@@ -570,6 +658,8 @@ class BlockDoptReducer(_DesignReducer):
 
     ridge : float, optional (default 1.0)
         Weight of the identity regularizer on the Jacobian Gram matrix.
+        See :func:`about_dopt_ridge_and_scale` for how it affects sensitivities in
+        different directions of parameter space.
 
     dtype : numpy dtype, optional (default numpy.float64)
         Working precision; see :func:`rank_circuits_by_dopt`.

@@ -25,14 +25,15 @@ from ._fisher import (calculate_fisher_information_matrices_by_L, calculate_fish
                       calculate_fisher_information_per_circuit)
 from ._reduction import CallableReducer, CircuitSelection, DesignReducer
 from ._runtime import calculate_edesign_estimated_runtime
-from .blockdopt import (BlockDoptReducer, block_linear_dopt, greedy_candidate_scores, greedy_path_log_volumes,
-                        perturb_errorgen_rates, rank_circuits_by_dopt)
+from .blockdopt import (BlockDoptReducer, about_dopt_ridge_and_scale, block_linear_dopt, greedy_candidate_scores,
+                        greedy_path_log_volumes, perturb_errorgen_rates, rank_circuits_by_dopt)
 
 __all__ = [
     "BlockDoptReducer",
     "CallableReducer",
     "CircuitSelection",
     "DesignReducer",
+    "about_dopt_ridge_and_scale",
     "block_linear_dopt",
     "calculate_edesign_estimated_runtime",
     "calculate_fisher_information_matrices_by_L",
