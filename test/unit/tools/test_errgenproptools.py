@@ -1249,6 +1249,31 @@ class ApproxStabilizerMethodTester(BaseCase):
         self.assertIsInstance(res, dict)
         self.assertGreater(len(res), 0)
 
+    def test_should_parallelize_magnus_qubit_validation(self):
+        # n_qubits must be provided and >= 1
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_magnus(4, 20, num_workers=2, n_qubits=None)
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_magnus(4, 20, num_workers=2, n_qubits=0)
+        with self.assertRaises(ValueError):
+            _eprop._should_parallelize_magnus(4, 20, num_workers=2, n_qubits=-2)
+
+        # Valid n_qubits returns bool
+        res = _eprop._should_parallelize_magnus(4, 20, num_workers=2, n_qubits=4)
+        self.assertIsInstance(res, bool)
+
+    def test_magnus_expansion_all_empty_layers(self):
+        # All empty layers should short-circuit and return empty dicts without error
+        res_m2 = _eprop.magnus_expansion([{}, {}], magnus_order=2)
+        self.assertEqual(res_m2, {})
+        res_m3 = _eprop.magnus_expansion([{}, {}], magnus_order=3)
+        self.assertEqual(res_m3, {})
+        res_s2 = _eprop._second_order_magnus_term([{}, {}], identity=None)
+        self.assertEqual(res_s2, {})
+        res_s3_2, res_s3_3 = _eprop._second_and_third_order_magnus_terms([{}, {}], identity=None)
+        self.assertEqual(res_s3_2, {})
+        self.assertEqual(res_s3_3, {})
+
     def test_approximate_stabilizer_probabilities_parallel(self):
         seq = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=None)
         par = _eprop.approximate_stabilizer_probabilities(self.propagated_errorgen_layer, self.circuit, order=1, num_workers=2)

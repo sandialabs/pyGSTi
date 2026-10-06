@@ -678,6 +678,11 @@ def _should_parallelize_magnus(
     """
     Internal helper: determines whether Magnus expansion should be parallelized across layer pairs.
     """
+    if n_qubits is None:
+        raise ValueError("n_qubits must be specified as an integer >= 1.")
+    if not isinstance(n_qubits, (int, _np.integer)) or n_qubits < 1:
+        raise ValueError(f"n_qubits must be an integer >= 1, got {n_qubits}.")
+
     workers = _determine_num_workers(num_workers)
     if workers < 1:
         raise ValueError(f"Worker count must be at least 1, got {workers}.")
@@ -701,8 +706,7 @@ def _should_parallelize_magnus(
         terms_ok = avg_terms_per_layer >= min_terms if min_terms is not None else True
         return n_pairs >= min_pairs and terms_ok
 
-    n = n_qubits if n_qubits is not None else 16
-    scale = 'small' if n <= 16 else ('medium' if n <= 64 else 'large')
+    scale = 'small' if n_qubits <= 16 else ('medium' if n_qubits <= 64 else 'large')
     cutoffs = _DEFAULT_THRESHOLD_TABLE[scale]
     return n_pairs >= cutoffs['min_magnus_pairs'] and avg_terms_per_layer >= cutoffs['min_magnus_terms']
 
@@ -857,8 +861,8 @@ def magnus_expansion(errorgen_layers: list[_ErrorgenDict], magnus_order: Literal
             break
 
     # Strategic single-point memory check for Magnus expansion (evaluates sequential, pool, and worker configurations)
-    if len(errorgen_layers) > 1 and magnus_order >= 2:
-        n_q = len(identity) if identity is not None else 1
+    if len(errorgen_layers) > 1 and magnus_order >= 2 and identity is not None:
+        n_q = len(identity)
         avg_k = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
         workers = _resolve_pool_workers(pool) if pool is not None else (_determine_num_workers(num_workers) if num_workers is not None else 1)
         _warn_if_insufficient_memory(
@@ -938,11 +942,15 @@ def _second_order_magnus_term(errorgen_layers: list[_ErrorgenDict], identity: Op
                 identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                 break
 
+    # If every layer is empty, all commutators evaluate trivially to zero without computation.
+    if identity is None:
+        return {}
+
     workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
     if workers < 1:
         raise ValueError(f"Worker count must be at least 1, got {workers}.")
 
-    n_q = len(identity) if identity is not None else 16
+    n_q = len(identity)
     avg_terms = (len(errorgen_layers[0]) + len(errorgen_layers[1])) // 2 if len(errorgen_layers) >= 2 else 0
 
     if workers == 1 or num_workers is None and pool is None or not _should_parallelize_magnus(len(errorgen_layers), avg_terms, num_workers=workers, n_qubits=n_q):
@@ -1019,10 +1027,14 @@ def _second_and_third_order_magnus_terms(errorgen_layers: list[_ErrorgenDict], i
                 identity = 'I'*len(next(iter(layer)).basis_element_labels[0])
                 break
 
+    # If every layer is empty, all commutators evaluate trivially to zero without computation.
+    if identity is None:
+        return {}, {}
+
     workers = _determine_num_workers(num_workers) if pool is None else _resolve_pool_workers(pool)
     if workers < 1:
         raise ValueError(f"Worker count must be at least 1, got {workers}.")
-    n_q = len(identity) if identity is not None else 16
+    n_q = len(identity)
     avg_terms = sum(len(l) for l in errorgen_layers) // max(1, len(errorgen_layers))
     num_layers = len(errorgen_layers)
 
@@ -5885,8 +5897,9 @@ def optimize_errorgen_propagation_parallelization(
     Parameters
     ----------
     num_qubits : int, optional
-        Qubit count to profile. Inferred from `model` or `circuit` if provided, else defaults to 16.
-    model : LocalNoiseModel, optional
+        Qubit count to profile. Inferred from `model` or `circuit` if provided.
+        At least one of `num_qubits`, `circuit`, or `model` must be provided.
+    model : Model, optional
         Optional model to use for profiling.
     circuit : Circuit, optional
         Optional circuit to use for profiling.
