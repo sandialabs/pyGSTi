@@ -95,14 +95,20 @@ def max_depths_log2(widths, error_per_layer, min_fidelity, include_all_widths=Tr
     return out
 
 
-def sample_circuit_shapes_logspace_uniform(max_depths_log2, num_samples, min_depth_log2=0):
+def sample_circuit_shapes_logspace_uniform(max_depths_log2, num_samples, min_depth_log2=0, seed=None):
     """
     Samples circuit shapes (widths and depths) so that they are uniformly
     spaced in log depth space.
 
-    Widths are sampled with a probability proportional to the number of depths
-    available at that width, so that the sampled shapes are approximately
-    uniformly distributed over the (width, log depth) region.
+    Widths are sampled with a probability proportional to the number of
+    power-of-two depths available at that width, `max_depths_log2[w] - min_depth_log2 + 1`,
+    so that the sampled shapes are approximately uniformly distributed over the
+    (width, log depth) region. A width whose maximum is below `min_depth_log2` is
+    never sampled.
+
+    At the sampled width `w`, the base-2 logarithm of the depth is uniform between
+    `min_depth_log2` and `max_depths_log2[w]`, and the depth is 2 to that power,
+    rounded to the nearest integer.
 
     Parameters
     ----------
@@ -112,8 +118,13 @@ def sample_circuit_shapes_logspace_uniform(max_depths_log2, num_samples, min_dep
     num_samples : int
         The number of circuit shapes to sample
 
-    min_depth_log2 : float, optional
-        The base-2 logarithm of the minimum depth to sample.
+    min_depth_log2 : int, optional
+        The base-2 logarithm of the minimum depth to sample. Expected to be a
+        non-negative integer: the width weights count power-of-two depths only
+        for integer values, and a negative value can give depth-0 shapes.
+
+    seed : int, optional
+        A seed for the random number generator, for reproducible sampling.
 
     Returns
     -------
@@ -122,17 +133,26 @@ def sample_circuit_shapes_logspace_uniform(max_depths_log2, num_samples, min_dep
 
     list
         The sampled circuit depths
+
+    Raises
+    ------
+    ValueError
+        If `min_depth_log2` is larger than `max_depths_log2` at every width
+        (including when `max_depths_log2` is empty), so no shape can be sampled.
     """
+    rand_state = _np.random.RandomState(seed)  # Ok if seed is None
     widths = list(max_depths_log2.keys())
-    widths_weights = _np.array([max_depths_log2[w] + 1 for w in widths])
-    widths_probablities = widths_weights / _np.sum(widths_weights)
+    widths_weights = _np.array([max_depths_log2[w] - min_depth_log2 + 1 if max_depths_log2[w] >= min_depth_log2
+                                else 0 for w in widths], float)
+    if _np.sum(widths_weights) == 0:
+        raise ValueError(f"min_depth_log2={min_depth_log2} is larger than max_depths_log2 at every width "
+                         f"({max_depths_log2}), so no circuit shape can be sampled.")
+    widths_probabilities = widths_weights / _np.sum(widths_weights)
     sampled_widths = []
     sampled_depths = []
     for i in range(num_samples):
-        w = _np.random.choice(widths, p=widths_probablities)
-        log2_sampled_depth = -1
-        while log2_sampled_depth < min_depth_log2:
-            log2_sampled_depth = max_depths_log2[w] * _np.random.rand()
+        w = rand_state.choice(widths, p=widths_probabilities)
+        log2_sampled_depth = rand_state.uniform(min_depth_log2, max_depths_log2[w])
         d = int(_np.round(2**log2_sampled_depth))
 
         sampled_widths.append(w)
@@ -141,7 +161,8 @@ def sample_circuit_shapes_logspace_uniform(max_depths_log2, num_samples, min_dep
     return sampled_widths, sampled_depths
 
 
-def quasi_uniform_feature_vectors(num_samples, num_features, max_values, min_values, logspace, integer_valued):
+def quasi_uniform_feature_vectors(num_samples, num_features, max_values, min_values, logspace, integer_valued,
+                                  seed=None):
     """
     Samples feature vectors that are quasi-uniformly spread over a hyperrectangle.
 
@@ -175,13 +196,17 @@ def quasi_uniform_feature_vectors(num_samples, num_features, max_values, min_val
     integer_valued : list or array of bool
         Whether each feature is rounded to the nearest integer. Length `num_features`.
 
+    seed : int, optional
+        A seed for the random scrambling of the Sobol sequence, for reproducible
+        sampling. With None, every call scrambles differently.
+
     Returns
     -------
     list of numpy.ndarray
         A list of `num_features` arrays, the jth of which contains the sampled
         values of the jth feature. Each array has length `2**ceil(log2(num_samples))`.
     """
-    sobol = _Sobol(num_features)
+    sobol = _Sobol(num_features, seed=seed)
     rounded_base2_num_samples = int(_np.ceil(_np.log2(num_samples)))
     samples = sobol.random_base2(rounded_base2_num_samples)
 

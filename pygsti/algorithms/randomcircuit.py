@@ -201,7 +201,7 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
 
 
 def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_density=0.25, one_q_gate_names=None,
-                                     one_q_gate_distribution=None, gate_args_lists=None, rand_state=None):
+                                     gate_args_lists=None, one_q_gate_distribution=None, rand_state=None):
     """
     TODO: docstring
     <TODO summary>
@@ -217,11 +217,19 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
     mean_two_q_gates : <TODO typ>, optional
         <TODO description>
 
+    gate_args_lists : dict, optional
+        A dictionary mapping a gate name to a list of argument tuples. Whenever a gate with
+        that name is sampled, as a one- or two-qubit gate, its arguments are a uniformly
+        random entry of that list.
+
     one_q_gate_distribution : list or array, optional
         The probability with which each of `one_q_gate_names` is sampled, for the qubits
         that are not acted on by a two-qubit gate. Must be the same length as
-        `one_q_gate_names`, and can only be specified if `one_q_gate_names` is. If None,
-        a uniformly random gate is chosen from those available on each qubit.
+        `one_q_gate_names`, and can only be specified if `one_q_gate_names` is. Its entries
+        must be non-negative and sum to 1, and every name with nonzero probability must be
+        a one-qubit gate of `pspec`. On each qubit, the probabilities are renormalized over the named
+        gates available on that qubit. If None, a uniformly random gate is chosen from
+        those available on each qubit.
 
     modelname : <TODO typ>, optional
         <TODO description>
@@ -232,6 +240,14 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
     Returns
     -------
     <TODO typ>
+
+    Raises
+    ------
+    ValueError
+        If `one_q_gate_distribution` is negative somewhere or doesn't sum to 1, or gives
+        nonzero probability to a name that isn't a one-qubit gate of `pspec`. Also if a qubit that
+        needs a one-qubit gate has none available (among `one_q_gate_names`, if given, and
+        with nonzero probability, if `one_q_gate_distribution` is given).
     """
     if gate_args_lists is None: gate_args_lists = {}
     if qubit_labels is None:
@@ -290,6 +306,17 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
             "one_q_gate_distribution can only be specified along with one_q_gate_names!"
         assert(len(one_q_gate_distribution) == len(one_q_gate_names)), \
             "one_q_gate_distribution must be the same length as one_q_gate_names!"
+        if any(p < 0 for p in one_q_gate_distribution) or not _np.isclose(_np.sum(one_q_gate_distribution), 1):
+            raise ValueError("one_q_gate_distribution must be non-negative and sum to 1, but it is "
+                             f"{list(one_q_gate_distribution)}.")
+        for name, p in zip(one_q_gate_names, one_q_gate_distribution):
+            if p > 0 and name not in pspec.gate_names:
+                raise ValueError(f"one_q_gate_names includes {name!r} with nonzero probability in "
+                                 f"one_q_gate_distribution, but the processor spec has no gate named {name!r}.")
+            if p > 0 and pspec.gate_num_qubits(name) != 1:
+                raise ValueError(f"one_q_gate_names includes {name!r} with nonzero probability in "
+                                 f"one_q_gate_distribution, but {name!r} is not a one-qubit gate of the "
+                                 "processor spec.")
     if one_q_gate_names is None or len(one_q_gate_names) > 0:
         for q in unusedqubits:
             if one_q_gate_names is None:
@@ -297,15 +324,31 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
             else:
                 possibleops = [gate_lbl for gate_lbl in ops_on_qubits[(q,)] if gate_lbl.name in one_q_gate_names]
             if one_q_gate_distribution is None:
+                candidates = possibleops
+            else:
+                # Indices of the named gates that have nonzero probability and are available on q.
+                possiblenames = set(gate_lbl.name for gate_lbl in possibleops)
+                candidates = [i for i, name in enumerate(one_q_gate_names)
+                              if one_q_gate_distribution[i] > 0 and name in possiblenames]
+            if len(candidates) == 0:
+                available = [gate_lbl.name for gate_lbl in ops_on_qubits[(q,)]]
+                msg = (f"Cannot sample a one-qubit gate for qubit {q}: the one-qubit gates available on it are "
+                       f"{available}, and one_q_gate_names is {one_q_gate_names}")
+                if one_q_gate_distribution is not None:
+                    msg += ", but none of the available gates has nonzero probability in one_q_gate_distribution"
+                raise ValueError(msg + ".")
+            if one_q_gate_distribution is None:
                 gate_label = possibleops[rand_state.randint(0, len(possibleops))]
             else:
-                # Sample a gate name from the specified distribution, rather than sampling
-                # uniformly from the gates available on this qubit.
-                random_index = rand_state.choice(len(one_q_gate_names), p=one_q_gate_distribution)
-                gate_name = one_q_gate_names[random_index]
+                # Sample from the distribution renormalized over the gates available on q. Where every
+                # gate with nonzero probability is available, this is the same draw as over all names.
+                p = _np.array([one_q_gate_distribution[i] for i in candidates], dtype=float)
+                gate_name = one_q_gate_names[candidates[rand_state.choice(len(candidates), p=p / _np.sum(p))]]
                 gate_label = _lbl.Label(gate_name, q)
-                assert(gate_label in possibleops), \
-                    "The gate %s sampled from one_q_gate_distribution is not available on qubit %s!" % (gate_name, q)
+            if gate_label.name in gate_args_lists.keys():
+                possibleargs = gate_args_lists[gate_label.name]
+                args = possibleargs[rand_state.randint(0, len(possibleargs))]
+                gate_label = _lbl.Label(gate_label.name, q, args=args)
             sampled_layer.append(gate_label)
 
     return sampled_layer

@@ -230,3 +230,100 @@ class FixedFeatureValueCircuitTest(BaseCase):
             seen.add(matching[0])
         self.assertEqual({frozenset(e) for e in seen}, {frozenset(['Q0', 'Q1']), frozenset(['Q1', 'Q2'])})
         self.assertTrue(any((v, u) in seen for (u, v) in seen))
+
+
+class EdgegrabOneQubitGateTest(BaseCase):
+
+    def setUp(self):
+        ring = [('Q0', 'Q1'), ('Q1', 'Q2'), ('Q2', 'Q3')]
+        # Gypi2 is available on Q0 and Q1 only.
+        self.het = QPS(4, ['Gcphase', 'Gxpi2', 'Gypi2', 'Gzpi2'],
+                       availability={'Gcphase': ring, 'Gypi2': [('Q0',), ('Q1',)]}, qubit_labels=QS)
+        self.rot = QPS(4, ['Gczr', 'Gxpi2', 'Gzr'], availability={'Gczr': ring}, qubit_labels=QS)
+        self.eg = _rc.sample_circuit_layer_by_edgegrab
+
+    def test_distribution_uses_only_available_gates(self):
+        seen = {'Q0': set(), 'Q1': set()}
+        for seed in range(20):
+            layer = self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gypi2'],
+                            one_q_gate_distribution=[0.5, 0.5], rand_state=np.random.RandomState(seed))
+            self.assertEqual(sorted(lbl.qubits[0] for lbl in layer), QS)
+            for lbl in layer:
+                self.assertEqual(len(lbl.qubits), 1)
+                q = lbl.qubits[0]
+                if q in ('Q2', 'Q3'):
+                    self.assertEqual(lbl.name, 'Gxpi2')
+                else:
+                    seen[q].add(lbl.name)
+        self.assertEqual(seen, {'Q0': {'Gxpi2', 'Gypi2'}, 'Q1': {'Gxpi2', 'Gypi2'}})
+
+    def test_distribution_renormalized_over_available_gates(self):
+        names = []
+        for seed in range(500):
+            layer = self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gypi2', 'Gzpi2'],
+                            one_q_gate_distribution=[0.1, 0.6, 0.3], rand_state=np.random.RandomState(seed))
+            names.extend(lbl.name for lbl in layer if lbl.qubits[0] in ('Q2', 'Q3'))
+        self.assertEqual(len(names), 1000)
+        self.assertAlmostEqual(names.count('Gzpi2') / len(names), 0.75, delta=0.06)
+
+    def test_raises_when_qubit_has_no_usable_gate(self):
+        cases = [(['Gypi2'], [1.0]), (['Gxpi2', 'Gypi2'], [0.0, 1.0]), (['Gypi2'], None)]
+        for names, dist in cases:
+            with self.assertRaisesRegex(ValueError, 'Cannot sample a one-qubit gate for qubit Q2'):
+                self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=names,
+                        one_q_gate_distribution=dist, rand_state=np.random.RandomState(0))
+
+    def test_one_qubit_gate_args(self):
+        allowed = [('0.1',), ('0.2',)]
+        for dist in (None, [0.5, 0.5]):
+            args_seen = []
+            for seed in range(10):
+                layer = self.eg(self.rot, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gzr'],
+                                gate_args_lists={'Gzr': allowed}, one_q_gate_distribution=dist,
+                                rand_state=np.random.RandomState(seed))
+                args_seen.extend(tuple(lbl.args) for lbl in layer if lbl.name == 'Gzr')
+            self.assertGreater(len(args_seen), 0)
+            for args in args_seen:
+                self.assertIn(args, allowed)
+            self.assertEqual(set(args_seen), set(allowed))
+
+    def test_samplerargs_positional_order(self):
+        czr_args = [('0.1',), ('-0.1',)]
+        num_czr = 0
+        for seed in range(5):
+            c = _rc.create_random_circuit(self.rot, 3, sampler='edgegrab',
+                                          samplerargs=[0.5, ['Gxpi2'], {'Gczr': czr_args}],
+                                          rand_state=np.random.RandomState(seed))
+            for layer in c:
+                for lbl in layer.components:
+                    if len(lbl.qubits) == 1:
+                        self.assertEqual(lbl.name, 'Gxpi2')
+                    else:
+                        self.assertEqual(lbl.name, 'Gczr')
+                        self.assertIn(tuple(lbl.args), czr_args)
+                        num_czr += 1
+        self.assertGreater(num_czr, 0)
+
+        for seed in range(5):
+            c = _rc.create_random_circuit(self.rot, 3, sampler='edgegrab',
+                                          samplerargs=[0.5, ['Gxpi2', 'Gzr'],
+                                                       {'Gczr': [('0.1',)], 'Gzr': [('0.3',)]}, [0.0, 1.0]],
+                                          rand_state=np.random.RandomState(seed))
+            for layer in c:
+                for lbl in layer.components:
+                    if len(lbl.qubits) == 1:
+                        self.assertEqual(lbl.name, 'Gzr')
+                        self.assertEqual(tuple(lbl.args), ('0.3',))
+
+    def test_rejects_bad_distribution(self):
+        # Gxpi is a standard gate name, but self.het doesn't have it.
+        with self.assertRaisesRegex(ValueError, "the processor spec has no gate named 'Gxpi'"):
+            self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gxpi'],
+                    one_q_gate_distribution=[0.5, 0.5], rand_state=np.random.RandomState(0))
+        with self.assertRaisesRegex(ValueError, "'Gcphase' is not a one-qubit gate"):
+            self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gcphase'],
+                    one_q_gate_distribution=[0.5, 0.5], rand_state=np.random.RandomState(0))
+        for dist in ([0.5, 0.6], [1.5, -0.5]):
+            with self.assertRaisesRegex(ValueError, 'must be non-negative and sum to 1'):
+                self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gzpi2'],
+                        one_q_gate_distribution=dist, rand_state=np.random.RandomState(0))
