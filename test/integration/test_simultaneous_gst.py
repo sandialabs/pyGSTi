@@ -39,12 +39,18 @@ from test.helpers.simultaneous_gst_validation import (
     THREE_QUBIT_SPARSE_MARKOVIAN,
     THREE_QUBIT_SPARSE_SPECTATOR,
     ValidationArtifacts,
+    create_run_root,
     run_validation_profile,
 )
 
 
-def artifact_dir():
-    root = pathlib.Path(os.environ['PYGSTI_SGST_ARTIFACT_DIR'])
+def artifact_dir(profile_name):
+    """Return a fresh run directory under ``PYGSTI_SGST_ARTIFACT_DIR`` for one profile.
+
+    Each run gets its own timestamped root, so running several profiles against one
+    ``PYGSTI_SGST_ARTIFACT_DIR`` keeps every profile's dataset, fit and metrics.
+    """
+    root = create_run_root(pathlib.Path(os.environ['PYGSTI_SGST_ARTIFACT_DIR']), profile_name)
     return ValidationArtifacts(
         root=root,
         dataset_dir=root / 'dataset',
@@ -55,6 +61,12 @@ def artifact_dir():
 
 def mpi_ranks():
     return int(os.environ.get('PYGSTI_SGST_MPI_RANKS', '1'))
+
+
+def run_profile(profile):
+    """Apply the runner's overrides to ``profile`` and run it in its own artifact directory."""
+    profile = profile_with_overrides(profile)
+    return run_validation_profile(profile, artifact_dir(profile.name), mpi_ranks())
 
 
 def profile_with_overrides(profile):
@@ -211,33 +223,27 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
 @pytest.mark.long_running
 class SimultaneousGSTValidationTester:
     def test_three_qubit_sparse_markovian_recovery(self):
-        result = run_validation_profile(
-            profile_with_overrides(THREE_QUBIT_SPARSE_MARKOVIAN), artifact_dir(), mpi_ranks())
+        result = run_profile(THREE_QUBIT_SPARSE_MARKOVIAN)
         assert result['validation_mean_tvd'] >= 0.0
 
     def test_three_qubit_sparse_spectator_crosstalk(self):
-        result = run_validation_profile(
-            profile_with_overrides(THREE_QUBIT_SPARSE_SPECTATOR), artifact_dir(), mpi_ranks())
+        result = run_profile(THREE_QUBIT_SPARSE_SPECTATOR)
         assert result['two_delta_logl'] >= 0.0
 
     def test_four_qubit_sparse_markovian_bridge(self):
-        result = run_validation_profile(
-            profile_with_overrides(FOUR_QUBIT_SPARSE_MARKOVIAN), artifact_dir(), mpi_ranks())
+        result = run_profile(FOUR_QUBIT_SPARSE_MARKOVIAN)
         assert result['fit_model_params'] == 59
 
     def test_four_qubit_sparse_spectator_crosstalk(self):
-        result = run_validation_profile(
-            profile_with_overrides(FOUR_QUBIT_SPARSE_SPECTATOR), artifact_dir(), mpi_ranks())
+        result = run_profile(FOUR_QUBIT_SPARSE_SPECTATOR)
         assert result['fit_model_params'] == 59
 
     def test_four_qubit_coherent_markovian_bridge(self):
-        result = run_validation_profile(
-            profile_with_overrides(FOUR_QUBIT_COHERENT_MARKOVIAN), artifact_dir(), mpi_ranks())
+        result = run_profile(FOUR_QUBIT_COHERENT_MARKOVIAN)
         assert result['fit_model_params'] == 21
 
     def test_four_qubit_coherent_spectator_crosstalk(self):
-        result = run_validation_profile(
-            profile_with_overrides(FOUR_QUBIT_COHERENT_SPECTATOR), artifact_dir(), mpi_ranks())
+        result = run_profile(FOUR_QUBIT_COHERENT_SPECTATOR)
         assert result['fit_model_params'] == 21
 
 
