@@ -244,6 +244,8 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
     Raises
     ------
     ValueError
+        If `one_q_gate_distribution` is given without `one_q_gate_names`, or with a
+        different length from `one_q_gate_names`.
         If `one_q_gate_distribution` is negative somewhere or doesn't sum to 1, or gives
         nonzero probability to a name that isn't a one-qubit gate of `pspec`. Also if a qubit that
         needs a one-qubit gate has none available (among `one_q_gate_names`, if given, and
@@ -302,10 +304,11 @@ def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_densit
                 del unusedqubits[unusedqubits.index(q)]
 
     if one_q_gate_distribution is not None:
-        assert(one_q_gate_names is not None), \
-            "one_q_gate_distribution can only be specified along with one_q_gate_names!"
-        assert(len(one_q_gate_distribution) == len(one_q_gate_names)), \
-            "one_q_gate_distribution must be the same length as one_q_gate_names!"
+        if one_q_gate_names is None:
+            raise ValueError("one_q_gate_distribution can only be given together with one_q_gate_names.")
+        if len(one_q_gate_distribution) != len(one_q_gate_names):
+            raise ValueError(f"one_q_gate_distribution has {len(one_q_gate_distribution)} entries and "
+                             f"one_q_gate_names has {len(one_q_gate_names)}, but they must have the same length")
         if any(p < 0 for p in one_q_gate_distribution) or not _np.isclose(_np.sum(one_q_gate_distribution), 1):
             raise ValueError("one_q_gate_distribution must be non-negative and sum to 1, but it is "
                              f"{list(one_q_gate_distribution)}.")
@@ -923,7 +926,8 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
         connectivity and the available gates are taken from `pspec`.
 
     width : int
-        The number of qubits the circuit acts on.
+        The number of qubits the circuit acts on. When `qubit_labels` is None, it can be
+        at most the number of qubits of `pspec`.
 
     depth : int
         The number of layers in the circuit.
@@ -954,16 +958,21 @@ def create_random_circuit_with_fixed_feature_values(pspec, width, depth, xi, qub
         `xi * width * depth / 2 >= nu * depth + 1`. Between those it depends on the random
         rounding, and successful calls there have an expected number of two-qubit gates
         below `xi * width * depth / 2`. On a contiguous stretch of a line, `nu` is
-        `width // 2`.
+        `width // 2`. Also if `qubit_labels` doesn't hold exactly `width` qubits, or if
+        `qubit_labels` is None and `width` is larger than the number of qubits of `pspec`.
     """
     if rand_state is None:
         rand_state = _np.random.RandomState()
     if qubit_labels is not None:
         assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
         qubits = list(qubit_labels[:])  # copy this list
-        assert(len(qubits) == width)
+        if len(qubits) != width:
+            raise ValueError(f"qubit_labels has {len(qubits)} qubits, but width is {width}.")
     else:
         qubits = list(pspec.qubit_labels[:width])  # copy this list
+        if len(qubits) != width:
+            raise ValueError(f"width {width} is larger than the number of qubits in the processor spec "
+                             f"({pspec.num_qubits}).")
 
     # Initialize an empty circuit, to populate with sampled layers.
     circuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
@@ -2367,7 +2376,8 @@ def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labe
     if circuit is False:
         return pauli, sign
     else:
-        pauli_circuit = _circuit_from_pauli_and_sign(pauli, sign, pspec=pspec, absolute_compilation=absolute_compilation, qubit_labels=qubit_labels)
+        pauli_circuit = _circuit_from_pauli(pauli, pspec=pspec, absolute_compilation=absolute_compilation,
+                                            qubit_labels=qubit_labels)
         return pauli, sign, pauli_circuit
 
 
@@ -2399,13 +2409,13 @@ def _sample_random_pauli_with_identities_fixed(n, is_identity, pspec=None, absol
     if circuit is False:
         return pauli, sign
     else:
-        pauli_circuit = _circuit_from_pauli_and_sign(pauli, sign, pspec=pspec,
-                                                     absolute_compilation=absolute_compilation,
-                                                     qubit_labels=qubit_labels)
+        pauli_circuit = _circuit_from_pauli(pauli, pspec=pspec,
+                                            absolute_compilation=absolute_compilation,
+                                            qubit_labels=qubit_labels)
         return pauli, sign, pauli_circuit
 
 
-def _circuit_from_pauli_and_sign(pauli, sign, pspec=None, absolute_compilation=None, qubit_labels=None):
+def _circuit_from_pauli(pauli, pspec=None, absolute_compilation=None, qubit_labels=None):
     # Compiles a Pauli, given as a list of 'I'/'X'/'Y'/'Z', into a circuit of native gates.
 
     if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list

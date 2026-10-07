@@ -41,7 +41,16 @@ def max_depth_log2(error_per_layer, min_fidelity):
     This function uses the approximation that the fidelities of
     depolarizing channels multiply, which is a good approximation
     except for very few qubit (narrow) circuits.
+
+    Raises
+    ------
+    ValueError
+        If `error_per_layer` or `min_fidelity` is not strictly between 0 and 1.
     """
+    if not (0 < error_per_layer < 1):
+        raise ValueError(f"error_per_layer must be between 0 and 1 (exclusive), but it is {error_per_layer}.")
+    if not (0 < min_fidelity < 1):
+        raise ValueError(f"min_fidelity must be between 0 and 1 (exclusive), but it is {min_fidelity}.")
     return max([-1, int(_np.ceil(_np.log2(_np.log(min_fidelity) / _np.log(1 - error_per_layer))))])
 
 
@@ -64,9 +73,12 @@ def max_depths_log2(widths, error_per_layer, min_fidelity, include_all_widths=Tr
         The desired minimum fidelity of the circuits.
 
     include_all_widths : bool, optional
-        If True, every width in `widths` appears in the returned dictionary,
-        with a maximum depth of 0 where no depth achieves `min_fidelity`.
-        If False, those widths are omitted.
+        If True, every width in `widths` appears in the returned dictionary.
+        A width at which `max_depth_log2` returns -1 gets 0, which is the
+        base-2 logarithm of depth 1, not a depth of 0. A width where depth 1
+        is the first power-of-two depth whose fidelity is at most
+        `min_fidelity` also gets 0. If False, the widths at which
+        `max_depth_log2` returns -1 are omitted.
 
     Returns
     -------
@@ -83,6 +95,12 @@ def max_depths_log2(widths, error_per_layer, min_fidelity, include_all_widths=Tr
     This function uses the approximation that the fidelities of
     depolarizing channels multiply, which is a good approximation
     except for very few qubit (narrow) circuits.
+
+    Raises
+    ------
+    ValueError
+        If `min_fidelity`, or `error_per_layer[w]` for some `w` in `widths`,
+        is not strictly between 0 and 1.
     """
     if include_all_widths:
         out = {w: max([0, max_depth_log2(error_per_layer[w], min_fidelity)]) for w in widths}
@@ -205,7 +223,14 @@ def quasi_uniform_feature_vectors(num_samples, num_features, max_values, min_val
     list of numpy.ndarray
         A list of `num_features` arrays, the jth of which contains the sampled
         values of the jth feature. Each array has length `2**ceil(log2(num_samples))`.
+
+    Raises
+    ------
+    ValueError
+        If `num_samples` is less than 1.
     """
+    if num_samples < 1:
+        raise ValueError(f"num_samples must be at least 1, but it is {num_samples}.")
     sobol = _Sobol(num_features, seed=seed)
     rounded_base2_num_samples = int(_np.ceil(_np.log2(num_samples)))
     samples = sobol.random_base2(rounded_base2_num_samples)

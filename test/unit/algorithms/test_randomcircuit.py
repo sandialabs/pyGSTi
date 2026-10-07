@@ -102,6 +102,44 @@ class LayerSamplerTester(BaseCase):
 
 QS = ['Q0', 'Q1', 'Q2', 'Q3']
 INFEASIBLE_RE = r'xi of at most 2/3 always fits'
+QS5 = ['Q0', 'Q1', 'Q2', 'Q3', 'Q4']
+
+# Outputs of create_random_circuit_with_fixed_feature_values at commit aa92fed01, keyed by
+# (geometry, width, xi, seed), at depth 8. Every call that succeeded there must return the
+# same circuit for the same rand_state, so a change meant to alter the draw order must
+# regenerate these. Only even widths reach the maximum-matching upgrade, so the width-4
+# cases are the ones that guard it.
+PR_HEAD_CIRCUITS = {
+    ('line', 3, 0.5, 0): (
+        '[Gcphase:Q0:Q1Gxpi2:Q2][Gypi2:Q0Gcphase:Q2:Q1][Gypi2:Q0Gi:Q1Gxpi2:Q2]'
+        '[Gcphase:Q0:Q1Gxpi2:Q2][Gxpi2:Q0Gcphase:Q2:Q1][Gxpi2:Q0Gi:Q1Gxpi2:Q2][Gi:Q0Gcphase:Q2:Q1]'
+        '[Gi:Q0Gcphase:Q2:Q1]@(Q0,Q1,Q2)'),
+    ('line', 3, 0.5, 1): (
+        '[Gi:Q0Gypi2:Q1Gxpi2:Q2][Gypi2:Q0Gi:Q1Gi:Q2][Gcphase:Q0:Q1Gypi2:Q2][Gcphase:Q0:Q1Gi:Q2]'
+        '[Gxpi2:Q0Gcphase:Q2:Q1][Gcphase:Q1:Q0Gypi2:Q2][Gypi2:Q0Gcphase:Q2:Q1][Gcphase:Q1:Q0Gi:Q2]@(Q0,Q1,Q2)'),
+    ('line', 4, 0.5, 0): (
+        '[Gi:Q0Gxpi2:Q1Gcphase:Q2:Q3][Gcphase:Q0:Q1Gcphase:Q3:Q2][Gi:Q0Gcphase:Q2:Q1Gi:Q3]'
+        '[Gxpi2:Q0Gcphase:Q2:Q1Gypi2:Q3][Gi:Q0Gypi2:Q1Gi:Q2Gxpi2:Q3][Gxpi2:Q0Gypi2:Q1Gi:Q2Gxpi2:Q3]'
+        '[Gxpi2:Q0Gxpi2:Q1Gcphase:Q3:Q2][Gcphase:Q1:Q0Gcphase:Q2:Q3]@(Q0,Q1,Q2,Q3)'),
+    ('line', 4, 0.5, 2): (
+        '[Gcphase:Q0:Q1Gcphase:Q3:Q2][Gcphase:Q0:Q1Gcphase:Q3:Q2][Gxpi2:Q0Gypi2:Q1Gi:Q2Gxpi2:Q3]'
+        '[Gi:Q0Gi:Q1Gypi2:Q2Gypi2:Q3][Gxpi2:Q0Gcphase:Q2:Q1Gypi2:Q3][Gcphase:Q0:Q1Gcphase:Q3:Q2]'
+        '[Gi:Q0Gcphase:Q1:Q2Gi:Q3][Gypi2:Q0Gi:Q1Gypi2:Q2Gi:Q3]@(Q0,Q1,Q2,Q3)'),
+    ('line', 5, 0.8, 0): (
+        '[Gcphase:Q1:Q0Gcphase:Q2:Q3Gxpi2:Q4][Gcphase:Q0:Q1Gcphase:Q3:Q2Gypi2:Q4]'
+        '[Gi:Q0Gcphase:Q2:Q1Gcphase:Q4:Q3][Gypi2:Q0Gcphase:Q2:Q1Gcphase:Q4:Q3]'
+        '[Gcphase:Q1:Q0Gi:Q2Gcphase:Q4:Q3][Gcphase:Q0:Q1Gcphase:Q3:Q2Gxpi2:Q4]'
+        '[Gcphase:Q1:Q0Gcphase:Q2:Q3Gxpi2:Q4][Gcphase:Q0:Q1Gypi2:Q2Gcphase:Q3:Q4]@(Q0,Q1,Q2,Q3,Q4)'),
+    ('ring', 4, 0.25, 3): (
+        '[Gypi2:Q0Gypi2:Q1Gypi2:Q2Gi:Q3][Gcphase:Q0:Q1Gcphase:Q3:Q2][Gxpi2:Q0Gcphase:Q2:Q1Gypi2:Q3]'
+        '[Gxpi2:Q0Gi:Q1Gypi2:Q2Gxpi2:Q3][Gxpi2:Q0Gypi2:Q1Gi:Q2Gypi2:Q3][Gi:Q0Gxpi2:Q1Gi:Q2Gxpi2:Q3]'
+        '[Gi:Q0Gypi2:Q1Gxpi2:Q2Gxpi2:Q3][Gypi2:Q0Gcphase:Q2:Q1Gi:Q3]@(Q0,Q1,Q2,Q3)'),
+    ('ring', 5, 0.75, 0): (
+        '[Gcphase:Q0:Q1Gcphase:Q2:Q3Gi:Q4][Gypi2:Q0Gcphase:Q1:Q2Gcphase:Q4:Q3]'
+        '[Gi:Q0Gcphase:Q1:Q2Gcphase:Q4:Q3][Gxpi2:Q0Gcphase:Q2:Q1Gxpi2:Q3Gypi2:Q4]'
+        '[Gcphase:Q1:Q0Gcphase:Q2:Q3Gi:Q4][Gxpi2:Q0Gcphase:Q2:Q1Gcphase:Q4:Q3]'
+        '[Gcphase:Q0:Q1Gcphase:Q3:Q2Gxpi2:Q4][Gcphase:Q1:Q2Gxpi2:Q3Gcphase:Q4:Q0]@(Q0,Q1,Q2,Q3,Q4)'),
+}
 
 
 def two_qubit_gates_by_layer(circuit):
@@ -231,6 +269,20 @@ class FixedFeatureValueCircuitTest(BaseCase):
         self.assertEqual({frozenset(e) for e in seen}, {frozenset(['Q0', 'Q1']), frozenset(['Q1', 'Q2'])})
         self.assertTrue(any((v, u) in seen for (u, v) in seen))
 
+    def test_matches_pr_head_output(self):
+        pspecs = {geometry: QPS(5, ['Gi', 'Gxpi2', 'Gypi2', 'Gcphase'], geometry=geometry, qubit_labels=QS5)
+                  for geometry in ('line', 'ring')}
+        for key, expected in PR_HEAD_CIRCUITS.items():
+            geometry, width, xi, seed = key
+            c = self.f(pspecs[geometry], width, 8, xi, rand_state=np.random.RandomState(seed))
+            self.assertEqual(c.str, expected, msg=f"circuit for {key} differs from the stored output")
+
+    def test_rejects_width_mismatch(self):
+        with self.assertRaisesRegex(ValueError, 'is larger than the number of qubits in the processor spec'):
+            self.f(self.line, 5, 4, 0.5, rand_state=np.random.RandomState(0))
+        with self.assertRaisesRegex(ValueError, 'qubit_labels has 2 qubits, but width is 3'):
+            self.f(self.line, 3, 4, 0.5, qubit_labels=['Q0', 'Q1'], rand_state=np.random.RandomState(0))
+
 
 class EdgegrabOneQubitGateTest(BaseCase):
 
@@ -327,3 +379,11 @@ class EdgegrabOneQubitGateTest(BaseCase):
             with self.assertRaisesRegex(ValueError, 'must be non-negative and sum to 1'):
                 self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gzpi2'],
                         one_q_gate_distribution=dist, rand_state=np.random.RandomState(0))
+
+    def test_distribution_without_matching_names_raises(self):
+        with self.assertRaisesRegex(ValueError, 'can only be given together with one_q_gate_names'):
+            self.eg(self.het, two_q_gate_density=0.0, one_q_gate_distribution=[1.0],
+                    rand_state=np.random.RandomState(0))
+        with self.assertRaisesRegex(ValueError, 'they must have the same length'):
+            self.eg(self.het, two_q_gate_density=0.0, one_q_gate_names=['Gxpi2', 'Gypi2'],
+                    one_q_gate_distribution=[1.0], rand_state=np.random.RandomState(0))

@@ -124,7 +124,7 @@ def sample_dfe_circuit(pspec, circuit, clifford_compilations, create_same_measur
     # Figure out which stabilizer of s_outputstate rand_pauli was mapped to.
     s_rc_inv, p_rc_inv = _symp.inverse_clifford(s_rc, p_rc)  # U^(-1)
     s_new_pauli, p_new_pauli = _symp.compose_cliffords(s_rc_inv, p_rc_inv, s_pc, p_pc)  # PU^(-1)
-    s_new_pauli, p_new_pauli = _symp.compose_cliffords(s_new_pauli, p_new_pauli, s_rc, p_rc)  # UPaU^(-1)
+    s_new_pauli, p_new_pauli = _symp.compose_cliffords(s_new_pauli, p_new_pauli, s_rc, p_rc)  # UPU^(-1)
 
     pauli_vector = p_new_pauli
     pauli = [i[0] for i in _symp.find_pauli_layer(pauli_vector, [j for j in range(n)])]

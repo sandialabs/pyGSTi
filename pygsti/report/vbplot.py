@@ -296,9 +296,9 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
         The quantity to plot. Default is 'polarization' as used and defined in arXiv:2008.11294. The plot
         will show the maximum, mean, and minimum of this metric at each circuit shape.
 
-    threshold : float, optional
+    threshold : float or None, optional
         The threshold for "success" for the figure-of-merit defined by `metric`. This threshold is used
-        to compute the three "success" boundaries that are shown in the plot.
+        to compute the three "success" boundaries that are shown in the plot. If None, no boundaries are drawn.
 
     hypothesis_test : string, optional
         The type of statistical significance adjustment to apply to the boundaries. The options are

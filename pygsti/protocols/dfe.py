@@ -10,12 +10,12 @@ DFE Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from collections import defaultdict
+import numbers as _numbers
+
 import numpy as _np
 
 from pygsti.protocols import protocol as _proto
 from pygsti.protocols import vb as _vb
-from pygsti import tools as _tools
 from pygsti.algorithms import dfe as _dfe
 from pygsti.tools import mcfetools as _mcfe
 from pygsti.baseobjs.label import Label as _Label
@@ -58,7 +58,10 @@ class DFEDesign(_vb.BenchmarkingDesign):
         Combining this with `fixed_identity_locations` raises ValueError.
 
     seed : int, optional
-        A seed for the random number generator, for reproducible sampling.
+        A seed for the random number generator, for reproducible sampling. If None, a seed
+        is drawn from NumPy's global random state, as the RB designs do. The seed used is
+        stored in the `seed` attribute, so the design can be regenerated from its saved
+        metadata.
 
     fixed_identity_locations : None, 'idle' or sequence, optional
         Qubits on which the sampled Pauli is pinned to the identity. If None, a uniformly
@@ -90,7 +93,13 @@ class DFEDesign(_vb.BenchmarkingDesign):
         measurements = []
         signs = []
 
-        rand_state = _np.random.RandomState(seed)  # Ok if seed is None
+        if seed is None:
+            self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
+        elif isinstance(seed, _numbers.Integral):
+            self.seed = int(seed)  # A NumPy integer can't be written to the design's JSON metadata
+        else:
+            self.seed = seed
+        rand_state = _np.random.RandomState(self.seed)
 
         for c, mask in zip(circuits, identity_masks):
             dfe_circuits_for_c = []
@@ -139,13 +148,17 @@ class DFEDesign(_vb.BenchmarkingDesign):
         return list(fixed_identity_locations)
 
     def _init_foundation(self, circuit_lists, measurements, signs, num_samples, descriptor,
-                         add_default_protocol, has_fixed_identity_locations):
+                         add_default_protocol, has_fixed_identity_locations, depths=None, qubit_labels=None):
         # Pair these attributes with circuit data so that we serialize/truncate properly
         self.paired_with_circuit_attrs = ["measurements", "signs"]
 
-        dummy_depths = list(range(len(circuit_lists)))
-        qubit_labels = circuit_lists[0][0].line_labels
-        super().__init__(dummy_depths, circuit_lists, signs, qubit_labels, remove_duplicates=False)
+        # By default the "depths" are the target indices 0..len-1, and the qubit labels are the
+        # first circuit's line labels; map_qubit_labels passes both explicitly.
+        if depths is None:
+            depths = list(range(len(circuit_lists)))
+        if qubit_labels is None:
+            qubit_labels = circuit_lists[0][0].line_labels
+        super().__init__(depths, circuit_lists, signs, qubit_labels, remove_duplicates=False)
         self.measurements = measurements
         self.signs = signs
         self.circuits_per_depth = num_samples
@@ -154,6 +167,41 @@ class DFEDesign(_vb.BenchmarkingDesign):
 
         if add_default_protocol:
             self.add_default_protocol(DFE(name='DFE'))
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        The new design keeps the depths (target indices), measurements, signs,
+        `has_fixed_identity_locations` and `seed` of this one. Like the RB designs, it has no
+        default protocols: use `add_default_protocol(DFE(name='DFE'))` to get one.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        DFEDesign
+        """
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        # Measurements are indexed by position in each circuit's line labels, so they stay valid.
+        # The getattrs let designs saved before these attributes existed be mapped too.
+        ret = self.__class__.__new__(self.__class__)
+        ret._init_foundation(mapped_circuit_lists,
+                             [list(m) for m in self.measurements],
+                             [list(s) for s in self.signs],
+                             self.circuits_per_depth, self.descriptor,
+                             add_default_protocol=False,
+                             has_fixed_identity_locations=getattr(self, 'has_fixed_identity_locations', False),
+                             depths=list(self.depths),
+                             qubit_labels=self._mapped_qubit_labels(mapper))
+        ret.seed = getattr(self, 'seed', None)
+        return ret
 
 
 class DFE(_vb.SummaryStatistics):
@@ -186,7 +234,9 @@ class DFE(_vb.SummaryStatistics):
     benchmarking designs (e.g. `BinaryRBDesign`) carry similar attributes but would give
     meaningless numbers. Designs built with `fixed_identity_locations` are refused with
     ValueError, because their sampled Paulis have fixed support and the process-fidelity
-    estimate would be biased.
+    estimate would be biased. ValueError is also raised for data with no dataset, for a dataset
+    that lacks counts for some dressed circuit (missing or zero-count rows), and for a design
+    whose `measurements` or `signs` don't line up with its circuit lists.
 
     Parameters
     ----------
@@ -225,6 +275,8 @@ class DFE(_vb.SummaryStatistics):
             raise ValueError("This design pins identity locations (fixed_identity_locations), so its sampled "
                              "Paulis have fixed support and the process-fidelity estimate would be biased. "
                              "Rebuild it with fixed_identity_locations=None.")
+        self._check_alignment(design)
+        self._check_data_complete(design, data.dataset)
 
         summary = self._compute_summary_statistics(data, energy=True)
 
@@ -248,6 +300,40 @@ class DFE(_vb.SummaryStatistics):
 
         return DFEResults(data, self, fidelities, standard_errors)
 
+    @staticmethod
+    def _check_alignment(design):
+        # The paired measurements and signs must match the circuit lists entry for entry, or the
+        # energies would be computed against the wrong measurements.
+        n_lists = len(design.circuit_lists)
+        aligned = (len(design.depths) == n_lists and len(design.measurements) == n_lists
+                   and len(design.signs) == n_lists
+                   and all(len(m) == len(cl) and len(s) == len(cl)
+                           for cl, m, s in zip(design.circuit_lists, design.measurements, design.signs)))
+        if not aligned:
+            raise ValueError("This design's depths, measurements or signs don't line up with its circuit lists. "
+                             "A truncation that removes every dressed circuit of some target causes this (a known "
+                             "bug in BenchmarkingDesign's truncation). Whole targets can be dropped safely with "
+                             "truncate_to_lists.")
+
+    @staticmethod
+    def _check_data_complete(design, ds):
+        if ds is None:
+            raise ValueError("The data has no dataset; DFE needs counts for every dressed circuit of the design.")
+        distinct = set(c for circuit_list in design.circuit_lists for c in circuit_list)
+        n_missing = 0
+        n_zero = 0
+        for c in distinct:
+            if c not in ds:
+                n_missing += 1
+            elif ds[c].total == 0:
+                n_zero += 1
+        if n_missing + n_zero > 0:
+            raise ValueError(f"The dataset lacks counts for {n_missing + n_zero} of the design's {len(distinct)} "
+                             f"distinct dressed circuits ({n_missing} missing, {n_zero} with zero counts). To "
+                             "analyze the available data, remove any zero-count rows from the dataset, then "
+                             "truncate the design with design.truncate_to_available_data(dataset). Truncation "
+                             "alone doesn't drop zero-count rows, because the dataset's keys include them.")
+
 
 class DFEResults(_proto.ProtocolResults):
     """
@@ -255,7 +341,11 @@ class DFEResults(_proto.ProtocolResults):
 
     Entry `i` of `fidelities` and of `standard_errors` belongs to target circuit
     `data.edesign.depths[i]`, which is that circuit's index in the `circuits` given to
-    :class:`DFEDesign`. These indices stay correct after the design is truncated.
+    :class:`DFEDesign`. The indices stay correct after `truncate_to_lists`, and after a
+    truncation to circuits or data that leaves every target at least one dressed circuit. A
+    truncation that removes all of a target's dressed circuits misaligns the design's
+    `measurements` and `signs` (a bug in `BenchmarkingDesign`), and :class:`DFE` refuses such
+    a design.
 
     Parameters
     ----------
