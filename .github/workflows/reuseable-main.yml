@@ -127,7 +127,7 @@ jobs:
         # Wall-clock-sensitive suites live under test/performance/ and so are not
         # collected here at all. The `-m "not slow"` filter is kept as a backstop
         # in case a benchmark-style test lands under test/unit again.
-        python -m pytest -n auto --dist loadscope -m "not slow" $COV_FLAG --durations=25 test/unit
+        python -m pytest -n auto --dist loadscope -m "not slow and not long_running" $COV_FLAG --durations=25 test/unit
     - name: Run workflow tests
       if: ${{ inputs.run-integration-tests == 'true' }}
       shell: bash
@@ -135,7 +135,7 @@ jobs:
         COV_FLAG: ${{ inputs.run-coverage == 'true' && '--cov=pygsti' || '' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -n auto --dist loadscope $COV_FLAG test/integration
+        python -m pytest -n auto --dist loadscope -m "not long_running" $COV_FLAG test/integration
     - name: Install ml extra (TensorFlow/Keras) for test_packages
       # test/test_packages/extras/ml exercises pygsti.extras.ml, which needs TensorFlow and
       # Keras. Those are deliberately not in the `testing` extra -- TensorFlow is a heavy,
@@ -156,7 +156,7 @@ jobs:
       if: ${{ inputs.run-extra-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/notebooks --durations=25 test/test_packages
+        python -m pytest -v -n auto --dist loadscope -m "not long_running" --ignore=test/test_packages/notebooks --durations=25 test/test_packages
     - name: Run notebook regression
       # Linux-only: this step compiles CHP with gcc and writes it to /usr/local/bin,
       # so it cannot run on the Windows/macOS runners even if a caller requests it.

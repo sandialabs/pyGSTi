@@ -29,6 +29,10 @@ from test.helpers.simultaneous_gst_validation import (
 )
 
 
+def test_long_running_marker_is_registered(pytestconfig):
+    assert any('long_running:' in line for line in pytestconfig.getini('markers'))
+
+
 def test_artifact_root_is_unique_and_has_manifest(tmp_path):
     root = create_run_root(tmp_path, profile_name='threeq_sparse_l4')
     assert root.is_dir()
@@ -233,6 +237,21 @@ def test_canonical_four_qubit_sparse_spectator_profile_matches_the_l4_bridge():
     assert spectator_label.errorgen_type == 'H'
     assert spectator_label.basis_element_labels == ('Z',)
     assert spectator_value == pytest.approx(0.005)
+
+
+def test_long_running_collection_includes_four_qubit_sparse_spectator_node():
+    checkout = pathlib.Path(__file__).resolve().parents[3]
+    node_id = (
+        'test/integration/test_simultaneous_gst.py::SimultaneousGSTValidationTester::'
+        'test_four_qubit_sparse_spectator_crosstalk'
+    )
+    result = subprocess.run(
+        [sys.executable, '-m', 'pytest', '--collect-only', '-q', '-m', 'long_running',
+         'test/integration/test_simultaneous_gst.py'],
+        cwd=checkout, capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0, result.stderr
+    assert node_id in result.stdout
 
 
 def test_full_hs_component_models_have_expected_parameter_counts():

@@ -208,6 +208,7 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
                 )
 
 
+@pytest.mark.long_running
 class SimultaneousGSTValidationTester:
     def test_three_qubit_sparse_markovian_recovery(self):
         result = run_validation_profile(
