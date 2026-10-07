@@ -23,6 +23,7 @@ import scipy.sparse as _sps
 from pygsti.tools.basistools import basis_matrices
 from pygsti.tools import sparsepsd as _sparsepsd
 from pygsti.tools.graphs import sparsechol as _sparsechol
+from pygsti.tools import matrixtools as _mt
 from pygsti.tools.legacytools import warn_deprecated as _warn_deprecated
 from pygsti.baseobjs.basis import (
     Basis as _Basis,
@@ -799,7 +800,8 @@ def random_cptp_errorgen_rates(
         directions must meet this condition.
 
     H_params : tuple of float, optional
-        The mean and standard deviation of the normal distribution of the H rates.
+        The mean and standard deviation of the normal distribution of the H rates. A nonzero
+        mean cannot be combined with an error budget.
 
     SCA_params : tuple of float, optional
         The mean and standard deviation of the proposal distribution of the entries of L. The
@@ -808,16 +810,10 @@ def random_cptp_errorgen_rates(
         directions, which is D**2 - 1 without restrictions.
 
     error_metric : {'generator_infidelity', 'total_generator_error'}, optional
-        A budget for the sampled rates, together with `error_metric_value`; give both or
-        neither. 'generator_infidelity' is sum(h**2) + sum(s) and 'total_generator_error' is
-        sum(|h|) + sum(s), over all returned H rates h and S rates s. These are coefficient
-        budgets in the scale of the selected basis, not channel infidelities. For the canonical
-        normalization, sum(h**2) = Tr(H**2) / D for the Hamiltonian H and sum(s) = Tr(K), so the
-        generator infidelity keeps its leading-order meaning on qudits. The budget is met by
-        rescaling the free (not fixed) rates: H rates by a common factor, and K by a diagonal
-        congruence, which keeps it positive semidefinite. Without `relative_HS_contribution`, the
-        free H and S contributions are scaled by the same factor. Nonzero `H_params` means are
-        not supported together with a budget.
+        A budget for the returned rates; give this and `error_metric_value` together, or neither.
+        'generator_infidelity' approximates entanglement infidelity for small errors.
+        'total_generator_error' sums absolute Hamiltonian rates and stochastic
+        rates. Definitions, normalization and rescaling are described in Notes.
 
     error_metric_value : float, optional
         The target value of `error_metric`.
@@ -851,50 +847,45 @@ def random_cptp_errorgen_rates(
 
     Notes
     -----
-    The default operator basis is :func:`pygsti.baseobjs.canonical_errorgen_basis`: PP on qubits
-    and GM on other subsystems, normalized so that Tr(F_a^dag F_b) = D delta_ab in Hilbert-space
-    dimension D. A string selects a family on each subsystem through ``Basis.cast(name, state_space)``.
-    GM works on all supported subsystem dimensions. PP gives the Pauli-product basis on qubits;
-    it also permits higher power-of-two dimensions, but its labels then do not identify the
-    given subsystem supports. Lowercase gm and pp are orthonormal instead of D-normalized,
-    changing the scale of the rates and error metrics.
+    **Operator basis.** The default, :func:`pygsti.baseobjs.canonical_errorgen_basis`, uses PP on
+    qubits and GM on other subsystems, normalized so that Tr(F_a^dag F_b) = D delta_ab in
+    Hilbert-space dimension D. A string selects a family on each subsystem through
+    ``Basis.cast(name, state_space)``; lowercase pp and gm are orthonormal instead. PP also
+    accepts higher power-of-two dimensions, but its labels then do not identify subsystem
+    supports. Weight limits, ``sslbl_overlap`` and global labels need supports, which are read
+    from PP/GM labels with one token per subsystem (I, X, Y, Z, X_{j,k}, Y_{j,k} or Z_{j}). For
+    other bases, use ``label_type='local'`` and no support restrictions.
 
-    Weight limits, ``sslbl_overlap`` and global labels require subsystem supports. These are
-    inferred from PP/GM labels with one token per subsystem: I, X, Y, Z, X_{j,k}, Y_{j,k}, or Z_{j}.
-    A tensor-product basis must have one factor of matching dimension per subsystem. For a
-    basis without this structure, use ``label_type='local'`` and no support restrictions.
+    Pass the same basis to ``LindbladErrorgen`` when building a generator from these rates. On a
+    qubit-qutrit space, ``elementary_errorgen_basis='GM'`` there means a single 6-dimensional
+    Gell-Mann basis; pass ``canonical_errorgen_basis(state_space)`` to match this sampler's default.
 
-    When constructing a ``LindbladErrorgen`` from these rates, pass the same operator basis.
-    In particular, ``LindbladErrorgen.from_elementary_errorgens(..., elementary_errorgen_basis='GM')``
-    on a qubit-qutrit space uses a single 6-dimensional Gell-Mann basis with different labels.
-    Pass ``canonical_errorgen_basis(state_space)`` to use this sampler's default tensor-product basis.
+    **Error metrics.** Both budgets count every returned H rate h_a and S rate s_a, fixed or free.
+    With q_a = Tr(F_a^dag F_a) / D (1 in the canonical basis), 'generator_infidelity' is
+    sum_a q_a * (h_a**2 + s_a) = Tr(H**2) / D + sum_a q_a * K_aa for H = sum_a h_a F_a. It does
+    not depend on how the basis is scaled, and it is the leading-order entanglement infidelity
+    1 - Tr(exp(G)) / D**2. 'total_generator_error' is sum(abs(h_a)) + sum(s_a). It depends on
+    the basis scaling and need not match diamond distance at leading order: for the qubit
+    Hamiltonian epsilon * (X + Z) in PP it is 2 * abs(epsilon), against sqrt(2) * abs(epsilon).
 
-    K is sampled through a Cholesky factor L on the filled pattern of the allowed C/A pairs
-    after a fill-reducing ordering (see :mod:`pygsti.tools.graphs.sparsechol`), with a Bartlett-type draw.
-    For the unrestricted pattern, K is a scaled Wishart matrix before fixed rates or budgets
-    are imposed. A chordal pattern admits an ordering without fill, so the factor draw respects
-    its support. Otherwise fill entries are zeroed. Disallowed real or imaginary components
-    are also zeroed, and the remaining off-diagonal entries are scaled toward zero if needed
-    to restore positive semidefiniteness while retaining the sampled diagonal.
+    A budget is met by scaling the free rates: H by a common factor, and K by a diagonal
+    congruence, which keeps it PSD. Without `relative_HS_contribution`, the free H and S
+    contributions scale by the same factor; with it, the fractions apply to the total
+    contributions, including fixed rates.
 
-    Fixed H and S rates are included even when sector, weight or overlap restrictions would
-    exclude them. A fixed C or A rate also adds both of its operator directions to K. If S is
-    enabled, their diagonal rates are sampled even when support restrictions would exclude
-    those directions; otherwise both S rates must be fixed explicitly. This does not enable
-    other C or A pairs involving these added directions.
+    **Sampling K.** K = L L^dag, where L is drawn Bartlett-style on the pattern of allowed C/A
+    pairs after a fill-reducing ordering (see :mod:`pygsti.tools.graphs.sparsechol`). The
+    unrestricted pattern gives a scaled Wishart matrix. Fill entries (none for a chordal pattern)
+    and disallowed real or imaginary components are zeroed. The remaining off-diagonal entries
+    are then shrunk toward zero if needed to restore positive semidefiniteness.
 
-    A diagonal congruence imposes the fixed S values and any budget scaling of the free S
-    values. Free H rates are scaled separately. The prescribed H and S rates remain unchanged.
-
-    When fixed C or A components are present, they are assigned after the diagonals are set.
-    Let B contain those diagonals and fixed components, with all other off-diagonal components zero. B must be PSD
-    to numerical tolerance; an indefinite B raises ValueError even when the free components
-    could complete it to a PSD matrix. This routine does not search for such a completion.
-
-    The remaining free off-diagonal components form O, and the final matrix is B + t*O.
-    For numerically positive-definite B, t is the largest feasible value in [0, 1], with a
-    small safety margin when t < 1. For numerically singular B, t is zero conservatively,
-    discarding the free off-diagonal components while retaining all prescribed values.
+    **Fixed rates.** Fixed H and S rates are returned even where restrictions would exclude them.
+    A fixed C or A rate adds its two directions to K. Their S rates are sampled if S is enabled
+    and must be fixed otherwise. No other pairs involving those directions are enabled. Let B hold
+    the diagonal and the fixed off-diagonal components. B must be PSD to numerical tolerance,
+    or ValueError is raised, even if the free components could complete it. The free
+    off-diagonal components O enter as B + t*O. When B is positive definite, t is the largest
+    feasible value in [0, 1], less a small margin. When B is singular, t is 0.
     """
     errorgen_types = tuple(errorgen_types)
     if not set(errorgen_types) <= set('HSCA'):
@@ -996,6 +987,22 @@ def random_cptp_errorgen_rates(
     S_free = _np.array([p for p, a in enumerate(K_dirs) if a not in fixed['S']], dtype=int)
     H_scale, S_scale = 1.0, 1.0
     if error_metric is not None:
+        def _basis_weights(b: _Basis) -> _np.ndarray:
+            """Return  Tr(F_a^dag F_a) / D for all elements F_a, including the identity direction."""
+            if isinstance(b, _TensorProdBasis):
+                weights = _np.ones(1)
+                for factor in b.component_bases:
+                    weights = _np.kron(weights, _basis_weights(factor))
+                return weights
+            d = b.elshape[0]
+            if isinstance(b, _BuiltinBasis):
+                if b.name in ('PP', 'GM'):
+                    return _np.ones(b.size)
+                if b.name in ('pp', 'gm'):
+                    return _np.full(b.size, 1.0 / d)
+            arr = _np.array([_mt.safe_norm(el) for el in b.elements])
+            return arr**2 / d
+
         def _free_scale(needed: float, free: float, what: str) -> float:
             """ The factor by which a free contribution `free` must scale to become `needed`. """
             tol = 1e-12 * max(abs(needed), 1.0)
@@ -1008,10 +1015,11 @@ def random_cptp_errorgen_rates(
             return needed / free
 
         power = 2 if error_metric == 'generator_infidelity' else 1
-        fixed_H = sum(abs(v) ** power for _, v in fixed['H'].values())
-        fixed_S = sum(v for _, v in fixed['S'].values())
-        free_H = sum(abs(h[a]) ** power for a in H_free)
-        free_S = float(_np.sum(_np.real(_np.diag(K))[S_free]))
+        budget_weights = _basis_weights(basis)[1:] if power == 2 else _np.ones(num_dirs)
+        fixed_H = sum(budget_weights[a] * abs(v) ** power for a, (_, v) in fixed['H'].items())
+        fixed_S = sum(budget_weights[a] * v for a, (_, v) in fixed['S'].items())
+        free_H  = sum(budget_weights[a] * abs(h[a]) ** power for a in H_free)
+        free_S  = float(_np.sum(budget_weights[K_dirs[S_free]] * _np.real(_np.diag(K))[S_free]))
         if relative_HS_contribution is not None:
             H_scale = _free_scale(relative_HS_contribution[0] * error_metric_value - fixed_H, free_H, 'H')
             S_scale = _free_scale(relative_HS_contribution[1] * error_metric_value - fixed_S, free_S, 'S')

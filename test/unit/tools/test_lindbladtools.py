@@ -535,6 +535,138 @@ def fixed_H_S():
     return {L('H', ('XI',)): 0.03, L('S', ('XZ_{1}',)): 0.002}
 
 
+class WeightedGeneratorInfidelityTester(BaseCase):
+
+    @staticmethod
+    def _matrix_contributions(rates, elements):
+        """Compute the two leading infidelity terms from the Hamiltonian and dissipator."""
+        d = next(iter(elements.values())).shape[0]
+        identity = np.eye(d)
+        hamiltonian = np.zeros((d, d), complex)
+        dissipator = np.zeros((d * d, d * d), complex)
+        for label, rate in rates.items():
+            operator = elements[label.basis_element_labels[0]]
+            if label.errorgen_type == 'H':
+                hamiltonian += rate * operator
+            elif label.errorgen_type == 'S':
+                square = operator.conj().T @ operator
+                dissipator += rate * (np.kron(operator, operator.conj())
+                                      - 0.5 * np.kron(square, identity) - 0.5 * np.kron(identity, square.T))
+        coherent = np.real(np.trace(hamiltonian @ hamiltonian)) / d
+        stochastic = -np.real(np.trace(dissipator)) / (d * d)
+        generator = -1j * (np.kron(hamiltonian, identity) - np.kron(identity, hamiltonian.T)) + dissipator
+        return coherent, stochastic, generator
+
+    @staticmethod
+    def _rescaled_two_qubit_basis():
+        from pygsti.baseobjs import ExplicitBasis
+        pp = Basis.cast('PP', 16)
+        scales = [1, .5, 2, 1.5, 3, .25, 4, .75, 1.25, 2.5, .8, 1.75, 5, 1.1, 2.25, 3.5]
+        elements = [scale * operator for scale, operator in zip(scales, pp.elements)]
+        return ExplicitBasis(elements, labels=pp.labels), dict(zip(pp.labels, elements))
+
+    def test_normalized_bases_budget_matches_leading_entanglement_infidelity(self):
+        target = 1e-6
+        for name, d in (('pp', 2), ('gm', 3)):
+            with self.subTest(basis=name):
+                basis = Basis.cast(name, d * d)
+                rates = lt.random_cptp_errorgen_rates(
+                    _space(('Q0',), (d,)), elementary_errorgen_basis=basis, errorgen_types=('H', 'S'),
+                    error_metric='generator_infidelity', error_metric_value=target,
+                    relative_HS_contribution=(.4, .6), label_type='local', seed=31)
+                coherent, stochastic, generator = self._matrix_contributions(rates, dict(zip(basis.labels,
+                                                                                           basis.elements)))
+                self.assertAlmostEqual(coherent, .4 * target, places=13)
+                self.assertAlmostEqual(stochastic, .6 * target, places=13)
+                actual = 1 - np.real(np.trace(spl.expm(generator))) / (d * d)
+                self.assertAlmostEqual(actual / target, 1, places=3)
+
+    def test_nonuniform_basis_budget_includes_fixed_and_restricted_directions(self):
+        basis, elements = self._rescaled_two_qubit_basis()
+        label = LocalElementaryErrorgenLabel
+        fixed = {label('H', ('ZZ',)): .01, label('S', ('XY',)): .0002}
+        for relative in (None, (.25, .75)):
+            with self.subTest(relative_HS=relative):
+                rates = lt.random_cptp_errorgen_rates(
+                    QubitSpace(2), elementary_errorgen_basis=basis, errorgen_types=('H', 'S'),
+                    max_weights={'H': 1, 'S': 1}, sslbl_overlap=(0,), fixed_errorgen_rates=fixed,
+                    error_metric='generator_infidelity', error_metric_value=.02,
+                    relative_HS_contribution=relative, label_type='local', seed=32)
+                for key, value in fixed.items():
+                    self.assertEqual(rates[key], value)
+                self.assertEqual({k.basis_element_labels[0] for k in rates if k.errorgen_type == 'H'},
+                                 {'XI', 'YI', 'ZI', 'ZZ'})
+                self.assertEqual({k.basis_element_labels[0] for k in rates if k.errorgen_type == 'S'},
+                                 {'XI', 'YI', 'ZI', 'XY'})
+                coherent, stochastic, _ = self._matrix_contributions(rates, elements)
+                self.assertAlmostEqual(coherent + stochastic, .02, places=12)
+                if relative is not None:
+                    self.assertAlmostEqual(coherent, .005, places=12)
+                    self.assertAlmostEqual(stochastic, .015, places=12)
+
+    def test_fixed_rate_feasibility_uses_weighted_contributions(self):
+        from pygsti.baseobjs import ExplicitBasis
+        pp = Basis.cast('PP', 4)
+        basis = ExplicitBasis([scale * operator for scale, operator in zip([1, 2, .5, 3], pp.elements)],
+                              labels=pp.labels)
+        label = LocalElementaryErrorgenLabel
+        # Z and X have larger physical costs than their coefficients; Y has a smaller cost.
+        cases = [('H', 'Z', .02, .002, None, True),
+                 ('S', 'X', .002, .004, None, True),
+                 ('H', 'Y', .04, .001, None, False),
+                 ('S', 'Y', .002, .001, None, False),
+                 ('S', 'X', .001, .01, (.8, .2), True)]
+        for sector, direction, value, target, relative, exceeds in cases:
+            with self.subTest(sector=sector, direction=direction, relative_HS=relative):
+                fixed = {label(sector, (direction,)): value}
+                kwargs = dict(elementary_errorgen_basis=basis, errorgen_types=('H', 'S'),
+                              fixed_errorgen_rates=fixed, error_metric='generator_infidelity',
+                              error_metric_value=target, relative_HS_contribution=relative,
+                              label_type='local', seed=33)
+                if exceeds:
+                    with self.assertRaisesRegex(ValueError, 'exceed'):
+                        lt.random_cptp_errorgen_rates(QubitSpace(1), **kwargs)
+                else:
+                    rates = lt.random_cptp_errorgen_rates(QubitSpace(1), **kwargs)
+                    self.assertEqual(rates[label(sector, (direction,))], value)
+                    coherent, stochastic, _ = self._matrix_contributions(rates, basis.ellookup)
+                    self.assertAlmostEqual(coherent + stochastic, target, places=12)
+
+    def test_sparse_tensor_factors_include_identity_normalization_without_expansion(self):
+        from unittest import mock
+        from pygsti.baseobjs import ExplicitBasis, TensorProdBasis
+        left = Basis.cast('pp', 4, sparse=True)
+        pp = Basis.cast('PP', 4, sparse=True)
+        right = ExplicitBasis([scale * operator for scale, operator in zip([3, 2, .5, 1.5], pp.elements)],
+                              labels=pp.labels, sparse=True)
+        basis = TensorProdBasis([left, right])
+        with mock.patch.object(TensorProdBasis, '_lazy_build_elements',
+                               side_effect=AssertionError('full tensor basis was materialized')):
+            rates = lt.random_cptp_errorgen_rates(
+                QubitSpace(2), elementary_errorgen_basis=basis, errorgen_types=('H', 'S'),
+                max_weights={'H': 1, 'S': 1}, error_metric='generator_infidelity', error_metric_value=.004,
+                relative_HS_contribution=(.25, .75), label_type='local', seed=34)
+        # Construct only the six physical operators present in the returned rates.
+        left_elements = dict(zip(left.labels, left.elements))
+        elements = {bel: np.kron(left_elements[bel[0]].toarray(), right.ellookup[bel[1]].toarray())
+                    for bel in {key.basis_element_labels[0] for key in rates}}
+        coherent, stochastic, _ = self._matrix_contributions(rates, elements)
+        self.assertAlmostEqual(coherent, .001, places=12)
+        self.assertAlmostEqual(stochastic, .003, places=12)
+
+    def test_total_generator_error_remains_a_coefficient_budget(self):
+        basis, _ = self._rescaled_two_qubit_basis()
+        label = LocalElementaryErrorgenLabel
+        kwargs = dict(errorgen_types=('H', 'S'), error_metric='total_generator_error', error_metric_value=.02,
+                      relative_HS_contribution=(.25, .75), label_type='local', seed=35,
+                      fixed_errorgen_rates={label('H', ('ZZ',)): .001, label('S', ('XY',)): .0002})
+        canonical = lt.random_cptp_errorgen_rates(QubitSpace(2), elementary_errorgen_basis='PP', **kwargs)
+        rescaled = lt.random_cptp_errorgen_rates(QubitSpace(2), elementary_errorgen_basis=basis, **kwargs)
+        self.assertEqual(rescaled, canonical)
+        self.assertAlmostEqual(sum(abs(v) for k, v in rescaled.items() if k.errorgen_type == 'H'), .005, places=12)
+        self.assertAlmostEqual(sum(v for k, v in rescaled.items() if k.errorgen_type == 'S'), .015, places=12)
+
+
 class BasisFactorValidationTester(BaseCase):
     def test_builtin_factors_skip_numerical_validation(self):
         from unittest import mock
