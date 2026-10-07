@@ -12,7 +12,7 @@ class SparsePsdExtractionTester(BaseCase):
 
     def test_component_masks_reject_nonmatrices(self):
         for mask in (np.array(0), np.array([0])):
-            with self.subTest(shape=mask.shape), self.assertRaisesRegex(ValueError, 'square matrix'):
+            with self.subTest(shape=mask.shape), self.assertRaisesRegex(ValueError, 'square'):
                 sp._sample_psd(np.zeros((1, 1)), np.random.default_rng(0), real_pattern=mask)
 
     def test_component_masks_validate_shape_and_containment(self):

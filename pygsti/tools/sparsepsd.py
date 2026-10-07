@@ -132,8 +132,6 @@ def _sample_psd(
         have the same shape as ``st.pattern`` and allow no edges outside it. Real and
         imaginary components may use different subsets of those edges.
         """
-        if _np.ndim(pattern) != 2:
-            raise ValueError("A component pattern must be a square matrix.")
         sub = _sparsechol._adjacency(pattern)
         if sub.shape != st.pattern.shape:
             raise ValueError("Component patterns must have the same shape as the overall pattern.")

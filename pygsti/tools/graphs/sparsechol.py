@@ -38,8 +38,10 @@ _SparsityPattern = _npt.ArrayLike | _sps.sparray | _sps.spmatrix
 
 def _adjacency(pattern: _SparsityPattern) -> _sps.csr_array:
     """ The symmetrized off-diagonal pattern of `pattern`, as a Boolean CSR array. """
+    if _np.ndim(pattern) != 2:
+        raise ValueError("A sparsity pattern must be a square matrix, not %d-dimensional." % _np.ndim(pattern))
     A = _sps.csr_array(pattern)
-    if A.ndim != 2 or A.shape[0] != A.shape[1]:
+    if A.shape[0] != A.shape[1]:
         raise ValueError("A sparsity pattern must be square, not %s." % str(A.shape))
     A = (A != 0).astype(_np.int8)
     A = A + A.T
@@ -322,8 +324,6 @@ class CholeskyStructure(object):
     filled_degrees: _npt.NDArray[_np.integer]
 
     def __init__(self, pattern: _SparsityPattern, *, ordering: _npt.ArrayLike | None = None) -> None:
-        if _np.ndim(pattern) != 2:
-            raise ValueError("A sparsity pattern must be a square matrix.")
         adj = _adjacency(pattern).copy()
         n = adj.shape[0]
         if ordering is None:
