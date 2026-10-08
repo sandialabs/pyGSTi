@@ -8,6 +8,8 @@ import sys
 import numpy as np
 import pytest
 from pygsti.circuits import Circuit
+from pygsti.data import simulate_data
+from pygsti.tools import tvd
 
 import test.helpers.simultaneous_gst_validation as validation
 from test.integration.test_simultaneous_gst import profile_with_overrides
@@ -22,7 +24,9 @@ from test.helpers.simultaneous_gst_validation import (
     create_run_root,
     eligible_to_launch,
     estimate_runtime,
+    expected_fisher_information,
     generate_finite_shot_data,
+    shot_noise_held_out_tvd_quantiles,
     spectator_support,
     spectator_term_text,
     static_work_units,
@@ -74,12 +78,9 @@ def test_markovian_generator_matches_the_fit_hypothesis():
 def test_spectator_profiles_default_to_calibrated_effect():
     sparse_profile = ValidationProfile.sparse_spectator_line(
         nqubits=3, max_lengths=(1, 2))
-    coherent_profile = ValidationProfile.coherent_spectator_line(
-        nqubits=4, max_lengths=(1, 2))
 
-    assert sparse_profile.spectator_error == 0.005
-    assert coherent_profile.spectator_error == 0.005
-    assert THREE_QUBIT_SPARSE_SPECTATOR.spectator_error == 0.005
+    for profile in (sparse_profile, THREE_QUBIT_SPARSE_SPECTATOR, validation.FOUR_QUBIT_SPARSE_SPECTATOR):
+        assert (profile.spectator_term, profile.spectator_error) == (('S', 'Z:2'), 0.01)
 
 
 def test_profile_overrides_are_immutable_and_optional(monkeypatch):
@@ -101,7 +102,7 @@ def test_profile_overrides_are_immutable_and_optional(monkeypatch):
     assert overridden is not profile
     # The canonical module-level profile must not be disturbed by a swept batch.
     assert (profile.seed, profile.spectator_error, profile.spectator_term) == (
-        20260901, 0.005, ('H', 'Z:2'))
+        20260901, 0.01, ('S', 'Z:2'))
 
 
 def test_spectator_generator_differs_from_the_local_fit_hypothesis():
@@ -116,7 +117,7 @@ def test_spectator_generator_differs_from_the_local_fit_hypothesis():
     }
     assert len(spectator_coefficients) == 1
     spectator_label, spectator_value = next(iter(spectator_coefficients.items()))
-    assert spectator_label.errorgen_type == 'H'
+    assert spectator_label.errorgen_type == 'S'
     assert spectator_label.basis_element_labels == ('Z',)
     assert spectator_value == pytest.approx(0.001)
 
@@ -205,13 +206,10 @@ def test_deepest_held_out_circuits_come_from_the_largest_germ_power():
             > min(circuit.depth for circuit in held_out.circuits))
 
 
-def test_four_qubit_fit_profiles_have_bridge_parameter_counts():
+def test_four_qubit_fit_profile_has_bridge_parameter_count():
     sparse_profile = ValidationProfile.sparse_line(nqubits=4, max_lengths=(1, 2))
-    coherent_profile = ValidationProfile.coherent_line(nqubits=4, max_lengths=(1, 2))
     sparse_fit_model, _ = build_fit_and_datagen_models(sparse_profile)
-    coherent_fit_model, _ = build_fit_and_datagen_models(coherent_profile)
     assert sparse_fit_model.num_params == 59
-    assert coherent_fit_model.num_params == 21
 
 
 def test_canonical_four_qubit_sparse_profile_uses_routine_l4_depth():
@@ -225,7 +223,7 @@ def test_canonical_four_qubit_sparse_spectator_profile_matches_the_l4_bridge():
     assert profile.max_lengths == (1, 2, 4)
     assert profile.model_terms == 'sparse'
     assert profile.scenario == 'spectator_crosstalk'
-    assert profile.spectator_error == pytest.approx(0.005)
+    assert profile.spectator_error == pytest.approx(0.01)
     assert fit_model.num_params == 59
     cnot_coefficients = datagen_model.errorgen_coefficients()[('Gcnot', 0, 1)]
     spectator_coefficients = {
@@ -234,9 +232,9 @@ def test_canonical_four_qubit_sparse_spectator_profile_matches_the_l4_bridge():
     }
     assert len(spectator_coefficients) == 1
     spectator_label, spectator_value = next(iter(spectator_coefficients.items()))
-    assert spectator_label.errorgen_type == 'H'
+    assert spectator_label.errorgen_type == 'S'
     assert spectator_label.basis_element_labels == ('Z',)
-    assert spectator_value == pytest.approx(0.005)
+    assert spectator_value == pytest.approx(0.01)
 
 
 def test_long_running_collection_includes_four_qubit_sparse_spectator_node():
@@ -304,6 +302,78 @@ def test_finite_shot_data_are_seeded_multinomial_counts():
         assert first_dataset[circuit].total == 37
         assert all(float(count).is_integer() for count in first_dataset[circuit].counts.values())
         assert first_dataset[circuit].counts == second_dataset[circuit].counts
+
+
+def _noisy_oneq_model_and_circuits(shots):
+    """A noisy one-qubit sparse model, training data at powers 1 and 2, held-out circuits at 4."""
+    model = ValidationProfile.sparse_line(nqubits=3, max_lengths=(1,)).oneq_model.copy()
+    model.from_vector(np.random.default_rng(7).uniform(0.002, 0.02, model.num_params))
+    fiducials = [(), ('Gxpi2',), ('Gypi2',), ('Gxpi2',) * 2, ('Gxpi2',) * 3, ('Gypi2',) * 3]
+    germs = [('Gi',), ('Gxpi2',), ('Gypi2',), ('Gxpi2', 'Gypi2')]
+
+    def circuits(powers):
+        return list(dict.fromkeys(
+            Circuit([(gate, 0) for gate in prep + germ * power + meas], line_labels=(0,))
+            for prep in fiducials for germ in germs for power in powers for meas in fiducials))
+
+    training = circuits((1, 2))
+    held_out = [circuit for circuit in circuits((4,)) if circuit not in set(training)]
+    dataset = simulate_data(model, training, num_samples=shots, seed=0)
+    return model, dataset, held_out
+
+
+def test_expected_fisher_information_is_the_expected_negative_loglikelihood_hessian():
+    # Brute-force reference from probabilities alone: central differences of
+    # sum_c N_c sum_o p_o(theta) log p_o(theta') in theta', at theta' = theta.
+    model, dataset, _ = _noisy_oneq_model_and_circuits(shots=1000)
+    circuits = list(dataset.keys())
+    theta = model.to_vector()
+    truth = model.sim.bulk_probs(circuits)
+    trial = model.copy()
+
+    def expected_loglikelihood(vector):
+        trial.from_vector(vector)
+        probabilities = trial.sim.bulk_probs(circuits)
+        return sum(dataset[circuit].total * truth[circuit][outcome] * np.log(probabilities[circuit][outcome])
+                   for circuit in circuits for outcome in truth[circuit])
+
+    step = 1e-4
+    basis = np.eye(len(theta)) * step
+    hessian = np.zeros((len(theta), len(theta)))
+    for i in range(len(theta)):
+        for j in range(i, len(theta)):
+            hessian[i, j] = hessian[j, i] = (
+                expected_loglikelihood(theta + basis[i] + basis[j])
+                - expected_loglikelihood(theta + basis[i] - basis[j])
+                - expected_loglikelihood(theta - basis[i] + basis[j])
+                + expected_loglikelihood(theta - basis[i] - basis[j])) / (4 * step ** 2)
+
+    fisher = expected_fisher_information(model, dataset)
+    np.testing.assert_allclose(fisher, -hessian, rtol=1e-3, atol=1e-6 * np.abs(fisher).max())
+
+
+def test_shot_noise_quantiles_match_monte_carlo_of_exact_held_out_predictions():
+    # Reference: draw theta_hat ~ N(theta, F^-1) and evaluate the exact (not linearized)
+    # held-out TVDs.  Enough shots keep theta_hat close enough to theta for the
+    # linearization to hold to within the Monte Carlo error.
+    model, dataset, held_out = _noisy_oneq_model_and_circuits(shots=100000)
+    theta = model.to_vector()
+    covariance = np.linalg.inv(expected_fisher_information(model, dataset))
+    truth = model.sim.bulk_probs(held_out)
+    trial = model.copy()
+    rng = np.random.default_rng(1)
+    means, maxima = [], []
+    for vector in rng.multivariate_normal(theta, covariance, size=1000):
+        trial.from_vector(vector)
+        predictions = trial.sim.bulk_probs(held_out)
+        tvds = [float(tvd(predictions[circuit], truth[circuit])) for circuit in held_out]
+        means.append(np.mean(tvds))
+        maxima.append(np.max(tvds))
+
+    mean_quantile, max_quantile = shot_noise_held_out_tvd_quantiles(
+        model, dataset, held_out, quantile=0.9, samples=20000)
+    assert mean_quantile == pytest.approx(np.quantile(means, 0.9), rel=0.1)
+    assert max_quantile == pytest.approx(np.quantile(maxima, 0.9), rel=0.1)
 
 
 def test_serial_validation_fit_uses_protocol_run_and_persists_results(tmp_path):

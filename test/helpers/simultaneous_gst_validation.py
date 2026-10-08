@@ -39,15 +39,6 @@ SPARSE_TERMS = {
 }
 
 
-COHERENT_TERMS = {
-    'Gi': (('H', 'Z'),),
-    'Gxpi2': (('H', 'Z'),),
-    'Gypi2': (('H', 'X'),),
-    'Gcnot': (('H', 'ZZ'),),
-    'Gii': (('H', 'ZI'), ('H', 'IZ')),
-}
-
-
 def _full_hs_terms(num_qubits: int) -> tuple[tuple[str, str], ...]:
     pauli_labels = (
         ''.join(label)
@@ -72,15 +63,15 @@ class ValidationProfile:
     nqubits: int
     max_lengths: tuple[int, ...]
     shots: int
-    model_terms: Literal['coherent', 'sparse', 'full_hs']
+    model_terms: Literal['sparse', 'full_hs']
     scenario: Literal['markovian', 'spectator_crosstalk']
     seed: int
     spectator_error: float = 0.0
     # The error injected into `Gcnot(0, 1)` for spectator-crosstalk scenarios, as a
-    # `create_cloud_crosstalk_model` coefficient key.  `('H', 'Z:2')` is a coherent
+    # `create_cloud_crosstalk_model` coefficient key.  `('S', 'Z:2')` is a stochastic
     # dephasing of the spectator alone; `('H', 'ZZ:1,2')` correlates the gate's target
     # with the spectator, which a crosstalk-free model cannot represent at all.
-    spectator_term: tuple[str, ...] = ('H', 'Z:2')
+    spectator_term: tuple[str, ...] = ('S', 'Z:2')
 
     @classmethod
     def sparse_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
@@ -89,29 +80,17 @@ class ValidationProfile:
         return cls(f'{nqubits}q_sparse_line', nqubits, tuple(max_lengths), shots,
                    'sparse', scenario, seed, spectator_error)
 
+    # S(Z:2) at 0.01 is large enough that the training data reveal it -- the
+    # crosstalk-free fit's 2*deltaLogL exceeds the generator's by about 1200 at 3Q -- while
+    # that fit still removes most of the held-out error.  The earlier default, H(Z:2) at
+    # 0.005, left the training likelihood unchanged.
     @classmethod
     def sparse_spectator_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
                               seed: int = 20260901,
-                              spectator_error: float = 0.005,
-                              spectator_term: tuple[str, ...] = ('H', 'Z:2')) -> 'ValidationProfile':
+                              spectator_error: float = 0.01,
+                              spectator_term: tuple[str, ...] = ('S', 'Z:2')) -> 'ValidationProfile':
         return cls(f'{nqubits}q_sparse_spectator_line', nqubits, tuple(max_lengths), shots,
                    'sparse', 'spectator_crosstalk', seed, spectator_error, tuple(spectator_term))
-
-    @classmethod
-    def coherent_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                      scenario: Literal['markovian', 'spectator_crosstalk'] = 'markovian',
-                      seed: int = 20260901,
-                      spectator_error: float = 0.0) -> 'ValidationProfile':
-        return cls(f'{nqubits}q_coherent_line', nqubits, tuple(max_lengths), shots,
-                   'coherent', scenario, seed, spectator_error)
-
-    @classmethod
-    def coherent_spectator_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
-                                seed: int = 20260901,
-                                spectator_error: float = 0.005,
-                                spectator_term: tuple[str, ...] = ('H', 'Z:2')) -> 'ValidationProfile':
-        return cls(f'{nqubits}q_coherent_spectator_line', nqubits, tuple(max_lengths), shots,
-                   'coherent', 'spectator_crosstalk', seed, spectator_error, tuple(spectator_term))
 
     @classmethod
     def full_hs_line(cls, nqubits: int, max_lengths: tuple[int, ...], shots: int = 1000,
@@ -154,10 +133,6 @@ FOUR_QUBIT_SPARSE_MARKOVIAN = ValidationProfile.sparse_line(
     nqubits=4, max_lengths=(1, 2, 4))
 FOUR_QUBIT_SPARSE_SPECTATOR = ValidationProfile.sparse_spectator_line(
     nqubits=4, max_lengths=(1, 2, 4))
-FOUR_QUBIT_COHERENT_MARKOVIAN = ValidationProfile.coherent_line(
-    nqubits=4, max_lengths=(1, 2))
-FOUR_QUBIT_COHERENT_SPECTATOR = ValidationProfile.coherent_spectator_line(
-    nqubits=4, max_lengths=(1, 2))
 
 
 def eligible_to_launch(estimate: RuntimeEstimate, remaining_seconds: float) -> bool:
@@ -253,15 +228,13 @@ def _line_processor_spec(nqubits: int) -> QubitProcessorSpec:
     )
 
 
-def _terms_by_gate(model_terms: Literal['coherent', 'sparse', 'full_hs']) -> dict:
-    if model_terms == 'coherent':
-        return COHERENT_TERMS
+def _terms_by_gate(model_terms: Literal['sparse', 'full_hs']) -> dict:
     if model_terms == 'sparse':
         return SPARSE_TERMS
     return FULL_HS_TERMS
 
 
-def _zero_term_dict(model_terms: Literal['coherent', 'sparse', 'full_hs'], gate_names) -> dict:
+def _zero_term_dict(model_terms: Literal['sparse', 'full_hs'], gate_names) -> dict:
     terms_by_gate = _terms_by_gate(model_terms)
     return {
         gate_name: {term: 0.0 for term in terms_by_gate[gate_name]}
@@ -270,7 +243,7 @@ def _zero_term_dict(model_terms: Literal['coherent', 'sparse', 'full_hs'], gate_
 
 
 def _build_model(processor_spec: QubitProcessorSpec,
-                 model_terms: Literal['coherent', 'sparse', 'full_hs'], independent_gates: bool):
+                 model_terms: Literal['sparse', 'full_hs'], independent_gates: bool):
     return create_crosstalk_free_model(
         processor_spec,
         lindblad_error_coeffs=_zero_term_dict(model_terms, processor_spec.gate_names),
@@ -492,7 +465,7 @@ def build_component_designs(profile: ValidationProfile) -> tuple[StandardGSTDesi
 class HeldOutCircuits:
     """Held-out circuits, and the subset drawn from the largest germ power.
 
-    A coherent error injected during `Gcnot(0, 1)` accumulates with the number of times
+    An error injected during `Gcnot(0, 1)` accumulates with the number of times
     that gate is applied, so the deepest circuits carry the most signal about it.
     Scoring them separately measures the effect where it is largest, without changing
     the data-generating model.
@@ -574,6 +547,58 @@ def generate_finite_shot_data(profile: ValidationProfile, datagen_model, circuit
     )
 
 
+def _probabilities_and_jacobian(model, circuits):
+    """Stack outcome probabilities and their parameter derivatives, one row per (circuit, outcome).
+
+    Also returns, for each row, the index in `circuits` of the circuit it belongs to.
+    """
+    probabilities = model.sim.bulk_probs(circuits)
+    derivatives = model.sim.bulk_dprobs(circuits)
+    rows = [(index, probabilities[circuit][outcome], derivatives[circuit][outcome])
+            for index, circuit in enumerate(circuits) for outcome in probabilities[circuit]]
+    owner, values, jacobian = zip(*rows)
+    return np.array(values), np.array(jacobian), np.array(owner)
+
+
+def expected_fisher_information(model, dataset) -> np.ndarray:
+    """Expected multinomial Fisher information of `dataset`'s circuits and shot counts at `model`."""
+    circuits = list(dataset.keys())
+    values, jacobian, owner = _probabilities_and_jacobian(model, circuits)
+    shots = np.array([dataset[circuit].total for circuit in circuits])[owner]
+    return (jacobian.T * (shots / np.clip(values, 1e-12, None))) @ jacobian
+
+
+def shot_noise_held_out_tvd_quantiles(model, dataset, held_out_circuits, quantile: float = 0.999,
+                                      samples: int = 20000, seed: int = 0) -> tuple[float, float]:
+    """Return quantiles of the held-out mean and maximum TVD that shot noise alone produces.
+
+    To first order a maximum-likelihood estimate is distributed as
+    ``theta_hat ~ N(theta, F^+)``, where ``F`` is the expected Fisher information of the
+    training data at the true parameters, so its held-out prediction errors are
+    ``J_h (theta_hat - theta)``.  This samples that distribution and returns the `quantile`
+    of the mean and of the maximum per-circuit TVD over `held_out_circuits`.
+
+    `model` is the data-generating model, and it must have the fit's parameterization, so
+    this applies only to scenarios whose fit hypothesis contains the generator.
+    """
+    fisher = expected_fisher_information(model, dataset)
+    eigenvalues, eigenvectors = np.linalg.eigh(fisher)
+    identifiable = eigenvalues > 1e-10 * eigenvalues.max()
+    covariance_root = eigenvectors[:, identifiable] / np.sqrt(eigenvalues[identifiable])
+    _, held_out_jacobian, owner = _probabilities_and_jacobian(model, list(held_out_circuits))
+    response = held_out_jacobian @ covariance_root
+    circuit_starts = np.flatnonzero(np.r_[True, np.diff(owner) != 0])
+    rng = np.random.default_rng(seed)
+    means, maxima = [], []
+    for chunk in np.array_split(np.arange(samples), max(1, samples // 500)):
+        errors = np.abs(response @ rng.standard_normal((response.shape[1], len(chunk))))
+        tvds = 0.5 * np.add.reduceat(errors, circuit_starts, axis=0)
+        means.append(tvds.mean(axis=0))
+        maxima.append(tvds.max(axis=0))
+    return (float(np.quantile(np.concatenate(means), quantile)),
+            float(np.quantile(np.concatenate(maxima), quantile)))
+
+
 def _mpi_worker_environment(existing_environment=None) -> dict[str, str]:
     """Build worker overrides that import pyGSTi from this active checkout."""
     environment = os.environ if existing_environment is None else existing_environment
@@ -641,17 +666,26 @@ def run_validation_profile(
     }
     validation_tvds = list(tvd_by_circuit.values())
     deep_tvds = [tvd_by_circuit[circuit] for circuit in held_out.deepest]
+    # References from the same run.  The data-generating model's own 2*deltaLogL is what a
+    # correct model scores on exactly this dataset, and the ideal (initial) model's held-out
+    # TVD is the prediction error of a fit that learned nothing.
+    datagen_two_delta_logl = two_delta_logl(datagen_model, dataset)
+    ideal_tvds = [float(tvd(fit_model.probabilities(circuit), datagen_model.probabilities(circuit)))
+                  for circuit in held_out.circuits]
     metrics: dict[str, float | int | str] = {
         'profile': profile.name,
         'scenario': profile.scenario,
         'spectator_term': spectator_term_text(profile.spectator_term),
         'spectator_error': float(profile.spectator_error),
         'two_delta_logl': float(two_delta_logl_value),
+        'datagen_two_delta_logl': float(datagen_two_delta_logl),
         'nsigma': float(nsigma),
         'validation_mean_tvd': float(np.mean(validation_tvds)),
         'validation_max_tvd': float(np.max(validation_tvds)),
         'validation_deep_mean_tvd': float(np.mean(deep_tvds)),
         'validation_deep_max_tvd': float(np.max(deep_tvds)),
+        'ideal_validation_mean_tvd': float(np.mean(ideal_tvds)),
+        'ideal_validation_max_tvd': float(np.max(ideal_tvds)),
         'elapsed_seconds': float(elapsed_seconds),
         'fit_model_params': int(fit_model.num_params),
         'training_circuits': int(len(training_circuits)),
@@ -660,6 +694,11 @@ def run_validation_profile(
         'shots': int(profile.shots),
         'mpi_ranks': int(mpi_ranks),
     }
+    if profile.scenario == 'markovian':
+        mean_bound, max_bound = shot_noise_held_out_tvd_quantiles(
+            datagen_model, dataset, held_out.circuits)
+        metrics['shot_noise_validation_mean_tvd_q999'] = mean_bound
+        metrics['shot_noise_validation_max_tvd_q999'] = max_bound
     (artifacts.root / 'metrics.json').write_text(json.dumps(metrics, indent=2) + '\n')
     return metrics
 

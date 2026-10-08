@@ -21,6 +21,7 @@ import unittest
 import pytest
 
 import numpy as np
+from scipy.stats import chi2
 
 import pygsti
 from pygsti.data import simulate_data
@@ -32,8 +33,6 @@ from pygsti.protocols.simultaneous_gst import SimultaneousGSTDesign
 from pygsti.tools import two_delta_logl
 from test.unit.protocols.test_simultaneous_gst import _line_pspec, _make_designs
 from test.helpers.simultaneous_gst_validation import (
-    FOUR_QUBIT_COHERENT_MARKOVIAN,
-    FOUR_QUBIT_COHERENT_SPECTATOR,
     FOUR_QUBIT_SPARSE_MARKOVIAN,
     FOUR_QUBIT_SPARSE_SPECTATOR,
     THREE_QUBIT_SPARSE_MARKOVIAN,
@@ -222,30 +221,55 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
 
 @pytest.mark.long_running
 class SimultaneousGSTValidationTester:
+    """Finite-shot recovery and robustness of simultaneous GST, one profile per test.
+
+    Each fit is checked against references computed from the same run, so the
+    assertions hold for any seed rather than for recorded numbers:
+
+    * ``datagen_two_delta_logl`` is what the data-generating model scores on exactly the
+      training data.  Comparing the fit against it avoids the degrees-of-freedom
+      convention behind ``nsigma``, which sparse multi-qubit outcome counts make unusable.
+    * ``ideal_validation_mean_tvd`` is the held-out error of the noiseless starting model,
+      that is, of a fit that learned nothing.
+    * ``shot_noise_validation_*_tvd_q999`` bound the held-out error that shot noise in the
+      training data gives a correct fit (Markovian profiles only).
+    """
+
+    @staticmethod
+    def assert_recovers_markovian_model(result):
+        likelihood_gain = result['datagen_two_delta_logl'] - result['two_delta_logl']
+        # The generator is in the fit's model family, so the maximum-likelihood fit explains
+        # the training data at least as well as the generator does, and by Wilks' theorem
+        # better by no more than a chi-squared with one degree per parameter allows.
+        assert likelihood_gain >= 0.0
+        assert likelihood_gain <= chi2.ppf(0.999, result['fit_model_params'])
+        # Its held-out predictions are as accurate as shot noise in the training data allows.
+        assert result['validation_mean_tvd'] <= result['shot_noise_validation_mean_tvd_q999']
+        assert result['validation_max_tvd'] <= result['shot_noise_validation_max_tvd_q999']
+        # And the profile can tell a fit from no fit: the noise it injects is large enough
+        # that fitting removes most of the noiseless model's held-out error.
+        assert result['validation_mean_tvd'] <= 0.5 * result['ideal_validation_mean_tvd']
+
+    @staticmethod
+    def assert_reveals_and_survives_crosstalk(result):
+        # The generator is outside the crosstalk-free family, and the training data show it
+        # exactly when the best crosstalk-free fit explains them worse than the generator does.
+        assert result['two_delta_logl'] > result['datagen_two_delta_logl']
+        # The violation is modest: the fit still removes most of the noiseless model's
+        # held-out error.
+        assert result['validation_mean_tvd'] <= 0.5 * result['ideal_validation_mean_tvd']
+
     def test_three_qubit_sparse_markovian_recovery(self):
-        result = run_profile(THREE_QUBIT_SPARSE_MARKOVIAN)
-        assert result['validation_mean_tvd'] >= 0.0
+        self.assert_recovers_markovian_model(run_profile(THREE_QUBIT_SPARSE_MARKOVIAN))
 
     def test_three_qubit_sparse_spectator_crosstalk(self):
-        result = run_profile(THREE_QUBIT_SPARSE_SPECTATOR)
-        assert result['two_delta_logl'] >= 0.0
+        self.assert_reveals_and_survives_crosstalk(run_profile(THREE_QUBIT_SPARSE_SPECTATOR))
 
     def test_four_qubit_sparse_markovian_bridge(self):
-        result = run_profile(FOUR_QUBIT_SPARSE_MARKOVIAN)
-        assert result['fit_model_params'] == 59
+        self.assert_recovers_markovian_model(run_profile(FOUR_QUBIT_SPARSE_MARKOVIAN))
 
     def test_four_qubit_sparse_spectator_crosstalk(self):
-        result = run_profile(FOUR_QUBIT_SPARSE_SPECTATOR)
-        assert result['fit_model_params'] == 59
-
-    def test_four_qubit_coherent_markovian_bridge(self):
-        result = run_profile(FOUR_QUBIT_COHERENT_MARKOVIAN)
-        assert result['fit_model_params'] == 21
-
-    def test_four_qubit_coherent_spectator_crosstalk(self):
-        result = run_profile(FOUR_QUBIT_COHERENT_SPECTATOR)
-        assert result['fit_model_params'] == 21
-
+        self.assert_reveals_and_survives_crosstalk(run_profile(FOUR_QUBIT_SPARSE_SPECTATOR))
 
 if __name__ == '__main__':
     unittest.main()
