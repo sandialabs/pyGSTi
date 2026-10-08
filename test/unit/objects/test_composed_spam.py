@@ -18,7 +18,7 @@ import pygsti.modelmembers.states as sv
 # Is the composed SPAM vec equivalent to applying each component separately?
 class ComposedSpamvecBase(object):
     base_prep_vec = sv.ComputationalBasisState([0], 'pp', 'default')
-    base_noise_op = op.StaticStandardOp('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
+    base_noise_op = op.StaticArbitraryOp.from_standard_gate_name('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
     base_povm = pv.ComputationalBasisPOVM(1, 'default') # Z-basis measurement
     expected_out = ld.OutcomeLabelDict([(('0',), 0.5), (('1',), 0.5)])
 
@@ -144,7 +144,7 @@ class FullDenseComposedSpamvecTester(MutableComposedSpamvecBase, BaseCase):
 # Is the composed POVM equivalent to applying each component separately?
 class ComposedPovmBase(object):
     base_prep = sv.ComputationalBasisState([0], 'pp', 'default') # 0 state prep
-    base_noise_op = op.StaticStandardOp('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
+    base_noise_op = op.StaticArbitraryOp.from_standard_gate_name('Gxpi2', 'pp', 'default') # X(pi/2) rotation as noise
     base_povm = pv.ComputationalBasisPOVM(1, 'default') # Z-basis measurement
     expected_out = ld.OutcomeLabelDict([(('0',), 0.5), (('1',), 0.5)])
     

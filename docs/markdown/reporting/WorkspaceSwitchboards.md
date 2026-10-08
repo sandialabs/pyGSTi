@@ -61,11 +61,11 @@ mdl3 = results3.estimates['GateSetTomography'].models['stdgaugeopt']
 circuits = results1.circuit_lists['final']
 ```
 
-Next we create the workspace, as before.  This time, we'll leave `autodisplay=False` (the default), to demonstrate how this gives us more control over when workspace items are displayed.  In particular, we'll build up a several workspace objects and display them all at once.  **NOTE that setting `connected=True` means you need to have an internet connection!**
+Next we create the workspace, as before.  This time, we'll leave `autodisplay=False` (the default), to demonstrate how this gives us more control over when workspace items are displayed.  In particular, we'll build up a several workspace objects and display them all at once.  **NOTE that setting `enable_offline_mode=False` means you need to have an internet connection!**
 
 ```{code-cell} ipython3
 w = pygsti.report.Workspace()  #create a new workspace
-w.init_notebook_mode(connected=False) # and initialize it so it works within a notebook
+w.init_notebook_mode(enable_offline_mode=True) # and initialize it so it works within a notebook
 ```
 
 Note that if we create a table it doesn't get displayed automatically.
@@ -213,5 +213,5 @@ otherView.display()
 ```
 
 ## Exporting to HTML
-Again, you can save this notebook as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file will retain all of the plot *and switch* interactivity, and in this case doesn't need the `offline` folder (because we set `connected=True` in `init_notebook_mode` above) but does need an internet connection.
+Again, you can save this notebook as an HTML file by going to **File => Download As => HTML** in the Jupyter menu.  The resulting file will retain all of the plot *and switch* interactivity, and in this case doesn't need the `offline` folder (because we used the default setting of `enable_offline_mode=False` in `init_notebook_mode` above) but does need an internet connection.
 

@@ -140,7 +140,7 @@ Configuration helpers, mixins, the LGST protocol, and checkpoints. Most are cons
 
   Both families add metadata to `Estimate.extra_parameters`. The actual prominence of either in typical workflows is uncertain — flag them when describing the result-object shape but don't over-elevate.
 
-- **`gaugeopt_suite` has two representations.** A gauge-optimization suite is variously a `list[list[dict]]` (the older shape) or a [`GSTGaugeOptSuite`](../../pygsti/protocols/gst.py#L857) object (the newer shape). Different entry points accept different shapes; some accept both. When configuring a non-trivial gauge-opt setup, check what shape the entry point you're calling expects. Tracked in [known-debt.md #14](../known-debt.md#14-gaugeopt_suite-representation-duality). Concrete example of both shapes:
+- **`gaugeopt_suite` has two representations.** A gauge-optimization suite is variously a `list[list[dict]]` (the older shape) or a [`GSTGaugeOptSuite`](../../pygsti/protocols/gst.py#L857) object (the newer shape). Different entry points accept different shapes; some accept both. When configuring a non-trivial gauge-opt setup, check what shape the entry point you're calling expects. Tracked in [known-debt.md #12](../known-debt.md#12-gaugeopt_suite-representation-duality). Concrete example of both shapes:
 
   ```python
   # list-of-list-of-dicts shape:
@@ -157,7 +157,7 @@ Configuration helpers, mixins, the LGST protocol, and checkpoints. Most are cons
 
 ## Architectural debt
 
-- [`gaugeopt_suite` representation duality](../known-debt.md#14-gaugeopt_suite-representation-duality).
+- [`gaugeopt_suite` representation duality](../known-debt.md#12-gaugeopt_suite-representation-duality).
 - [#620](https://github.com/sandialabs/pyGSTi/issues/620) — parameterization-preserving gauge optimization.
 - General GST refactor threads in [#715](https://github.com/sandialabs/pyGSTi/issues/715) (subpackage restructuring).
 

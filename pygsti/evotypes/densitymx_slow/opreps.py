@@ -173,23 +173,6 @@ class OpRepSparse(OpRep):
         return self.A.toarray()
 
 
-class OpRepStandard(OpRepDenseSuperop):
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        self.name = name
-        self.basis = basis
-
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        superop = _ot.unitary_to_superop(U, basis)
-        state_space = _StateSpace.cast(state_space)
-        assert(superop.shape[0] == state_space.dim)
-
-        super(OpRepStandard, self).__init__(superop, basis, state_space)
-
-
 class OpRepKraus(OpRep):
     def __init__(self, basis, kraus_reps, state_space):
         self.basis = basis

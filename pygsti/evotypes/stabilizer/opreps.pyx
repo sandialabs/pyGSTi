@@ -109,16 +109,6 @@ cdef class OpRepClifford(OpRep):
         return (OpRepClifford, (self.unitary, (self.smatrix, self.svector), self.basis, self.state_space))
 
 
-cdef class OpRepStandard(OpRepClifford):   # TODO
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        super(OpRepStandard, self).__init__(U, None, basis, state_space)
-
-
 cdef class OpRepComposed(OpRep):
     cdef public object factor_reps  # list of OpRep objs?
 

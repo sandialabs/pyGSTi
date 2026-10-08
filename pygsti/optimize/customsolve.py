@@ -79,11 +79,6 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
     None
     """
 
-    #DEBUG
-    #for i in range(a.shape[1]):
-    #    print(i, " = ", _np.linalg.norm(a[:,i]))
-    #assert(False), "STOP"
-
     pivot_row_indices = []
     #potential_pivot_indices = list(range(a.shape[0]))  # *local* row indices of rows not already chosen as pivot rows
     potential_pivot_mask = _np.ones(a.shape[0], dtype=bool)  # *local* row indices of rows not already chosen pivot rows
@@ -224,10 +219,6 @@ def _find_pivot(
         buf2, buf3, best_host_indices, best_host_vals
     ):
     
-    #print(f'Length potential_pivot_inds {len(potential_pivot_inds)}')
-    #print(f'potential_pivot_inds: {potential_pivot_inds}')
-    #print(f'best_host_indices: {best_host_indices}')
-    
     if len(potential_pivot_inds) > 0:
         best_abs_local_potential_pivot, ibest_local = _restricted_abs_argmax(a[:, icol], potential_pivot_inds)
         #abs_local_potential_pivots = _np.abs(a[potential_pivot_inds, icol])
@@ -296,7 +287,6 @@ def _find_pivot(
         buf1b[0] = ibest_local_as_global
         best_local_gindices = best_host_indices  # each proc is a "host"
         
-        #print(f'rank {comm.rank} best_local_gindices before gather: {best_local_gindices}')
         comm.Gather(buf1b, best_local_gindices, root=0)
 
         # root proc determines best global pivot and broadcasts row# to others (& it's recorded for later)

@@ -688,8 +688,6 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
     # columns of state_s rather than the last n.
 
     a = qubit_index
-    #print("DB: pauli Z_%d meas on state:" % a) #DEBUG
-    #print(state_s); print(state_p) #DEBUG
 
     # Let A be the Pauli op being measured
     #Step1: determine if all stabilizer elements commute with Z_a
@@ -699,17 +697,13 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
     for col in range(n):
         if state_s[a, col] == 1:
             p = col
-            #print("Column %d anticommutes with Z_%d" % (p,a)) #DEBUG
 
             # p is first stabilizer that anticommutes w/Z_a. Outcome is random,
             # and we just need to update the state (if requested).
             s_out = state_s.copy(); p_out = state_p.copy()
             for i in range(two_n):
                 if i != p and state_s[a, i] == 1:
-                    #print("COLSUM ",i,p) #DEBUG
                     colsum(i, p, s_out, p_out, n)
-                    #print(s_out); print(p_out) #DEBUG
-                    #print("-----") #DEBUG
             s_out[:, p + n] = s_out[:, p]; p_out[p + n] = p_out[p]  # set p-th col -> (p+n)-th col
             s_out[:, p] = 0; s_out[a + n, p] = 1  # p-th col = I*...Z_a*...I stabilizer
 
@@ -717,8 +711,6 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
             p_out0 = p_out.copy(); p_out0[p] = (4 - (icount % 4)) % 4  # so overall phase is 0
             p_out1 = p_out.copy(); p_out1[p] = (p_out0[p] + 2) % 4    # so overall phase is -1
             return 0.5, 0.5, s_out, s_out, p_out0, p_out1  # Note: s is same for 0 and 1 outcomes
-
-    #print("Nothing anticommutes!") #DEBUG
 
     # no break ==> all commute, so outcome is deterministic, so no
     # state update; just determine whether Z_a or -Z_a is in the stabilizer,
@@ -731,10 +723,8 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
     icount = acc_p[0] + sum([3 if (acc_s[i] == acc_s[i + n] == 1) else 0 for i in range(n)])  # 11 = -iY convention
     icount = icount % 4
     if icount == 0:  # outcome is always zero
-        #print("Always 0!") #DEBUG
         return (1.0, 0.0, state_s, state_s, state_p, state_p)
     else:  # outcome is always 1
-        #print("Always 1!") #DEBUG
         assert(icount == 2)  # should never get 1 or 3 (low bit should always be 0)
         return (0.0, 1.0, state_s, state_s, state_p, state_p)
 

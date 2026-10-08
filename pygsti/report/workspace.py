@@ -424,7 +424,7 @@ class Workspace(object):
         self.GermFiducialProbTrajectoriesPlot = makefactory(_driftrpt.GermFiducialProbTrajectoriesPlot)
         self.GermFiducialPowerSpectraPlot = makefactory(_driftrpt.GermFiducialPowerSpectraPlot)
 
-    def init_notebook_mode(self, connected=False, autodisplay=False):
+    def init_notebook_mode(self, enable_offline_mode=False, autodisplay=False):
         """
         Initialize this Workspace for use in an iPython notebook environment.
 
@@ -433,11 +433,11 @@ class Workspace(object):
 
         Parameters
         ----------
-        connected : bool , optional
-            Whether to assume you are connected to the internet.  If you are,
-            then setting this to `True` allows initialization to rely on web-
-            hosted resources which will reduce the overall size of your
-            notebook.
+        enable_offline_mode : bool , optional
+            Whether to assume you are connected to the internet.  If not,
+            then setting this to `True` allows initialization to rely on
+            embedded and locally stored web resources for viewing content without an
+            active connection.
 
         autodisplay : bool , optional
             Whether to automatically display workspace objects after they are
@@ -454,28 +454,28 @@ class Workspace(object):
 
         script = ""
 
-        if not connected:
+        if enable_offline_mode:
             _merge.rsync_offline_dir(_os.getcwd())
 
         #If offline, add JS to head that will load local requireJS and/or
         # jQuery if needed (jupyter-exported html files always use CDN
         # for these).
-        if not connected:
+        if enable_offline_mode:
             script += "<script src='offline/jupyterlibload.js'></script>\n"
 
         #Load our custom plotly extension functions
-        script += _merge.insert_resource(connected, None, "pygsti_plotly_ex.js")
+        script += _merge.insert_resource(enable_offline_mode, None, "pygsti_plotly_ex.js")
         script += "<script type='text/javascript'> window.plotman = new PlotManager(); </script>"
 
         #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
         jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
-        script += _merge.insert_resource(connected, jQueryUI_CSS, "smoothness-jquery-ui.css")
+        script += _merge.insert_resource(enable_offline_mode, jQueryUI_CSS, "smoothness-jquery-ui.css")
 
         # Load style sheets for displaying tables
-        script += _merge.insert_resource(connected, None, "pygsti_dataviz.css")
+        script += _merge.insert_resource(enable_offline_mode, None, "pygsti_dataviz.css")
 
         #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
-        if connected:
+        if not enable_offline_mode:
             imgURL = "https://code.jquery.com/ui/1.12.1/themes/smoothness/images/ui-icons_222222_256x240.png"
         else:
             imgURL = "offline/images/ui-icons_222222_256x240.png"
@@ -496,7 +496,7 @@ class Workspace(object):
         # current page, so just using "offline/myfile" works fine then.
 
         #Tell require.js where jQueryUI and Katex are
-        if connected:
+        if not enable_offline_mode:
             reqscript = (
                 "<script>"
                 "console.log('ONLINE - using CDN paths');"
@@ -550,7 +550,7 @@ class Workspace(object):
         # so math shows up properly in plots (maybe we could just use a require
         # statement for this instead of polling?)
         script += _merge.insert_resource(
-            connected, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
+            enable_offline_mode, "https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.7.1/katex.min.css",
             "katex.css")
 
         script += (
@@ -581,7 +581,7 @@ class Workspace(object):
             '</script>\n')
 
         # Initialize Plotly libraries
-        script += _plotly_ex.init_notebook_mode_ex(connected)
+        script += _plotly_ex.init_notebook_mode_ex(enable_offline_mode)
 
         # Perform check to see what has been loaded
         script += (
@@ -993,8 +993,13 @@ class Switchboard(_collections.OrderedDict):
 
                 if view_suffix:
                     js += "\n".join((
+                        "var connected_%s_base = false;" % ID,
+                        "var connect_%s_base_timer = null;" % ID,
                         "function connect_%s_to_base(){" % ID,
+                        "  if(connected_%s_base) return;" % ID,  # re-entrant: event and timer may both fire
                         "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    connected_%s_base = true;" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s');" % ID,
                         "    $('#%s').on('change', function(event, ui) {" % baseID,
                         "      var v = $(\"#%s > input[name='%s']:checked\").val();" % (baseID, baseID),
                         "      var el = $(\"#%s > input[name='%s'][value=\" + v + \"]\");" % (ID, ID),
@@ -1012,7 +1017,11 @@ class Switchboard(_collections.OrderedDict):
                         "    $('#%s').trigger('change');" % baseID,
                         "  }",
                         "  else {",  # need to wait for base switch
-                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s')" % ID +
+                        ".one('pygsti-switch-initialized.%s', connect_%s_to_base);" % (ID, ID),
+                        #one live backstop timer, else each event wake adds another chain
+                        "    clearTimeout(connect_%s_base_timer);" % ID,
+                        "    connect_%s_base_timer = setTimeout(connect_%s_to_base, 500);" % (ID, ID),
                         "    console.log('%s base NOT initialized: Waiting...');" % ID,
                         "  }",
                         "};",
@@ -1032,8 +1041,13 @@ class Switchboard(_collections.OrderedDict):
 
                 if view_suffix:
                     js += "\n".join((
+                        "var connected_%s_base = false;" % ID,
+                        "var connect_%s_base_timer = null;" % ID,
                         "function connect_%s_to_base(){" % ID,
+                        "  if(connected_%s_base) return;" % ID,  # re-entrant: event and timer may both fire
                         "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    connected_%s_base = true;" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s');" % ID,
                         "    $('#%s').on('selectmenuchange', function(event, ui) {" % baseID,
                         "      var v = $('#%s').val();" % baseID,
                         "      var el = $('#%s');" % ID,
@@ -1052,7 +1066,11 @@ class Switchboard(_collections.OrderedDict):
                         "    console.log('%s connected to base');\n" % ID,
                         "  }",
                         "  else {",  # need to wait for base switch
-                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s')" % ID +
+                        ".one('pygsti-switch-initialized.%s', connect_%s_to_base);" % (ID, ID),
+                        #one live backstop timer, else each event wake adds another chain
+                        "    clearTimeout(connect_%s_base_timer);" % ID,
+                        "    connect_%s_base_timer = setTimeout(connect_%s_to_base, 500);" % (ID, ID),
                         "    console.log('%s base NOT initialized: Waiting...');" % ID,
                         "  }",
                         "};",
@@ -1145,8 +1163,13 @@ class Switchboard(_collections.OrderedDict):
                     # which causes a change event to fire.  Views handle this event
                     # to update their own slider values.
                     js += "\n".join((
+                        "var connected_%s_base = false;" % ID,
+                        "var connect_%s_base_timer = null;" % ID,
                         "function connect_%s_to_base(){" % ID,
+                        "  if(connected_%s_base) return;" % ID,  # re-entrant: event and timer may both fire
                         "  if( $('#%s').hasClass('initializedSwitch') ) {" % baseID,  # "if base switch is ready"
+                        "    connected_%s_base = true;" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s');" % ID,
                         "    $('#%s').on('slidechange', function(event, ui) {" % baseID,
                         "      $('#%s').slider('value', ui.value);" % ID,
                         "      $('#%s-handle').text( $('#%s-handle').text() );" % (ID, baseID),
@@ -1155,7 +1178,11 @@ class Switchboard(_collections.OrderedDict):
                         "    $('#%s').trigger('slidechange', mock_ui);" % baseID,
                         "  }",
                         "  else {",  # need to wait for base switch
-                        "    setTimeout(connect_%s_to_base, 500);" % ID,
+                        "    $(document).off('pygsti-switch-initialized.%s')" % ID +
+                        ".one('pygsti-switch-initialized.%s', connect_%s_to_base);" % (ID, ID),
+                        #one live backstop timer, else each event wake adds another chain
+                        "    clearTimeout(connect_%s_base_timer);" % ID,
+                        "    connect_%s_base_timer = setTimeout(connect_%s_to_base, 500);" % (ID, ID),
                         "    console.log('%s base NOT initialized: Waiting...');" % ID,
                         "  }",
                         "};",
@@ -1166,6 +1193,9 @@ class Switchboard(_collections.OrderedDict):
                 raise ValueError("Unknown switch type: %s" % styp)
 
             js += "$('#%s').addClass('initializedSwitch');\n" % ID
+            #let anything waiting on this switch connect immediately rather than
+            #discovering it on its next 500ms poll
+            js += "$(document).trigger('pygsti-switch-initialized');\n"
 
             switch_html.append(html)
             switch_js.append(js)
@@ -1886,8 +1916,13 @@ class WorkspaceOutput(object):
 
         #define fn to "connect" output object to switchboard, i.e.
         #  register event handlers for relevant switches so output object updates
+        js += "var connected_%s = false;\n" % id
+        js += "var connect_%s_timer = null;\n" % id
         js += "function connect_%s_to_switches(){\n" % id
+        js += "  if(connected_%s) return;\n" % id  # re-entrant: event and timer may both fire
         js += "  if(%s) {\n" % cnd  # "if switches are ready"
+        js += "    connected_%s = true;\n" % id
+        js += "    $(document).off('pygsti-switch-initialized.%s');\n" % id
         # loop below adds event bindings to the body of this if-block
 
         #build a handler function to get all of the relevant switch positions,
@@ -1911,7 +1946,7 @@ class WorkspaceOutput(object):
             handler_js += "  divToShow.show();\n"
             handler_js += "  divToShow.parentsUntil('#%s').show();\n" % id
             handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "  pygsti_set_caption_width(caption, divToShow);\n"
         else:
             handler_js += "  if( divToShow.children().length == 0 ) {\n"
             handler_js += "    $(`#${idToShow}`).load(`figures/${idToShow}.html`, function() {\n"
@@ -1928,14 +1963,14 @@ class WorkspaceOutput(object):
                 handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
                 handler_js += " + idToShow + '.pkl\" target=\"_blank\">&#9660;PKL</a>');\n"
             handler_js += "        caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "        caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "        pygsti_set_caption_width(caption, divToShow);\n"
             handler_js += "    });\n"  # end load-complete handler
             handler_js += "  }\n"
             handler_js += "  else {\n"
             handler_js += "    divToShow.show();\n"
             handler_js += "    divToShow.parentsUntil('#%s').show();\n" % id
             handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
-            handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
+            handler_js += "    pygsti_set_caption_width(caption, divToShow);\n"
             handler_js += "  }\n"
         handler_js += "}\n"  # end <id>_onchange function
 
@@ -1957,7 +1992,11 @@ class WorkspaceOutput(object):
         js += "    $( '#%s' ).show()\n" % id  # visibility updates are done: show parent container
         js += "  }\n"  # ends if-block
         js += "  else {\n"  # switches aren't ready - so wait
-        js += "    setTimeout(connect_%s_to_switches, 500);\n" % id
+        js += "    $(document).off('pygsti-switch-initialized.%s')" % id
+        js += ".one('pygsti-switch-initialized.%s', connect_%s_to_switches);\n" % (id, id)
+        #one live backstop timer, else each event wake adds another chain
+        js += "    clearTimeout(connect_%s_timer);\n" % id
+        js += "    connect_%s_timer = setTimeout(connect_%s_to_switches, 500);\n" % (id, id)
         js += "    console.log('%s switches NOT initialized: Waiting...');\n" % id
         js += "  }\n"
         js += "};\n"  # end of connect function
@@ -3133,7 +3172,7 @@ class WorkspaceText(WorkspaceOutput):
                 '  CollapsibleLists.applyTo(el[0]);\n'
                 '}}\n'
                 'caption = el.closest("figure").children("figcaption:first");\n'
-                'caption.css("width", Math.round(el.width()*0.9) + "px");\n'
+                'pygsti_set_caption_width(caption, el);\n'
             ).format(textid=text_id)
         else:
             init_text_js = ""  # no per-div init needed

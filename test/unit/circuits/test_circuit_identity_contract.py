@@ -14,9 +14,17 @@ Pinned here:
   * implicit done_editing() on hashing an editable circuit (mutation + warning)
   * ordering follows tup ordering
   * the empty-circuit vs idle-layer representation distinction
+  * layer canonicalization: every construction path that takes user input sorts the
+    simple labels within a layer, so text and code produce the same circuit (#757);
+    `_fastinit` is the documented exception
 """
+from unittest import mock
+
 from pygsti.baseobjs import Label
 from pygsti.circuits import Circuit
+import pygsti.circuits.circuitparser as cparser_mod
+from pygsti.circuits.circuitparser import slowcircuitparser
+from pygsti.io import stdinput
 from pygsti.tools.exceptions import ImplicitlyDoneEditingCircuitWarning
 
 from ..util import BaseCase
@@ -93,17 +101,84 @@ class CircuitIdentityContractTester(BaseCase):
         self.assertNotEqual(base, Circuit([('Gx', 0)], line_labels=(0,),  compilable_layer_indices=(0,)))
 
     def test_construction_paths_agree(self):
-        # all public construction paths must yield equal circuits with equal hashes
-        # (Circuit._fastinit is deliberately EXCLUDED: see the issue #757 pins)
+        # all public construction paths must yield equal circuits with equal hashes.
+        # `Circuit._fastinit` is EXCLUDED because it is private and canonicalizes
+        # nothing -- see test_fastinit_requires_canonical_input below.
         via_string   = Circuit('Gx:0Gy:0@(0)')
         via_labels   = Circuit([Label(('Gx', 0)), Label(('Gy', 0))], line_labels=(0,))
         via_tuples   = Circuit([('Gx', 0), ('Gy', 0)],               line_labels=(0,))
         via_editable = Circuit([('Gx', 0), ('Gy', 0)],               line_labels=(0,), editable=True)
         via_editable.done_editing()
+        via_stdinput = stdinput.StdInputParser().parse_circuit('Gx:0Gy:0@(0)', create_subcircuits=False)
         reference = via_string
-        for name, other in [('labels', via_labels), ('tuples', via_tuples), ('editable', via_editable)]:
+        for name, other in [('labels', via_labels), ('tuples', via_tuples),
+                            ('editable', via_editable), ('stdinput', via_stdinput)]:
             self.assertEqual(other, reference, msg=name)
             self.assertEqual(hash(other), hash(reference), msg=name)
+
+    # ------------------------------------------------- layer canonicalization (#757)
+
+    def test_parsed_circuits_match_constructed_ones(self):
+        # #757: io/stdinput.py builds every parsed circuit through `_fastinit`, which
+        # applies no sort, so the same text used to yield two unequal, differently
+        # hashing Circuits depending on whether it came through StdInputParser
+        # (dataset/text-file loading) or the constructor. Both parsers now emit
+        # canonically-sorted layer labels, so the two paths agree.
+        text = "[Gy:1Gx:0]@(0,1)"
+        c_parsed = stdinput.StdInputParser().parse_circuit(text, create_subcircuits=False)
+        c_built = Circuit(text)
+        self.assertEqual(c_parsed, c_built)
+        self.assertEqual(hash(c_parsed), hash(c_built))
+        self.assertEqual(c_parsed.tup[0], Label((('Gx', 0), ('Gy', 1))))
+
+    def test_both_parsers_emit_the_same_canonical_order(self):
+        # the Cython and pure-Python parsers must stay in lockstep: canonicalizing in
+        # one and not the other would split behavior by whether the extension built
+        cases = ["[Gy:1Gx:0]@(0,1)", "[Gz:2Gcnot:0:1]@(0,1,2)",
+                 "[Gx:1!0.5Gy:0]@(0,1)", "[GxGi]@(0,1)",
+                 "[Gy:q1Gx:q0]@(q0,q1)", "[Gz:1[Gy:2Gx:0]]@(0,1,2)"]
+        for text in cases:
+            with self.subTest(text=text):
+                fast = Circuit(text)
+                with mock.patch.object(cparser_mod, 'parse_circuit',
+                                       slowcircuitparser.parse_circuit):
+                    slow = Circuit(text)
+                self.assertEqual(fast, slow)
+                self.assertEqual(fast.tup, slow.tup)
+
+    def test_parsers_reject_duplicate_sslbls_within_a_layer(self):
+        # canonicalization also validates: two gates on the same line in one layer
+        # have no sorted order. The constructor always rejected this; StdInputParser
+        # used to accept it and produce a circuit the constructor could not build.
+        text = "[Gx:0Gy:0]@(0)"
+        with self.assertRaisesRegex(ValueError, 'duplicate sslbls'):
+            Circuit(text)
+        with self.assertRaisesRegex(ValueError, 'duplicate sslbls'):
+            stdinput.StdInputParser().parse_circuit(text, create_subcircuits=False)
+
+    def test_fastinit_does_not_flatten_nested_compound_layers(self):
+        # A SEPARATE parsed-vs-constructed divergence, unrelated to layer ordering and
+        # not addressed by the #757 parser fix: `__init__` flattens a nested compound
+        # layer, `_fastinit` keeps the nesting. Reproduces with a hand-built, already
+        # canonically-sorted label and no parser involved, so sorting is not the cause.
+        # Pinned as the current behavior; recorded for issue filing.
+        nested = Label((Label((Label(('Gx', 0)), Label(('Gy', 2)))), Label(('Gz', 1))))
+        via_fastinit = Circuit._fastinit((nested,), (0, 1, 2), False)
+        via_init = Circuit([nested], line_labels=(0, 1, 2))
+        self.assertNotEqual(via_fastinit, via_init)
+        self.assertEqual(via_init.tup[0], Label((('Gx', 0), ('Gz', 1), ('Gy', 2))))
+
+    def test_fastinit_requires_canonical_input(self):
+        # #757 was fixed in the parsers, not here: `_fastinit` is the ~0.5us hot
+        # construction tier -- some 300x cheaper than `__init__` -- and still trusts
+        # its caller to pass canonical layer tuples. Passing unsorted ones produces a
+        # circuit that will not compare equal to the same circuit built any other way.
+        # It is private; the only callers outside circuit.py are in io/stdinput.py,
+        # and those now receive sorted labels from the parser.
+        unsorted = Circuit._fastinit((Label((('Gy', 1), ('Gx', 0))),), (0, 1), False)
+        canonical = Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1))
+        self.assertNotEqual(unsorted, canonical)
+        self.assertEqual(Circuit._fastinit(canonical.layertup, (0, 1), False), canonical)
 
     def test_hashing_editable_circuit_mutates_it(self):
         c = Circuit([[('Gy', 1), ('Gx', 0)]], line_labels=(0, 1), editable=True)

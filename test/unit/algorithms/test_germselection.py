@@ -361,6 +361,15 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
         )
         # TODO assert correctness
 
+    def test_build_up_breadth_skips_initial_germ_set_test(self):
+        germs = germsel.find_germs_breadthfirst_greedy(
+            self.neighbors,
+            self.germ_set,
+            initial_germ_set_test=False,
+            **self.options
+        )
+        self.assertIsNotNone(germs)
+
     def test_build_up_breadth_force_strings(self):
         forceStrs = [Circuit([Label('Gxpi2',0)], line_labels = (0,)),
                     Circuit([Label('Gypi2',0)], line_labels = (0,))]

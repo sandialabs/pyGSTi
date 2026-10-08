@@ -77,6 +77,13 @@ linting = [
     'autopep8',
     'flake8'
 ]
+# TensorFlow/Keras for pygsti.extras.ml (QPANNs). >=2.16 for Keras 3, which extras.ml's
+# custom layers target. Deliberately not part of `testing`/`no_mpi`/`complete`: TensorFlow is
+# heavy and platform-specific. CI installs it explicitly for the jobs that need it.
+ml = [
+    'tensorflow>=2.16',
+    'keras>=3.0'
+]
 memory_profiling = ['psutil']
 mongodb = ['pymongo']
 msgpack = ['msgpack']

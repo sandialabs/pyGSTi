@@ -82,17 +82,6 @@ class OpRepClifford(OpRep):
         return s
 
 
-class OpRepStandard(OpRepClifford):
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        self.name = name
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        super(OpRepStandard, self).__init__(U, None, basis, state_space)
-
-
 class OpRepComposed(OpRep):
 
     def __init__(self, factor_op_reps, state_space):

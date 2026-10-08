@@ -599,6 +599,11 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
                 return sum([budget_for_label(component) for component in lbl.components])
 
         budget = error_per_op.get('SPAM', 0)
+        # `layer_label` indexes top-level layers (`num_layers`), but we want a budget for
+        # every executed layer (`depth`).  Those differ only when the circuit retains a
+        # CircuitLabel, so expand just in that case; the common path is untouched.
+        if circuit.depth != circuit.num_layers:
+            circuit = circuit.expand_subcircuits()
         layers = [circuit.layer_label(i) for i in range(circuit.depth)] if (self._idlename is None) \
             else [circuit.layer_label_with_idles(i, idle_gate_name=self._idlename) for i in range(circuit.depth)]
         for layer in layers:
@@ -661,6 +666,10 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
         circuit_budget_matrix = _np.zeros((len(circuits), self.num_primitive_ops), 'd')
         for i, circuit in enumerate(circuits):
 
+            # see the note in circuit_budget: expand only when a retained CircuitLabel
+            # makes `depth` and `num_layers` disagree.
+            if circuit.depth != circuit.num_layers:
+                circuit = circuit.expand_subcircuits()
             layers = [circuit.layer_label(i) for i in range(circuit.depth)] if (self._idlename is None) \
                 else [circuit.layer_label_with_idles(i, idle_gate_name=self._idlename) for i in range(circuit.depth)]
             for layer in layers:

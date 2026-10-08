@@ -145,32 +145,6 @@ cdef class OpRepDenseUnitary(OpRep):
         return OpRepDenseUnitary(self.base.copy(), self.basis, self.state_space)
 
 
-cdef class OpRepStandard(OpRepDenseUnitary):
-    cdef public object name
-
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        self.name = name
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        state_space = _StateSpace.cast(state_space)
-        assert(U.shape[0] == state_space.udim)
-        super(OpRepStandard, self).__init__(U, basis, state_space)
-
-    def __reduce__(self):
-        return (OpRepStandard, (self.name, self.basis, self.state_space))
-
-    def __setstate__(self, state):
-        pass  # must define this becuase base class does - need to override it
-
-
-#class OpRepStochastic(OpRepDense):
-# - maybe we could add this, but it wouldn't be a "dense" op here,
-#   perhaps we need to change API?
-
-
 cdef class OpRepComposed(OpRep):
     cdef public object factor_reps  # list of OpRep objs?
 

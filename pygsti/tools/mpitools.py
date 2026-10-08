@@ -453,9 +453,6 @@ def gather_slices(slices, slice_owners, ar_to_fill,
 
     axes = (axes,) if _compat.isint(axes) else axes
 
-    #print("DB: Rank %d (%d): BEGIN GATHER SLICES: interhost=%s, group=%s" %
-    #      (my_rank, broadcast_comm.rank, str(my_interhost_ranks), str(broadcast_comm.Get_group())))
-
     # # if ar_to_fill_inds only contains slices (or is empty), then we can slice ar_to_fill once up front
     # # and not use generic arIndx in loop below (slower, especially with lots of procs)
     # if all([isinstance(indx, slice) for indx in ar_to_fill_inds]):
@@ -517,12 +514,9 @@ def gather_slices(slices, slice_owners, ar_to_fill,
             buf = _findx(ar_to_fill, arIndx, True) if (my_rank == owner) \
                 else _np.empty(_findx_shape(ar_to_fill, arIndx), ar_to_fill.dtype)
             if my_interhost_ranks is None or len(my_interhost_ranks) > 1:
-                #print("DB: Rank %d (%d) Broadcast: arIndx = %s, owner=%d root=%d" %
-                #      (my_rank, broadcast_comm.rank, str(arIndx), owner, broadcast_rank_map[owner]))
                 broadcast_comm.Bcast(buf, root=broadcast_rank_map[owner])
                 if my_rank != owner: _fas(ar_to_fill, arIndx, buf)
             buf = None  # free buffer mem asap
-    #print("DB: Rank %d: END GATHER SLICES" % my_rank)
 
     # Important: wait for everything to finish before proceeding
     #  (when broadcast_comm != comm some procs may run ahead - see comment above)

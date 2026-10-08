@@ -43,6 +43,7 @@ from .cptrop import RootConjOperator, SummedOperator
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti import SpaceT
 
 
@@ -57,9 +58,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
 
     for typ in op_type_preferences:
         try:
-            if typ == 'static standard' and stdname is not None:
-                op = StaticStandardOp(stdname, basis, evotype, state_space)
-            elif typ == 'static clifford':
+            if typ == 'static clifford':
                 op = StaticCliffordOp(U, None, basis, evotype, state_space)
             elif typ == 'static unitary':
                 op = StaticUnitaryOp(U, basis, evotype, state_space)
@@ -69,15 +68,17 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 superop_mx = _ot.unitary_to_superop(U, basis)
                 op = create_from_superop_mx(superop_mx, op_type, basis, stdname, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):  # maybe "lindblad XXX" where XXX is a valid lindblad type?
+                lndtype = LindbladParameterization.cast(typ)
+                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
+                # For stabilizer evotype, use 'static clifford' as postfactor preference; otherwise 'static unitary', 'static'
+                postfactor_pref = ('static clifford', 'static unitary', 'static') if str(evotype) in ('stabilizer', 'chp') \
+                    else ('static unitary', 'static')
                 if _np.allclose(U, _np.identity(U.shape[0], 'd')):
                     unitary_postfactor = None
                 else:
                     unitary_postfactor = create_from_unitary_mx(
-                        U, ('static standard', 'static clifford', 'static unitary'),
+                        U, postfactor_pref,
                         basis, stdname, evotype, state_space)
-
-                lndtype = LindbladParameterization.cast(typ)
-                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = LindbladErrorgen.from_error_generator(state_space.dim, lndtype, proj_basis, basis,
                                                                  truncate=True, evotype=evotype,
                                                                  state_space=state_space)
@@ -190,6 +191,18 @@ def verbose_type_from_op_type(op_type):
 
     verbose_type_preferences = []
     for typ in op_type_preferences:
+        if typ == 'static standard':
+            _warnings.warn(
+                "The 'static standard' operation parameterization type is deprecated and will be "
+                "removed in a future release. Please use ('static unitary', 'static') or 'static unitary' instead.",
+                _pyGSTiDeprecationWarning,
+                stacklevel=2,
+            )
+            for fallback_typ in ('static unitary', 'static'):
+                if fallback_typ not in verbose_type_preferences:
+                    verbose_type_preferences.append(fallback_typ)
+            continue
+
         verbose_type = None
         if _ot.is_valid_lindblad_paramtype(typ):
             # TODO: DO we want to prepend with lindblad?

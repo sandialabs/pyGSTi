@@ -337,6 +337,7 @@ Protocol objects (GST, RB, RPE, drift, …) with their inputs, data, and results
    pygsti.protocols.rb
    pygsti.protocols.rpe
    pygsti.protocols.scarab
+   pygsti.protocols.simultaneous_gst
    pygsti.protocols.stability
    pygsti.protocols.treenode
    pygsti.protocols.vb
@@ -375,6 +376,7 @@ General-purpose numerical and quantum-information utilities.
    pygsti.tools.fasterrgencalc
    pygsti.tools.fogitools
    pygsti.tools.gatetools
+   pygsti.tools.graphs
    pygsti.tools.group
    pygsti.tools.hypothesis
    pygsti.tools.internalgates

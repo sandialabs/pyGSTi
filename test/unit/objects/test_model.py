@@ -338,6 +338,22 @@ class GeneralMethodBase(object):
         self.assertEqual(self.model.num_params, 27)
         self.assertEqual(set(lbls_save), set(self.model.parameter_labels))  # ok if ordering if different
 
+    def test_circuit_parameter_dependence_with_collected_parameters(self):
+        # Collecting parameters across gates makes a gate's gpindices an array, not a slice.
+        self.model.set_all_parameterizations("H+s")
+        self.model.collect_parameters([('Gx', 'X Hamiltonian error coefficient'),
+                                       ('Gy', 'Y Hamiltonian error coefficient')],
+                                      new_param_label='Over-rotation')
+        self.assertNotIsInstance(self.model['Gy'].gpindices, slice)
+
+        circuit = Circuit(['Gy'])
+        dependence = self.model.circuit_parameter_dependence([circuit])[circuit]
+        expected = set()
+        for member in (self.model['rho0'], self.model['Gy'], self.model['Mdefault']):
+            expected.update(member.gpindices_as_array().tolist())
+        self.assertEqual(dependence, sorted(expected))
+        self.assertIn(list(self.model.parameter_labels).index('Over-rotation'), dependence)
+
     def test_parameter_bounds(self):
         self.model.set_all_parameterizations("H+S")
         self.model.num_params  # rebuild parameter vector -- but this should be done by set_all_parameterizations?!

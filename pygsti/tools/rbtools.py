@@ -212,7 +212,6 @@ def marginalized_hamming_distance_counts(dsrow, circ, target, qubits):
         hamming_distance_counts = _np.zeros(len(qubits) + 1, float)
 
         for (outbitstring,), counts in dsrow.counts.items():
-            #print(outbitstring)
             hamming_distance_counts[hamming_distance(''.join([outbitstring[i] for i in indices]), margtarget)] += counts
 
         hamming_distance_counts = list(hamming_distance_counts)

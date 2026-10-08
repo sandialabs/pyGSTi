@@ -1925,7 +1925,8 @@ class OpModel(Model):
         unique_layers = unique_layers.union(*unique_layers_by_circuit)
 
         #Now pre-compute the gpindices for all of these unique layers
-        unique_layers_gpindices_dict = {layer:_slct.indices(self.circuit_layer_operator(layer).gpindices) for layer in unique_layers}
+        unique_layers_gpindices_dict = {layer: self.circuit_layer_operator(layer).gpindices_as_array().tolist()
+                                        for layer in unique_layers}
         
         #loop through the circuit layers and get the circuit layer operators.
         #from each of the circuit layer operators we'll get their gpindices. 
@@ -2614,8 +2615,8 @@ class OpModel(Model):
                 nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
                 tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
                 U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect
-            elif isinstance(op, _op.StaticStandardOp):
-                op_mx = op.to_dense()
+            elif isinstance(op, (_op.StaticStandardOp, _op.StaticArbitraryOp, _op.StaticUnitaryOp, _op.DenseOperator)):
+                op_mx = op.to_dense(on_space='HilbertSchmidt')
                 nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
                 tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
                 U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect

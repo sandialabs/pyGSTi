@@ -1,0 +1,17 @@
+# Mirrors the flake8 lint step in .github/workflows/reuseable-main.yml.
+# CI installs flake8 unpinned; bump rev to track the latest release.
+repos:
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.4.1
+    hooks:
+      # Blocking: the critical-error selection CI fails on.
+      - id: flake8
+        name: flake8 (critical)
+        args: [--count, --show-source, --statistics, --config=.flake8-critical]
+      # Informational: the full pass using .flake8; never fails, like CI.
+      # Run on demand: pre-commit run --hook-stage manual
+      - id: flake8
+        name: flake8 (full, informational)
+        args: [--exit-zero, --statistics]
+        stages: [manual]
+        verbose: true

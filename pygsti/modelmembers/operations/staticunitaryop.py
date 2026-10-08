@@ -17,6 +17,7 @@ from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.modelmembers.torchable import StaticTorchable as _StaticTorchable
+from pygsti.tools import internalgates as _itgs
 
 
 class StaticUnitaryOp(_DenseUnitaryOperator, _NoErrorGeneratorInterface, _StaticTorchable):
@@ -45,6 +46,19 @@ class StaticUnitaryOp(_DenseUnitaryOperator, _NoErrorGeneratorInterface, _Static
     def __init__(self, m, basis='pp', evotype="default", state_space=None):
         _DenseUnitaryOperator.__init__(self, m, basis, evotype, state_space)
         #(default DenseOperator/LinearOperator methods implement an object with no parameters)
+
+    @classmethod
+    def from_standard_gate_name(cls, name, basis='pp', evotype="default", state_space=None):
+        """
+        Alternative constructor which builds the unitary operation from a string
+        corresponding to a built-in standard gate name.
+        See `pygsti.tools.internalgates.standard_gatename_unitaries`.
+        """
+        std_unitaries = _itgs.standard_gatename_unitaries()
+        if name not in std_unitaries:
+            raise ValueError(f"'{name}' does not name a standard operation")
+        U = std_unitaries[name]
+        return cls(U, basis=basis, evotype=evotype, state_space=state_space)
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """

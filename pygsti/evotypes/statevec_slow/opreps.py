@@ -92,20 +92,6 @@ class OpRepDenseUnitary(OpRep):
         return "OpRepDenseUnitary:\n" + str(self.base)
 
 
-class OpRepStandard(OpRepDenseUnitary):
-    def __init__(self, name, basis, state_space):
-        std_unitaries = _itgs.standard_gatename_unitaries()
-        self.name = name
-        if self.name not in std_unitaries:
-            raise ValueError("Name '%s' not in standard unitaries" % self.name)
-
-        U = std_unitaries[self.name]
-        state_space = _StateSpace.cast(state_space)
-        assert(U.shape[0] == state_space.udim)
-
-        super(OpRepStandard, self).__init__(U, basis, state_space)
-
-
 class OpRepComposed(OpRep):
     # exactly the same as densitymx case
     def __init__(self, factor_op_reps, state_space):

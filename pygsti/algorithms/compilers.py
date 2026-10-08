@@ -1918,7 +1918,6 @@ def _compile_cnot_circuit_using_oicage_algorithm(s: _np.ndarray, pspec: Optional
                 qq_rQsgraph_index = dis.index(min(dis))
                 qq = rQsgraph_llist[qq_rQsgraph_index]
                 qqindex = allqubits.index(qq)
-                #print(qq_rQsgraph_index,qq,qqindex)
                 # Check it's one of the remaining qubits, as otherwise using it here will ruin
                 # things. It also cannot be i, obviously.
                 if qq != q:

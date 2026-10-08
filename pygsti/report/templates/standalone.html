@@ -38,7 +38,18 @@
           if (((parts.length == 1) && (typeof window[parts[0]] == "undefined")) ||
               ((parts.length == 2) && (typeof window[parts[0]][parts[1]] == "undefined"))) {
               console.log(`***Failed to load ${localFilename} from CDN. Falling back to local offline version.***`);
-              document.write(unescape(`%3Cscript src="./offline/${localFilename}" type="text/javascript"%3E%3C/script%3E`));
+              if (document.readyState === "loading") {
+                  // Still parsing: document.write injects the fallback at this point in
+                  // the parse, so it loads synchronously and the inline checks that
+                  // follow (e.g. for jQuery.ui) see the library.  The script is
+                  // same-origin, so Chrome's document.write intervention exempts it.
+                  document.write(unescape(`%3Cscript src="./offline/${localFilename}" type="text/javascript"%3E%3C/script%3E`));
+              } else {
+                  // After parsing, document.write would blank the page.
+                  var fallbackScript = document.createElement("script");
+                  fallbackScript.src = "./offline/" + localFilename;
+                  document.head.appendChild(fallbackScript);
+              }
           }
       }
     </script>

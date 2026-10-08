@@ -1,11 +1,21 @@
+#***************************************************************************************************
+# Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
+# in this software.
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+# in compliance with the License.  You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
+#***************************************************************************************************
+
+from typing import Sequence as _Sequence, Dict as _Dict, Tuple as _Tuple, \
+    Optional as _Optional, Set as _Set, Union as _Union
 import networkx as _nx
 
-from typing import Sequence, Dict, Tuple, Optional, Set, Union
-from pygsti.circuits import Circuit as Circuit
-from pygsti.baseobjs.label import Label
+from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.baseobjs.label import Label as _Label
 
 
-def compute_qubit_lane_mappings_for_circuit(circuit: Circuit) -> tuple[dict[int, int],
+def compute_qubit_lane_mappings_for_circuit(circuit: _Circuit) -> tuple[dict[int, int],
                                                                        dict[int, set[int]]]:
     """
     Partition `circuit`'s lines ("qubits") into lanes: maximal groups of lines that
@@ -52,8 +62,8 @@ def compute_qubit_lane_mappings_for_circuit(circuit: Circuit) -> tuple[dict[int,
     return qubit_to_lane, lane_to_qubits
 
 
-def _lookup_cached_lanes(circuit: Circuit,
-                         lane_to_qubits: dict[int, tuple[int, ...]]) -> Optional[list[Circuit]]:
+def _lookup_cached_lanes(circuit: _Circuit,
+                         lane_to_qubits: dict[int, tuple[int, ...]]) -> _Optional[list[_Circuit]]:
     """
     Return the cached lane circuits for `circuit`, if a matching cache is available.
 
@@ -77,11 +87,11 @@ def _lookup_cached_lanes(circuit: Circuit,
     return lane_circuits
 
 
-def split_into_tensor_lanes(circuit: Circuit,
-                            qubit_to_lanes: Optional[dict[int, int]] = None,
-                            lane_to_qubits: Optional[dict[int, tuple[int, ...]]] = None,
+def split_into_tensor_lanes(circuit: _Circuit,
+                            qubit_to_lanes: _Optional[dict[int, int]] = None,
+                            lane_to_qubits: _Optional[dict[int, tuple[int, ...]]] = None,
                             cache_lanes_in_circuit: bool = False,
-                            idle_gate_name: Union[str, Label] = "Gi") -> list[Circuit]:
+                            idle_gate_name: _Union[str, _Label] = "Gi") -> list[_Circuit]:
     """
     Split a circuit into multiple subcircuits ("lanes") which do not talk across lanes.
 
@@ -102,7 +112,7 @@ def split_into_tensor_lanes(circuit: Circuit,
     if cached_lane_circuits is not None:
         return cached_lane_circuits
 
-    lane_circuits: list[Circuit] = [None] * len(lane_to_qubits)
+    lane_circuits: list[_Circuit] = [None] * len(lane_to_qubits)
     for lane, lane_qubits in lane_to_qubits.items():
         other_qubits = [q for q in circuit.line_labels if q not in lane_qubits]
         lane_circuit = circuit.copy(editable=True)
@@ -124,8 +134,8 @@ def split_into_tensor_lanes(circuit: Circuit,
     return lane_circuits
 
 
-def _prepare_target_circuit(source: Circuit, target_line_labels: Tuple[Union[int, str], ...],
-                            max_len: int, layer_mappers: Dict[int, Dict]) -> Circuit:
+def _prepare_target_circuit(source: _Circuit, target_line_labels: _Tuple[_Union[int, str], ...],
+                            max_len: int, layer_mappers: _Dict[int, _Dict]) -> _Circuit:
     """
     Pad `source` to `max_len` layers, apply the appropriate `layer_mappers` entry to
     each (local) layer label, and relabel its lines to `target_line_labels`.
@@ -143,15 +153,15 @@ def _prepare_target_circuit(source: Circuit, target_line_labels: Tuple[Union[int
         mapper[layer_lbl].map_state_space_labels(sslbl_map)
         for layer_lbl in padded.layertup
     ]
-    return Circuit(new_layers, line_labels=target_line_labels, editable=False)
+    return _Circuit(new_layers, line_labels=target_line_labels, editable=False)
 
 
 def batch_tensor(
-    circuits: Sequence[Circuit],
-    layer_mappers: Dict[int, Dict],
-    global_line_order: Optional[Tuple[Union[int, str], ...]] = None,
-    target_lines: Optional[Sequence[Tuple[Union[int, str], ...]]] = None
-) -> Circuit:
+    circuits: _Sequence[_Circuit],
+    layer_mappers: _Dict[int, _Dict],
+    global_line_order: _Optional[_Tuple[_Union[int, str], ...]] = None,
+    target_lines: _Optional[_Sequence[_Tuple[_Union[int, str], ...]]] = None
+) -> _Circuit:
     """
     `circuits`: Sequence of `Circuit` the circuits you want to tensor together.
     `layer_mappers`: dictionary of lane size to a dictionary of `Label` to `Label`.
@@ -168,8 +178,8 @@ def batch_tensor(
         raise ValueError("batch_tensor requires at least two circuits to tensor together.")
     if __debug__:
         for num_lines in layer_mappers:
-            if Label(()) in layer_mappers[num_lines]:
-                assert layer_mappers[num_lines][Label(())] != Label(())
+            if _Label(()) in layer_mappers[num_lines]:
+                assert layer_mappers[num_lines][_Label(())] != _Label(())
 
     if target_lines is None:
         target_lines = []
@@ -184,7 +194,7 @@ def batch_tensor(
         total_lines = sum([c.num_lines for c in circuits])
         max_cir_len = max([len(c) for c in circuits])
 
-    s: Set[int] = set()
+    s: _Set[int] = set()
     for c, t in zip(circuits, target_lines):
         assert not s.intersection(t)
         assert len(t) == c.num_lines

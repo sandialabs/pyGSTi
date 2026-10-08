@@ -15,6 +15,7 @@ from pygsti.models import ExplicitOpModel
 from pygsti.baseobjs import statespace, basisconstructors as bc
 from pygsti.models.gaugegroup import FullGaugeGroupElement, UnitaryGaugeGroupElement
 from pygsti.baseobjs import Basis
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..util import BaseCase, needs_cvxpy
 
 SKIP_DIAMONDIST_ON_WIN = True
@@ -198,43 +199,76 @@ class DenseOpTester(ImmutableDenseOpBase, BaseCase):
 
 
 class StaticStdOpTester(BaseCase):
-    def test_statevec(self):
+    def test_from_standard_gate_name_static_arbitrary_op(self):
         std_unitaries = itgs.standard_gatename_unitaries()
-
         for name, U in std_unitaries.items():
             if callable(U): continue  # skip unitary functions (create factories)
-            try:
-                svop = op.StaticStandardOp(name, 'pp', 'statevec', state_space=None)
-            except ModuleNotFoundError:  # if 'statevec' isn't built (no cython)
-                svop = op.StaticStandardOp(name, 'pp', 'statevec_slow', state_space=None)
-            self.assertArraysAlmostEqual(svop._rep.to_dense('Hilbert'), U)
+            dmop = op.StaticArbitraryOp.from_standard_gate_name(name, 'pp', 'default')
+            self.assertArraysAlmostEqual(dmop.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
 
-    def test_densitymx_svterm_cterm(self):
+    def test_from_standard_gate_name_static_unitary_op(self):
         std_unitaries = itgs.standard_gatename_unitaries()
+        for name, U in std_unitaries.items():
+            if callable(U): continue  # skip unitary functions (create factories)
+            uop = op.StaticUnitaryOp.from_standard_gate_name(name, 'pp', 'default')
+            self.assertArraysAlmostEqual(uop.to_dense('Hilbert'), U)
+            self.assertArraysAlmostEqual(uop.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
 
-        for evotype in ['default']:  # 'densitymx', 'svterm', 'cterm'
-            for name, U in std_unitaries.items():
-                if callable(U): continue  # skip unitary functions (create factories)
-                dmop = op.StaticStandardOp(name, 'pp', evotype, state_space=None)
-                self.assertArraysAlmostEqual(dmop._rep.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
+    def test_from_standard_gate_name_static_clifford_op(self):
+        # Standard Clifford gates can be constructed via from_standard_gate_name for stabilizer & chp evotypes
+        for name in ('Gi', 'Gxpi', 'Gxpi2', 'Gypi', 'Gypi2', 'Gzpi', 'Gzpi2', 'Gh', 'Gcnot', 'Gswap'):
+            cop = op.StaticCliffordOp.from_standard_gate_name(name, 'pp', evotype='stabilizer')
+            U = itgs.standard_gatename_unitaries()[name]
+            self.assertArraysAlmostEqual(cop.to_dense('Hilbert'), U)
 
-    def test_chp(self):
-        std_chp_ops = itgs.standard_gatenames_chp_conversions()
+        # Test with CHP evotype
+        cop_chp = op.StaticCliffordOp.from_standard_gate_name('Gxpi', evotype='chp')
+        self.assertIsInstance(cop_chp, op.StaticCliffordOp)
+        self.assertEqual(cop_chp._rep._chp_ops(), ['h 0', 'p 0', 'p 0', 'h 0'])
 
-        for name, ops in std_chp_ops.items():
-            if not name.startswith('G'): continue  # currently the 'h', 'p', 'm' gates aren't "standard" yet because they lack unitaries
-            chpop = op.StaticStandardOp(name, 'pp', 'chp', state_space=None)
-            op_str = '\n'.join(ops)
-            self.assertEqual('\n'.join(chpop._rep._chp_ops()), op_str)
-        
+    def test_static_standard_op_deprecation_warning(self):
+        with pytest.deprecated_call():
+            std_op = op.StaticStandardOp('Gxpi2', 'pp', 'default')
+        self.assertIsInstance(std_op, op.StaticArbitraryOp)
+        self.assertEqual(std_op.name, 'Gxpi2')
+
+    def test_static_standard_op_deserialization(self):
+        mm_dict = {
+            'module': 'pygsti.modelmembers.operations.staticstdop',
+            'class': 'StaticStandardOp',
+            'submembers': [],
+            'model_parameter_indices': None,
+            'relative_submember_parameter_indices': [],
+            'parameter_labels': None,
+            'parameter_bounds': None,
+            'state_space': statespace.ExplicitStateSpace(['Q0'], [2]).to_nice_serialization(),
+            'evotype': 'default',
+            'name': 'Gxpi2',
+            'basis': Basis.cast('pp', 4).to_nice_serialization()
+        }
+        with pytest.deprecated_call():
+            deserialized = op.StaticStandardOp.from_memoized_dict(mm_dict, {}, None)
+        self.assertIsInstance(deserialized, op.StaticArbitraryOp)
+        expected_superop = gt.unitary_to_pauligate(itgs.standard_gatename_unitaries()['Gxpi2'])
+        self.assertArraysAlmostEqual(deserialized.to_dense('HilbertSchmidt'), expected_superop)
+
+    def test_static_standard_op_type_in_create_from_unitary_mx(self):
+        U = itgs.standard_gatename_unitaries()['Gxpi2']
+        with pytest.deprecated_call():
+            created = op.create_from_unitary_mx(U, 'static standard', 'pp')
+        self.assertIsInstance(created, (op.StaticUnitaryOp, op.StaticArbitraryOp))
+        self.assertArraysAlmostEqual(created.to_dense('HilbertSchmidt'), gt.unitary_to_pauligate(U))
+
     def test_raises_on_bad_values(self):
         with self.assertRaises(ValueError):
-            op.StaticStandardOp('BadGate', 'pp', 'statevec')
+            op.StaticArbitraryOp.from_standard_gate_name('BadGate', 'pp', 'statevec')
         with self.assertRaises(ValueError):
-            op.StaticStandardOp('BadGate', 'pp', 'densitymx')
-
-        with self.assertRaises(ModuleNotFoundError):
-            op.StaticStandardOp('Gi', 'pp', 'not_an_evotype')
+            op.StaticUnitaryOp.from_standard_gate_name('BadGate', 'pp', 'default')
+        with self.assertRaises(ValueError):
+            op.StaticCliffordOp.from_standard_gate_name('BadGate', 'pp', 'default')
+        with pytest.deprecated_call():
+            with self.assertRaises(ValueError):
+                op.StaticStandardOp('BadGate', 'pp', 'densitymx')
 
 
 class FullOpTester(MutableDenseOpBase, BaseCase):
@@ -716,3 +750,55 @@ class DepolarizeOpTester(BaseCase):
         v = (rho.T @ dop.to_dense() @ rho).item()
         u = float(v)
         self.assertAlmostEqual(u, 0.98)
+
+
+class ExpErrorgenOpToDenseHilbertTester(BaseCase):
+    """`ExpErrorgenOp.to_dense` must return a unitary when a Hilbert space is requested.
+
+    An error generator is never itself unitary -- it is the argument of the exponential, not
+    the result -- so `LindbladErrorgen.to_dense` rejects ``on_space='Hilbert'`` outright. The
+    cast down to a unitary therefore has to happen in `ExpErrorgenOp.to_dense`, after
+    exponentiating.
+    """
+
+    @staticmethod
+    def _exp_errorgen(elementary_errorgens, evotype):
+        errgen = op.LindbladErrorgen.from_elementary_errorgens(
+            elementary_errorgens, evotype=evotype, state_space=1)
+        return op.ExpErrorgenOp(errgen)
+
+    def test_hilbert_evotype_returns_unitary(self):
+        # 'statevec' has minimal_space == 'Hilbert', so both 'minimal' and 'Hilbert' must give
+        # back a 2x2 unitary rather than a 4x4 superoperator.
+        expop = self._exp_errorgen({('H', 'X'): 0.1}, 'statevec')
+        self.assertEqual(expop.evotype.minimal_space, 'Hilbert')
+
+        for on_space in ('minimal', 'Hilbert'):
+            mx = expop.to_dense(on_space)
+            self.assertEqual(mx.shape, (2, 2))
+            self.assertArraysAlmostEqual(mx.conj().T @ mx, np.identity(2))
+
+        # pyGSTi's H generator is H_P[rho] = -i[P, rho], so exp(0.1 * H_X) is the unitary
+        # exp(-0.1i X) = cos(0.1) I - i sin(0.1) X.
+        expected = np.array([[np.cos(0.1), -1j * np.sin(0.1)],
+                             [-1j * np.sin(0.1), np.cos(0.1)]])
+        self.assertArraysAlmostEqual(expop.to_dense('Hilbert'), expected)
+
+    def test_explicit_hilbert_schmidt_still_returns_superop(self):
+        expop = self._exp_errorgen({('H', 'X'): 0.1}, 'statevec')
+        self.assertEqual(expop.to_dense('HilbertSchmidt').shape, (4, 4))
+
+    def test_hilbert_schmidt_evotype_unaffected(self):
+        # 'densitymx' has minimal_space == 'HilbertSchmidt'; 'minimal' must stay a superoperator.
+        expop = self._exp_errorgen({('H', 'X'): 0.1}, 'densitymx')
+        self.assertEqual(expop.evotype.minimal_space, 'HilbertSchmidt')
+        self.assertEqual(expop.to_dense().shape, (4, 4))
+        self.assertEqual(expop.to_dense('minimal').shape, (4, 4))
+
+    def test_non_unitary_errorgen_raises_informative_error(self):
+        # A stochastic error generator does not exponentiate to a unitary, so asking for one
+        # must raise a helpful ValueError rather than an opaque failure.
+        expop = self._exp_errorgen({('S', 'X'): 0.1}, 'densitymx')
+        with self.assertRaises(ValueError) as ctx:
+            expop.to_dense('Hilbert')
+        self.assertIn('Could not convert to unitary', str(ctx.exception))

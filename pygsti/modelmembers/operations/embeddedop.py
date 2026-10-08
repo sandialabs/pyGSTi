@@ -701,14 +701,19 @@ class EmbeddedOp(_LinearOperator, _Torchable):
                 self._cached_embedded_errorgen_labels_global = embedded_labels
             elif isinstance(labels_to_embed[0], _LocalElementaryErrorgenLabel):
                 #use different embedding scheme for local labels
+                #target_labels are this EmbeddedOp's target qubit *labels*, which may not be
+                #integer positions (e.g. string qubit labels, or permuted integer labels), so
+                #resolve each to its integer position in state_space.qubit_labels before using it
+                #to index the (plain-list) base_label.
+                target_positions = [self.state_space.qubit_labels.index(t) for t in self.target_labels]
                 embedded_labels = []
                 base_label = [identity_label for _ in range(self.state_space.num_qudits)]
                 for lbl in labels_to_embed:
                     new_bels = []
                     for bel in lbl.basis_element_labels:
                         base_label = [identity_label for _ in range(self.state_space.num_qudits)]
-                        for target, pauli in zip(self.target_labels, bel):
-                            base_label[target] = pauli
+                        for pos, pauli in zip(target_positions, bel, strict=True):
+                            base_label[pos] = pauli
                         new_bels.append(''.join(base_label))
                     embedded_labels.append(_LocalElementaryErrorgenLabel(lbl.errorgen_type, tuple(new_bels)))
                 embedded_labels = tuple(embedded_labels)

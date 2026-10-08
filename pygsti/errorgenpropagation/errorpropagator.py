@@ -18,7 +18,7 @@ except ImportError:
     warnings.warn(msg)
 import numpy as _np
 import scipy.linalg as _spl
-from .localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from .localstimerrorgen import LocalStimErrorgenLabel as _LSE, canonicalize_errorgen_layer as _canonicalize_errorgen_layer
 from numpy import zeros, complex128
 from numpy.linalg import multi_dot
 from scipy.linalg import expm
@@ -32,6 +32,7 @@ import pygsti.tools.errgenproptools as _eprop
 import pygsti.tools.basistools as _bt
 import pygsti.tools.matrixtools as _mt
 import pygsti.tools.optools as _ot
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning as _pyGSTiDeprecationWarning
 from pygsti.models.model import OpModel as _OpModel
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel, ImplicitOpModel as _ImplicitOpModel
 from pygsti.modelmembers.operations import LindbladErrorgen as _LindbladErrorgen
@@ -91,8 +92,9 @@ class ErrorGeneratorPropagator:
                 assert state_space_labels is not None, msg
                 if isinstance(state_space_labels, int):
                     state_space_labels = list(range(state_space_labels))
-            # cast all of the error generator labels to LSE.
-            fixed_errorgen_layer = {_LSE.cast(lbl, sslbls=state_space_labels):val for lbl, val in fixed_errorgen_layer.items()}
+            # cast all of the error generator labels to LSE, in canonical basis element label order
+            # (a reordered A label has its rate negated; see `canonicalize_errorgen_layer`).
+            fixed_errorgen_layer = _canonicalize_errorgen_layer(fixed_errorgen_layer, sslbls=state_space_labels)
             
             # validate that all of the new LSE keys have the same length (i.e. same number of qubits).
             msg = 'Error generators do not all have the same length!'
@@ -292,8 +294,8 @@ class ErrorGeneratorPropagator:
             Circuit to construct a set of post gate error generators for.
 
         bch_order : int, optional (default 1)
-            Order of the BCH approximation to use. A maximum value of 4 is
-            currently supported.
+            Order of the BCH approximation to use. Up to third order is supported
+            in 'magnus' mode (up to fifth order in the deprecated 'pairwise' mode).
  
         include_spam : bool, optional (default True)
             If True then we include in the propagation the error generators associated
@@ -309,6 +311,11 @@ class ErrorGeneratorPropagator:
             the pairwise BCH of the given order 'pairwise'. 'magnus' mode supports up to 
             the third-order Magnus expansion, while 'pairwise' supports up to fifth-order
             in the BCH approximation.
+
+            .. deprecated::
+                'pairwise' mode is deprecated and will be removed in a future release; using
+                it emits a `pyGSTiDeprecationWarning`. Migrate to the Magnus expansion
+                implementation ('magnus').
         
         circuit_conversion_kwargs : dict, optional (default None)
             A set of optional kwargs which will be passed into the `convert_to_stim_tableau_layers`
@@ -317,17 +324,26 @@ class ErrorGeneratorPropagator:
             values.
         """
 
+        if mode == 'pairwise':
+            warnings.warn("The 'pairwise' mode of ErrorGeneratorPropagator.propagate_errorgens_bch (repeated pairwise "
+                          "application of the BCH approximation) is deprecated and will be removed in a future release "
+                          "of pyGSTi. Please migrate to the Magnus expansion implementation, mode='magnus' (the "
+                          "default), which supports bch_order values of 1, 2 and 3.",
+                          _pyGSTiDeprecationWarning, stacklevel=2)
+        elif mode != 'magnus':
+            raise ValueError(f"Unrecognized mode '{mode}'; expected 'magnus' or 'pairwise'.")
+
         propagated_errorgen_layers = self.propagate_errorgens(circuit, include_spam=include_spam, circuit_conversion_kwargs=circuit_conversion_kwargs)
         #if length one no need to do anything.
         if len(propagated_errorgen_layers)==1:
             return propagated_errorgen_layers[0]
         
         if mode == 'magnus':
-            assert bch_order<=3, 'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
+            assert bch_order<=3, f'The highest order Magnus expansion supported is currently third-order, requested {bch_order}.'
             combined_err_layer = _eprop.magnus_expansion(propagated_errorgen_layers, magnus_order=bch_order, truncation_threshold=truncation_threshold)
 
-        elif mode == 'pairwise':
-            assert bch_order<=5, 'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
+        else:  # 'pairwise' (deprecated, see above)
+            assert bch_order<=5, f'The highest order pairwise BCH expansion supported is currently fifth-order, requested {bch_order}.'
             #iterate through in reverse order (the propagated layers are
             #in circuit ordering and not matrix multiplication ordering at the moment)
             #and combine the terms pairwise
@@ -335,8 +351,6 @@ class ErrorGeneratorPropagator:
             for i in range(len(propagated_errorgen_layers)-2, -1, -1):
                 combined_err_layer = _eprop.bch_approximation(combined_err_layer, propagated_errorgen_layers[i],
                                                                 bch_order=bch_order, truncation_threshold=truncation_threshold)
-        else:
-            NotImplementedError(f'Unrecognized mode {mode}')
 
         return combined_err_layer
         
@@ -660,20 +674,27 @@ class ErrorGeneratorPropagator:
             for errgen_coeff_lbl, rate in layer_errorgen_coeff_dict.items(): #for an error in the accompanying error dictionary 
                 #only track this error generator if its rate is not exactly zero. #TODO: Add more flexible initial truncation logic.
                 if rate !=0 or fixed_rate is not None:
-                    #if isinstance(errgen_coeff_lbl, _LEEL):
                     initial_label = errgen_coeff_lbl
-                    #else:
-                    #    initial_label = None
                     #TODO: Can probably replace this function call with `padded_basis_element_labels` method of `GlobalElementaryErrorgenLabel`
                     paulis = _eprop.errgen_coeff_label_to_stim_pauli_strs(errgen_coeff_lbl, num_qubits)
                     pauli_strs = errgen_coeff_lbl.basis_element_labels #get the original python string reps from local labels
-                    if include_circuit_time:
-                        #TODO: Refactor the fixed rate stuff to reduce the number of if statement evaluations.
-                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j, 
-                                            initial_label=initial_label, pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
-                    else:
-                        errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, initial_label=initial_label, 
-                                            pauli_str_reps=pauli_strs)] = rate if fixed_rate is None else fixed_rate
+                    # The model's local labels keep the pair order of the gate they were embedded from,
+                    # which after padding to the full width need not be the canonical (string-sorted)
+                    # order every LocalStimErrorgenLabel must have. Reorder here, negating the rate for
+                    # A (A_{Q,P} = -A_{P,Q}; free for C); the label then records the canonical form as
+                    # its initial label (the lazy default) so that transform maps key on it too. A
+                    # `fixed_rate` is the rate *of the canonical label* and is not negated: the transform
+                    # maps (fixed_rate=1) must report only the propagation sign of the canonical label.
+                    if len(pauli_strs) == 2 and pauli_strs[1] < pauli_strs[0]:
+                        paulis = paulis[::-1]
+                        pauli_strs = pauli_strs[::-1]
+                        initial_label = None
+                        if errgen_coeff_lbl.errorgen_type == 'A':
+                            rate = -rate
+                    if fixed_rate is not None:
+                        rate = fixed_rate
+                    errorgen_layer[_LSE(errgen_coeff_lbl.errorgen_type, paulis, circuit_time=j if include_circuit_time else None,
+                                        initial_label=initial_label, pauli_str_reps=pauli_strs)] = rate
             errorgen_dicts_by_layer.append(errorgen_layer)
         return errorgen_dicts_by_layer
     

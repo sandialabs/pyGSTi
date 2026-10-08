@@ -258,17 +258,18 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     return {'html': plot_html, 'js': full_script}
 
 
-def init_notebook_mode_ex(connected=False):
+def init_notebook_mode_ex(enable_offline_mode=False):
     """
     Similar to `init_notebook_mode` in `plotly.offline`.
 
     The main difference is that this function loads the pyGSTi-customized plotly library
-    when `connected=False` (which contains fixes relevant to pyGSTi plots).
+    when `enable_offline_mode=True` (which contains fixes relevant to pyGSTi plots).
 
     Parameters
     ----------
-    connected : bool, optional
+    enable_offline_mode : bool, optional
         Whether an active internet connection should be assumed.
+        If True embed resources to allow use without active internet connection.
 
     Returns
     -------
@@ -276,7 +277,7 @@ def init_notebook_mode_ex(connected=False):
     """
     global __PLOTLY_OFFLINE_INITIALIZED
 
-    if connected:
+    if not enable_offline_mode:
         # Inject plotly.js into the output cell
         script_inject = (
             ''

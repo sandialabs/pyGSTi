@@ -15,5 +15,6 @@ include test/unit/extras/*/*.py
 include test/output/.placeholder
 include test/test_packages/*/*.py
 include test/test_packages/extras/*.py
+include test/test_packages/extras/*/*.py
 include test/test_packages/cmp_chk_files/*
 include test/test_packages/temp_test_files/.placeholder
