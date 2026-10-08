@@ -49,9 +49,15 @@ contributors working at Sandia.
 
 #### For non-Sandians
 
-If you're interested in making contributions please let us know by email at
-[pygsti@sandia.gov][email] so we can get you a Contributor License Agreement
-(CLA). This needs to be signed and through our system before you can contribute.
+No Contributor License Agreement (CLA) is required. Instead, include a
+statement in your pull request that your contributions are made under the
+terms of the [Apache License, Version 2.0][license], the license pyGSTi is
+distributed under. For example:
+
+> I agree that my contributions to this pull request are made under the
+> terms of the Apache License, Version 2.0.
+
+If you have questions, you can reach the authors at [pygsti@sandia.gov][email].
 
 #### For Sandians
 
@@ -61,6 +67,7 @@ If you're interested in making contributions please let us know by email at
   request an invite to the [repository][pygsti].
 
 [email]: mailto:pygsti@sandia.gov
+[license]: LICENSE
 [issues:bug]: https://github.com/sandialabs/pyGSTi/issues/new?labels=bug&template=bug_report.md
 [issues:feature]: https://github.com/sandialabs/pyGSTi/issues/new?labels=enhancement&template=feature_request.md
 [issues:new]: https://github.com/sandialabs/pyGSTi/issues/new
