@@ -377,6 +377,7 @@ General-purpose numerical and quantum-information utilities.
    pygsti.tools.fogitools
    pygsti.tools.gatetools
    pygsti.tools.graphs
+   pygsti.tools.graphs.sparsechol
    pygsti.tools.group
    pygsti.tools.hypothesis
    pygsti.tools.internalgates
