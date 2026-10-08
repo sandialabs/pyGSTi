@@ -60,6 +60,13 @@ distributed under. For example:
 
 If you have questions, you can reach the authors at [pygsti@sandia.gov][email].
 
+#### For Sandians
+
+* **Join the SandiaLabs organization**.
+
+* **Contact the authors** at [pygsti@sandia.gov][email] to
+  request an invite to the [repository][pygsti].
+
 ### Use of generative AI tools
 
 If your contribution was developed with the help of generative AI tools
@@ -71,13 +78,6 @@ If your contribution was developed with the help of generative AI tools
   the source code itself.
 * **Attest that you have thoroughly reviewed** all contributions written with
   generative AI tools.
-
-#### For Sandians
-
-* **Join the SandiaLabs organization**.
-
-* **Contact the authors** at [pygsti@sandia.gov][email] to
-  request an invite to the [repository][pygsti].
 
 [email]: mailto:pygsti@sandia.gov
 [license]: LICENSE
