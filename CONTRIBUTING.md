@@ -49,15 +49,28 @@ contributors working at Sandia.
 
 #### For non-Sandians
 
-No Contributor License Agreement (CLA) is required. Instead, include a
-statement in your pull request that your contributions are made under the
+A Contributor License Agreement (CLA) is no longer required (we can still
+send you a copy if you would like to sign one). Instead, include a sentence in
+your pull request message stating that your contributions are made under the
 terms of the [Apache License, Version 2.0][license], the license pyGSTi is
 distributed under. For example:
 
-> I agree that my contributions to this pull request are made under the
-> terms of the Apache License, Version 2.0.
+> These contributions are being made under the terms of the open-source
+> Apache 2.0 license.
 
 If you have questions, you can reach the authors at [pygsti@sandia.gov][email].
+
+### Use of generative AI tools
+
+If your contribution was developed with the help of generative AI tools
+(agentic or otherwise), please:
+
+* **Say so and name the model(s) used.** Annotating your commit messages with
+  this information is best practice. If your commits already exist, a note in
+  the pull request message is also fine. Please don't put these annotations in
+  the source code itself.
+* **Attest that you have thoroughly reviewed** all contributions written with
+  generative AI tools.
 
 #### For Sandians
 
