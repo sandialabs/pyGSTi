@@ -45,6 +45,8 @@ from .slicetools import *
 from .symplectic import *
 from .typeddict import TypedDict
 
+from .vbtools import *
+
 
 def __getattr__(name):
     # PEP 562 hook: serve deprecation shims for leakage routines relocated to
