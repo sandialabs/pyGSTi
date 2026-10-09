@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 
@@ -5,8 +7,9 @@ from pygsti.baseobjs import Label as L
 from pygsti.circuits import Circuit
 from pygsti.modelmembers.instruments import Instrument
 from pygsti.modelpacks import smq1Q_XYI as std
-from pygsti.models import prepare_lindblad_seed
+from pygsti.models import fit_instrument_parameters, prepare_lindblad_seed
 from pygsti.models.modelparaminterposer import LinearInterposer
+from pygsti.tools import basistools as bt
 from pygsti.tools import optools as ot
 from pygsti.tools import sdptools as sdps
 from ..util import BaseCase
@@ -197,3 +200,67 @@ class PrepareLindbladSeedScopeTester(BaseCase):
         model.collect_parameters([gx, gy])
         with self.assertRaisesRegex(ValueError, 'share model parameter'):
             prepare_lindblad_seed(model, BUDGET, seed=1)
+
+
+class FitInstrumentParametersTester(BaseCase):
+
+    def setUp(self):
+        self.model = _instrument_model()
+        self.label = L('Iz', 0)
+        basis = self.model.basis
+        # a weak measurement followed by a depolarizing kick, which the ideal-base chart can reach
+        D = np.eye(4)
+        D[1:, 1:] *= 0.98
+        E0 = np.diag([0.92, 0.08]).astype(complex)
+        sk = lambda m: bt.stdmx_to_vec(m, basis).ravel().real
+        self.weak = {'p0': D @ ot.rootconj_superop(sk(E0), basis),
+                     'p1': D @ ot.rootconj_superop(sk(np.eye(2) - E0), basis)}
+
+    def _fitted(self, vector):
+        fitted = self.model.copy()
+        fitted.from_vector(vector)
+        return fitted[self.label]
+
+    def test_reaches_reachable_members(self):
+        # the members of the same chart at random interior parameters, and the weak measurement
+        vector, _ = prepare_lindblad_seed(self.model, BUDGET, seed=11)
+        noisy = self.model.copy()
+        noisy.from_vector(vector)
+        for name, members in (('chart', noisy[self.label]), ('weak', self.weak)):
+            with self.subTest(members=name):
+                vector, fits = fit_instrument_parameters(self.model, {self.label: members}, tol=1e-9)
+                fit = fits[self.label]
+                self.assertTrue(fit.reached)
+                self.assertLessEqual(fit.residual, 1e-9)
+                self.assertGreater(fit.start_residual, 1e-2)
+                inst = self._fitted(vector)
+                for k, m in members.items():
+                    target = m.to_dense() if hasattr(m, 'to_dense') else m
+                    np.testing.assert_allclose(inst[k].to_dense(), target, atol=1e-9)
+
+    def test_other_parameters_and_model_are_unchanged(self):
+        before = self.model.to_vector().copy()
+        vector, _ = fit_instrument_parameters(self.model, {self.label: self.weak})
+        np.testing.assert_array_equal(self.model.to_vector(), before)
+        others = np.setdiff1d(np.arange(len(before)), self.model[self.label].gpindices_as_array())
+        np.testing.assert_array_equal(vector[others], before[others])
+
+    def test_fit_that_stops_early_warns(self):
+        with self.assertWarnsRegex(UserWarning, 'out of the instrument'):
+            _, fits = fit_instrument_parameters(self.model, {self.label: self.weak}, max_iter=1)
+        fit = fits[self.label]
+        self.assertFalse(fit.reached)
+        self.assertGreater(fit.residual, fit.tol)
+        self.assertIn('Maximum iterations', fit.message)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            _, fits = fit_instrument_parameters(self.model, {self.label: self.weak}, max_iter=1, warn=False)
+        self.assertFalse(fits[self.label].reached)
+
+    def test_rejects_mismatched_members(self):
+        with self.assertRaisesRegex(ValueError, 'no instrument'):
+            fit_instrument_parameters(self.model, {L('Ix', 0): self.weak})
+        with self.assertRaisesRegex(ValueError, 'outcomes'):
+            fit_instrument_parameters(self.model, {self.label: {'p0': self.weak['p0']}})
+        with self.assertRaisesRegex(ValueError, 'tol'):
+            fit_instrument_parameters(self.model, {self.label: self.weak}, tol=0)

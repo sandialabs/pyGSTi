@@ -43,9 +43,8 @@ def _build_target(with_instrument=True):
 def _build_truth(target):
     """A noisy version of the target whose instrument members are FULL RANK:
     slightly depolarizing gates, and a weak (interior-effect) measurement
-    followed by a depolarizing kick.  This is the regime where a target-seeded
-    Lindblad instrument fit fails (rank cap) but the projection-seeded refit
-    must reach TP-fit quality."""
+    followed by a depolarizing kick, far enough from the ideal instrument that
+    the refit's instrument parameters have real work to do."""
     truth = target.copy()
     basis = truth.basis
     D = np.eye(4)
@@ -142,14 +141,17 @@ class RefitGuardTester(BaseCase):
         with self.assertRaisesRegex(ValueError, 'interior_init'):
             refit_instruments_cptplnd(self.results, self.base_label, interior_init=0.01, verbosity=0)
 
+    def test_bad_instrument_fit_raises(self):
+        with self.assertRaisesRegex(ValueError, 'instrument_fit'):
+            refit_instruments_cptplnd(self.results, self.base_label, instrument_fit=1e-8, verbosity=0)
+
 
 @pytest.mark.slow
 class RefitRegressionTester(BaseCase):
-    """The whole bug as a test: data generated from a noisy full-rank
-    instrument model, TP fit, then the projection-seeded CPTPLND refit must
-    reach TP-fit quality with all members CP.  (A target-seeded CPTPLND fit
-    fails this by a large margin -- the frozen singular base caps the member
-    rank; see findings encoded in the diagnostics module.)"""
+    """The whole workflow as a test: data generated from a noisy full-rank
+    instrument model, TP fit, then the CPTPLND refit, whose instrument
+    parameters start at the projected TP members, must reach TP-fit quality
+    with all members CP."""
 
     OPT = {'maxiter': 150}
 
@@ -181,6 +183,8 @@ class RefitRegressionTester(BaseCase):
         # the seed was moved into the interior, so the fit skipped first-iteration finite differences
         self.assertEqual(est.meta['lindblad_seed_report'].diamond_budget, 1e-3)
         self.assertEqual(est.parameters['protocol'].optimizer.first_fditer, 0)
+        # the instrument parameters reproduced the projected TP members before that
+        self.assertTrue(est.meta['instrument_fit_report'][INST_LBL].reached)
         lnd_2dll = pygsti.tools.two_delta_logl(lnd_mdl, ds, circuits)
 
         # CP-constrained fit quality must be statistically comparable to TP's

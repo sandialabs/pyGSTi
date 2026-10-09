@@ -13,6 +13,7 @@ GST Protocol objects
 
 import collections as _collections
 import copy as _copy
+import inspect as _inspect
 import os as _os
 import pickle as _pickle
 import time as _time
@@ -3501,7 +3502,7 @@ def _add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str,
 def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=None,
                               parameterization='CPTPLND', norm='frobenius',
                               projection_method='auto', gaugeopt_first=True,
-                              patch='auto', interior_init='default',
+                              patch='auto', instrument_fit='default', interior_init='default',
                               gaugeopt='param-preserving',
                               objfn_builders=None, optimizer=None,
                               badfit_options=None, verbosity=2,
@@ -3511,14 +3512,15 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
     parameterization, warm-starting the instruments from the CPTP projection of
     the fitted ones, and add the result to `results` as a new estimate.
 
-    The instruments' static bases are taken from the CPTP projection of the
-    fitted ones: each projected member's effect, followed by the unitary that
-    :func:`~pygsti.modelmembers.instruments.infer_unitary_factors` chooses for
-    it.  The Lindblad parameters then fit the remaining noise.  The projected
-    effects bound the fit: every reachable effect's spectrum stays inside the
-    corresponding base effect's spectral interval (see the extent check in
-    :mod:`pygsti.modelmembers.instruments.diagnostics`), so a nearly projective
-    true effect can lie out of reach of a slightly noisy TP fit.
+    Each instrument's static base is the target's: its ideal effects, each
+    followed by its post-measurement unitary.  The CPTP projection of the
+    fitted instrument goes into the instrument's Lindblad parameters instead
+    (:func:`pygsti.models.fit_instrument_parameters`).  Freezing the projected
+    effects as the base would bound the fit, because every reachable effect's
+    spectrum stays inside the corresponding base effect's spectral interval
+    (see the extent check in :mod:`pygsti.modelmembers.instruments.diagnostics`);
+    a nearly projective true effect could then lie out of reach of a slightly
+    noisy TP fit.
 
     The steps, each with its verified rationale:
 
@@ -3529,18 +3531,25 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
        measurably halves the projection cost.
     3. Project each instrument's dense members onto the CPTP-instrument set
        (`norm`, `projection_method` -- see
-       :func:`~pygsti.modelmembers.instruments.seedrepair.project_instrument_to_cptp`),
-       then build each instrument on its effects and post-measurement
-       unitaries, displacing span-deficient effects (`patch='auto'`).
+       :func:`~pygsti.modelmembers.instruments.seedrepair.project_instrument_to_cptp`).
     4. Build the seed model: the *target* converted to `parameterization`
        (gates and SPAM exactly as :class:`StandardGST` seeds them -- converting
        fitted gates through the matrix log has known branch-cut failures), with
-       the instruments rebuilt at the projection.  The grafted seed is
-       diagnosed and any residual flags are warned about.
+       span-deficient instrument effects displaced (`patch`).  The seed is
+       diagnosed and any residual flags are warned about.  Then fit the
+       instruments' parameters to the projected members (`instrument_fit`).
+       At small noise the projected members are nearly reachable, so the fit
+       stops when its residual is close to zero: below step 5's diamond-norm
+       budget, since step 5 then moves the instruments about that far anyway.
+       Members on the CP boundary, where the projection puts them, are
+       generally out of exact reach, so a fit that stalls short of that is
+       logged rather than warned about; the GST fit starts from its result
+       either way.
     5. Move the seed's CP-constrained Lindblad blocks into their interiors
        (`interior_init`, see :func:`pygsti.models.prepare_lindblad_seed`).  At
        zero noise their dissipative derivatives vanish and projective effects
-       are non-differentiable; from the interior seed the fit needs no
+       are non-differentiable, and projected members on the CP boundary fit
+       to the same zero derivatives; from the interior seed the fit needs no
        first-iteration finite differences.
     6. Run :class:`GateSetTomography` from that seed on the *same*
        ``ProtocolData`` and merge the new estimate into `results`.
@@ -3577,10 +3586,20 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
         projecting (step 2).
 
     patch : {'auto', 'all', None}, optional
-        Run :func:`~pygsti.modelmembers.instruments.seedrepair.patch_instrument_seed`
-        on the projected members (``None`` skips its effect displacement and
-        builds the instrument from
-        :func:`~pygsti.modelmembers.instruments.infer_unitary_factors` directly).
+        Rebuild each instrument with
+        :func:`~pygsti.modelmembers.instruments.seedrepair.patch_instrument_seed`
+        on the target's members, which displaces the effects when their span is
+        deficient (``'auto'``) or always (``'all'``).  ``None`` keeps the
+        instruments that converting the target builds.
+
+    instrument_fit : 'default', dict, or None, optional
+        Keyword arguments for :func:`pygsti.models.fit_instrument_parameters`,
+        applied to the seed (step 4); ``'default'`` means its defaults (``{}``),
+        except that ``warn`` defaults to False and ``tol`` to the diamond-norm
+        budget of step 5 when `interior_init` is not ``None``.  The fits go in
+        the new estimate's
+        ``meta['instrument_fit_report']``.  ``None`` skips the fit, so the
+        instruments start from the target.
 
     interior_init : 'default', dict, or None, optional
         Keyword arguments for :func:`pygsti.models.prepare_lindblad_seed`, applied
@@ -3613,22 +3632,31 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
     str
         The new estimate's label (already added to `results`).
     """
-    from pygsti.modelmembers.instruments import Instrument as _Instrument
     from pygsti.modelmembers.instruments import (
         diagnose_model_instruments as _diagnose_model_instruments,
-        infer_unitary_factors as _infer_unitary_factors,
         project_instrument_to_cptp as _project_to_cptp,
         patch_instrument_seed as _patch_seed)
     from pygsti.modelmembers.instruments.diagnostics import \
         _static_parts_of_member, _emit_warning as _emit_seed_warning, \
         InstrumentSeedReport as _InstrumentSeedReport
-    from pygsti.models.lindbladinit import prepare_lindblad_seed as _prepare_lindblad_seed
+    from pygsti.models.lindbladinit import prepare_lindblad_seed as _prepare_lindblad_seed, \
+        fit_instrument_parameters as _fit_instrument_parameters
     from pygsti.modelmembers.operations.lindbladerrorgen import \
         LindbladParameterization as _LindbladParameterization
     from pygsti.models.gaugegroup import TPGaugeGroup as _TPGaugeGroup
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
+    if instrument_fit == 'default':
+        instrument_fit = {}
+    if instrument_fit is not None and not isinstance(instrument_fit, dict):
+        raise ValueError("instrument_fit must be 'default', a dict of fit_instrument_parameters "
+                         f"keyword arguments, or None, not {instrument_fit!r}.")
+    if interior_init == 'default':
+        interior_init = {}
+    if interior_init is not None and not isinstance(interior_init, dict):
+        raise ValueError("interior_init must be 'default', a dict of prepare_lindblad_seed "
+                         f"keyword arguments, or None, not {interior_init!r}.")
     if base_estimate_label not in results.estimates:
         raise ValueError(f"No estimate {base_estimate_label!r} in results; available: "
                          f"{list(results.estimates.keys())}")
@@ -3671,42 +3699,48 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
         src_mdl = _alg.gaugeopt_to_target(
             src_mdl, target, gauge_group=_TPGaugeGroup(src_mdl.state_space, src_mdl.basis))
 
-    # 3-4. seed model: target converted to the Lindblad parameterization, with
-    #      instruments rebuilt at the CPTP projection of the fitted ones.
+    # 3-4. seed model: target converted to the Lindblad parameterization, so
+    #      every instrument's static base is ideal, with the CPTP projection of
+    #      the fitted instruments put into the instruments' parameters.
     seed = target.copy()
     seed.set_all_parameterizations(parameterization)
     basis = seed.basis
     povm_errormap = _LindbladParameterization.minimal_cp_paramtype(parameterization)
+    projected = {}
     for lbl in list(seed.instruments.keys()):
         printer.log(f"refit_instruments_cptplnd: projecting instrument {lbl!r} "
                     f"onto the CPTP-instrument set ({norm})")
-        projected = _project_to_cptp(src_mdl.instruments[lbl], basis, norm=norm,
-                                     method=projection_method)
+        projected[lbl] = _project_to_cptp(src_mdl.instruments[lbl], basis, norm=norm,
+                                          method=projection_method)
         if patch is not None:
-            seed_inst = _patch_seed(projected, basis, mode=patch,
+            seed[lbl] = _patch_seed(target.instruments[lbl], basis, mode=patch,
                                     gate_parameterization=parameterization,
                                     povm_errormap=povm_errormap)
-        else:
-            pairs, _ = _infer_unitary_factors(projected, basis)
-            seed_inst = _Instrument.from_effects(
-                pairs, basis, gate_parameterization=parameterization,
-                povm_errormap=povm_errormap)
-        seed[lbl] = seed_inst
     reports = _diagnose_model_instruments(seed, warn=False)
     for report in reports.values():
         # step 5 addresses CP-BOUNDARY, which concerns the starting point rather than the base
         flags = [f for f in report.flags if interior_init is None or f.name != 'CP-BOUNDARY']
         if flags:
             _emit_seed_warning(_InstrumentSeedReport(report.label, flags, report.details, report.deep))
+    fit_report = None
+    if instrument_fit is not None:
+        fit_kwargs = dict(instrument_fit)
+        fit_kwargs.setdefault('warn', False)
+        if interior_init is not None and 'tol' not in fit_kwargs:
+            fit_kwargs['tol'] = interior_init.get(
+                'diamond_budget', _inspect.signature(_prepare_lindblad_seed).parameters['diamond_budget'].default)
+        printer.log("refit_instruments_cptplnd: fitting the instruments' parameters to the projected members")
+        fit_vector, fit_report = _fit_instrument_parameters(seed, projected, **fit_kwargs)
+        seed.from_vector(fit_vector)
+        for lbl, fit in fit_report.items():
+            printer.log(f"refit_instruments_cptplnd: instrument {lbl!r} fitted to Frobenius residual "
+                        f"{fit.residual:.3g} (from {fit.start_residual:.3g}; tol {fit.tol:.3g}"
+                        + ("" if fit.reached else f", not reached: {fit.message}") + ")",
+                        2 if fit.reached else 1)
 
     # 5. move the seed's Lindblad blocks into their interiors.
-    if interior_init == 'default':
-        interior_init = {}
     seed_report = None
     if interior_init is not None:
-        if not isinstance(interior_init, dict):
-            raise ValueError("interior_init must be 'default', a dict of prepare_lindblad_seed "
-                             f"keyword arguments, or None, not {interior_init!r}.")
         printer.log("refit_instruments_cptplnd: moving the seed's Lindblad blocks into their interiors")
         seed_vector, seed_report = _prepare_lindblad_seed(seed, **interior_init)
         seed.from_vector(seed_vector)
@@ -3746,6 +3780,8 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
     results.add_estimates(new_results, silent_steal=True)
     if seed_report is not None:
         results.estimates[new_estimate_label].meta['lindblad_seed_report'] = seed_report
+    if fit_report is not None:
+        results.estimates[new_estimate_label].meta['instrument_fit_report'] = fit_report
 
     # 7. parameterization-preserving gauge optimization of the new estimate.
     if gaugeopt == 'param-preserving' or isinstance(gaugeopt, GSTGaugeOptSuite):

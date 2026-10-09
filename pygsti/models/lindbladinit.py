@@ -1,5 +1,5 @@
 """
-Interior initialization of the Lindblad error generators in a model.
+Initialization of the Lindblad error generators in a model.
 
 At zero noise, CP-constrained Lindblad coefficient blocks sit on the boundary of their
 parameterizations: squared rates and Cholesky factors are zero, so the dissipative coefficients
@@ -8,6 +8,10 @@ by :meth:`~pygsti.modelmembers.instruments.Instrument.from_effects` also sit on 
 boundary, where E½ has no derivative. :func:`prepare_lindblad_seed` moves every such block a
 bounded distance into its interior, changing parameter values only: the static parts of the
 model, and the ability to return to zero noise, are unchanged.
+
+:func:`fit_instrument_parameters` instead sets a model's instrument parameters so that the
+instruments reproduce given members, such as those of a TP fit, keeping the instruments' static
+bases ideal.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -20,6 +24,7 @@ model, and the ability to return to zero noise, are unchanged.
 from __future__ import annotations
 
 import dataclasses as _dataclasses
+import warnings as _warnings
 
 import numpy as _np
 
@@ -30,6 +35,9 @@ from pygsti.tools import lindbladtools as _lt
 
 #: Dissipative block parameterizations whose coefficients have zero derivative at zero noise.
 _DEGENERATE_PARAM_MODES = ('cholesky', 'depol')
+
+#: The relative step size at which :func:`fit_instrument_parameters` considers its fit stalled.
+_STALLED_STEP = 1e-10
 
 
 @_dataclasses.dataclass(frozen=True)
@@ -195,6 +203,154 @@ def prepare_lindblad_seed(model, diamond_budget: float = 1e-3, *, hs_split: tupl
     report = LindbladSeedReport(float(diamond_budget), hs_split, float(floor_fraction), seed,
                                 tuple(perturbed_report), tuple(skipped), effect_min_eigenvalues)
     return vector, report
+
+
+@_dataclasses.dataclass(frozen=True)
+class InstrumentParameterFit:
+    """How :func:`fit_instrument_parameters` fitted one instrument."""
+
+    residual: float
+    """The Frobenius norm of the stacked member differences at the returned parameters."""
+
+    start_residual: float
+    """The same, at the starting point."""
+
+    tol: float
+    reached: bool
+    """Whether `residual <= tol`."""
+
+    message: str
+    """Why the optimizer stopped."""
+
+
+def fit_instrument_parameters(model, members, *, tol: float = 1e-8, max_iter: int = 200,
+                              start_budget: float | None = 1e-3, warn: bool = True
+                              ) -> tuple[_np.ndarray, dict[object, InstrumentParameterFit]]:
+    """
+    Parameters with which a model's instruments reproduce given member superoperators.
+
+    For each instrument label in `members`, the instrument's own parameters are fitted to minimize
+    sum_k ‖I_k(θ) − T_k‖_F², where I_k(θ) is the member for outcome k as a superoperator in the
+    model's basis and T_k is the given one, by Levenberg–Marquardt with analytic member
+    derivatives. The model's other parameters keep their values.
+
+    This puts a fitted instrument into the Lindblad parameters of a chart whose static base is
+    ideal, such as an instrument that `set_all_parameterizations('CPTPLND')` converts from an ideal
+    target, instead of freezing the fitted members as the base, whose spectral intervals would bound
+    every reachable effect. At small noise each T_k is expected to be nearly reachable, so a fit stops
+    when its residual is at most `tol`. One that stops otherwise, after `max_iter` iterations or when
+    its steps stall, warns with the residual it reached (if `warn`).
+
+    Members on the boundary of the CP set, as a projection onto CPTP instruments produces, are
+    generally out of exact reach: in one-qubit tests, fits to such members stalled at the same
+    residual from every start, a residual that grew in proportion to the noise. Choose `tol`
+    accordingly.
+
+    A fit cannot start at zero noise, where dissipative coefficients have zero derivative and
+    projective effects have none at all. Unless `start_budget` is None, it starts from the model's
+    parameters plus the uniform stochastic rates that
+    `prepare_lindblad_seed(model, start_budget, hs_split=(0, 1), floor_fraction=1)` adds, which are
+    deterministic. Members on the boundary of the CP set have their Cholesky coordinates fitted back
+    toward zero, so apply :func:`prepare_lindblad_seed` to the result before starting an
+    exact-Jacobian fit from it.
+
+    Parameters
+    ----------
+    model : OpModel
+        The model whose instruments to fit. Not modified.
+
+    members : dict
+        Maps instrument labels to their target members: an Instrument, a TPInstrument, or a dict from
+        each of the instrument's outcome labels to a superoperator in the model's basis.
+
+    tol : float, optional
+        The Frobenius-norm residual at which a fit stops.
+
+    max_iter : int, optional
+        The maximum number of LM iterations per instrument.
+
+    start_budget : float or None, optional
+        The diamond-norm bound, per CP-constrained error generator, on the rates added to make the
+        starting point differentiable. None starts from the model's parameters as they are.
+
+    warn : bool, optional
+        Whether to warn about each fit that stops with its residual above `tol`.
+
+    Returns
+    -------
+    vector : numpy.ndarray
+        The model's parameter vector with each fitted instrument's parameters replaced; apply it
+        with `model.from_vector(vector)`.
+
+    fits : dict
+        An :class:`InstrumentParameterFit` for each instrument label in `members`.
+    """
+    # deferred: pygsti.optimize imports pygsti.objectivefns, which imports this package
+    from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+    from pygsti.modelmembers.instruments.unitaryfactors import _as_dense_members
+    from pygsti.optimize.arraysinterface import UndistributedArraysInterface as _UndistributedArraysInterface
+    from pygsti.optimize.simplerlm import simplish_leastsq as _simplish_leastsq
+
+    if not (_np.isfinite(tol) and tol > 0):
+        raise ValueError("`tol` must be positive and finite, not %s." % tol)
+    if getattr(model, 'param_interposer', None) is not None:
+        raise NotImplementedError("fit_instrument_parameters does not support models with a parameter interposer.")
+
+    work = model.copy()
+    work._clean_paramvec()  # so that every member's gpindices index the model's parameter vector
+    vector = work.to_vector().copy()
+    if start_budget is not None:
+        start, _ = prepare_lindblad_seed(work, start_budget, hs_split=(0.0, 1.0), floor_fraction=1.0, seed=0)
+        work.from_vector(start)
+
+    fits = {}
+    for lbl, given in members.items():
+        if lbl not in work.instruments:
+            raise ValueError("The model has no instrument %s." % (lbl,))
+        inst = work.instruments[lbl]
+        targets = _as_dense_members(given)
+        outcomes = list(inst.keys())
+        if set(targets) != set(outcomes):
+            raise ValueError("The members given for instrument %s have outcomes %s, but the instrument has %s."
+                             % (lbl, list(targets), outcomes))
+        target = _np.concatenate([targets[k].ravel() for k in outcomes])
+        size = targets[outcomes[0]].size
+        position = {g: i for i, g in enumerate(inst.gpindices_as_array())}
+        columns = {k: [position[g] for g in inst[k].gpindices_as_array()] for k in outcomes}
+
+        def residual(theta):
+            inst.from_vector(theta)
+            return _np.concatenate([inst[k].to_dense().ravel() for k in outcomes]) - target
+
+        def jacobian(theta):
+            inst.from_vector(theta)
+            jac = _np.zeros((target.size, theta.size))
+            for i, k in enumerate(outcomes):
+                jac[i * size:(i + 1) * size, columns[k]] = inst[k].deriv_wrt_params()
+            return jac
+
+        # The residual is the convergence test. The step test only ends a fit whose steps have stalled,
+        # which otherwise grows the damping until it overflows.
+        theta0 = inst.to_vector().copy()
+        with _warnings.catch_warnings():
+            # Members with boundary effects pull the fitted effects toward the boundary, where
+            # RootConjOperator warns that it falls back to finite differences, which suffice here.
+            _warnings.filterwarnings('ignore', message="RootConjOperator's effect has eigenvalues")
+            theta, _, message, _, _, _, _ = _simplish_leastsq(
+                residual, jacobian, theta0, f_norm2_tol=tol**2, jac_norm_tol=0.0, rel_ftol=0.0,
+                rel_xtol=_STALLED_STEP, max_iter=max_iter,
+                arrays_interface=_UndistributedArraysInterface(target.size, theta0.size),
+                verbosity=_VerbosityPrinter(0, warnings=False))
+            res = float(_np.linalg.norm(residual(theta)))
+            fit = InstrumentParameterFit(res, float(_np.linalg.norm(residual(theta0))), float(tol), res <= tol,
+                                         message)
+        if warn and not fit.reached:
+            _warnings.warn("The parameters of instrument %s reproduce its given members only to Frobenius residual "
+                           "%.3g, above tol = %.3g (%s). The members may be out of the instrument's reach, as "
+                           "members on the CP boundary generally are." % (lbl, fit.residual, tol, message))
+        vector[inst.gpindices_as_array()] = theta
+        fits[lbl] = fit
+    return vector, fits
 
 
 def _collect_members(model):
