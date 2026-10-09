@@ -27,6 +27,22 @@ def _luders_instrument(effect_mats, basis, **kwargs):
     return Instrument.from_effects(members, basis, **kwargs)
 
 
+def _hand_built_instrument(effect_superkets, gate_superops, basis):
+    """A chart frozen around non-unitary static gates, which the constructors no longer build."""
+    from pygsti.modelmembers.instruments._construction import _parameterized_instrument
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')  # the singular-base construction warning
+        return Instrument(_parameterized_instrument(basis, effect_superkets, gate_superops))
+
+
+def _dephased_projective_instrument(basis):
+    """Ideal Z measurement frozen around the complete-dephasing gate, as pyGSTi 0.10 built it."""
+    effects = {f'p{k}': _sk(np.diag([1.0 - k, float(k)]), basis) for k in range(2)}
+    dephasing = 0.5 * (bt.change_basis(np.eye(4), 'std', basis)
+                       + bt.change_basis(np.kron(PAULI['Z'], PAULI['Z']), 'std', basis)).real
+    return _hand_built_instrument(effects, {k: dephasing for k in effects}, basis)
+
+
 def _projective_member_superops(basis):
     """Ideal Z-measurement members P_k rho P_k as dense superops."""
     members = {}
@@ -156,9 +172,9 @@ class StaticBaseTester(BaseCase):
         members = _projective_member_superops(self.pp)
         basis, effects, gates, info = instrument_static_base(members, self.pp)
         self.assertFalse(info['exact'])
-        # the canonical decomposition of an ideal projective member is rank-2
+        # an ideal projective member is exactly its effect followed by the identity
         for G in gates.values():
-            self.assertEqual(np.linalg.matrix_rank(G, tol=1e-9), 2)
+            self.assertArraysAlmostEqual(G, np.eye(4))
 
     def test_predicted_base_from_tpinstrument(self):
         members = _projective_member_superops(self.pp)
@@ -180,9 +196,15 @@ class RankCheckTester(BaseCase):
     def setUp(self):
         self.pp = Basis.cast('pp', 4)
 
-    def test_projective_base_is_rank_capped(self):
-        inst = Instrument.from_cptr_superops(_projective_member_superops(self.pp), self.pp)
-        ranks = static_base_ranks(inst, self.pp)
+    def test_projective_members_get_unitary_bases(self):
+        for inst in (Instrument.from_cptr_superops(_projective_member_superops(self.pp), self.pp),
+                     _projective_member_superops(self.pp)):  # built, and predicted
+            for row in static_base_ranks(inst, self.pp).values():
+                self.assertEqual(row['rank'], 4)
+                self.assertTrue(row['frozen'])
+
+    def test_dephasing_base_is_rank_capped(self):
+        ranks = static_base_ranks(_dephased_projective_instrument(self.pp), self.pp)
         for row in ranks.values():
             self.assertEqual(row['rank'], 2)
             self.assertEqual(row['full'], 4)
@@ -205,8 +227,12 @@ class DiagnoseVerdictTester(BaseCase):
         kwargs.setdefault('warn', False)
         return diagnose_instrument(*args, **kwargs)
 
-    def test_ideal_projective_flags_rank_cap_and_boundary(self):
+    def test_ideal_projective_flags_only_the_boundary(self):
         rep = self._diagnose(_projective_member_superops(self.pp), self.pp)
+        self.assertEqual([f.name for f in rep.flags], ['CP-BOUNDARY'])
+
+    def test_dephasing_base_flags_rank_cap_and_boundary(self):
+        rep = self._diagnose(_dephased_projective_instrument(self.pp), self.pp)
         self.assertIn('RANK-CAP(2/4)', rep.verdict)
         self.assertIn('CP-BOUNDARY', rep.verdict)
         self.assertIn('BLIND', rep.verdict)
@@ -255,22 +281,21 @@ class DiagnoseVerdictTester(BaseCase):
         rep = self._diagnose(inst, self.pp, gate_parameterization='GLND')
         self.assertTrue(rep.ok, rep.verdict)
 
-    def test_measure_and_reset_flags_rank_cap_informationally(self):
-        # Legitimately rank-1 members: the flag is CORRECT and informational.
+    def test_rank_one_base_flags_rank_cap(self):
+        # A hand-built chart frozen around a reset channel: every member is capped at rank 1.
         # Effects must remain free (the cap is in the member direction).
         basis = self.pp
         E0 = np.diag([0.85, 0.15]).astype(complex)
         effects = {'p0': _sk(E0, basis), 'p1': _sk(np.eye(2) - E0, basis)}
         G = np.outer(_sk(np.array([[1, 0], [0, 0]], complex), basis),
                      _sk(np.eye(2), basis)).real
-        members = {k: (effects[k], G) for k in effects}
-        inst = Instrument.from_effects(members, basis)
+        inst = _hand_built_instrument(effects, {k: G for k in effects}, basis)
         rep = self._diagnose(inst, basis)
         self.assertIn('RANK-CAP(1/4)', rep.verdict)
         self.assertEqual(rep.details['effect_rank'], rep.details['effect_target'])
 
     def test_shallow_only_runs_structural_checks(self):
-        rep = self._diagnose(_projective_member_superops(self.pp), self.pp, deep=False)
+        rep = self._diagnose(_dephased_projective_instrument(self.pp), self.pp, deep=False)
         self.assertFalse(rep.deep)
         self.assertIn('RANK-CAP', rep.verdict)
         self.assertNotIn('BLIND', rep.verdict)
@@ -282,10 +307,10 @@ class DiagnoseVerdictTester(BaseCase):
             self._diagnose(inst, self.pp, gate_parameterization='full TP')
 
     def test_warning_emission(self):
-        members = _projective_member_superops(self.pp)
+        capped = _dephased_projective_instrument(self.pp)
         with warnings.catch_warnings(record=True) as ws:
             warnings.simplefilter('always')
-            diagnose_instrument(members, self.pp, deep=False, warn=True)
+            diagnose_instrument(capped, self.pp, deep=False, warn=True)
         flagged = [w for w in ws if 'RANK-CAP' in str(w.message)]
         self.assertEqual(len(flagged), 1)
         self.assertIn('repair', str(flagged[0].message))
@@ -312,8 +337,7 @@ class ModelLevelTester(BaseCase):
         return mdl
 
     def test_model_reports_match_instrument_reports(self):
-        inst = Instrument.from_cptr_superops(_projective_member_superops(self.pp), self.pp)
-        mdl = self._host(inst)
+        mdl = self._host(_dephased_projective_instrument(self.pp))
         reports = diagnose_model_instruments(mdl, warn=False)
         self.assertEqual(list(reports.keys()), [('Itest', 0)])
         rep = reports[('Itest', 0)]

@@ -3511,13 +3511,14 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
     parameterization, warm-starting the instruments from the CPTP projection of
     the fitted ones, and add the result to `results` as a new estimate.
 
-    This implements the verified seeding recipe for Lindblad-mode instrument
-    fits.  Starting such a fit from the *target* instruments fails whenever the
-    target is (near-)projective: the conversion freezes a singular static base
-    gate, hard-capping every reachable member's rank (see
-    :mod:`pygsti.modelmembers.instruments.diagnostics`).  Seeding the
-    instruments at the CPTP projection of a TP fit's instruments instead gives
-    the chart the correct base structure, and the refit recovers the rest.
+    The instruments' static bases are taken from the CPTP projection of the
+    fitted ones: each projected member's effect, followed by the unitary that
+    :func:`~pygsti.modelmembers.instruments.infer_unitary_factors` chooses for
+    it.  The Lindblad parameters then fit the remaining noise.  The projected
+    effects bound the fit: every reachable effect's spectrum stays inside the
+    corresponding base effect's spectral interval (see the extent check in
+    :mod:`pygsti.modelmembers.instruments.diagnostics`), so a nearly projective
+    true effect can lie out of reach of a slightly noisy TP fit.
 
     The steps, each with its verified rationale:
 
@@ -3529,8 +3530,8 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
     3. Project each instrument's dense members onto the CPTP-instrument set
        (`norm`, `projection_method` -- see
        :func:`~pygsti.modelmembers.instruments.seedrepair.project_instrument_to_cptp`),
-       then optionally run the standard seed patchers on the projection
-       (`patch='auto'`).
+       then build each instrument on its effects and post-measurement
+       unitaries, displacing span-deficient effects (`patch='auto'`).
     4. Build the seed model: the *target* converted to `parameterization`
        (gates and SPAM exactly as :class:`StandardGST` seeds them -- converting
        fitted gates through the matrix log has known branch-cut failures), with
@@ -3577,8 +3578,9 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
 
     patch : {'auto', 'all', None}, optional
         Run :func:`~pygsti.modelmembers.instruments.seedrepair.patch_instrument_seed`
-        on the projected members (``None`` skips patching and uses
-        :meth:`Instrument.from_cptr_superops` directly).
+        on the projected members (``None`` skips its effect displacement and
+        builds the instrument from
+        :func:`~pygsti.modelmembers.instruments.infer_unitary_factors` directly).
 
     interior_init : 'default', dict, or None, optional
         Keyword arguments for :func:`pygsti.models.prepare_lindblad_seed`, applied
@@ -3614,6 +3616,7 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
     from pygsti.modelmembers.instruments import Instrument as _Instrument
     from pygsti.modelmembers.instruments import (
         diagnose_model_instruments as _diagnose_model_instruments,
+        infer_unitary_factors as _infer_unitary_factors,
         project_instrument_to_cptp as _project_to_cptp,
         patch_instrument_seed as _patch_seed)
     from pygsti.modelmembers.instruments.diagnostics import \
@@ -3684,8 +3687,9 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
                                     gate_parameterization=parameterization,
                                     povm_errormap=povm_errormap)
         else:
-            seed_inst = _Instrument.from_cptr_superops(
-                projected, basis, gate_parameterization=parameterization,
+            pairs, _ = _infer_unitary_factors(projected, basis)
+            seed_inst = _Instrument.from_effects(
+                pairs, basis, gate_parameterization=parameterization,
                 povm_errormap=povm_errormap)
         seed[lbl] = seed_inst
     reports = _diagnose_model_instruments(seed, warn=False)

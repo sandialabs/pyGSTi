@@ -362,7 +362,7 @@ class InstrumentTestCase(BaseTestCase):
         # construction (Instrument.from_cptr_superops).  This exercises serialization
         # of the nested member structure
         #   ComposedOp([RootConjOperator(ComposedPOVM effect),
-        #               ComposedOp([StaticArbitraryOp, ExpErrorgenOp])])
+        #               ComposedOp([StaticUnitaryOp, ExpErrorgenOp])])
         # including the shared-parameter (POVM) layout that gives the later members
         # non-contiguous relative submember parameter indices.
         from pygsti.modelmembers.operations import ComposedOp, RootConjOperator

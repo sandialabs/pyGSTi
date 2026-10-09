@@ -14,7 +14,9 @@ Three O(1), data-free structural checks decide this in advance:
 
 * **rank** (:func:`static_base_ranks`): a static base gate ``G_static,k`` with
   superop rank ``r < d**2`` caps every reachable member at rank ``r``, because
-  the parameterized factor ``exp(L)`` is invertible.
+  the parameterized factor ``exp(L)`` is invertible.  The :class:`Instrument`
+  constructors freeze unitary gates, which are never rank deficient, so this
+  only fires on charts assembled by hand around a non-unitary channel.
 
 * **span** (:func:`base_effect_span`): all ``n`` effects are images of ONE
   shared error map's unital dual, ``E_k = M^dag(E_base,k)``, and every unital
@@ -45,10 +47,8 @@ decision self-reports as ambiguous when the singular-value gap is small
 (observed at d = 4); the structural checks above stay decisive there.
 
 Diagnostics **warn with a named repair and never raise**: a flag is not always
-a bug.  A measure-and-reset instrument, for example, legitimately reports a
-rank cap -- its members really are rank-1 superoperators, and if the user
-believes that structure the flag is informational.  Repairs live in
-:mod:`pygsti.modelmembers.instruments.seedrepair`.
+a bug, since the flagged structure may be what the user intends.  Repairs live
+in :mod:`pygsti.modelmembers.instruments.seedrepair`.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -72,9 +72,11 @@ from pygsti.modelmembers import povms as _pv
 from pygsti.modelmembers.instruments.instrument import Instrument as _Instrument
 from pygsti.modelmembers.instruments.tpinstrument import TPInstrument as _TPInstrument
 from pygsti.modelmembers.instruments._construction import (
-    _decompose_cptr, _parameterized_instrument, _is_lindblad_type
+    _parameterized_instrument, _is_lindblad_type
 )
+from pygsti.modelmembers.instruments.unitaryfactors import _unitary_factor
 from pygsti.tools import basistools as _bt
+from pygsti.tools import optools as _ot
 
 #: Relative singular-value cutoff for Jacobian ranks.  Sits above pyGSTi's
 #: analytic-derivative noise floor (~1e-8 relative) and far below the smallest
@@ -192,11 +194,12 @@ def _static_parts_of_member(member):
     else:
         E = _np.asarray(effect.to_dense()).ravel()
 
+    static_types = (_op.StaticArbitraryOp, _op.StaticUnitaryOp)
     if isinstance(gate, _op.ComposedOp) and len(gate.factorops) >= 1 \
-       and isinstance(gate.factorops[0], _op.StaticArbitraryOp):
-        return E, _np.asarray(gate.factorops[0].to_dense()), True
-    if isinstance(gate, _op.StaticArbitraryOp):
-        return E, _np.asarray(gate.to_dense()), True
+       and isinstance(gate.factorops[0], static_types):
+        return E, _np.asarray(gate.factorops[0].to_dense('HilbertSchmidt')), True
+    if isinstance(gate, static_types):
+        return E, _np.asarray(gate.to_dense('HilbertSchmidt')), True
     if isinstance(gate, _op.FullTPOp):
         return E, _np.asarray(gate.to_dense()), False
     return None
@@ -211,10 +214,11 @@ def instrument_static_base(instrument, basis):
     ``ComposedOp([RootConjOperator(E_k), gate])`` structure the base is read
     off exactly.  For anything else -- a plain dense :class:`Instrument`, a
     :class:`TPInstrument`, or a ``{label: superop}`` dict -- the base is
-    *predicted* by running the same decomposition
-    (:func:`~pygsti.modelmembers.instruments._construction._decompose_cptr`)
-    that :meth:`Instrument.from_cptr_superops` would use, i.e. the base that a
-    conversion to a Lindblad parameterization would freeze.
+    *predicted*: each member's effect, and the superoperator of the unitary
+    that :func:`~pygsti.modelmembers.instruments.unitaryfactors.infer_unitary_factors`
+    chooses for it, i.e. the base that
+    :func:`~pygsti.modelmembers.instruments.seedrepair.patch_instrument_seed`
+    builds before any effect displacement.
 
     Parameters
     ----------
@@ -260,8 +264,9 @@ def instrument_static_base(instrument, basis):
     effects, gates, frozen = {}, {}, {}
     for lbl, I_k in dense.items():
         try:
-            E_k, G_k = _decompose_cptr(I_k, basis)
-        except (ValueError, AssertionError) as e:
+            E_k, U_k, _ = _unitary_factor(I_k, basis)
+            G_k = _ot.unitary_to_superop(U_k, basis).real
+        except ValueError as e:
             raise ValueError(
                 f"Could not decompose instrument member {lbl!r} into effect and "
                 f"post-measurement gate: {e}\nIf the members are not completely "
@@ -293,9 +298,10 @@ def static_base_ranks(instrument, basis, tol=1e-9):
 
     A frozen base gate with rank ``r < d**2`` is a hard cap: every member the
     chart can reach has rank at most ``r``, because the Lindblad factor
-    ``exp(L)`` composed onto it is invertible.  This is exactly the failure
-    mode of an ideal projective instrument, whose canonical decomposition
-    produces a singular (complete-dephasing or worse) post-measurement gate.
+    ``exp(L)`` composed onto it is invertible.  pyGSTi 0.10's constructors hit
+    this for ideal projective instruments, freezing a singular
+    (complete-dephasing) channel; they now freeze unitary gates, which are
+    never rank deficient.
 
     Returns
     -------
@@ -648,9 +654,9 @@ def _assemble_flags(base_ranks, span, extent, deep_res, dim,
             f"RANK-CAP({worst}/{full})",
             f"static base gate(s) {sorted(map(str, capped))} are rank deficient; every "
             "reachable member is capped at the base's rank because exp(L) is invertible. "
-            "If your instrument's members really are rank-deficient (e.g. measure-and-"
-            "reset), this flag is informational.",
-            f"{_SEEDREPAIR_MOD}.full_rank_base_blend (c ~ 0.9) or patch_instrument_seed"))
+            "If you built this rank cap deliberately, this flag is informational.",
+            f"{_SEEDREPAIR_MOD}.patch_instrument_seed, or Instrument.from_effects with "
+            "the post-measurement unitaries"))
 
     if span['deficient']:
         flags.append(InstrumentSeedFlag(
@@ -710,7 +716,8 @@ def _assemble_flags(base_ranks, span, extent, deep_res, dim,
                     "the base is full rank but so poorly conditioned that fits are "
                     "expected to stall (a calibrated warning, not a certificate: "
                     "there is no principled threshold).",
-                    f"{_SEEDREPAIR_MOD}.full_rank_base_blend with c near 1"))
+                    f"{_SEEDREPAIR_MOD}.patch_instrument_seed, or Instrument.from_effects "
+                    "with the post-measurement unitaries"))
         if deep_res['member_gap'] < AMBIGUOUS_GAP or deep_res['effect_gap'] < AMBIGUOUS_GAP:
             flags.append(InstrumentSeedFlag(
                 "AMBIGUOUS-RANK",
@@ -759,8 +766,8 @@ def diagnose_instrument(instrument, basis, deep=True, warn=True,
     For the deep check, an instrument that does not already carry a
     parameterized chart (a dense :class:`Instrument`, a :class:`TPInstrument`,
     or a ``{label: superop}`` dict) is hosted in a scratch chart built with
-    ``gate_parameterization`` / ``povm_errormap`` -- i.e. the chart that
-    :meth:`Instrument.from_cptr_superops` would build.  If you built your
+    ``gate_parameterization`` / ``povm_errormap`` around the predicted
+    static base of :func:`instrument_static_base`.  If you built your
     chart with a different parameterization, pass the same strings here.
     For an instrument already inside a model, prefer
     :func:`diagnose_model_instruments`, which certifies the actual in-model

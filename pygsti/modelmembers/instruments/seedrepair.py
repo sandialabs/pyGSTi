@@ -4,12 +4,17 @@ Repairs ("patchers") for the static base of parameterized instrument charts.
 Companion to :mod:`pygsti.modelmembers.instruments.diagnostics`: each function
 here is the named repair for one of that module's flags.
 
-============================  =========================================
-flag                          repair
-============================  =========================================
-RANK-CAP                      :func:`full_rank_base_blend` (c ~ 0.9)
-SPAN-DEFICIENT / ZERO-EXTENT  :func:`displace_base_effects` (delta ~ 0.1-0.2)
-============================  =========================================
+================================  ==========================================
+flag                              repair
+================================  ==========================================
+RANK-CAP / ILL-CONDITIONED        unitary static gates (:func:`patch_instrument_seed`,
+                                  or :func:`~pygsti.modelmembers.instruments.unitaryfactors.infer_unitary_factors`
+                                  with :meth:`Instrument.from_effects`)
+SPAN-DEFICIENT / ZERO-EXTENT      :func:`displace_base_effects` (delta ~ 0.1-0.2)
+================================  ==========================================
+
+The first pair only arises for static gates that are not unitary, which the
+:class:`Instrument` constructors never build.
 
 The CP-BOUNDARY flag is not a defect of the base: base effects at 0 or 1 (as
 in an ideal measurement) keep the ideal instrument reachable.  Moving them
@@ -18,9 +23,9 @@ unital dual preserves spectral bounds.  What the flag affects is the fit's
 starting point, and :func:`pygsti.models.prepare_lindblad_seed` handles that on
 the model by giving the error maps small nonzero rates.
 
-:func:`patch_instrument_seed` runs the diagnostics and applies exactly the
-repairs whose checks fail, returning a ready-to-fit parameterized
-:class:`Instrument`; :func:`patch_model_instrument_seeds` does the same for
+:func:`patch_instrument_seed` builds the chart on unitary static gates and
+displaces the effects when their span check fails, returning a ready-to-fit
+parameterized :class:`Instrument`; :func:`patch_model_instrument_seeds` does the same for
 every instrument in a model copy.  :func:`project_instrument_to_cptp` is the
 entry point for projecting (possibly non-CP) dense members onto the
 CPTP-instrument set, with or without cvxpy.
@@ -29,9 +34,9 @@ All repairs operate on the dense ``(effect, gate)`` base *before* the
 parameterized chart is built -- mutating a built chart's static operations in
 place is unsupported (read-only member dicts, cached representations).
 
-The default repair magnitudes (c = 0.9, delta = 0.2) were
+The default displacement (delta = 0.2) was
 calibrated on a single 1-qubit, 196-circuit dataset with 2-outcome
-instruments; they are sensible starting points, not universal constants.  In
+instruments; it is a sensible starting point, not a universal constant.  In
 particular `delta` bounds the certified reach of the repaired effects (the
 extent check reports the resulting ceiling), so a `delta` smaller than the
 true deviation of your device saturates silently -- prefer too large over too
@@ -54,143 +59,16 @@ import numpy as _np
 
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.modelmembers.instruments.instrument import Instrument as _Instrument
-from pygsti.modelmembers.instruments.tpinstrument import TPInstrument as _TPInstrument
-from pygsti.modelmembers.instruments._construction import (
-    _decompose_cptr, _parameterized_instrument
-)
-from pygsti.modelmembers.instruments.diagnostics import (
-    _ranks_from_base, _span_from_base, _extent_from_base
-)
+from pygsti.modelmembers.instruments._construction import _parameterized_instrument
+from pygsti.modelmembers.instruments.diagnostics import _span_from_base, _extent_from_base
+from pygsti.modelmembers.instruments.unitaryfactors import _as_dense_members, infer_unitary_factors
 from pygsti.tools import basistools as _bt
-from pygsti.tools import optools as _ot
 from pygsti.tools.jamiolkowski import jamiolkowski_iso as _jam, \
     jamiolkowski_iso_inv as _jam_inv
 
 
-def _as_dense_members(instrument_or_members):
-    """Normalize to an OrderedDict of dense member superops."""
-    if isinstance(instrument_or_members, (_Instrument, _TPInstrument)):
-        return _collections.OrderedDict(
-            (lbl, _np.asarray(m.to_dense('HilbertSchmidt')))
-            for lbl, m in instrument_or_members.items())
-    if isinstance(instrument_or_members, dict):
-        return _collections.OrderedDict(
-            (lbl, _np.asarray(m)) for lbl, m in instrument_or_members.items())
-    raise ValueError(f"Cannot interpret {type(instrument_or_members).__name__} as "
-                     "an instrument; pass an Instrument, TPInstrument, or "
-                     "{label: superop} dict.")
-
-
-def conj_superop(M, basis):
-    """
-    Dense superop (in `basis`) of the conjugation map ``rho -> M rho M^dagger``
-    for a general (possibly non-Hermitian) matrix `M`.
-
-    Note :func:`.._construction._conjugation_superop` builds ``kron(M, M.T)``,
-    which is only correct for Hermitian `M`; the polar unitaries used by
-    :func:`full_rank_base_blend` are generally not Hermitian.
-    """
-    return _np.real(_bt.change_basis(_np.kron(M, M.conj()), 'std', basis))
-
-
 # --------------------------------------------------------------------------- #
-# Repair 1: rank cap -> blend the static base toward a unitary completion
-# --------------------------------------------------------------------------- #
-
-def full_rank_base_blend(member_superop, base_gate_superop, basis, c=0.9,
-                         rank_tol=1e-9):
-    r"""
-    Replace a rank-deficient static base gate ``G_k`` with the full-rank convex
-    blend
-
-        ``G_c = (1 - c) * G_k + c * conj(U)``,
-
-    where ``U`` is the polar unitary of the member's Kraus operator.  ``G_c``
-    is CPTP by convexity (both endpoints are), full rank for any ``c > 0``, and
-    -- for a single-Kraus member -- *exactly seed-preserving*:
-    ``conj(U) . rootconj(E_k) == member`` holds identically, so the seeded
-    member is untouched while the frozen base's rank cap is lifted.
-
-    ``c`` must be near 1, not merely nonzero: the blend's conditioning is what
-    the optimizer actually feels, and measured fit quality degrades steeply as
-    ``c`` falls (c = 0.9 fits ~2x better than c = 0.5 on the calibration
-    dataset even though both pass every structural check).
-
-    For a member that genuinely needs more than one Kraus operator there is no
-    canonical unitary completion; this function blends toward the polar unitary
-    of the *largest-weight* Kraus operator and warns, since seed preservation
-    is then only approximate.  (Measured on random completions, the fit is
-    insensitive to which completion is chosen.)  If the blend fails its
-    post-hoc CP/TP/rank verification the original ``G_k`` is returned with a
-    warning instead.
-
-    Parameters
-    ----------
-    member_superop : numpy.ndarray
-        The dense CPTR member ``I_k`` (in `basis`) whose base gate is being
-        repaired.
-
-    base_gate_superop : numpy.ndarray
-        The static base gate ``G_k`` (e.g. from ``_decompose_cptr``).
-
-    basis : BasisLike
-        The basis of both superops.
-
-    c : float, optional
-        The blend weight toward the unitary completion.
-
-    rank_tol : float, optional
-        Singular-value cutoff for the post-hoc full-rank verification.
-
-    Returns
-    -------
-    numpy.ndarray
-        The repaired (or, on verification failure, original) base gate.
-    """
-    basis = _Basis.cast(basis, member_superop.shape[0])
-    dim = basis.dim
-    udim = round(dim ** 0.5)
-    G_k = _np.asarray(base_gate_superop)
-    if not (0.0 <= c <= 1.0):
-        raise ValueError(f"c must be in [0, 1], not {c}.")
-    if c == 0.0:
-        return G_k
-
-    kraus = _ot.minimal_kraus_decomposition(_np.asarray(member_superop), basis)
-    if len(kraus) > 1:
-        weights = [_np.linalg.norm(K) for K in kraus]
-        K_top = kraus[int(_np.argmax(weights))]
-        _warnings.warn(
-            f"full_rank_base_blend: the member has Kraus rank {len(kraus)}, so there "
-            "is no canonical unitary completion; blending toward the polar unitary of "
-            "the largest-weight Kraus operator (weight fraction "
-            f"{max(weights) / _np.linalg.norm(weights):.2f}).  The blended base is "
-            "CPTP and full rank but the seeded member is only approximately "
-            "preserved.")
-    else:
-        K_top = kraus[0]
-    U_svd, _, Wh_svd = _np.linalg.svd(K_top)
-    K_superop = conj_superop(U_svd @ Wh_svd, basis)
-
-    G_c = (1.0 - c) * G_k + c * K_superop
-
-    # Post-hoc verification: CP, TP, full rank.  On failure, warn and keep G_k.
-    I_superket = _bt.stdmx_to_vec(_np.eye(udim), basis).ravel().real
-    min_choi = _np.linalg.eigvalsh(_jam(G_c, basis, 'std', normalized=True)).min()
-    tp_ok = _np.allclose(I_superket @ G_c, I_superket, atol=1e-9)
-    svals = _np.linalg.svd(G_c, compute_uv=False)
-    full_rank = bool(_np.sum(svals > rank_tol * svals[0]) == dim)
-    if min_choi < -1e-9 or not tp_ok or not full_rank:
-        _warnings.warn(
-            f"full_rank_base_blend: the blended base failed verification "
-            f"(min Choi eig {min_choi:.2e}, TP {tp_ok}, full rank {full_rank}); "
-            "returning the original base gate unrepaired.")
-        return G_k
-    return G_c
-
-
-# --------------------------------------------------------------------------- #
-# Repair 2: span deficiency -> displace the base effects until m = n - 1
+# Span deficiency -> displace the base effects until m = n - 1
 # --------------------------------------------------------------------------- #
 
 def _spectral_normalized_traceless_directions(dim):
@@ -450,18 +328,22 @@ def project_instrument_to_cptp(instrument_or_members, basis, norm='frobenius',
 # One-call patcher
 # --------------------------------------------------------------------------- #
 
-def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
-                          delta=0.2, gate_parameterization='CPTPLND',
-                          povm_errormap='CPTPLND', return_report=False):
+def patch_instrument_seed(instrument_or_members, basis, mode='auto', delta=0.2,
+                          gate_parameterization='CPTPLND', povm_errormap='CPTPLND',
+                          reference=None, return_report=False):
     r"""
-    Diagnose an instrument seed's static base, apply the standard repairs, and
-    return a ready-to-fit parameterized :class:`Instrument`.
+    Build a ready-to-fit parameterized :class:`Instrument` from dense members,
+    repairing the static base that a Lindblad chart would freeze.
 
-    The pipeline: decompose each dense member into ``(E_k, G_k)`` (the base
-    that a Lindblad chart would freeze), then
+    The pipeline:
 
-    1. blend any rank-deficient ``G_k`` toward its unitary completion
-       (:func:`full_rank_base_blend`, weight `c`) -- lifts the member rank cap;
+    1. factor each member as its effect ``E_k`` followed by a post-measurement
+       unitary ``U_k``
+       (:func:`~pygsti.modelmembers.instruments.unitaryfactors.infer_unitary_factors`,
+       ties broken toward `reference`).  The effects are kept exactly.  A member
+       with more than one Kraus operator, such as a member of a fitted
+       instrument, is replaced by its effect-preserving one-Kraus approximation;
+       the Lindblad parameters are left to fit the difference;
     2. displace the effects if their span is deficient
        (:func:`displace_base_effects`, magnitude `delta`) -- unfreezes
        proportional-to-identity and n >= 3 commuting effect tuples.
@@ -470,17 +352,14 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
     reachable; run :func:`pygsti.models.prepare_lindblad_seed` on the model
     before fitting to start from interior effects.
 
-    With ``mode='auto'`` (default) each repair is applied only when its check
-    fails; ``mode='all'`` applies both unconditionally.  The repaired
-    base is re-checked and a warning names anything still flagged (nothing
-    here ever raises on a flag).
+    With ``mode='auto'`` (default) step 2 is applied only when its check fails;
+    ``mode='all'`` applies it unconditionally.  The repaired base is re-checked
+    and a warning names anything still flagged (nothing here ever raises on a
+    flag).
 
-    Note the repaired chart is a *deliberately displaced seed* wherever step 2
-    fires (and approximately displaced for multi-Kraus members in step 1): the
-    fit is expected to recover the difference.  Measured end-to-end, an
-    earlier version of this recipe, which also offset the effects into the
-    interior of (0, 1), took a target-seeded CPTPLND instrument fit from
-    2*Delta(logL) 3838 to ~411 on the calibration dataset (TP floor 390).
+    The repaired chart is a *deliberately displaced seed* wherever step 2 fires
+    or step 1 approximates a member: the fit is expected to recover the
+    difference.
 
     Parameters
     ----------
@@ -493,17 +372,21 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
         The basis of the dense representations.
 
     mode : {'auto', 'all'}, optional
-        Apply repairs only on check failure, or unconditionally.
+        Displace the effects only on a span-check failure, or unconditionally.
 
-    c, delta : float, optional
-        Repair magnitudes (see the module docstring for calibration caveats).
+    delta : float, optional
+        Displacement magnitude (see the module docstring for calibration caveats).
 
     gate_parameterization, povm_errormap : str, optional
         The chart to build, as in :meth:`Instrument.from_effects`.
 
+    reference : numpy.ndarray or dict, optional
+        Unitary (or `{label: unitary}`) toward which step 1 breaks ties; the
+        identity by default.  See ``infer_unitary_factors``.
+
     return_report : bool, optional
-        Also return a dict recording which repairs fired and the residual
-        diagnostics of the repaired base.
+        Also return a dict recording which repairs fired, each member's
+        unitary factorization, and the residual diagnostics of the repaired base.
 
     Returns
     -------
@@ -516,29 +399,17 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
         raise ValueError(f"mode must be 'auto' or 'all', not {mode!r}.")
     members = _as_dense_members(instrument_or_members)
     basis = _Basis.cast(basis, next(iter(members.values())).shape[0])
-    dim = basis.dim
 
-    effects, gates = _collections.OrderedDict(), _collections.OrderedDict()
-    for lbl, I_k in members.items():
-        try:
-            E_k, G_k = _decompose_cptr(I_k, basis)
-        except (ValueError, AssertionError) as e:
-            raise ValueError(
-                f"Could not decompose instrument member {lbl!r}: {e}\nIf the members "
-                "are not completely positive (e.g. they come from a TP fit), project "
-                "them first with project_instrument_to_cptp and patch the result.") from e
-        effects[lbl], gates[lbl] = E_k, G_k
-
-    applied = []
-
-    # 1. rank cap -> blend
-    for lbl, G_k in gates.items():
-        rank = int(_np.linalg.matrix_rank(G_k, tol=1e-9))
-        if mode == 'all' or rank < dim:
-            G_c = full_rank_base_blend(members[lbl], G_k, basis, c=c)
-            if G_c is not G_k:
-                gates[lbl] = G_c
-                applied.append(('full_rank_base_blend', lbl))
+    # 1. effects and post-measurement unitaries
+    try:
+        pairs, factors = infer_unitary_factors(members, basis, reference=reference)
+    except ValueError as e:
+        raise ValueError(f"{e}\nIf the members are not completely positive (e.g. they come from a TP "
+                         "fit), project them first with project_instrument_to_cptp and patch the "
+                         "result.") from e
+    effects = _collections.OrderedDict((lbl, E) for lbl, (E, _) in pairs.items())
+    unitaries = _collections.OrderedDict((lbl, U) for lbl, (_, U) in pairs.items())
+    applied = [('infer_unitary_factors', None)]
 
     # 2. span deficiency -> displace
     span = _span_from_base(basis, effects)
@@ -547,11 +418,7 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
         applied.append(('displace_base_effects', None))
 
     # Re-check the repaired base; warn (never raise) if anything is still flagged.
-    info = {'gate_frozen': {lbl: True for lbl in gates}}
     residual = []
-    for lbl, row in _ranks_from_base(basis, gates, info).items():
-        if row['rank'] < row['full']:
-            residual.append(f"RANK-CAP({row['rank']}/{row['full']}) on {lbl!r}")
     span_after = _span_from_base(basis, effects)
     if span_after['deficient']:
         residual.append(f"SPAN-DEFICIENT({span_after['m']}/{span_after['target']})")
@@ -559,19 +426,15 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
     if residual:
         _warnings.warn("patch_instrument_seed: the repaired base still flags " +
                        ", ".join(residual) + ".  If the flagged structure is "
-                       "intended (e.g. genuinely rank-deficient members), this "
-                       "is informational.")
+                       "intended, this is informational.")
 
-    with _warnings.catch_warnings():
-        # any surviving rank deficiency was already reported as a residual flag
-        _warnings.filterwarnings('ignore', message='.*post-measurement gate.*singular.*')
-        inst = _Instrument(_parameterized_instrument(basis, effects, gates,
-                                                     gate_parameterization, povm_errormap))
+    inst = _Instrument(_parameterized_instrument(basis, effects, unitaries,
+                                                 gate_parameterization, povm_errormap))
     if return_report:
         max_shift = max(
             _np.linalg.norm(_np.asarray(m.to_dense('HilbertSchmidt')) - members[lbl])
             for lbl, m in inst.items())
-        report = {'applied': applied, 'residual_flags': residual,
+        report = {'applied': applied, 'residual_flags': residual, 'unitary_factors': factors,
                   'effect_span': span_after, 'effect_extent': extent_after,
                   'max_member_shift': float(max_shift)}
         return inst, report

@@ -7,12 +7,9 @@ import pygsti.tools.optools as ot
 from pygsti.baseobjs import Basis
 import pygsti.modelmembers.operations as op
 from pygsti.modelmembers.instruments import (
-    Instrument, diagnose_instrument, base_effect_span, base_effect_extent,
-    conj_superop, full_rank_base_blend,
-    displace_base_effects, project_instrument_to_cptp,
+    Instrument, diagnose_instrument, displace_base_effects, project_instrument_to_cptp,
     patch_instrument_seed, patch_model_instrument_seeds
 )
-from pygsti.modelmembers.instruments._construction import _decompose_cptr
 from pygsti.tools.jamiolkowski import jamiolkowski_iso
 from ..util import BaseCase, needs_cvxpy
 
@@ -53,50 +50,6 @@ def _effect_completeness_residual(effect_superkets, basis):
     tot = sum(bt.vec_to_stdmx(np.asarray(E).ravel(), basis, keep_complex=True)
               for E in effect_superkets.values())
     return np.max(np.abs(tot - np.eye(udim)))
-
-
-class FullRankBaseBlendTester(BaseCase):
-
-    def setUp(self):
-        self.pp = Basis.cast('pp', 4)
-        self.members = _projective_members(self.pp)
-
-    def test_blend_is_exactly_seed_preserving_for_single_kraus(self):
-        for lbl, I_k in self.members.items():
-            E_k, G_k = _decompose_cptr(I_k, self.pp)
-            self.assertEqual(np.linalg.matrix_rank(G_k, tol=1e-9), 2)
-            G_c = full_rank_base_blend(I_k, G_k, self.pp, c=0.9)
-            self.assertEqual(np.linalg.matrix_rank(G_c, tol=1e-9), 4)
-            self.assertGreater(_min_choi_eig(G_c, self.pp), -1e-10)
-            self.assertLess(_tp_residual(G_c, self.pp), 1e-10)
-            # the seeded member is bit-identical to the original
-            member = G_c @ ot.rootconj_superop(E_k, self.pp)
-            self.assertArraysAlmostEqual(member, I_k, places=10)
-
-    def test_c_zero_is_identity(self):
-        I_k = self.members['p0']
-        _, G_k = _decompose_cptr(I_k, self.pp)
-        self.assertIs(full_rank_base_blend(I_k, G_k, self.pp, c=0.0), G_k)
-
-    def test_invalid_c_raises(self):
-        I_k = self.members['p0']
-        _, G_k = _decompose_cptr(I_k, self.pp)
-        with self.assertRaises(ValueError):
-            full_rank_base_blend(I_k, G_k, self.pp, c=1.5)
-
-    def test_multi_kraus_member_warns_and_stays_feasible(self):
-        # Kraus-rank-2 member: amplitude damping composed with a weak measurement.
-        A0 = np.array([[1, 0], [0, np.sqrt(0.95)]], complex)
-        A1 = np.array([[0, np.sqrt(0.05)], [0, 0]], complex)
-        M0 = np.diag([np.cos(0.2), np.sin(0.2)]).astype(complex)
-        I_k = op.FullArbitraryOp.from_kraus_operators([M0 @ A0, M0 @ A1], 'pp').to_dense()
-        E_k, G_k = _decompose_cptr(I_k, self.pp)
-        with warnings.catch_warnings(record=True) as ws:
-            warnings.simplefilter('always')
-            G_c = full_rank_base_blend(I_k, G_k, self.pp, c=0.9)
-        self.assertTrue(any('Kraus rank' in str(w.message) for w in ws))
-        self.assertGreater(_min_choi_eig(G_c, self.pp), -1e-9)
-        self.assertLess(_tp_residual(G_c, self.pp), 1e-9)
 
 
 class EffectRepairTester(BaseCase):
@@ -199,14 +152,17 @@ class PatchInstrumentSeedTester(BaseCase):
     def setUp(self):
         self.pp = Basis.cast('pp', 4)
 
-    def test_projective_seed_gets_blend_and_keeps_its_effects(self):
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            inst, report = patch_instrument_seed(_projective_members(self.pp), self.pp,
-                                                 return_report=True)
+    def test_projective_seed_gets_identity_unitaries_and_keeps_its_effects(self):
+        inst, report = patch_instrument_seed(_projective_members(self.pp), self.pp,
+                                             return_report=True)
         fired = [name for name, _ in report['applied']]
-        self.assertEqual(fired, ['full_rank_base_blend', 'full_rank_base_blend'])
+        self.assertEqual(fired, ['infer_unitary_factors'])
         self.assertEqual(report['residual_flags'], [])
+        self.assertLess(report['max_member_shift'], 1e-12)
+        for member in inst.values():
+            static = member.factorops[1].factorops[0]
+            self.assertIsInstance(static, op.StaticUnitaryOp)
+            self.assertArraysAlmostEqual(static.to_dense('HilbertSchmidt'), np.eye(4))
         # The projective effects stay put, so the ideal measurement stays reachable; the only
         # remaining flag concerns the starting point, which prepare_lindblad_seed handles.
         rep = diagnose_instrument(inst, self.pp, warn=False)
@@ -220,7 +176,6 @@ class PatchInstrumentSeedTester(BaseCase):
                                                  self.pp, return_report=True)
         fired = [name for name, _ in report['applied']]
         self.assertIn('displace_base_effects', fired)
-        self.assertNotIn('full_rank_base_blend', fired)
         rep = diagnose_instrument(inst, self.pp, warn=False)
         self.assertTrue(rep.ok, rep.verdict)
 
@@ -230,7 +185,7 @@ class PatchInstrumentSeedTester(BaseCase):
         R1 = ot.rootconj_superop(_sk(np.eye(2) - E0, self.pp), self.pp)
         members = {'p0': R0, 'p1': R1}
         inst, report = patch_instrument_seed(members, self.pp, return_report=True)
-        self.assertEqual(report['applied'], [])
+        self.assertEqual(report['applied'], [('infer_unitary_factors', None)])
         self.assertLess(report['max_member_shift'], 1e-9)
         for lbl, m in inst.items():
             self.assertArraysAlmostEqual(m.to_dense('HilbertSchmidt'), members[lbl],
@@ -258,21 +213,18 @@ class PatchInstrumentSeedTester(BaseCase):
             patch_instrument_seed(members, self.pp)
         self.assertIn('project_instrument_to_cptp', str(ctx.exception))
 
-    def test_residual_flags_warn_for_legit_rank_deficiency(self):
-        # measure-and-reset: the blend cannot lift a genuinely rank-1 member's
-        # cap without destroying the seed; the patcher warns instead of raising.
+    def test_multi_kraus_members_are_approximated_with_their_effects_kept(self):
+        # Weak measurement followed by a reset to |0>: each member has two Kraus operators,
+        # so the seed is the effect-preserving one-Kraus approximation, not an error.
         E0 = np.diag([0.85, 0.15]).astype(complex)
         effects = {'p0': _sk(E0, self.pp), 'p1': _sk(np.eye(2) - E0, self.pp)}
         G = np.outer(_sk(np.array([[1, 0], [0, 0]], complex), self.pp),
                      _sk(np.eye(2), self.pp)).real
         members = {k: G @ ot.rootconj_superop(effects[k], self.pp) for k in effects}
-        with warnings.catch_warnings(record=True) as ws:
-            warnings.simplefilter('always')
-            inst = patch_instrument_seed(members, self.pp)
-        self.assertIsInstance(inst, Instrument)
-        # either the blend repaired it (rank raised) or a residual warning fired;
-        # in no case may an exception have escaped
-        self.assertTrue(True if inst is not None else False)
+        inst, report = patch_instrument_seed(members, self.pp, return_report=True)
+        for lbl, m in inst.items():
+            self.assertGreater(report['unitary_factors'][lbl].residual, 1e-2)
+            self.assertArraysAlmostEqual(m.to_dense('HilbertSchmidt')[0], members[lbl][0])
 
 
 class PatchModelTester(BaseCase):
@@ -293,7 +245,5 @@ class PatchModelTester(BaseCase):
         self.assertIsNot(patched, mdl)
         rep = diagnose_instrument(patched.instruments[('Iz', 0)], self.pp, warn=False)
         self.assertEqual([f.name for f in rep.flags], ['CP-BOUNDARY'])  # left for prepare_lindblad_seed
-        # original model untouched: its instrument still has the pathological base
-        rep0 = diagnose_instrument(mdl.instruments[('Iz', 0)], self.pp, warn=False,
-                                   deep=False)
-        self.assertIn('RANK-CAP', rep0.verdict)
+        # original model untouched: its instrument is still the plain dense one
+        self.assertNotIsInstance(mdl.instruments[('Iz', 0)]['p0'], op.ComposedOp)
