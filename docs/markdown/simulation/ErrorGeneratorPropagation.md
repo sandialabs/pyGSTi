@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.3
+    jupytext_version: 1.19.6
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -431,4 +431,3 @@ canonicalize_errorgen_layer(noncanonical_layer)
 In the above output the C rate is unchanged, while the two A entries are merged into `A(IX, YI)` with rate `-0.02 + 0.005`. If you build your own error generator dictionaries (for example to compare against propagated ones, or to use as a `fixed_errorgen_layer` with rates you computed yourself), pass them through this function rather than constructing `LocalStimErrorgenLabel`s by hand.
 
 There's a whole bunch of other functionality and utilities available, particularly in the `errgenproptools` module which have not been covered in this tutorial, so please check out the documentation for additional capabilities!
-
