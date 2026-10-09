@@ -36,7 +36,7 @@ from pygsti.tools import lindbladtools as _lt
 #: Dissipative block parameterizations whose coefficients have zero derivative at zero noise.
 _DEGENERATE_PARAM_MODES = ('cholesky', 'depol')
 
-#: The relative step size at which :func:`fit_instrument_parameters` considers its fit stalled.
+#: The relative step size at which :func:`fit_instrument_parameters` gives up on a fit whose steps are all rejected.
 _STALLED_STEP = 1e-10
 
 
@@ -217,40 +217,41 @@ class InstrumentParameterFit:
 
     tol: float
     reached: bool
-    """Whether `residual <= tol`."""
+    """Whether `residual <= tol`. Members out of the chart's reach end with this False."""
 
     message: str
     """Why the optimizer stopped."""
 
 
-def fit_instrument_parameters(model, members, *, tol: float = 1e-8, max_iter: int = 200,
-                              start_budget: float | None = 1e-3, warn: bool = True
+def fit_instrument_parameters(model, members, *, tol: float = 1e-8, rel_ftol: float = 1e-4,
+                              max_iter: int = 200, start_budget: float | None = 1e-3
                               ) -> tuple[_np.ndarray, dict[object, InstrumentParameterFit]]:
     """
-    Parameters with which a model's instruments reproduce given member superoperators.
+    Parameters with which a model's instruments come closest to given member superoperators.
 
     For each instrument label in `members`, the instrument's own parameters are fitted to minimize
     sum_k ‖I_k(θ) − T_k‖_F², where I_k(θ) is the member for outcome k as a superoperator in the
     model's basis and T_k is the given one, by Levenberg–Marquardt with analytic member
     derivatives. The model's other parameters keep their values.
 
-    This puts a fitted instrument into the Lindblad parameters of a chart whose static base is
-    ideal, such as an instrument that `set_all_parameterizations('CPTPLND')` converts from an ideal
-    target, instead of freezing the fitted members as the base, whose spectral intervals would bound
-    every reachable effect. At small noise each T_k is expected to be nearly reachable, so a fit stops
-    when its residual is at most `tol`. One that stops otherwise, after `max_iter` iterations or when
-    its steps stall, warns with the residual it reached (if `warn`).
+    This puts a fitted instrument, such as one from a TP fit, into the Lindblad parameters of a
+    chart whose static base is ideal, like an instrument that `set_all_parameterizations('CPTPLND')`
+    converts from an ideal target, instead of freezing the fitted members as the base, whose spectral
+    intervals would bound every reachable effect. A fit stops when its residual is at most `tol`,
+    or when an iteration reduces the sum of squares by a relative amount below `rel_ftol`, both
+    actually and as predicted, or after `max_iter` iterations; the returned fits say which.
 
-    Members on the boundary of the CP set, as a projection onto CPTP instruments produces, are
-    generally out of exact reach: in one-qubit tests, fits to such members stalled at the same
-    residual from every start, a residual that grew in proportion to the noise. Choose `tol`
-    accordingly.
+    The given members need not be within the chart's reach, and generally are not: TP-fit members
+    need not be CP, and the boundary of the CP set, where a projection onto CPTP instruments puts
+    them, is not generically reachable by Lindblad charts. The fit then ends at a nonzero residual,
+    on a least-squares fit within the chart's reach. The `rel_ftol` test keeps it from creeping along
+    nearly flat directions for a negligible gain.
 
     A fit cannot start at zero noise, where dissipative coefficients have zero derivative and
     projective effects have none at all. Unless `start_budget` is None, it starts from the model's
     parameters plus the uniform stochastic rates that
     `prepare_lindblad_seed(model, start_budget, hs_split=(0, 1), floor_fraction=1)` adds, which are
-    deterministic. Members on the boundary of the CP set have their Cholesky coordinates fitted back
+    deterministic. Members at or beyond the boundary of the CP set have Cholesky coordinates fitted
     toward zero, so apply :func:`prepare_lindblad_seed` to the result before starting an
     exact-Jacobian fit from it.
 
@@ -266,15 +267,15 @@ def fit_instrument_parameters(model, members, *, tol: float = 1e-8, max_iter: in
     tol : float, optional
         The Frobenius-norm residual at which a fit stops.
 
+    rel_ftol : float, optional
+        The relative reduction in the sum of squares below which a fit counts as converged.
+
     max_iter : int, optional
         The maximum number of LM iterations per instrument.
 
     start_budget : float or None, optional
         The diamond-norm bound, per CP-constrained error generator, on the rates added to make the
         starting point differentiable. None starts from the model's parameters as they are.
-
-    warn : bool, optional
-        Whether to warn about each fit that stops with its residual above `tol`.
 
     Returns
     -------
@@ -293,6 +294,8 @@ def fit_instrument_parameters(model, members, *, tol: float = 1e-8, max_iter: in
 
     if not (_np.isfinite(tol) and tol > 0):
         raise ValueError("`tol` must be positive and finite, not %s." % tol)
+    if not 0 <= rel_ftol < 1:
+        raise ValueError("`rel_ftol` must be in [0, 1), not %s." % rel_ftol)
     if getattr(model, 'param_interposer', None) is not None:
         raise NotImplementedError("fit_instrument_parameters does not support models with a parameter interposer.")
 
@@ -329,25 +332,21 @@ def fit_instrument_parameters(model, members, *, tol: float = 1e-8, max_iter: in
                 jac[i * size:(i + 1) * size, columns[k]] = inst[k].deriv_wrt_params()
             return jac
 
-        # The residual is the convergence test. The step test only ends a fit whose steps have stalled,
-        # which otherwise grows the damping until it overflows.
+        # The step test ends a fit whose steps are all rejected, which otherwise grows the damping
+        # until it overflows; the rel_ftol test needs an accepted step.
         theta0 = inst.to_vector().copy()
         with _warnings.catch_warnings():
             # Members with boundary effects pull the fitted effects toward the boundary, where
             # RootConjOperator warns that it falls back to finite differences, which suffice here.
             _warnings.filterwarnings('ignore', message="RootConjOperator's effect has eigenvalues")
             theta, _, message, _, _, _, _ = _simplish_leastsq(
-                residual, jacobian, theta0, f_norm2_tol=tol**2, jac_norm_tol=0.0, rel_ftol=0.0,
+                residual, jacobian, theta0, f_norm2_tol=tol**2, jac_norm_tol=0.0, rel_ftol=rel_ftol,
                 rel_xtol=_STALLED_STEP, max_iter=max_iter,
                 arrays_interface=_UndistributedArraysInterface(target.size, theta0.size),
                 verbosity=_VerbosityPrinter(0, warnings=False))
             res = float(_np.linalg.norm(residual(theta)))
             fit = InstrumentParameterFit(res, float(_np.linalg.norm(residual(theta0))), float(tol), res <= tol,
                                          message)
-        if warn and not fit.reached:
-            _warnings.warn("The parameters of instrument %s reproduce its given members only to Frobenius residual "
-                           "%.3g, above tol = %.3g (%s). The members may be out of the instrument's reach, as "
-                           "members on the CP boundary generally are." % (lbl, fit.residual, tol, message))
         vector[inst.gpindices_as_array()] = theta
         fits[lbl] = fit
     return vector, fits

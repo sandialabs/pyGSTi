@@ -150,7 +150,7 @@ class RefitGuardTester(BaseCase):
 class RefitRegressionTester(BaseCase):
     """The whole workflow as a test: data generated from a noisy full-rank
     instrument model, TP fit, then the CPTPLND refit, whose instrument
-    parameters start at the projected TP members, must reach TP-fit quality
+    parameters start fitted to the TP members, must reach TP-fit quality
     with all members CP."""
 
     OPT = {'maxiter': 150}
@@ -183,8 +183,9 @@ class RefitRegressionTester(BaseCase):
         # the seed was moved into the interior, so the fit skipped first-iteration finite differences
         self.assertEqual(est.meta['lindblad_seed_report'].diamond_budget, 1e-3)
         self.assertEqual(est.parameters['protocol'].optimizer.first_fditer, 0)
-        # the instrument parameters reproduced the projected TP members before that
-        self.assertTrue(est.meta['instrument_fit_report'][INST_LBL].reached)
+        # before that, the instrument parameters were fitted to the TP members
+        fit = est.meta['instrument_fit_report'][INST_LBL]
+        self.assertLess(fit.residual, 0.05 * fit.start_residual)
         lnd_2dll = pygsti.tools.two_delta_logl(lnd_mdl, ds, circuits)
 
         # CP-constrained fit quality must be statistically comparable to TP's

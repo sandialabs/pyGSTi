@@ -1,5 +1,3 @@
-import warnings
-
 import numpy as np
 import pytest
 
@@ -11,6 +9,7 @@ from pygsti.models import fit_instrument_parameters, prepare_lindblad_seed
 from pygsti.models.modelparaminterposer import LinearInterposer
 from pygsti.tools import basistools as bt
 from pygsti.tools import optools as ot
+from pygsti.tools.jamiolkowski import jamiolkowski_iso
 from pygsti.tools import sdptools as sdps
 from ..util import BaseCase
 
@@ -245,17 +244,29 @@ class FitInstrumentParametersTester(BaseCase):
         others = np.setdiff1d(np.arange(len(before)), self.model[self.label].gpindices_as_array())
         np.testing.assert_array_equal(vector[others], before[others])
 
-    def test_fit_that_stops_early_warns(self):
-        with self.assertWarnsRegex(UserWarning, 'out of the instrument'):
-            _, fits = fit_instrument_parameters(self.model, {self.label: self.weak}, max_iter=1)
+    def test_fit_that_stops_early_reports_it(self):
+        _, fits = fit_instrument_parameters(self.model, {self.label: self.weak}, max_iter=1)
         fit = fits[self.label]
         self.assertFalse(fit.reached)
         self.assertGreater(fit.residual, fit.tol)
         self.assertIn('Maximum iterations', fit.message)
-        with warnings.catch_warnings():
-            warnings.simplefilter('error')
-            _, fits = fit_instrument_parameters(self.model, {self.label: self.weak}, max_iter=1, warn=False)
-        self.assertFalse(fits[self.label].reached)
+
+    def test_unreachable_members_end_on_a_cp_least_squares_fit(self):
+        # Stretching the Bloch-vector block makes the members TP but not even positive.
+        stretched = {k: m.copy() for k, m in self.weak.items()}
+        for m in stretched.values():
+            m[1:, 1:] *= 1.05
+        vector, fits = fit_instrument_parameters(self.model, {self.label: stretched})
+        fit = fits[self.label]
+        self.assertFalse(fit.reached)
+        self.assertIn('relative reductions', fit.message)
+        self.assertLess(fit.residual, 0.5 * fit.start_residual)
+        inst = self._fitted(vector)
+        for k, m in inst.items():
+            choi = jamiolkowski_iso(m.to_dense(), self.model.basis, 'std')
+            self.assertGreater(np.linalg.eigvalsh(choi).min(), -1e-9)
+        # the fit is (locally) least-squares: its residual is no worse than the weak members' own
+        self.assertLess(fit.residual, np.sqrt(sum(np.linalg.norm(stretched[k] - self.weak[k])**2 for k in stretched)))
 
     def test_rejects_mismatched_members(self):
         with self.assertRaisesRegex(ValueError, 'no instrument'):
