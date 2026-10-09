@@ -3528,7 +3528,7 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
        measurably halves the projection cost.
     3. Project each instrument's dense members onto the CPTP-instrument set
        (`norm`, `projection_method` -- see
-       :func:`~pygsti.modelmembers.instruments.seeding.project_instrument_to_cptp`),
+       :func:`~pygsti.modelmembers.instruments.seedrepair.project_instrument_to_cptp`),
        then optionally run the standard seed patchers on the projection
        (`patch='auto'`).
     4. Build the seed model: the *target* converted to `parameterization`
@@ -3569,14 +3569,14 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
         Projection norm for step 3.
 
     projection_method : {'auto', 'sdp', 'dykstra'}, optional
-        See :func:`~pygsti.modelmembers.instruments.seeding.project_instrument_to_cptp`.
+        See :func:`~pygsti.modelmembers.instruments.seedrepair.project_instrument_to_cptp`.
 
     gaugeopt_first : bool, optional
         Whether to gauge-optimize the source model to the target before
         projecting (step 2).
 
     patch : {'auto', 'all', None}, optional
-        Run :func:`~pygsti.modelmembers.instruments.seeding.patch_instrument_seed`
+        Run :func:`~pygsti.modelmembers.instruments.seedrepair.patch_instrument_seed`
         on the projected members (``None`` skips patching and uses
         :meth:`Instrument.from_cptr_superops` directly).
 

@@ -392,7 +392,7 @@ def _parameterized_instrument(basis: _BasisLike,
                     "are full rank will fail.  If this rank structure is intended "
                     "(e.g. a measure-and-reset instrument), ignore this warning.  "
                     "Otherwise repair the seed -- see "
-                    "pygsti.modelmembers.instruments.seeding.patch_instrument_seed "
+                    "pygsti.modelmembers.instruments.seedrepair.patch_instrument_seed "
                     "and .diagnostics.diagnose_instrument.")
         root = _op.RootConjOperator(composed_povm[lbl], basis)
         gate = _parameterize_gate(G_superop, basis, gate_parameterization)

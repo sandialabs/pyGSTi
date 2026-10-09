@@ -176,7 +176,7 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
             intervals bound every reachable effect.  Diagnose a seed with
             :func:`~pygsti.modelmembers.instruments.diagnostics.diagnose_instrument`
             and repair it with
-            :func:`~pygsti.modelmembers.instruments.seeding.patch_instrument_seed`.
+            :func:`~pygsti.modelmembers.instruments.seedrepair.patch_instrument_seed`.
 
         Parameters
         ----------
@@ -253,7 +253,7 @@ class Instrument(_StackedMemberDictTorchable, _collections.OrderedDict):
             reachable member's rank (a warning is emitted).  Diagnose with
             :func:`~pygsti.modelmembers.instruments.diagnostics.diagnose_instrument`;
             repair with
-            :func:`~pygsti.modelmembers.instruments.seeding.patch_instrument_seed`.
+            :func:`~pygsti.modelmembers.instruments.seedrepair.patch_instrument_seed`.
 
         Parameters
         ----------

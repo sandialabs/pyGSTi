@@ -48,7 +48,7 @@ Diagnostics **warn with a named repair and never raise**: a flag is not always
 a bug.  A measure-and-reset instrument, for example, legitimately reports a
 rank cap -- its members really are rank-1 superoperators, and if the user
 believes that structure the flag is informational.  Repairs live in
-:mod:`pygsti.modelmembers.instruments.seeding`.
+:mod:`pygsti.modelmembers.instruments.seedrepair`.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019, 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -267,7 +267,7 @@ def instrument_static_base(instrument, basis):
                 f"post-measurement gate: {e}\nIf the members are not completely "
                 "positive (e.g. they come from a TP fit), project them onto the "
                 "CPTP-instrument set first -- see "
-                "pygsti.modelmembers.instruments.seeding.project_instrument_to_cptp "
+                "pygsti.modelmembers.instruments.seedrepair.project_instrument_to_cptp "
                 "or pygsti.tools.sdptools.project_instrument_members.") from e
         effects[lbl], gates[lbl] = E_k, G_k
         frozen[lbl] = True   # a Lindblad conversion would freeze this gate
@@ -632,7 +632,7 @@ def _scratch_host(effect_superkets, gate_superops, basis,
 # Flag assembly and the top-level entry points
 # --------------------------------------------------------------------------- #
 
-_SEEDING_MOD = "pygsti.modelmembers.instruments.seeding"
+_SEEDREPAIR_MOD = "pygsti.modelmembers.instruments.seedrepair"
 
 
 def _assemble_flags(base_ranks, span, extent, deep_res, dim,
@@ -650,7 +650,7 @@ def _assemble_flags(base_ranks, span, extent, deep_res, dim,
             "reachable member is capped at the base's rank because exp(L) is invertible. "
             "If your instrument's members really are rank-deficient (e.g. measure-and-"
             "reset), this flag is informational.",
-            f"{_SEEDING_MOD}.full_rank_base_blend (c ~ 0.9) or patch_instrument_seed"))
+            f"{_SEEDREPAIR_MOD}.full_rank_base_blend (c ~ 0.9) or patch_instrument_seed"))
 
     if span['deficient']:
         flags.append(InstrumentSeedFlag(
@@ -660,7 +660,7 @@ def _assemble_flags(base_ranks, span, extent, deep_res, dim,
             f"{span['reachable_effect_dim']} of {span['full_effect_dim']} dimensions. "
             "Proportional-to-identity base effects (m = 0) and n >= 3 commuting base "
             "effects are the two known causes.",
-            f"{_SEEDING_MOD}.displace_base_effects (delta ~ 0.1-0.2)"))
+            f"{_SEEDREPAIR_MOD}.displace_base_effects (delta ~ 0.1-0.2)"))
 
     frozen_effects = [k for k, row in extent.items() if row['extent'] <= extent_tol]
     if frozen_effects:
@@ -668,7 +668,7 @@ def _assemble_flags(base_ranks, span, extent, deep_res, dim,
             "ZERO-EXTENT",
             f"effect(s) {sorted(map(str, frozen_effects))} have a degenerate base "
             "spectrum, so the shared error map's unital dual can never move them at all.",
-            f"{_SEEDING_MOD}.displace_base_effects"))
+            f"{_SEEDREPAIR_MOD}.displace_base_effects"))
 
     on_boundary = [k for k, row in extent.items() if row['boundary_margin'] <= boundary_tol]
     if on_boundary:
@@ -699,7 +699,7 @@ def _assemble_flags(base_ranks, span, extent, deep_res, dim,
                 f"EFFECTS-FROZEN({eff_dim - r_eff}/{eff_dim})",
                 "the reachable effect tuple is rank deficient at generic parameters "
                 "(the sampled counterpart of the span law).",
-                f"{_SEEDING_MOD}.displace_base_effects"))
+                f"{_SEEDREPAIR_MOD}.displace_base_effects"))
         if not capped:
             cond = deep_res['reachable_cond']
             ill = {k: c for k, c in cond.items() if c < ILL_CONDITIONED_TOL}
@@ -710,7 +710,7 @@ def _assemble_flags(base_ranks, span, extent, deep_res, dim,
                     "the base is full rank but so poorly conditioned that fits are "
                     "expected to stall (a calibrated warning, not a certificate: "
                     "there is no principled threshold).",
-                    f"{_SEEDING_MOD}.full_rank_base_blend with c near 1"))
+                    f"{_SEEDREPAIR_MOD}.full_rank_base_blend with c near 1"))
         if deep_res['member_gap'] < AMBIGUOUS_GAP or deep_res['effect_gap'] < AMBIGUOUS_GAP:
             flags.append(InstrumentSeedFlag(
                 "AMBIGUOUS-RANK",
@@ -736,7 +736,7 @@ def _emit_warning(report):
         "\n".join(f"  - {f}" for f in report.flags) +
         "\n(A flag is not always a bug: if the flagged structure is intended, "
         "ignore this warning.  Repairs are in "
-        "pygsti.modelmembers.instruments.seeding.)")
+        "pygsti.modelmembers.instruments.seedrepair.)")
 
 
 def diagnose_instrument(instrument, basis, deep=True, warn=True,
