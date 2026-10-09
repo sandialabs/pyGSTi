@@ -386,7 +386,9 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', delta=0.2,
 
     return_report : bool, optional
         Also return a dict recording which repairs fired, each member's
-        unitary factorization, and the residual diagnostics of the repaired base.
+        :class:`~pygsti.modelmembers.instruments.unitaryfactors.UnitaryApproximationReport`
+        (key ``'unitary_approximations'``), and the residual diagnostics of the
+        repaired base.
 
     Returns
     -------
@@ -402,7 +404,7 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', delta=0.2,
 
     # 1. effects and post-measurement unitaries
     try:
-        pairs, factors = infer_unitary_factors(members, basis, reference=reference)
+        pairs, approximations = infer_unitary_factors(members, basis, reference=reference)
     except ValueError as e:
         raise ValueError(f"{e}\nIf the members are not completely positive (e.g. they come from a TP "
                          "fit), project them first with project_instrument_to_cptp and patch the "
@@ -434,7 +436,7 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', delta=0.2,
         max_shift = max(
             _np.linalg.norm(_np.asarray(m.to_dense('HilbertSchmidt')) - members[lbl])
             for lbl, m in inst.items())
-        report = {'applied': applied, 'residual_flags': residual, 'unitary_factors': factors,
+        report = {'applied': applied, 'residual_flags': residual, 'unitary_approximations': approximations,
                   'effect_span': span_after, 'effect_extent': extent_after,
                   'max_member_shift': float(max_shift)}
         return inst, report

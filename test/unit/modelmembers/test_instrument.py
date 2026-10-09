@@ -232,7 +232,7 @@ class FromCptrSuperopsTester(BaseCase):
         # The approximation route keeps every effect, hence every outcome probability, and
         # still yields one ComposedOp and one shared effect per outcome.
         arrays = _noisy_z_op_arrays()
-        pairs, factors = inst.infer_unitary_factors(arrays, self.basis)
+        pairs, reports = inst.infer_unitary_factors(arrays, self.basis)
         instrument = Instrument.from_effects(pairs, self.basis)
         members = self._members(instrument)
         trace = np.eye(self.basis.dim)[0]  # <<I| / sqrt(2) in the normalized pp basis
@@ -241,7 +241,8 @@ class FromCptrSuperopsTester(BaseCase):
             self.assertNotIsInstance(member, SummedOperator)
             self.assertIsInstance(member.factorops[0], RootConjOperator)
             self.assertArraysAlmostEqual(trace @ members[k], trace @ arrays[k])
-            self.assertGreater(factors[k].residual, 1e-3)
+            self.assertGreater(reports[k].residual, 1e-3)
+            self.assertEqual(reports[k].issues, ())
             self._assert_cp(members[k])
         effects = {id(member.factorops[0].submembers()[0]) for member in instrument.values()}
         self.assertEqual(len(effects), len(instrument))

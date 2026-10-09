@@ -74,7 +74,7 @@ from pygsti.modelmembers.instruments.tpinstrument import TPInstrument as _TPInst
 from pygsti.modelmembers.instruments._construction import (
     _parameterized_instrument, _is_lindblad_type
 )
-from pygsti.modelmembers.instruments.unitaryfactors import _unitary_factor
+from pygsti.modelmembers.instruments.unitaryfactors import _unitary_approximation
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 
@@ -264,7 +264,7 @@ def instrument_static_base(instrument, basis):
     effects, gates, frozen = {}, {}, {}
     for lbl, I_k in dense.items():
         try:
-            E_k, U_k, _ = _unitary_factor(I_k, basis)
+            E_k, U_k, _ = _unitary_approximation(I_k, basis)
             G_k = _ot.unitary_to_superop(U_k, basis).real
         except ValueError as e:
             raise ValueError(

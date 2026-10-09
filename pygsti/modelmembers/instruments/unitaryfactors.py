@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import collections as _collections
 import dataclasses as _dataclasses
+import warnings as _warnings
 
 import numpy as _np
 
@@ -51,26 +52,36 @@ OVERLAP_TOL = 1e-9
 
 
 @_dataclasses.dataclass(frozen=True)
-class UnitaryFactor:
-    """How :func:`infer_unitary_factors` chose one member's post-measurement unitary."""
+class UnitaryApproximationReport:
+    """
+    How well a member's effect and inferred unitary, `J_k = Ad_U o RootConj(E_k)`, reproduce the
+    member `I_k`.
+
+    `J_k` keeps `I_k`'s effect, so outcome probabilities are unchanged and only post-measurement
+    states can differ.  Empty `issues` means the inference went as planned: `J_k` equals `I_k` when
+    `kraus_rank` is 1, and is otherwise the effect-preserving one-Kraus approximation of `I_k`, off
+    by `residual`, which is left for a Lindblad chart's parameters to fit.  Each entry of `issues`
+    names something undesirable, usually a member far from any measurement followed by a unitary.
+    """
 
     residual: float
-    """Frobenius norm of `I_k - Ad_U o RootConj(E_k)` as a standard-basis superoperator."""
+    """
+    Frobenius norm of `I_k - J_k` as a superoperator in an orthonormal basis.  It bounds the change,
+    in Frobenius norm, of every unnormalized post-measurement state `I_k(rho)`.
+    """
 
     relative_residual: float
     """`residual` divided by the Frobenius norm of `I_k` (zero for a zero member)."""
 
-    choi_eigenvalues: _np.ndarray
-    """Eigenvalues of the member's unnormalized Choi matrix, in decreasing order."""
+    kraus_rank: int
+    """How many Kraus operators `I_k` has: its Choi eigenvalues above `trunc_tol`."""
 
-    leading_multiplicity: int
-    """How many Choi eigenvalues tie with the largest (zero for a zero member)."""
-
-    completion_dim: int
-    """Input dimensions on which the member does not determine `U`, so the reference did."""
-
-    unresolved_dim: int
-    """Completion dimensions the tie-breaking rules leave tied; `U` pairs them arbitrarily there."""
+    issues: tuple[str, ...]
+    """
+    Plain-language descriptions of anything undesirable, empty when the inference went as planned.
+    A Kraus operator `K`'s weight, which they may cite, is `||K||_F^2 / Tr E_k`: its share of the
+    outcome's probability on the maximally mixed state.
+    """
 
 
 def _kraus_superop_std(K: _np.ndarray) -> _np.ndarray:
@@ -100,13 +111,14 @@ def _closest_completion(V0: _np.ndarray, W0: _np.ndarray,
     return Z + Pn @ Zn @ Qn.conj().T, unresolved
 
 
-def _unitary_factor(member: _np.ndarray, basis: _Basis, reference: _np.ndarray | None = None,
-                    error_tol: float = 1e-6, trunc_tol: float = 1e-7
-                    ) -> tuple[_np.ndarray, _np.ndarray, UnitaryFactor]:
+def _unitary_approximation(member: _np.ndarray, basis: _Basis, reference: _np.ndarray | None = None,
+                           error_tol: float = 1e-6, trunc_tol: float = 1e-7
+                           ) -> tuple[_np.ndarray, _np.ndarray, UnitaryApproximationReport]:
     """
     Choose the post-measurement unitary of one dense member superop (in `basis`).
 
-    Returns the effect superket `E` (in `basis`), the unitary `U`, and a :class:`UnitaryFactor`.
+    Returns the effect superket `E` (in `basis`), the unitary `U`, and a
+    :class:`UnitaryApproximationReport`.
     Raises ValueError if the member is not completely positive within `error_tol`.  A member
     whose Choi eigenvalues are all at most `trunc_tol` is treated as zero.
     """
@@ -136,9 +148,11 @@ def _unitary_factor(member: _np.ndarray, basis: _Basis, reference: _np.ndarray |
         raise ValueError(f"The member is not completely positive: its Choi matrix has eigenvalue "
                          f"{c_vals[-1]:.3e}.")
 
+    issues = []
     if c_vals[0] <= trunc_tol:
         U = R.copy()
-        multiplicity, completion_dim, unresolved = 0, udim, 0
+        issues.append("it is zero (its outcome never occurs), so U is the reference unitary (the identity "
+                      "by default)")
     else:
         multiplicity = int(_np.count_nonzero(c_vals >= c_vals[0] * (1 - TIE_RTOL)))
         v = c_vecs[:, 0]
@@ -161,15 +175,27 @@ def _unitary_factor(member: _np.ndarray, basis: _Basis, reference: _np.ndarray |
         V0, W0 = L[:, r:], Rh[r:].conj().T
         Z, unresolved = _closest_completion(V0, W0, [R, U_supp.conj().T])
         U = U_supp + V0 @ Z @ W0.conj().T
-        completion_dim = udim - r
+
+        weights = c_vals.clip(0, None)
+        share = weights[0] / weights.sum()
+        if multiplicity > 1 or share <= 0.5:
+            issue = (f"no Kraus operator dominates (the largest carries {share:.0%} of the member's weight), "
+                     "so the member is far from any measurement followed by a unitary")
+            if multiplicity > 1:
+                issue += f"; {multiplicity} tie for the largest, and U follows the reference among them"
+            issues.append(issue)
+        if unresolved:
+            issues.append(f"U is arbitrary on {unresolved} input dimension(s) that neither the member nor the "
+                          "reference determines; pass a reference that does")
 
     member_std = _bt.change_basis(member, basis, 'std')
     residual = float(_np.linalg.norm(member_std - _kraus_superop_std(U @ sqrtE)))
     scale = float(_np.linalg.norm(member_std))
-    factor = UnitaryFactor(residual=residual, relative_residual=residual / scale if scale > 0 else 0.0,
-                           choi_eigenvalues=c_vals, leading_multiplicity=multiplicity,
-                           completion_dim=completion_dim, unresolved_dim=unresolved)
-    return E_superket, U, factor
+    report = UnitaryApproximationReport(residual=residual,
+                                        relative_residual=residual / scale if scale > 0 else 0.0,
+                                        kraus_rank=int(_np.count_nonzero(c_vals > trunc_tol)),
+                                        issues=tuple(issues))
+    return E_superket, U, report
 
 
 def _as_dense_members(instrument_or_members) -> _collections.OrderedDict:
@@ -186,7 +212,8 @@ def _as_dense_members(instrument_or_members) -> _collections.OrderedDict:
 def infer_unitary_factors(instrument_or_members, basis: _BasisLike, *,
                           reference: _np.ndarray | dict[str, _np.ndarray] | None = None,
                           error_tol: float = 1e-6, trunc_tol: float = 1e-7
-                          ) -> tuple[dict[str, tuple[_np.ndarray, _np.ndarray]], dict[str, UnitaryFactor]]:
+                          ) -> tuple[dict[str, tuple[_np.ndarray, _np.ndarray]],
+                                     dict[str, UnitaryApproximationReport]]:
     r"""
     Choose a post-measurement unitary for each member of a completely positive instrument.
 
@@ -194,13 +221,14 @@ def infer_unitary_factors(instrument_or_members, basis: _BasisLike, *,
     this module's docstring, so the returned pairs rebuild an instrument with the same effects,
     hence the same outcome probabilities for every input state::
 
-        members, factors = infer_unitary_factors(instrument, basis)
+        members, reports = infer_unitary_factors(instrument, basis)
         seed = Instrument.from_effects(members, basis)
 
     The rebuilt member is `Ad_U o RootConj(E_k)`.  It equals `I_k` when `I_k` has one Kraus
-    operator; otherwise it is an approximation whose error `factors[k].residual` reports.  A
+    operator; otherwise it is an approximation whose error `reports[k].residual` reports.  A
     multi-Kraus member's conditional output states, and so downstream circuit probabilities,
-    change.
+    change.  A warning names any member whose report lists issues, such as a member far from any
+    measurement followed by a unitary.
 
     Parameters
     ----------
@@ -228,18 +256,21 @@ def infer_unitary_factors(instrument_or_members, basis: _BasisLike, *,
     -------
     members : dict
         `{label: (effect superket, unitary)}`, the input of :meth:`Instrument.from_effects`.
-    factors : dict
-        `{label: UnitaryFactor}`: residuals, Choi spectra, and how much of each unitary the
-        tie-breaking rules chose.
+    reports : dict
+        `{label: UnitaryApproximationReport}`: how well each rebuilt member reproduces the member,
+        and any issues.
     """
     dense = _as_dense_members(instrument_or_members)
     basis = _Basis.cast(basis, next(iter(dense.values())).shape[0])
-    members, factors = _collections.OrderedDict(), _collections.OrderedDict()
+    members, reports = _collections.OrderedDict(), _collections.OrderedDict()
     for lbl, member in dense.items():
         ref = reference.get(lbl) if isinstance(reference, dict) else reference
         try:
-            E, U, factor = _unitary_factor(member, basis, ref, error_tol, trunc_tol)
+            E, U, report = _unitary_approximation(member, basis, ref, error_tol, trunc_tol)
         except ValueError as e:
             raise ValueError(f"Instrument member {lbl!r}: {e}") from e
-        members[lbl], factors[lbl] = (E, U), factor
-    return members, factors
+        members[lbl], reports[lbl] = (E, U), report
+    flagged = [f"member {lbl!r}: " + "; ".join(r.issues) for lbl, r in reports.items() if r.issues]
+    if flagged:
+        _warnings.warn("infer_unitary_factors: " + ".  ".join(flagged) + ".", stacklevel=2)
+    return members, reports

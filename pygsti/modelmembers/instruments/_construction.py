@@ -50,7 +50,7 @@ from pygsti.baseobjs import BasisLike as _BasisLike
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _pv
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
-from pygsti.modelmembers.instruments.unitaryfactors import _unitary_factor
+from pygsti.modelmembers.instruments.unitaryfactors import _unitary_approximation
 from pygsti.tools import optools as _ot
 from pygsti.tools import basistools as _bt
 
@@ -182,14 +182,13 @@ def _normalize_effects_and_gates(members: dict[str, MemberSpec], basis: _BasisLi
         if not _np.allclose(I_superket @ G_superop, I_superket, atol=atol):
             raise ValueError(f"The post-measurement gate for outcome {label!r} is not TP.")
         try:
-            _, U, factor = _unitary_factor(G_superop, basis)
+            _, U, report = _unitary_approximation(G_superop, basis)
         except ValueError as e:
             raise ValueError(_nonunitary_gate_message(label, str(e))) from e
-        if factor.residual > atol:
+        if report.residual > atol:
             raise ValueError(_nonunitary_gate_message(
-                label, f"its superoperator is {factor.residual:.2e} (Frobenius) from the nearest "
-                f"unitary channel, and its Choi matrix has {int(_np.sum(factor.choi_eigenvalues > atol))} "
-                "eigenvalues above atol"))
+                label, f"its superoperator is {report.residual:.2e} (Frobenius) from the nearest "
+                f"unitary channel, and it has {report.kraus_rank} Kraus operators"))
         return U
 
     superkets = dict()
@@ -235,12 +234,11 @@ def _unitary_members_from_cptr(op_arrays: dict[str, _np.ndarray], basis: _Basis,
     inexact = []
     for lbl, I_k in op_arrays.items():
         try:
-            E_k, U_k, factor = _unitary_factor(I_k, basis, None, error_tol, trunc_tol)
+            E_k, U_k, report = _unitary_approximation(I_k, basis, None, error_tol, trunc_tol)
         except ValueError as e:
             raise ValueError(f"Instrument member {lbl!r}: {e}") from e
-        if factor.residual > error_tol:
-            rank = int(_np.sum(factor.choi_eigenvalues > trunc_tol))
-            inexact.append(f"{lbl!r} (Choi rank {rank}, residual {factor.residual:.2e})")
+        if report.residual > error_tol:
+            inexact.append(f"{lbl!r} (Kraus rank {report.kraus_rank}, residual {report.residual:.2e})")
         superkets[lbl], unitaries[lbl] = E_k, U_k
     if inexact:
         raise ValueError(

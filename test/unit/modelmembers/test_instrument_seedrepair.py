@@ -223,7 +223,7 @@ class PatchInstrumentSeedTester(BaseCase):
         members = {k: G @ ot.rootconj_superop(effects[k], self.pp) for k in effects}
         inst, report = patch_instrument_seed(members, self.pp, return_report=True)
         for lbl, m in inst.items():
-            self.assertGreater(report['unitary_factors'][lbl].residual, 1e-2)
+            self.assertGreater(report['unitary_approximations'][lbl].residual, 1e-2)
             self.assertArraysAlmostEqual(m.to_dense('HilbertSchmidt')[0], members[lbl][0])
 
 

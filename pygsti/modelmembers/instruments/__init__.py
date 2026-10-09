@@ -19,7 +19,7 @@ from .diagnostics import (
     static_base_ranks, base_effect_span, base_effect_extent,
     diagnose_instrument, diagnose_model_instruments
 )
-from .unitaryfactors import UnitaryFactor, infer_unitary_factors
+from .unitaryfactors import UnitaryApproximationReport, infer_unitary_factors
 from .seedrepair import (
     displace_base_effects, project_instrument_to_cptp,
     patch_instrument_seed, patch_model_instrument_seeds
