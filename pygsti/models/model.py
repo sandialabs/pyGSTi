@@ -2158,11 +2158,22 @@ class OpModel(Model):
         Label or None
         """
         if len(self._primitive_povm_label_dict) == 1 and \
-           (sslbls is None or sslbls == ('*',) or (self.state_space.num_tensor_product_blocks == 1
-                                                   and self.state_space.tensor_product_block_labels(0) == sslbls)):
+           (sslbls is None or sslbls == ('*',) or self._sslbls_within_single_block(sslbls)):
             return next(iter(self._primitive_povm_label_dict.keys()))
         else:
             return None
+
+    def _sslbls_within_single_block(self, sslbls):
+        """
+        Whether `sslbls` lie within the model's state space, when it has a single tensor product block.
+
+        A circuit on a subset of the model's lines (e.g. on qubit 0 of a 2-qubit model) leaves
+        the other lines idle, so the model's only POVM can still be applied to it.
+        """
+        if self.state_space.num_tensor_product_blocks != 1:
+            return False
+        block_labels = self.state_space.tensor_product_block_labels(0)
+        return len(sslbls) > 0 and set(sslbls).issubset(block_labels)
 
     def _has_primitive_preps(self):
         """
