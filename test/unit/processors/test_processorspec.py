@@ -458,13 +458,63 @@ class ProcessorSpecTester(BaseCase):
 
     def test_rename_gate_inplace(self):
         ps = QubitProcessorSpec(1, gate_names=['Gx', 'Gy'], availability={'Gx': [(0,)], 'Gy': [(0,)]})
-        ps.rename_gate_inplace('Gx', 'MyGx')
+        ps.rename_gate_inplace('Gx', 'GmyGx')
         self.assertNotIn('Gx', ps.gate_names)
-        self.assertIn('MyGx', ps.gate_names)
+        self.assertIn('GmyGx', ps.gate_names)
         self.assertNotIn('Gx', ps.gate_unitaries)
-        self.assertIn('MyGx', ps.gate_unitaries)
+        self.assertIn('GmyGx', ps.gate_unitaries)
         self.assertNotIn('Gx', ps.availability)
-        self.assertIn('MyGx', ps.availability)
+        self.assertIn('GmyGx', ps.availability)
+
+    def test_rename_gate_inplace_rejects_noncompliant_name(self):
+        ps = QubitProcessorSpec(1, gate_names=['Gx', 'Gy'], availability={'Gx': [(0,)], 'Gy': [(0,)]})
+        with self.assertRaises(ValueError) as cm:
+            ps.rename_gate_inplace('Gx', 'MyGx')
+        self.assertIn('MyGx', str(cm.exception))
+        self.assertIn('Gx', ps.gate_names)  # the spec is left alone
+
+    def test_rename_gate_inplace_to_empty_label(self):
+        # pygsti.leakage renames the implicit idle to the empty layer label, which carries
+        # no name to prefix-check.
+        ps = QubitProcessorSpec(1, gate_names=['Gx', '{idle}'])
+        ps.rename_gate_inplace('{idle}', Label(()))
+        self.assertIn(Label(()), ps.gate_names)
+
+    def test_gate_names_must_be_in_reserved_namespaces(self):
+        # 'G'-prefixed and brace-wrapped implicit names are the two accepted namespaces;
+        # anything else cannot be stored in a model's operation dictionaries, so it is
+        # rejected here rather than much later during model construction.
+        ps = QubitProcessorSpec(1, gate_names=['Gx', '{idle}'])
+        self.assertEqual(ps.gate_names, ('Gx', '{idle}'))
+
+        cases = [
+            ({'gate_names': ['Gx', 'mygate'],
+              'nonstd_gate_unitaries': {'mygate': np.eye(2, dtype='complex')}}, 'gate_names'),
+            ({'gate_names': ['Gx'],
+              'nonstd_gate_unitaries': {'mygate': np.eye(2, dtype='complex')}}, 'nonstd_gate_unitaries'),
+            ({'gate_names': ['Gx'], 'nonstd_gate_num_qubits': {'mygate': 1}}, 'nonstd_gate_num_qubits'),
+        ]
+        for kwargs, expected_argname in cases:
+            with self.subTest(argname=expected_argname):
+                with self.assertRaises(ValueError) as cm:
+                    QubitProcessorSpec(1, **kwargs)
+                self.assertIn('mygate', str(cm.exception))
+                self.assertIn(expected_argname, str(cm.exception))
+
+    def test_gate_name_namespace_check_accepts_label_objects(self):
+        from pygsti.processors.processorspec import _is_compliant_gate_name
+        compliant = ['Gx', '{idle}', Label('Gx'), Label(('Gx', 0)), Label(())]
+        noncompliant = ['mygate', Label('mygate'), Label(('mygate', 0))]
+        for name in compliant:
+            self.assertTrue(_is_compliant_gate_name(name), msg=repr(name))
+        for name in noncompliant:
+            self.assertFalse(_is_compliant_gate_name(name), msg=repr(name))
+
+    def test_qudit_gate_names_must_be_in_reserved_namespaces(self):
+        with self.assertRaises(ValueError) as cm:
+            QuditProcessorSpec(['Q0'], [3], ['mygate'],
+                               nonstd_gate_unitaries={'mygate': np.eye(3, dtype='complex')})
+        self.assertIn('mygate', str(cm.exception))
 
     def test_resolved_availability_modes(self):
         ps = QubitProcessorSpec(3, gate_names=['Gcnot'], availability={'Gcnot': [(0, 1)]}, geometry='line')

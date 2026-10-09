@@ -80,7 +80,7 @@ The returned `ModelEstimateResults` object (see the [Results tutorial](../analys
 ```{code-cell} ipython3
 report = pygsti.report.construct_standard_report(
     results, title="Example 2Q-GST Report", verbosity=2)
-report.write_html('../../../example_files/easy_2q_report', connected=True, verbosity=2)
+report.write_html('../../../example_files/easy_2q_report', verbosity=2)
 ```
 
 The report is served with these docs: <a href="../../../reports/easy_2q_report/main.html">easy 2Q report</a>.  You've run 2-qubit GST!

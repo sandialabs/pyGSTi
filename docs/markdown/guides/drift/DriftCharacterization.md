@@ -95,7 +95,7 @@ NOTE: In notebook display of report figures does not work in jupyterlab due to r
 ```{code-cell} ipython3
 # Create a workspace to show plots
 w = pygsti.report.Workspace()
-w.init_notebook_mode(connected=False, autodisplay=True) 
+w.init_notebook_mode(enable_offline_mode=True, autodisplay=True) 
 ```
 
 ### 1. Instability Detection Results : Power Spectra and the Frequencies of Instabilities
@@ -194,7 +194,7 @@ We can also create a report that contains all of these plots, as well as a few o
 
 ```{code-cell} ipython3
 report = pygsti.report.create_drift_report(results, title='Example Drift Report')
-report.write_html('../../../tutorial_files/DriftReport', connected=True)
+report.write_html('../../../tutorial_files/DriftReport')
 ```
 
 The report is served with these docs: <a href="../../../reports/DriftReport/main.html">DriftReport</a>.

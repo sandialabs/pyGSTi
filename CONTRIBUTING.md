@@ -49,9 +49,16 @@ contributors working at Sandia.
 
 #### For non-Sandians
 
-If you're interested in making contributions please let us know by email at
-[pygsti@sandia.gov][email] so we can get you a Contributor License Agreement
-(CLA). This needs to be signed and through our system before you can contribute.
+A Contributor License Agreement (CLA) is no longer required (we can still
+send you a copy if you would like to sign one). Instead, include a sentence in
+your pull request message stating that your contributions are made under the
+terms of the [Apache License, Version 2.0][license], the license pyGSTi is
+distributed under. For example:
+
+> These contributions are being made under the terms of the open-source
+> Apache 2.0 license.
+
+If you have questions, you can reach the authors at [pygsti@sandia.gov][email].
 
 #### For Sandians
 
@@ -60,7 +67,20 @@ If you're interested in making contributions please let us know by email at
 * **Contact the authors** at [pygsti@sandia.gov][email] to
   request an invite to the [repository][pygsti].
 
+### Use of generative AI tools
+
+If your contribution was developed with the help of generative AI tools
+(agentic or otherwise), please:
+
+* **Say so and name the model(s) used.** Annotating your commit messages with
+  this information is best practice. If your commits already exist, a note in
+  the pull request message is also fine. Please don't put these annotations in
+  the source code itself.
+* **Attest that you have thoroughly reviewed** all contributions written with
+  generative AI tools.
+
 [email]: mailto:pygsti@sandia.gov
+[license]: LICENSE
 [issues:bug]: https://github.com/sandialabs/pyGSTi/issues/new?labels=bug&template=bug_report.md
 [issues:feature]: https://github.com/sandialabs/pyGSTi/issues/new?labels=enhancement&template=feature_request.md
 [issues:new]: https://github.com/sandialabs/pyGSTi/issues/new

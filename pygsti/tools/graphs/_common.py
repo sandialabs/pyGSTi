@@ -7,15 +7,12 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-"""Shared types and small utilities used across the edge-coloring submodules."""
+"""Shared types and small utilities used across the graphs subpackage."""
 from typing import Any, Dict, List, Sequence, Tuple
 
 # Vertex: usually an int (qubit index) or string-like qubit label. Only needs
 # to support equality/hashing (as a dict key) and, for `order`, `</>`.
 Vertex = Any
-
-# Color: an edge (or vertex) color, a non-negative integer.
-Color = int
 
 # Edge: an undirected edge as a 2-tuple of vertices. Functions in this
 # package generally expect/produce *canonical* edges (v1 <= v2, see `order`);
@@ -25,9 +22,6 @@ Edge = Tuple[Vertex, Vertex]
 
 # NeighborMap: vertex -> list of neighboring vertices.
 NeighborMap = Dict[Vertex, List[Vertex]]
-
-# Coloring: a (possibly partial) proper edge coloring: color -> canonical edges.
-Coloring = Dict[Color, List[Edge]]
 
 
 def order(u: Vertex, v: Vertex) -> Edge:
@@ -66,20 +60,8 @@ def find_neighbors(vertices: Sequence[Vertex], edges: Sequence[Edge]) -> Neighbo
     return {v: list(nbrs) for v, nbrs in neighbors.items()}
 
 
-def check_valid_edge_coloring(color_patches: Coloring, ret_false_on_error: bool = False) -> bool:
+def max_degree(neighbors: NeighborMap) -> int:
     """
-    color_patches (dict): A dictionary mapping each color to a list of edges
-                          colored with that color. Unlike with edges, the items
-                          in color_patches are NOT symmetric [i.e., it only
-                          contains (v1, v2) for v1 < v2]
+    Return the maximum degree of the graph described by `neighbors`.
     """
-    for c, patch in color_patches.items():
-        in_patch = set()
-        for pair in patch:
-            in_patch.add(pair[0])
-            in_patch.add(pair[1])
-        if len(in_patch) != 2 * len(patch):
-            if ret_false_on_error:
-                return False
-            raise ValueError()
-    return True
+    return max((len(nbrs) for nbrs in neighbors.values()), default=0)

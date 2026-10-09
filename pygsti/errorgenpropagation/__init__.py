@@ -8,3 +8,5 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+
+from .localstimerrorgen import canonicalize_errorgen_layer

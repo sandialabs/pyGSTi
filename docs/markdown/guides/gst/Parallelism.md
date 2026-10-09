@@ -95,7 +95,7 @@ from pygsti.report import construct_standard_report
 report = construct_standard_report(
     results, title="MPI Example Report", verbosity=0
 )
-report.write_html('../../../example_files/mpi_example_brief', connected=True, auto_open=False)
+report.write_html('../../../example_files/mpi_example_brief', auto_open=False)
 ```
 
 Open the <a href="../../../reports/mpi_example_brief/main.html">report</a>.

@@ -257,7 +257,7 @@ report_dir += '/robust-gst-report'
 print('HTML report will be written to ... ')
 import os
 print(os.getcwd() + '/' + report_dir + '/main.html\n\n')
-report.write_html(report_dir, connected=True, verbosity=0)
+report.write_html(report_dir, verbosity=0)
 ```
 
 Trained and tested on clean data (first table), the two objectives agree closely: `-logl` scores 465.6, `tvd` scores 475.7 — a roughly 2% cost for the robust objective when there is nothing to be robust to.

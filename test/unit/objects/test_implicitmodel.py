@@ -5,7 +5,10 @@ from pygsti.baseobjs.label import Label
 from pygsti.circuits.circuit import Circuit
 from pygsti.modelmembers.operations import ComposedOp, EmbeddedOp
 from pygsti.models import LocalNoiseModel, ExplicitOpModel, ImplicitOpModel
-from pygsti.models.modelconstruction import create_crosstalk_free_model
+from pygsti.models.cloudnoisemodel import CloudNoiseModel
+from pygsti.models.modelconstruction import (
+    create_crosstalk_free_model, create_cloud_crosstalk_model
+)
 from pygsti.processors.processorspec import QubitProcessorSpec
 from pygsti.modelmembers.operations import (
     StaticArbitraryOp, ExpErrorgenOp, LindbladErrorgen
@@ -35,6 +38,19 @@ class ImplicitOpModelMixin:
             qubit_labels=qubit_labels
         )
 
+    def test_completed_circuit_with_permuted_povm_label(self):
+        # Completing a circuit whose line labels are out of order appends a POVM label like
+        # `Mdefault:qb1:qb0`, which names the full-device POVM rather than a marginal.
+        # MapLayout computes parameter dependence on completed circuits.
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        circuit = Circuit([('Gx', 'qb0')], line_labels=('qb1', 'qb0'))
+        completed = m.complete_circuit(circuit)
+        povm_label = completed.layertup[-1]
+        self.assertEqual(povm_label, Label(('Mdefault', 'qb1', 'qb0')))
+        self.assertIs(m.circuit_layer_operator(povm_label, 'povm'), m.povm_blks['layers']['Mdefault'])
+        self.assertEqual(m.circuit_parameter_dependence([completed])[completed],
+                         m.circuit_parameter_dependence([circuit])[circuit])
+
     @staticmethod
     def _test_getitem(base: BaseCase, m: ImplicitOpModel):
         base.assertIs( m['rho0'],        m.prep_blks['layers']['rho0']             )
@@ -42,6 +58,9 @@ class ImplicitOpModelMixin:
         base.assertIs( m['Gx'],          m.operation_blks['gates']['Gx']           )
         base.assertIs( m[('Gx', 'qb0')], m.operation_blks['layers'][('Gx', 'qb0')] )
         base.assertIs( m['Gx:qb0'],      m.operation_blks['layers'][('Gx', 'qb0')] )
+        base.assertIs( m[Label(('Gx', 'qb0'))], m.operation_blks['layers'][('Gx', 'qb0')] )
+        with base.assertRaises(KeyError):
+            _ = m['nonexistent']
         return
 
 
@@ -62,6 +81,24 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
         super()._test_getitem(self, m)
         return
 
+    def test_member_dict_prefixes(self):
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        inst = Instrument({'p0': np.diag([1., 0, 0, 0]), 'p1': np.diag([0, 0, 0, 1.])})
+        member_dicts = (
+            (m.prep_blks['layers'], 'rho1', m['rho0'].copy(), 'Mbad'),
+            (m.povm_blks['layers'], 'Mtest', m['Mdefault'].copy(), 'rhobad'),
+            (m.operation_blks['gates'], 'Ggate', m['Gx'].copy(), 'Mbad'),
+            (m.operation_blks['layers'], ('Glayer', 'qb0'), m[('Gx', 'qb0')].copy(), 'Ibad'),
+            (m.instrument_blks['layers'], 'Itest', inst, 'Gbad'),
+            (m.factories['gates'], 'Gfactory', m['Gx'].copy(), 'rhobad'),
+            (m.factories['layers'], ('Gfactorylayer', 'qb0'), m[('Gx', 'qb0')].copy(), 'Mbad')
+        )
+        for member_dict, valid_key, member, invalid_key in member_dicts:
+            member_dict[valid_key] = member
+            self.assertIs(m[valid_key], member_dict[valid_key])
+            with self.assertRaises(KeyError):
+                member_dict[invalid_key] = member
+
     def test_indep_localnoise(self):
         mdl_local = create_crosstalk_free_model(
             self.pspec_2Q, ideal_gate_type='H+S',
@@ -77,6 +114,7 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
             ('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'),
             ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0')
         ]))
+        self.assertIs(mdl_local[('Gx', 'qb0')], mdl_local.operation_blks['gates'][('Gx', 'qb0')])
         test_circuit = ([('Gx', 'qb0'), ('Gy', 'qb1')],
                         ('Gcnot', 'qb0', 'qb1'),
                         [('Gx', 'qb1'), ('Gy', 'qb0')])
@@ -97,6 +135,8 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
             ('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'),
             ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0')
         ]))
+
+        self.assertIs(mdl_local[('Gx', 'qb0')], mdl_local.operation_blks['layers'][('Gx', 'qb0')])
         test_circuit = ([('Gx', 'qb0'), ('Gy', 'qb1')],
                         ('Gcnot', 'qb0', 'qb1'),
                         [('Gx', 'qb1'), ('Gy', 'qb0')])
@@ -130,6 +170,10 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
             ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0'),
             ('Gidle', 'qb0'), ('Gidle', 'qb1'), '{auto_global_idle}'
         ]))
+
+        self.assertIs(mdl_local['{auto_global_idle}'],
+                      mdl_local.operation_blks['layers']['{auto_global_idle}'])
+
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'),
                         [], [('Gx', 'qb1'), ('Gy', 'qb0')])
         probs = mdl_local.probabilities(test_circuit)
@@ -218,6 +262,56 @@ class LocalNoiseModelTester(ImplicitOpModelMixin, BaseCase):
         c3.done_editing()
         prob3 = mdl_local.probabilities(c3)
         self.assertEqual(len(prob3), 16)  # Full 4 qubit space
+
+
+class CloudNoiseModelTester(ImplicitOpModelMixin, BaseCase):
+    """
+    Build CloudNoiseModel objects from create_cloud_crosstalk_model.
+    """
+
+    def ideal_model_from_pspec(self, ps: QubitProcessorSpec) -> CloudNoiseModel:
+        return create_cloud_crosstalk_model(ps, depolarization_strengths={'Gx': 0.1})
+
+    def test_getitem(self):
+        # Not `ImplicitOpModelMixin._test_getitem`: that asserts `m[layer_lbl]` *is* the
+        # stored `operation_blks['layers']` entry, which holds for LocalNoiseModel but not
+        # here -- a CloudNoiseModel composes the target gate with its cloud noise to build
+        # the layer op on demand.
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        self.assertIs(m['rho0'], m.prep_blks['layers']['rho0'])
+        self.assertIs(m['Mdefault'], m.povm_blks['layers']['Mdefault'])
+        self.assertIs(m['Gx'], m.operation_blks['gates']['Gx'])
+        self.assertIs(m[('Gx', 'qb0')], m['Gx:qb0'])
+        with self.assertRaises(KeyError):
+            _ = m['nonexistent']
+
+    def test_member_dict_prefixes(self):
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        inst = Instrument({'p0': np.diag([1., 0, 0, 0]), 'p1': np.diag([0, 0, 0, 1.])})
+        cloudnoise_member = m.operation_blks['cloudnoise'][('Gx', 'qb0')].copy()
+        member_dicts = (
+            (m.prep_blks['layers'], 'rho1', m['rho0'].copy(), 'Mbad'),
+            (m.povm_blks['layers'], 'Mtest', m['Mdefault'].copy(), 'rhobad'),
+            (m.operation_blks['gates'], 'Ggate', m['Gx'].copy(), 'Mbad'),
+            (m.operation_blks['cloudnoise'], ('Gcloud', 'qb0'), cloudnoise_member, 'Mbad'),
+            (m.operation_blks['layers'], ('Glayer', 'qb0'), m[('Gx', 'qb0')].copy(), 'Ibad'),
+            (m.instrument_blks['layers'], 'Itest', inst, 'Gbad'),
+            (m.factories['gates'], 'Gfactory', m['Gx'].copy(), 'rhobad'),
+            (m.factories['cloudnoise'], ('Gfactorycloud', 'qb0'), m[('Gx', 'qb0')].copy(), 'rhobad'),
+            (m.factories['layers'], ('Gfactorylayer', 'qb0'), m[('Gx', 'qb0')].copy(), 'Mbad')
+        )
+        for member_dict, valid_key, member, invalid_key in member_dicts:
+            with self.subTest(valid_key=str(valid_key)):
+                member_dict[valid_key] = member
+                with self.assertRaises(KeyError):
+                    member_dict[invalid_key] = member
+
+    def test_implicit_idle_label_accepted(self):
+        # '{...}' names are the other accepted namespace; make sure enforcing 'G' did not
+        # lock out the brace-wrapped implicit labels.
+        m = self.ideal_model_from_pspec(self.pspec_2Q)
+        m.operation_blks['layers']['{auto_global_idle}'] = m[('Gx', 'qb0')].copy()
+        self.assertIn('{auto_global_idle}', m.operation_blks['layers'])
 
 
 class ToExplicitModelTester(BaseCase):

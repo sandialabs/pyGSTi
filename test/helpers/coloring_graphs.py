@@ -10,16 +10,16 @@
 """Graph fixtures and coloring assessors shared by the graph-coloring tests.
 
 Two suites use these: the correctness tests in
-``test/unit/tools/test_graphcoloring.py`` and the wall-clock scaling suite in
-``test/performance/test_graphcoloring_scaling.py``. They live here rather than
+``test/unit/tools/graphs/test_coloring.py`` and the wall-clock scaling suite in
+``test/performance/test_coloring_scaling.py``. They live here rather than
 in either one so that a fix to ``assess_coloring`` -- which decides whether a
 coloring is *correct* -- cannot land in one suite and not the other.
 """
 
 import numpy as np
 
-from pygsti.tools.graphcoloring import find_neighbors
-from pygsti.tools.graphcoloring._dispatch import VALID_ALGORITHMS
+from pygsti.tools.graphs import find_neighbors, max_degree
+from pygsti.tools.graphs.coloring._dispatch import VALID_ALGORITHMS
 
 
 # Every edge-coloring algorithm exposed by the switchboard.
@@ -60,7 +60,7 @@ def _finalize(vertices, edges):
     """
     vertices = list(vertices)
     neighbors = find_neighbors(vertices, edges)
-    deg = max((len(neighbors[v]) for v in vertices), default=0)
+    deg = max_degree(neighbors)
     return vertices, list(edges), neighbors, deg
 
 

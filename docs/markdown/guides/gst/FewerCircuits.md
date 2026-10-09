@@ -267,9 +267,9 @@ Finally, one can generate reports using GST with reduced-sequences:
 
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(full_results, title="Standard GST Strings Example"
-                                       ).write_html("../../../tutorial_files/example_stdstrs_report", connected=True)
+                                       ).write_html("../../../tutorial_files/example_stdstrs_report")
 pygsti.report.construct_standard_report(pfpr_results_greedy, title="Per-germ FPR (Greedy Heuristic) Report Example"
-                                        ).write_html("../../../tutorial_files/example_pfpr_greedy_report", connected=True)
+                                        ).write_html("../../../tutorial_files/example_pfpr_greedy_report")
 ```
 
 If all has gone well, the <a href="../../../reports/example_stdstrs_report/main.html">Standard GST</a>

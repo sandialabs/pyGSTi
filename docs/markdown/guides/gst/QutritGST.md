@@ -109,7 +109,7 @@ The standard report needs nothing qutrit-specific either.
 ```{code-cell} ipython3
 ws = pygsti.report.construct_standard_report(
     result, "Example Qutrit Report", verbosity=3
-).write_html('../../../example_files/sampleQutritReport', connected=True, auto_open=False, verbosity=3)
+).write_html('../../../example_files/sampleQutritReport', auto_open=False, verbosity=3)
 ```
 
 Served with these docs: <a href="../../../reports/sampleQutritReport/main.html">sampleQutritReport</a>.

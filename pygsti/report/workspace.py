@@ -425,7 +425,7 @@ class Workspace(object):
         self.GermFiducialProbTrajectoriesPlot = makefactory(_driftrpt.GermFiducialProbTrajectoriesPlot)
         self.GermFiducialPowerSpectraPlot = makefactory(_driftrpt.GermFiducialPowerSpectraPlot)
 
-    def init_notebook_mode(self, connected=False, autodisplay=False):
+    def init_notebook_mode(self, enable_offline_mode=False, autodisplay=False):
         """
         Initialize this Workspace for use in an iPython notebook environment.
 
@@ -434,11 +434,11 @@ class Workspace(object):
 
         Parameters
         ----------
-        connected : bool , optional
-            Whether to assume you are connected to the internet.  If you are,
-            then setting this to `True` allows initialization to rely on web-
-            hosted resources which will reduce the overall size of your
-            notebook.
+        enable_offline_mode : bool , optional
+            Whether to assume you are connected to the internet.  If not,
+            then setting this to `True` allows initialization to rely on
+            embedded and locally stored web resources for viewing content without an
+            active connection.
 
         autodisplay : bool , optional
             Whether to automatically display workspace objects after they are
@@ -466,7 +466,7 @@ class Workspace(object):
         # they can be inlined before the libraries themselves arrive.
         script += _merge.insert_resource(True, None, "pygsti_plotly_ex.js")
 
-        # Style sheets.  These are always *inlined*, even when connected=False:
+        # Style sheets.  These are always *inlined*, even when enable_offline_mode=False:
         # a <link href='offline/...'> in cell output would be resolved against
         # the page URL, which is not the notebook's directory under JupyterLab
         # or Notebook 7.  Images referenced by the jQuery-UI theme are folded in
@@ -482,9 +482,9 @@ class Workspace(object):
                    "</style>\n") % _nbsetup.image_data_uri("ui-icons_222222_256x240.png")
 
         # Load jQuery, jQuery-UI, plotly and KaTeX with ordinary <script> tags
-        # (sequentially from a CDN when connected, inlined when not), then
+        # (sequentially from a CDN by default, inlined in offline mode), then
         # release everything that queued up on pygsti_require in the meantime.
-        script += _nbsetup.library_script(connected)
+        script += _nbsetup.library_script(enable_offline_mode)
 
         # Typeset math.  Modern Jupyter front-ends ship MathJax themselves, so
         # KaTeX is only a fallback; note that MathJax 3 has no .Hub, hence the

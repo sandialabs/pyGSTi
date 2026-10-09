@@ -334,7 +334,7 @@ report = pygsti.report.construct_standard_report(results, title='MCM GST', verbo
 with warnings.catch_warnings():
     warnings.simplefilter('ignore', NumericalDomainWarning)
     warnings.simplefilter('ignore', RuntimeWarning)
-    report.write_html("../../../tutorial_files/mcm_gst_report", connected=True, verbosity=0)
+    report.write_html("../../../tutorial_files/mcm_gst_report", verbosity=0)
 ```
 
 The report is served with these docs: <a href="../../../reports/mcm_gst_report/main.html">MCM GST</a>.

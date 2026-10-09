@@ -52,12 +52,12 @@ Once constructed, a `Report` object can write itself out as an HTML document, a 
 ```{code-cell} ipython3
 report = pygsti.report.construct_standard_report(results, title="GST Example Report", verbosity=1)
 #HTML
-report.write_html("../../../tutorial_files/exampleReport", connected=True, auto_open=False, verbosity=1)
+report.write_html("../../../tutorial_files/exampleReport", auto_open=False, verbosity=1)
 ```
 
 Served with these docs: <a href="../../../reports/exampleReport/main.html">exampleReport</a>.
 
-The `connected` argument decides where a report's JavaScript and CSS come from.  At the default `connected=False`, pyGSTi copies an `offline` folder of libraries (jQuery, Plotly, KaTeX) in beside `main.html`; that adds about 9 MB to every report and lets it render on a machine with no network connection.  Passing `connected=True` loads the same libraries from a CDN instead, leaving the report as a single `main.html` file that needs a network connection to draw its figures.  Every report in this documentation is written with `connected=True`, because they are served from a web site whose readers are online by definition.  For a report you mean to email to a colleague or keep for the archive, leave the default.
+The `enable_offline_mode` argument decides where a report's JavaScript and CSS come from.  At the default, `enable_offline_mode=False`, they are loaded from a CDN, leaving the report as a single `main.html` file that needs a network connection to draw its figures.  Passing `enable_offline_mode=True` makes pyGSTi copy an `offline` folder of libraries (jQuery, Plotly, KaTeX) in beside `main.html`; that adds about 9 MB to every report and lets it render on a machine with no network connection.  Every report in this documentation uses the default, because they are served from a web site whose readers are online by definition.  For a report you mean to email to a colleague or keep for the archive, pass `enable_offline_mode=True`.
 
 A second knob, the `embed_figures` entry of `advanced_options`, decides where the *figures* live.  By default every figure is embedded in `main.html`, so the report is self-contained and opens with a double-click -- and, for a large experiment design, so `main.html` runs to tens of megabytes and takes seconds to parse.  With `embed_figures=False` each figure is written to its own file under `figures/` and fetched only when you open the section that shows it, which keeps `main.html` to a few hundred kilobytes; the cost is that browsers refuse those fetches for pages opened straight from the filesystem, so such a report must be served over HTTP (`python -m http.server` in the report directory is enough).  Setting the environment variable `PYGSTI_REPORT_EMBED_FIGURE_DEFAULT` (to `false` or `true`) before running Python changes the default for every report you generate; the copies of these tutorials' reports served with this documentation are built with it set to `false`, which is why their links point at a `main.html` inside each report's directory.  `write_html(..., single_file=True)`, which additionally bakes in the external dependencies, requires embedded figures.
 
@@ -117,7 +117,7 @@ Now call the *same* `construct_standard_report` function, but instead of passing
 ws = pygsti.report.Workspace()
 report = pygsti.report.construct_standard_report(
     {'full TP': results_tp, "Full": results_full}, title="Example Multi-Estimate Report", ws=ws, verbosity=2)
-report.write_html("../../../tutorial_files/exampleMultiEstimateReport", connected=True, auto_open=False, verbosity=2)
+report.write_html("../../../tutorial_files/exampleMultiEstimateReport", auto_open=False, verbosity=2)
 ```
 
 Served with these docs: <a href="../../../reports/exampleMultiEstimateReport/main.html">exampleMultiEstimateReport</a>.
@@ -138,7 +138,7 @@ pygsti.report.construct_standard_report(
     results_both,
     title="Example Multi-Estimate Report (v2)", 
     ws=ws, verbosity=2
-).write_html("../../../tutorial_files/exampleMultiEstimateReport2", connected=True, auto_open=False, verbosity=2)
+).write_html("../../../tutorial_files/exampleMultiEstimateReport2", auto_open=False, verbosity=2)
 ```
 
 Served with these docs: <a href="../../../reports/exampleMultiEstimateReport2/main.html">exampleMultiEstimateReport2</a>.
@@ -155,7 +155,7 @@ results_std = pygsti.protocols.StandardGST(modes=('full TP', 'CPTPLND', 'Target'
 # Generate a report with "TP", "CPTP", and "Target" estimates
 pygsti.report.construct_standard_report(
     results_std, title="Post StdPractice Report", verbosity=1
-).write_html("../../../tutorial_files/exampleStdReport", connected=True, auto_open=False, verbosity=1)
+).write_html("../../../tutorial_files/exampleStdReport", auto_open=False, verbosity=1)
 ```
 
 Served with these docs: <a href="../../../reports/exampleStdReport/main.html">exampleStdReport</a>.
@@ -178,7 +178,7 @@ crfact.project_hessian('intrinsic error')
 pygsti.report.construct_standard_report(
     results_std, title="Post StdPractice Report (w/CIs on CPTP)",
     confidence_level=95, verbosity=1
-).write_html("../../../tutorial_files/exampleStdReport2", connected=True, auto_open=False, verbosity=1)
+).write_html("../../../tutorial_files/exampleStdReport2", auto_open=False, verbosity=1)
 ```
 
 Served with these docs: <a href="../../../reports/exampleStdReport2/main.html">exampleStdReport2</a>.
@@ -212,7 +212,7 @@ results_std2 = pygsti.protocols.StandardGST(modes=('full TP', 'Target'),
 pygsti.report.construct_standard_report(
     {'DS1': results_std, 'DS2': results_std2},
     title="Example Multi-Dataset Report", verbosity=1
-).write_html("../../../tutorial_files/exampleMultiDataSetReport", connected=True, auto_open=False, verbosity=1)
+).write_html("../../../tutorial_files/exampleMultiDataSetReport", auto_open=False, verbosity=1)
 ```
 
 Served with these docs: <a href="../../../reports/exampleMultiDataSetReport/main.html">exampleMultiDataSetReport</a>.
@@ -246,7 +246,7 @@ results_lgst = pygsti.protocols.LGST(smq1Q_XYI.target_model()).run(lgst_data)
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(
     results_lgst, title="LGST-only Example Report", verbosity=2
-).write_html('../../../example_files/LGSTonlyReport', connected=True, auto_open=False, verbosity=2)
+).write_html('../../../example_files/LGSTonlyReport', auto_open=False, verbosity=2)
 ```
 
 That report is served with these docs: <a href="../../../reports/LGSTonlyReport/main.html">LGSTonlyReport</a>.
@@ -264,7 +264,7 @@ Below we demonstrate both options in a very brief (`brevity=4`) report with link
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(
     results_std, title="Example Brief Report", verbosity=1
-).write_html("../../../tutorial_files/exampleBriefReport", connected=True, auto_open=False, verbosity=1,
+).write_html("../../../tutorial_files/exampleBriefReport", auto_open=False, verbosity=1,
              brevity=4, link_to=('pkl', 'tex'))
 ```
 
@@ -283,7 +283,7 @@ The line below creates a report notebook with `write_notebook`.  The argument li
 ```{code-cell} ipython3
 pygsti.report.construct_standard_report(
     results, title="GST Example Report Notebook", confidence_level=None, verbosity=3
-).write_notebook("../../../tutorial_files/exampleReport.ipynb", auto_open=False, connected=False, verbosity=3)
+).write_notebook("../../../tutorial_files/exampleReport.ipynb", auto_open=False, enable_offline_mode=True, verbosity=3)
 ```
 
 ## Multi-qubit reports

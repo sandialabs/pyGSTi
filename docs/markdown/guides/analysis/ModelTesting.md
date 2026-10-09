@@ -68,7 +68,7 @@ results.add_estimates(results3)
 
 pygsti.report.construct_standard_report(
     results, title="Model Test Example Report", verbosity=1
-).write_html("../../../tutorial_files/modeltest_report", connected=True, auto_open=False, verbosity=1)
+).write_html("../../../tutorial_files/modeltest_report", auto_open=False, verbosity=1)
 ```
 
 Served with these docs: <a href="../../../reports/modeltest_report/main.html">modeltest_report</a>.
@@ -90,7 +90,7 @@ gst_results.add_model_test(target_model, test_model3, estimate_key='MyModel3')
 #Create a report to see that we've added an estimate labeled "MyModel3"
 pygsti.report.construct_standard_report(
     gst_results, title="GST with Model Test Example Report 1", verbosity=1
-).write_html("../../../tutorial_files/gstwithtest_report1", connected=True, auto_open=False, verbosity=1)
+).write_html("../../../tutorial_files/gstwithtest_report1", auto_open=False, verbosity=1)
 ```
 
 Served with these docs: <a href="../../../reports/gstwithtest_report1/main.html">gstwithtest_report1</a>.
@@ -109,7 +109,7 @@ gst_results = proto.run(data, disable_checkpointing=True)
 
 pygsti.report.construct_standard_report(
     gst_results, title="GST with Model Test Example Report 2", verbosity=1
-).write_html("../../../tutorial_files/gstwithtest_report2", connected=True, auto_open=False, verbosity=1)
+).write_html("../../../tutorial_files/gstwithtest_report2", auto_open=False, verbosity=1)
 ```
 
 Served with these docs: <a href="../../../reports/gstwithtest_report2/main.html">gstwithtest_report2</a>.

@@ -132,7 +132,7 @@ device's qubit graph.
 `up_to_weight_k_error_gens_from_qubit_graph` does that enumeration. It (and
 `layer_snipper_from_qubit_graph`, below) accepts a `networkx` graph, an
 `igraph`/`graph-tool` graph, pyGSTi's own `QubitGraph` or `QubitProcessorSpec`, or a raw
-adjacency matrix. See `pygsti.extras.ml.graphtools` for the full list. Here is the line
+adjacency matrix. See `pygsti.tools.graphs` for the full list. Here is the line
 graph with a hop distance of {{num_hops}}.
 
 ```{code-cell} ipython3

@@ -17,8 +17,8 @@ This module replaces that dependency with a tiny loader of pyGSTi's own:
   that pyGSTi itself has loaded.  Calls made before the libraries have finished
   loading are queued and replayed, in order, once they are ready.
 * the libraries are loaded with plain ``<script>`` tags -- either sequentially
-  from a CDN (``connected=True``) or inlined directly into the output cell
-  (``connected=False``).  Neither path needs an ``offline/`` directory next to
+  from a CDN (the default) or inlined directly into the output cell
+  (``enable_offline_mode=True``).  Neither path needs an ``offline/`` directory next to
   the notebook, so neither depends on a notebook-server URL scheme.
 
 The AMD globals ``define``/``require`` are left alone, with one exception: while
@@ -44,7 +44,7 @@ import mimetypes as _mimetypes
 import os as _os
 import re as _re
 
-#: CDN locations used when ``connected=True``.  The order matters: jquery-ui is
+#: CDN locations used by default, when ``enable_offline_mode=False``.  The order matters: jquery-ui is
 #: a jQuery plugin and plotly's MathJax hooks want jQuery present already.
 CDN_URLS = [
     ("jquery", "https://code.jquery.com/jquery-3.6.4.min.js"),
@@ -55,7 +55,7 @@ CDN_URLS = [
 ]
 
 #: The same libraries as files under ``templates/offline``, used when
-#: ``connected=False``.  Same order, same reasons.
+#: ``enable_offline_mode=True``.  Same order, same reasons.
 OFFLINE_FILENAMES = [
     ("jquery", "jquery-3.6.4.min.js"),
     ("jquery-UI", "jquery-ui.min.js"),
@@ -256,24 +256,24 @@ def loader_script():
     return "<script type='text/javascript'>" + LOADER_JS + "</script>\n"
 
 
-def library_script(connected):
+def library_script(enable_offline_mode):
     """
     The HTML that loads jQuery, jQuery-UI, plotly and KaTeX and then releases
     everything queued on ``pygsti_require``.
 
     Parameters
     ----------
-    connected : bool
-        If True the libraries are pulled from a CDN, which keeps the notebook
+    enable_offline_mode : bool
+        If False the libraries are pulled from a CDN, which keeps the notebook
         small but requires an internet connection when the notebook is *viewed*.
-        If False their sources are inlined into the output cell, which makes the
+        If True their sources are inlined into the output cell, which makes the
         notebook self-contained (and large).
 
     Returns
     -------
     str
     """
-    if connected:
+    if not enable_offline_mode:
         urls = ",\n".join("  '%s'" % url for _, url in CDN_URLS)
         return ("<script type='text/javascript'>\n"
                 "window.pygsti_amd_suspend();\n"

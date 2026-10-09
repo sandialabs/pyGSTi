@@ -61,7 +61,7 @@ comparator_0_1.run(significance=0.05)
 ```{code-cell} ipython3
 #Create a workspace to show plots
 w = pygsti.report.Workspace()
-w.init_notebook_mode(connected=False, autodisplay=True) 
+w.init_notebook_mode(enable_offline_mode=True, autodisplay=True) 
 ```
 
 As we expect, the datasets are consistent!  We can also visualize this in a few ways.  The plot below shows a histogram of the p-values associated with the different strings.  If the null hypothesis (that the underlying models are the same) is true, then we expect the distribution to roughly follow the dotted green line.

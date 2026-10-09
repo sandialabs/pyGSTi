@@ -56,7 +56,7 @@ results = pygsti.protocols.StandardGST().run(data)
 # create a report
 report = pygsti.report.construct_standard_report(
     results, title="GST Overview Tutorial Example Report")
-report.write_html("../../../tutorial_files/gettingStartedReport", connected=True)
+report.write_html("../../../tutorial_files/gettingStartedReport")
 ```
 
 Served with these docs: <a href="../../../reports/gettingStartedReport/main.html">gettingStartedReport</a>.
@@ -185,7 +185,7 @@ stability_protocol = pygsti.protocols.StabilityAnalysis()
 results = stability_protocol.run(gst_data)
 
 report = pygsti.report.create_drift_report(results, title='Demo Drift Report')
-report.write_html('../../../tutorial_files/DemoDriftReport', connected=True)
+report.write_html('../../../tutorial_files/DemoDriftReport')
 ```
 
 Served with these docs: <a href="../../../reports/DemoDriftReport/main.html">DemoDriftReport</a>.

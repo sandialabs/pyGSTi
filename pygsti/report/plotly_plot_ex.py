@@ -258,7 +258,7 @@ def plot_ex(figure_or_data, show_link=True, link_text='Export to plot.ly',
     return {'html': plot_html, 'js': full_script}
 
 
-def init_notebook_mode_ex(connected=False):
+def init_notebook_mode_ex(enable_offline_mode=False):
     """
     Return HTML that makes `window.Plotly` available in a Jupyter notebook.
 
@@ -271,10 +271,14 @@ def init_notebook_mode_ex(connected=False):
     with jQuery and KaTeX via `pygsti.report.notebook_setup`.  It is kept for
     callers that only need plotly.
 
+    `enable_offline_mode=True` inlines the pyGSTi-customized plotly bundle, which
+    carries fixes relevant to pyGSTi plots, instead of loading plotly from a CDN.
+
     Parameters
     ----------
-    connected : bool, optional
+    enable_offline_mode : bool, optional
         Whether an active internet connection should be assumed.
+        If True embed resources to allow use without active internet connection.
 
     Returns
     -------
@@ -282,7 +286,7 @@ def init_notebook_mode_ex(connected=False):
     """
     global __PLOTLY_OFFLINE_INITIALIZED
 
-    if connected:
+    if not enable_offline_mode:
         script_inject = (
             "<script type='text/javascript'>"
             "if(!window.Plotly) {"
