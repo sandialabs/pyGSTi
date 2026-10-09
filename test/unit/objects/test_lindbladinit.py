@@ -146,6 +146,16 @@ class PrepareLindbladSeedScopeTester(BaseCase):
         for entry in report.perturbed:
             self.assertAlmostEqual(entry.diamond_bound, BUDGET, places=14)
 
+    def test_stochastic_only_split(self):
+        model = std.target_model()
+        model.set_all_parameterizations('CPTPLND')
+        vector, report = prepare_lindblad_seed(model, BUDGET, hs_split=(0.0, 1.0), seed=1)
+        model.from_vector(vector)
+        coeffs = _errorgen(model.operations[L('Gxpi2', 0)]).coefficients(label_type='local')
+        self.assertTrue(all(abs(c) == 0 for k, c in coeffs.items() if k.errorgen_type == 'H'))
+        for entry in report.perturbed:
+            self.assertAlmostEqual(entry.diamond_bound, BUDGET, places=14)
+
     def test_rejects_invalid_arguments(self):
         model = _instrument_model()
         for kwargs in ({'diamond_budget': 0.0}, {'diamond_budget': np.inf},

@@ -257,16 +257,16 @@ def _interior_rates(errgen, diamond_budget, hs_split, floor_fraction, rng):
     S_weights = 2 * op_norms(diss_blocks, S_lbls)**2
 
     # Random directions from the existing sampler, on the error generator's own basis and labels.
-    types = ('H', 'S') if (H_lbls and H_share > 0) else ('S',)
+    sample_H = bool(H_lbls) and H_share > 0
     basis = diss_blocks[0]._basis
-    sampled = _lt.random_cptp_errorgen_rates(errgen.state_space, errorgen_types=types,
+    sampled = _lt.random_cptp_errorgen_rates(errgen.state_space, errorgen_types=('H', 'S') if sample_H else ('S',),
                                              elementary_errorgen_basis=basis, label_type='local', seed=rng)
-    missing = [k for k in H_lbls + S_lbls if k not in sampled]
+    missing = [k for k in (H_lbls if sample_H else []) + S_lbls if k not in sampled]
     if missing:
         raise ValueError("random_cptp_errorgen_rates on basis %s did not produce rates for %s; the error generator's "
                          "blocks must share one identity-first basis." % (basis.name, missing))
     added = {}
-    if H_lbls and H_share > 0:
+    if sample_H:
         h = _np.array([sampled[k] for k in H_lbls])
         h *= H_share / _np.dot(H_weights, _np.abs(h))
         added.update(zip(H_lbls, h))
