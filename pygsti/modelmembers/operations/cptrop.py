@@ -40,8 +40,9 @@ if TYPE_CHECKING:
     import torch as _torch
 try:
     import torch as _torch
+    _TORCH_AVAILABLE = True
 except ImportError:
-    pass
+    _TORCH_AVAILABLE = False
 
 import warnings as _warnings
 
@@ -58,6 +59,66 @@ from pygsti.tools import optools as _ot
 
 from typing import Union
 BasisLike = Union[Basis, str]
+
+
+if _TORCH_AVAILABLE:
+    class _EffectSqrt(_torch.autograd.Function):
+        """
+        E ↦ E½ for a Hermitian E whose eigenvalues are clamped to [0, 1], as in
+        :func:`~pygsti.tools.optools.rootconj_superop`.
+
+        Autograd through ``torch.linalg.eigh`` differentiates eigenvectors, which divides by
+        eigenvalue gaps and gives NaN at repeated eigenvalues. This function instead applies the
+        Fréchet derivative of the square root (see
+        :func:`~pygsti.tools.matrixtools.sqrtm_frechet_derivative`), whose denominators are
+        sums of square roots. That map is self-adjoint under the real Frobenius inner product,
+        so the same formula serves for ``backward`` and ``jvp``, and ``generate_vmap_rule`` makes
+        both ``torch.func.jacrev`` and ``torch.func.jacfwd`` work.
+
+        An identically zero E is treated as a constant map with zero derivative. When some but
+        not all eigenvalues are at or below `tol` the derivative does not exist, and
+        differentiating raises a ValueError; the value is still computed.
+        """
+        generate_vmap_rule = True
+
+        @staticmethod
+        def forward(E: _torch.Tensor, tol: float):
+            vals, V = _torch.linalg.eigh(E)
+            vals = _torch.clamp(vals, 0.0, 1.0)
+            R = (V * _torch.sqrt(vals).to(V.dtype).unsqueeze(0)) @ V.mH
+            return R, V, vals
+
+        @staticmethod
+        def setup_context(ctx, inputs, output):
+            _, tol = inputs
+            _, V, vals = output
+            ctx.mark_non_differentiable(V, vals)
+            ctx.save_for_backward(V, vals)
+            ctx.save_for_forward(V, vals)
+            ctx.tol = tol
+
+        @staticmethod
+        def _frechet(V: _torch.Tensor, vals: _torch.Tensor, tol: float, H: _torch.Tensor) -> _torch.Tensor:
+            at_zero = vals <= tol
+            if bool(at_zero.all()):
+                return _torch.zeros_like(H)
+            if bool(at_zero.any()):
+                raise ValueError(
+                    f"RootConjOperator's effect has eigenvalues within {tol} of 0 (smallest {vals.min().item():.3g}), "
+                    "where E^(1/2) is not differentiable. Start the fit from effects interior to (0, 1).")
+            roots = _torch.sqrt(vals)
+            inv_root_sums = (1.0 / (roots.unsqueeze(1) + roots.unsqueeze(0))).to(V.dtype)
+            return V @ ((V.mH @ H @ V) * inv_root_sums) @ V.mH
+
+        @staticmethod
+        def backward(ctx, grad_R, grad_V, grad_vals):
+            V, vals = ctx.saved_tensors
+            return _EffectSqrt._frechet(V, vals, ctx.tol, grad_R), None
+
+        @staticmethod
+        def jvp(ctx, tangent_E, tangent_tol):
+            V, vals = ctx.saved_tensors
+            return _EffectSqrt._frechet(V, vals, ctx.tol, tangent_E), None, None
 
 
 class RootConjOperator(LinearOperator, _Torchable):
@@ -218,11 +279,12 @@ class RootConjOperator(LinearOperator, _Torchable):
         return out
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[Any, ...]:
-        """Bake the constants used by :meth:`torch_base` (see there for the degeneracy caveat).
+        """Bake the constants used by :meth:`torch_base` (see there for the boundary caveat).
 
         All free parameters belong to the wrapped effect; the basis element matrices ``B`` and the
         std<->basis change-of-basis matrices ``toMx`` / ``fromMx`` are constant and are pre-computed
-        here (mirroring :func:`pygsti.tools.optools.rootconj_superop`).
+        here (mirroring :func:`pygsti.tools.optools.rootconj_superop`), along with
+        :attr:`DERIV_EIGTOL`.
         """
         cdtype = _torch.complex128 if real_dtype.itemsize == 8 else _torch.complex64
         dim = self._state_space.dim
@@ -234,7 +296,8 @@ class RootConjOperator(LinearOperator, _Torchable):
         toMx  = _torch.from_numpy(to_np).to(dtype=cdtype, device=device)
         from_np = _np.ascontiguousarray(self._basis.create_transform_matrix('std'))
         fromMx  = _torch.from_numpy(from_np).to(dtype=cdtype, device=device)
-        return (type(self._effect), self._effect.stateless_data(real_dtype, device), B, toMx, fromMx)
+        return (type(self._effect), self._effect.stateless_data(real_dtype, device), B, toMx, fromMx,
+                self.DERIV_EIGTOL)
 
     @staticmethod
     def torch_base(sd: Tuple[Any, ...], t_param: _torch.Tensor) -> _torch.Tensor:
@@ -242,15 +305,13 @@ class RootConjOperator(LinearOperator, _Torchable):
 
         .. warning::
 
-            This uses ``torch.linalg.eigh`` on the effect matrix ``E``.  The AD rules for ``eigh``
-            contain ``1 / (λᵢ − λⱼ)`` factors -- in reverse mode (``torch.func.jacrev``) *and* forward
-            mode (``torch.func.jacfwd``) alike -- so the Jacobian from either mode is numerically
-            unstable, and NaN in the exactly-degenerate limit, for effects with (near-)degenerate
-            spectra.  Independently, ``sqrt`` of the clamped eigenvalues has an infinite derivative at
-            an eigenvalue of exactly 0, so boundary spectra also produce NaN Jacobians in both modes --
-            e.g. ideal projective effects (spectrum of 0s and 1s) yield entirely-NaN Jacobians.  Use
-            torch AD for this operator, in either mode, only for effects whose spectra are interior to
-            ``(0, 1)`` and non-degenerate; only the value path has no such restriction.
+            The derivative is exact for positive definite effects, including those with repeated
+            eigenvalues, and zero for an identically zero effect. When some but not all of the
+            effect's eigenvalues are within :attr:`DERIV_EIGTOL` of 0, as for ideal projective
+            effects, E½ is not differentiable, and differentiating this function in either mode
+            (``torch.func.jacrev`` or ``jacfwd``) raises a ValueError. The value path has no such
+            restriction. (The NumPy :meth:`deriv_wrt_params` falls back to finite differences
+            there instead, for compatibility.)
 
         Unlike the numpy reference :func:`~pygsti.tools.optools.rootconj_superop` -- which warns
         when an eigenvalue of ``E`` strays outside ``[0, 1]`` by more than :attr:`EIGTOL_WARNING`
@@ -258,12 +319,11 @@ class RootConjOperator(LinearOperator, _Torchable):
         magnitude of violation.  So under torch-driven optimization it can keep returning
         (clamped) values in regions where the numpy path would refuse to evaluate.
         """
-        etype, esd, B, toMx, fromMx = sd
+        etype, esd, B, toMx, fromMx, deriv_eigtol = sd
         v = etype.torch_base(esd, t_param).to(B.dtype)  # whole t_param: params delegate to the effect
         E = _torch.einsum('i,iab->ab', v, B)            # vec_to_stdmx
         E = (E + E.mH) / 2                               # match eigendecomposition's Hermitian symmetrize
-        vals, V = _torch.linalg.eigh(E)
-        R = (V * _torch.sqrt(_torch.clamp(vals, 0.0, 1.0)).unsqueeze(0)) @ V.mH
+        R = _EffectSqrt.apply(E, deriv_eigtol)[0]
         # plain (non-conjugate) transpose, matching np.kron(R, R.T); .contiguous() because
         # torch.kron cannot view the transposed (non-contiguous) operand.
         return (toMx @ _torch.kron(R, R.transpose(0, 1).contiguous()) @ fromMx).real

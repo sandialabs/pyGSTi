@@ -528,9 +528,8 @@ class CPTRInstrumentForwardSimConsistencyTester(ForwardSimConsistencyTester):
         rng = np.random.default_rng(44)
         model.from_vector(model.to_vector() + 0.02 * rng.standard_normal(model.num_params))
 
-        # Effects spectrally interior to (0, 1) and non-degenerate, so RootConjOperator's
-        # derivative is exact, its eigh-backward Jacobian is well-conditioned, and no
-        # NumericalDomainWarning fires.
+        # Effects spectrally interior to (0, 1), so RootConjOperator's NumPy and Torch derivatives
+        # are exact and no NumericalDomainWarning fires.
         E0 = np.diag([0.7, 0.3]).astype(complex)
         E1 = np.diag([0.3, 0.7]).astype(complex)
         instr = Instrument.from_effects({'p0': E0, 'p1': E1}, model.basis)

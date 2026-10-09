@@ -19,13 +19,14 @@ def torch_base_value(obj, dtype=torch.float64, device='cpu'):
     return type(obj).torch_base(sd, t_param).detach().numpy()
 
 
-def torch_base_jacobian(obj, dtype=torch.float64, device='cpu'):
-    """``torch.func.jacrev(torch_base)`` at obj's current parameters, as a numpy array shaped
-    ``(obj.to_dense('HilbertSchmidt').size, obj.num_params)`` -- i.e. reproduces ``deriv_wrt_params``."""
+def torch_base_jacobian(obj, dtype=torch.float64, device='cpu', jac=torch.func.jacrev):
+    """``jac(torch_base)`` (``torch.func.jacrev`` by default, or ``jacfwd``) at obj's current parameters,
+    as a numpy array shaped ``(obj.to_dense('HilbertSchmidt').size, obj.num_params)`` -- i.e. reproduces
+    ``deriv_wrt_params``."""
     sd = obj.stateless_data(dtype, device)
     t_param = torch.from_numpy(np.ascontiguousarray(obj.to_vector()))
     out_size = obj.to_dense('HilbertSchmidt').size
-    J = torch.func.jacrev(lambda tp: type(obj).torch_base(sd, tp))(t_param)
+    J = jac(lambda tp: type(obj).torch_base(sd, tp))(t_param)
     return J.reshape(out_size, -1).detach().numpy()
 
 
