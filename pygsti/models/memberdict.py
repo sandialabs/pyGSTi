@@ -16,41 +16,47 @@ from pygsti.modelmembers import modelmember as _mm
 
 
 LabelLike = _Label | tuple | str
+_PrefixType = str | tuple[str, ...] | None
 
 
 class _PrefixOrderedDict(_collections.OrderedDict):
     """
-    Base class ordered dictionaries whose keys *must* be strings which begin with a given prefix.
+    Base class for ordered dictionaries whose keys must begin with one of a set of prefixes.
 
     Parameters
     ----------
-    prefix : str
-        The required prefix.
+    prefix : str or tuple of str or None
+        The accepted prefix or prefixes, or `None` if keys are unconstrained.
 
     items : list or dict, optional
         Initial values.  Should only be used as part of de-serialization.
     """
 
-    def __init__(self, prefix, items=None):
-        """ Creates a new _PrefixOrderedDict whose keys must begin
-            with the string `prefix`."""
+    def __init__(self, prefix: _PrefixType, items=None):
+        """Create a new `_PrefixOrderedDict`."""
         #** Note: if change __init__ signature, update __reduce__ below
         if items is None:
             items = []
         self._prefix = prefix
         super(_PrefixOrderedDict, self).__init__(items)
 
-    def __setitem__(self, key, val):
+    def __setitem__(self, key: _Label, val):
         """ Assumes key is a Label object """
-        if not (self._prefix is None or key.has_prefix(self._prefix)):
-            raise KeyError("All keys must be strings, "
-                           "beginning with the prefix '%s'" % self._prefix)
+        if self._prefix is not None:
+            if isinstance(self._prefix, tuple):
+                has_prefix = any(key.has_prefix(p) for p in self._prefix)
+                prefix_desc = "one of the prefixes " + ", ".join(f"'{p}'" for p in self._prefix)
+            else:
+                has_prefix = key.has_prefix(self._prefix)
+                prefix_desc = "the prefix '%s'" % self._prefix
+            if not has_prefix:
+                raise KeyError("All keys must begin with %s" % prefix_desc)
         super(_PrefixOrderedDict, self).__setitem__(key, val)
 
 
 class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
     """
-    An ordered dictionary whose keys must begin with a given prefix.
+    An ordered dictionary whose keys must begin with a given prefix or prefixes.
 
     This class also ensure that every value is an object of the appropriate Model
     member type (e.g. :class:`State`- or :class:`LinearOperator`-derived object) by converting any
@@ -66,8 +72,8 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         The default parameterization used when creating an
         object from a key assignment.
 
-    prefix : str
-        The required prefix of all keys (which must be strings).
+    prefix : str or tuple of str or None
+        The accepted prefix or prefixes of all keys, or `None` if keys are unconstrained.
 
     flags : dict
         A dictionary of flags adjusting the behavior of the created
@@ -90,7 +96,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         Used by pickle and other serializations to initialize elements.
     """
 
-    def __init__(self, parent, default_param, prefix, flags, items=None):
+    def __init__(self, parent, default_param, prefix: _PrefixType, flags, items=None):
         """
         Creates a new OrderedMemberDict.
 
@@ -104,8 +110,8 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
             The default parameterization used when creating an
             object from a key assignment.
 
-        prefix : str
-            The required prefix of all keys (which must be strings).
+        prefix : str or tuple of str or None
+            The accepted prefix or prefixes of all keys, or `None` if keys are unconstrained.
 
         flags : dict
             A dictionary of flags adjusting the behavior of the created

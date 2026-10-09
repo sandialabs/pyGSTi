@@ -38,7 +38,6 @@ from pygsti.processors import CliffordCompilationRules as CCR
 :tags: [nbval-skip]
 
 from qiskit_ibm_runtime import QiskitRuntimeService
-from qiskit_ibm_runtime.fake_provider import FakeSherbrooke
 ```
 
 ## Load your IBM Q access
@@ -75,9 +74,6 @@ service.backends()
 
 # Can also ask for the least busy physical device
 backend = service.least_busy()
-
-# ... or can use a simulated fake backend
-sim_backend = FakeSherbrooke()
 ```
 
 ```{code-cell} ipython3
@@ -190,11 +186,14 @@ We're now ready to run on the IBM Q processor. We do this using an `IBMQExperime
 
 We can enable checkpointing for `IBMQExperiment` objects by providing a path. This is the default and is recommended! We are also overriding old checkpoints here to ensure we have a clean starting point.
 
+By default, `IBMQExperiment` batches 3000 circuits per job; this can be overridden by the `circuits_per_batch` parameter. Alternatively, you can use `circuits_per_batch="auto"` to estimate a cost-aware batch size based on the backend's gate-duration data, targeting a specific job duration rather than a fixed circuit count.
+
 ```{code-cell} ipython3
 :tags: [nbval-skip]
 
-exp = ibmq.IBMQExperiment(combined_edesign, pspec, circuits_per_batch=75, num_shots=1024, seed=20231201,
+exp = ibmq.IBMQExperiment(combined_edesign, pspec, num_shots=1024, seed=20231201,
                           checkpoint_path='test_ibmq', checkpoint_override=True)
+# Alternatively, use circuits_per_batch="auto" to estimate batch size from backend timing data
 ```
 
 First we convert pyGSTi circuits into jobs that can be submitted to IBM Q. **This step includes transpiling of the pyGSTi circuits into OpenQASM** (and then into QisKit objects).
@@ -226,7 +225,9 @@ If the `IBMQExperiment` object is lost and needs to be reloaded (i.e. notebook r
 exp2 = ibmq.IBMQExperiment.from_dir('test_ibmq')
 ```
 
-We're now ready to submit this experiment to IBM Q.Note that we can submit using a different backend than what was used to generate the experiment design. In general, it is not a good idea to mix and match backends for physical devices unless they have the exact same connectivity and qubit labeling; however, it **is** often useful for debugging purposes to use the simulator backend rather than a physical device.
+We're now ready to submit this experiment to IBM Q. Note that we can submit using a different backend than what was used to generate the experiment design. In general, it is not a good idea to mix and match backends for physical devices unless they have the exact same connectivity and qubit labeling; however, it **is** often useful for debugging purposes to use the simulator backend rather than a physical device.
+
+`submit()` accepts a `Session` or `Batch` runtime-mode object via the `ibmq_runtime_mode` parameter, useful if you want to supply your own or reuse one across multiple `submit()` calls. If none is provided, it creates its own `Batch` by default, which bills only for actual QPU hardware time rather than IBM-side preprocessing overhead. `ibmq_session` is a deprecated alias for `ibmq_runtime_mode`.
 
 ```{code-cell} ipython3
 :tags: [nbval-skip]
@@ -256,7 +257,9 @@ exp3 = ibmq.IBMQExperiment.from_dir('test_ibmq', regen_jobs=True, service=servic
 exp3.monitor()
 ```
 
-You can then grab the results, **Once you see that all the jobs are complete** (`.retrieve_results()` will just hang if the jobs have not yet completed).
+You can then grab the results. **Once you see that all the jobs are complete** (`.retrieve_results()` will just hang if the jobs have not yet completed), call `retrieve_results()` to fetch and process the outcome counts into a `ProtocolData` object.
+
+The `checkpointing_mode` parameter controls how the newly-retrieved results are persisted: `"data"` (default, fast) writes only the newly-retrieved outcome counts, avoiding re-serialization of the experiment design and circuit batches; `"full"` re-serializes the entire on-disk state; and `"none"` skips the checkpoint write entirely, which is safe because `submit()` already persists job IDs incrementally, allowing results to be re-retrieved later if needed.
 
 ```{code-cell} ipython3
 :tags: [nbval-skip]

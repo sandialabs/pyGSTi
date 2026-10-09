@@ -35,6 +35,47 @@ def _tuplize(x):
     return x
 
 
+def _is_compliant_gate_name(gate_name):
+    """Whether `gate_name` lies in one of the namespaces reserved for operations.
+
+    Gate names must either begin with 'G' or be a brace-wrapped implicit name such as
+    `'{idle}'`.  These are the two namespaces that the operation and factory
+    `OrderedMemberDict`s of `LocalNoiseModel` and `CloudNoiseModel` accept, so a name
+    outside them cannot be stored in a model built from this processor spec.
+
+    Non-string names are checked with `Label.has_prefix`, the same predicate the member
+    dicts apply, so the empty layer label `Label(())` -- which `pygsti.leakage` renames
+    the implicit idle to -- is accepted as it is there.
+    """
+    if not isinstance(gate_name, str):
+        # `LabelStr` subclasses `str` and so takes the branch below; other Label types
+        # (and anything else label-like) are asked directly.
+        has_prefix = getattr(gate_name, 'has_prefix', None)
+        return has_prefix('G') or has_prefix('{') if callable(has_prefix) else True
+    return gate_name.startswith('G') or (gate_name.startswith('{') and gate_name.endswith('}'))
+
+
+def _validate_gate_names(gate_names, source):
+    """Raise if any of `gate_names` is outside the reserved operation namespaces.
+
+    Parameters
+    ----------
+    gate_names : iterable
+        The names to check.
+
+    source : str
+        Name of the argument the names came from, used in the error message.
+    """
+    offenders = [gn for gn in gate_names if not _is_compliant_gate_name(gn)]
+    if offenders:
+        raise ValueError(
+            "Invalid gate name(s) in `%s`: %s. Gate names must begin with 'G' (e.g. 'Gxpi2') "
+            "or be a brace-wrapped implicit name (e.g. '{idle}'); these are the namespaces "
+            "that model operation dictionaries accept."
+            % (source, ", ".join(repr(gn) for gn in offenders))
+        )
+
+
 class ProcessorSpec(_NicelySerializable):
     """
     The API presented by a quantum processor, and possible classical control processors.
@@ -213,6 +254,10 @@ class QuditProcessorSpec(ProcessorSpec):
         if arity_unitary_overlap:
             raise ValueError("Non-standard gates cannot be given in both `nonstd_gate_unitaries` and "
                              "`nonstd_gate_num_qudits`: %s" % sorted(arity_unitary_overlap))
+
+        _validate_gate_names(gate_names, 'gate_names')
+        _validate_gate_names(nonstd_gate_unitaries, 'nonstd_gate_unitaries')
+        _validate_gate_names(nonstd_gate_num_qudits, 'nonstd_gate_num_qudits')
 
         #Store inputs for adding models later
         self.gate_names = tuple(gate_names[:])  # copy & cast to tuple
@@ -581,6 +626,7 @@ class QuditProcessorSpec(ProcessorSpec):
         """
         if existing_gate_name not in self.gate_names:
             raise ValueError("'%s' is not an existing gate name!" % str(existing_gate_name))
+        _validate_gate_names([new_gate_name], 'new_gate_name')
 
         def rename(nm):
             return new_gate_name if (nm == existing_gate_name) else nm
@@ -1079,6 +1125,10 @@ class QubitProcessorSpec(QuditProcessorSpec):
         self.gate_arg_label_indices = {
             gate_name: tuple(indices) for gate_name, indices in (gate_arg_label_indices or {}).items()
         }
+
+        # Checked here as well as in the base class so the error names the argument the
+        # caller actually passed; the base class knows it only as `nonstd_gate_num_qudits`.
+        _validate_gate_names(nonstd_gate_num_qubits or {}, 'nonstd_gate_num_qubits')
 
         super().__init__(qubit_labels, [2] * num_qubits, gate_names, nonstd_gate_unitaries, availability,
                          geometry, prep_names, povm_names, instrument_names,

@@ -18,7 +18,6 @@ import numpy as _np
 
 from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel, _init_spam_layers
 from pygsti.models.layerrules import LayerRules as _LayerRules
-from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
@@ -64,7 +63,7 @@ class LocalNoiseModel(_ImplicitOpModel):
     prep_layers : None or operator or dict or list
         The state preparateion operations as n-qudit layer operations.  If
         `None`, then no state preparations will be present in the created model.
-        If a dict, then the keys are labels and the values are layer operators.
+        If a dict, then the keys are labels beginning with "rho" and the values are layer operators.
         If a list, then the elements are layer operators and the labels will be
         assigned as "rhoX" where X is an integer starting at 0.  If a single
         layer operation of type :class:`State` is given, then this is used as
@@ -73,7 +72,7 @@ class LocalNoiseModel(_ImplicitOpModel):
     povm_layers : None or operator or dict or list
         The state preparateion operations as n-qudit layer operations.  If
         `None`, then no POVMS will be present in the created model.  If a dict,
-        then the keys are labels and the values are layer operators.  If a list,
+        then the keys are labels beginning with "M" and the values are layer operators.  If a list,
         then the elements are layer operators and the labels will be assigned as
         "MX" where X is an integer starting at 0.  If a single layer operation
         of type :class:`POVM` is given, then this is used as the sole POVM and
@@ -136,6 +135,24 @@ class LocalNoiseModel(_ImplicitOpModel):
         this idle operation is *not* added to other layers as in `"add_global"`.
     """
 
+    # Operations and factories also accept the reserved brace-wrapped implicit-operation
+    # labels used by ProcessorSpec and by LocalNoiseModel for '{auto_global_idle}'.
+    _member_prefixes = (
+        ('prep_blks', 'layers', 'rho'),
+        ('povm_blks', 'layers', 'M'),
+        ('operation_blks', 'gates', ('G', '{')),
+        ('operation_blks', 'layers', ('G', '{')),
+        ('instrument_blks', 'layers', 'I'),
+        # ^ Unclear why instrument_blks should only be keyed by `layers`.
+        #
+        # I'll grant that it seems weird to key by `gates`, but the things
+        # stored in operation_blks['gates'] have direct instrument analogs
+        # that aren't suitable for instrument_blks['layers'].
+        #
+        ('factories', 'gates', ('G', '{')),
+        ('factories', 'layers', ('G', '{')),
+    )
+
     def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
                  simulator="auto", on_construction_error='raise',
                  independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="none"):
@@ -170,21 +187,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',
                                               simulator=simulator, evotype=evotype)
 
-        flags = {'auto_embed': False, 'match_parent_statespace': False,
-                 'match_parent_evotype': True, 'cast_to_type': None}
-        self.prep_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.povm_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['gates'] = _OrderedMemberDict(self, None, None, flags)
-        self.operation_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        self.instrument_blks['layers'] = _OrderedMemberDict(self, None, None, flags)
-        # ^ Unclear why instrument_blks should only be keyed by `layers`.
-        #
-        #     I'll grant that it seems weird to key by `gates`, but the things
-        #     stored in operation_blks['gates'] have direct instrument analogs
-        #     that aren't suitable for instrument_blks['layers'].
-        #
-        self.factories['gates'] = _OrderedMemberDict(self, None, None, flags)
-        self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
+        self._init_member_dicts()
 
         _init_spam_layers(self, prep_layers, povm_layers)  # SPAM
 
@@ -346,18 +349,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                                   simulator=simulator, evotype=state['evotype'])
 
         modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
-        flags = {'auto_embed': False, 'match_parent_statespace': False,
-                 'match_parent_evotype': True, 'cast_to_type': None}
-        mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
-        mdl.povm_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('povm_blks|layers', []))
-        mdl.operation_blks['gates'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                         modelmembers.get('operation_blks|gates', []))
-        mdl.operation_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                          modelmembers.get('operation_blks|layers', []))
-        mdl.instrument_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags,
-                                                           modelmembers.get('instrument_blks|layers', []))
-        mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))
-        mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|layers', []))
+        mdl._init_member_dicts(modelmembers)
         mdl._clean_paramvec()
 
         Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params

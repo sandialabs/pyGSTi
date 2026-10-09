@@ -28,7 +28,8 @@ import pygsti
 import stim
 from pygsti.tools import errgenproptools as eprop
 from pygsti.tools import errgenpolytools as epoly
-from pygsti.tools.lindbladtools import random_CPTP_error_generator_rates
+from pygsti.baseobjs import QubitSpace
+from pygsti.tools.lindbladtools import random_cptp_errorgen_rates
 from pygsti.errorgenpropagation.errorpropagator import ErrorGeneratorPropagator
 from pygsti.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 ```
@@ -59,7 +60,7 @@ for gate, availability in pspec.availability.items():
     for qs in qubits_for_gate:
         label = pygsti.baseobjs.Label(gate, qs)
         # Sample error rates.
-        error_rates_dict[label] = random_CPTP_error_generator_rates(num_qubits=n, errorgen_types=('H', 'S'), label_type='local', seed=1234)
+        error_rates_dict[label] = random_cptp_errorgen_rates(QubitSpace(n), errorgen_types=('H', 'S'), label_type='local', seed=1234)
 ```
 
 ```{code-cell} ipython3
@@ -266,8 +267,8 @@ This can be done using the `fixed_errorgen_layer` argument of the `ErrorGenerato
 For example, we can construct a random 4-qubit error generator layer directly:
 
 ```{code-cell} ipython3
-fixed_errorgen_layer = random_CPTP_error_generator_rates(
-    num_qubits=4,
+fixed_errorgen_layer = random_cptp_errorgen_rates(
+    QubitSpace(4),
     errorgen_types=('H', 'S'),
     max_weights={'H': 2, 'S': 1},
     seed=1234,
@@ -306,8 +307,8 @@ If the fixed error generator layer is specified using `GlobalElementaryErrorgenL
 For example:
 
 ```{code-cell} ipython3
-fixed_errorgen_layer_global = random_CPTP_error_generator_rates(
-    num_qubits=4,
+fixed_errorgen_layer_global = random_cptp_errorgen_rates(
+    QubitSpace(4),
     errorgen_types=('H', 'S'),
     max_weights={'H': 2, 'S': 1},
     seed=1234,

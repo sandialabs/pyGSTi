@@ -4,7 +4,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.19.4
+    jupytext_version: 1.19.3
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -67,10 +67,10 @@ print(ex_mmg1.is_equivalent(ex_mmg2))
 ```
 
 ```{code-cell} ipython3
-pspec = pygsti.processors.QubitProcessorSpec(2, ['Gi', 'Gxpi2', 'Gypi2', 'mygate'], geometry='line', nonstd_gate_unitaries={'mygate': np.eye(2, dtype='complex')})
+pspec = pygsti.processors.QubitProcessorSpec(2, ['Gi', 'Gxpi2', 'Gypi2', 'Gmygate'], geometry='line', nonstd_gate_unitaries={'Gmygate': np.eye(2, dtype='complex')})
 
 ln_mdl1 = pygsti.models.create_crosstalk_free_model(pspec,
-                                                    depolarization_strengths={('Gxpi2', 0): 0.1, ('mygate', 0): 0.2},
+                                                    depolarization_strengths={('Gxpi2', 0): 0.1, ('Gmygate', 0): 0.2},
                                                     lindblad_error_coeffs={('Gypi2', 1): {('H', 'X'): 0.2, ('S', 'Y'): 0.3}})
 print(ln_mdl1)
 ```
@@ -83,7 +83,7 @@ ln_mmg1.print_graph()
 ```{code-cell} ipython3
 # Should be exactly the same
 ln_mdl2 = pygsti.models.create_crosstalk_free_model(pspec,
-                                                    depolarization_strengths={('Gxpi2', 0): 0.1, ('mygate', 0): 0.2},
+                                                    depolarization_strengths={('Gxpi2', 0): 0.1, ('Gmygate', 0): 0.2},
                                                     lindblad_error_coeffs={('Gypi2', 1): {('H', 'X'): 0.2, ('S', 'Y'): 0.3}})
 ln_mmg2 = ln_mdl2.create_modelmember_graph()
 print(ln_mmg1.is_similar(ln_mmg2))
@@ -93,7 +93,7 @@ print(ln_mmg1.is_equivalent(ln_mmg2))
 ```{code-cell} ipython3
 # Should be similar if we change params
 ln_mdl3 = pygsti.models.create_crosstalk_free_model(pspec,
-                                                    depolarization_strengths={('Gxpi2', 0): 0.01, ('mygate', 0): 0.02},
+                                                    depolarization_strengths={('Gxpi2', 0): 0.01, ('Gmygate', 0): 0.02},
                                                     lindblad_error_coeffs={('Gypi2', 1): {('H', 'X'): 0.5, ('S', 'Y'): 0.1}})
 ln_mmg3 = ln_mdl3.create_modelmember_graph()
 print(ln_mmg1.is_similar(ln_mmg3))

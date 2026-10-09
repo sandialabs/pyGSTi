@@ -24,6 +24,8 @@ Various functions and objects within pyGSTi require knowledge of what Hilbert-Sc
 
 The most straightforward way to create a `Basis` object is to provide its short name and dimension to the `Basis.cast` function, which "casts" various things as a basis object.  PyGSTi contains built-in support for bases consisting of the tensor product of Pauli matrices (or just the Pauli matrices in the case of 1 qubit), named `"pp"`, as well as the Gell-Mann matrices, named `"gm"`.  It also contains a special "qutrit" basis, named `"qt"`, for the case of 3-level quantum systems.  In cases when there are an integral number of qubits, and the dimension equals $4^N$, the `"pp"` basis is usually preferred since it is more intuitive.  In other cases, where the Hilbert space includes non-qubit (e.g. environmental) degrees of freedom, the Gell-Mann basis may be useful since it can be used in any dimension.  Note that both the Gell-Mann and Pauli-Product bases reduce to the usual Pauli matrices plus identity in when the dimension equals 4 (1 qubit).
 
+The uppercase names `"PP"` and `"GM"` select the Pauli-product and Gell-Mann bases with identity first and $\operatorname{Tr}(B_i^\dagger B_j)=d\,\delta_{ij}$ for $d\times d$ matrices. Thus `"GM"` scales the `"gm"` matrices by $\sqrt{d}$; for example, `Basis.cast('GM', 9)` gives a qutrit basis. It differs from `"gm_unnormalized"`, whose nonidentity elements have squared Frobenius norm 2 in every dimension.
+
 Here are some examples:
 
 ```{code-cell} ipython3
