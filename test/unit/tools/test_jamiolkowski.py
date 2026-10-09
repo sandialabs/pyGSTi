@@ -8,6 +8,7 @@ from pygsti.baseobjs import Basis
 from pygsti.baseobjs.basis import BuiltinBasis, TensorProdBasis
 from pygsti.tools.optools import unitary_to_superop
 from pygsti.tools import jamiolkowski as j
+from pygsti.tools.exceptions import pyGSTiDeprecationWarning
 from ..util import BaseCase, needs_cvxpy
 
 
@@ -95,13 +96,13 @@ class JamiolkowskiOpsTester(BaseCase):
         self.mxPP = bt.change_basis(self.mxGM, self.gm, self.pp)
 
     def test_sum_of_negative_choi_evals(self):
-        sumOfNeg = j.sum_of_negative_choi_eigenvalues(std1Q.target_model())
+        sumOfNeg = j.abs_sum_of_negative_choi_eigenvalues(std1Q.target_model())
         self.assertAlmostEqual(sumOfNeg, 0.0)
 
-        sumOfNegWt = j.sum_of_negative_choi_eigenvalues(std1Q.target_model(), {'Gx': 1.0, 'Gy': 0.5})
+        sumOfNegWt = j.abs_sum_of_negative_choi_eigenvalues(std1Q.target_model(), {'Gx': 1.0, 'Gy': 0.5})
         self.assertAlmostEqual(sumOfNegWt, 0.0)
 
-        sumsOfNeg = j.sums_of_negative_choi_eigenvalues(std1Q.target_model())
+        sumsOfNeg = j.abs_sums_of_negative_choi_eigenvalues(std1Q.target_model())
         self.assertArraysAlmostEqual(sumsOfNeg, np.zeros(3, 'd'))  # 3 gates in std.target_model()
 
         magsOfNeg = j.magnitudes_of_negative_choi_eigenvalues(std1Q.target_model())
@@ -128,6 +129,24 @@ class JamiolkowskiOpsTester(BaseCase):
 
         mags = j.magnitudes_of_negative_choi_eigenvalues(non_cp_model)
         self.assertArraysAlmostEqual(np.array(mags), np.array(expected_mags))
+
+    def test_deprecated_aliases_warn_and_delegate(self):
+        model = std1Q.target_model()
+        gate_mx = next(iter(model.operations.values())).to_dense()
+        cases = [
+            (j.sum_of_negative_choi_eigenvalues_gate,
+             j.abs_sum_of_negative_choi_eigenvalues_gate, (gate_mx, model.basis)),
+            (j.sum_of_negative_choi_eigenvalues,
+             j.abs_sum_of_negative_choi_eigenvalues, (model,)),
+            (j.sums_of_negative_choi_eigenvalues,
+             j.abs_sums_of_negative_choi_eigenvalues, (model,)),
+        ]
+        for deprecated, replacement, args in cases:
+            with self.subTest(deprecated=deprecated.__name__):
+                with self.assertWarns(pyGSTiDeprecationWarning):
+                    got = deprecated(*args)
+                self.assertArraysAlmostEqual(np.atleast_1d(got),
+                                             np.atleast_1d(replacement(*args)))
 
     def test_fast_jamiolkowski_iso(self):
         choiStd = j.jamiolkowski_iso(self.mxStd, self.std, self.std)

@@ -12,6 +12,7 @@ Functions for constructing semidefinite programming models
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import numpy as np
 import warnings
@@ -30,7 +31,24 @@ from pygsti.tools.exceptions import CVXPYFailure
 
 CVXPY_ENABLED = importlib.util.find_spec("cvxpy") is not None
 _MOSEK_WARNING_PATTERN = ".*Incorrect array format causing data to be copied*"
+_EMPTY_REDUCE_WARNING_PATTERN = ".*invalid value encountered in reduce.*"
 _CVXPY = None
+
+
+def _quiet_empty_reduce(fn):
+    """Silence numpy's invalid-reduce warning raised from inside cvxpy.
+
+    cvxpy sizes a reduction's output with ``np.sum(np.empty(shape))``. When that
+    uninitialized buffer happens to hold both +inf and -inf, numpy warns on stderr about
+    an invalid reduce. The warning says nothing about the problem being solved, and
+    whether it fires at all depends on what was last in that memory. Seen with cvxpy 1.9.2.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', _EMPTY_REDUCE_WARNING_PATTERN, RuntimeWarning)
+            return fn(*args, **kwargs)
+    return wrapper
 
 
 def _get_cvxpy():
@@ -45,6 +63,7 @@ def _get_cvxpy():
 SDP_SOLVER_PRIORITY = ['MOSEK', 'CLARABEL', 'CVXOPT']
 
 
+@_quiet_empty_reduce
 def solve_sdp(prob: cp.Problem, **kwargs) -> tuple[np.floating, dict[str, np.ndarray]]:
     cp = _get_cvxpy()
 
@@ -71,6 +90,7 @@ def solve_sdp(prob: cp.Problem, **kwargs) -> tuple[np.floating, dict[str, np.nda
     return objective_val, varvals
 
 
+@_quiet_empty_reduce
 def diamond_norm_model_jamiolkowski(J: ExpressionLike) -> tuple[cp.Problem, List[cp.Variable]]:
     # return a model for computing the diamond norm.
     #
@@ -197,6 +217,7 @@ def cptp_superop_variable(purestate_dim: int, basis: BasisLike) -> Tuple[cp.Expr
     return X, constraints
 
 
+@_quiet_empty_reduce
 def diamond_distance_projection_model(superop: np.ndarray, basis: Basis, leakfree: bool=False, seepfree: bool=False, cptp: bool=True, subspace_diamond: bool=False):
     assert CVXPY_ENABLED
     cp = _get_cvxpy()

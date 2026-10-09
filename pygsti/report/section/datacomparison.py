@@ -9,6 +9,7 @@
 #***************************************************************************************************
 
 from pygsti.report.section import Section as _Section
+from pygsti.baseobjs import VerbosityPrinter as _VerbosityPrinter
 from pygsti.data import DataComparator as _DataComparator
 from pygsti.tools.mpitools import distribute_indices as _distribute_indices
 
@@ -16,7 +17,10 @@ from pygsti.tools.mpitools import distribute_indices as _distribute_indices
 class DataComparisonSection(_Section):
     _HTML_TEMPLATE = 'tabs/DataComparison.html'
 
-    def render(self, workspace, results=None, dataset_labels=None, embed_figures=True, comm=None, **kwargs):
+    def render(self, workspace, results=None, dataset_labels=None, embed_figures=True, comm=None, verbosity=0,
+               **kwargs):
+        printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
+
         #initialize a new "dataset comparison switchboard"
         dscmp_switchBd = workspace.Switchboard(
             ["Dataset1", "Dataset2"],
@@ -49,7 +53,8 @@ class DataComparisonSection(_Section):
                     ds1 = results[dslbl1].dataset
                     ds2 = results[dslbl2].dataset
                     dsc = _DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
-                    dsc.run()  # to perform processing
+                    printer.log("Comparing data sets '%s' and '%s':" % (dslbl1, dslbl2))
+                    dsc.run(verbosity=printer.verbosity)  # to perform processing
                     dsComp[(d1, d2)] = dsc
             dicts = comm.gather(dsComp, root=0)
             if rank == 0:
@@ -65,7 +70,8 @@ class DataComparisonSection(_Section):
                 ds1 = results[dslbl1].dataset
                 ds2 = results[dslbl2].dataset
                 dsc = _DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
-                dsc.run()  # to perform processing
+                printer.log("Comparing data sets '%s' and '%s':" % (dslbl1, dslbl2))
+                dsc.run(verbosity=printer.verbosity)  # to perform processing
                 all_dsComps[(d1, d2)] = dsc
                 dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1, d2)]
 

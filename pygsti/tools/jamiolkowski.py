@@ -16,6 +16,7 @@ import numpy as _np
 
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.baseobjs.basis import Basis as _Basis, BasisLike
 from typing import Union, TYPE_CHECKING
 
@@ -353,9 +354,10 @@ def fast_jamiolkowski_iso_std_inv(choi_mx: _np.ndarray, op_mx_basis: BasisLike, 
     #transform operation matrix into appropriate basis
     return _bt.change_basis(opMxInStdBasis, std_equiv, op_mx_basis)
 
-def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
+
+def abs_sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
     """
-    Compute the sum of the negative Choi eigenvalues of a process matrix.
+    Compute the absolute value of the sum of the negative Choi eigenvalues of a process matrix.
 
     Parameters
     ----------
@@ -369,18 +371,17 @@ def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
         the absolute value of the sum of the negative eigenvalues
         of the Choi representation of op_mx
     """
-    sumOfNeg = 0
     J = fast_jamiolkowski_iso_std(op_mx, op_mx_basis)  # Choi mx basis doesn't matter
     evals = _mt.eigenvalues(J, assume_hermitian=True)
-    sumOfNeg = - _np.sum(evals[evals < 0])
-    return sumOfNeg
+    return abs(_np.sum(evals[evals < 0]))
 
-def sum_of_negative_choi_eigenvalues(model, weights: dict[str, float]=None) -> float:
+
+def abs_sum_of_negative_choi_eigenvalues(model, weights: dict[str, float]=None) -> float:
     """
     Compute the amount of non-CP-ness of a model.
 
-    This is defined (somewhat arbitrarily) by summing the negative
-    eigenvalues of the Choi matrix for each gate in `model`.
+    This is defined (somewhat arbitrarily) by summing the absolute values of the
+    negative eigenvalues of the Choi matrix for each gate in `model`.
 
     Parameters
     ----------
@@ -398,20 +399,20 @@ def sum_of_negative_choi_eigenvalues(model, weights: dict[str, float]=None) -> f
         the scaled sum across each gate of the absolute value of the sum negative eigenvalues
         of the Choi matrix for that gate.
     """
-    sums = sums_of_negative_choi_eigenvalues(model)
+    sums = abs_sums_of_negative_choi_eigenvalues(model)
     if weights is not None:
         default = weights.get('gates', 1.0)
         sums = [s * weights.get(gl, default) for gl, s in zip(model.operations, sums)]
     return sum(sums)
 
 
-def sums_of_negative_choi_eigenvalues(model):
+def abs_sums_of_negative_choi_eigenvalues(model):
     """
     Compute the amount of non-CP-ness of a model.
 
-    This is defined (somewhat arbitrarily) by summing the negative
-    eigenvalues of the Choi matrix for each gate in model separately.
-    This function is different from :func:`sum_of_negative_choi_eigenvalues`
+    This is defined (somewhat arbitrarily) by summing the absolute values of the
+    negative eigenvalues of the Choi matrix for each gate in model separately.
+    This function is different from :func:`abs_sum_of_negative_choi_eigenvalues`
     in that it returns sums separately for each operation of `model`.
 
     Parameters
@@ -428,9 +429,77 @@ def sums_of_negative_choi_eigenvalues(model):
     ret = []
     for (_, gate) in model.operations.items():
         mx = gate.to_dense()
-        sumOfNeg = sum_of_negative_choi_eigenvalues_gate(mx, model.basis)
+        sumOfNeg = abs_sum_of_negative_choi_eigenvalues_gate(mx, model.basis)
         ret.append(sumOfNeg)
     return ret
+
+
+@_deprecated_fn('abs_sum_of_negative_choi_eigenvalues_gate')
+def sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis):
+    """
+    Deprecated alias for :func:`abs_sum_of_negative_choi_eigenvalues_gate`.
+
+    .. deprecated:: 0.10.3
+        The old name misleadingly suggested a non-positive return value.
+        Use :func:`abs_sum_of_negative_choi_eigenvalues_gate` instead.
+
+    Parameters
+    ----------
+    op_mx : np.array
+
+    op_mx_basis : Basis
+
+    Returns
+    -------
+    float
+    """
+    return abs_sum_of_negative_choi_eigenvalues_gate(op_mx, op_mx_basis)
+
+
+@_deprecated_fn('abs_sum_of_negative_choi_eigenvalues')
+def sum_of_negative_choi_eigenvalues(model, weights: dict[str, float]=None) -> float:
+    """
+    Deprecated alias for :func:`abs_sum_of_negative_choi_eigenvalues`.
+
+    .. deprecated:: 0.10.3
+        The old name misleadingly suggested a non-positive return value.
+        Use :func:`abs_sum_of_negative_choi_eigenvalues` instead.
+
+    Parameters
+    ----------
+    model : Model
+        The model to act on.
+
+    weights : dict
+        A dictionary of weights used to multiply the negative
+        eigenvalues of different gates.
+
+    Returns
+    -------
+    float
+    """
+    return abs_sum_of_negative_choi_eigenvalues(model, weights)
+
+
+@_deprecated_fn('abs_sums_of_negative_choi_eigenvalues')
+def sums_of_negative_choi_eigenvalues(model):
+    """
+    Deprecated alias for :func:`abs_sums_of_negative_choi_eigenvalues`.
+
+    .. deprecated:: 0.10.3
+        The old name misleadingly suggested non-positive return values.
+        Use :func:`abs_sums_of_negative_choi_eigenvalues` instead.
+
+    Parameters
+    ----------
+    model : Model
+        The model to act on.
+
+    Returns
+    -------
+    list of floats
+    """
+    return abs_sums_of_negative_choi_eigenvalues(model)
 
 
 def magnitudes_of_negative_choi_eigenvalues(model):

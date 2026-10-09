@@ -1,0 +1,9 @@
+# Do I need any of this?
+
+Nothing in this part is required to run a characterization protocol and read the answer. If that is what you came for, [Start here](../start/Index) and the [characterization guides](../guides/Index) are the whole path, and you can leave this part unread. The machinery underneath that path has its own part, [Internals](../internals/Index); this part holds the corners of pyGSTi that only some readers need.
+
+**[Specialist protocols](specialist/Index).** [Robust phase estimation](specialist/RobustPhaseEstimation) estimates a few rotation angles of a single-qubit gate set from a short list of circuits, and [parity benchmarking](specialist/ParityBenchmarking) scores a four-qubit parity check by the weight-$X$ disturbance between a reference and a test dataset. Each answers one narrow question far more cheaply than a full characterization would; both live in `pygsti.extras`.
+
+**Machine-learned error models.** A [QPANN](ml/QPANN) is a neural network that predicts how well a noisy device will run a given circuit; the error-propagation physics is built into the architecture, so its weights read as error rates on physical qubits. The page runs the pipeline from encoding circuits to validating the learned rates against a simulated device. Training one needs TensorFlow and Keras.
+
+**Other platforms.** [Cirq integration](interop/Cirq) converts circuits in both directions and loads the results of running them into a pyGSTi dataset. [IBM Q](interop/IBMQ) goes further: an `IBMQExperiment` transpiles an experiment design to OpenQASM, submits it to an IBM backend through Qiskit, and hands the counts back as the `ProtocolData` object the matching analysis protocol takes. It needs Qiskit and an IBM Q account. For hardware pyGSTi does not talk to directly, [getting your own data in](../start/YourOwnData) is the general route.

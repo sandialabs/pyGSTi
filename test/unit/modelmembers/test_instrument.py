@@ -146,8 +146,8 @@ class FromCptrSuperopsTester(BaseCase):
         return {k: v.to_dense('HilbertSchmidt') for k, v in instrument.items()}
 
     def _assert_cp(self, member_superop, atol=1e-8):
-        viol = pygsti.tools.sum_of_negative_choi_eigenvalues_gate(member_superop, 'pp')
-        self.assertGreaterEqual(viol, -atol)
+        viol = pygsti.tools.abs_sum_of_negative_choi_eigenvalues_gate(member_superop, 'pp')
+        self.assertLess(viol, atol)
 
     # --- factory / structure tests ---
 
@@ -346,8 +346,8 @@ class FromEffectsTester(BaseCase):
     def test_members_are_cp(self):
         instrument = Instrument.from_effects({'p0': self.E0, 'p1': self.E1}, self.basis)
         for mx in self._members(instrument).values():
-            viol = pygsti.tools.sum_of_negative_choi_eigenvalues_gate(mx, 'pp')
-            self.assertGreaterEqual(viol, -1e-8)
+            viol = pygsti.tools.abs_sum_of_negative_choi_eigenvalues_gate(mx, 'pp')
+            self.assertLess(viol, 1e-12)
 
     def test_unitary_gate_and_matrix_effect(self):
         # A post-measurement Z on outcome p1, and effects given as 2x2 matrices.
