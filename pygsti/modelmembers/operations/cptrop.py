@@ -105,7 +105,8 @@ if _TORCH_AVAILABLE:
             if bool(at_zero.any()):
                 raise ValueError(
                     f"RootConjOperator's effect has eigenvalues within {tol} of 0 (smallest {vals.min().item():.3g}), "
-                    "where E^(1/2) is not differentiable. Start the fit from effects interior to (0, 1).")
+                    "where E^(1/2) is not differentiable. Start the fit from effects interior to (0, 1); "
+                    "pygsti.models.prepare_lindblad_seed moves a Lindblad model's effects there.")
             roots = _torch.sqrt(vals)
             inv_root_sums = (1.0 / (roots.unsqueeze(1) + roots.unsqueeze(0))).to(V.dtype)
             return V @ ((V.mH @ H @ V) * inv_root_sums) @ V.mH
@@ -234,8 +235,8 @@ class RootConjOperator(LinearOperator, _Torchable):
             _warnings.warn(
                 f"RootConjOperator's effect has eigenvalues within {tol} of 0 (smallest {evals.min():.3g}), "
                 "where E^(1/2) is not differentiable; falling back to a finite-difference derivative. "
-                "Starting a fit with effects interior to (0, 1), e.g. by giving the effects' error map "
-                "small nonzero stochastic rates, avoids this.")
+                "Start the fit from effects interior to (0, 1); pygsti.models.prepare_lindblad_seed "
+                "moves a Lindblad model's effects there.")
             return _fd_deriv_wrt_params(self, wrt_filter)
 
         # dE for each parameter, then dR = D sqrt(E)[dE].
