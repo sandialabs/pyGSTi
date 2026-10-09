@@ -818,3 +818,38 @@ class ModelEquivalenceTester(BaseCase):
                                                  lindblad_error_coeffs={'Gcnot': {('H','ZZ'): 0.07, ('S','XX'): 0.10}},
                                                  independent_gates=True, independent_spam=True, verbosity=2)
         self.check_model(mdl_cloud)
+
+class DefaultPOVMOnSubsetOfLinesTester(BaseCase):
+    # Issue #721: a circuit on a strict subset of a model's lines had no default
+    # POVM, even when the model has a single POVM that applies to it.
+
+    def setUp(self):
+        from pygsti.modelpacks import smq2Q_XYICNOT
+        self.model = smq2Q_XYICNOT.target_model()
+        self.circuit = Circuit([("Gypi2", 0), ("Gxpi2", 0)], line_labels=(0,))
+
+    def test_probabilities_match_explicit_povm(self):
+        explicit = Circuit([("Gypi2", 0), ("Gxpi2", 0), "Mdefault"], line_labels=(0,))
+        probs = self.model.probabilities(self.circuit)
+        expected = self.model.probabilities(explicit)
+        self.assertEqual(set(probs.keys()), set(expected.keys()))
+        for outcome, p in expected.items():
+            self.assertAlmostEqual(probs[outcome], p)
+
+    def test_complete_and_split_use_the_single_povm(self):
+        completed = self.model.complete_circuits([self.circuit])[0]
+        self.assertEqual(completed[-1], "Mdefault")
+        _, _, povm_lbl = self.model.split_circuits([self.circuit])[0]
+        self.assertEqual(povm_lbl, "Mdefault")
+
+    def test_no_default_for_lines_outside_the_model(self):
+        self.assertIsNone(self.model._default_primitive_povm_layer_lbl((2,)))
+        self.assertIsNone(self.model._default_primitive_povm_layer_lbl((0, 2)))
+        with self.assertRaises(ValueError):
+            self.model.complete_circuits([Circuit([], line_labels=(2,))])
+
+    def test_no_default_with_several_povms(self):
+        self.model.povms["M2"] = self.model.povms["Mdefault"].copy()
+        self.assertIsNone(self.model._default_primitive_povm_layer_lbl((0,)))
+        with self.assertRaises(ValueError):
+            self.model.complete_circuits([self.circuit])
