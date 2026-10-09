@@ -156,6 +156,23 @@ class PrepareLindbladSeedScopeTester(BaseCase):
         for entry in report.perturbed:
             self.assertAlmostEqual(entry.diamond_bound, BUDGET, places=14)
 
+    def test_defaults(self):
+        model = std.target_model()
+        model.set_all_parameterizations('CPTPLND')
+        _, report = prepare_lindblad_seed(model, seed=1)
+        self.assertEqual((report.diamond_budget, report.hs_split, report.floor_fraction), (1e-3, (0.5, 0.5), 0.5))
+        for entry in report.perturbed:
+            self.assertAlmostEqual(entry.diamond_bound, 1e-3, places=14)
+
+    def test_hamiltonian_share(self):
+        model = std.target_model()
+        model.set_all_parameterizations('CPTPLND')
+        vector, report = prepare_lindblad_seed(model, BUDGET, hs_split=(0.5, 0.5), seed=1)
+        model.from_vector(vector)
+        coeffs = _errorgen(model.operations[L('Gxpi2', 0)]).coefficients(label_type='local')
+        h = np.array([c.real for k, c in coeffs.items() if k.errorgen_type == 'H'])
+        self.assertAlmostEqual(2 * np.abs(h).sum(), 0.5 * BUDGET, places=14)  # unit operator norms in PP
+
     def test_rejects_invalid_arguments(self):
         model = _instrument_model()
         for kwargs in ({'diamond_budget': 0.0}, {'diamond_budget': np.inf},

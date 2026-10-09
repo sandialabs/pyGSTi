@@ -179,7 +179,7 @@ class RefitRegressionTester(BaseCase):
         est = results.estimates[new_label]
         lnd_mdl = est.models['final iteration estimate']
         # the seed was moved into the interior, so the fit skipped first-iteration finite differences
-        self.assertEqual(est.meta['lindblad_seed_report'].diamond_budget, 1e-2)
+        self.assertEqual(est.meta['lindblad_seed_report'].diamond_budget, 1e-3)
         self.assertEqual(est.parameters['protocol'].optimizer.first_fditer, 0)
         lnd_2dll = pygsti.tools.two_delta_logl(lnd_mdl, ds, circuits)
 

@@ -78,7 +78,7 @@ class LindbladSeedReport:
     after preparation."""
 
 
-def prepare_lindblad_seed(model, diamond_budget: float, *, hs_split: tuple[float, float] = (0.5, 0.5),
+def prepare_lindblad_seed(model, diamond_budget: float = 1e-3, *, hs_split: tuple[float, float] = (0.5, 0.5),
                           floor_fraction: float = 0.5, seed: int | None = None
                           ) -> tuple[_np.ndarray, LindbladSeedReport]:
     """
@@ -113,15 +113,21 @@ def prepare_lindblad_seed(model, diamond_budget: float, *, hs_split: tuple[float
     model : OpModel
         The model to prepare. Not modified.
 
-    diamond_budget : float
-        The diamond-norm bound, per perturbed error generator, on the added generator.
+    diamond_budget : float, optional
+        The diamond-norm bound, per perturbed error generator, on the added generator. In
+        one-qubit instrument fits the final fit was insensitive to it between 1e-3 and 1e-2,
+        except that larger perturbations occasionally led to a worse local optimum, and slightly
+        worse at 5e-2.
 
     hs_split : tuple of float, optional
         The fractions of `diamond_budget` given to H and S rates. They must sum to 1, and the S
-        fraction must be positive.
+        fraction must be positive. A nonzero H share also breaks symmetries that stochastic rates
+        alone leave in place: with S rates only, a Z rotation of a Z-diagonal state preparation,
+        for example, still has zero first derivative.
 
     floor_fraction : float, optional
-        The fraction of the S share spread evenly over every S direction, in [0, 1].
+        The fraction of the S share spread evenly over every S direction, in [0, 1]. It had no
+        visible effect on one-qubit fits; it guarantees the effect-eigenvalue bound above.
 
     seed : int, optional
         Seed for the random rates. None draws fresh entropy, which is recorded in the report.

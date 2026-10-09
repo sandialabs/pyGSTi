@@ -3582,7 +3582,7 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
 
     interior_init : 'default', dict, or None, optional
         Keyword arguments for :func:`pygsti.models.prepare_lindblad_seed`, applied
-        to the seed (step 5); ``'default'`` means ``{'diamond_budget': 1e-2}``.
+        to the seed (step 5); ``'default'`` means its defaults (``{}``).
         The report goes in the new estimate's ``meta['lindblad_seed_report']``.
         With an interior seed the fit runs with ``first_fditer=0``, overriding the
         value in an optimizer scavenged from the base estimate; an `optimizer`
@@ -3697,7 +3697,7 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
 
     # 5. move the seed's Lindblad blocks into their interiors.
     if interior_init == 'default':
-        interior_init = {'diamond_budget': 1e-2}
+        interior_init = {}
     seed_report = None
     if interior_init is not None:
         if not isinstance(interior_init, dict):
