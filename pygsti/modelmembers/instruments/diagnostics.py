@@ -29,8 +29,11 @@ Three O(1), data-free structural checks decide this in advance:
 * **extent** (:func:`base_effect_extent`): the unital dual compresses spectra,
   so ``spec(E_k(theta))`` lies inside ``[lmin(E_base,k), lmax(E_base,k)]`` for
   every ``theta``.  The base's spectral interval is a certified containing box
-  for the entire fit trajectory: an interval touching {0, 1} is a CP-boundary
-  trap, and one narrower than the true deviation saturates silently.
+  for the entire fit trajectory: one narrower than the true deviation
+  saturates silently.  An interval touching {0, 1}, as for an ideal
+  measurement, keeps the ideal instrument reachable but makes the member map
+  non-differentiable at zero noise; start the fit from interior parameters
+  with :func:`pygsti.models.prepare_lindblad_seed`.
 
 A fourth, sampled check -- the Jacobian certificate, run by default from
 :func:`diagnose_instrument` / :func:`diagnose_model_instruments` -- compares
@@ -352,8 +355,9 @@ def base_effect_extent(instrument, basis):
 
     * interval degenerate to a point -> the effect can never move at all
       (the span law's m = 0, per effect);
-    * interval touching 0 or 1 -> the fit can (and, measured, does) hit the CP
-      boundary mid-flight and stick there;
+    * interval touching 0 or 1 -> the member map is non-differentiable at zero
+      noise, and a fit that returns there has zero dissipative derivatives
+      (start from :func:`pygsti.models.prepare_lindblad_seed`);
     * interval narrower than the deviation the data wants -> the fit saturates
       the box and quietly stops short.  ``'extent'`` is the certified maximum
       Frobenius distance any reachable effect can sit from the interval
@@ -671,10 +675,10 @@ def _assemble_flags(base_ranks, span, extent, deep_res, dim,
         flags.append(InstrumentSeedFlag(
             "CP-BOUNDARY",
             f"effect(s) {sorted(map(str, on_boundary))} have base eigenvalues exactly at "
-            "0 or 1; the fit trajectory can reach the CP boundary and stick there "
-            "(a measured mid-fit trap), and the member map is non-differentiable "
-            "at that point.",
-            f"{_SEEDING_MOD}.interior_effect_offset (eps ~ 0.01)"))
+            "0 or 1. That keeps the ideal measurement reachable, but at zero noise the "
+            "member map is non-differentiable and the dissipative derivatives vanish, "
+            "so a fit should not start there.",
+            "pygsti.models.prepare_lindblad_seed on the model (leaves the base unchanged)"))
 
     if deep_res is not None:
         ref, r_mem = deep_res['member_target'], deep_res['member_rank']

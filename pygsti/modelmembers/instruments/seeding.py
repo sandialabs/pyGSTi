@@ -9,8 +9,14 @@ flag                          repair
 ============================  =========================================
 RANK-CAP                      :func:`full_rank_base_blend` (c ~ 0.9)
 SPAN-DEFICIENT / ZERO-EXTENT  :func:`displace_base_effects` (delta ~ 0.1-0.2)
-CP-BOUNDARY                   :func:`interior_effect_offset` (eps ~ 0.01)
 ============================  =========================================
+
+The CP-BOUNDARY flag is not a defect of the base: base effects at 0 or 1 (as
+in an ideal measurement) keep the ideal instrument reachable.  Moving them
+into the interior would shrink the reachable set, since the shared error map's
+unital dual preserves spectral bounds.  What the flag affects is the fit's
+starting point, and :func:`pygsti.models.prepare_lindblad_seed` handles that on
+the model by giving the error maps small nonzero rates.
 
 :func:`patch_instrument_seed` runs the diagnostics and applies exactly the
 repairs whose checks fail, returning a ready-to-fit parameterized
@@ -23,7 +29,7 @@ All repairs operate on the dense ``(effect, gate)`` base *before* the
 parameterized chart is built -- mutating a built chart's static operations in
 place is unsupported (read-only member dicts, cached representations).
 
-The default repair magnitudes (c = 0.9, eps = 0.01, delta = 0.2) were
+The default repair magnitudes (c = 0.9, delta = 0.2) were
 calibrated on a single 1-qubit, 196-circuit dataset with 2-outcome
 instruments; they are sensible starting points, not universal constants.  In
 particular `delta` bounds the certified reach of the repaired effects (the
@@ -184,53 +190,7 @@ def full_rank_base_blend(member_superop, base_gate_superop, basis, c=0.9,
 
 
 # --------------------------------------------------------------------------- #
-# Repair 2: CP boundary -> pull the effect spectra strictly inside (0, 1)
-# --------------------------------------------------------------------------- #
-
-def interior_effect_offset(effect_superkets, basis, eps=0.01):
-    r"""
-    Mix each base effect with the identity,
-
-        ``E_k -> (1 - eps) * E_k + (eps / n) * I``,
-
-    which preserves the completeness sum for any number of outcomes ``n`` and
-    moves every effect eigenvalue strictly inside ``(0, 1)`` (new spectrum in
-    ``[eps/n, 1 - eps + eps/n]``).
-
-    Why: an effect eigenvalue exactly at 0 or 1 puts the member map at a
-    non-differentiable point (the sqrt(E) cusp) *and* -- because the shared
-    error map's unital dual compresses spectra -- lets the fit trajectory
-    reach the CP boundary and stick there, a measured mid-fit trap.  A
-    positive ``eps`` buys a certified spectral floor for the entire fit at a
-    statistically invisible price (the offset is free at the optimum).
-
-    Parameters
-    ----------
-    effect_superkets : dict[label, numpy.ndarray]
-        The base effect superkets in `basis`.
-
-    basis : BasisLike
-        The basis of the superkets.
-
-    eps : float, optional
-        The identity admixture.
-
-    Returns
-    -------
-    dict[label, numpy.ndarray]
-    """
-    first = next(iter(effect_superkets.values()))
-    basis = _Basis.cast(basis, _np.asarray(first).size)
-    udim = round(basis.dim ** 0.5)
-    I_sk = _bt.stdmx_to_vec(_np.eye(udim), basis).ravel().real
-    n = len(effect_superkets)
-    return _collections.OrderedDict(
-        (lbl, (1.0 - eps) * _np.asarray(E).ravel() + (eps / n) * I_sk)
-        for lbl, E in effect_superkets.items())
-
-
-# --------------------------------------------------------------------------- #
-# Repair 3: span deficiency -> displace the base effects until m = n - 1
+# Repair 2: span deficiency -> displace the base effects until m = n - 1
 # --------------------------------------------------------------------------- #
 
 def _spectral_normalized_traceless_directions(dim):
@@ -491,7 +451,7 @@ def project_instrument_to_cptp(instrument_or_members, basis, norm='frobenius',
 # --------------------------------------------------------------------------- #
 
 def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
-                          eps=0.01, delta=0.2, gate_parameterization='CPTPLND',
+                          delta=0.2, gate_parameterization='CPTPLND',
                           povm_errormap='CPTPLND', return_report=False):
     r"""
     Diagnose an instrument seed's static base, apply the standard repairs, and
@@ -504,21 +464,23 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
        (:func:`full_rank_base_blend`, weight `c`) -- lifts the member rank cap;
     2. displace the effects if their span is deficient
        (:func:`displace_base_effects`, magnitude `delta`) -- unfreezes
-       proportional-to-identity and n >= 3 commuting effect tuples;
-    3. offset the effects into the open interval (0, 1) if any spectrum
-       touches the boundary after step 2 (:func:`interior_effect_offset`,
-       admixture `eps`) -- removes the CP-boundary trap.
+       proportional-to-identity and n >= 3 commuting effect tuples.
+
+    Effects touching 0 or 1 are left in place, so the ideal measurement stays
+    reachable; run :func:`pygsti.models.prepare_lindblad_seed` on the model
+    before fitting to start from interior effects.
 
     With ``mode='auto'`` (default) each repair is applied only when its check
-    fails; ``mode='all'`` applies all three unconditionally.  The repaired
+    fails; ``mode='all'`` applies both unconditionally.  The repaired
     base is re-checked and a warning names anything still flagged (nothing
     here ever raises on a flag).
 
     Note the repaired chart is a *deliberately displaced seed* wherever step 2
     fires (and approximately displaced for multi-Kraus members in step 1): the
-    fit is expected to recover the difference, and measured end-to-end this
-    recipe took a target-seeded CPTPLND instrument fit from 2*Delta(logL)
-    3838 to ~411 on the calibration dataset (TP floor 390).
+    fit is expected to recover the difference.  Measured end-to-end, an
+    earlier version of this recipe, which also offset the effects into the
+    interior of (0, 1), took a target-seeded CPTPLND instrument fit from
+    2*Delta(logL) 3838 to ~411 on the calibration dataset (TP floor 390).
 
     Parameters
     ----------
@@ -533,7 +495,7 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
     mode : {'auto', 'all'}, optional
         Apply repairs only on check failure, or unconditionally.
 
-    c, eps, delta : float, optional
+    c, delta : float, optional
         Repair magnitudes (see the module docstring for calibration caveats).
 
     gate_parameterization, povm_errormap : str, optional
@@ -584,13 +546,6 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
         effects = displace_base_effects(effects, basis, delta=delta)
         applied.append(('displace_base_effects', None))
 
-    # 3. boundary contact (evaluated after any displacement) -> interior offset
-    extent = _extent_from_base(basis, effects)
-    on_boundary = any(row['boundary_margin'] <= 1e-9 for row in extent.values())
-    if mode == 'all' or on_boundary:
-        effects = interior_effect_offset(effects, basis, eps=eps)
-        applied.append(('interior_effect_offset', None))
-
     # Re-check the repaired base; warn (never raise) if anything is still flagged.
     info = {'gate_frozen': {lbl: True for lbl in gates}}
     residual = []
@@ -601,8 +556,6 @@ def patch_instrument_seed(instrument_or_members, basis, mode='auto', c=0.9,
     if span_after['deficient']:
         residual.append(f"SPAN-DEFICIENT({span_after['m']}/{span_after['target']})")
     extent_after = _extent_from_base(basis, effects)
-    if any(row['boundary_margin'] <= 1e-9 for row in extent_after.values()):
-        residual.append("CP-BOUNDARY")
     if residual:
         _warnings.warn("patch_instrument_seed: the repaired base still flags " +
                        ", ".join(residual) + ".  If the flagged structure is "

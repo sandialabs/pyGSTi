@@ -3501,7 +3501,8 @@ def _add_param_preserving_gauge_opt(results: ModelEstimateResults, est_key: str,
 def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=None,
                               parameterization='CPTPLND', norm='frobenius',
                               projection_method='auto', gaugeopt_first=True,
-                              patch='auto', gaugeopt='param-preserving',
+                              patch='auto', interior_init='default',
+                              gaugeopt='param-preserving',
                               objfn_builders=None, optimizer=None,
                               badfit_options=None, verbosity=2,
                               disable_checkpointing=True):
@@ -3535,9 +3536,14 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
        fitted gates through the matrix log has known branch-cut failures), with
        the instruments rebuilt at the projection.  The grafted seed is
        diagnosed and any residual flags are warned about.
-    5. Run :class:`GateSetTomography` from that seed on the *same*
+    5. Move the seed's CP-constrained Lindblad blocks into their interiors
+       (`interior_init`, see :func:`pygsti.models.prepare_lindblad_seed`).  At
+       zero noise their dissipative derivatives vanish and projective effects
+       are non-differentiable; from the interior seed the fit needs no
+       first-iteration finite differences.
+    6. Run :class:`GateSetTomography` from that seed on the *same*
        ``ProtocolData`` and merge the new estimate into `results`.
-    6. Gauge-optimize the new estimate.  By default this uses
+    7. Gauge-optimize the new estimate.  By default this uses
        *parameterization-preserving* gauge optimization
        (``gaugeopt='param-preserving'``), which is the principled route to
        error bars for CP-constrained estimates -- standard gauge optimization
@@ -3574,6 +3580,16 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
         on the projected members (``None`` skips patching and uses
         :meth:`Instrument.from_cptr_superops` directly).
 
+    interior_init : 'default', dict, or None, optional
+        Keyword arguments for :func:`pygsti.models.prepare_lindblad_seed`, applied
+        to the seed (step 5); ``'default'`` means ``{'diamond_budget': 1e-2}``.
+        The report goes in the new estimate's ``meta['lindblad_seed_report']``.
+        With an interior seed the fit runs with ``first_fditer=0``, overriding the
+        value in an optimizer scavenged from the base estimate; an `optimizer`
+        passed here keeps any ``first_fditer`` it sets.  ``None`` skips step 5
+        and keeps the scavenged optimizer's settings, which is how this function
+        behaved before step 5 existed.
+
     gaugeopt : {'param-preserving', 'suite', None} or GSTGaugeOptSuite, optional
         Gauge optimization for the new estimate: parameterization-preserving
         with the standard suite (default), the base estimate's own suite run
@@ -3601,7 +3617,9 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
         project_instrument_to_cptp as _project_to_cptp,
         patch_instrument_seed as _patch_seed)
     from pygsti.modelmembers.instruments.diagnostics import \
-        _static_parts_of_member
+        _static_parts_of_member, _emit_warning as _emit_seed_warning, \
+        InstrumentSeedReport as _InstrumentSeedReport
+    from pygsti.models.lindbladinit import prepare_lindblad_seed as _prepare_lindblad_seed
     from pygsti.modelmembers.operations.lindbladerrorgen import \
         LindbladParameterization as _LindbladParameterization
     from pygsti.models.gaugegroup import TPGaugeGroup as _TPGaugeGroup
@@ -3670,15 +3688,40 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
                 projected, basis, gate_parameterization=parameterization,
                 povm_errormap=povm_errormap)
         seed[lbl] = seed_inst
-    _diagnose_model_instruments(seed, warn=True)   # warn on any residual flags
+    reports = _diagnose_model_instruments(seed, warn=False)
+    for report in reports.values():
+        # step 5 addresses CP-BOUNDARY, which concerns the starting point rather than the base
+        flags = [f for f in report.flags if interior_init is None or f.name != 'CP-BOUNDARY']
+        if flags:
+            _emit_seed_warning(_InstrumentSeedReport(report.label, flags, report.details, report.deep))
 
-    # 5. run the Lindblad fit from the seed, on the SAME ProtocolData object
+    # 5. move the seed's Lindblad blocks into their interiors.
+    if interior_init == 'default':
+        interior_init = {'diamond_budget': 1e-2}
+    seed_report = None
+    if interior_init is not None:
+        if not isinstance(interior_init, dict):
+            raise ValueError("interior_init must be 'default', a dict of prepare_lindblad_seed "
+                             f"keyword arguments, or None, not {interior_init!r}.")
+        printer.log("refit_instruments_cptplnd: moving the seed's Lindblad blocks into their interiors")
+        seed_vector, seed_report = _prepare_lindblad_seed(seed, **interior_init)
+        seed.from_vector(seed_vector)
+
+    # 6. run the Lindblad fit from the seed, on the SAME ProtocolData object
     #    (ModelEstimateResults.add_estimates checks dataset identity).
     base_proto = base_est.parameters.get('protocol', None)
     objfn_builders = objfn_builders if objfn_builders is not None \
         else getattr(base_proto, 'objfn_builders', None)
-    optimizer = optimizer if optimizer is not None \
-        else getattr(base_proto, 'optimizer', None)
+    if optimizer is None:
+        optimizer = _copy.deepcopy(getattr(base_proto, 'optimizer', None))
+        if seed_report is not None and optimizer is not None:
+            optimizer.first_fditer = 0  # the base fit's value was chosen for a zero-derivative seed
+    if seed_report is not None:
+        # first-iteration finite differences exist to leave a zero-derivative seed
+        if optimizer is None:
+            optimizer = {'first_fditer': 0}
+        elif isinstance(optimizer, dict) and 'first_fditer' not in optimizer:
+            optimizer = dict(optimizer, first_fditer=0)
     badfit_options = badfit_options if badfit_options is not None \
         else getattr(base_proto, 'badfit_options', None)
 
@@ -3697,8 +3740,10 @@ def refit_instruments_cptplnd(results, base_estimate_label, new_estimate_label=N
         verbosity=verbosity, name=new_estimate_label)
     new_results = proto.run(results.data, disable_checkpointing=disable_checkpointing)
     results.add_estimates(new_results, silent_steal=True)
+    if seed_report is not None:
+        results.estimates[new_estimate_label].meta['lindblad_seed_report'] = seed_report
 
-    # 6. parameterization-preserving gauge optimization of the new estimate.
+    # 7. parameterization-preserving gauge optimization of the new estimate.
     if gaugeopt == 'param-preserving' or isinstance(gaugeopt, GSTGaugeOptSuite):
         gop_params = gaugeopt if isinstance(gaugeopt, GSTGaugeOptSuite) else \
             GSTGaugeOptSuite(gaugeopt_suite_names='stdgaugeopt', gaugeopt_target=target)

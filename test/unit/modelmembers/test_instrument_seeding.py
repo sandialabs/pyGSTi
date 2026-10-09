@@ -8,7 +8,7 @@ from pygsti.baseobjs import Basis
 import pygsti.modelmembers.operations as op
 from pygsti.modelmembers.instruments import (
     Instrument, diagnose_instrument, base_effect_span, base_effect_extent,
-    conj_superop, full_rank_base_blend, interior_effect_offset,
+    conj_superop, full_rank_base_blend,
     displace_base_effects, project_instrument_to_cptp,
     patch_instrument_seed, patch_model_instrument_seeds
 )
@@ -103,29 +103,6 @@ class EffectRepairTester(BaseCase):
 
     def setUp(self):
         self.pp = Basis.cast('pp', 4)
-
-    def test_interior_offset_preserves_completeness_any_n(self):
-        families = {
-            2: [np.diag([1.0, 0.0]), np.diag([0.0, 1.0])],
-            3: [np.diag([0.6, 0.1]), np.diag([0.3, 0.35]), np.diag([0.1, 0.55])],
-        }
-        for n, E_mats in families.items():
-            with self.subTest(n=n):
-                effects = {f'p{i}': _sk(E, self.pp) for i, E in enumerate(E_mats)}
-                out = interior_effect_offset(effects, self.pp, eps=0.02)
-                self.assertLess(_effect_completeness_residual(out, self.pp), 1e-12)
-                for E in out.values():
-                    spec = np.linalg.eigvalsh(bt.vec_to_stdmx(E, self.pp,
-                                                              keep_complex=True))
-                    self.assertGreater(spec.min(), 0.0)
-                    self.assertLess(spec.max(), 1.0)
-
-    def test_interior_offset_eps_zero_is_identity(self):
-        effects = {'p0': _sk(np.diag([1.0, 0.0]), self.pp),
-                   'p1': _sk(np.diag([0.0, 1.0]), self.pp)}
-        out = interior_effect_offset(effects, self.pp, eps=0.0)
-        for k in effects:
-            self.assertArraysAlmostEqual(out[k], effects[k])
 
     def test_displace_fixes_proportional_to_identity_pair(self):
         effects = {'p0': _sk(np.eye(2) / 2, self.pp), 'p1': _sk(np.eye(2) / 2, self.pp)}
@@ -222,18 +199,19 @@ class PatchInstrumentSeedTester(BaseCase):
     def setUp(self):
         self.pp = Basis.cast('pp', 4)
 
-    def test_projective_seed_gets_blend_and_offset(self):
+    def test_projective_seed_gets_blend_and_keeps_its_effects(self):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             inst, report = patch_instrument_seed(_projective_members(self.pp), self.pp,
                                                  return_report=True)
         fired = [name for name, _ in report['applied']]
-        self.assertIn('full_rank_base_blend', fired)
-        self.assertIn('interior_effect_offset', fired)
-        self.assertNotIn('displace_base_effects', fired)
+        self.assertEqual(fired, ['full_rank_base_blend', 'full_rank_base_blend'])
         self.assertEqual(report['residual_flags'], [])
+        # The projective effects stay put, so the ideal measurement stays reachable; the only
+        # remaining flag concerns the starting point, which prepare_lindblad_seed handles.
         rep = diagnose_instrument(inst, self.pp, warn=False)
-        self.assertTrue(rep.ok, rep.verdict)
+        self.assertEqual([f.name for f in rep.flags], ['CP-BOUNDARY'])
+        self.assertIn('prepare_lindblad_seed', rep.flags[0].repair)
 
     def test_prop_to_identity_seed_gets_displacement(self):
         with warnings.catch_warnings():
@@ -268,7 +246,6 @@ class PatchInstrumentSeedTester(BaseCase):
                                               return_report=True)
         fired = [name for name, _ in report['applied']]
         self.assertIn('displace_base_effects', fired)
-        self.assertIn('interior_effect_offset', fired)
 
     def test_bad_mode_raises(self):
         with self.assertRaises(ValueError):
@@ -315,7 +292,7 @@ class PatchModelTester(BaseCase):
             patched = patch_model_instrument_seeds(mdl)
         self.assertIsNot(patched, mdl)
         rep = diagnose_instrument(patched.instruments[('Iz', 0)], self.pp, warn=False)
-        self.assertTrue(rep.ok, rep.verdict)
+        self.assertEqual([f.name for f in rep.flags], ['CP-BOUNDARY'])  # left for prepare_lindblad_seed
         # original model untouched: its instrument still has the pathological base
         rep0 = diagnose_instrument(mdl.instruments[('Iz', 0)], self.pp, warn=False,
                                    deep=False)

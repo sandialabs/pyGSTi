@@ -261,18 +261,31 @@ report = diagnose_instrument({'p0': Gmz_plus, 'p1': Gmz_minus}, 'pp', warn=False
 print(report)
 ```
 
-Each flag names its repair.  `patch_instrument_seed` applies exactly the repairs whose checks fail (a convex blend of the static gate toward a unitary completion; a displacement of span-deficient effects; an interior offset for boundary-touching spectra) and returns a ready-to-fit parameterized instrument whose base passes every check:
+Each flag names its repair.  `patch_instrument_seed` applies exactly the static-base repairs whose checks fail (a convex blend of the static gate toward a unitary completion; a displacement of span-deficient effects) and returns a parameterized instrument.  It leaves effect eigenvalues at 0 and 1 where they are, so the ideal measurement stays reachable, and the one remaining flag, `CP-BOUNDARY`, is about where a fit *starts* rather than what it can reach:
 
 ```{code-cell} ipython3
 patched = patch_instrument_seed({'p0': Gmz_plus, 'p1': Gmz_minus}, 'pp')
 print(diagnose_instrument(patched, 'pp', warn=False).verdict)
 ```
 
-A patched model (see also `patch_model_instrument_seeds`) can be passed directly to `GateSetTomography` as the `initial_model` for a cold CPTPLND fit.  A flag is not always a bug, though: a measure-and-reset instrument *legitimately* has rank-1 members, and its rank-cap flag is informational -- which is why diagnostics warn rather than raise.
+At zero noise every CP-constrained Lindblad block has zero dissipative derivatives, and boundary effects make the member maps non-differentiable, so an exact-Jacobian fit cannot start there.  `prepare_lindblad_seed` returns parameters that move every such block into its interior by a chosen diamond-norm distance, leaving the static base alone:
+
+```{code-cell} ipython3
+from pygsti.models import prepare_lindblad_seed
+
+mdl_seed = std.target_model()
+mdl_seed.set_all_parameterizations('CPTPLND')
+mdl_seed[('Iz', 0)] = patched
+seed_vector, seed_report = prepare_lindblad_seed(mdl_seed, diamond_budget=1e-2, seed=0)
+mdl_seed.from_vector(seed_vector)
+print(seed_report.effect_min_eigenvalues)
+```
+
+The prepared model can be passed to `GateSetTomography` as the `initial_model` for a cold CPTPLND fit, with `optimizer={'first_fditer': 0}`: the first-iteration finite differences exist only to leave a zero-derivative seed.  A flag is not always a bug, though: a measure-and-reset instrument *legitimately* has rank-1 members, and its rank-cap flag is informational -- which is why diagnostics warn rather than raise.
 
 ### Warm-starting a CPTPLND fit from a TP estimate
 
-The best-verified route to a high-quality CP-constrained instrument fit is to warm-start it from a `"full TP"` fit: gauge-optimize the TP estimate toward the target, project its instruments onto the CPTP-instrument set (Frobenius norm), and seed the CPTPLND fit with target gates/SPAM plus the projected instruments.  One call runs the whole recipe against an existing estimate and adds the result as a new estimate (gauge-optimized parameterization-preservingly, which is what error-bar computations on CP-constrained estimates need):
+The best-verified route to a high-quality CP-constrained instrument fit is to warm-start it from a `"full TP"` fit: gauge-optimize the TP estimate toward the target, project its instruments onto the CPTP-instrument set (Frobenius norm), seed the CPTPLND fit with target gates/SPAM plus the projected instruments, and move that seed into the interior with `prepare_lindblad_seed`.  One call runs the whole recipe against an existing estimate and adds the result as a new estimate (gauge-optimized parameterization-preservingly, which is what error-bar computations on CP-constrained estimates need):
 
 ```{code-cell} ipython3
 from pygsti.protocols import refit_instruments_cptplnd
