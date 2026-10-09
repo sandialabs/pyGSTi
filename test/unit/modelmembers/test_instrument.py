@@ -1,5 +1,6 @@
 import copy
 import pickle
+import warnings
 
 import numpy as np
 
@@ -391,6 +392,74 @@ class FromEffectsTester(BaseCase):
     def test_raises_on_non_tp_gate(self):
         with self.assertRaises(ValueError):
             Instrument.from_effects({'p0': (self.E0, 0.9 * np.eye(4)), 'p1': self.E1}, self.basis)
+
+
+def _central_difference_deriv(operator, h=1e-6):
+    """Central-difference derivative of `operator.to_dense()`, in the layout of `deriv_wrt_params`."""
+    p0 = operator.to_vector()
+    work = operator.copy()
+    cols = []
+    for i in range(len(p0)):
+        p = p0.copy()
+        p[i] += h
+        work.from_vector(p)
+        plus = work.to_dense()
+        p[i] -= 2 * h
+        work.from_vector(p)
+        cols.append(((plus - work.to_dense()) / (2 * h)).ravel())
+    return np.array(cols).T
+
+
+class RootConjDerivativeTester(BaseCase):
+    """RootConjOperator.deriv_wrt_params: exact where E^(1/2) is differentiable, finite differences
+    (with a warning) on the spectral boundary where it is not."""
+
+    def setUp(self):
+        self.basis = std.target_model().basis
+
+    def _root_conj(self, effects, basis, perturbation=0.0, seed=0):
+        instrument = Instrument.from_effects(effects, basis)
+        if perturbation:
+            rng = np.random.default_rng(seed)
+            instrument.from_vector(instrument.to_vector() + perturbation * rng.standard_normal(instrument.num_params))
+        return {lbl: member.factorops[0] for lbl, member in instrument.items()}
+
+    def test_matches_central_differences(self):
+        E0 = np.diag([0.7, 0.3]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis, perturbation=0.05, seed=1)['p0']
+        self.assertArraysAlmostEqual(rcop.deriv_wrt_params(), _central_difference_deriv(rcop), places=7)
+
+    def test_matches_central_differences_with_repeated_eigenvalues(self):
+        # A depolarized two-qubit projector has a threefold eigenvalue, where differentiating
+        # eigenvectors (as autograd through eigh does) breaks down.
+        P = np.diag([1.0, 0, 0, 0]).astype(complex)
+        E0 = 0.8 * P + 0.2 * np.eye(4) / 4
+        basis = pygsti.baseobjs.Basis.cast('pp', 16)
+        rcops = self._root_conj({'p0': E0, 'p1': np.eye(4) - E0}, basis)
+        for rcop in rcops.values():
+            self.assertArraysAlmostEqual(rcop.deriv_wrt_params(), _central_difference_deriv(rcop), places=7)
+
+    def test_wrt_filter(self):
+        E0 = np.diag([0.7, 0.3]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis, perturbation=0.05)['p0']
+        full = rcop.deriv_wrt_params()
+        self.assertEqual(full.shape, (self.basis.dim**2, rcop.num_params))
+        self.assertArraysEqual(rcop.deriv_wrt_params([3, 1]), full[:, [3, 1]])
+
+    def test_zero_effect_has_zero_derivative(self):
+        rcop = self._root_conj({'p0': np.eye(2, dtype=complex), 'p1': np.zeros((2, 2), complex)},
+                               self.basis, perturbation=0.05)['p1']
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            deriv = rcop.deriv_wrt_params()
+        self.assertArraysEqual(deriv, np.zeros((self.basis.dim**2, rcop.num_params)))
+
+    def test_boundary_effect_warns_and_uses_finite_differences(self):
+        E0 = np.diag([1.0, 0.0]).astype(complex)
+        rcop = self._root_conj({'p0': E0, 'p1': np.eye(2) - E0}, self.basis)['p0']
+        with self.assertWarnsRegex(UserWarning, 'not differentiable'):
+            deriv = rcop.deriv_wrt_params()
+        self.assertArraysEqual(deriv, op.linearop.finite_difference_deriv_wrt_params(rcop, None))
 
 
 class SharedErrorMapCopyTester(BaseCase):

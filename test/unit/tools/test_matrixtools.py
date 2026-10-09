@@ -262,6 +262,27 @@ class GeneralMatrixToolsTester(BaseCase):
             np.array(sorted(actual, key=sort_key)), np.array(sorted(expected, key=sort_key)))
 
 
+    def test_sqrtm_frechet_derivative_solves_sylvester(self):
+        # A repeated eigenvalue: eigh picks an arbitrary basis of that eigenspace, and the result
+        # must not depend on the choice.
+        rng = np.random.default_rng(3)
+        V, _ = np.linalg.qr(rng.standard_normal((4, 4)) + 1j * rng.standard_normal((4, 4)))
+        A = (V * np.array([0.5, 0.5, 0.2, 0.9])) @ V.conj().T
+        H = rng.standard_normal((3, 4, 4)) + 1j * rng.standard_normal((3, 4, 4))
+        H = H + H.conj().transpose(0, 2, 1)
+
+        evals, evecs = np.linalg.eigh(A)
+        X = mt.sqrtm_frechet_derivative(evecs, evals, H)
+        S = spl.sqrtm(A)
+        self.assertEqual(X.shape, H.shape)
+        for X_k, H_k in zip(X, H):
+            self.assertArraysAlmostEqual(X_k, spl.solve_sylvester(S, S, H_k))
+
+    def test_sqrtm_frechet_derivative_requires_positive_definite(self):
+        with self.assertRaises(ValueError):
+            mt.sqrtm_frechet_derivative(np.eye(2), np.array([0.0, 1.0]), np.eye(2))
+
+
 class ApproximateMatrixLogBCHTester(BaseCase):
     """
     Cover ``approximate_matrix_log_BCH``, which builds a *real* generator for a

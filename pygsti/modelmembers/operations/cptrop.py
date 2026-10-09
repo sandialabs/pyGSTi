@@ -43,12 +43,17 @@ try:
 except ImportError:
     pass
 
+import warnings as _warnings
+
 import numpy as _np
 from pygsti.pgtypes import SpaceT
 from pygsti.baseobjs.basis import Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers.povms.effect import POVMEffect
 from pygsti.modelmembers.operations.linearop import LinearOperator
+from pygsti.modelmembers.operations.linearop import finite_difference_deriv_wrt_params as _fd_deriv_wrt_params
 from pygsti.modelmembers.torchable import Torchable as _Torchable
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 
 from typing import Union
@@ -81,10 +86,18 @@ class RootConjOperator(LinearOperator, _Torchable):
     EIGTOL_ERROR : float
         How far an eigenvalue of E may fall outside [0, 1] before an error is raised.
         Defaults to :data:`~pygsti.tools.optools.EFFECT_EIGVAL_ABSTOL_ERROR`.
+    DERIV_EIGTOL : float
+        Eigenvalues of E at or below this are treated as zero by :meth:`deriv_wrt_params`.
+        E½ is differentiable only when E is positive definite or identically zero, so an E
+        with some but not all eigenvalues at or below this falls back to finite differences.
+        `eigh` resolves an eigenvalue of an E with ‖E‖ ≤ 1 to about 1e-16, so the default of
+        1e-10 treats anything zero up to roundoff as zero while keeping the relative error of
+        each computed sqrt(λ) near 1e-6 or below.
     """
 
     EIGTOL_WARNING = _ot.EFFECT_EIGVAL_ABSTOL_WARN
     EIGTOL_ERROR   = _ot.EFFECT_EIGVAL_ABSTOL_ERROR
+    DERIV_EIGTOL   = 1e-10
 
     def __init__(self, effect: POVMEffect, basis: BasisLike):
         self._basis        = Basis.cast(basis, effect.dim)
@@ -125,7 +138,59 @@ class RootConjOperator(LinearOperator, _Torchable):
         self._rep.base_has_changed()
 
     def deriv_wrt_params(self, wrt_filter: _np.ndarray | list | None = None) -> _np.ndarray:
-        return LinearOperator.deriv_wrt_params(self, wrt_filter)
+        """
+        The element-wise derivative of this operator's superoperator, shape `(dim**2, num_params)`.
+
+        With R = E½ the superoperator is R ⊗ Rᵀ in the standard basis, so its derivative is
+        dR ⊗ Rᵀ + R ⊗ dRᵀ, where dR solves R dR + dR R = dE (see
+        :func:`~pygsti.tools.matrixtools.sqrtm_frechet_derivative`). This is exact for positive
+        definite E, including E with repeated eigenvalues. An identically zero E (one whose
+        derivative also vanishes, e.g. a zero effect under a shared error map) is a constant
+        map with zero derivative.
+
+        When E is singular but nonzero the derivative does not exist: E(a) = P + a²D has
+        dE/da = 0 at a = 0, yet E(a)½ contains a term proportional to |a|. There this method
+        warns and returns the finite-difference estimate pyGSTi has always used.
+        """
+        if self.num_params == 0:
+            return LinearOperator.deriv_wrt_params(self, wrt_filter)
+
+        # Effect parameters, placed at this operator's local indices.
+        local_inds = _np.arange(self.num_params)[self._submember_rpindices[0]]
+        effect_deriv = _np.zeros((self.dim, self.num_params))
+        effect_deriv[:, local_inds] = self._effect.deriv_wrt_params()
+        if wrt_filter is not None:
+            effect_deriv = effect_deriv[:, wrt_filter]
+
+        effect_mat = _bt.vec_to_stdmx(self._effect.to_dense(), self._basis, keep_complex=True)
+        evecs, evals, _ = _mt.eigendecomposition(effect_mat, assume_hermitian=True)
+        evals = _np.clip(evals, 0.0, 1.0)
+        tol = self.DERIV_EIGTOL
+        num_cols = effect_deriv.shape[1]
+        if evals.max() <= tol and _np.allclose(effect_deriv, 0.0, rtol=0.0, atol=tol):
+            return _np.zeros((self.dim**2, num_cols))
+        if evals.min() <= tol:
+            _warnings.warn(
+                f"RootConjOperator's effect has eigenvalues within {tol} of 0 (smallest {evals.min():.3g}), "
+                "where E^(1/2) is not differentiable; falling back to a finite-difference derivative. "
+                "Starting a fit with effects interior to (0, 1), e.g. by giving the effects' error map "
+                "small nonzero stochastic rates, avoids this.")
+            return _fd_deriv_wrt_params(self, wrt_filter)
+
+        # dE for each parameter, then dR = D sqrt(E)[dE].
+        elements = _np.asarray(self._basis.elements)
+        dE = _np.einsum('ik,iab->kab', effect_deriv, elements)
+        dR = _mt.sqrtm_frechet_derivative(evecs, evals, dE)
+        R = (evecs * _np.sqrt(evals)[None, :]) @ evecs.conj().T
+
+        # d(R ⊗ Rᵀ) = dR ⊗ Rᵀ + R ⊗ dRᵀ, as plain (non-conjugate) transposes to match rootconj_superop.
+        n = R.shape[0]
+        dsuperop_std = (_np.einsum('pik,jl->pijkl', dR, R.T)
+                        + _np.einsum('ik,plj->pijkl', R, dR)).reshape(num_cols, n * n, n * n)
+        to_basis = _BuiltinBasis('std', self.dim).create_transform_matrix(self._basis)
+        from_basis = self._basis.create_transform_matrix('std')
+        dsuperop = (to_basis @ dsuperop_std @ from_basis).real
+        return dsuperop.reshape(num_cols, self.dim**2).T
 
     def has_nonzero_hessian(self) -> bool:
         # Not affine in its parameters.
