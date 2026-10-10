@@ -33,6 +33,8 @@ which the classmethods wrap with `cls(...)`.
 """
 from __future__ import annotations
 
+import warnings as _warnings
+
 import numpy as _np
 
 from pygsti.baseobjs.basis import Basis as _Basis
@@ -376,6 +378,22 @@ def _parameterized_instrument(basis: _BasisLike,
 
     member_ops = dict()
     for lbl, G_superop in gate_superops.items():
+        if _is_lindblad_type(gate_parameterization):
+            svals = _np.linalg.svd(G_superop, compute_uv=False)
+            if svals[-1] < 1e-7 * svals[0]:
+                rank = int(_np.sum(svals > 1e-7 * svals[0]))
+                _warnings.warn(
+                    f"The post-measurement gate for outcome {lbl!r} is singular "
+                    f"(superoperator rank {rank} < {basis.dim}).  A Lindblad gate "
+                    "parameterization freezes this gate as a static base and only "
+                    "composes an invertible exp(L) onto it, so no optimized member "
+                    "can ever exceed rank "
+                    f"{rank}; fitting data from a device whose instrument members "
+                    "are full rank will fail.  If this rank structure is intended "
+                    "(e.g. a measure-and-reset instrument), ignore this warning.  "
+                    "Otherwise repair the seed -- see "
+                    "pygsti.modelmembers.instruments.seeding.patch_instrument_seed "
+                    "and .diagnostics.diagnose_instrument.")
         root = _op.RootConjOperator(composed_povm[lbl], basis)
         gate = _parameterize_gate(G_superop, basis, gate_parameterization)
         member_ops[lbl] = _op.ComposedOp([root, gate])

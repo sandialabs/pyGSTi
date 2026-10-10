@@ -14,6 +14,16 @@ from __future__ import annotations
 from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
+from .diagnostics import (
+    InstrumentSeedFlag, InstrumentSeedReport, instrument_static_base,
+    static_base_ranks, base_effect_span, base_effect_extent,
+    diagnose_instrument, diagnose_model_instruments
+)
+from .seeding import (
+    conj_superop, full_rank_base_blend, interior_effect_offset,
+    displace_base_effects, project_instrument_to_cptp,
+    patch_instrument_seed, patch_model_instrument_seeds
+)
 
 from typing import Optional, TYPE_CHECKING
 from pygsti.baseobjs.basis import BasisLike
