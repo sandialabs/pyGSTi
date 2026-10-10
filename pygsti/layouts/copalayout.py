@@ -166,9 +166,10 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         # Step3: create a dictionary of element indices by concatenating the present outcomes of all
         #  the circuits in order.
         elindex_outcome_tuples = _collections.OrderedDict(); k = 0
-        for i, c in enumerate(circuits):
-            num_outcomes = len(present_outcomes[i])
-            elindex_outcome_tuples[i] = tuple([(k + j, outcome) for j, outcome in enumerate(present_outcomes[i])])
+        for i_unique in range(len(unique_circuits)):
+            num_outcomes = len(present_outcomes[i_unique])
+            elindex_outcome_tuples[i_unique] = tuple([(k + j, outcome)
+                                                      for j, outcome in enumerate(present_outcomes[i_unique])])
             k += num_outcomes
 
         return cls(circuits, unique_circuits, to_unique, elindex_outcome_tuples, unique_complete_circuits,

@@ -246,3 +246,78 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
         for lbl, effect in self.items():
             s += "%s: %s\n" % (lbl, str(effect))
         return s
+
+
+class _LazyEffectsPOVM(POVM):
+    """
+    Base class providing common scaffolding for POVMs whose effect vectors are constructed
+    "lazily" -- i.e. the first time they're accessed -- rather than being stored upfront
+    in `__init__`.  This is used by e.g. `ComputationalBasisPOVM`, `MarginalizedPOVM`,
+    `TensorProductPOVM`, and `ComposedPOVM`, all of which cache effects (as normal
+    `OrderedDict` entries) once they're constructed, so that repeated access doesn't
+    require reconstructing the same effect vector over and over.
+
+    This inherits from `POVM` (rather than being a plain, standalone mixin) since it is
+    only ever meant to be combined with `POVM`-derived classes -- it relies on `POVM`
+    machinery such as `self.parent` and the underlying `OrderedDict` storage.  Derived
+    classes therefore don't need to separately list `POVM` as a base class.
+
+    Derived classes must implement `__contains__`, `keys()`, and `__len__`, as well as
+    `_construct_effect(key)`, which should build and return a new effect vector for the
+    given key (allocating gpindices for it as appropriate) -- but should *not* attempt
+    to cache the constructed effect, as that is handled by `__getitem__` below.
+    """
+
+    def __iter__(self):
+        return self.keys()
+
+    def values(self):
+        """
+        An iterator over the effect vectors of this POVM.
+        """
+        for k in self.keys():
+            yield self[k]
+
+    def items(self):
+        """
+        An iterator over the (effect_label, effect_vector) items in this POVM.
+        """
+        for k in self.keys():
+            yield k, self[k]
+
+    def __getitem__(self, key):
+        """ For lazy creation of effect vectors """
+        if _collections.OrderedDict.__contains__(self, key):
+            ret = _collections.OrderedDict.__getitem__(self, key)
+            if ret.parent is self.parent:  # check for "stale" cached effect vector, and
+                return ret  # ensure we return an effect for our parent!
+
+        if key in self:  # calls __contains__ to efficiently check for membership
+            #create effect vector now that it's been requested (lazy creation)
+            effect = self._construct_effect(key)
+            _collections.OrderedDict.__setitem__(self, key, effect)
+            return effect
+        else:
+            raise KeyError("%s is not an outcome label of this %s" % (key, self.__class__.__name__))
+
+    def simplify_effects(self, prefix=""):
+        """
+        Creates a dictionary of simplified effect vectors.
+
+        Returns a dictionary of effect POVMEffects that belong to the POVM's parent
+        `Model` - that is, whose `gpindices` are set to all or a subset of
+        this POVM's gpindices.  Such effect vectors are used internally within
+        computations involving the parent `Model`.
+
+        Parameters
+        ----------
+        prefix : str
+            A string, usually identitying this POVM, which may be used
+            to prefix the simplified gate keys.
+
+        Returns
+        -------
+        OrderedDict of POVMEffects
+        """
+        if prefix: prefix += "_"
+        return _collections.OrderedDict([(prefix + k, self[k]) for k in self.keys()])

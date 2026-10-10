@@ -27,13 +27,13 @@ import numpy as _np
 
 from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers.povms.computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
-from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.modelmembers.povms.povm import _LazyEffectsPOVM
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.evotypes import Evotype as _Evotype
 
 
-class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface, _Torchable):
+class ComputationalBasisPOVM(_LazyEffectsPOVM, _NoErrorGeneratorInterface, _Torchable):
     """
     A POVM that "measures" states in the computational "Z" basis.
 
@@ -101,9 +101,6 @@ class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface, _Torchable):
         return bool(len(key) == self.nqubits
                     and all([(letter in fkeys) for letter in key]))
 
-    def __iter__(self):
-        return self.keys()
-
     def __len__(self):
         return 2**self.nqubits
 
@@ -120,65 +117,18 @@ class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface, _Torchable):
         for k in _itertools.product(*iterover):
             yield "".join(k)
 
-    def values(self):
-        """
-        An iterator over the effect vectors of this POVM.
-        """
-        for k in self.keys():
-            yield self[k]
-
-    def items(self):
-        """
-        An iterator over the (effect_label, effect_vector) items in this POVM.
-        """
-        for k in self.keys():
-            yield k, self[k]
-
-    def __getitem__(self, key):
-        """ For lazy creation of effect vectors """
-        if _collections.OrderedDict.__contains__(self, key):
-            ret = _collections.OrderedDict.__getitem__(self, key)
-            if ret.parent is self.parent:  # check for "stale" cached effect vector, and
-                return ret  # ensure we return an effect for our parent!
-
-        if key in self:  # calls __contains__ to efficiently check for membership
-            #create effect vector now that it's been requested (lazy creation)
-            # decompose key into separate factor-effect labels
-            outcomes = [(0 if letter == '0' else 1) for letter in key]
-            effect = _ComputationalBasisPOVMEffect(outcomes, 'pp', self._evotype, self.state_space)
-            assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! computational vecs have no params
-            _collections.OrderedDict.__setitem__(self, key, effect)
-            return effect
-        else: raise KeyError("%s is not an outcome label of this StabilizerZPOVM" % key)
+    def _construct_effect(self, key):
+        """ Builds (but does not cache) the effect vector for the given outcome label. """
+        # decompose key into separate factor-effect labels
+        outcomes = [(0 if letter == '0' else 1) for letter in key]
+        effect = _ComputationalBasisPOVMEffect(outcomes, 'pp', self._evotype, self.state_space)
+        assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! computational vecs have no params
+        return effect
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         return (ComputationalBasisPOVM, (self.nqubits, self._evotype, self.qubit_filter),
                 {'_gpindices': self._gpindices})  # preserve gpindices (but not parent)
-
-    def simplify_effects(self, prefix=""):
-        """
-        Creates a dictionary of simplified effect vectors.
-
-        Returns a dictionary of effect POVMEffects that belong to the POVM's parent
-        `Model` - that is, whose `gpindices` are set to all or a subset of
-        this POVM's gpindices.  Such effect vectors are used internally within
-        computations involving the parent `Model`.
-
-        Parameters
-        ----------
-        prefix : str
-            A string, usually identitying this POVM, which may be used
-            to prefix the simplified gate keys.
-
-        Returns
-        -------
-        OrderedDict of POVMEffects
-        """
-        if prefix: prefix += "_"
-        simplified = _collections.OrderedDict(
-            [(prefix + k, self[k]) for k in self.keys()])
-        return simplified
 
     def stateless_data(self, real_dtype: _torch.dtype, device: _torch.Device) -> Tuple[_torch.Tensor]:
         # A ComputationalBasisPOVM has zero free parameters, so its torch_base is a constant: one
