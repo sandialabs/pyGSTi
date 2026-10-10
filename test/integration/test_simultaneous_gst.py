@@ -13,11 +13,15 @@ circuit generation -> noisy data simulation -> GST fitting, for each of the
 four Lindblad error types (H, S, H+S, and H+S+C+A).
 """
 
+import dataclasses
+import os
+import pathlib
 import unittest
 
 import pytest
 
 import numpy as np
+from scipy.stats import chi2
 
 import pygsti
 from pygsti.data import simulate_data
@@ -28,6 +32,61 @@ from pygsti.protocols.protocol import ProtocolData
 from pygsti.protocols.simultaneous_gst import SimultaneousGSTDesign
 from pygsti.tools import two_delta_logl
 from test.unit.protocols.test_simultaneous_gst import _line_pspec, _make_designs
+from test.helpers.simultaneous_gst_validation import (
+    FOUR_QUBIT_SPARSE_MARKOVIAN,
+    FOUR_QUBIT_SPARSE_SPECTATOR,
+    THREE_QUBIT_SPARSE_MARKOVIAN,
+    THREE_QUBIT_SPARSE_SPECTATOR,
+    ValidationArtifacts,
+    create_run_root,
+    run_validation_profile,
+)
+
+
+def artifact_dir(profile_name):
+    """Return a fresh run directory under ``PYGSTI_SGST_ARTIFACT_DIR`` for one profile.
+
+    Each run gets its own timestamped root, so running several profiles against one
+    ``PYGSTI_SGST_ARTIFACT_DIR`` keeps every profile's dataset, fit and metrics.
+    """
+    root = create_run_root(pathlib.Path(os.environ['PYGSTI_SGST_ARTIFACT_DIR']), profile_name)
+    return ValidationArtifacts(
+        root=root,
+        dataset_dir=root / 'dataset',
+        results_dir=root / 'fit',
+        manifest_path=root / 'profile.json',
+    )
+
+
+def mpi_ranks():
+    return int(os.environ.get('PYGSTI_SGST_MPI_RANKS', '1'))
+
+
+def run_profile(profile):
+    """Apply the runner's overrides to ``profile`` and run it in its own artifact directory."""
+    profile = profile_with_overrides(profile)
+    return run_validation_profile(profile, artifact_dir(profile.name), mpi_ranks())
+
+
+def profile_with_overrides(profile):
+    """Return ``profile`` or an immutable per-run replacement selected by the runner.
+
+    The spectator overrides let one queue sweep crosstalk strength and character
+    without editing the canonical profiles. ``PYGSTI_SGST_SPECTATOR_TERM`` is
+    pipe-separated because a correlated coefficient key already contains commas,
+    e.g. ``H|ZZ:1,2``.
+    """
+    changes = {}
+    seed = os.environ.get('PYGSTI_SGST_PROFILE_SEED')
+    if seed is not None:
+        changes['seed'] = int(seed)
+    spectator_error = os.environ.get('PYGSTI_SGST_SPECTATOR_ERROR')
+    if spectator_error is not None:
+        changes['spectator_error'] = float(spectator_error)
+    spectator_term = os.environ.get('PYGSTI_SGST_SPECTATOR_TERM')
+    if spectator_term is not None:
+        changes['spectator_term'] = tuple(spectator_term.split('|'))
+    return dataclasses.replace(profile, **changes) if changes else profile
 
 
 def _build_noise_model(pspec, lindblad_error_coeffs, parameterization):
@@ -159,6 +218,58 @@ class TestSimultaneousGSTPipeline(unittest.TestCase):
                         f"{two_delta_logl_val}",
                 )
 
+
+@pytest.mark.long_running
+class SimultaneousGSTValidationTester:
+    """Finite-shot recovery and robustness of simultaneous GST, one profile per test.
+
+    Each fit is checked against references computed from the same run, so the
+    assertions hold for any seed rather than for recorded numbers:
+
+    * ``datagen_two_delta_logl`` is what the data-generating model scores on exactly the
+      training data.  Comparing the fit against it avoids the degrees-of-freedom
+      convention behind ``nsigma``, which sparse multi-qubit outcome counts make unusable.
+    * ``ideal_validation_mean_tvd`` is the held-out error of the noiseless starting model,
+      that is, of a fit that learned nothing.
+    * ``shot_noise_validation_*_tvd_q999`` bound the held-out error that shot noise in the
+      training data gives a correct fit (Markovian profiles only).
+    """
+
+    @staticmethod
+    def assert_recovers_markovian_model(result):
+        likelihood_gain = result['datagen_two_delta_logl'] - result['two_delta_logl']
+        # The generator is in the fit's model family, so the maximum-likelihood fit explains
+        # the training data at least as well as the generator does, and by Wilks' theorem
+        # better by no more than a chi-squared with one degree per parameter allows.
+        assert likelihood_gain >= 0.0
+        assert likelihood_gain <= chi2.ppf(0.999, result['fit_model_params'])
+        # Its held-out predictions are as accurate as shot noise in the training data allows.
+        assert result['validation_mean_tvd'] <= result['shot_noise_validation_mean_tvd_q999']
+        assert result['validation_max_tvd'] <= result['shot_noise_validation_max_tvd_q999']
+        # And the profile can tell a fit from no fit: the noise it injects is large enough
+        # that fitting removes most of the noiseless model's held-out error.
+        assert result['validation_mean_tvd'] <= 0.5 * result['ideal_validation_mean_tvd']
+
+    @staticmethod
+    def assert_reveals_and_survives_crosstalk(result):
+        # The generator is outside the crosstalk-free family, and the training data show it
+        # exactly when the best crosstalk-free fit explains them worse than the generator does.
+        assert result['two_delta_logl'] > result['datagen_two_delta_logl']
+        # The violation is modest: the fit still removes most of the noiseless model's
+        # held-out error.
+        assert result['validation_mean_tvd'] <= 0.5 * result['ideal_validation_mean_tvd']
+
+    def test_three_qubit_sparse_markovian_recovery(self):
+        self.assert_recovers_markovian_model(run_profile(THREE_QUBIT_SPARSE_MARKOVIAN))
+
+    def test_three_qubit_sparse_spectator_crosstalk(self):
+        self.assert_reveals_and_survives_crosstalk(run_profile(THREE_QUBIT_SPARSE_SPECTATOR))
+
+    def test_four_qubit_sparse_markovian_bridge(self):
+        self.assert_recovers_markovian_model(run_profile(FOUR_QUBIT_SPARSE_MARKOVIAN))
+
+    def test_four_qubit_sparse_spectator_crosstalk(self):
+        self.assert_reveals_and_survives_crosstalk(run_profile(FOUR_QUBIT_SPARSE_SPECTATOR))
 
 if __name__ == '__main__':
     unittest.main()
