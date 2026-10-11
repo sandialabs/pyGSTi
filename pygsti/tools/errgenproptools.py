@@ -492,7 +492,6 @@ def configure_errorgen_propagation_parallelization(
     dict
         Dictionary showing the currently active configuration and threshold cutoffs.
     """
-    global _MANUAL_PARALLEL_OVERRIDES
     if reset_to_defaults:
         _MANUAL_PARALLEL_OVERRIDES.clear()
         if "_ACTIVE_PARALLEL_THRESHOLDS" in globals():
